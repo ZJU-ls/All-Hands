@@ -1,0 +1,47 @@
+[importlinter]
+root_package = allhands
+include_external_packages = True
+
+[importlinter:contract:layered]
+name = Layered architecture (strict top-down)
+type = layers
+layers =
+    allhands.api
+    allhands.services
+    allhands.execution
+    allhands.observability
+    allhands.persistence
+    allhands.core
+containers =
+    allhands
+
+[importlinter:contract:core-no-frameworks]
+name = core must not import frameworks
+type = forbidden
+source_modules =
+    allhands.core
+forbidden_modules =
+    sqlalchemy
+    fastapi
+    starlette
+    langgraph
+    langchain
+    langchain_core
+    langchain_openai
+    langfuse
+    openai
+    anthropic
+    mcp
+
+[importlinter:contract:persistence-no-frameworks]
+name = persistence must not import api/service/execution
+type = forbidden
+source_modules =
+    allhands.persistence
+forbidden_modules =
+    allhands.api
+    allhands.services
+    allhands.execution
+    fastapi
+    langgraph
+    langchain

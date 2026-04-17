@@ -1,0 +1,286 @@
+# CLAUDE.md · allhands Dev Contract
+
+> **所有进入本项目的 Claude 会话,必须先读完本文件再做任何事。** 本文件是开发契约,违反的修改要被拒绝。
+
+---
+
+## 1. 项目速览
+
+**allhands** 是一个开源自部署的"数字员工组织"平台。用户通过与 Lead Agent 对话来设计、调度、观测一支员工团队。详情看 `product/00-north-star.md`。
+
+**当前版本:** v0 MVP。范围看 `product/01-prd.md §3`。
+
+---
+
+## 2. 必读文档(第一次进入会话必须读)
+
+按顺序:
+
+1. `product/00-north-star.md` — 产品哲学、4 条核心设计原则
+2. `product/04-architecture.md` — 10 层架构 + 模块边界
+3. 本文件(CLAUDE.md) — 开发纪律
+4. 当前正在做的 `plans/*.md`(如果有)
+
+其他文档按需:`01-prd.md`、`02-user-stories.md`、`03-visual-design.md`、`05-roadmap.md`、`adr/`。
+
+---
+
+## 3. 核心设计原则(必须遵守,违反则打回)
+
+### 3.1 Tool First
+
+- 所有新能力 → 注册新 Tool(Backend / Render / Meta 之一)
+- **不写独立的 REST endpoint 做 CRUD**。员工 / Skill / MCP 的管理全部走 Meta Tool
+- **不写独立的前端配置页面**。通过 Lead Agent 对话 + Render Tool + ComponentRegistry
+
+### 3.2 统一 React Agent
+
+- 数据模型里**没有 `mode` 字段**。PR 里出现 `mode` 字段立即打回
+- 所有员工走同一 `AgentRunner`(封装 LangGraph `create_react_agent`)
+- 模式差异由 `tools[]` / `skill_ids[]` / `max_iterations` 决定
+
+### 3.3 L4 对话式操作 + 护栏
+
+- Tool 必须声明 `scope`(READ / WRITE / IRREVERSIBLE / BOOTSTRAP)
+- WRITE 以上默认 `requires_confirmation=True`,不能绕过 `ConfirmationGate`
+- BOOTSTRAP 必须走"候选版本 + 显式切换"流程,不能直接生效
+
+### 3.4 低耦合 / 高扩展
+
+- `core/` 禁止 import `sqlalchemy` / `fastapi` / `langgraph` / `langchain` / `openai` / `anthropic`
+- 跨层只 import 接口(ABC),不 import 具体实现
+- 新能力走"注册"而非"改核心代码"
+
+---
+
+## 4. 目录结构
+
+```
+allhands/
+├── product/               # 产品与架构文档(改动走 ADR)
+├── plans/                 # implementation plans
+├── backend/
+│   ├── src/allhands/
+│   │   ├── core/          # L4 领域(纯 Pydantic)
+│   │   ├── persistence/   # L3 SQLAlchemy + repos
+│   │   ├── observability/ # L2 LangFuse
+│   │   ├── execution/     # L5 AgentRunner / ToolRegistry / Gate / MCP
+│   │   ├── services/      # L6 应用服务
+│   │   ├── api/           # L7 FastAPI routers + L8 protocol
+│   │   ├── config/        # 环境配置
+│   │   └── main.py        # 入口
+│   ├── tests/
+│   │   ├── unit/
+│   │   └── integration/
+│   ├── alembic/
+│   ├── pyproject.toml
+│   └── ruff.toml
+├── web/
+│   ├── app/               # L9 Next.js App Router
+│   ├── components/        # L10 展示组件
+│   ├── lib/               # L9 SSE/state/registry
+│   ├── public/
+│   └── package.json
+├── docker-compose.yml
+├── .env.example
+├── .claude/
+│   ├── skills/
+│   │   └── allhands-dev/SKILL.md  # 本项目核心原则(简短版)
+│   └── settings.json              # 项目级 hooks
+├── CLAUDE.md                       # 本文件
+├── README.md
+└── LICENSE
+```
+
+---
+
+## 5. 常用命令
+
+### 5.1 启动开发环境
+
+```bash
+# 一键启动(推荐,首次)
+docker compose up --build
+
+# 后端本地开发(热重载)
+cd backend
+uv sync
+uv run uvicorn allhands.main:app --reload --port 8000
+
+# 前端本地开发
+cd web
+pnpm install
+pnpm dev
+```
+
+### 5.2 测试 / 静态检查
+
+```bash
+# 后端
+cd backend
+uv run pytest                    # 全部测试
+uv run pytest tests/unit         # 仅 unit
+uv run ruff check .              # lint
+uv run ruff format --check .     # format check
+uv run mypy src                  # 类型检查
+uv run lint-imports              # 分层边界检查
+
+# 前端
+cd web
+pnpm test                        # vitest
+pnpm lint                        # eslint
+pnpm typecheck                   # tsc --noEmit
+pnpm build                       # 生产构建(typecheck + build)
+```
+
+### 5.3 数据库
+
+```bash
+cd backend
+uv run alembic upgrade head            # 应用所有 migration
+uv run alembic revision -m "..."       # 新建 migration
+uv run alembic downgrade -1            # 回滚一步
+```
+
+### 5.4 本项目全量检查(pre-commit / CI)
+
+```bash
+./scripts/check.sh   # 所有 lint + type + test,任何失败退出非零
+```
+
+---
+
+## 6. 开发纪律
+
+### 6.1 TDD(强制)
+
+本项目安装了 `superpowers` plugin,`test-driven-development` skill 为 Rigid(严格遵守)。
+
+**流程:**
+1. 先写失败的测试
+2. 写最少的代码让测试通过
+3. 重构
+
+**例外:** 脚手架、配置文件、迁移文件不需要 TDD。
+
+### 6.2 Lint / Type 必须绿
+
+**PR / commit 前:**
+- `ruff check .` 零警告
+- `mypy src` 零错误(strict 模式)
+- `lint-imports` 零违规(分层契约)
+- `pnpm lint` + `pnpm typecheck` 零错误
+
+### 6.3 Import 分层契约(硬规则)
+
+- `core/` 只依赖 `pydantic` + stdlib
+- `persistence/` 依赖 `core/`(+ sqlalchemy)
+- `execution/` 依赖 `core/` + `persistence/` + langgraph 等
+- `services/` 依赖 `core/` / `persistence/` / `execution/` / `observability/`
+- `api/` 依赖 `services/` + `core/`(用于 DTO)
+- `observability/` 依赖 `core/` + langfuse
+
+`import-linter` 在 pre-commit 强制。违反 → commit 拒绝。
+
+### 6.4 新增 Tool 的流程(示例)
+
+要加一个新 Backend Tool `fetch_url`:
+
+1. 在 `backend/src/allhands/execution/tools/fetch.py` 写:
+   ```python
+   TOOL = Tool(
+       id="allhands.builtin.fetch_url",
+       kind=ToolKind.BACKEND,
+       name="fetch_url",
+       description="Fetch a URL and return its text content. Use for web pages or JSON APIs.",
+       input_schema={...},
+       output_schema={...},
+       scope=ToolScope.READ,
+       requires_confirmation=False,
+   )
+   async def executor(url: str, timeout: int = 10) -> str: ...
+   ```
+
+2. 在 `tools/__init__.py` 的 `discover_builtin_tools()` 里导入并注册
+
+3. 写 unit test:`tests/unit/tools/test_fetch.py`
+
+4. 写 integration test(若涉及网络):`tests/integration/tools/test_fetch.py`
+
+5. 如果 Skill 需要它,更新对应 `skills/*.yaml`
+
+**不修改任何其他代码**。这是 Tool First 的验证:新 Tool = 新文件 + 注册一行。
+
+### 6.5 新增 Render Tool + 前端组件
+
+1. 后端 render tool 返回 `{component: "MyThing", props: {...}}`
+2. 前端 `web/components/render/MyThing.tsx` 写组件
+3. 前端 `web/lib/component-registry.ts` 加 `MyThing: MyThingComponent`
+4. 协议 schema 在 `backend/src/allhands/api/protocol.py` 和 `web/lib/protocol.ts` 同步更新(加 props 类型)
+5. 前后端 schema 一致性测试:`tests/integration/test_render_protocol.py`
+
+### 6.6 Confirmation Gate 不能绕过
+
+- Tool 声明了 `scope >= WRITE` 就必须经过 `ConfirmationGate`
+- 测试里若需要跳过 gate,用 `AutoApprovePolicy` 注入(仅限测试)
+
+### 6.7 禁止的行为
+
+- ❌ 在 `core/` 里 import 框架
+- ❌ 在数据库表中加 `mode` 字段(员工或会话)
+- ❌ 为员工/MCP/Skill 开 REST CRUD endpoint(必须走 Meta Tool)
+- ❌ 为员工管理写独立前端页面(必须走 Lead Agent + render tool)
+- ❌ Tool 不声明 `scope` / 不经 Gate
+- ❌ 不带测试的实现 PR
+- ❌ LangGraph / LangChain 类型出现在 `services/` 以上(必须被 `execution/` 封装)
+
+---
+
+## 7. 提交规范
+
+- Conventional Commits:`feat(scope): ...` / `fix: ...` / `refactor: ...` / `docs: ...` / `test: ...` / `chore: ...`
+- commit message 说 **为什么**,不只是**什么**
+- PR 必须关联 plan / ADR / user story(如果适用)
+
+---
+
+## 8. ADR 流程
+
+**涉及架构或产品哲学的决策 → 新增一条 ADR。**
+
+1. `product/adr/NNNN-<slug>.md`,编号递增
+2. 模板:Context / Decision / Rationale / Consequences / Alternatives
+3. 更新相关产品文档引用这条 ADR
+4. PR 里 reviewer 确认 ADR
+
+---
+
+## 9. 当前工作入口
+
+**查 `plans/` 目录下最新的 plan**。开发按 plan 的 Task 列表推进,完成一个勾掉一个。
+
+---
+
+## 10. 有疑问时的优先级
+
+1. 当前 plan 具体描述
+2. 本文件(CLAUDE.md)
+3. `product/04-architecture.md`
+4. `product/00-north-star.md`
+5. ADR
+6. 其他 product 文档
+
+**冲突时高优先级覆盖低优先级。** 发现冲突 → 立刻停,问用户 / 提 ADR。
+
+---
+
+## 11. Sonic boom 检查(karpathy-guidelines 复述)
+
+本项目安装了 `karpathy-guidelines` 行为准则,提醒你:
+
+- **Think before coding** — 假设、模糊点必须 surface,不要闷声往下做
+- **Simplicity first** — 最少代码解决问题,不做未请求的抽象
+- **Surgical changes** — 只改必要的,不顺手"改进"邻近代码
+- **Goal-driven execution** — 每个改动都有可验证的成功标准
+
+违反以上 → 代码 review 会打回。

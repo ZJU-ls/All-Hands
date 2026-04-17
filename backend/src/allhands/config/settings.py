@@ -1,0 +1,63 @@
+"""Runtime configuration.
+
+All config is loaded from env vars (or .env). See .env.example for the full list.
+Settings is cached as a module-level singleton via get_settings().
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="ALLHANDS_",
+        extra="ignore",
+    )
+
+    env: str = Field(default="dev", description="dev | test | prod")
+    log_level: str = Field(default="INFO")
+
+    database_url: str = Field(
+        default="sqlite+aiosqlite:///./data/allhands.db",
+        description="Async SQLAlchemy URL. Default uses local SQLite under ./data.",
+    )
+    checkpoint_db_path: str = Field(
+        default="./data/checkpoints.db",
+        description="Path for LangGraph AsyncSqliteSaver. Separate from app DB on purpose.",
+    )
+
+    langfuse_host: str | None = Field(default=None)
+    langfuse_public_key: str | None = Field(default=None)
+    langfuse_secret_key: str | None = Field(default=None)
+
+    openai_api_key: str | None = Field(default=None)
+    openai_base_url: str | None = Field(default=None)
+    default_model_ref: str = Field(default="openai/gpt-4o-mini")
+
+    cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+
+    confirmation_ttl_seconds: int = Field(default=300, ge=10)
+    max_iterations_default: int = Field(default=10, ge=1, le=100)
+
+    def sync_database_url(self) -> str:
+        """Synchronous URL for alembic/tools that can't use async driver."""
+        return self.database_url.replace("+aiosqlite", "")
+
+    def ensure_data_dir(self) -> None:
+        """Ensure ./data exists for sqlite files."""
+        for url in (self.database_url, f"sqlite:///{self.checkpoint_db_path}"):
+            if "sqlite" in url:
+                path = url.split("///", 1)[-1]
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()

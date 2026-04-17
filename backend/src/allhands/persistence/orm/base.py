@@ -1,0 +1,9 @@
+"""Declarative base. Single Base for all ORM models so alembic picks them up."""
+
+from __future__ import annotations
+
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+    pass
