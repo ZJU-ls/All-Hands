@@ -15,6 +15,11 @@ export default function ConversationPage() {
           allhands
         </div>
         <div className="text-xs text-text-muted px-1">Lead Agent</div>
+        <div className="mt-auto">
+          <a href="/settings" className="text-xs text-zinc-600 hover:text-zinc-400 px-1 py-1 flex items-center gap-1 transition-colors">
+            &#9881; Settings
+          </a>
+        </div>
       </div>
 
       <div className="flex flex-col flex-1 min-w-0">
