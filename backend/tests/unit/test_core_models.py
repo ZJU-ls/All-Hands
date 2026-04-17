@@ -41,7 +41,7 @@ def test_tool_is_frozen_and_serializable() -> None:
         output_schema={"type": "object"},
         scope=ToolScope.READ,
         requires_confirmation=False,
-        cost_hint=CostHint.LOW,
+        cost_hint=CostHint(relative="low"),
     )
     assert tool.scope == ToolScope.READ
     dumped = tool.model_dump()
@@ -92,30 +92,30 @@ def test_employee_has_no_mode_field() -> None:
 
 
 def test_employee_has_any_capability() -> None:
-    base = dict(
-        id="e1",
-        name="Researcher",
-        description="",
-        system_prompt="x",
-        model_ref="openai/gpt-4o-mini",
-        created_by="user",
-        created_at=_now(),
-    )
+    base = {
+        "id": "e1",
+        "name": "Researcher",
+        "description": "",
+        "system_prompt": "x",
+        "model_ref": "openai/gpt-4o-mini",
+        "created_by": "user",
+        "created_at": _now(),
+    }
     assert not Employee(**base).has_any_capability()
     assert Employee(**base, tool_ids=["t1"]).has_any_capability()
     assert Employee(**base, skill_ids=["s1"]).has_any_capability()
 
 
 def test_employee_max_iterations_bounds() -> None:
-    base = dict(
-        id="e1",
-        name="Researcher",
-        description="",
-        system_prompt="x",
-        model_ref="openai/gpt-4o-mini",
-        created_by="user",
-        created_at=_now(),
-    )
+    base = {
+        "id": "e1",
+        "name": "Researcher",
+        "description": "",
+        "system_prompt": "x",
+        "model_ref": "openai/gpt-4o-mini",
+        "created_by": "user",
+        "created_at": _now(),
+    }
     with pytest.raises(ValidationError):
         Employee(**base, max_iterations=0)
     with pytest.raises(ValidationError):

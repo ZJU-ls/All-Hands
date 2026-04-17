@@ -38,16 +38,16 @@ async def session() -> AsyncSession:  # type: ignore[misc]
 
 def _employee(**kw: object) -> Employee:
     now = datetime.now(UTC)
-    defaults: dict[str, object] = dict(
-        id=str(uuid.uuid4()),
-        name="Researcher",
-        description="desc",
-        system_prompt="You are helpful.",
-        model_ref="openai/gpt-4o-mini",
-        created_by="user",
-        created_at=now,
-        tool_ids=["allhands.builtin.fetch_url"],
-    )
+    defaults: dict[str, object] = {
+        "id": str(uuid.uuid4()),
+        "name": "Researcher",
+        "description": "desc",
+        "system_prompt": "You are helpful.",
+        "model_ref": "openai/gpt-4o-mini",
+        "created_by": "user",
+        "created_at": now,
+        "tool_ids": ["allhands.builtin.fetch_url"],
+    }
     defaults.update(kw)
     return Employee(**defaults)
 

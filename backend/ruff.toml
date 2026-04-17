@@ -21,10 +21,13 @@ select = [
 ignore = [
     "E501",   # line length handled by formatter
     "B008",   # FastAPI Depends() defaults
+    "N818",   # domain exceptions don't need Error suffix (DDD convention)
+    "TC003",  # stdlib datetime used at runtime by Pydantic validators
+    "TC001",  # same for first-party imports used by Pydantic
 ]
 
 [lint.per-file-ignores]
-"tests/**" = ["N", "B"]
+"tests/**" = ["N", "B", "SIM117"]
 
 [format]
 quote-style = "double"
