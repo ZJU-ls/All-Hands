@@ -12,8 +12,6 @@ layers =
     allhands.observability
     allhands.persistence
     allhands.core
-containers =
-    allhands
 
 [importlinter:contract:core-no-frameworks]
 name = core must not import frameworks
