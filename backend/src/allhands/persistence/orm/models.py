@@ -7,7 +7,7 @@ without touching domain types.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime  # noqa: TC003 — SQLAlchemy evaluates Mapped[] at runtime
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -65,9 +65,7 @@ class ConversationRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     title: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    employee_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("employees.id"), index=True
-    )
+    employee_id: Mapped[str] = mapped_column(String(64), ForeignKey("employees.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     extra_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
 
@@ -101,9 +99,7 @@ class ToolCallRow(Base):
     __tablename__ = "tool_calls"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    message_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("messages.id"), index=True
-    )
+    message_id: Mapped[str] = mapped_column(String(64), ForeignKey("messages.id"), index=True)
     tool_id: Mapped[str] = mapped_column(String(128), index=True)
     args: Mapped[dict[str, object]] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(32), index=True)
