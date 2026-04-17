@@ -1,0 +1,133 @@
+"""Tests for EmployeeService and ConfirmationService."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
+
+import pytest
+
+from allhands.core import (
+    Confirmation,
+    ConfirmationStatus,
+    Employee,
+)
+from allhands.services.confirmation_service import ConfirmationService
+from allhands.services.employee_service import EmployeeService
+
+
+def _make_mock_employee_repo() -> AsyncMock:
+    repo = AsyncMock()
+    repo.list_all = AsyncMock(return_value=[])
+    repo.get_lead = AsyncMock(return_value=None)
+    repo.get_by_name = AsyncMock(return_value=None)
+    repo.upsert = AsyncMock(side_effect=lambda emp: emp)
+    repo.delete = AsyncMock()
+    return repo
+
+
+async def test_employee_service_create_sets_id_and_timestamp() -> None:
+    repo = _make_mock_employee_repo()
+    svc = EmployeeService(repo)
+    emp = await svc.create(
+        name="Researcher",
+        description="A researcher",
+        system_prompt="You research things.",
+        model_ref="openai/gpt-4o-mini",
+        tool_ids=["allhands.builtin.fetch_url"],
+    )
+    assert emp.id != ""
+    assert emp.name == "Researcher"
+    assert emp.created_by == "user"
+    repo.upsert.assert_called_once()
+
+
+async def test_employee_service_create_rejects_no_capability() -> None:
+    repo = _make_mock_employee_repo()
+    svc = EmployeeService(repo)
+    with pytest.raises(ValueError, match="capability"):
+        await svc.create(
+            name="Empty",
+            description="no tools",
+            system_prompt="x",
+            model_ref="openai/gpt-4o-mini",
+            tool_ids=[],
+            skill_ids=[],
+        )
+
+
+async def test_employee_service_list() -> None:
+    repo = _make_mock_employee_repo()
+    repo.list_all = AsyncMock(return_value=[
+        Employee(
+            id="e1",
+            name="Alice",
+            description="",
+            system_prompt="x",
+            model_ref="openai/gpt-4o-mini",
+            tool_ids=["t1"],
+            created_by="user",
+            created_at=datetime.now(UTC),
+        )
+    ])
+    svc = EmployeeService(repo)
+    employees = await svc.list_all()
+    assert len(employees) == 1
+
+
+async def test_employee_service_delete_calls_repo() -> None:
+    repo = _make_mock_employee_repo()
+    emp = Employee(
+        id="e1",
+        name="Alice",
+        description="",
+        system_prompt="x",
+        model_ref="openai/gpt-4o-mini",
+        tool_ids=["t1"],
+        created_by="user",
+        created_at=datetime.now(UTC),
+    )
+    repo.get = AsyncMock(return_value=emp)
+    svc = EmployeeService(repo)
+    await svc.delete("e1")
+    repo.delete.assert_called_once_with("e1")
+
+
+async def test_confirmation_service_approve() -> None:
+    repo = AsyncMock()
+    now = datetime.now(UTC)
+    conf = Confirmation(
+        id="cf1",
+        tool_call_id="tc1",
+        rationale="test",
+        summary="test",
+        status=ConfirmationStatus.PENDING,
+        created_at=now,
+        expires_at=now + timedelta(minutes=5),
+    )
+    repo.get = AsyncMock(return_value=conf)
+    repo.update_status = AsyncMock()
+
+    svc = ConfirmationService(repo)
+    await svc.approve("cf1")
+    repo.update_status.assert_called_once_with("cf1", ConfirmationStatus.APPROVED)
+
+
+async def test_confirmation_service_reject() -> None:
+    repo = AsyncMock()
+    now = datetime.now(UTC)
+    conf = Confirmation(
+        id="cf1",
+        tool_call_id="tc1",
+        rationale="test",
+        summary="test",
+        status=ConfirmationStatus.PENDING,
+        created_at=now,
+        expires_at=now + timedelta(minutes=5),
+    )
+    repo.get = AsyncMock(return_value=conf)
+    repo.update_status = AsyncMock()
+
+    svc = ConfirmationService(repo)
+    await svc.reject("cf1")
+    repo.update_status.assert_called_once_with("cf1", ConfirmationStatus.REJECTED)
