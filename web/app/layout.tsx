@@ -13,7 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body>{children}</body>
+      <body className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+        {children}
+      </body>
     </html>
   );
 }

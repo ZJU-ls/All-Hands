@@ -1,5 +1,6 @@
 /**
- * Transport protocol — mirrors backend allhands/api/protocol.py.
+ * Transport protocol — mirrors backend allhands/api/protocol.py and
+ * allhands/execution/events.py.
  *
  * Any schema change here MUST be matched on the backend (and vice versa).
  * tests/integration/test_render_protocol.py checks schema parity end-to-end.
@@ -24,15 +25,17 @@ export type ToolCall = {
   error?: string | null;
 };
 
+export type RenderInteraction = {
+  kind: "button" | "form_submit" | "link";
+  label: string;
+  action: string;
+  payload?: Record<string, unknown>;
+};
+
 export type RenderPayload = {
   component: string;
   props: Record<string, unknown>;
-  interactions: Array<{
-    kind: "button" | "form_submit" | "link";
-    label: string;
-    action: string;
-    payload?: Record<string, unknown>;
-  }>;
+  interactions: RenderInteraction[];
 };
 
 export type Message = {
@@ -42,14 +45,34 @@ export type Message = {
   content: string;
   tool_calls: ToolCall[];
   render_payloads: RenderPayload[];
+  tool_call_id?: string | null;
+  trace_ref?: string | null;
   created_at: string;
 };
 
-/** SSE event envelope — narrow union per backend allhands/api/protocol.py. */
+/** SSE event envelope — mirrors backend allhands/execution/events.py AgentEvent union. */
 export type SSEEvent =
-  | { type: "message.delta"; message_id: string; delta: string }
-  | { type: "message.final"; message: Message }
-  | { type: "tool_call.update"; tool_call: ToolCall }
-  | { type: "confirmation.requested"; confirmation_id: string; tool_call_id: string }
-  | { type: "render"; message_id: string; payload: RenderPayload }
-  | { type: "run.end"; reason: "done" | "max_iterations" | "error"; error?: string };
+  | { kind: "token"; message_id: string; delta: string }
+  | { kind: "tool_call_start"; tool_call: ToolCall }
+  | { kind: "tool_call_end"; tool_call: ToolCall }
+  | {
+      kind: "confirm_required";
+      confirmation_id: string;
+      tool_call_id: string;
+      summary: string;
+      rationale: string;
+      diff?: Record<string, unknown> | null;
+    }
+  | { kind: "confirm_resolved"; confirmation_id: string; status: string }
+  | { kind: "render"; message_id: string; payload: RenderPayload }
+  | {
+      kind: "nested_run_start";
+      run_id: string;
+      parent_run_id: string | null;
+      employee_name: string;
+    }
+  | { kind: "nested_run_end"; run_id: string; status: string }
+  | { kind: "trace"; trace_id: string; url?: string | null }
+  | { kind: "error"; code: string; message: string }
+  | { kind: "done"; message_id: string; reason: "done" | "max_iterations" | "error" }
+  | { kind: string; [key: string]: unknown };

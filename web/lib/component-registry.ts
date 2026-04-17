@@ -39,3 +39,14 @@ export function resolveComponent(name: string): RegistryEntry | undefined {
 export function registeredComponents(): string[] {
   return [...registry.keys()].sort();
 }
+
+// Register built-in render components (client-side only)
+if (typeof window !== "undefined") {
+  import("../components/render/MarkdownCard").then(({ MarkdownCard }) => {
+    try {
+      registerComponent("MarkdownCard", MarkdownCard);
+    } catch {
+      // Already registered (hot reload)
+    }
+  });
+}
