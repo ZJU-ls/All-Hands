@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any, AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 from allhands.core import Employee
-from allhands.execution.events import DoneEvent, TokenEvent
 from allhands.execution.gate import AutoApproveGate
 from allhands.execution.registry import ToolRegistry
 from allhands.execution.runner import AgentRunner

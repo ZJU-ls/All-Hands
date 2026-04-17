@@ -7,7 +7,7 @@ without touching domain types.
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 — SQLAlchemy evaluates Mapped[] at runtime
+from datetime import datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -123,3 +123,15 @@ class ConfirmationRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class LLMProviderRow(Base):
+    __tablename__ = "llm_providers"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    base_url: Mapped[str] = mapped_column(String(512))
+    api_key: Mapped[str] = mapped_column(String(512), default="")
+    default_model: Mapped[str] = mapped_column(String(128), default="gpt-4o-mini")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)

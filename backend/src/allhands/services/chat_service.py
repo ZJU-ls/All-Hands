@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from allhands.execution.gate import BaseGate
     from allhands.execution.registry import ToolRegistry
     from allhands.execution.skills import SkillRegistry
-    from allhands.persistence.repositories import ConversationRepo, EmployeeRepo
+    from allhands.persistence.repositories import ConversationRepo, EmployeeRepo, LLMProviderRepo
 
 
 class ChatService:
@@ -29,12 +29,14 @@ class ChatService:
         tool_registry: ToolRegistry,
         skill_registry: SkillRegistry,
         gate: BaseGate,
+        provider_repo: LLMProviderRepo | None = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
         self._tools = tool_registry
         self._skills = skill_registry
         self._gate = gate
+        self._providers = provider_repo
 
     async def create_conversation(self, employee_id: str) -> Conversation:
         conv = Conversation(
@@ -86,9 +88,14 @@ class ChatService:
             if m.role in ("user", "assistant")
         ]
 
+        provider = None
+        if self._providers is not None:
+            provider = await self._providers.get_default()
+
         runner = AgentRunner(
             employee=effective_employee,
             tool_registry=self._tools,
             gate=self._gate,
+            provider=provider,
         )
         return runner.stream(messages=lc_messages, thread_id=conversation_id)

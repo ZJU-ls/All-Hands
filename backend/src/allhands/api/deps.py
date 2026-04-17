@@ -15,6 +15,7 @@ from allhands.persistence.sql_repos import (
     SqlConfirmationRepo,
     SqlConversationRepo,
     SqlEmployeeRepo,
+    SqlLLMProviderRepo,
 )
 from allhands.services.chat_service import ChatService
 from allhands.services.confirmation_service import ConfirmationService
@@ -24,6 +25,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from allhands.services.provider_service import LLMProviderService
 
 
 @lru_cache(maxsize=1)
@@ -81,4 +84,11 @@ async def get_chat_service(session: AsyncSession) -> ChatService:
         tool_registry=get_tool_registry(),
         skill_registry=get_skill_registry(),
         gate=gate,
+        provider_repo=SqlLLMProviderRepo(session),
     )
+
+
+async def get_provider_service(session: AsyncSession) -> LLMProviderService:
+    from allhands.services.provider_service import LLMProviderService
+
+    return LLMProviderService(SqlLLMProviderRepo(session))

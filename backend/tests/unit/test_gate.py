@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from allhands.core import Tool, ToolKind, ToolScope
 from allhands.execution.gate import AutoApproveGate, AutoRejectGate
 

@@ -9,6 +9,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from allhands.config import get_settings
+from allhands.core.provider import LLMProvider
 from allhands.core.tool import ToolScope
 from allhands.execution.events import (
     AgentEvent,
@@ -25,16 +26,25 @@ if TYPE_CHECKING:
     from allhands.execution.registry import ToolRegistry
 
 
-def _build_model(model_ref: str) -> Any:
+def _build_model(model_ref: str, provider: LLMProvider | None = None) -> Any:
     from langchain_openai import ChatOpenAI
 
-    settings = get_settings()
     model_name = model_ref.split("/", 1)[-1]
     kwargs: dict[str, Any] = {"model": model_name}
-    if settings.openai_api_key:
-        kwargs["api_key"] = settings.openai_api_key
-    if settings.openai_base_url:
-        kwargs["base_url"] = settings.openai_base_url
+
+    if provider is not None:
+        if provider.api_key:
+            kwargs["api_key"] = provider.api_key
+        if provider.base_url:
+            kwargs["base_url"] = provider.base_url
+    else:
+        # fallback to env config
+        settings = get_settings()
+        if settings.openai_api_key:
+            kwargs["api_key"] = settings.openai_api_key
+        if settings.openai_base_url:
+            kwargs["base_url"] = settings.openai_base_url
+
     return ChatOpenAI(**kwargs)
 
 
@@ -44,10 +54,12 @@ class AgentRunner:
         employee: Employee,
         tool_registry: ToolRegistry,
         gate: BaseGate,
+        provider: LLMProvider | None = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
         self._gate = gate
+        self._provider = provider
 
     async def stream(
         self,
@@ -107,7 +119,7 @@ class AgentRunner:
                 )
             lc_tools.append(lc_tool)
 
-        model = _build_model(self._employee.model_ref)
+        model = _build_model(self._employee.model_ref, self._provider)
         lc_messages = [
             HumanMessage(content=m["content"]) if m["role"] == "user"
             else AIMessage(content=m["content"])

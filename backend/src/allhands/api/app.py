@@ -9,6 +9,7 @@ from allhands import __version__
 from allhands.api.routers import health
 from allhands.api.routers.chat import router as chat_router
 from allhands.api.routers.confirmations import router as confirmations_router
+from allhands.api.routers.providers import router as providers_router
 from allhands.config import get_settings
 
 
@@ -32,4 +33,5 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(chat_router, prefix="/api")
     app.include_router(confirmations_router, prefix="/api")
+    app.include_router(providers_router, prefix="/api")
     return app

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from allhands.core import (
     Conversation,
     Employee,
     InteractionSpec,
+    LLMProvider,
     MCPHealth,
     MCPServer,
     MCPTransport,
@@ -29,6 +30,7 @@ from allhands.persistence.orm.models import (
     ConfirmationRow,
     ConversationRow,
     EmployeeRow,
+    LLMProviderRow,
     MCPServerRow,
     MessageRow,
     SkillRow,
@@ -391,3 +393,74 @@ class SqlMCPServerRepo:
         if row:
             await self._s.delete(row)
             await self._s.flush()
+
+
+def _row_to_provider(row: LLMProviderRow) -> LLMProvider:
+    return LLMProvider(
+        id=row.id,
+        name=row.name,
+        base_url=row.base_url,
+        api_key=row.api_key,
+        default_model=row.default_model,
+        is_default=row.is_default,
+        enabled=row.enabled,
+    )
+
+
+class SqlLLMProviderRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, provider_id: str) -> LLMProvider | None:
+        row = await self._s.get(LLMProviderRow, provider_id)
+        return _row_to_provider(row) if row else None
+
+    async def get_default(self) -> LLMProvider | None:
+        result = await self._s.execute(
+            select(LLMProviderRow).where(
+                LLMProviderRow.is_default.is_(True), LLMProviderRow.enabled.is_(True)
+            )
+        )
+        row = result.scalar_one_or_none()
+        return _row_to_provider(row) if row else None
+
+    async def list_all(self) -> list[LLMProvider]:
+        result = await self._s.execute(select(LLMProviderRow))
+        return [_row_to_provider(r) for r in result.scalars().all()]
+
+    async def upsert(self, provider: LLMProvider) -> LLMProvider:
+        existing = await self._s.get(LLMProviderRow, provider.id)
+        if existing:
+            existing.name = provider.name
+            existing.base_url = provider.base_url
+            existing.api_key = provider.api_key
+            existing.default_model = provider.default_model
+            existing.is_default = provider.is_default
+            existing.enabled = provider.enabled
+        else:
+            self._s.add(
+                LLMProviderRow(
+                    id=provider.id,
+                    name=provider.name,
+                    base_url=provider.base_url,
+                    api_key=provider.api_key,
+                    default_model=provider.default_model,
+                    is_default=provider.is_default,
+                    enabled=provider.enabled,
+                )
+            )
+        await self._s.flush()
+        return provider
+
+    async def delete(self, provider_id: str) -> None:
+        row = await self._s.get(LLMProviderRow, provider_id)
+        if row:
+            await self._s.delete(row)
+            await self._s.flush()
+
+    async def set_default(self, provider_id: str) -> None:
+        await self._s.execute(update(LLMProviderRow).values(is_default=False))
+        row = await self._s.get(LLMProviderRow, provider_id)
+        if row:
+            row.is_default = True
+        await self._s.flush()
