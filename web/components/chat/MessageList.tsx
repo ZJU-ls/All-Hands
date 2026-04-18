@@ -29,6 +29,7 @@ export function MessageList({ conversationId }: Props) {
         conversation_id: conversationId,
         tool_call_id: null,
         trace_ref: null,
+        parent_run_id: null,
       }
     : null;
 

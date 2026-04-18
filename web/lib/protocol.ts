@@ -47,6 +47,7 @@ export type Message = {
   render_payloads: RenderPayload[];
   tool_call_id?: string | null;
   trace_ref?: string | null;
+  parent_run_id?: string | null;
   created_at: string;
 };
 

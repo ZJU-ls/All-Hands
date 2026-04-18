@@ -90,6 +90,23 @@ async def list_conversations(
     ]
 
 
+@router.get("/{conversation_id}", response_model=ConversationResponse)
+async def get_conversation(
+    conversation_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> ConversationResponse:
+    conv_repo = await get_conversation_repo(session)
+    conv = await conv_repo.get(conversation_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+    return ConversationResponse(
+        id=conv.id,
+        employee_id=conv.employee_id,
+        title=conv.title,
+        created_at=conv.created_at.isoformat(),
+    )
+
+
 @router.post("/{conversation_id}/messages")
 async def send_message(
     conversation_id: str,
