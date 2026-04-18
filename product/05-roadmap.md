@@ -41,6 +41,8 @@
 
 ### v1.3 · 模型网关抽象
 
+> **状态:已合并于 ADR 0008**(2026-04-18)—— Gateway 的 Provider / Model Meta Tools + UI 与 Skill / MCP 三块一起在 `plans/2026-04-18-gateway-skill-mcp.md` 落地。
+
 - 把 v0 写死的 OpenAI-compatible 升级为可配置多网关
 - 数据模型:`ModelGateway` 表
 - 支持协议:OpenAI、Anthropic、本地 Ollama(MVP 三协议足够)
@@ -87,11 +89,15 @@
 
 ### v3.1 · Skill 市场
 
+> **状态:已合并于 ADR 0008**(2026-04-18)—— Skill 全栈(GitHub / 官方市场 / 本地 .zip)已在 `plans/2026-04-18-gateway-skill-mcp.md` Task 2 落地;签名验证留给 v3 后续迭代。
+
 - 公开 Skill 注册表(GitHub 仓库列表即可)
 - UI 浏览 / 一键安装(Lead Agent 调 Meta Tool 完成)
 - 版本管理、签名验证(避免恶意 Skill)
 
 ### v3.2 · MCP 市场
+
+> **状态:已合并于 ADR 0008**(2026-04-18)—— MCP 服务器管理 + 对话式 invoke 已在 `plans/2026-04-18-gateway-skill-mcp.md` Task 3 落地;社区 curated list 留给 v3 后续。
 
 - 同上,但聚焦 MCP 服务发现
 - Awesome-MCP 风格的 curated list + 一键注册

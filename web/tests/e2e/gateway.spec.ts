@@ -49,10 +49,10 @@ test.describe("gateway · 三态 + ConfirmDialog", () => {
     await page.getByPlaceholder("sk-... (本地部署可留空)").fill("sk-test");
     await page.getByRole("button", { name: "保存" }).click();
 
-    await expect(page.getByText("OpenAI")).toBeVisible();
+    await expect(page.getByTestId("provider-OpenAI")).toBeVisible();
 
     // 删除按钮触发 ConfirmDialog(不是 window.confirm)
-    await page.getByRole("button", { name: "删除" }).click();
+    await page.getByTestId("provider-OpenAI").getByRole("button", { name: "删除" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText(/删除供应商/)).toBeVisible();

@@ -178,6 +178,7 @@ export default function ProvidersPage() {
             {providers.map((p) => (
               <div
                 key={p.id}
+                data-testid={`provider-${p.name}`}
                 className="rounded-xl border border-border bg-surface p-4"
               >
                 <div className="flex items-start justify-between gap-3">
