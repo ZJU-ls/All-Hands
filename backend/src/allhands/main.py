@@ -12,29 +12,28 @@ app = create_app()
 
 @app.on_event("startup")
 async def startup() -> None:
-    from alembic.config import Config as AlembicConfig
+    import subprocess
 
-    from alembic import command
     from allhands.config import get_settings
     from allhands.persistence.db import get_sessionmaker
     from allhands.persistence.sql_repos import SqlEmployeeRepo
     from allhands.services.bootstrap_service import ensure_lead_agent
 
     settings = get_settings()
-    if hasattr(settings, "ensure_data_dir"):
-        settings.ensure_data_dir()
+    settings.ensure_data_dir()
 
-    # Run migrations
+    # Run migrations via subprocess to avoid asyncio conflict
     try:
-        cfg = AlembicConfig("alembic.ini")
-        cfg.set_main_option(
-            "sqlalchemy.url",
-            settings.sync_database_url()
-            if hasattr(settings, "sync_database_url")
-            else str(settings.database_url).replace("sqlite+aiosqlite", "sqlite"),
+        result = subprocess.run(  # noqa: ASYNC221  # intentional blocking: avoids nested-loop error from alembic's asyncio.run()
+            ["uv", "run", "alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
-        command.upgrade(cfg, "head")
-        log.info("alembic.upgrade", status="ok")
+        if result.returncode == 0:
+            log.info("alembic.upgrade", status="ok")
+        else:
+            log.warning("alembic.upgrade.failed", stderr=result.stderr[:200])
     except Exception as exc:
         log.warning("alembic.upgrade.failed", error=str(exc))
 
