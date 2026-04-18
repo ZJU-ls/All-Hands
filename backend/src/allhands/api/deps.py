@@ -27,6 +27,8 @@ from allhands.persistence.sql_repos import (
     SqlLLMProviderRepo,
     SqlMCPServerRepo,
     SqlSkillRepo,
+    SqlTriggerFireRepo,
+    SqlTriggerRepo,
 )
 from allhands.services.chat_service import ChatService
 from allhands.services.confirmation_service import ConfirmationService
@@ -34,6 +36,7 @@ from allhands.services.employee_service import EmployeeService
 from allhands.services.github_market import AnthropicsSkillsMarket, GithubSkillMarket
 from allhands.services.mcp_service import MCPService
 from allhands.services.skill_service import SkillService
+from allhands.services.trigger_service import TriggerService
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -143,3 +146,14 @@ def _get_mcp_adapter() -> RealMCPAdapter:
 
 async def get_mcp_service(session: AsyncSession = Depends(get_session)) -> MCPService:
     return MCPService(repo=SqlMCPServerRepo(session), adapter=_get_mcp_adapter())
+
+
+async def get_trigger_service(
+    session: AsyncSession = Depends(get_session),
+) -> TriggerService:
+    return TriggerService(
+        trigger_repo=SqlTriggerRepo(session),
+        fire_repo=SqlTriggerFireRepo(session),
+        # action_handlers left empty at request scope — the scheduler process
+        # (wave B.3 · 6/N) wires handlers via the shared lifespan-owned instance.
+    )

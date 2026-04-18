@@ -15,6 +15,7 @@ from allhands.api.routers.models import router as models_router
 from allhands.api.routers.plans import router as plans_router
 from allhands.api.routers.providers import router as providers_router
 from allhands.api.routers.skills import router as skills_router
+from allhands.api.routers.triggers import router as triggers_router
 from allhands.config import get_settings
 
 
@@ -44,4 +45,5 @@ def create_app() -> FastAPI:
     app.include_router(skills_router, prefix="/api")
     app.include_router(mcp_servers_router, prefix="/api")
     app.include_router(plans_router, prefix="/api")
+    app.include_router(triggers_router, prefix="/api")
     return app
