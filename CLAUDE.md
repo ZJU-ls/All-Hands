@@ -31,15 +31,16 @@
 
 ## 3. 核心设计原则(必须遵守,违反则打回)
 
-### 3.1 Tool First
+### 3.1 Tool First(2026-04-18 扩展版 · 见 L01)
 
-> **Tool 是 Agent 的能力边界,不是平台的 API 形态。**
-> 问「这能不能包装成 Tool?」是错问题。正确问法:**"这件事该不该由 Agent 代表用户做?"** 是 → Tool;否 → REST / UI 直调都行。
+> **Tool 是 Agent 的能力边界;平台的每个能力都要同时暴露成 Meta Tool,让 Lead Agent 通过对话能做用户在 UI 上能做的任何事。**
+> 原则不是"Agent 代做的才是 Tool",而是 **"Agent 全知全能 = 平台能力都有对应 Tool"**。独立 UI 页面与 Meta Tool **并存**,不是二选一。
 
-- **Agent 侧的新能力** → 注册新 Tool(Backend / Render / Meta 之一);不是 Agent 做的事**不需要**是 Tool
-- 后端:员工 / Skill / MCP / Provider 等**由 Lead Agent 代表用户执行**的写操作必须是 Meta Tool,不能开 REST CRUD(违反 → `backend/tests/unit/test_learnings.py` 会红)
-- **前端允许有菜单栏和导航页面**(Chat、模型网关、Traces 等都是合法入口);页面内部调用后端时,**只要是 Agent 代做的**优先走 Meta Tool
-- REST 直调允许的场景:**Bootstrap 引导** / **只读浏览(Traces、列表)** / **复杂配置流程(Gateway 类)** / **敏感凭证直输**
+- **一份实现,两个入口**:后端 service 层写一份业务逻辑;上面叠两层 API —— `routers/` 给 UI 用户直接操作,`execution/tools/meta/` 给 Lead Agent 对话调用。两者语义等价,不允许功能漂移
+- **Agent-managed 资源(员工 / Skill / MCP / Provider / Model)** 的每一个 CRUD 操作和页面按钮行为都必须有**对应的** Meta Tool(即使独立页已经在用 REST)
+- **前端允许独立 CRUD 页 + 页面操作按钮**(Gateway / Skills 管理 / MCP 管理 / 员工管理等),走 REST 直调;**同时**必须确认对应能力已在 Meta Tool 注册
+- REST-only(不需要 Meta Tool)场景:**Bootstrap 候选版本切换** / **只读列表浏览(Traces)** / **敏感凭证直输(API key)** / Confirmation Gate 回执 / 对话消息收发本身
+- 回归测试(`test_learnings.py::TestL01ToolFirstBoundary`)验证:Agent-managed 路由凡有 REST 写操作 → 必须有同名语义 Meta Tool(两个入口必须成对)
 
 ### 3.2 统一 React Agent
 
