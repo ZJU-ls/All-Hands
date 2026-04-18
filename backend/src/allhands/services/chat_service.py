@@ -6,8 +6,9 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from allhands.core import Conversation, Message
+from allhands.core import Conversation, Employee, Message
 from allhands.core.errors import DomainError, EmployeeNotFound
+from allhands.execution.dispatch import DispatchService
 from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import expand_skills_to_tools
 
@@ -76,9 +77,7 @@ class ChatService:
             effective_employee = employee.model_copy(
                 update={"system_prompt": employee.system_prompt + "\n\n" + prompt_fragment}
             )
-        all_tool_ids = list(
-            dict.fromkeys(employee.tool_ids + [t.id for t in expanded_tools])
-        )
+        all_tool_ids = list(dict.fromkeys(employee.tool_ids + [t.id for t in expanded_tools]))
         effective_employee = effective_employee.model_copy(update={"tool_ids": all_tool_ids})
 
         history = await self._conversations.list_messages(conversation_id)
@@ -92,10 +91,43 @@ class ChatService:
         if self._providers is not None:
             provider = await self._providers.get_default()
 
+        dispatch_service = DispatchService(
+            employee_repo=self._employees,
+            runner_factory=self._build_runner_factory(provider),
+        )
         runner = AgentRunner(
             employee=effective_employee,
             tool_registry=self._tools,
             gate=self._gate,
             provider=provider,
+            dispatch_service=dispatch_service,
         )
         return runner.stream(messages=lc_messages, thread_id=conversation_id)
+
+    def _build_runner_factory(self, provider: Any) -> Any:
+        """Closure used by DispatchService to spawn sub-runners.
+
+        The sub-runner carries the same tool registry / gate / provider so that
+        Confirmation Gate events propagate through the active SSE stream and
+        provider config is inherited (agent-design § 6.2 rules 4 + 7).
+        """
+        tool_registry = self._tools
+        gate = self._gate
+        employee_repo = self._employees
+
+        def factory(child: Employee, depth: int) -> AgentRunner:
+            # Sub-runner also gets a dispatch_service so nested dispatch works
+            # until MAX_DISPATCH_DEPTH kicks in.
+            nested_dispatch = DispatchService(
+                employee_repo=employee_repo,
+                runner_factory=self._build_runner_factory(provider),
+            )
+            return AgentRunner(
+                employee=child,
+                tool_registry=tool_registry,
+                gate=gate,
+                provider=provider,
+                dispatch_service=nested_dispatch,
+            )
+
+        return factory

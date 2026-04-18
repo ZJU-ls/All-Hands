@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from allhands.core import (
+    AgentPlan,
     Confirmation,
     ConfirmationStatus,
     Conversation,
@@ -22,13 +23,16 @@ from allhands.core import (
     MCPServer,
     MCPTransport,
     Message,
+    PlanStep,
     RenderPayload,
     Skill,
     SkillSource,
+    StepStatus,
     ToolCall,
     ToolCallStatus,
 )
 from allhands.persistence.orm.models import (
+    AgentPlanRow,
     ConfirmationRow,
     ConversationRow,
     EmployeeRow,
@@ -412,6 +416,86 @@ class SqlMCPServerRepo:
 
     async def delete(self, server_id: str) -> None:
         row = await self._s.get(MCPServerRow, server_id)
+        if row:
+            await self._s.delete(row)
+            await self._s.flush()
+
+
+def _row_to_plan(row: AgentPlanRow) -> AgentPlan:
+    steps = [
+        PlanStep(
+            index=cast("int", s.get("index", 0)),
+            title=cast("str", s.get("title", "")),
+            status=StepStatus(cast("str", s.get("status", "pending"))),
+            note=cast("str | None", s.get("note")),
+        )
+        for s in (row.steps or [])
+    ]
+    return AgentPlan(
+        id=row.id,
+        conversation_id=row.conversation_id,
+        run_id=row.run_id,
+        owner_employee_id=row.owner_employee_id,
+        title=row.title,
+        steps=steps,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+class SqlAgentPlanRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, plan_id: str) -> AgentPlan | None:
+        row = await self._s.get(AgentPlanRow, plan_id)
+        return _row_to_plan(row) if row else None
+
+    async def get_latest_for_conversation(self, conversation_id: str) -> AgentPlan | None:
+        result = await self._s.execute(
+            select(AgentPlanRow)
+            .where(AgentPlanRow.conversation_id == conversation_id)
+            .order_by(AgentPlanRow.updated_at.desc())
+        )
+        row = result.scalars().first()
+        return _row_to_plan(row) if row else None
+
+    async def list_for_conversation(self, conversation_id: str) -> list[AgentPlan]:
+        result = await self._s.execute(
+            select(AgentPlanRow)
+            .where(AgentPlanRow.conversation_id == conversation_id)
+            .order_by(AgentPlanRow.created_at.desc())
+        )
+        return [_row_to_plan(r) for r in result.scalars().all()]
+
+    async def upsert(self, plan: AgentPlan) -> AgentPlan:
+        existing = await self._s.get(AgentPlanRow, plan.id)
+        step_rows = [s.model_dump(mode="json") for s in plan.steps]
+        if existing:
+            existing.conversation_id = plan.conversation_id
+            existing.run_id = plan.run_id
+            existing.owner_employee_id = plan.owner_employee_id
+            existing.title = plan.title
+            existing.steps = step_rows
+            existing.updated_at = _naive(plan.updated_at)
+        else:
+            self._s.add(
+                AgentPlanRow(
+                    id=plan.id,
+                    conversation_id=plan.conversation_id,
+                    run_id=plan.run_id,
+                    owner_employee_id=plan.owner_employee_id,
+                    title=plan.title,
+                    steps=step_rows,
+                    created_at=_naive(plan.created_at),
+                    updated_at=_naive(plan.updated_at),
+                )
+            )
+        await self._s.flush()
+        return plan
+
+    async def delete(self, plan_id: str) -> None:
+        row = await self._s.get(AgentPlanRow, plan_id)
         if row:
             await self._s.delete(row)
             await self._s.flush()

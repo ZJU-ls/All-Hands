@@ -99,20 +99,35 @@ DISPATCH_EMPLOYEE_TOOL = Tool(
     kind=ToolKind.META,
     name="dispatch_employee",
     description=(
-        "Dispatch a task to an employee and return their result. The employee runs as a sub-agent."
+        "Dispatch a task to an employee as a sub-agent. The sub-run gets a fresh "
+        "thread_id and does NOT inherit parent conversation history. Returns "
+        "{run_id, status, summary, output_refs}. See agent-design § 6."
     ),
     input_schema={
         "type": "object",
         "properties": {
-            "name": {"type": "string", "description": "Employee name to dispatch."},
-            "task": {"type": "string", "description": "Task description."},
-            "context": {
-                "type": "object",
-                "description": "Optional additional context passed to the employee.",
-                "default": {},
+            "employee_id": {
+                "type": "string",
+                "description": "Employee ID (from list_employees).",
+            },
+            "task": {
+                "type": "string",
+                "description": "Clear, self-contained task description for the sub-agent.",
+            },
+            "context_refs": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional refs to prior run_ids / message_ids for context.",
+                "default": [],
+            },
+            "timeout_seconds": {
+                "type": "integer",
+                "description": "Sub-run timeout (default 300s).",
+                "default": 300,
+                "minimum": 1,
             },
         },
-        "required": ["name", "task"],
+        "required": ["employee_id", "task"],
     },
     output_schema={"type": "object"},
     scope=ToolScope.WRITE,

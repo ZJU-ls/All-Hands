@@ -22,8 +22,36 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from allhands.core import Employee
+    from allhands.execution.dispatch import DispatchService
     from allhands.execution.gate import BaseGate
     from allhands.execution.registry import ToolRegistry
+
+
+DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
+
+
+def _make_dispatch_executor(dispatch_service: DispatchService) -> Any:
+    """Build the StructuredTool coroutine for dispatch_employee.
+
+    Keeps the closure out of the per-tool for-loop (avoids B023 loop-variable
+    capture). The runner wires this in place of the registry's no-op executor.
+    """
+
+    async def _dispatch_executor(
+        employee_id: str,
+        task: str,
+        context_refs: list[str] | None = None,
+        timeout_seconds: int = 300,
+    ) -> dict[str, Any]:
+        result = await dispatch_service.dispatch(
+            employee_id=employee_id,
+            task=task,
+            context_refs=context_refs,
+            timeout_seconds=timeout_seconds,
+        )
+        return result.model_dump()
+
+    return _dispatch_executor
 
 
 def _build_model(model_ref: str, provider: LLMProvider | None = None) -> Any:
@@ -55,11 +83,13 @@ class AgentRunner:
         tool_registry: ToolRegistry,
         gate: BaseGate,
         provider: LLMProvider | None = None,
+        dispatch_service: DispatchService | None = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
         self._gate = gate
         self._provider = provider
+        self._dispatch_service = dispatch_service
 
     async def stream(
         self,
@@ -78,6 +108,16 @@ class AgentRunner:
             try:
                 tool, executor = self._tool_registry.get(tool_id)
             except KeyError:
+                continue
+
+            if tool_id == DISPATCH_TOOL_ID and self._dispatch_service is not None:
+                lc_tools.append(
+                    StructuredTool.from_function(
+                        coroutine=_make_dispatch_executor(self._dispatch_service),
+                        name=tool.name,
+                        description=tool.description,
+                    )
+                )
                 continue
 
             needs_gate = (
@@ -121,7 +161,8 @@ class AgentRunner:
 
         model = _build_model(self._employee.model_ref, self._provider)
         lc_messages = [
-            HumanMessage(content=m["content"]) if m["role"] == "user"
+            HumanMessage(content=m["content"])
+            if m["role"] == "user"
             else AIMessage(content=m["content"])
             for m in messages
             if m["role"] in ("user", "assistant")

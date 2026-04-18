@@ -1,15 +1,75 @@
-"""EmployeeService — application-level use cases for employee management."""
+"""EmployeeService — application-level use cases for employee management.
+
+Enforces the dispatch-mount invariants from agent-design § 7:
+
+- `is_lead_agent=True` auto-injects `dispatch_employee` + `list_employees` +
+  `get_employee_detail` so the Lead always has the coordination toolkit.
+- A non-Lead employee may mount `dispatch_employee` (sub-lead pattern), but
+  it MUST also mount `list_employees` + `get_employee_detail` — without the
+  "who can I delegate to?" tools, dispatch is a blind shot.
+- Any other combination with `dispatch_employee` is rejected as an invariant
+  violation.
+
+Default skill injection (§ 13.5.3): new employees created without an explicit
+`skill_ids` list get `DEFAULT_SKILL_IDS` so every employee starts with the
+"output" skills (render + artifacts) needed to produce visible work.
+"""
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from allhands.core import Employee, EmployeeNotFound
+from allhands.core import Employee, EmployeeNotFound, InvariantViolation
 
 if TYPE_CHECKING:
     from allhands.persistence.repositories import EmployeeRepo
+
+
+log = logging.getLogger(__name__)
+
+DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
+LIST_EMPLOYEES_TOOL_ID = "allhands.meta.list_employees"
+GET_EMPLOYEE_DETAIL_TOOL_ID = "allhands.meta.get_employee_detail"
+
+COORDINATION_TOOL_IDS: tuple[str, ...] = (
+    DISPATCH_TOOL_ID,
+    LIST_EMPLOYEES_TOOL_ID,
+    GET_EMPLOYEE_DETAIL_TOOL_ID,
+)
+
+DEFAULT_SKILL_IDS: tuple[str, ...] = ("allhands.render", "allhands.artifacts")
+
+
+def _inject_coordination_tools(tool_ids: list[str]) -> list[str]:
+    out = list(tool_ids)
+    for t in COORDINATION_TOOL_IDS:
+        if t not in out:
+            out.append(t)
+    return out
+
+
+def _validate_dispatch_mount(tool_ids: list[str], is_lead_agent: bool) -> None:
+    if is_lead_agent:
+        return
+    if DISPATCH_TOOL_ID not in tool_ids:
+        return
+    missing = [
+        t for t in (LIST_EMPLOYEES_TOOL_ID, GET_EMPLOYEE_DETAIL_TOOL_ID) if t not in tool_ids
+    ]
+    if missing:
+        raise InvariantViolation(
+            "Non-Lead employee mounts dispatch_employee but is missing "
+            f"coordination tool(s): {missing}. Sub-lead employees MUST also "
+            "mount list_employees + get_employee_detail, otherwise they cannot "
+            "decide who to delegate to."
+        )
+    log.warning(
+        "employee.sub_lead_mount",
+        extra={"detail": "non-Lead employee mounts dispatch_employee (sub-lead pattern)"},
+    )
 
 
 class EmployeeService:
@@ -28,12 +88,13 @@ class EmployeeService:
         is_lead_agent: bool = False,
         created_by: str = "user",
     ) -> Employee:
-        tids = tool_ids or []
-        sids = skill_ids or []
+        tids = list(tool_ids) if tool_ids is not None else []
+        sids = list(skill_ids) if skill_ids is not None else list(DEFAULT_SKILL_IDS)
+        if is_lead_agent:
+            tids = _inject_coordination_tools(tids)
+        _validate_dispatch_mount(tids, is_lead_agent)
         if not tids and not sids:
-            raise ValueError(
-                "Employee must have at least one tool or skill capability."
-            )
+            raise ValueError("Employee must have at least one tool or skill capability.")
         employee = Employee(
             id=str(uuid.uuid4()),
             name=name,
@@ -76,6 +137,10 @@ class EmployeeService:
         max_iterations: int | None = None,
     ) -> Employee:
         emp = await self.get(employee_id)
+        new_tool_ids = list(tool_ids) if tool_ids is not None else list(emp.tool_ids)
+        if emp.is_lead_agent:
+            new_tool_ids = _inject_coordination_tools(new_tool_ids)
+        _validate_dispatch_mount(new_tool_ids, emp.is_lead_agent)
         updated = emp.model_copy(
             update={
                 k: v
@@ -83,7 +148,7 @@ class EmployeeService:
                     "description": description,
                     "system_prompt": system_prompt,
                     "model_ref": model_ref,
-                    "tool_ids": tool_ids,
+                    "tool_ids": new_tool_ids if tool_ids is not None else None,
                     "skill_ids": skill_ids,
                     "max_iterations": max_iterations,
                 }.items()

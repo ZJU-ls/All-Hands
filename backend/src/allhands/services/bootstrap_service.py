@@ -1,36 +1,46 @@
-"""BootstrapService — ensure Lead Agent exists on startup."""
+"""BootstrapService — ensure Lead Agent exists on startup.
+
+The Lead Agent gets:
+
+- All employee meta tools (list/get_detail/create/update/delete/dispatch)
+- All Plan family tools — Lead should plan its own delegation flow
+- Default `skill_ids` (render + artifacts) so the Lead can output visible
+  work without extra wiring
+
+System prompt is loaded from `execution/prompts/lead_agent.md` so we can
+iterate on wording without a code deploy.
+"""
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from allhands.core import Employee
 from allhands.execution.tools.meta.employee_tools import ALL_META_TOOLS
+from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
+from allhands.services.employee_service import DEFAULT_SKILL_IDS
 
 if TYPE_CHECKING:
     from allhands.persistence.repositories import EmployeeRepo
 
-LEAD_SYSTEM_PROMPT = """\
-You are the Lead Agent of the allhands platform — a digital employee organization platform.
-You help users build and manage a team of AI employees.
 
-You have access to meta tools to:
-- list, create, update, and delete employees
-- dispatch tasks to employees
-- render content in the UI using render tools
-- list available skills
+PROMPT_PATH = Path(__file__).resolve().parents[1] / "execution" / "prompts" / "lead_agent.md"
 
-When a user asks you to accomplish a task:
-1. Think about which employees would be needed
-2. Create them if they don't exist (requires user confirmation)
-3. Dispatch the task to the appropriate employees
-4. Synthesize their results and present a clear answer
+FALLBACK_PROMPT = (
+    "You are the Lead Agent of the allhands platform. Coordinate employees "
+    "via list_employees / get_employee_detail / dispatch_employee. Plan with "
+    "plan_create before non-trivial work."
+)
 
-Always be transparent about what you're doing and why.
-When creating employees, write clear, focused system prompts.
-"""
+
+def load_lead_prompt() -> str:
+    try:
+        return PROMPT_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return FALLBACK_PROMPT
 
 
 async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
@@ -39,15 +49,15 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
     if existing is not None:
         return existing
 
-    meta_tool_ids = [t.id for t in ALL_META_TOOLS]
+    tool_ids = [t.id for t in ALL_META_TOOLS] + [t.id for t in ALL_PLAN_TOOLS]
     lead = Employee(
         id=str(uuid.uuid4()),
         name="LeadAgent",
         description="The Lead Agent — user's primary interface to the platform.",
-        system_prompt=LEAD_SYSTEM_PROMPT,
+        system_prompt=load_lead_prompt(),
         model_ref="openai/gpt-4o-mini",
-        tool_ids=meta_tool_ids,
-        skill_ids=[],
+        tool_ids=tool_ids,
+        skill_ids=list(DEFAULT_SKILL_IDS),
         max_iterations=20,
         is_lead_agent=True,
         created_by="system",

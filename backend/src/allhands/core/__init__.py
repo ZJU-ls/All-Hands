@@ -21,17 +21,21 @@ from allhands.core.errors import (
     DomainError,
     EmployeeNotFound,
     InvariantViolation,
+    MaxDispatchDepthExceeded,
     MaxIterationsReached,
     MCPHandshakeFailed,
+    SubRunFailed,
     ToolNotFound,
 )
 from allhands.core.mcp import MCPHealth, MCPServer, MCPTransport
 from allhands.core.model import LLMModel
+from allhands.core.plan import AgentPlan, PlanStep, StepStatus
 from allhands.core.provider import LLMProvider
 from allhands.core.skill import Skill, SkillSource
 from allhands.core.tool import CostHint, Tool, ToolKind, ToolScope
 
 __all__ = [
+    "AgentPlan",
     "Confirmation",
     "ConfirmationExpired",
     "ConfirmationRejected",
@@ -49,12 +53,16 @@ __all__ = [
     "MCPHealth",
     "MCPServer",
     "MCPTransport",
+    "MaxDispatchDepthExceeded",
     "MaxIterationsReached",
     "Message",
     "MessageRole",
+    "PlanStep",
     "RenderPayload",
     "Skill",
     "SkillSource",
+    "StepStatus",
+    "SubRunFailed",
     "Tool",
     "ToolCall",
     "ToolCallStatus",

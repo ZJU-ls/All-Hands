@@ -41,3 +41,21 @@ class MCPHandshakeFailed(DomainError):
         super().__init__(f"MCP handshake failed for '{server_name}': {detail}")
         self.server_name = server_name
         self.detail = detail
+
+
+class MaxDispatchDepthExceeded(DomainError):
+    """Raised when dispatch_employee would exceed MAX_DISPATCH_DEPTH (agent-design § 6.2 rule 5)."""
+
+    def __init__(self, depth: int, limit: int) -> None:
+        super().__init__(f"Dispatch depth {depth} exceeds MAX_DISPATCH_DEPTH={limit}.")
+        self.depth = depth
+        self.limit = limit
+
+
+class SubRunFailed(DomainError):
+    """Sub-run (dispatched employee) failed before producing a result (§ 6.3)."""
+
+    def __init__(self, employee_id: str, reason: str) -> None:
+        super().__init__(f"Sub-run of employee '{employee_id}' failed: {reason}")
+        self.employee_id = employee_id
+        self.reason = reason

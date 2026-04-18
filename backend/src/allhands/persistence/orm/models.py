@@ -64,6 +64,23 @@ class MCPServerRow(Base):
     health: Mapped[str] = mapped_column(String(32), default="unknown")
 
 
+class AgentPlanRow(Base):
+    __tablename__ = "agent_plans"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        index=True,
+    )
+    run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    owner_employee_id: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(512))
+    steps: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class ConversationRow(Base):
     __tablename__ = "conversations"
 

@@ -392,6 +392,10 @@ def expand_skills_to_tools(
 | `allhands.meta.register_mcp` | WRITE | yes |
 | `allhands.meta.remove_mcp` | IRREVERSIBLE | yes |
 | `allhands.meta.list_conversations` | READ | no |
+| `allhands.meta.plan_create` | WRITE | no(agent 工作备忘,无外部副作用) |
+| `allhands.meta.plan_update_step` | WRITE | no |
+| `allhands.meta.plan_complete_step` | WRITE | no |
+| `allhands.meta.plan_view` | READ | no |
 | `allhands.meta.propose_lead_agent_version` | BOOTSTRAP | yes + 写候选 |
 | `allhands.meta.switch_lead_agent_version` | BOOTSTRAP | yes + 写候选 |
 

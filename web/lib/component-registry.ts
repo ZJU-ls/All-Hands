@@ -49,4 +49,11 @@ if (typeof window !== "undefined") {
       // Already registered (hot reload)
     }
   });
+  import("../components/render/PlanTimeline").then(({ PlanTimeline }) => {
+    try {
+      registerComponent("PlanTimeline", PlanTimeline);
+    } catch {
+      // Already registered (hot reload)
+    }
+  });
 }
