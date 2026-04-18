@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { Cockpit } from "@/components/cockpit/Cockpit";
 
 export default function HomePage() {
-  redirect("/chat");
+  return <Cockpit />;
 }
