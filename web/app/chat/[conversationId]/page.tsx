@@ -10,6 +10,7 @@ import {
   type ConversationHeaderEmployee,
 } from "@/components/chat/ConversationHeader";
 import { AppShell } from "@/components/shell/AppShell";
+import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
 import {
   getConversation,
   getEmployee,
@@ -32,6 +33,7 @@ export default function ConversationPage() {
   const [conv, setConv] = useState<ConversationDto | null>(null);
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,28 +55,57 @@ export default function ConversationPage() {
     };
   }, [conversationId]);
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        setPanelOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const headerEmployee = employee ? toHeaderEmployee(employee) : null;
 
   return (
     <AppShell
       title="对话"
       actions={
-        <ConversationHeader
-          employee={headerEmployee}
-          conversationTitle={conv?.title ?? null}
-        />
+        <div className="flex items-center gap-2">
+          <ConversationHeader
+            employee={headerEmployee}
+            conversationTitle={conv?.title ?? null}
+          />
+          <button
+            onClick={() => setPanelOpen((v) => !v)}
+            aria-pressed={panelOpen}
+            aria-label="切换制品区"
+            title="制品区 · Cmd/Ctrl+J"
+            className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 font-mono text-[11px] transition-colors duration-base ${
+              panelOpen
+                ? "border-border-strong bg-surface-2 text-text"
+                : "border-border text-text-muted hover:text-text hover:border-border-strong"
+            }`}
+          >
+            制品 <span className="text-text-subtle">⌘J</span>
+          </button>
+        </div>
       }
     >
-      <div className="flex h-full flex-col min-w-0">
-        {error && (
-          <div className="border-b border-border bg-surface-2 px-4 py-2 text-[12px] text-danger">
-            {error}
+      <div className="flex h-full min-w-0">
+        <div className="flex h-full flex-1 flex-col min-w-0">
+          {error && (
+            <div className="border-b border-border bg-surface-2 px-4 py-2 text-[12px] text-danger">
+              {error}
+            </div>
+          )}
+          <div className="flex-1 overflow-y-auto">
+            <MessageList conversationId={conversationId} />
           </div>
-        )}
-        <div className="flex-1 overflow-y-auto">
-          <MessageList conversationId={conversationId} />
+          <InputBar conversationId={conversationId} />
         </div>
-        <InputBar conversationId={conversationId} />
+        {panelOpen && <ArtifactPanel onClose={() => setPanelOpen(false)} />}
       </div>
       <ConfirmationDialog />
     </AppShell>

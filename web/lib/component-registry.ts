@@ -67,4 +67,7 @@ if (typeof window !== "undefined") {
     safeRegister("Viz.Callout", Viz.Callout);
     safeRegister("Viz.LinkCard", Viz.LinkCard);
   });
+  import("../components/render/Artifact/Preview").then(({ ArtifactPreview }) => {
+    safeRegister("Artifact.Preview", ArtifactPreview);
+  });
 }
