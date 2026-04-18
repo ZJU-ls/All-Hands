@@ -49,7 +49,8 @@ class TestL01ToolFirstBoundary:
     # Known gaps being filled by plan `2026-04-18-gateway-skill-mcp.md`.
     # These routers have REST writes but their Meta Tool files are still being authored.
     # Entries must be removed when the plan's corresponding task lands the tool file.
-    KNOWN_GAP_ROUTERS: ClassVar[set[str]] = {"providers.py", "models.py"}
+    # Empty = full parity enforced.
+    KNOWN_GAP_ROUTERS: ClassVar[set[str]] = set()
 
     WRITE_DECORATOR = re.compile(r"@router\.(post|patch|put|delete)\b", re.IGNORECASE)
 

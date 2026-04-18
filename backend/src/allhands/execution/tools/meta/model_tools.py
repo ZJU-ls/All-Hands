@@ -1,0 +1,127 @@
+"""Meta tools for LLM Model — mirrors REST routes in routers/models.py.
+
+L01 扩展版(2026-04-18):Lead Agent 对话入口 + UI 独立页并存。
+models.py 的 list / get / create / update / delete / chat-test 都对应 Meta Tool。
+"""
+
+from __future__ import annotations
+
+from allhands.core import Tool, ToolKind, ToolScope
+
+_MODEL_ID_REQUIRED: dict[str, object] = {
+    "type": "object",
+    "properties": {"model_id": {"type": "string"}},
+    "required": ["model_id"],
+}
+
+
+LIST_MODELS_TOOL = Tool(
+    id="allhands.meta.list_models",
+    kind=ToolKind.META,
+    name="list_models",
+    description=("List LLM models. Pass provider_id to filter to one provider, omit for all."),
+    input_schema={
+        "type": "object",
+        "properties": {"provider_id": {"type": "string"}},
+    },
+    output_schema={"type": "object"},
+    scope=ToolScope.READ,
+    requires_confirmation=False,
+)
+
+GET_MODEL_TOOL = Tool(
+    id="allhands.meta.get_model",
+    kind=ToolKind.META,
+    name="get_model",
+    description="Get a specific LLM model by id.",
+    input_schema=_MODEL_ID_REQUIRED,
+    output_schema={"type": "object"},
+    scope=ToolScope.READ,
+    requires_confirmation=False,
+)
+
+CREATE_MODEL_TOOL = Tool(
+    id="allhands.meta.create_model",
+    kind=ToolKind.META,
+    name="create_model",
+    description=(
+        "Register a model under a provider. Provide provider_id, the model's "
+        "API name (e.g. 'gpt-4o-mini'), optional display_name and context_window."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "provider_id": {"type": "string"},
+            "name": {"type": "string"},
+            "display_name": {"type": "string", "default": ""},
+            "context_window": {"type": "integer", "default": 0},
+        },
+        "required": ["provider_id", "name"],
+    },
+    output_schema={"type": "object"},
+    scope=ToolScope.WRITE,
+    requires_confirmation=True,
+)
+
+UPDATE_MODEL_TOOL = Tool(
+    id="allhands.meta.update_model",
+    kind=ToolKind.META,
+    name="update_model",
+    description="Update an LLM model by id. Only passed fields are changed.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "model_id": {"type": "string"},
+            "name": {"type": "string"},
+            "display_name": {"type": "string"},
+            "context_window": {"type": "integer"},
+            "enabled": {"type": "boolean"},
+        },
+        "required": ["model_id"],
+    },
+    output_schema={"type": "object"},
+    scope=ToolScope.WRITE,
+    requires_confirmation=True,
+)
+
+DELETE_MODEL_TOOL = Tool(
+    id="allhands.meta.delete_model",
+    kind=ToolKind.META,
+    name="delete_model",
+    description="Permanently remove an LLM model from its provider.",
+    input_schema=_MODEL_ID_REQUIRED,
+    output_schema={"type": "object"},
+    scope=ToolScope.IRREVERSIBLE,
+    requires_confirmation=True,
+)
+
+CHAT_TEST_MODEL_TOOL = Tool(
+    id="allhands.meta.chat_test_model",
+    kind=ToolKind.META,
+    name="chat_test_model",
+    description=(
+        "Send one prompt through (provider, model) and return the reply. "
+        "Use this to verify a newly-added model is reachable before binding it to employees."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "model_id": {"type": "string"},
+            "prompt": {"type": "string", "default": "ping"},
+        },
+        "required": ["model_id"],
+    },
+    output_schema={"type": "object"},
+    scope=ToolScope.READ,
+    requires_confirmation=False,
+)
+
+
+ALL_MODEL_META_TOOLS: list[Tool] = [
+    LIST_MODELS_TOOL,
+    GET_MODEL_TOOL,
+    CREATE_MODEL_TOOL,
+    UPDATE_MODEL_TOOL,
+    DELETE_MODEL_TOOL,
+    CHAT_TEST_MODEL_TOOL,
+]
