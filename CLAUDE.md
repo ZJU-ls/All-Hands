@@ -1,6 +1,6 @@
 # CLAUDE.md · allhands Dev Contract
 
-> **所有进入本项目的 Claude 会话,必须先读完本文件再做任何事。** 本文件是开发契约,违反的修改要被拒绝。
+> **所有进入本项目的贡献者必须先读完本文件再做任何事。** 本文件是开发契约,违反的修改要被拒绝。
 
 ---
 
@@ -12,16 +12,20 @@
 
 ---
 
-## 2. 必读文档(第一次进入会话必须读)
+## 2. 必读文档(第一次进入仓必须读)
 
 按顺序:
 
-1. `product/00-north-star.md` — 产品哲学、4 条核心设计原则
-2. `product/04-architecture.md` — 10 层架构 + 模块边界
-3. 本文件(CLAUDE.md) — 开发纪律
-4. 当前正在做的 `plans/*.md`(如果有)
+1. [`product/00-north-star.md`](product/00-north-star.md) — 产品哲学、4 条核心设计原则
+2. [`product/04-architecture.md`](product/04-architecture.md) — 10 层架构 + 模块边界
+3. 本文件 — 开发纪律
 
-其他文档按需:`01-prd.md`、`02-user-stories.md`、`03-visual-design.md`、`05-roadmap.md`、`adr/`。
+其他文档按需:`01-prd.md`、`02-user-stories.md`、`05-roadmap.md`、`adr/`。
+
+**改 `web/` 代码前额外必读:**
+- [`product/03-visual-design.md`](product/03-visual-design.md) — 视觉契约 · Linear Precise 规范
+- [`product/06-ux-principles.md`](product/06-ux-principles.md) — 交互契约 · 用户友好产品设计(P01…P10)
+- [`design-system/MASTER.md`](design-system/MASTER.md) — 组件与 token 速查表
 
 ---
 
@@ -29,9 +33,13 @@
 
 ### 3.1 Tool First
 
-- 所有新能力 → 注册新 Tool(Backend / Render / Meta 之一)
-- **不写独立的 REST endpoint 做 CRUD**。员工 / Skill / MCP 的管理全部走 Meta Tool
-- **不写独立的前端配置页面**。通过 Lead Agent 对话 + Render Tool + ComponentRegistry
+> **Tool 是 Agent 的能力边界,不是平台的 API 形态。**
+> 问「这能不能包装成 Tool?」是错问题。正确问法:**"这件事该不该由 Agent 代表用户做?"** 是 → Tool;否 → REST / UI 直调都行。
+
+- **Agent 侧的新能力** → 注册新 Tool(Backend / Render / Meta 之一);不是 Agent 做的事**不需要**是 Tool
+- 后端:员工 / Skill / MCP / Provider 等**由 Lead Agent 代表用户执行**的写操作必须是 Meta Tool,不能开 REST CRUD(违反 → `backend/tests/unit/test_learnings.py` 会红)
+- **前端允许有菜单栏和导航页面**(Chat、模型网关、Traces 等都是合法入口);页面内部调用后端时,**只要是 Agent 代做的**优先走 Meta Tool
+- REST 直调允许的场景:**Bootstrap 引导** / **只读浏览(Traces、列表)** / **复杂配置流程(Gateway 类)** / **敏感凭证直输**
 
 ### 3.2 统一 React Agent
 
@@ -51,6 +59,20 @@
 - 跨层只 import 接口(ABC),不 import 具体实现
 - 新能力走"注册"而非"改核心代码"
 
+### 3.5 视觉纪律 · Linear Precise(`web/` 代码必读)
+
+视觉契约在 [`product/03-visual-design.md`](product/03-visual-design.md),速查表在 [`design-system/MASTER.md`](design-system/MASTER.md),活样本在 [`web/app/design-lab/page.tsx`](web/app/design-lab/page.tsx)。
+
+**三条最高纪律:**
+
+1. **禁止 icon 库**(Lucide / Heroicons / Phosphor / Tabler)。图形信息只能来自:排版 · 激活色条 · 点阵 logo · 状态点 · Kbd chip · Mono 字符(`→ ← ⌘ ↵`)· 5 类 1-line SVG(check / arrow-right / external / copy / plus-minus)
+2. **颜色密度 ≤ 3** (不含语义状态色)。一律用 token(`bg-bg` `text-text-muted` `bg-primary`...),**禁止** 在 JSX 写十六进制或 `bg-blue-500`、`text-zinc-400` 等 Tailwind 原色类,**禁止** `dark:bg-zinc-900` 并行定义
+3. **动效克制**。位移不超过 2px,hover 只改边框亮度;时长走 `--dur-*`;禁止 `scale` / `box-shadow` 做交互反馈;禁止动画库(Framer Motion / GSAP)
+
+**违反以上三条任意一条 → review 直接打回,无协商。**
+
+新增任何 `web/` 组件前,先过一遍 [`design-system/MASTER.md` §0 自检清单](design-system/MASTER.md#0-每次开发前的自检)。Token 或组件契约变更需同步修改:`product/03-visual-design.md`(规范)→ `globals.css` + `tailwind.config.ts`(实现)→ `design-system/MASTER.md`(速查)。
+
 ---
 
 ## 4. 目录结构
@@ -58,7 +80,6 @@
 ```
 allhands/
 ├── product/               # 产品与架构文档(改动走 ADR)
-├── plans/                 # implementation plans
 ├── backend/
 │   ├── src/allhands/
 │   │   ├── core/          # L4 领域(纯 Pydantic)
@@ -127,7 +148,8 @@ uv run lint-imports              # 分层边界检查
 
 # 前端
 cd web
-pnpm test                        # vitest
+pnpm test                        # vitest(单元 + 静态契约扫描)
+pnpm test:e2e                    # playwright(视觉回归)
 pnpm lint                        # eslint
 pnpm typecheck                   # tsc --noEmit
 pnpm build                       # 生产构建(typecheck + build)
@@ -142,7 +164,7 @@ uv run alembic revision -m "..."       # 新建 migration
 uv run alembic downgrade -1            # 回滚一步
 ```
 
-### 5.4 本项目全量检查(pre-commit / CI)
+### 5.4 全量检查(CI 同款)
 
 ```bash
 ./scripts/check.sh   # 所有 lint + type + test,任何失败退出非零
@@ -152,9 +174,7 @@ uv run alembic downgrade -1            # 回滚一步
 
 ## 6. 开发纪律
 
-### 6.1 TDD(强制)
-
-本项目安装了 `superpowers` plugin,`test-driven-development` skill 为 Rigid(严格遵守)。
+### 6.1 TDD
 
 **流程:**
 1. 先写失败的测试
@@ -240,7 +260,7 @@ uv run alembic downgrade -1            # 回滚一步
 
 - Conventional Commits:`feat(scope): ...` / `fix: ...` / `refactor: ...` / `docs: ...` / `test: ...` / `chore: ...`
 - commit message 说 **为什么**,不只是**什么**
-- PR 必须关联 plan / ADR / user story(如果适用)
+- PR 必须关联 ADR / user story(如果适用)
 
 ---
 
@@ -255,32 +275,12 @@ uv run alembic downgrade -1            # 回滚一步
 
 ---
 
-## 9. 当前工作入口
+## 9. 有疑问时的优先级
 
-**查 `plans/` 目录下最新的 plan**。开发按 plan 的 Task 列表推进,完成一个勾掉一个。
+1. 本文件(CLAUDE.md)
+2. `product/04-architecture.md`
+3. `product/00-north-star.md`
+4. ADR
+5. 其他 product 文档
 
----
-
-## 10. 有疑问时的优先级
-
-1. 当前 plan 具体描述
-2. 本文件(CLAUDE.md)
-3. `product/04-architecture.md`
-4. `product/00-north-star.md`
-5. ADR
-6. 其他 product 文档
-
-**冲突时高优先级覆盖低优先级。** 发现冲突 → 立刻停,问用户 / 提 ADR。
-
----
-
-## 11. Sonic boom 检查(karpathy-guidelines 复述)
-
-本项目安装了 `karpathy-guidelines` 行为准则,提醒你:
-
-- **Think before coding** — 假设、模糊点必须 surface,不要闷声往下做
-- **Simplicity first** — 最少代码解决问题,不做未请求的抽象
-- **Surgical changes** — 只改必要的,不顺手"改进"邻近代码
-- **Goal-driven execution** — 每个改动都有可验证的成功标准
-
-违反以上 → 代码 review 会打回。
+**冲突时高优先级覆盖低优先级。** 发现冲突 → 立刻停,问 maintainer / 提 ADR。

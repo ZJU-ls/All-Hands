@@ -41,6 +41,18 @@ data/*.db-wal
 .claude/settings.local.json
 .claude/.cache/
 
+# ——— 个人 AI-paired 开发 harness(生产力链路,不进仓,别人 clone 不需要) ———
+/CLAUDE.local.md
+/docs/claude/
+/docs/meta/
+/plans/
+# Playwright 视觉 baseline 是项目资产,要 commit,这里不排除。
+# 但跑测试产生的中间产物要排除:
+/web/test-results/
+/web/playwright-report/
+/web/tests/e2e/*-trace.zip
+/web/tests/e2e/*.webm
+
 # OS
 .DS_Store
 Thumbs.db
