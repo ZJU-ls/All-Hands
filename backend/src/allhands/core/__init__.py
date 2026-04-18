@@ -26,8 +26,9 @@ from allhands.core.errors import (
     ToolNotFound,
 )
 from allhands.core.mcp import MCPHealth, MCPServer, MCPTransport
+from allhands.core.model import LLMModel
 from allhands.core.provider import LLMProvider
-from allhands.core.skill import Skill
+from allhands.core.skill import Skill, SkillSource
 from allhands.core.tool import CostHint, Tool, ToolKind, ToolScope
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     "EmployeeNotFound",
     "InteractionSpec",
     "InvariantViolation",
+    "LLMModel",
     "LLMProvider",
     "MCPHandshakeFailed",
     "MCPHealth",
@@ -52,6 +54,7 @@ __all__ = [
     "MessageRole",
     "RenderPayload",
     "Skill",
+    "SkillSource",
     "Tool",
     "ToolCall",
     "ToolCallStatus",

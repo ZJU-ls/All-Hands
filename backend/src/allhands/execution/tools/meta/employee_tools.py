@@ -119,17 +119,6 @@ DISPATCH_EMPLOYEE_TOOL = Tool(
     requires_confirmation=False,
 )
 
-LIST_SKILLS_TOOL = Tool(
-    id="allhands.meta.list_skills",
-    kind=ToolKind.META,
-    name="list_skills",
-    description="List all available skills.",
-    input_schema={"type": "object", "properties": {}},
-    output_schema={"type": "object"},
-    scope=ToolScope.READ,
-    requires_confirmation=False,
-)
-
 ALL_META_TOOLS = [
     LIST_EMPLOYEES_TOOL,
     GET_EMPLOYEE_TOOL,
@@ -137,5 +126,4 @@ ALL_META_TOOLS = [
     UPDATE_EMPLOYEE_TOOL,
     DELETE_EMPLOYEE_TOOL,
     DISPATCH_EMPLOYEE_TOOL,
-    LIST_SKILLS_TOOL,
 ]

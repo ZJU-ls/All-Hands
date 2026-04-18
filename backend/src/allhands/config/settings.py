@@ -24,8 +24,12 @@ class Settings(BaseSettings):
     env: str = Field(default="dev", description="dev | test | prod")
     log_level: str = Field(default="INFO")
 
+    data_dir: str = Field(
+        default="./data",
+        description="Root for file-backed state: sqlite, installed skills, uploads.",
+    )
     database_url: str = Field(
-        default="sqlite+aiosqlite:///./data/allhands.db",
+        default="sqlite+aiosqlite:///./data/app.db",
         description="Async SQLAlchemy URL. Default uses local SQLite under ./data.",
     )
     checkpoint_db_path: str = Field(
@@ -40,6 +44,9 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None)
     openai_base_url: str | None = Field(default=None)
     default_model_ref: str = Field(default="openai/gpt-4o-mini")
+
+    # Alibaba Cloud Bailian (DashScope) — OpenAI-compatible endpoint
+    dashscope_api_key: str | None = Field(default=None)
 
     cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 

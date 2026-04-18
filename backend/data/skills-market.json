@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "slug": "mcp-builder",
+      "name": "mcp-builder",
+      "description": "Author MCP servers in Python or TypeScript — scaffolds transport + tool handlers + sample client.",
+      "source_url": "https://github.com/anthropics/skills/tree/main/mcp-builder",
+      "version": "0.1.0"
+    },
+    {
+      "slug": "skill-creator",
+      "name": "skill-creator",
+      "description": "Template wizard for authoring a new allhands Skill — generates SKILL.md + tool bundle.",
+      "source_url": "https://github.com/anthropics/skills/tree/main/skill-creator",
+      "version": "0.1.0"
+    },
+    {
+      "slug": "find-skills",
+      "name": "find-skills",
+      "description": "Search curated skill library and installed skills. Invoked when user asks how to do X.",
+      "source_url": "https://github.com/anthropics/skills/tree/main/find-skills",
+      "version": "0.1.0"
+    }
+  ]
+}

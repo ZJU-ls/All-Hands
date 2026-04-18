@@ -40,11 +40,15 @@ class SkillRow(Base):
     __tablename__ = "skills"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), index=True)
     description: Mapped[str] = mapped_column(String(2000))
     tool_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     prompt_fragment: Mapped[str] = mapped_column(String(8000))
     version: Mapped[str] = mapped_column(String(32))
+    source: Mapped[str] = mapped_column(String(32), default="builtin")
+    source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    installed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
 
 class MCPServerRow(Base):
@@ -134,4 +138,17 @@ class LLMProviderRow(Base):
     api_key: Mapped[str] = mapped_column(String(512), default="")
     default_model: Mapped[str] = mapped_column(String(128), default="gpt-4o-mini")
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class LLMModelRow(Base):
+    __tablename__ = "llm_models"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("llm_providers.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(128), index=True)
+    display_name: Mapped[str] = mapped_column(String(128), default="")
+    context_window: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -16,6 +16,7 @@ from allhands.core import (
     Conversation,
     Employee,
     InteractionSpec,
+    LLMModel,
     LLMProvider,
     MCPHealth,
     MCPServer,
@@ -23,6 +24,7 @@ from allhands.core import (
     Message,
     RenderPayload,
     Skill,
+    SkillSource,
     ToolCall,
     ToolCallStatus,
 )
@@ -30,6 +32,7 @@ from allhands.persistence.orm.models import (
     ConfirmationRow,
     ConversationRow,
     EmployeeRow,
+    LLMModelRow,
     LLMProviderRow,
     MCPServerRow,
     MessageRow,
@@ -148,6 +151,10 @@ def _row_to_skill(row: SkillRow) -> Skill:
         tool_ids=list(row.tool_ids),
         prompt_fragment=row.prompt_fragment or None,
         version=row.version,
+        source=SkillSource(row.source),
+        source_url=row.source_url,
+        installed_at=_utc(row.installed_at) if row.installed_at else None,
+        path=row.path,
     )
 
 
@@ -327,12 +334,17 @@ class SqlSkillRepo:
 
     async def upsert(self, skill: Skill) -> None:
         existing = await self._s.get(SkillRow, skill.id)
+        installed_at_naive = _naive(skill.installed_at) if skill.installed_at else None
         if existing:
             existing.name = skill.name
             existing.description = skill.description
             existing.tool_ids = list(skill.tool_ids)
             existing.prompt_fragment = skill.prompt_fragment or ""
             existing.version = skill.version
+            existing.source = skill.source.value
+            existing.source_url = skill.source_url
+            existing.installed_at = installed_at_naive
+            existing.path = skill.path
         else:
             self._s.add(
                 SkillRow(
@@ -342,9 +354,19 @@ class SqlSkillRepo:
                     tool_ids=list(skill.tool_ids),
                     prompt_fragment=skill.prompt_fragment or "",
                     version=skill.version,
+                    source=skill.source.value,
+                    source_url=skill.source_url,
+                    installed_at=installed_at_naive,
+                    path=skill.path,
                 )
             )
         await self._s.flush()
+
+    async def delete(self, skill_id: str) -> None:
+        row = await self._s.get(SkillRow, skill_id)
+        if row:
+            await self._s.delete(row)
+            await self._s.flush()
 
 
 class SqlMCPServerRepo:
@@ -464,3 +486,61 @@ class SqlLLMProviderRepo:
         if row:
             row.is_default = True
         await self._s.flush()
+
+
+def _row_to_model(row: LLMModelRow) -> LLMModel:
+    return LLMModel(
+        id=row.id,
+        provider_id=row.provider_id,
+        name=row.name,
+        display_name=row.display_name,
+        context_window=row.context_window,
+        enabled=row.enabled,
+    )
+
+
+class SqlLLMModelRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, model_id: str) -> LLMModel | None:
+        row = await self._s.get(LLMModelRow, model_id)
+        return _row_to_model(row) if row else None
+
+    async def list_all(self) -> list[LLMModel]:
+        result = await self._s.execute(select(LLMModelRow))
+        return [_row_to_model(r) for r in result.scalars().all()]
+
+    async def list_for_provider(self, provider_id: str) -> list[LLMModel]:
+        result = await self._s.execute(
+            select(LLMModelRow).where(LLMModelRow.provider_id == provider_id)
+        )
+        return [_row_to_model(r) for r in result.scalars().all()]
+
+    async def upsert(self, model: LLMModel) -> LLMModel:
+        existing = await self._s.get(LLMModelRow, model.id)
+        if existing:
+            existing.provider_id = model.provider_id
+            existing.name = model.name
+            existing.display_name = model.display_name
+            existing.context_window = model.context_window
+            existing.enabled = model.enabled
+        else:
+            self._s.add(
+                LLMModelRow(
+                    id=model.id,
+                    provider_id=model.provider_id,
+                    name=model.name,
+                    display_name=model.display_name,
+                    context_window=model.context_window,
+                    enabled=model.enabled,
+                )
+            )
+        await self._s.flush()
+        return model
+
+    async def delete(self, model_id: str) -> None:
+        row = await self._s.get(LLMModelRow, model_id)
+        if row:
+            await self._s.delete(row)
+            await self._s.flush()
