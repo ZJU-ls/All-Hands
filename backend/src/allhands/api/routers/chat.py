@@ -39,7 +39,9 @@ async def create_conversation(
     try:
         await emp_svc.get(body.employee_id)
     except EmployeeNotFound as exc:
-        raise HTTPException(status_code=404, detail=f"Employee {body.employee_id!r} not found.") from exc
+        raise HTTPException(
+            status_code=404, detail=f"Employee {body.employee_id!r} not found."
+        ) from exc
     conv = await chat_svc.create_conversation(body.employee_id)
     return ConversationResponse(
         id=conv.id,
@@ -51,14 +53,32 @@ async def create_conversation(
 
 @router.get("")
 async def list_conversations(
+    employee_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> list[ConversationResponse]:
+    """List conversations.
+
+    - `?employee_id=<id>` filters to that employee's conversations.
+    - no param → default to Lead Agent's conversations (legacy behaviour).
+    - `?employee_id=all` → across every employee, newest first.
+    """
     conv_repo = await get_conversation_repo(session)
     emp_svc = await get_employee_service(session)
-    lead = await emp_svc.get_lead()
-    if lead is None:
-        return []
-    convs = await conv_repo.list_for_employee(lead.id)
+    if employee_id == "all":
+        convs = await conv_repo.list_all()
+    elif employee_id:
+        try:
+            await emp_svc.get(employee_id)
+        except EmployeeNotFound as exc:
+            raise HTTPException(
+                status_code=404, detail=f"Employee {employee_id!r} not found."
+            ) from exc
+        convs = await conv_repo.list_for_employee(employee_id)
+    else:
+        lead = await emp_svc.get_lead()
+        if lead is None:
+            return []
+        convs = await conv_repo.list_for_employee(lead.id)
     return [
         ConversationResponse(
             id=c.id,

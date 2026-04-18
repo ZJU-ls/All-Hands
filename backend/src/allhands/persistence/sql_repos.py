@@ -261,6 +261,12 @@ class SqlConversationRepo:
         )
         return [_row_to_conversation(r) for r in result.scalars().all()]
 
+    async def list_all(self) -> list[Conversation]:
+        result = await self._s.execute(
+            select(ConversationRow).order_by(ConversationRow.created_at.desc())
+        )
+        return [_row_to_conversation(r) for r in result.scalars().all()]
+
     async def list_messages(self, conversation_id: str) -> list[Message]:
         result = await self._s.execute(
             select(MessageRow)
