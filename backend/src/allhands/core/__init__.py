@@ -4,6 +4,13 @@ This package depends only on pydantic + stdlib. Never import frameworks here.
 See product/04-architecture.md for full specifications.
 """
 
+from allhands.core.artifact import (
+    BINARY_KINDS,
+    TEXT_KINDS,
+    Artifact,
+    ArtifactKind,
+    ArtifactVersion,
+)
 from allhands.core.confirmation import Confirmation, ConfirmationStatus
 from allhands.core.conversation import (
     Conversation,
@@ -49,9 +56,14 @@ from allhands.core.trigger import (
 )
 
 __all__ = [
+    "BINARY_KINDS",
     "DEFAULT_MIN_INTERVAL_SECONDS",
     "MIN_INTERVAL_SECONDS",
+    "TEXT_KINDS",
     "AgentPlan",
+    "Artifact",
+    "ArtifactKind",
+    "ArtifactVersion",
     "Confirmation",
     "ConfirmationExpired",
     "ConfirmationRejected",

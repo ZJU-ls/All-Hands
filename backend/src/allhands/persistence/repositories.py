@@ -5,8 +5,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from allhands.core import (
         AgentPlan,
+        Artifact,
+        ArtifactVersion,
         Confirmation,
         ConfirmationStatus,
         Conversation,
@@ -104,6 +108,26 @@ class TriggerFireRepo(Protocol):
     async def list_for_trigger(self, trigger_id: str, limit: int = 50) -> list[TriggerFire]: ...
     async def upsert(self, fire: TriggerFire) -> TriggerFire: ...
     async def count_in_window(self, seconds: int) -> int: ...
+
+
+class ArtifactRepo(Protocol):
+    async def get(self, artifact_id: str) -> Artifact | None: ...
+    async def list_for_workspace(
+        self,
+        workspace_id: str,
+        *,
+        kind: str | None = None,
+        name_prefix: str | None = None,
+        pinned_only: bool = False,
+        include_deleted: bool = False,
+        limit: int = 100,
+    ) -> list[Artifact]: ...
+    async def search(self, workspace_id: str, query: str, limit: int = 50) -> list[Artifact]: ...
+    async def upsert(self, artifact: Artifact) -> Artifact: ...
+    async def soft_delete(self, artifact_id: str, deleted_at: datetime) -> None: ...
+    async def list_versions(self, artifact_id: str) -> list[ArtifactVersion]: ...
+    async def get_version(self, artifact_id: str, version: int) -> ArtifactVersion | None: ...
+    async def save_version(self, version: ArtifactVersion) -> None: ...
 
 
 class EventRepo(Protocol):

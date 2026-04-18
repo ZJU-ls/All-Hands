@@ -1,0 +1,17 @@
+id: allhands.artifacts
+name: 制品区
+description: 产出 / 存取 / 迭代多模态制品(文档、代码、图、数据)
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.artifacts.create
+  - allhands.artifacts.list
+  - allhands.artifacts.read
+  - allhands.artifacts.render
+  - allhands.artifacts.update
+  - allhands.artifacts.delete
+  - allhands.artifacts.pin
+  - allhands.artifacts.search
+
+prompt_fragment_file: prompts/guidance.md

@@ -12,6 +12,9 @@ if TYPE_CHECKING:
 
 from allhands.core import (
     AgentPlan,
+    Artifact,
+    ArtifactKind,
+    ArtifactVersion,
     Confirmation,
     ConfirmationStatus,
     Conversation,
@@ -40,6 +43,8 @@ from allhands.core import (
 )
 from allhands.persistence.orm.models import (
     AgentPlanRow,
+    ArtifactRow,
+    ArtifactVersionRow,
     ConfirmationRow,
     ConversationRow,
     EmployeeRow,
@@ -790,6 +795,171 @@ class SqlTriggerFireRepo:
         stmt = select(TriggerFireRow).where(TriggerFireRow.fired_at >= cutoff)
         result = await self._s.execute(stmt)
         return len(result.scalars().all())
+
+
+def _row_to_artifact(row: ArtifactRow) -> Artifact:
+    return Artifact(
+        id=row.id,
+        workspace_id=row.workspace_id,
+        name=row.name,
+        kind=ArtifactKind(row.kind),
+        mime_type=row.mime_type,
+        content=row.content,
+        file_path=row.file_path,
+        size_bytes=row.size_bytes,
+        version=row.version,
+        pinned=row.pinned,
+        deleted_at=_utc(row.deleted_at) if row.deleted_at else None,
+        created_by_run_id=row.created_by_run_id,
+        created_by_employee_id=row.created_by_employee_id,
+        conversation_id=row.conversation_id,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+        extra_metadata=dict(row.extra_metadata or {}),
+    )
+
+
+def _row_to_artifact_version(row: ArtifactVersionRow) -> ArtifactVersion:
+    return ArtifactVersion(
+        id=row.id,
+        artifact_id=row.artifact_id,
+        version=row.version,
+        content=row.content,
+        file_path=row.file_path,
+        diff_from_prev=row.diff_from_prev,
+        created_at=_utc(row.created_at),
+    )
+
+
+class SqlArtifactRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, artifact_id: str) -> Artifact | None:
+        row = await self._s.get(ArtifactRow, artifact_id)
+        return _row_to_artifact(row) if row else None
+
+    async def list_for_workspace(
+        self,
+        workspace_id: str,
+        *,
+        kind: str | None = None,
+        name_prefix: str | None = None,
+        pinned_only: bool = False,
+        include_deleted: bool = False,
+        limit: int = 100,
+    ) -> list[Artifact]:
+        stmt = select(ArtifactRow).where(ArtifactRow.workspace_id == workspace_id)
+        if not include_deleted:
+            stmt = stmt.where(ArtifactRow.deleted_at.is_(None))
+        if kind is not None:
+            stmt = stmt.where(ArtifactRow.kind == kind)
+        if name_prefix:
+            stmt = stmt.where(ArtifactRow.name.like(f"{name_prefix}%"))
+        if pinned_only:
+            stmt = stmt.where(ArtifactRow.pinned.is_(True))
+        stmt = stmt.order_by(
+            ArtifactRow.pinned.desc(),
+            ArtifactRow.updated_at.desc(),
+        ).limit(limit)
+        result = await self._s.execute(stmt)
+        return [_row_to_artifact(r) for r in result.scalars().all()]
+
+    async def search(self, workspace_id: str, query: str, limit: int = 50) -> list[Artifact]:
+        like = f"%{query}%"
+        stmt = (
+            select(ArtifactRow)
+            .where(ArtifactRow.workspace_id == workspace_id)
+            .where(ArtifactRow.deleted_at.is_(None))
+            .where((ArtifactRow.name.like(like)) | (ArtifactRow.content.like(like)))
+            .order_by(ArtifactRow.updated_at.desc())
+            .limit(limit)
+        )
+        result = await self._s.execute(stmt)
+        return [_row_to_artifact(r) for r in result.scalars().all()]
+
+    async def upsert(self, artifact: Artifact) -> Artifact:
+        existing = await self._s.get(ArtifactRow, artifact.id)
+        if existing:
+            existing.workspace_id = artifact.workspace_id
+            existing.name = artifact.name
+            existing.kind = artifact.kind.value
+            existing.mime_type = artifact.mime_type
+            existing.content = artifact.content
+            existing.file_path = artifact.file_path
+            existing.size_bytes = artifact.size_bytes
+            existing.version = artifact.version
+            existing.pinned = artifact.pinned
+            existing.deleted_at = _naive(artifact.deleted_at) if artifact.deleted_at else None
+            existing.created_by_run_id = artifact.created_by_run_id
+            existing.created_by_employee_id = artifact.created_by_employee_id
+            existing.conversation_id = artifact.conversation_id
+            existing.updated_at = _naive(artifact.updated_at)
+            existing.extra_metadata = dict(artifact.extra_metadata)
+        else:
+            self._s.add(
+                ArtifactRow(
+                    id=artifact.id,
+                    workspace_id=artifact.workspace_id,
+                    name=artifact.name,
+                    kind=artifact.kind.value,
+                    mime_type=artifact.mime_type,
+                    content=artifact.content,
+                    file_path=artifact.file_path,
+                    size_bytes=artifact.size_bytes,
+                    version=artifact.version,
+                    pinned=artifact.pinned,
+                    deleted_at=_naive(artifact.deleted_at) if artifact.deleted_at else None,
+                    created_by_run_id=artifact.created_by_run_id,
+                    created_by_employee_id=artifact.created_by_employee_id,
+                    conversation_id=artifact.conversation_id,
+                    created_at=_naive(artifact.created_at),
+                    updated_at=_naive(artifact.updated_at),
+                    extra_metadata=dict(artifact.extra_metadata),
+                )
+            )
+        await self._s.flush()
+        return artifact
+
+    async def soft_delete(self, artifact_id: str, deleted_at: datetime) -> None:
+        await self._s.execute(
+            update(ArtifactRow)
+            .where(ArtifactRow.id == artifact_id)
+            .values(deleted_at=_naive(deleted_at), updated_at=_naive(deleted_at))
+        )
+
+    async def list_versions(self, artifact_id: str) -> list[ArtifactVersion]:
+        stmt = (
+            select(ArtifactVersionRow)
+            .where(ArtifactVersionRow.artifact_id == artifact_id)
+            .order_by(ArtifactVersionRow.version.desc())
+        )
+        result = await self._s.execute(stmt)
+        return [_row_to_artifact_version(r) for r in result.scalars().all()]
+
+    async def get_version(self, artifact_id: str, version: int) -> ArtifactVersion | None:
+        stmt = (
+            select(ArtifactVersionRow)
+            .where(ArtifactVersionRow.artifact_id == artifact_id)
+            .where(ArtifactVersionRow.version == version)
+        )
+        result = await self._s.execute(stmt)
+        row = result.scalars().first()
+        return _row_to_artifact_version(row) if row else None
+
+    async def save_version(self, version: ArtifactVersion) -> None:
+        self._s.add(
+            ArtifactVersionRow(
+                id=version.id,
+                artifact_id=version.artifact_id,
+                version=version.version,
+                content=version.content,
+                file_path=version.file_path,
+                diff_from_prev=version.diff_from_prev,
+                created_at=_naive(version.created_at),
+            )
+        )
+        await self._s.flush()
 
 
 def _row_to_event(row: EventRow) -> EventEnvelope:

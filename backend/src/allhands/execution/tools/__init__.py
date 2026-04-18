@@ -10,6 +10,7 @@ from allhands.execution.tools.builtin.fetch_url import TOOL as FETCH_URL_TOOL
 from allhands.execution.tools.builtin.fetch_url import execute as fetch_url_execute
 from allhands.execution.tools.builtin.write_file import TOOL as WRITE_FILE_TOOL
 from allhands.execution.tools.builtin.write_file import execute as write_file_execute
+from allhands.execution.tools.meta.artifact_tools import ALL_ARTIFACT_TOOLS
 from allhands.execution.tools.meta.employee_tools import ALL_META_TOOLS
 from allhands.execution.tools.meta.mcp_server_tools import ALL_MCP_SERVER_META_TOOLS
 from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
@@ -70,5 +71,6 @@ def discover_builtin_tools(registry: ToolRegistry) -> None:
         *ALL_MCP_SERVER_META_TOOLS,
         *ALL_PLAN_TOOLS,
         *ALL_TRIGGER_META_TOOLS,
+        *ALL_ARTIFACT_TOOLS,
     ):
         registry.register(tool, _async_noop)

@@ -208,6 +208,44 @@ class TriggerFireRow(Base):
     error_detail: Mapped[str | None] = mapped_column(String(2000), nullable=True)
 
 
+class ArtifactRow(Base):
+    __tablename__ = "artifacts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(256), index=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    mime_type: Mapped[str] = mapped_column(String(128))
+    content: Mapped[str | None] = mapped_column(String, nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_by_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_by_employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    conversation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    extra_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
+
+
+class ArtifactVersionRow(Base):
+    __tablename__ = "artifact_versions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    artifact_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("artifacts.id", ondelete="CASCADE"),
+        index=True,
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    content: Mapped[str | None] = mapped_column(String, nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    diff_from_prev: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
 class EventRow(Base):
     __tablename__ = "events"
 
