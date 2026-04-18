@@ -13,6 +13,7 @@ from allhands import __version__
 from allhands.api.routers import health
 from allhands.api.routers.artifacts import router as artifacts_router
 from allhands.api.routers.chat import router as chat_router
+from allhands.api.routers.cockpit import router as cockpit_router
 from allhands.api.routers.confirmations import router as confirmations_router
 from allhands.api.routers.employees import router as employees_router
 from allhands.api.routers.mcp_servers import router as mcp_servers_router
@@ -92,4 +93,5 @@ def create_app() -> FastAPI:
     app.include_router(triggers_router, prefix="/api")
     app.include_router(webhooks_router, prefix="/api")
     app.include_router(artifacts_router, prefix="/api")
+    app.include_router(cockpit_router, prefix="/api")
     return app

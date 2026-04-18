@@ -398,6 +398,8 @@ def expand_skills_to_tools(
 | `allhands.meta.plan_view` | READ | no |
 | `allhands.meta.propose_lead_agent_version` | BOOTSTRAP | yes + 写候选 |
 | `allhands.meta.switch_lead_agent_version` | BOOTSTRAP | yes + 写候选 |
+| `allhands.meta.cockpit.get_workspace_summary` | READ | no |
+| `allhands.meta.cockpit.pause_all_runs` | IRREVERSIBLE | yes + reason |
 
 ### L5.8 内置 Render Tools
 
@@ -513,6 +515,10 @@ Content-Type: application/json
 | POST | `/api/confirmations/{id}/resolve` | 确认决议 |
 | GET  | `/api/confirmations/pending` | 拉取未决确认(兜底/轮询) |
 | GET  | `/api/traces/{trace_id}` | 返回 LangFuse URL(避免前端知 LangFuse host) |
+| GET  | `/api/cockpit/summary` | Workspace 快照(KPI + 健康 + recent events) |
+| GET  | `/api/cockpit/stream` | Workspace-level SSE(snapshot + 增量) · 见 cockpit spec § 4.2 |
+| POST | `/api/cockpit/pause-all` | 急停(要 `X-Confirmation-Token`;幂等) |
+| POST | `/api/cockpit/resume-all` | 恢复 · 对称 |
 
 **注意:**
 - v0 **无鉴权**。依赖 docker compose 内网,不暴露公网。

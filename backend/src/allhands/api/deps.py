@@ -24,6 +24,7 @@ from allhands.persistence.sql_repos import (
     SqlConfirmationRepo,
     SqlConversationRepo,
     SqlEmployeeRepo,
+    SqlEventRepo,
     SqlLLMModelRepo,
     SqlLLMProviderRepo,
     SqlMCPServerRepo,
@@ -33,10 +34,12 @@ from allhands.persistence.sql_repos import (
 )
 from allhands.services.artifact_service import ArtifactService
 from allhands.services.chat_service import ChatService
+from allhands.services.cockpit_service import CockpitService
 from allhands.services.confirmation_service import ConfirmationService
 from allhands.services.employee_service import EmployeeService
 from allhands.services.github_market import AnthropicsSkillsMarket, GithubSkillMarket
 from allhands.services.mcp_service import MCPService
+from allhands.services.pause_state import PauseSwitch
 from allhands.services.skill_service import SkillService
 from allhands.services.trigger_service import TriggerService
 
@@ -168,4 +171,24 @@ async def get_trigger_service(
         trigger_repo=SqlTriggerRepo(session),
         fire_repo=SqlTriggerFireRepo(session),
         action_handlers=handlers,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_pause_switch() -> PauseSwitch:
+    return PauseSwitch()
+
+
+async def get_cockpit_service(
+    session: AsyncSession = Depends(get_session),
+    pause_switch: PauseSwitch = Depends(get_pause_switch),
+) -> CockpitService:
+    return CockpitService(
+        event_repo=SqlEventRepo(session),
+        confirmation_repo=SqlConfirmationRepo(session),
+        employee_repo=SqlEmployeeRepo(session),
+        conversation_repo=SqlConversationRepo(session),
+        trigger_repo=SqlTriggerRepo(session),
+        artifact_repo=SqlArtifactRepo(session),
+        pause_state_provider=pause_switch.snapshot,
     )
