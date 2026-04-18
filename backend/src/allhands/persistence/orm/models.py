@@ -254,3 +254,8 @@ class EventRow(Base):
     payload: Mapped[dict[str, object]] = mapped_column(JSON)
     published_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     trigger_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actor: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    severity: Mapped[str] = mapped_column(String(16), default="info")
+    link: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    workspace_id: Mapped[str] = mapped_column(String(64), default="default", index=True)

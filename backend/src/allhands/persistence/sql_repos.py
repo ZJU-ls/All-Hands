@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -969,6 +969,11 @@ def _row_to_event(row: EventRow) -> EventEnvelope:
         payload=row.payload,
         published_at=_utc(row.published_at),
         trigger_id=row.trigger_id,
+        actor=row.actor,
+        subject=row.subject,
+        severity=row.severity,
+        link=row.link,
+        workspace_id=row.workspace_id,
     )
 
 
@@ -984,11 +989,47 @@ class SqlEventRepo:
                 payload=event.payload,
                 published_at=_naive(event.published_at),
                 trigger_id=event.trigger_id,
+                actor=event.actor,
+                subject=event.subject,
+                severity=event.severity,
+                link=event.link,
+                workspace_id=event.workspace_id,
             )
         )
         await self._s.flush()
 
-    async def list_recent(self, limit: int = 100) -> list[EventEnvelope]:
-        stmt = select(EventRow).order_by(EventRow.published_at.desc()).limit(limit)
+    async def list_recent(
+        self,
+        limit: int = 100,
+        *,
+        workspace_id: str | None = None,
+        kind_prefixes: list[str] | None = None,
+        since: datetime | None = None,
+    ) -> list[EventEnvelope]:
+        stmt = select(EventRow)
+        if workspace_id is not None:
+            stmt = stmt.where(EventRow.workspace_id == workspace_id)
+        if kind_prefixes:
+            stmt = stmt.where(or_(*(EventRow.kind.startswith(p) for p in kind_prefixes)))
+        if since is not None:
+            stmt = stmt.where(EventRow.published_at >= _naive(since))
+        stmt = stmt.order_by(EventRow.published_at.desc()).limit(limit)
         result = await self._s.execute(stmt)
         return [_row_to_event(r) for r in result.scalars().all()]
+
+    async def count_since(
+        self,
+        since: datetime,
+        *,
+        workspace_id: str | None = None,
+        kind_prefixes: list[str] | None = None,
+    ) -> int:
+        stmt = (
+            select(func.count()).select_from(EventRow).where(EventRow.published_at >= _naive(since))
+        )
+        if workspace_id is not None:
+            stmt = stmt.where(EventRow.workspace_id == workspace_id)
+        if kind_prefixes:
+            stmt = stmt.where(or_(*(EventRow.kind.startswith(p) for p in kind_prefixes)))
+        result = await self._s.execute(stmt)
+        return int(result.scalar_one())

@@ -171,12 +171,22 @@ class TriggerFire(BaseModel):
 
 
 class EventEnvelope(BaseModel):
-    """In-process + persisted event. Produced by EventBus.publish."""
+    """In-process + persisted event. Produced by EventBus.publish.
+
+    Cockpit spec § 7 shares this envelope with the activity feed projection.
+    `actor/subject/severity/link/workspace_id` default to None/"info"/"default"
+    so triggers' existing ``publish(kind, payload)`` calls stay source-compatible.
+    """
 
     id: str = Field(..., min_length=1, max_length=64)
     kind: str = Field(..., min_length=1, max_length=128)
     payload: dict[str, Any] = Field(default_factory=dict)
     published_at: datetime
     trigger_id: str | None = None  # set when this event was emitted by a TriggerFire
+    actor: str | None = None
+    subject: str | None = None
+    severity: str = "info"
+    link: str | None = None
+    workspace_id: str = "default"
 
     model_config = {"frozen": True}

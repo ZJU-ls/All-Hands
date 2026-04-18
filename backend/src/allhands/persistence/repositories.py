@@ -132,4 +132,18 @@ class ArtifactRepo(Protocol):
 
 class EventRepo(Protocol):
     async def save(self, event: EventEnvelope) -> None: ...
-    async def list_recent(self, limit: int = 100) -> list[EventEnvelope]: ...
+    async def list_recent(
+        self,
+        limit: int = 100,
+        *,
+        workspace_id: str | None = None,
+        kind_prefixes: list[str] | None = None,
+        since: datetime | None = None,
+    ) -> list[EventEnvelope]: ...
+    async def count_since(
+        self,
+        since: datetime,
+        *,
+        workspace_id: str | None = None,
+        kind_prefixes: list[str] | None = None,
+    ) -> int: ...
