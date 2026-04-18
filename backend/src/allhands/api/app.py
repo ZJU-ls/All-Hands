@@ -10,6 +10,7 @@ from allhands.api.routers import health
 from allhands.api.routers.chat import router as chat_router
 from allhands.api.routers.confirmations import router as confirmations_router
 from allhands.api.routers.employees import router as employees_router
+from allhands.api.routers.mcp_servers import router as mcp_servers_router
 from allhands.api.routers.models import router as models_router
 from allhands.api.routers.providers import router as providers_router
 from allhands.api.routers.skills import router as skills_router
@@ -40,4 +41,5 @@ def create_app() -> FastAPI:
     app.include_router(providers_router, prefix="/api")
     app.include_router(models_router, prefix="/api")
     app.include_router(skills_router, prefix="/api")
+    app.include_router(mcp_servers_router, prefix="/api")
     return app

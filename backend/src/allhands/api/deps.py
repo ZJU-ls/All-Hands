@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import (
 
 from allhands.config import get_settings
 from allhands.execution.gate import BaseGate, PersistentConfirmationGate
+from allhands.execution.mcp.adapter import RealMCPAdapter
 from allhands.execution.registry import ToolRegistry
 from allhands.execution.skills import SkillRegistry, seed_skills
 from allhands.execution.tools import discover_builtin_tools
@@ -24,11 +25,13 @@ from allhands.persistence.sql_repos import (
     SqlEmployeeRepo,
     SqlLLMModelRepo,
     SqlLLMProviderRepo,
+    SqlMCPServerRepo,
     SqlSkillRepo,
 )
 from allhands.services.chat_service import ChatService
 from allhands.services.confirmation_service import ConfirmationService
 from allhands.services.employee_service import EmployeeService
+from allhands.services.mcp_service import MCPService
 from allhands.services.skill_service import SkillService
 
 if TYPE_CHECKING:
@@ -117,3 +120,12 @@ async def get_skill_service(session: AsyncSession = Depends(get_session)) -> Ski
         install_root=data_dir / "skills",
         market_file=data_dir / "skills-market.json",
     )
+
+
+@lru_cache(maxsize=1)
+def _get_mcp_adapter() -> RealMCPAdapter:
+    return RealMCPAdapter()
+
+
+async def get_mcp_service(session: AsyncSession = Depends(get_session)) -> MCPService:
+    return MCPService(repo=SqlMCPServerRepo(session), adapter=_get_mcp_adapter())

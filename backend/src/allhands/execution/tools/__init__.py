@@ -11,6 +11,7 @@ from allhands.execution.tools.builtin.fetch_url import execute as fetch_url_exec
 from allhands.execution.tools.builtin.write_file import TOOL as WRITE_FILE_TOOL
 from allhands.execution.tools.builtin.write_file import execute as write_file_execute
 from allhands.execution.tools.meta.employee_tools import ALL_META_TOOLS
+from allhands.execution.tools.meta.mcp_server_tools import ALL_MCP_SERVER_META_TOOLS
 from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
 from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
 from allhands.execution.tools.meta.skill_tools import ALL_SKILL_META_TOOLS
@@ -31,5 +32,6 @@ def discover_builtin_tools(registry: ToolRegistry) -> None:
         *ALL_PROVIDER_META_TOOLS,
         *ALL_MODEL_META_TOOLS,
         *ALL_SKILL_META_TOOLS,
+        *ALL_MCP_SERVER_META_TOOLS,
     ):
         registry.register(tool, _async_noop)
