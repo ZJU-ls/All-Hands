@@ -401,13 +401,22 @@ def expand_skills_to_tools(
 
 ### L5.8 内置 Render Tools
 
-| Tool ID | 返回 component |
-|---|---|
-| `allhands.render.markdown` | `Markdown` |
-| `allhands.render.employee_list` | `EmployeeList` |
-| `allhands.render.employee_detail` | `EmployeeCard` |
-| `allhands.render.confirmation_summary` | `ConfirmationSummary` |
-| `allhands.render.trace_link` | `TraceLink` |
+内置 skill `allhands.render` 打包 10 个 render tool,所有员工默认挂(见 § 4.1 DEFAULT_SKILL_IDS)。
+
+| Tool ID | 返回 component | 典型场景 |
+|---|---|---|
+| `allhands.render.markdown_card` | `MarkdownCard` | 长文 / 富文本 |
+| `allhands.render.table` | `Viz.Table` | 多条记录 × 多属性对比 |
+| `allhands.render.kv` | `Viz.KV` | 单实体详情 |
+| `allhands.render.cards` | `Viz.Cards` | 2-6 个并列方案 |
+| `allhands.render.timeline` | `Viz.Timeline` | 过程 / 历史 |
+| `allhands.render.steps` | `Viz.Steps` | wizard / 顺序步骤 |
+| `allhands.render.code` | `Viz.Code` | 代码片段(含 Copy) |
+| `allhands.render.diff` | `Viz.Diff` | 前后对比(unified / split) |
+| `allhands.render.callout` | `Viz.Callout` | info / warn / success / error |
+| `allhands.render.link_card` | `Viz.LinkCard` | 富外链 |
+
+skill manifest 在 `backend/skills/builtin/render/SKILL.yaml`,guidance 在 `backend/skills/builtin/render/prompts/guidance.md`。
 
 **注意:** 大多数情况下,Meta Tool 返回数据,Lead Agent 决定**是否**调 render tool 把数据展示出来。也可以设计为:部分 Meta Tool 自动附带 render payload(通过 "auto-render" 标志)。v0 保持简单:**Meta Tool 纯数据,Lead Agent 显式调 render tool**。
 

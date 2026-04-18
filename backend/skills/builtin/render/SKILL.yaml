@@ -1,0 +1,19 @@
+id: allhands.render
+name: 可视化渲染
+description: Structured display — table, kv, cards, timeline, steps, code, diff, callout, link_card.
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.render.markdown_card
+  - allhands.render.table
+  - allhands.render.kv
+  - allhands.render.cards
+  - allhands.render.timeline
+  - allhands.render.steps
+  - allhands.render.code
+  - allhands.render.diff
+  - allhands.render.callout
+  - allhands.render.link_card
+
+prompt_fragment_file: prompts/guidance.md
