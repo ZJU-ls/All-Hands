@@ -53,6 +53,17 @@ class Settings(BaseSettings):
     confirmation_ttl_seconds: int = Field(default=300, ge=10)
     max_iterations_default: int = Field(default=10, ge=1, le=100)
 
+    # ---- Skill market (GitHub-backed, default: anthropics/skills) ----
+    skill_market_owner: str = Field(default="anthropics")
+    skill_market_repo: str = Field(default="skills")
+    skill_market_branch: str = Field(default="main")
+    skill_market_path_prefix: str = Field(default="skills")
+    skill_market_cache_ttl_seconds: int = Field(default=600, ge=0)
+    github_token: str | None = Field(
+        default=None,
+        description="Optional GitHub PAT. Lifts anon 60 req/h rate cap on market listing.",
+    )
+
     def sync_database_url(self) -> str:
         """Synchronous URL for alembic/tools that can't use async driver."""
         return self.database_url.replace("+aiosqlite", "")

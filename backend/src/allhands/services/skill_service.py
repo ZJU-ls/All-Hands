@@ -1,11 +1,11 @@
-"""SkillService — install / manage Skills from github / market / local upload.
+"""SkillService — install / manage Skills from GitHub / market / local upload.
 
 Mirrors what the `/skills` UI page exposes and what `execution/tools/meta/skill_tools.py`
 advertises to Lead Agent. One service, two entry points.
 
 Install sources:
-- GitHub URL: cloned via an injectable SkillSourceCloner (prod uses git, tests fake it)
-- Market slug: curated entries in `skills-market.json` resolve to a github URL
+- GitHub URL: arbitrary repo cloned via an injectable SkillSourceCloner (prod = git, tests = fake)
+- Market slug: resolved against a `GithubSkillMarket` backend (prod = anthropics/skills, tests = fake)
 - Local .zip: extract, validate SKILL.md, move into install_root/<slug>/
 
 Each install writes a row to SkillRepo and returns the resulting Skill with
@@ -16,13 +16,12 @@ from __future__ import annotations
 
 import asyncio
 import io
-import json
 import re
 import shutil
+import tarfile
 import tempfile
 import uuid
 import zipfile
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -30,6 +29,12 @@ from typing import TYPE_CHECKING, Protocol
 import yaml
 
 from allhands.core import Skill, SkillSource
+from allhands.services.github_market import (
+    GithubMarketEntry,
+    GithubMarketError,
+    GithubMarketPreview,
+    GithubSkillMarket,
+)
 
 if TYPE_CHECKING:
     from allhands.persistence.repositories import SkillRepo
@@ -40,15 +45,6 @@ FRONTMATTER = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 class SkillInstallError(Exception):
     """Raised when skill install fails — missing SKILL.md / bad frontmatter / bad zip."""
-
-
-@dataclass(frozen=True)
-class MarketSkillEntry:
-    slug: str
-    name: str
-    description: str
-    source_url: str
-    version: str
 
 
 class SkillSourceCloner(Protocol):
@@ -133,12 +129,12 @@ class SkillService:
         self,
         repo: SkillRepo,
         install_root: Path,
-        market_file: Path,
+        market: GithubSkillMarket,
         cloner: SkillSourceCloner | None = None,
     ) -> None:
         self._repo = repo
         self._install_root = install_root
-        self._market_file = market_file
+        self._market = market
         self._cloner = cloner or GitCloner()
 
     async def list_all(self) -> list[Skill]:
@@ -176,18 +172,17 @@ class SkillService:
             shutil.rmtree(current.path, ignore_errors=True)
         await self._repo.delete(skill_id)
 
-    async def list_market(self) -> list[MarketSkillEntry]:
-        data = json.loads(self._market_file.read_text(encoding="utf-8"))
-        return [
-            MarketSkillEntry(
-                slug=str(e["slug"]),
-                name=str(e["name"]),
-                description=str(e.get("description", "")),
-                source_url=str(e["source_url"]),
-                version=str(e.get("version", "0.1.0")),
-            )
-            for e in data.get("skills", [])
-        ]
+    async def list_market(self, query: str | None = None) -> list[GithubMarketEntry]:
+        try:
+            return await self._market.list(query)
+        except GithubMarketError as exc:
+            raise SkillInstallError(f"market list failed: {exc}") from exc
+
+    async def preview_market_skill(self, slug: str) -> GithubMarketPreview:
+        try:
+            return await self._market.get_preview(slug)
+        except GithubMarketError as exc:
+            raise SkillInstallError(f"market preview failed: {exc}") from exc
 
     async def install_from_github(self, url: str, ref: str = "main") -> Skill:
         slug = _slug_from_name(url.rstrip("/").split("/")[-1] or "skill")
@@ -207,21 +202,22 @@ class SkillService:
         return skill
 
     async def install_from_market(self, slug: str) -> Skill:
-        entries = await self.list_market()
-        entry = next((e for e in entries if e.slug == slug), None)
-        if entry is None:
-            raise SkillInstallError(f"market slug not found: {slug}")
-        dest = self._install_root / entry.slug
+        try:
+            tar_bytes, source_url = await self._market.fetch_archive(slug)
+        except GithubMarketError as exc:
+            raise SkillInstallError(str(exc)) from exc
+        dest = self._install_root / slug
         if dest.exists():
             shutil.rmtree(dest)
         self._install_root.mkdir(parents=True, exist_ok=True)
-        await self._cloner.clone(entry.source_url, "main", dest)
+        with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:gz") as tar:
+            _safe_extract(tar, self._install_root)
         skill_md = dest / "SKILL.md"
         if not skill_md.exists():
             shutil.rmtree(dest, ignore_errors=True)
-            raise SkillInstallError("SKILL.md missing in market-sourced repo")
+            raise SkillInstallError("SKILL.md missing in market archive")
         fm = _parse_frontmatter(skill_md.read_text(encoding="utf-8"))
-        skill = _build_skill(fm, source=SkillSource.MARKET, source_url=entry.source_url, path=dest)
+        skill = _build_skill(fm, source=SkillSource.MARKET, source_url=source_url, path=dest)
         await self._repo.upsert(skill)
         return skill
 
@@ -248,6 +244,19 @@ class SkillService:
         skill = _build_skill(fm, source=SkillSource.LOCAL, source_url=filename, path=dest)
         await self._repo.upsert(skill)
         return skill
+
+
+def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
+    """Reject path-traversal members before extracting. Uses `filter='data'`
+    per PEP 706 — strips setuid/device files and rejects absolute / traversing paths."""
+    dest_abs = dest.resolve()
+    for member in tar.getmembers():
+        target = (dest / member.name).resolve()
+        try:
+            target.relative_to(dest_abs)
+        except ValueError as exc:
+            raise SkillInstallError(f"tar archive path traversal blocked: {member.name}") from exc
+    tar.extractall(dest, filter="data")
 
 
 def _find_skill_md(root: Path) -> Path | None:

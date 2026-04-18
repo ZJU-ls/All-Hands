@@ -16,10 +16,26 @@ def test_all_skill_meta_tools_exported() -> None:
     assert "allhands.meta.list_skills" in ids
     assert "allhands.meta.get_skill_detail" in ids
     assert "allhands.meta.list_skill_market" in ids
+    assert "allhands.meta.preview_skill_market" in ids
     assert "allhands.meta.install_skill_from_github" in ids
     assert "allhands.meta.install_skill_from_market" in ids
     assert "allhands.meta.update_skill" in ids
     assert "allhands.meta.delete_skill" in ids
+
+
+def test_list_market_has_optional_query_param() -> None:
+    from allhands.execution.tools.meta.skill_tools import LIST_SKILL_MARKET_TOOL
+
+    props = LIST_SKILL_MARKET_TOOL.input_schema.get("properties", {})
+    assert "query" in props, "list_skill_market must accept optional query filter"
+    assert "query" not in LIST_SKILL_MARKET_TOOL.input_schema.get("required", [])
+
+
+def test_preview_market_tool_requires_slug() -> None:
+    from allhands.execution.tools.meta.skill_tools import PREVIEW_SKILL_MARKET_TOOL
+
+    assert PREVIEW_SKILL_MARKET_TOOL.scope.value == "read"
+    assert "slug" in PREVIEW_SKILL_MARKET_TOOL.input_schema.get("required", [])
 
 
 def test_skill_meta_tools_kind_is_meta() -> None:

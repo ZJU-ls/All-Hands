@@ -39,8 +39,39 @@ LIST_SKILL_MARKET_TOOL = Tool(
     id="allhands.meta.list_skill_market",
     kind=ToolKind.META,
     name="list_skill_market",
-    description="List curated skills available for one-click install from the market.",
-    input_schema={"type": "object", "properties": {}},
+    description=(
+        "List curated skills available for one-click install from the official GitHub "
+        "market (default: anthropics/skills). Optional `query` does a substring match "
+        "on slug / name / description / tags."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Substring filter; omit for full listing.",
+            },
+        },
+    },
+    output_schema={"type": "object"},
+    scope=ToolScope.READ,
+    requires_confirmation=False,
+)
+
+PREVIEW_SKILL_MARKET_TOOL = Tool(
+    id="allhands.meta.preview_skill_market",
+    kind=ToolKind.META,
+    name="preview_skill_market",
+    description=(
+        "Fetch a market skill's SKILL.md + file listing BEFORE installing. "
+        "Use this to let the user read the skill's intent / trigger rules / "
+        "bundled files before committing to install."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {"slug": {"type": "string"}},
+        "required": ["slug"],
+    },
     output_schema={"type": "object"},
     scope=ToolScope.READ,
     requires_confirmation=False,
@@ -124,6 +155,7 @@ ALL_SKILL_META_TOOLS = [
     LIST_SKILLS_TOOL,
     GET_SKILL_DETAIL_TOOL,
     LIST_SKILL_MARKET_TOOL,
+    PREVIEW_SKILL_MARKET_TOOL,
     INSTALL_SKILL_FROM_GITHUB_TOOL,
     INSTALL_SKILL_FROM_MARKET_TOOL,
     UPDATE_SKILL_TOOL,

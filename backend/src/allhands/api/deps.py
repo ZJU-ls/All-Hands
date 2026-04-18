@@ -31,6 +31,7 @@ from allhands.persistence.sql_repos import (
 from allhands.services.chat_service import ChatService
 from allhands.services.confirmation_service import ConfirmationService
 from allhands.services.employee_service import EmployeeService
+from allhands.services.github_market import AnthropicsSkillsMarket, GithubSkillMarket
 from allhands.services.mcp_service import MCPService
 from allhands.services.skill_service import SkillService
 
@@ -112,13 +113,26 @@ async def get_model_service(session: AsyncSession) -> LLMModelService:
     return LLMModelService(SqlLLMModelRepo(session), SqlLLMProviderRepo(session))
 
 
+@lru_cache(maxsize=1)
+def get_skill_market() -> GithubSkillMarket:
+    settings = get_settings()
+    return AnthropicsSkillsMarket(
+        owner=settings.skill_market_owner,
+        repo=settings.skill_market_repo,
+        branch=settings.skill_market_branch,
+        path_prefix=settings.skill_market_path_prefix,
+        cache_ttl_seconds=settings.skill_market_cache_ttl_seconds,
+        token=settings.github_token,
+    )
+
+
 async def get_skill_service(session: AsyncSession = Depends(get_session)) -> SkillService:
     settings = get_settings()
     data_dir = Path(settings.data_dir)
     return SkillService(
         repo=SqlSkillRepo(session),
         install_root=data_dir / "skills",
-        market_file=data_dir / "skills-market.json",
+        market=get_skill_market(),
     )
 
 

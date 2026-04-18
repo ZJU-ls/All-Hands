@@ -1,11 +1,14 @@
 """Task 2 · SkillService unit tests.
 
-Uses a fake SkillRepo + fake cloner so tests don't touch the network or git.
+Uses a fake SkillRepo + fake cloner + fake GithubSkillMarket — tests never touch
+the network. Covers install_from_github / install_from_market / install_from_upload /
+update / delete / list_market / preview_market_skill.
 """
 
 from __future__ import annotations
 
 import io
+import tarfile
 import zipfile
 from pathlib import Path
 from typing import ClassVar
@@ -13,6 +16,7 @@ from typing import ClassVar
 import pytest
 
 from allhands.core import Skill, SkillSource
+from allhands.services.github_market import FakeGithubMarket
 from allhands.services.skill_service import (
     SkillInstallError,
     SkillService,
@@ -61,6 +65,22 @@ class FakeCloner(SkillSourceCloner):
         (dest / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
 
 
+def _make_tar(slug: str, skill_md: str, extra_files: dict[str, str] | None = None) -> bytes:
+    """Build a tarball with `<slug>/SKILL.md` (+ optional extras) at root."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = skill_md.encode("utf-8")
+        info = tarfile.TarInfo(name=f"{slug}/SKILL.md")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+        for name, content in (extra_files or {}).items():
+            body = content.encode("utf-8")
+            info = tarfile.TarInfo(name=f"{slug}/{name}")
+            info.size = len(body)
+            tar.addfile(info, io.BytesIO(body))
+    return buf.getvalue()
+
+
 @pytest.fixture
 def install_root(tmp_path: Path) -> Path:
     return tmp_path / "skills"
@@ -72,33 +92,18 @@ def repo() -> FakeSkillRepo:
 
 
 @pytest.fixture
-def market_file(tmp_path: Path) -> Path:
-    market = tmp_path / "skills-market.json"
-    market.write_text(
-        """{
-          "version": 1,
-          "skills": [
-            {
-              "slug": "test-skill",
-              "name": "test-skill",
-              "description": "fixture skill",
-              "source_url": "https://github.com/example/test-skill",
-              "version": "0.2.0"
-            }
-          ]
-        }""",
-        encoding="utf-8",
-    )
-    return market
+def market() -> FakeGithubMarket:
+    tar = _make_tar("test-skill", SKILL_MD, {"README.md": "hello"})
+    return FakeGithubMarket(entries={"test-skill": (SKILL_MD, ("SKILL.md", "README.md"), tar)})
 
 
 @pytest.fixture
-def service(repo: FakeSkillRepo, install_root: Path, market_file: Path) -> SkillService:
+def service(repo: FakeSkillRepo, install_root: Path, market: FakeGithubMarket) -> SkillService:
     FakeCloner.clone_calls.clear()
     return SkillService(
         repo=repo,
         install_root=install_root,
-        market_file=market_file,
+        market=market,
         cloner=FakeCloner(),
     )
 
@@ -117,11 +122,15 @@ async def test_install_from_github_registers_skill(
     assert await repo.get(skill.id) is not None
 
 
-async def test_install_from_market_uses_slug_entry(service: SkillService) -> None:
+async def test_install_from_market_uses_github_archive(
+    service: SkillService, install_root: Path
+) -> None:
     skill = await service.install_from_market("test-skill")
     assert skill.source == SkillSource.MARKET
-    assert skill.source_url == "https://github.com/example/test-skill"
-    assert FakeCloner.clone_calls[-1][0] == "https://github.com/example/test-skill"
+    assert skill.source_url.startswith("https://github.com/fake/repo/tree/main/skills/test-skill")
+    assert skill.path is not None
+    assert (Path(skill.path) / "SKILL.md").exists()
+    assert (Path(skill.path) / "README.md").exists()
 
 
 async def test_install_from_market_unknown_slug_raises(service: SkillService) -> None:
@@ -130,16 +139,14 @@ async def test_install_from_market_unknown_slug_raises(service: SkillService) ->
 
 
 async def test_install_from_github_missing_skill_md_raises(
-    repo: FakeSkillRepo, install_root: Path, market_file: Path
+    repo: FakeSkillRepo, install_root: Path, market: FakeGithubMarket
 ) -> None:
     class EmptyCloner:
         async def clone(self, url: str, ref: str, dest: Path) -> None:
             dest.mkdir(parents=True, exist_ok=True)
             # no SKILL.md
 
-    svc = SkillService(
-        repo=repo, install_root=install_root, market_file=market_file, cloner=EmptyCloner()
-    )
+    svc = SkillService(repo=repo, install_root=install_root, market=market, cloner=EmptyCloner())
     with pytest.raises(SkillInstallError, match=r"SKILL\.md"):
         await svc.install_from_github("https://github.com/example/nope")
 
@@ -162,6 +169,27 @@ async def test_install_from_upload_rejects_non_zip(service: SkillService) -> Non
 async def test_list_market_returns_seeds(service: SkillService) -> None:
     entries = await service.list_market()
     assert any(e.slug == "test-skill" for e in entries)
+
+
+async def test_list_market_filters_by_query(service: SkillService) -> None:
+    # query matching the description "A test skill"
+    matches = await service.list_market("test skill")
+    assert len(matches) == 1
+    # non-matching query
+    none = await service.list_market("nonexistent-term-xyz")
+    assert none == []
+
+
+async def test_preview_market_skill_returns_skill_md(service: SkillService) -> None:
+    preview = await service.preview_market_skill("test-skill")
+    assert preview.slug == "test-skill"
+    assert "test-skill" in preview.skill_md
+    assert "SKILL.md" in preview.files
+
+
+async def test_preview_market_skill_unknown_raises(service: SkillService) -> None:
+    with pytest.raises(SkillInstallError):
+        await service.preview_market_skill("nope")
 
 
 async def test_delete_removes_db_and_disk(

@@ -1,13 +1,14 @@
 """End-to-end tests for /api/skills — router + service + repo chain.
 
-Uses an in-memory SQLite session and a FakeCloner override on SkillService
-so tests don't hit the network. Market file is provided via a temp data_dir.
+Uses an in-memory SQLite session and a FakeCloner + FakeGithubMarket override on
+SkillService so tests don't hit the network. Covers legacy behavior plus new
+search + preview endpoints.
 """
 
 from __future__ import annotations
 
 import io
-import json
+import tarfile
 import zipfile
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -21,13 +22,15 @@ from allhands.api import create_app
 from allhands.api.deps import get_session, get_skill_service
 from allhands.persistence.orm.base import Base
 from allhands.persistence.sql_repos import SqlSkillRepo
+from allhands.services.github_market import FakeGithubMarket
 from allhands.services.skill_service import SkillService
 
 SKILL_MD = """---
 name: fixture-skill
-description: fixture
+description: fixture skill description
 version: 0.1.0
 tool_ids: []
+tags: [demo, fixture]
 ---
 body
 """
@@ -39,27 +42,20 @@ class FakeCloner:
         (dest / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
 
 
+def _fake_market_tar(slug: str, skill_md: str) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = skill_md.encode("utf-8")
+        info = tarfile.TarInfo(name=f"{slug}/SKILL.md")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
-    (data_dir / "skills-market.json").write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "skills": [
-                    {
-                        "slug": "fixture-skill",
-                        "name": "fixture-skill",
-                        "description": "fixture",
-                        "source_url": "https://github.com/example/fixture-skill",
-                        "version": "0.1.0",
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
 
     async def _session() -> AsyncIterator[AsyncSession]:
@@ -69,11 +65,16 @@ def client(tmp_path: Path) -> TestClient:
         async with maker() as s, s.begin():
             yield s
 
+    tar = _fake_market_tar("fixture-skill", SKILL_MD)
+    fake_market = FakeGithubMarket(
+        entries={"fixture-skill": (SKILL_MD, ("SKILL.md",), tar)},
+    )
+
     async def _skill_service(session: AsyncSession = Depends(_session)) -> SkillService:
         return SkillService(
             repo=SqlSkillRepo(session),
             install_root=data_dir / "skills",
-            market_file=data_dir / "skills-market.json",
+            market=fake_market,
             cloner=FakeCloner(),
         )
 
@@ -94,6 +95,31 @@ def test_list_market_returns_seed(client: TestClient) -> None:
     assert response.status_code == 200
     data = response.json()
     assert any(s["slug"] == "fixture-skill" for s in data)
+    fixture = next(s for s in data if s["slug"] == "fixture-skill")
+    assert fixture["tags"] == ["demo", "fixture"]
+
+
+def test_list_market_filters_by_query(client: TestClient) -> None:
+    r = client.get("/api/skills/market", params={"q": "fixture"})
+    assert r.status_code == 200
+    assert len(r.json()) == 1
+    r2 = client.get("/api/skills/market", params={"q": "does-not-exist"})
+    assert r2.status_code == 200
+    assert r2.json() == []
+
+
+def test_market_preview_returns_skill_md(client: TestClient) -> None:
+    r = client.get("/api/skills/market/fixture-skill/preview")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["slug"] == "fixture-skill"
+    assert body["skill_md"].startswith("---")
+    assert "SKILL.md" in body["files"]
+
+
+def test_market_preview_unknown_slug_404(client: TestClient) -> None:
+    r = client.get("/api/skills/market/nope/preview")
+    assert r.status_code == 404
 
 
 def test_install_from_market_then_list(client: TestClient) -> None:
