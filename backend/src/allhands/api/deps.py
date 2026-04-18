@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002 — runtime-needed for FastAPI Depends resolution
 )
@@ -149,11 +149,13 @@ async def get_mcp_service(session: AsyncSession = Depends(get_session)) -> MCPSe
 
 
 async def get_trigger_service(
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> TriggerService:
+    runtime = getattr(request.app.state, "trigger_runtime", None)
+    handlers = runtime.handlers if runtime is not None else None
     return TriggerService(
         trigger_repo=SqlTriggerRepo(session),
         fire_repo=SqlTriggerFireRepo(session),
-        # action_handlers left empty at request scope — the scheduler process
-        # (wave B.3 · 6/N) wires handlers via the shared lifespan-owned instance.
+        action_handlers=handlers,
     )

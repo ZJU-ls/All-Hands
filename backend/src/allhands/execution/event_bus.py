@@ -63,6 +63,7 @@ class EventBus:
     def __init__(self, persist: PersistCallback | None = None) -> None:
         self._persist = persist
         self._subs: list[tuple[EventPattern, EventHandler]] = []
+        self._catchall: list[EventHandler] = []
         self._inflight: set[asyncio.Task[None]] = set()
 
     async def publish(
@@ -82,10 +83,15 @@ class EventBus:
             await self._persist(env)
         for pattern, handler in list(self._subs):
             if matches_event_pattern(pattern, env):
-                task = asyncio.create_task(self._safe_invoke(handler, env))
-                self._inflight.add(task)
-                task.add_done_callback(self._inflight.discard)
+                self._spawn(handler, env)
+        for handler in list(self._catchall):
+            self._spawn(handler, env)
         return env
+
+    def _spawn(self, handler: EventHandler, env: EventEnvelope) -> None:
+        task = asyncio.create_task(self._safe_invoke(handler, env))
+        self._inflight.add(task)
+        task.add_done_callback(self._inflight.discard)
 
     def subscribe(
         self,
@@ -98,6 +104,19 @@ class EventBus:
         def unsubscribe() -> None:
             if entry in self._subs:
                 self._subs.remove(entry)
+
+        return unsubscribe
+
+    def subscribe_all(self, handler: EventHandler) -> Callable[[], None]:
+        """Fire on every event regardless of kind. Used by the trigger event
+        listener, which does its own per-trigger matching against a live repo
+        snapshot so that CRUD takes effect without re-subscription.
+        """
+        self._catchall.append(handler)
+
+        def unsubscribe() -> None:
+            if handler in self._catchall:
+                self._catchall.remove(handler)
 
         return unsubscribe
 

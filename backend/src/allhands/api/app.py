@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,7 +20,45 @@ from allhands.api.routers.plans import router as plans_router
 from allhands.api.routers.providers import router as providers_router
 from allhands.api.routers.skills import router as skills_router
 from allhands.api.routers.triggers import router as triggers_router
+from allhands.api.routers.webhooks import router as webhooks_router
 from allhands.config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Own the TriggerRuntime for the process lifetime.
+
+    Kept compact so test clients that want to bypass scheduler (TestClient
+    with dependency_overrides) can skip the runtime: they just never touch
+    `app.state.trigger_runtime` and the routers that need it return 503.
+    """
+    from allhands.api.deps import get_tool_registry
+    from allhands.execution.triggers.runtime import TriggerRuntime
+    from allhands.persistence.db import get_sessionmaker
+
+    runtime: TriggerRuntime | None = None
+    try:
+        maker = get_sessionmaker()
+        runtime = TriggerRuntime(
+            session_maker=maker,
+            tool_registry=get_tool_registry(),
+        )
+        await runtime.start()
+        app.state.trigger_runtime = runtime
+    except Exception:
+        logger.exception("trigger.runtime.start.failed")
+        app.state.trigger_runtime = None
+
+    try:
+        yield
+    finally:
+        if runtime is not None:
+            try:
+                await runtime.shutdown()
+            except Exception:
+                logger.exception("trigger.runtime.shutdown.failed")
 
 
 def create_app() -> FastAPI:
@@ -26,6 +68,7 @@ def create_app() -> FastAPI:
         version=__version__,
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
+        lifespan=_lifespan,
     )
 
     app.add_middleware(
@@ -46,4 +89,5 @@ def create_app() -> FastAPI:
     app.include_router(mcp_servers_router, prefix="/api")
     app.include_router(plans_router, prefix="/api")
     app.include_router(triggers_router, prefix="/api")
+    app.include_router(webhooks_router, prefix="/api")
     return app
