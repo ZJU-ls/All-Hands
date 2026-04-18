@@ -20,6 +20,7 @@ from allhands.execution.skills import SkillRegistry, seed_skills
 from allhands.execution.tools import discover_builtin_tools
 from allhands.persistence.db import get_sessionmaker
 from allhands.persistence.sql_repos import (
+    SqlArtifactRepo,
     SqlConfirmationRepo,
     SqlConversationRepo,
     SqlEmployeeRepo,
@@ -30,6 +31,7 @@ from allhands.persistence.sql_repos import (
     SqlTriggerFireRepo,
     SqlTriggerRepo,
 )
+from allhands.services.artifact_service import ArtifactService
 from allhands.services.chat_service import ChatService
 from allhands.services.confirmation_service import ConfirmationService
 from allhands.services.employee_service import EmployeeService
@@ -146,6 +148,14 @@ def _get_mcp_adapter() -> RealMCPAdapter:
 
 async def get_mcp_service(session: AsyncSession = Depends(get_session)) -> MCPService:
     return MCPService(repo=SqlMCPServerRepo(session), adapter=_get_mcp_adapter())
+
+
+async def get_artifact_service(
+    session: AsyncSession = Depends(get_session),
+) -> ArtifactService:
+    settings = get_settings()
+    data_dir = Path(settings.data_dir)
+    return ArtifactService(SqlArtifactRepo(session), data_dir)
 
 
 async def get_trigger_service(
