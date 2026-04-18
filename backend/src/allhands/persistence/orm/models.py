@@ -169,3 +169,50 @@ class LLMModelRow(Base):
     display_name: Mapped[str] = mapped_column(String(128), default="")
     context_window: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class TriggerRow(Base):
+    __tablename__ = "triggers"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    kind: Mapped[str] = mapped_column(String(16), index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    timer: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    event: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    action: Mapped[dict[str, object]] = mapped_column(JSON)
+    min_interval_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    fires_total: Mapped[int] = mapped_column(Integer, default=0)
+    fires_failed_streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_fired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    auto_disabled_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str] = mapped_column(String(64))
+
+
+class TriggerFireRow(Base):
+    __tablename__ = "trigger_fires"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    trigger_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("triggers.id", ondelete="CASCADE"), index=True
+    )
+    fired_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    source: Mapped[str] = mapped_column(String(16))
+    event_payload: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    action_snapshot: Mapped[dict[str, object]] = mapped_column(JSON)
+    rendered_task: Mapped[str | None] = mapped_column(String(8000), nullable=True)
+    run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="queued")
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+
+
+class EventRow(Base):
+    __tablename__ = "events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(128), index=True)
+    payload: Mapped[dict[str, object]] = mapped_column(JSON)
+    published_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    trigger_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

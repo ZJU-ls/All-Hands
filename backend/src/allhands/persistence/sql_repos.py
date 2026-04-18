@@ -16,6 +16,7 @@ from allhands.core import (
     ConfirmationStatus,
     Conversation,
     Employee,
+    EventEnvelope,
     InteractionSpec,
     LLMModel,
     LLMProvider,
@@ -30,17 +31,26 @@ from allhands.core import (
     StepStatus,
     ToolCall,
     ToolCallStatus,
+    Trigger,
+    TriggerAction,
+    TriggerFire,
+    TriggerFireSource,
+    TriggerFireStatus,
+    TriggerKind,
 )
 from allhands.persistence.orm.models import (
     AgentPlanRow,
     ConfirmationRow,
     ConversationRow,
     EmployeeRow,
+    EventRow,
     LLMModelRow,
     LLMProviderRow,
     MCPServerRow,
     MessageRow,
     SkillRow,
+    TriggerFireRow,
+    TriggerRow,
 )
 
 
@@ -628,3 +638,181 @@ class SqlLLMModelRepo:
         if row:
             await self._s.delete(row)
             await self._s.flush()
+
+
+# ---- Trigger repos (Wave B.3) ----
+
+
+def _trigger_to_row_kwargs(trigger: Trigger) -> dict[str, object]:
+    return {
+        "id": trigger.id,
+        "name": trigger.name,
+        "kind": trigger.kind.value,
+        "enabled": trigger.enabled,
+        "timer": trigger.timer.model_dump(mode="json") if trigger.timer else None,
+        "event": trigger.event.model_dump(mode="json") if trigger.event else None,
+        "action": trigger.action.model_dump(mode="json"),
+        "min_interval_seconds": trigger.min_interval_seconds,
+        "fires_total": trigger.fires_total,
+        "fires_failed_streak": trigger.fires_failed_streak,
+        "last_fired_at": _naive(trigger.last_fired_at) if trigger.last_fired_at else None,
+        "auto_disabled_reason": trigger.auto_disabled_reason,
+        "created_at": _naive(trigger.created_at),
+        "created_by": trigger.created_by,
+    }
+
+
+def _row_to_trigger(row: TriggerRow) -> Trigger:
+    from allhands.core import EventPattern, TimerSpec
+
+    return Trigger(
+        id=row.id,
+        name=row.name,
+        kind=TriggerKind(row.kind),
+        enabled=row.enabled,
+        timer=TimerSpec.model_validate(row.timer) if row.timer else None,
+        event=EventPattern.model_validate(row.event) if row.event else None,
+        action=TriggerAction.model_validate(row.action),
+        min_interval_seconds=row.min_interval_seconds,
+        fires_total=row.fires_total,
+        fires_failed_streak=row.fires_failed_streak,
+        last_fired_at=_utc(row.last_fired_at) if row.last_fired_at else None,
+        auto_disabled_reason=row.auto_disabled_reason,
+        created_at=_utc(row.created_at),
+        created_by=row.created_by,
+    )
+
+
+class SqlTriggerRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, trigger_id: str) -> Trigger | None:
+        row = await self._s.get(TriggerRow, trigger_id)
+        return _row_to_trigger(row) if row else None
+
+    async def list_all(self) -> list[Trigger]:
+        result = await self._s.execute(select(TriggerRow).order_by(TriggerRow.created_at.desc()))
+        return [_row_to_trigger(r) for r in result.scalars().all()]
+
+    async def list_by_kind(self, kind: str, enabled_only: bool = False) -> list[Trigger]:
+        stmt = select(TriggerRow).where(TriggerRow.kind == kind)
+        if enabled_only:
+            stmt = stmt.where(TriggerRow.enabled.is_(True))
+        result = await self._s.execute(stmt)
+        return [_row_to_trigger(r) for r in result.scalars().all()]
+
+    async def upsert(self, trigger: Trigger) -> Trigger:
+        existing = await self._s.get(TriggerRow, trigger.id)
+        fields = _trigger_to_row_kwargs(trigger)
+        if existing:
+            for k, v in fields.items():
+                setattr(existing, k, v)
+        else:
+            self._s.add(TriggerRow(**fields))
+        await self._s.flush()
+        return trigger
+
+    async def delete(self, trigger_id: str) -> None:
+        row = await self._s.get(TriggerRow, trigger_id)
+        if row:
+            await self._s.delete(row)
+            await self._s.flush()
+
+
+def _row_to_trigger_fire(row: TriggerFireRow) -> TriggerFire:
+    return TriggerFire(
+        id=row.id,
+        trigger_id=row.trigger_id,
+        fired_at=_utc(row.fired_at),
+        source=TriggerFireSource(row.source),
+        event_payload=row.event_payload,
+        action_snapshot=TriggerAction.model_validate(row.action_snapshot),
+        rendered_task=row.rendered_task,
+        run_id=row.run_id,
+        status=TriggerFireStatus(row.status),
+        error_code=row.error_code,
+        error_detail=row.error_detail,
+    )
+
+
+class SqlTriggerFireRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, fire_id: str) -> TriggerFire | None:
+        row = await self._s.get(TriggerFireRow, fire_id)
+        return _row_to_trigger_fire(row) if row else None
+
+    async def list_for_trigger(self, trigger_id: str, limit: int = 50) -> list[TriggerFire]:
+        stmt = (
+            select(TriggerFireRow)
+            .where(TriggerFireRow.trigger_id == trigger_id)
+            .order_by(TriggerFireRow.fired_at.desc())
+            .limit(limit)
+        )
+        result = await self._s.execute(stmt)
+        return [_row_to_trigger_fire(r) for r in result.scalars().all()]
+
+    async def upsert(self, fire: TriggerFire) -> TriggerFire:
+        existing = await self._s.get(TriggerFireRow, fire.id)
+        fields: dict[str, object] = {
+            "id": fire.id,
+            "trigger_id": fire.trigger_id,
+            "fired_at": _naive(fire.fired_at),
+            "source": fire.source.value,
+            "event_payload": fire.event_payload,
+            "action_snapshot": fire.action_snapshot.model_dump(mode="json"),
+            "rendered_task": fire.rendered_task,
+            "run_id": fire.run_id,
+            "status": fire.status.value,
+            "error_code": fire.error_code,
+            "error_detail": fire.error_detail,
+        }
+        if existing:
+            for k, v in fields.items():
+                setattr(existing, k, v)
+        else:
+            self._s.add(TriggerFireRow(**fields))
+        await self._s.flush()
+        return fire
+
+    async def count_in_window(self, seconds: int) -> int:
+        from datetime import timedelta
+
+        cutoff = _naive(datetime.now(UTC)) - timedelta(seconds=seconds)
+        stmt = select(TriggerFireRow).where(TriggerFireRow.fired_at >= cutoff)
+        result = await self._s.execute(stmt)
+        return len(result.scalars().all())
+
+
+def _row_to_event(row: EventRow) -> EventEnvelope:
+    return EventEnvelope(
+        id=row.id,
+        kind=row.kind,
+        payload=row.payload,
+        published_at=_utc(row.published_at),
+        trigger_id=row.trigger_id,
+    )
+
+
+class SqlEventRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def save(self, event: EventEnvelope) -> None:
+        self._s.add(
+            EventRow(
+                id=event.id,
+                kind=event.kind,
+                payload=event.payload,
+                published_at=_naive(event.published_at),
+                trigger_id=event.trigger_id,
+            )
+        )
+        await self._s.flush()
+
+    async def list_recent(self, limit: int = 100) -> list[EventEnvelope]:
+        stmt = select(EventRow).order_by(EventRow.published_at.desc()).limit(limit)
+        result = await self._s.execute(stmt)
+        return [_row_to_event(r) for r in result.scalars().all()]
