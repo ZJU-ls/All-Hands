@@ -15,6 +15,7 @@ export function QuickActions({
 }) {
   const actions: Action[] = [
     { label: "+ 新对话", href: "/chat" },
+    { label: "+ 新任务", href: "/tasks" },
     { label: "+ 新员工", href: "/employees" },
     { label: "+ 新触发器", href: "/triggers" },
     paused

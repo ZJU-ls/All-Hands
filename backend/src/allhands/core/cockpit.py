@@ -106,6 +106,8 @@ class WorkspaceSummary(BaseModel):
     artifacts_total: int = 0
     artifacts_this_week_delta: int = 0
     triggers_active: int = 0
+    tasks_active: int = 0
+    tasks_needs_user: int = 0
     tokens_today_total: int = 0
     tokens_today_prompt: int = 0
     tokens_today_completion: int = 0

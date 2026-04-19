@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from allhands.core import (
+    ACTIVE_STATUSES,
     AgentPlan,
     Artifact,
     ArtifactKind,
@@ -32,6 +33,9 @@ from allhands.core import (
     Skill,
     SkillSource,
     StepStatus,
+    Task,
+    TaskSource,
+    TaskStatus,
     ToolCall,
     ToolCallStatus,
     Trigger,
@@ -54,6 +58,7 @@ from allhands.persistence.orm.models import (
     MCPServerRow,
     MessageRow,
     SkillRow,
+    TaskRow,
     TriggerFireRow,
     TriggerRow,
 )
@@ -1033,3 +1038,126 @@ class SqlEventRepo:
             stmt = stmt.where(or_(*(EventRow.kind.startswith(p) for p in kind_prefixes)))
         result = await self._s.execute(stmt)
         return int(result.scalar_one())
+
+
+def _row_to_task(row: TaskRow) -> Task:
+    return Task(
+        id=row.id,
+        workspace_id=row.workspace_id,
+        title=row.title,
+        goal=row.goal,
+        dod=row.dod,
+        assignee_id=row.assignee_id,
+        status=TaskStatus(row.status),
+        source=TaskSource(row.source),
+        created_by=row.created_by,
+        parent_task_id=row.parent_task_id,
+        run_ids=list(row.run_ids or []),
+        artifact_ids=list(row.artifact_ids or []),
+        conversation_id=row.conversation_id,
+        result_summary=row.result_summary,
+        error_summary=row.error_summary,
+        pending_input_question=row.pending_input_question,
+        pending_approval_payload=dict(row.pending_approval_payload)
+        if row.pending_approval_payload
+        else None,
+        token_budget=row.token_budget,
+        tokens_used=row.tokens_used,
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+        completed_at=_utc(row.completed_at) if row.completed_at else None,
+    )
+
+
+class SqlTaskRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, task_id: str) -> Task | None:
+        row = await self._s.get(TaskRow, task_id)
+        return _row_to_task(row) if row else None
+
+    async def list_all(
+        self,
+        *,
+        workspace_id: str = "default",
+        statuses: list[TaskStatus] | None = None,
+        assignee_id: str | None = None,
+        limit: int = 100,
+    ) -> list[Task]:
+        stmt = select(TaskRow).where(TaskRow.workspace_id == workspace_id)
+        if statuses:
+            stmt = stmt.where(TaskRow.status.in_([s.value for s in statuses]))
+        if assignee_id:
+            stmt = stmt.where(TaskRow.assignee_id == assignee_id)
+        stmt = stmt.order_by(TaskRow.updated_at.desc()).limit(limit)
+        result = await self._s.execute(stmt)
+        return [_row_to_task(r) for r in result.scalars().all()]
+
+    async def count_active(self, workspace_id: str = "default") -> int:
+        active_values = [s.value for s in ACTIVE_STATUSES]
+        stmt = (
+            select(func.count())
+            .select_from(TaskRow)
+            .where(TaskRow.workspace_id == workspace_id)
+            .where(TaskRow.status.in_(active_values))
+        )
+        result = await self._s.execute(stmt)
+        return int(result.scalar_one())
+
+    async def upsert(self, task: Task) -> Task:
+        existing = await self._s.get(TaskRow, task.id)
+        if existing is None:
+            self._s.add(
+                TaskRow(
+                    id=task.id,
+                    workspace_id=task.workspace_id,
+                    title=task.title,
+                    goal=task.goal,
+                    dod=task.dod,
+                    assignee_id=task.assignee_id,
+                    status=task.status.value,
+                    source=task.source.value,
+                    created_by=task.created_by,
+                    parent_task_id=task.parent_task_id,
+                    run_ids=list(task.run_ids),
+                    artifact_ids=list(task.artifact_ids),
+                    conversation_id=task.conversation_id,
+                    result_summary=task.result_summary,
+                    error_summary=task.error_summary,
+                    pending_input_question=task.pending_input_question,
+                    pending_approval_payload=dict(task.pending_approval_payload)
+                    if task.pending_approval_payload
+                    else None,
+                    token_budget=task.token_budget,
+                    tokens_used=task.tokens_used,
+                    created_at=_naive(task.created_at),
+                    updated_at=_naive(task.updated_at),
+                    completed_at=_naive(task.completed_at) if task.completed_at else None,
+                )
+            )
+        else:
+            existing.workspace_id = task.workspace_id
+            existing.title = task.title
+            existing.goal = task.goal
+            existing.dod = task.dod
+            existing.assignee_id = task.assignee_id
+            existing.status = task.status.value
+            existing.source = task.source.value
+            existing.created_by = task.created_by
+            existing.parent_task_id = task.parent_task_id
+            existing.run_ids = list(task.run_ids)
+            existing.artifact_ids = list(task.artifact_ids)
+            existing.conversation_id = task.conversation_id
+            existing.result_summary = task.result_summary
+            existing.error_summary = task.error_summary
+            existing.pending_input_question = task.pending_input_question
+            existing.pending_approval_payload = (
+                dict(task.pending_approval_payload) if task.pending_approval_payload else None
+            )
+            existing.token_budget = task.token_budget
+            existing.tokens_used = task.tokens_used
+            existing.updated_at = _naive(task.updated_at)
+            existing.completed_at = _naive(task.completed_at) if task.completed_at else None
+        await self._s.flush()
+        return task

@@ -51,6 +51,15 @@ from allhands.core.model import LLMModel
 from allhands.core.plan import AgentPlan, PlanStep, StepStatus
 from allhands.core.provider import LLMProvider
 from allhands.core.skill import Skill, SkillSource
+from allhands.core.task import (
+    ACTIVE_STATUSES,
+    PENDING_USER_STATUSES,
+    TERMINAL_STATUSES,
+    Task,
+    TaskSource,
+    TaskStatus,
+    is_legal_transition,
+)
 from allhands.core.tool import CostHint, Tool, ToolKind, ToolScope
 from allhands.core.trigger import (
     DEFAULT_MIN_INTERVAL_SECONDS,
@@ -68,9 +77,12 @@ from allhands.core.trigger import (
 )
 
 __all__ = [
+    "ACTIVE_STATUSES",
     "BINARY_KINDS",
     "DEFAULT_MIN_INTERVAL_SECONDS",
     "MIN_INTERVAL_SECONDS",
+    "PENDING_USER_STATUSES",
+    "TERMINAL_STATUSES",
     "TEXT_KINDS",
     "ActiveRunCard",
     "ActiveRunStatus",
@@ -114,6 +126,9 @@ __all__ = [
     "SkillSource",
     "StepStatus",
     "SubRunFailed",
+    "Task",
+    "TaskSource",
+    "TaskStatus",
     "TimerSpec",
     "Tool",
     "ToolCall",
@@ -129,4 +144,5 @@ __all__ = [
     "TriggerFireStatus",
     "TriggerKind",
     "WorkspaceSummary",
+    "is_legal_transition",
 ]

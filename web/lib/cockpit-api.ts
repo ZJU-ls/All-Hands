@@ -63,6 +63,8 @@ export type WorkspaceSummaryDto = {
   artifacts_total: number;
   artifacts_this_week_delta: number;
   triggers_active: number;
+  tasks_active: number;
+  tasks_needs_user: number;
   tokens_today_total: number;
   tokens_today_prompt: number;
   tokens_today_completion: number;

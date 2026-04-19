@@ -259,3 +259,35 @@ class EventRow(Base):
     severity: Mapped[str] = mapped_column(String(16), default="info")
     link: Mapped[str | None] = mapped_column(String(512), nullable=True)
     workspace_id: Mapped[str] = mapped_column(String(64), default="default", index=True)
+
+
+class TaskRow(Base):
+    __tablename__ = "tasks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(String(64), default="default", index=True)
+    title: Mapped[str] = mapped_column(String(256))
+    goal: Mapped[str] = mapped_column(String)
+    dod: Mapped[str] = mapped_column(String)
+    assignee_id: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    source: Mapped[str] = mapped_column(String(32))
+    created_by: Mapped[str] = mapped_column(String(128))
+    parent_task_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("tasks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    run_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    artifact_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    conversation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    result_summary: Mapped[str | None] = mapped_column(String, nullable=True)
+    error_summary: Mapped[str | None] = mapped_column(String, nullable=True)
+    pending_input_question: Mapped[str | None] = mapped_column(String, nullable=True)
+    pending_approval_payload: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    token_budget: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tokens_used: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

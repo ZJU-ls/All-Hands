@@ -29,6 +29,7 @@ from allhands.persistence.sql_repos import (
     SqlLLMProviderRepo,
     SqlMCPServerRepo,
     SqlSkillRepo,
+    SqlTaskRepo,
     SqlTriggerFireRepo,
     SqlTriggerRepo,
 )
@@ -190,5 +191,6 @@ async def get_cockpit_service(
         conversation_repo=SqlConversationRepo(session),
         trigger_repo=SqlTriggerRepo(session),
         artifact_repo=SqlArtifactRepo(session),
+        task_repo=SqlTaskRepo(session),
         pause_state_provider=pause_switch.snapshot,
     )

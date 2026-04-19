@@ -21,6 +21,8 @@ if TYPE_CHECKING:
         MCPServer,
         Message,
         Skill,
+        Task,
+        TaskStatus,
         Trigger,
         TriggerFire,
     )
@@ -147,3 +149,17 @@ class EventRepo(Protocol):
         workspace_id: str | None = None,
         kind_prefixes: list[str] | None = None,
     ) -> int: ...
+
+
+class TaskRepo(Protocol):
+    async def get(self, task_id: str) -> Task | None: ...
+    async def list_all(
+        self,
+        *,
+        workspace_id: str = "default",
+        statuses: list[TaskStatus] | None = None,
+        assignee_id: str | None = None,
+        limit: int = 100,
+    ) -> list[Task]: ...
+    async def count_active(self, workspace_id: str = "default") -> int: ...
+    async def upsert(self, task: Task) -> Task: ...

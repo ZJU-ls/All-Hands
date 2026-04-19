@@ -18,6 +18,7 @@ from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
 from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
 from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
 from allhands.execution.tools.meta.skill_tools import ALL_SKILL_META_TOOLS
+from allhands.execution.tools.meta.task_tools import ALL_TASK_META_TOOLS
 from allhands.execution.tools.meta.trigger_tools import ALL_TRIGGER_META_TOOLS
 from allhands.execution.tools.render.callout import TOOL as CALLOUT_TOOL
 from allhands.execution.tools.render.callout import execute as callout_execute
@@ -74,5 +75,6 @@ def discover_builtin_tools(registry: ToolRegistry) -> None:
         *ALL_TRIGGER_META_TOOLS,
         *ALL_ARTIFACT_TOOLS,
         *ALL_COCKPIT_META_TOOLS,
+        *ALL_TASK_META_TOOLS,
     ):
         registry.register(tool, _async_noop)

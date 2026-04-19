@@ -13,6 +13,7 @@ const MENU: MenuSection[] = [
     title: "工作区",
     items: [
       { label: "对话", href: "/chat" },
+      { label: "任务", href: "/tasks" },
       { label: "历史会话", href: "/conversations" },
     ],
   },

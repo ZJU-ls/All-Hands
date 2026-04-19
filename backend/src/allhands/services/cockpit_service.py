@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         ConversationRepo,
         EmployeeRepo,
         EventRepo,
+        TaskRepo,
         TriggerRepo,
     )
 
@@ -42,6 +43,7 @@ ACTIVITY_EVENT_KINDS = (
     "trigger.",
     "confirmation.",
     "mcp.",
+    "task.",
 )
 
 
@@ -125,6 +127,7 @@ class CockpitService:
         conversation_repo: ConversationRepo,
         trigger_repo: TriggerRepo,
         artifact_repo: ArtifactRepo,
+        task_repo: TaskRepo | None = None,
         workspace_id: str = "default",
         active_runs_provider: Callable[[], list[ActiveRunCard]] | None = None,
         health_provider: Callable[[], HealthSnapshot] | None = None,
@@ -137,6 +140,7 @@ class CockpitService:
         self._conversations = conversation_repo
         self._triggers = trigger_repo
         self._artifacts = artifact_repo
+        self._tasks = task_repo
         self._ws = workspace_id
         self._active_runs = active_runs_provider or (list)
         self._health = health_provider or _default_health
@@ -174,6 +178,19 @@ class CockpitService:
         else:
             tok = _default_token_stats()
 
+        tasks_active = 0
+        tasks_needs_user = 0
+        if self._tasks is not None:
+            from allhands.core import PENDING_USER_STATUSES as _PENDING
+
+            tasks_active = await self._tasks.count_active(self._ws)
+            needs_user_tasks = await self._tasks.list_all(
+                workspace_id=self._ws,
+                statuses=list(_PENDING),
+                limit=500,
+            )
+            tasks_needs_user = len(needs_user_tasks)
+
         convs_today = sum(1 for c in conversations if c.created_at >= day_start)
         artifacts_week = sum(1 for a in artifacts if a.created_at >= week_start)
 
@@ -201,6 +218,8 @@ class CockpitService:
             artifacts_total=len(artifacts),
             artifacts_this_week_delta=artifacts_week,
             triggers_active=sum(1 for t in triggers if t.enabled),
+            tasks_active=tasks_active,
+            tasks_needs_user=tasks_needs_user,
             tokens_today_total=tok.prompt + tok.completion,
             tokens_today_prompt=tok.prompt,
             tokens_today_completion=tok.completion,

@@ -45,6 +45,7 @@ class TestL01ToolFirstBoundary:
         "providers.py",
         "models.py",
         "triggers.py",
+        "tasks.py",
     ]
 
     # Known gaps being filled by plan `2026-04-18-gateway-skill-mcp.md`.

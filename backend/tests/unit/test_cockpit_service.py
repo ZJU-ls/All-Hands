@@ -44,6 +44,7 @@ from allhands.persistence.sql_repos import (
     SqlConversationRepo,
     SqlEmployeeRepo,
     SqlEventRepo,
+    SqlTaskRepo,
     SqlTriggerRepo,
 )
 from allhands.services.cockpit_service import (
@@ -51,6 +52,7 @@ from allhands.services.cockpit_service import (
     PauseState,
     TokenStats,
 )
+from allhands.services.task_service import TaskService
 
 
 async def _init_schema(engine: AsyncEngine) -> None:
@@ -176,15 +178,17 @@ async def _seed(
 
 
 def _svc(session: AsyncSession, **overrides: object) -> CockpitService:
-    return CockpitService(
-        event_repo=SqlEventRepo(session),
-        confirmation_repo=SqlConfirmationRepo(session),
-        employee_repo=SqlEmployeeRepo(session),
-        conversation_repo=SqlConversationRepo(session),
-        trigger_repo=SqlTriggerRepo(session),
-        artifact_repo=SqlArtifactRepo(session),
-        **overrides,  # type: ignore[arg-type]
-    )
+    defaults: dict[str, object] = {
+        "event_repo": SqlEventRepo(session),
+        "confirmation_repo": SqlConfirmationRepo(session),
+        "employee_repo": SqlEmployeeRepo(session),
+        "conversation_repo": SqlConversationRepo(session),
+        "trigger_repo": SqlTriggerRepo(session),
+        "artifact_repo": SqlArtifactRepo(session),
+        "task_repo": SqlTaskRepo(session),
+    }
+    defaults.update(overrides)
+    return CockpitService(**defaults)  # type: ignore[arg-type]
 
 
 async def _in_session(
@@ -363,6 +367,70 @@ async def test_confirmations_pending_counts_pending_only(
         summary = await svc.build_summary(now=now)
 
     assert summary.confirmations_pending == 1
+
+
+async def test_tasks_kpis_populate_from_task_service(
+    maker: async_sessionmaker[AsyncSession],
+) -> None:
+    """Cockpit summary exposes tasks_active + tasks_needs_user counts.
+
+    Spec `docs/specs/agent-design/2026-04-18-tasks.md` § 7.1:
+    cockpit KPI bar must show how many tasks are running and how many
+    need the user.
+    """
+    from allhands.core import TaskSource
+
+    async with maker() as s, s.begin():
+        tsvc = TaskService(SqlTaskRepo(s))
+        t1 = await tsvc.create(
+            title="queued-task",
+            goal="g",
+            dod="d",
+            assignee_id="e1",
+            source=TaskSource.USER,
+            created_by="user",
+        )
+        t2 = await tsvc.create(
+            title="running-task",
+            goal="g",
+            dod="d",
+            assignee_id="e1",
+            source=TaskSource.USER,
+            created_by="user",
+        )
+        await tsvc.start(t2.id, run_id="r-1")
+        t3 = await tsvc.create(
+            title="needs-input-task",
+            goal="g",
+            dod="d",
+            assignee_id="e1",
+            source=TaskSource.USER,
+            created_by="user",
+        )
+        await tsvc.start(t3.id, run_id="r-2")
+        await tsvc.request_input(t3.id, "what should the tone be?")
+        # completed task should NOT count toward active
+        t4 = await tsvc.create(
+            title="done-task",
+            goal="g",
+            dod="d",
+            assignee_id="e1",
+            source=TaskSource.USER,
+            created_by="user",
+        )
+        await tsvc.start(t4.id, run_id="r-3")
+        await tsvc.complete(t4.id, result_summary="shipped")
+        # silence unused warnings
+        _ = t1
+
+    async with maker() as s:
+        svc = _svc(s)
+        summary = await svc.build_summary()
+
+    # t1(queued) + t2(running) + t3(needs_input) = 3 active; t4(completed) excluded
+    assert summary.tasks_active == 3
+    # only t3 needs user input/approval
+    assert summary.tasks_needs_user == 1
 
 
 async def test_token_stats_provider_feeds_kpi(
