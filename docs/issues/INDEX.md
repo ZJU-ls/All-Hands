@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(track-2-qa audit)
+最后更新:2026-04-19(track-2-qa audit + user product review I-0015/I-0016)
 
 ---
 
@@ -24,6 +24,8 @@
 | [I-0012](open/I-0012-design-lab-missing-live-samples.md) | P2 | open | design-lab missing live samples for Viz components + Artifact.Preview | web/app/design-lab | 2026-04-19 / track-2-qa | — | ui, visual, docs |
 | [I-0013](open/I-0013-voice-tone-chapter-and-lead-welcome-missing.md) | P2 | open | Voice & Tone chapter + Lead welcome message never added | product/03-visual-design · employee_service | 2026-04-19 / track-2-qa | — | docs, ui |
 | [I-0014](open/I-0014-coachmark-firstrun-guide-missing.md) | P2 | open | Coachmark system + first-run guided tour not built | web/components/ui · lib/first-run | 2026-04-19 / track-2-qa | — | ui, onboarding |
+| [I-0015](open/I-0015-composer-ergonomics-ai-native.md) | P0 | open | Composer 布局不符合 AI 原生产品惯例 · thinking 位置错 · 中止按钮缺失 | web/components/chat · /models · 所有对话入口 | 2026-04-19 / user-product-review | AI-native UX DoD | ui, ux, product-quality |
+| [I-0016](open/I-0016-streaming-output-universal.md) | P0 | open | 流式输出(打字机)没有覆盖所有 AI 输出位置 · 非 AI 原生体验 | web/lib/stream-client · MessageBubble · 所有 agent 消费点 | 2026-04-19 / user-product-review | AI-native UX DoD | ui, api, streaming |
 
 ---
 
@@ -31,10 +33,10 @@
 
 | 维度 | 数量 |
 |---|---|
-| P0 | 3 |
+| P0 | 5 |
 | P1 | 4 |
 | P2 | 5 |
-| **open** | 12 |
+| **open** | 14 |
 | **in-progress** | 0 |
 | **blocked** | 0 |
 
