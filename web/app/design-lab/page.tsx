@@ -1413,7 +1413,7 @@ function ShowcaseCard({
   );
 }
 
-/* ---------- Icon Gallery (ADR-0003 · Raycast-style) ---------- */
+/* ---------- Icon Gallery (ADR-0009 · Raycast-style) ---------- */
 
 type IconEntry = { name: string; Icon: (p: IconProps) => JSX.Element };
 
@@ -1458,7 +1458,7 @@ function IconGallery() {
       <ul className="mb-4 text-xs text-text-muted space-y-1 list-none pl-0">
         <li className="flex gap-2">
           <span className="text-text-subtle">·</span>
-          <span>ADR-0003 允许自有 icon 系统;第三方 icon 库(lucide / heroicons / phosphor / tabler)仍禁。</span>
+          <span>ADR-0009 允许自有 icon 系统;第三方 icon 库(lucide / heroicons / phosphor / tabler)仍禁。</span>
         </li>
         <li className="flex gap-2">
           <span className="text-text-subtle">·</span>

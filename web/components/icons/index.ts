@@ -6,7 +6,7 @@
  *   import { ChatIcon, UserIcon } from "@/components/icons";
  *   <ChatIcon size={20} className="text-text-muted" />
  *
- * See ADR-0003 + product/03-visual-design.md §2.
+ * See product/adr/0009-custom-icon-system.md + product/03-visual-design.md §2.
  */
 
 export { IconBase } from "./Base";
