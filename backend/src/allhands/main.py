@@ -22,8 +22,15 @@ async def startup() -> None:
 
     from allhands.config import get_settings
     from allhands.persistence.db import get_sessionmaker
-    from allhands.persistence.sql_repos import SqlEmployeeRepo
-    from allhands.services.bootstrap_service import ensure_lead_agent
+    from allhands.persistence.sql_repos import (
+        SqlEmployeeRepo,
+        SqlLLMModelRepo,
+        SqlLLMProviderRepo,
+    )
+    from allhands.services.bootstrap_service import (
+        ensure_gateway_demo_seeds,
+        ensure_lead_agent,
+    )
 
     settings = get_settings()
     settings.ensure_data_dir()
@@ -52,3 +59,14 @@ async def startup() -> None:
             log.info("lead_agent.ready", id=lead.id, name=lead.name)
     except Exception as exc:
         log.warning("lead_agent.seed.failed", error=str(exc))
+
+    # Seed Gateway demo providers (idempotent · only when table is empty)
+    try:
+        maker = get_sessionmaker()
+        async with maker() as session, session.begin():
+            prov_repo = SqlLLMProviderRepo(session)
+            model_repo = SqlLLMModelRepo(session)
+            seeded = await ensure_gateway_demo_seeds(prov_repo, model_repo)
+            log.info("gateway.seed", seeded=seeded)
+    except Exception as exc:
+        log.warning("gateway.seed.failed", error=str(exc))
