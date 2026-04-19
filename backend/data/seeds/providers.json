@@ -1,0 +1,29 @@
+[
+  {
+    "id": "seed-provider-bailian",
+    "name": "Bailian",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "api_key": "",
+    "default_model": "qwen-plus",
+    "is_default": true,
+    "enabled": true
+  },
+  {
+    "id": "seed-provider-openrouter",
+    "name": "OpenRouter",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key": "",
+    "default_model": "anthropic/claude-3.5-sonnet",
+    "is_default": false,
+    "enabled": true
+  },
+  {
+    "id": "seed-provider-deepseek",
+    "name": "DeepSeek",
+    "base_url": "https://api.deepseek.com/v1",
+    "api_key": "",
+    "default_model": "deepseek-chat",
+    "is_default": false,
+    "enabled": true
+  }
+]

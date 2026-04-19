@@ -1,0 +1,15 @@
+[
+  {
+    "id": "seed-mcp-filesystem",
+    "name": "Filesystem",
+    "transport": "stdio",
+    "config": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/allhands-demo"],
+      "env": {}
+    },
+    "enabled": true,
+    "exposed_tool_ids": [],
+    "health": "unknown"
+  }
+]

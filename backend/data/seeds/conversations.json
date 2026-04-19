@@ -1,0 +1,25 @@
+[
+  {
+    "id": "seed-conv-research-intro",
+    "employee_name": "ResearchAgent",
+    "title": "Which emerging battery chemistries ship before 2030?",
+    "created_at": "2026-04-15T09:00:00Z",
+    "messages": [
+      {
+        "id": "seed-msg-001",
+        "role": "user",
+        "content": "Give me a structured brief on emerging battery chemistries expected to reach commercial shipments before 2030. Focus on energy density, cycle life, and supply-chain risk.",
+        "created_at": "2026-04-15T09:00:00Z"
+      },
+      {
+        "id": "seed-msg-002",
+        "role": "assistant",
+        "content": "Here is the brief. Three chemistries dominate the near-term pipeline:\n\n1. Solid-state lithium-metal — energy density ~450 Wh/kg, cycle life > 1000 at lab scale; Toyota and QuantumScape lead. Supply-chain risk: lithium carbonate and dry-room capacity.\n2. Sodium-ion — lower density (~160 Wh/kg) but sodium abundance and better cold-weather performance; CATL shipping first-gen cells for BESS use today.\n3. Lithium-sulfur — high theoretical density (~500 Wh/kg) but cycle life stuck below 500 in most literature; Oxis Energy restructured, Lyten is the current front-runner.\n\nOpen questions: gigafactory capex curve after 2027, reuse/recycle economics for Na-ion.",
+        "created_at": "2026-04-15T09:00:08Z",
+        "metadata": {
+          "reasoning_summary": "Drafted the three near-term chemistries, ranked by 2030 shipment likelihood. Pulled cycle-life figures from manufacturer briefings + preprints."
+        }
+      }
+    ]
+  }
+]
