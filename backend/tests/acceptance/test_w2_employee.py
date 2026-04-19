@@ -37,7 +37,7 @@ def test_render_card_for_employee_registered(repo_root: Path) -> None:
     """W2 expects an Employee-shaped render component.
 
     This currently xfails: the registry has MarkdownCard / PlanTimeline /
-    Viz.* / Artifact.Preview but no EmployeeCard. See issue I-0004
+    Viz.* / Artifact.Preview but no EmployeeCard. See issue I-0008
     (audited gap from docs/specs/agent-design/2026-04-18-employee-chat.md).
     Flip to ``assert`` once the issue is closed.
     """
@@ -49,7 +49,7 @@ def test_render_card_for_employee_registered(repo_root: Path) -> None:
     text = registry.read_text(encoding="utf-8")
     if "Employee" not in text:
         pytest.xfail(
-            "W2 audit gap (I-0004): employee-chat spec ships /employees list + "
+            "W2 audit gap (I-0008): employee-chat spec ships /employees list + "
             "create_employee meta tool, but no EmployeeCard render component is "
             "registered — Lead's create_employee result cannot render inline in chat"
         )
