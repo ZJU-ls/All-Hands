@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(Track M 关闭 I-0022 skill 动态注入 + Track L 关闭 I-0021 员工设计页 + Track N 关闭 I-0020 seed + Track K 关闭 I-0019 · Wave-3 主段合流完成)
+最后更新:2026-04-19(Track J 阶段 1 诊断 I-0018 · Track M 关闭 I-0022 + Track L 关闭 I-0021 + Track N 关闭 I-0020 + Track K 关闭 I-0019 · Wave-3 主段合流完成)
 
 ---
 
@@ -79,3 +79,4 @@
 - 2026-04-19 · Track K 关闭 I-0019(/gateway master-detail → accordion · PingIndicator 4 态状态机 · `POST /api/models/{id}/ping` + `allhands.meta.ping_model` 成对 · 6+5+5 后端用例 + 3 playwright smoke · provider/model seed 由 Track N 的 `seed_service` 统一供给)· P1 2 → 1 · open 10 → 9
 - 2026-04-19 · Track L 关闭 I-0021(/employees/design Phase-3B · `execution/modes/{execute,plan,plan_with_subagent,preview}.py` 单一展开算法 · `plan_with_subagent.max_iterations=15`(SIGNOFF Q7)· `POST /api/employees/preview` 配 `PREVIEW_EMPLOYEE_COMPOSITION_TOOL`(L01 REST+Meta 双入口)· PresetRadio 3 选一友好中文名 + DesignForm + DryRunPanel + SkillMultiPicker + max-iterations field · 10 preview + 6 e2e + L01 green · §3.2 6 层证据)· P1 1 → 0 · open 9 → 8
 - 2026-04-19 · Track M 关闭 I-0022(skill 动态注入 + Subagent + PlanCard · Phase 1 `resolve_skill` + `SkillDescriptor` + `SkillRuntime` + `bootstrap_employee_runtime` + AgentRunner per-turn rebuild (V02 §2.1) · Phase 2 `spawn_subagent` + `sk_executor_spawn` + depth-cap (V10 §4.5) · Phase 3 `sk_planner` + `render_plan` + PlanCard · system-prompt token 1752→140 / 92% 缩减 · 7 ref-src-claude citations · 10 integration + 8 unit + 5 web + L01 green)· P0 3 → 2 · open 8 → 7
+- 2026-04-19 · Track J 阶段 1 诊断 I-0018 · `docs/tracks/J-diagnosis.md` · Next rewrites **证伪** · 根因两层叠加(H1 上游 batching · H2 前端 React 18 同步 batching)

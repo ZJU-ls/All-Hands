@@ -3,35 +3,40 @@ id: I-0017
 severity: P0
 status: open
 title: 前后端 SSE/streaming 协议统一迁移到 AG-UI Protocol · 自定义事件名不符合 AI-native 行业标准
-affects: backend/api/routers/{cockpit,artifacts,conversations,models}.py · web/lib/stream-client.ts · 所有 EventSource/fetch-stream 消费点
+affects: backend/api/routers/{cockpit,artifacts,chat,models}.py · web/lib/stream-client.ts · 所有 EventSource/fetch-stream 消费点
 discovered: 2026-04-19 / user-product-review(Wave-2 merge 后用户反馈)
 blocker-for: Wave-3 AI-native · CopilotKit / 外部 AG-UI 客户端接入 · L01 Tool First extension
 tags: arch, api, streaming, protocol
 ---
 
+## 背景
+
+v0 MVP 期间 4 条 SSE 路全部是**自定义事件名**(2026-04-19 盘点):
+
+| endpoint | 事件名 | 数据字段 |
+|---|---|---|
+| `POST /api/conversations/{id}/messages` | `token` / `tool_call_*` / `reasoning` / `confirm_required` / `trace` / `render` / `done` / `error` | `data.delta` / 各自 |
+| `GET /api/cockpit/stream` | `snapshot` / `activity` / `run_update` / `run_done` / `health` / `kpi` / `heartbeat` / `error` | 各自 |
+| `GET /api/artifacts/stream` | `artifact_changed` / `heartbeat` / `error` | 各自 |
+| `POST /api/models/{id}/test/stream` | `meta` / `reasoning` / `delta` / `done` / `error` | `data.text` / 各自 |
+
+每条新 SSE feature 都需要前后端对齐 event name + data schema · **契约漂移是时间问题**。前端 `stream-client.ts` 的 `DEFAULT_TOKEN_EVENTS` 已经需要同时认两套 token 字段(`token.delta` vs `delta.text`)· 这种"适配表"会继续膨胀。
+
 ## Repro
 
-打开任何现有 SSE 流:
-- `/api/cockpit/stream`(Track B)
-- `/api/artifacts/stream`(Track A)
-- `/api/conversations/{id}/messages`(chat)
-- `/api/models/{id}/test/stream`(gateway / Track D)
+```bash
+curl -N http://localhost:8000/api/cockpit/stream
+# → event: snapshot / event: heartbeat / event: run_update …(自定义)
 
-用 `curl -N` 观察 wire format:
+curl -N -X POST http://localhost:8000/api/models/<id>/test/stream -d '{"prompt":"hi"}'
+# → event: meta / event: delta / event: done(自定义)
 ```
-event: delta
-data: {"text": "..."}
 
-event: reasoning
-data: {"text": "..."}
-
-event: done
-data: {...}
-```
+全仓 `grep -rn "ag-ui\|agui\|CopilotKit"` = 0 命中 · 完全自定义。
 
 ## Expected
 
-**前后端都走 AG-UI Protocol(https://docs.ag-ui.com)**,事件名遵循 AG-UI 规范:
+**前后端都走 AG-UI Protocol**(https://docs.ag-ui.com),事件名遵循 AG-UI 规范:
 
 - `RUN_STARTED` / `RUN_FINISHED` / `RUN_ERROR`
 - `STEP_STARTED` / `STEP_FINISHED`
@@ -40,26 +45,39 @@ data: {...}
 - `STATE_SNAPSHOT` / `STATE_DELTA`
 - `RAW` / `CUSTOM`(扩展点)
 
-allhands 的 domain-specific 事件(artifact_changed / cockpit heartbeat / render envelope / reasoning tokens 等)作为 **AG-UI 上的 CUSTOM / STATE_DELTA 扩展**,不是自创事件名。
+allhands-specific 事件(artifact_changed / cockpit kpi / heartbeat / reasoning / render envelope)作为 **AG-UI 上的 CUSTOM 扩展**,不是自创事件名。
 
-## Actual
+## 验收标准
 
-- 全仓 `grep -rn "ag-ui\|agui\|CopilotKit"` = 0 命中 · 当前是完全自定义 SSE
-- 每个 endpoint 的事件名、data schema 都是 ad-hoc,互不兼容
-- 前端 `stream-client.ts` 的 `tokenEvents` 字典手动维护每条流的 event→field 映射
-- 无法直接接 AG-UI 生态的客户端(CopilotKit / 其他 Agent UI)
-
-## 评估方向
-
-1. **Inventory** 所有现役 SSE 端点 + 事件 schema(models / cockpit / artifacts / conversations)· 列到 ADR
-2. **Design** AG-UI 映射表:自定义事件 → AG-UI 标准事件 + allhands 扩展字段
-3. **ADR-0010** 记录协议决策 · 引用 ag-ui.com 规范
-4. **后端适配层**:在 routers 下加一层 `ag_ui_encoder.py`,把业务事件 pack 成 AG-UI 帧
-5. **前端适配层**:`stream-client.ts` 改读 AG-UI 事件,`onToken`/`onMetaEvent` 用 AG-UI 事件名
-6. **回归测试**:每条流至少 1 条 integration 验证 AG-UI 帧格式,1 条 e2e 验证消费端能实时渲染
+- [x] `product/adr/0010-ag-ui-protocol-adoption.md` 落地 · Context / Decision / Rationale / Consequences / Alternatives 齐
+- [x] `docs/specs/2026-04-19-ag-ui-migration.md` 映射表完整(4 条 SSE × 所有事件 → AG-UI 标准 OR 扩展类型)
+- [x] `backend/src/allhands/api/ag_ui_encoder.py` · 对外暴露 `encode_text_delta` / `encode_text_start` / `encode_text_end` / `encode_custom` / `encode_state_snapshot` / `encode_state_delta` / `encode_run_error` / `encode_run_finished` 等
+- [ ] 4 条 SSE endpoint 全部切到 encoder · wire 上肉眼能看到 `event: TEXT_MESSAGE_CONTENT` 等 AG-UI 标准事件名
+- [ ] `web/lib/stream-client.ts` 读 AG-UI · 提供 onTextStart/onTextDelta/onTextEnd/onToolCall/onCustom/onStateSnapshot/onStateDelta 语义 hook
+- [ ] 4 个 consumer(chat / cockpit / artifacts / model-test)切到新 hook · 不再直接读 event name
+- [ ] 回归测试:
+  - `backend/tests/integration/test_ag_ui_wire_format.py` · 断言每条 endpoint 的 wire 帧是 AG-UI 标准
+  - `web/lib/__tests__/stream-client.ag-ui.test.ts` · 覆盖所有 AG-UI hook
+  - `web/tests/e2e/*-streaming.spec.ts` · e2e 端到端仍然能打字机
 
 ## 相关
 
-- 阻塞 I-0018(model test stream 当前非流式 · 迁移后重新验证)
-- 如果采用 `@ag-ui/core` npm 包 + python 对端,确认版本策略和扩展点
-- 视情况引入 `ref-src-ag-ui`:AG-UI protocol 的 reference implementation
+- 规范源:https://docs.ag-ui.com · `ref-src-ag-ui`
+- 关联 issue:I-0018(streaming bug · 同一 stream-client · 同一修法)
+- 关联 ADR:0010(本 issue 的产出)
+
+---
+
+## 工作记录
+
+### 2026-04-19 · in-progress · track-j
+- 已录 · 与 I-0018 同一 track 推进
+- 阶段 1:ADR-0010 + migration spec 落地(commit `9f38ac9`)
+- 阶段 2:`ag_ui_encoder.py` 基础设施(commit `4f47f6f`)
+- 阶段 3:4 条 endpoint + stream-client + 4 consumer 全迁
+
+---
+
+## 关闭记录
+
+_留待关闭时填写。_
