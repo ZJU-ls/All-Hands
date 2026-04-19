@@ -306,6 +306,9 @@ describe("openStream · AG-UI v1 semantic hooks", () => {
   it(
     "spreads frame dispatch across macrotasks when frames arrive in one chunk (I-0018)",
     async () => {
+      // All 5 frames arrive in a SINGLE reader.read() chunk — mirroring the
+      // pathological upstream-batching case. The fix is to yield a macrotask
+      // between frames so React 18 can paint between setState calls.
       const fetchMock = installFetch(() =>
         mockStreamingResponse([
           [
