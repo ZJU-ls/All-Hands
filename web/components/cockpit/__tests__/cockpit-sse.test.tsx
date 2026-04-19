@@ -183,10 +183,13 @@ describe("Cockpit · SSE consumer (I-0006)", () => {
     expect(FakeEventSource.instances).toHaveLength(1);
     expect(FakeEventSource.instances[0]!.url).toBe("/api/cockpit/stream");
 
-    // Snapshot frame arrives via the SSE stream.
+    // Snapshot frame arrives via the SSE stream (AG-UI v1 CUSTOM envelope).
     const snap = makeSnapshot();
     await act(async () => {
-      FakeEventSource.instances[0]!.emit("snapshot", snap);
+      FakeEventSource.instances[0]!.emit("CUSTOM", {
+        name: "allhands.cockpit_snapshot",
+        value: snap,
+      });
       // also resolve the inflight /summary fetch for cleanup
       resolveSummary(snap);
     });
@@ -201,15 +204,21 @@ describe("Cockpit · SSE consumer (I-0006)", () => {
     render(<Cockpit />);
 
     await act(async () => {
-      FakeEventSource.instances[0]!.emit("snapshot", makeSnapshot());
+      FakeEventSource.instances[0]!.emit("CUSTOM", {
+        name: "allhands.cockpit_snapshot",
+        value: makeSnapshot(),
+      });
     });
 
     await act(async () => {
-      FakeEventSource.instances[0]!.emit("activity", {
-        id: "evt_new",
-        kind: "conv.created",
-        ts: "2026-04-19T12:05:00Z",
-        payload: { summary: "用户开了新对话", severity: "info" },
+      FakeEventSource.instances[0]!.emit("CUSTOM", {
+        name: "allhands.cockpit_activity",
+        value: {
+          id: "evt_new",
+          kind: "conv.created",
+          ts: "2026-04-19T12:05:00Z",
+          payload: { summary: "用户开了新对话", severity: "info" },
+        },
       });
     });
 
@@ -238,7 +247,10 @@ describe("Cockpit · SSE consumer (I-0006)", () => {
     const { Cockpit } = await import("../Cockpit");
     render(<Cockpit />);
     await act(async () => {
-      FakeEventSource.instances[0]!.emit("snapshot", makeSnapshot());
+      FakeEventSource.instances[0]!.emit("CUSTOM", {
+        name: "allhands.cockpit_snapshot",
+        value: makeSnapshot(),
+      });
     });
     // Cockpit proper must not install any interval timer.
     expect(setIntervalSpy).not.toHaveBeenCalled();

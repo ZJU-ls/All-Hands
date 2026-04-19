@@ -223,30 +223,36 @@ async def test_stream_forwards_bus_event_as_sse_frame(
     response = await stream_artifacts(request)  # type: ignore[arg-type]
     body_iter = response.body_iterator
 
-    async def _next_non_heartbeat() -> str:
+    async def _next_matching(predicate: Callable[[str], bool]) -> str:
         while True:
             chunk = await asyncio.wait_for(body_iter.__anext__(), timeout=1.0)
             if isinstance(chunk, bytes):
                 chunk = chunk.decode("utf-8")
-            if "heartbeat" in chunk and "artifact_changed" not in chunk and "ready" not in chunk:
-                continue
-            return chunk
+            if predicate(chunk):
+                return chunk
 
-    # 1. First non-heartbeat frame is the `ready` opener.
-    ready = await _next_non_heartbeat()
-    assert ready.startswith("event: ready\n")
+    # 1. First RUN_STARTED frame opens the AG-UI v1 envelope.
+    run_started = await _next_matching(lambda c: c.startswith("event: RUN_STARTED\n"))
+    assert '"threadId": "artifacts"' in run_started
+    assert '"runId": "run_' in run_started
 
-    # 2. Drive a real write, then pull the next non-heartbeat frame and assert
-    #    it carries the artifact_changed envelope for the new id.
+    # 2. The `allhands.artifacts_ready` CUSTOM lands before we publish.
+    ready = await _next_matching(
+        lambda c: c.startswith("event: CUSTOM\n") and "allhands.artifacts_ready" in c
+    )
+    assert '"name": "allhands.artifacts_ready"' in ready
+
+    # 3. Drive a real write, then pull the next artifact_changed CUSTOM frame.
     async with session_maker() as s, s.begin():
         svc = ArtifactService(SqlArtifactRepo(s), tmp_path, bus=bus)
         art = await svc.create(name="stream-me", kind=ArtifactKind.MARKDOWN, content="hi")
 
-    frame = await _next_non_heartbeat()
-    assert frame.startswith("event: artifact_changed\n")
+    frame = await _next_matching(
+        lambda c: c.startswith("event: CUSTOM\n") and "allhands.artifact_changed" in c
+    )
     assert art.id in frame
     assert '"op": "created"' in frame
 
     request.close()
-    with contextlib.suppress(StopAsyncIteration, TimeoutError):
+    with contextlib.suppress(StopAsyncIteration, TimeoutError, asyncio.CancelledError):
         await asyncio.wait_for(body_iter.__anext__(), timeout=0.2)

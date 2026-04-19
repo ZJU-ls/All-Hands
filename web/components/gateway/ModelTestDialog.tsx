@@ -107,6 +107,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
 
     let acc = "";
     let accReasoning = "";
+    let errored = false;
 
     const handle = openStream(
       `/api/models/${model.id}/test/stream`,
@@ -116,28 +117,34 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
         body: JSON.stringify(body),
       },
       {
-        tokenEvents: { delta: "text", reasoning: "text" },
-        onToken: (delta, frame) => {
-          if (frame.event === "reasoning") {
-            accReasoning += delta;
-            setStreamReasoning(accReasoning);
-            setPhase("thinking");
-          } else if (frame.event === "delta") {
-            acc += delta;
-            setStreamContent(acc);
-            setPhase("answering");
-          }
+        onTextMessageChunk: (f) => {
+          acc += f.delta;
+          setStreamContent(acc);
+          setPhase("answering");
         },
-        onMetaEvent: (frame) => {
-          const { event, data } = frame;
-          if (event === "done") {
-            const final = (data.response as string) ?? acc;
-            const finalReasoning = (data.reasoning_text as string) ?? accReasoning;
-            const usage = (data.usage ?? {}) as {
-              input_tokens?: number;
-              output_tokens?: number;
-              total_tokens?: number;
+        onReasoningMessageChunk: (f) => {
+          accReasoning += f.delta;
+          setStreamReasoning(accReasoning);
+          setPhase("thinking");
+        },
+        onCustom: (name, value) => {
+          if (name === "allhands.model_test_metrics") {
+            const data = (value ?? {}) as {
+              response?: string;
+              reasoning_text?: string;
+              latency_ms?: number;
+              ttft_ms?: number;
+              reasoning_first_ms?: number;
+              tokens_per_second?: number;
+              usage?: {
+                input_tokens?: number;
+                output_tokens?: number;
+                total_tokens?: number;
+              };
             };
+            const final = data.response ?? acc;
+            const finalReasoning = data.reasoning_text ?? accReasoning;
+            const usage = data.usage ?? {};
             setMessages([
               ...history,
               {
@@ -152,28 +159,47 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
             setLastRun({
               streaming: false,
               metrics: {
-                latencyMs: data.latency_ms as number,
-                ttftMs: data.ttft_ms as number,
-                reasoningFirstMs: data.reasoning_first_ms as number,
-                tokensPerSecond: data.tokens_per_second as number,
+                latencyMs: data.latency_ms,
+                ttftMs: data.ttft_ms,
+                reasoningFirstMs: data.reasoning_first_ms,
+                tokensPerSecond: data.tokens_per_second,
                 inputTokens: usage.input_tokens ?? 0,
                 outputTokens: usage.output_tokens ?? 0,
                 totalTokens: usage.total_tokens ?? 0,
               },
             });
-          } else if (event === "error") {
+          } else if (name === "allhands.model_test_error") {
+            errored = true;
+            const data = (value ?? {}) as {
+              error?: string;
+              error_category?: ErrorCategory;
+              latency_ms?: number;
+            };
             setStreamContent("");
             setStreamReasoning("");
             setPhase("idle");
             setLastRun({
               streaming: false,
               error: {
-                category: (data.error_category as ErrorCategory) ?? "unknown",
-                message: (data.error as string) ?? "失败",
+                category: data.error_category ?? "unknown",
+                message: data.error ?? "失败",
               },
-              metrics: { latencyMs: data.latency_ms as number },
+              metrics: { latencyMs: data.latency_ms },
             });
           }
+        },
+        onRunError: (err) => {
+          if (errored) return; // error CUSTOM already populated lastRun
+          setStreamContent("");
+          setStreamReasoning("");
+          setPhase("idle");
+          setLastRun({
+            streaming: false,
+            error: {
+              category: (err.code as ErrorCategory) ?? "unknown",
+              message: err.message || "失败",
+            },
+          });
         },
         onDone: () => {
           setIsLoading(false);

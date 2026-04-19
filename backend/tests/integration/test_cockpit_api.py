@@ -224,8 +224,10 @@ def test_stream_first_frame_is_snapshot(
     client: TestClient,
     maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Opening /api/cockpit/stream immediately pushes a `snapshot` SSE with
-    the full WorkspaceSummary payload. Spec § 4.2: "连接开始时服务端立刻 push 一条 snapshot".
+    """Opening /api/cockpit/stream pushes AG-UI v1 RUN_STARTED followed by a
+    CUSTOM `allhands.cockpit_snapshot` frame carrying the full summary.
+    ADR 0010 + I-0017 migrated the cockpit stream off the legacy
+    `event: snapshot` name.
     """
     _seed(maker)
 
@@ -234,18 +236,24 @@ def test_stream_first_frame_is_snapshot(
         assert resp.headers["content-type"].startswith("text/event-stream")
 
         buf = ""
+        frames: list[str] = []
         for chunk in resp.iter_text():
             buf += chunk
-            if "\n\n" in buf:
+            while "\n\n" in buf:
+                head, buf = buf.split("\n\n", 1)
+                frames.append(head)
+            if len(frames) >= 2:
                 break
 
-        first_frame, _ = buf.split("\n\n", 1)
-        lines = first_frame.splitlines()
-        assert lines[0] == "event: snapshot"
-        assert lines[1].startswith("data: ")
+        assert frames[0].splitlines()[0] == "event: RUN_STARTED"
+        snapshot_lines = frames[1].splitlines()
+        assert snapshot_lines[0] == "event: CUSTOM"
+        assert snapshot_lines[1].startswith("data: ")
         import json as _json
 
-        payload = _json.loads(lines[1][len("data: ") :])
+        envelope = _json.loads(snapshot_lines[1][len("data: ") :])
+        assert envelope["name"] == "allhands.cockpit_snapshot"
+        payload = envelope["value"]
         assert payload["employees_total"] == 1
         assert payload["triggers_active"] == 1
         assert "recent_events" in payload

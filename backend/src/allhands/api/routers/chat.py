@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import (
     get_chat_service,
     get_conversation_repo,
@@ -118,20 +120,44 @@ async def send_message(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
-    """Stream an agent turn over SSE.
+    """Stream an agent turn as AG-UI v1 SSE (I-0017 / ADR 0010).
+
+    Wire sequence per turn:
+      RUN_STARTED
+        (per assistant message) TEXT_MESSAGE_START -> TEXT_MESSAGE_CONTENT * N -> TEXT_MESSAGE_END
+        (per tool call) TOOL_CALL_START → TOOL_CALL_ARGS → TOOL_CALL_END → TOOL_CALL_RESULT
+        (allhands-specific) CUSTOM with name ∈ {allhands.confirm_required,
+          allhands.confirm_resolved, allhands.render, allhands.nested_run,
+          allhands.trace}
+        STEP_STARTED / STEP_FINISHED around nested runs
+      RUN_FINISHED   (or RUN_ERROR on terminal failure)
 
     I-0015 / I-0016: the client UI owns the "stop" button. When the user
     hits stop, it aborts the fetch which tears down the TCP connection;
-    starlette surfaces that as a `http.disconnect` receive message. We
-    poll `request.is_disconnected()` between events and break the loop so
-    the underlying async generator (`runner.stream`) is closed and the
+    starlette surfaces that as a ``http.disconnect`` receive message. We
+    poll ``request.is_disconnected()`` between events and break the loop so
+    the underlying async generator (``runner.stream``) is closed and the
     LangGraph agent task is cancelled.
     """
 
     chat_svc = await get_chat_service(session)
 
-    async def event_stream() -> AsyncIterator[str]:
+    async def event_stream() -> AsyncIterator[bytes]:
+        run_id = f"run_{secrets.token_hex(8)}"
+        yield agui.encode_sse(agui.run_started(conversation_id, run_id))
+
         stream = None
+        current_message_id: str | None = None
+        finished = False
+
+        def _close_open_message() -> bytes | None:
+            nonlocal current_message_id
+            if current_message_id is None:
+                return None
+            closing = agui.encode_sse(agui.text_message_end(current_message_id))
+            current_message_id = None
+            return closing
+
         try:
             stream = await chat_svc.send_message(conversation_id, body.content)
             stream_iter = stream.__aiter__()
@@ -146,10 +172,90 @@ async def send_message(
                     event = await stream_iter.__anext__()
                 except StopAsyncIteration:
                     break
-                data = event.model_dump(mode="json")
-                yield f"event: {event.kind}\ndata: {json.dumps(data)}\n\n"
+                if event.kind == "token":
+                    if current_message_id != event.message_id:
+                        closing = _close_open_message()
+                        if closing is not None:
+                            yield closing
+                        yield agui.encode_sse(agui.text_message_start(event.message_id))
+                        current_message_id = event.message_id
+                    yield agui.encode_sse(agui.text_message_content(event.message_id, event.delta))
+                elif event.kind == "tool_call_start":
+                    tc = event.tool_call
+                    yield agui.encode_sse(agui.tool_call_start(tc.id, tc.tool_id))
+                    if tc.args is not None:
+                        yield agui.encode_sse(
+                            agui.tool_call_args(tc.id, json.dumps(tc.args, ensure_ascii=False))
+                        )
+                elif event.kind == "tool_call_end":
+                    tc = event.tool_call
+                    yield agui.encode_sse(agui.tool_call_end(tc.id))
+                    if tc.result is not None:
+                        yield agui.encode_sse(
+                            agui.tool_call_result(
+                                tc.id,
+                                json.dumps(tc.result, ensure_ascii=False, default=str),
+                            )
+                        )
+                elif event.kind == "confirm_required":
+                    payload = event.model_dump(mode="json", exclude={"kind"})
+                    yield agui.encode_sse(agui.custom("allhands.confirm_required", payload))
+                elif event.kind == "confirm_resolved":
+                    payload = event.model_dump(mode="json", exclude={"kind"})
+                    yield agui.encode_sse(agui.custom("allhands.confirm_resolved", payload))
+                elif event.kind == "render":
+                    payload = event.model_dump(mode="json", exclude={"kind"})
+                    yield agui.encode_sse(agui.custom("allhands.render", payload))
+                elif event.kind == "nested_run_start":
+                    yield agui.encode_sse(agui.step_started(f"nested_run.{event.employee_name}"))
+                    yield agui.encode_sse(
+                        agui.custom(
+                            "allhands.nested_run",
+                            {
+                                "run_id": event.run_id,
+                                "parent_run_id": event.parent_run_id,
+                                "employee_name": event.employee_name,
+                                "phase": "start",
+                            },
+                        )
+                    )
+                elif event.kind == "nested_run_end":
+                    yield agui.encode_sse(agui.step_finished(f"nested_run.{event.run_id}"))
+                    yield agui.encode_sse(
+                        agui.custom(
+                            "allhands.nested_run",
+                            {
+                                "run_id": event.run_id,
+                                "status": event.status,
+                                "phase": "end",
+                            },
+                        )
+                    )
+                elif event.kind == "trace":
+                    yield agui.encode_sse(
+                        agui.custom(
+                            "allhands.trace",
+                            {"trace_id": event.trace_id, "url": event.url},
+                        )
+                    )
+                elif event.kind == "error":
+                    closing = _close_open_message()
+                    if closing is not None:
+                        yield closing
+                    yield agui.encode_sse(agui.run_error(event.message, event.code))
+                    finished = True
+                elif event.kind == "done":
+                    closing = _close_open_message()
+                    if closing is not None:
+                        yield closing
+                    yield agui.encode_sse(agui.run_finished(conversation_id, run_id))
+                    finished = True
         except DomainError as exc:
-            yield f"event: error\ndata: {json.dumps({'code': 'DOMAIN_ERROR', 'message': str(exc)})}\n\n"
+            closing = _close_open_message()
+            if closing is not None:
+                yield closing
+            yield agui.encode_sse(agui.run_error(str(exc), "DOMAIN_ERROR"))
+            finished = True
         except asyncio.CancelledError:
             log.info(
                 "chat.send_message: stream cancelled by runtime",
@@ -157,8 +263,17 @@ async def send_message(
             )
             raise
         except Exception as exc:
-            yield f"event: error\ndata: {json.dumps({'code': 'INTERNAL', 'message': str(exc)})}\n\n"
+            closing = _close_open_message()
+            if closing is not None:
+                yield closing
+            yield agui.encode_sse(agui.run_error(str(exc), "INTERNAL"))
+            finished = True
         finally:
+            if not finished:
+                closing = _close_open_message()
+                if closing is not None:
+                    yield closing
+                yield agui.encode_sse(agui.run_finished(conversation_id, run_id))
             # Closing the async generator propagates GeneratorExit into the
             # agent loop, cancelling any in-flight LangGraph / LLM await.
             if stream is not None:
@@ -172,4 +287,8 @@ async def send_message(
                             exc_info=True,
                         )
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

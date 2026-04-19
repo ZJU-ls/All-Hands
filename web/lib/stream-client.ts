@@ -1,49 +1,72 @@
 /**
- * Unified SSE stream-client for agent / LLM output.
+ * AG-UI Protocol v1 SSE client (I-0017 · ADR 0010).
  *
- * Replaces the ad-hoc `fetch + getReader + split('\n')` logic that used to
- * live inline in chat and model-test surfaces.
+ * Parses `event: <TYPE>\ndata: <JSON>\n\n` frames emitted by the four
+ * streaming endpoints (chat · model-test · cockpit · artifacts) and
+ * dispatches them to typed semantic callbacks. Wire fields are camelCase
+ * per AG-UI v1; private allhands payloads ride inside CUSTOM envelopes
+ * with `name: "allhands.*"` and a snake_case `value` body.
  *
- * Contract (I-0015 / I-0016):
- *   - Parses `event: … \ndata: …\n\n` SSE frames.
- *   - Delivers `onToken` for the primary text delta event.
- *   - Delivers `onMetaEvent` for every other named event (tool_call_*,
- *     reasoning, confirm_required, trace, render, etc.).
- *   - Calls `onDone` once on stream completion (even if no done frame was
- *     emitted) and `onError` for transport or server errors.
- *   - Honors the caller-supplied `AbortSignal` and returns `{ abort }` so
- *     callers can also cancel without threading the controller.
+ * Cancellation (I-0015 / I-0016): honors the caller's AbortSignal and
+ * returns {abort} so surfaces can cancel without threading the controller.
  */
-
-export type StreamEventFrame = {
-  /** SSE `event:` name, or empty string when the stream used default event. */
+export type AgUiEventFrame = {
+  /** AG-UI event type (RUN_STARTED, TEXT_MESSAGE_CONTENT, CUSTOM, …). */
   event: string;
-  /** Parsed `data:` payload (JSON if decodable, otherwise `{_raw: string}`). */
+  /** Parsed JSON data line (or `{_raw: "..."}` for non-JSON data). */
   data: Record<string, unknown>;
 };
 
-export type StreamClientCallbacks = {
+export type RunStartedFrame = { threadId: string; runId: string };
+export type RunFinishedFrame = { threadId: string; runId: string };
+export type RunErrorFrame = { message: string; code?: string };
+export type TextMessageStartFrame = { messageId: string; role: string };
+export type TextMessageDeltaFrame = { messageId: string; delta: string; role?: string };
+export type TextMessageEndFrame = { messageId: string };
+export type ReasoningMessageChunkFrame = { messageId: string; delta: string };
+export type ReasoningMessageEndFrame = { messageId: string };
+export type ToolCallStartFrame = { toolCallId: string; toolCallName: string };
+export type ToolCallArgsFrame = { toolCallId: string; delta: string };
+export type ToolCallEndFrame = { toolCallId: string };
+export type ToolCallResultFrame = { toolCallId: string; content: string };
+export type StepFrame = { stepName: string };
+
+export type AgUiCallbacks = {
+  onRunStarted?: (frame: RunStartedFrame) => void;
+  onRunFinished?: (frame: RunFinishedFrame) => void;
+  onRunError?: (frame: RunErrorFrame) => void;
+
+  onTextMessageStart?: (frame: TextMessageStartFrame) => void;
+  onTextMessageContent?: (frame: TextMessageDeltaFrame) => void;
+  onTextMessageChunk?: (frame: TextMessageDeltaFrame) => void;
+  onTextMessageEnd?: (frame: TextMessageEndFrame) => void;
+
+  onReasoningMessageChunk?: (frame: ReasoningMessageChunkFrame) => void;
+  onReasoningMessageEnd?: (frame: ReasoningMessageEndFrame) => void;
+
+  onToolCallStart?: (frame: ToolCallStartFrame) => void;
+  onToolCallArgs?: (frame: ToolCallArgsFrame) => void;
+  onToolCallEnd?: (frame: ToolCallEndFrame) => void;
+  onToolCallResult?: (frame: ToolCallResultFrame) => void;
+
+  onStepStarted?: (frame: StepFrame) => void;
+  onStepFinished?: (frame: StepFrame) => void;
+
   /**
-   * Token-bearing event. `frame.event` is the declared event name so callers
-   * can distinguish e.g. `token` vs `reasoning`.
+   * CUSTOM envelope — `name` identifies the extension (e.g.
+   * `allhands.confirm_required`), `value` is the snake_case payload.
    */
-  onToken?: (delta: string, frame: StreamEventFrame) => void;
-  /** Every non-token event, including `done` / `error` / custom meta. */
-  onMetaEvent?: (frame: StreamEventFrame) => void;
-  /** Called once after the stream finishes cleanly. */
+  onCustom?: (name: string, value: unknown, frame: AgUiEventFrame) => void;
+
+  /** Any AG-UI event that isn't covered by a typed handler above. */
+  onEvent?: (frame: AgUiEventFrame) => void;
+
+  /** Called once when the stream terminates cleanly (RUN_FINISHED, EOF, or abort). */
   onDone?: () => void;
   /** Called for transport errors, non-2xx HTTP, or consumer exceptions. */
   onError?: (err: Error) => void;
-  /** External AbortSignal. The client also installs its own, returned via {abort}. */
+
   signal?: AbortSignal;
-  /**
-   * Which `event:` names count as token deltas, and which field holds the
-   * text. Defaults cover the two known backends:
-   *   - `/api/conversations/{id}/messages` emits `event: token` + `data.delta`
-   *   - `/api/models/{id}/test/stream` emits `event: delta` + `data.text`
-   *     (plus `event: reasoning` + `data.text` for thinking tokens).
-   */
-  tokenEvents?: Record<string, string>;
 };
 
 export type StreamHandle = {
@@ -55,16 +78,10 @@ export type StreamHandle = {
 
 export type StreamRequestInit = Omit<RequestInit, "signal">;
 
-const DEFAULT_TOKEN_EVENTS: Record<string, string> = {
-  token: "delta",
-  delta: "text",
-  reasoning: "text",
-};
-
 export function openStream(
   url: string,
   init: StreamRequestInit,
-  callbacks: StreamClientCallbacks,
+  callbacks: AgUiCallbacks,
 ): StreamHandle {
   const internal = new AbortController();
   const external = callbacks.signal;
@@ -72,8 +89,6 @@ export function openStream(
     if (external.aborted) internal.abort();
     else external.addEventListener("abort", () => internal.abort(), { once: true });
   }
-
-  const tokenEvents = { ...DEFAULT_TOKEN_EVENTS, ...(callbacks.tokenEvents ?? {}) };
 
   const done = (async () => {
     let settled = false;
@@ -111,16 +126,17 @@ export function openStream(
             const frame = parseSseFrame(rawFrame);
             if (!frame) continue;
 
-            const tokenField = tokenEvents[frame.event];
-            if (tokenField) {
-              const delta = frame.data[tokenField];
-              if (typeof delta === "string" && delta.length > 0) {
-                callbacks.onToken?.(delta, frame);
-              }
-              callbacks.onMetaEvent?.(frame);
-            } else {
-              callbacks.onMetaEvent?.(frame);
-            }
+            dispatchFrame(frame, callbacks);
+
+            // I-0018: yield a macrotask between frames so React 18 can paint
+            // between setState calls. Without this, when upstream packs
+            // multiple frames into a single reader chunk (common for
+            // DashScope-family compat endpoints with max_tokens <= 64) the
+            // drain loop fires N synchronous setState callbacks in one task,
+            // automatic batching collapses them into a single paint, and the
+            // assistant text appears to "蹦出一次".
+            if (internal.signal.aborted) break;
+            await new Promise<void>((r) => setTimeout(r, 0));
           }
         }
       } finally {
@@ -144,12 +160,107 @@ export function openStream(
   };
 }
 
+function dispatchFrame(frame: AgUiEventFrame, cb: AgUiCallbacks): void {
+  const d = frame.data;
+  switch (frame.event) {
+    case "RUN_STARTED":
+      cb.onRunStarted?.({
+        threadId: String(d.threadId ?? ""),
+        runId: String(d.runId ?? ""),
+      });
+      return;
+    case "RUN_FINISHED":
+      cb.onRunFinished?.({
+        threadId: String(d.threadId ?? ""),
+        runId: String(d.runId ?? ""),
+      });
+      return;
+    case "RUN_ERROR":
+      cb.onRunError?.({
+        message: String(d.message ?? ""),
+        code: typeof d.code === "string" ? d.code : undefined,
+      });
+      return;
+
+    case "TEXT_MESSAGE_START":
+      cb.onTextMessageStart?.({
+        messageId: String(d.messageId ?? ""),
+        role: String(d.role ?? "assistant"),
+      });
+      return;
+    case "TEXT_MESSAGE_CONTENT":
+      cb.onTextMessageContent?.({
+        messageId: String(d.messageId ?? ""),
+        delta: String(d.delta ?? ""),
+      });
+      return;
+    case "TEXT_MESSAGE_CHUNK":
+      cb.onTextMessageChunk?.({
+        messageId: String(d.messageId ?? ""),
+        delta: String(d.delta ?? ""),
+        role: typeof d.role === "string" ? d.role : "assistant",
+      });
+      return;
+    case "TEXT_MESSAGE_END":
+      cb.onTextMessageEnd?.({ messageId: String(d.messageId ?? "") });
+      return;
+
+    case "REASONING_MESSAGE_CHUNK":
+      cb.onReasoningMessageChunk?.({
+        messageId: String(d.messageId ?? ""),
+        delta: String(d.delta ?? ""),
+      });
+      return;
+    case "REASONING_MESSAGE_END":
+      cb.onReasoningMessageEnd?.({ messageId: String(d.messageId ?? "") });
+      return;
+
+    case "TOOL_CALL_START":
+      cb.onToolCallStart?.({
+        toolCallId: String(d.toolCallId ?? ""),
+        toolCallName: String(d.toolCallName ?? ""),
+      });
+      return;
+    case "TOOL_CALL_ARGS":
+      cb.onToolCallArgs?.({
+        toolCallId: String(d.toolCallId ?? ""),
+        delta: String(d.delta ?? ""),
+      });
+      return;
+    case "TOOL_CALL_END":
+      cb.onToolCallEnd?.({ toolCallId: String(d.toolCallId ?? "") });
+      return;
+    case "TOOL_CALL_RESULT":
+      cb.onToolCallResult?.({
+        toolCallId: String(d.toolCallId ?? ""),
+        content: String(d.content ?? ""),
+      });
+      return;
+
+    case "STEP_STARTED":
+      cb.onStepStarted?.({ stepName: String(d.stepName ?? "") });
+      return;
+    case "STEP_FINISHED":
+      cb.onStepFinished?.({ stepName: String(d.stepName ?? "") });
+      return;
+
+    case "CUSTOM": {
+      const name = typeof d.name === "string" ? d.name : "";
+      cb.onCustom?.(name, d.value, frame);
+      return;
+    }
+
+    default:
+      cb.onEvent?.(frame);
+  }
+}
+
 /**
  * Parses a single SSE frame. Multi-line `data:` lines are joined by `\n`
  * per the HTML spec. Returns `null` for empty frames (e.g. trailing
  * keep-alive newlines).
  */
-export function parseSseFrame(frame: string): StreamEventFrame | null {
+export function parseSseFrame(frame: string): AgUiEventFrame | null {
   let event = "";
   const dataParts: string[] = [];
   let hasContent = false;
@@ -174,5 +285,20 @@ export function parseSseFrame(frame: string): StreamEventFrame | null {
     return { event, data: parsed };
   } catch {
     return { event, data: { _raw: raw } };
+  }
+}
+
+/**
+ * Parses a raw `MessageEvent.data` from an EventSource-style consumer into a
+ * JSON object. Used by the cockpit + artifacts stream consumers that use
+ * the browser `EventSource` (not `openStream`) — they only need the JSON
+ * body of the frame since the event type lands via `addEventListener`.
+ */
+export function parseAgUiMessageData(data: string): Record<string, unknown> | null {
+  if (!data) return null;
+  try {
+    return JSON.parse(data) as Record<string, unknown>;
+  } catch {
+    return null;
   }
 }

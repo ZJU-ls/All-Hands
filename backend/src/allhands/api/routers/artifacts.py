@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import json
 import logging
+import secrets
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
+from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_artifact_service
 from allhands.core import BINARY_KINDS, Artifact, ArtifactKind, ArtifactVersion
 from allhands.services.artifact_service import ArtifactNotFound, ArtifactService
@@ -133,13 +134,16 @@ async def list_artifacts(
     return [_to_response(a) for a in items]
 
 
-def _sse(event: str, data: object) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
-
-
 @router.get("/stream")
 async def stream_artifacts(request: Request) -> StreamingResponse:
-    """SSE feed of ``artifact_changed`` envelopes (I-0005).
+    """AG-UI v1 SSE feed of ``artifact_changed`` envelopes (I-0005 / I-0017).
+
+    Wire sequence:
+      RUN_STARTED(threadId="artifacts", runId=run_<rand>)
+      CUSTOM allhands.artifacts_ready {ts}
+      (per bus event) CUSTOM allhands.artifact_changed {id, kind, ts, payload}
+      (idle) CUSTOM allhands.heartbeat {ts}
+      RUN_FINISHED on disconnect · RUN_ERROR on failure
 
     Opens without a snapshot — the panel already lists artifacts via the REST
     list endpoint on mount; this stream only carries incremental change
@@ -168,26 +172,40 @@ async def stream_artifacts(request: Request) -> StreamingResponse:
 
         unsubscribe = bus.subscribe_all(_on_event)
 
-    async def event_stream() -> AsyncIterator[str]:
+    thread_id = "artifacts"
+    run_id = f"run_{secrets.token_hex(8)}"
+
+    async def event_stream() -> AsyncIterator[bytes]:
+        finished = False
         try:
-            yield _sse("ready", {"ts": datetime.now(UTC).isoformat()})
+            yield agui.encode_sse(agui.run_started(thread_id, run_id))
+            yield agui.encode_sse(
+                agui.custom("allhands.artifacts_ready", {"ts": datetime.now(UTC).isoformat()})
+            )
             while True:
                 if await request.is_disconnected():
-                    return
+                    break
                 try:
                     frame = await asyncio.wait_for(queue.get(), timeout=_HEARTBEAT_SECONDS)
-                    yield _sse("artifact_changed", frame)
+                    yield agui.encode_sse(agui.custom("allhands.artifact_changed", frame))
                 except TimeoutError:
-                    yield _sse("heartbeat", {"ts": datetime.now(UTC).isoformat()})
+                    yield agui.encode_sse(
+                        agui.custom(
+                            "allhands.heartbeat",
+                            {"ts": datetime.now(UTC).isoformat()},
+                        )
+                    )
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception("artifacts.stream.failed")
-            yield _sse(
-                "error",
-                {"code": "INTERNAL", "message": "artifact stream terminated"},
+            yield agui.encode_sse(
+                agui.run_error(str(exc) or "artifact stream terminated", "INTERNAL")
             )
+            finished = True
         finally:
+            if not finished:
+                yield agui.encode_sse(agui.run_finished(thread_id, run_id))
             if unsubscribe is not None:
                 unsubscribe()
 

@@ -28,7 +28,7 @@ from collections.abc import Callable
 
 import pytest
 
-from allhands.api.routers.cockpit import _KIND_TO_SSE_EVENT
+from allhands.api.routers.cockpit import _KIND_TO_CUSTOM_NAME
 from allhands.core import EventEnvelope, EventPattern
 from allhands.execution.event_bus import EventBus
 
@@ -95,19 +95,21 @@ async def test_subscribe_all_receives_every_kind() -> None:
     assert sink == ["run.started", "artifact.updated"]
 
 
-def test_cockpit_kind_to_sse_event_map_covers_spec_frames() -> None:
-    """cockpit spec § 4.2 declares: run_update / run_done / health / kpi.
+def test_cockpit_kind_to_custom_name_map_covers_spec_frames() -> None:
+    """cockpit spec § 4.2 declares run_update / run_done / health / kpi.
 
-    The router keeps a lookup table (unknown kinds fall through as generic
-    ``activity``). If a producer renames a kind without updating the map the
-    SSE frame regresses to ``activity`` and the cockpit stops moving run
-    cards — this test is the trip wire.
+    Under AG-UI v1 (ADR 0010) each legacy SSE event name becomes a CUSTOM
+    envelope with ``name`` ``allhands.cockpit_<suffix>``. The router keeps a
+    lookup table (unknown kinds fall through to ``allhands.cockpit_activity``).
+    If a producer renames a kind without updating the map the CUSTOM name
+    regresses to activity and the cockpit stops moving run cards — this test
+    is the trip wire.
     """
-    assert _KIND_TO_SSE_EVENT["run.started"] == "run_update"
-    assert _KIND_TO_SSE_EVENT["run.finished"] == "run_done"
-    assert _KIND_TO_SSE_EVENT["run.cancelled"] == "run_done"
-    assert _KIND_TO_SSE_EVENT["health.updated"] == "health"
-    assert _KIND_TO_SSE_EVENT["kpi.updated"] == "kpi"
+    assert _KIND_TO_CUSTOM_NAME["run.started"] == "allhands.cockpit_run_update"
+    assert _KIND_TO_CUSTOM_NAME["run.finished"] == "allhands.cockpit_run_done"
+    assert _KIND_TO_CUSTOM_NAME["run.cancelled"] == "allhands.cockpit_run_done"
+    assert _KIND_TO_CUSTOM_NAME["health.updated"] == "allhands.cockpit_health"
+    assert _KIND_TO_CUSTOM_NAME["kpi.updated"] == "allhands.cockpit_kpi"
 
 
 @pytest.mark.xfail(

@@ -95,9 +95,12 @@ async def test_event_stream_closes_agent_on_disconnect(
     )
     body_iter = response.body_iterator  # type: ignore[attr-defined]
 
-    # First frame: got a token. Stream is live.
-    first = await body_iter.__anext__()
-    assert "event: token" in first
+    # First frame: RUN_STARTED opens the AG-UI v1 envelope (I-0017).
+    run_started = await body_iter.__anext__()
+    assert b"event: RUN_STARTED" in run_started
+    # Next frame: the first AG-UI token lands as TEXT_MESSAGE_START.
+    text_start = await body_iter.__anext__()
+    assert b"event: TEXT_MESSAGE_START" in text_start
     assert not svc.closed.is_set()
 
     # Client disconnects. Router polls between events so the next

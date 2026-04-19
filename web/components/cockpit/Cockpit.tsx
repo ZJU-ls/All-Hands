@@ -80,49 +80,85 @@ export function Cockpit() {
       setStreamError(null);
     });
 
-    source.addEventListener("snapshot", (evt) => {
+    source.addEventListener("RUN_STARTED", () => {
       if (cancelledRef.current) return;
+      setConnection("open");
+      setStreamError(null);
+    });
+
+    const applyActivity = (frame: StreamFrame, refresh: boolean) => {
+      const activity = buildActivityEvent(frame);
+      if (!activity) return;
+      setSummary((prev) => {
+        if (!prev) return prev;
+        const existing = prev.recent_events ?? [];
+        if (existing.some((e) => e.id === activity.id)) return prev;
+        return {
+          ...prev,
+          recent_events: [activity, ...existing].slice(0, MAX_RECENT_EVENTS),
+        };
+      });
+      if (refresh) scheduleRefresh();
+    };
+
+    // AG-UI v1: every legacy cockpit frame is now a CUSTOM envelope whose
+    // `name` identifies the original event. We branch on `data.name` and
+    // peel the snake_case body out of `data.value`.
+    source.addEventListener("CUSTOM", (evt) => {
+      if (cancelledRef.current) return;
+      let data: { name?: string; value?: unknown };
       try {
-        const snap = JSON.parse((evt as MessageEvent).data) as WorkspaceSummaryDto;
-        setSummary(snap);
-        setConnection("open");
-        setStreamError(null);
+        data = JSON.parse((evt as MessageEvent).data) as {
+          name?: string;
+          value?: unknown;
+        };
       } catch {
-        setStreamError("failed to parse snapshot frame");
+        return;
+      }
+      const name = data.name ?? "";
+      const value = data.value;
+
+      if (name === "allhands.cockpit_snapshot") {
+        try {
+          setSummary(value as WorkspaceSummaryDto);
+          setConnection("open");
+          setStreamError(null);
+        } catch {
+          setStreamError("failed to parse snapshot frame");
+        }
+        return;
+      }
+      if (name === "allhands.heartbeat") {
+        if (connection !== "open") setConnection("open");
+        return;
+      }
+      if (name === "allhands.cockpit_activity" || name === "allhands.cockpit_run_update") {
+        applyActivity((value ?? {}) as StreamFrame, false);
+        return;
+      }
+      if (name === "allhands.cockpit_run_done") {
+        applyActivity((value ?? {}) as StreamFrame, true);
+        return;
+      }
+      if (name === "allhands.cockpit_health" || name === "allhands.cockpit_kpi") {
+        scheduleRefresh();
+        return;
       }
     });
 
-    const onActivity = (evt: Event) => {
+    source.addEventListener("RUN_ERROR", (evt) => {
       if (cancelledRef.current) return;
+      let msg = "实时流终止";
       try {
-        const frame = JSON.parse((evt as MessageEvent).data) as StreamFrame;
-        const activity = buildActivityEvent(frame);
-        if (!activity) return;
-        setSummary((prev) => {
-          if (!prev) return prev;
-          const existing = prev.recent_events ?? [];
-          if (existing.some((e) => e.id === activity.id)) return prev;
-          return {
-            ...prev,
-            recent_events: [activity, ...existing].slice(0, MAX_RECENT_EVENTS),
-          };
-        });
+        const data = JSON.parse((evt as MessageEvent).data) as { message?: string };
+        if (data.message) msg = data.message;
       } catch {
-        /* tolerate malformed frames — the next snapshot will reconcile */
+        /* swallow — we already have a default message */
       }
-    };
-    source.addEventListener("activity", onActivity);
-    source.addEventListener("run_update", onActivity);
-    source.addEventListener("run_done", (evt) => {
-      onActivity(evt);
-      scheduleRefresh();
+      setConnection("error");
+      setStreamError(msg);
     });
-    source.addEventListener("health", () => scheduleRefresh());
-    source.addEventListener("kpi", () => scheduleRefresh());
-    source.addEventListener("heartbeat", () => {
-      if (cancelledRef.current) return;
-      if (connection !== "open") setConnection("open");
-    });
+
     source.addEventListener("error", () => {
       if (cancelledRef.current) return;
       // Browser EventSource auto-reconnects on its own; reflect the gap in UI.

@@ -3,12 +3,19 @@
 import { useCallback, useRef, useState } from "react";
 import { openStream, type StreamHandle } from "@/lib/stream-client";
 import { useChatStore } from "@/lib/store";
-import type { RenderPayload, SSEEvent, ToolCall } from "@/lib/protocol";
+import type { RenderPayload, ToolCall, ToolCallStatus } from "@/lib/protocol";
 import { Composer, ThinkingToggle } from "./Composer";
 
 type Props = { conversationId: string };
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+type ToolCallAccumulator = {
+  id: string;
+  name: string;
+  argsBuf: string;
+  started: boolean;
+};
 
 export function InputBar({ conversationId }: Props) {
   const [value, setValue] = useState("");
@@ -40,7 +47,7 @@ export function InputBar({ conversationId }: Props) {
       created_at: new Date().toISOString(),
     });
 
-    let streamingMsgId = "";
+    const toolCalls = new Map<string, ToolCallAccumulator>();
 
     const handle = openStream(
       `${BASE}/api/conversations/${conversationId}/messages`,
@@ -50,34 +57,49 @@ export function InputBar({ conversationId }: Props) {
         body: JSON.stringify({ content }),
       },
       {
-        tokenEvents: { token: "delta" },
-        onToken: (_delta, frame) => {
-          const ev = frame.data as { message_id?: string; delta?: string };
-          if (!ev.message_id) return;
-          if (!streamingMsgId) {
-            streamingMsgId = ev.message_id;
-            startStreaming(ev.message_id);
-          }
-          appendToken(ev.message_id, ev.delta ?? "");
+        onTextMessageStart: (f) => {
+          startStreaming(f.messageId);
         },
-        onMetaEvent: (frame) => {
-          const kind = (frame.data.kind as string | undefined) ?? frame.event;
-          if (!kind) return;
-          if (kind === "token") return;
-          const data = frame.data as SSEEvent;
-
-          if (kind === "tool_call_start" || kind === "tool_call_end") {
-            const ev = data as { kind: string; tool_call: ToolCall };
-            updateToolCall(ev.tool_call);
-          } else if (kind === "confirm_required") {
-            const ev = data as {
-              kind: string;
-              confirmation_id: string;
-              tool_call_id: string;
-              summary: string;
-              rationale: string;
+        onTextMessageContent: (f) => {
+          appendToken(f.messageId, f.delta);
+        },
+        onToolCallStart: (f) => {
+          toolCalls.set(f.toolCallId, {
+            id: f.toolCallId,
+            name: f.toolCallName,
+            argsBuf: "",
+            started: false,
+          });
+        },
+        onToolCallArgs: (f) => {
+          const acc = toolCalls.get(f.toolCallId);
+          if (!acc) return;
+          acc.argsBuf += f.delta;
+          if (!acc.started) {
+            acc.started = true;
+            updateToolCall(materializeToolCall(acc, "pending"));
+          }
+        },
+        onToolCallEnd: (f) => {
+          const acc = toolCalls.get(f.toolCallId);
+          if (!acc) return;
+          updateToolCall(materializeToolCall(acc, "succeeded"));
+        },
+        onToolCallResult: (f) => {
+          const acc = toolCalls.get(f.toolCallId);
+          if (!acc) return;
+          updateToolCall(materializeToolCall(acc, "succeeded", f.content));
+        },
+        onCustom: (name, value) => {
+          if (name === "allhands.confirm_required") {
+            const ev = (value ?? {}) as {
+              confirmation_id?: string;
+              tool_call_id?: string;
+              summary?: string;
+              rationale?: string;
               diff?: Record<string, unknown> | null;
             };
+            if (!ev.confirmation_id || !ev.tool_call_id) return;
             addConfirmation({
               confirmationId: ev.confirmation_id,
               toolCallId: ev.tool_call_id,
@@ -85,13 +107,21 @@ export function InputBar({ conversationId }: Props) {
               rationale: ev.rationale ?? "",
               diff: ev.diff,
             });
-          } else if (kind === "render") {
-            const ev = data as { kind: string; message_id: string; payload: RenderPayload };
+          } else if (name === "allhands.render") {
+            const ev = (value ?? {}) as {
+              message_id?: string;
+              payload?: RenderPayload;
+            };
+            if (!ev.message_id || !ev.payload) return;
             addRenderPayload(ev.message_id, ev.payload);
-          } else if (kind === "done" || kind === "error") {
-            stopStreaming();
-            streamingMsgId = "";
           }
+        },
+        onRunError: (err) => {
+          console.error("sendMessage run error:", err.message, err.code);
+          stopStreaming();
+        },
+        onRunFinished: () => {
+          stopStreaming();
         },
         onDone: () => {
           stopStreaming();
@@ -145,4 +175,38 @@ export function InputBar({ conversationId }: Props) {
       />
     </div>
   );
+}
+
+/** Flatten an accumulator into the canonical ToolCall shape expected by the
+ * chat store. TOOL_CALL_ARGS frames ship JSON fragments; we only parse when
+ * we have the whole buffer so partial deltas don't crash on malformed JSON.
+ */
+function materializeToolCall(
+  acc: ToolCallAccumulator,
+  status: ToolCallStatus,
+  resultContent?: string,
+): ToolCall {
+  let args: Record<string, unknown> = {};
+  if (acc.argsBuf) {
+    try {
+      args = JSON.parse(acc.argsBuf) as Record<string, unknown>;
+    } catch {
+      args = { _raw: acc.argsBuf };
+    }
+  }
+  let result: unknown;
+  if (resultContent !== undefined) {
+    try {
+      result = JSON.parse(resultContent);
+    } catch {
+      result = resultContent;
+    }
+  }
+  return {
+    id: acc.id,
+    tool_id: acc.name,
+    args,
+    status,
+    result,
+  };
 }

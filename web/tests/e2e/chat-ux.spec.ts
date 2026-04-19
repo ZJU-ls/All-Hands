@@ -172,7 +172,9 @@ test.describe("chat UX · Composer send/stop + typewriter (I-0015 / I-0016)", ()
     await pushChunk(
       page,
       streamId1,
-      'event: token\ndata: {"message_id":"m_1","delta":"Hel"}\n\n',
+      'event: RUN_STARTED\ndata: {"threadId":"t_1","runId":"r_1"}\n\n' +
+        'event: TEXT_MESSAGE_START\ndata: {"threadId":"t_1","runId":"r_1","messageId":"m_1","role":"assistant"}\n\n' +
+        'event: TEXT_MESSAGE_CONTENT\ndata: {"messageId":"m_1","delta":"Hel"}\n\n',
     );
 
     await expect(page.getByTestId("composer-stop")).toBeVisible();
@@ -187,7 +189,7 @@ test.describe("chat UX · Composer send/stop + typewriter (I-0015 / I-0016)", ()
     await pushChunk(
       page,
       streamId1,
-      'event: token\ndata: {"message_id":"m_1","delta":"lo "}\n\n',
+      'event: TEXT_MESSAGE_CONTENT\ndata: {"messageId":"m_1","delta":"lo "}\n\n',
     );
     await expect
       .poll(
@@ -199,7 +201,7 @@ test.describe("chat UX · Composer send/stop + typewriter (I-0015 / I-0016)", ()
     await pushChunk(
       page,
       streamId1,
-      'event: token\ndata: {"message_id":"m_1","delta":"world"}\n\n',
+      'event: TEXT_MESSAGE_CONTENT\ndata: {"messageId":"m_1","delta":"world"}\n\n',
     );
     await expect
       .poll(
@@ -221,7 +223,9 @@ test.describe("chat UX · Composer send/stop + typewriter (I-0015 / I-0016)", ()
     await pushChunk(
       page,
       streamId2,
-      'event: token\ndata: {"message_id":"m_2","delta":"OK"}\n\n',
+      'event: RUN_STARTED\ndata: {"threadId":"t_2","runId":"r_2"}\n\n' +
+        'event: TEXT_MESSAGE_START\ndata: {"threadId":"t_2","runId":"r_2","messageId":"m_2","role":"assistant"}\n\n' +
+        'event: TEXT_MESSAGE_CONTENT\ndata: {"messageId":"m_2","delta":"OK"}\n\n',
     );
     await expect(page.getByTestId("composer-stop")).toBeVisible();
     await expect(page.getByTestId("streaming-cursor")).toBeVisible();
@@ -229,7 +233,8 @@ test.describe("chat UX · Composer send/stop + typewriter (I-0015 / I-0016)", ()
     await pushChunk(
       page,
       streamId2,
-      'event: done\ndata: {"message_id":"m_2"}\n\n',
+      'event: TEXT_MESSAGE_END\ndata: {"messageId":"m_2"}\n\n' +
+        'event: RUN_FINISHED\ndata: {"threadId":"t_2","runId":"r_2"}\n\n',
     );
     await closeStream(page, streamId2);
 

@@ -167,10 +167,10 @@ describe("ArtifactPanel · SSE consumer (I-0005)", () => {
     await flushPromises();
 
     await act(async () => {
-      FakeEventSource.instances[0]!.emit(
-        "artifact_changed",
-        changedFrame("created", "art_new"),
-      );
+      FakeEventSource.instances[0]!.emit("CUSTOM", {
+        name: "allhands.artifact_changed",
+        value: changedFrame("created", "art_new"),
+      });
     });
     await flushPromises();
     await flushPromises();
@@ -191,10 +191,10 @@ describe("ArtifactPanel · SSE consumer (I-0005)", () => {
     expect(screen.getByText("v1.md")).toBeDefined();
 
     await act(async () => {
-      FakeEventSource.instances[0]!.emit(
-        "artifact_changed",
-        changedFrame("updated", "art_1", { version: 2 }),
-      );
+      FakeEventSource.instances[0]!.emit("CUSTOM", {
+        name: "allhands.artifact_changed",
+        value: changedFrame("updated", "art_1", { version: 2 }),
+      });
     });
     await flushPromises();
     await flushPromises();
@@ -215,10 +215,10 @@ describe("ArtifactPanel · SSE consumer (I-0005)", () => {
     expect(screen.getByText("bye.md")).toBeDefined();
 
     await act(async () => {
-      FakeEventSource.instances[0]!.emit(
-        "artifact_changed",
-        changedFrame("deleted", "art_2"),
-      );
+      FakeEventSource.instances[0]!.emit("CUSTOM", {
+        name: "allhands.artifact_changed",
+        value: changedFrame("deleted", "art_2"),
+      });
     });
     await flushPromises();
 
@@ -242,10 +242,10 @@ describe("ArtifactPanel · SSE consumer (I-0005)", () => {
     expect(screen.queryByText("置顶")).toBeNull();
 
     await act(async () => {
-      FakeEventSource.instances[0]!.emit(
-        "artifact_changed",
-        changedFrame("pinned", "art_1"),
-      );
+      FakeEventSource.instances[0]!.emit("CUSTOM", {
+        name: "allhands.artifact_changed",
+        value: changedFrame("pinned", "art_1"),
+      });
     });
     await flushPromises();
     await flushPromises();

@@ -52,20 +52,12 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
       if (!cancelled) setStreamConn("open");
     };
     source.addEventListener("open", markOpen);
-    source.addEventListener("ready", markOpen);
-    source.addEventListener("heartbeat", markOpen);
+    source.addEventListener("RUN_STARTED", markOpen);
     source.addEventListener("error", () => {
       if (!cancelled) setStreamConn("error");
     });
 
-    const onChanged = async (evt: Event) => {
-      if (cancelled) return;
-      let frame: ArtifactChangedFrame;
-      try {
-        frame = JSON.parse((evt as MessageEvent).data) as ArtifactChangedFrame;
-      } catch {
-        return; // malformed frame — the next snapshot refresh will reconcile
-      }
+    const handleArtifactChanged = async (frame: ArtifactChangedFrame) => {
       const payload = frame.payload;
       if (!payload?.artifact_id || !payload.op) return;
       const artifactId = payload.artifact_id;
@@ -92,7 +84,30 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
         if (!cancelled) void refresh();
       }
     };
-    source.addEventListener("artifact_changed", onChanged);
+
+    // AG-UI v1: `allhands.artifacts_ready` / `allhands.artifact_changed` /
+    // `allhands.heartbeat` all ride inside CUSTOM envelopes. Inspect
+    // `data.name` to dispatch; the legacy payload is in `data.value`.
+    source.addEventListener("CUSTOM", (evt) => {
+      if (cancelled) return;
+      let data: { name?: string; value?: unknown };
+      try {
+        data = JSON.parse((evt as MessageEvent).data) as {
+          name?: string;
+          value?: unknown;
+        };
+      } catch {
+        return;
+      }
+      const name = data.name ?? "";
+      if (name === "allhands.artifacts_ready" || name === "allhands.heartbeat") {
+        markOpen();
+        return;
+      }
+      if (name === "allhands.artifact_changed") {
+        void handleArtifactChanged((data.value ?? {}) as ArtifactChangedFrame);
+      }
+    });
 
     return () => {
       cancelled = true;

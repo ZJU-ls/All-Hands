@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import json
+import secrets
+import time
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
@@ -11,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_model_service, get_session
 from allhands.core.model import LLMModel
 from allhands.services.model_service import astream_chat_test, run_chat_test
@@ -201,15 +203,16 @@ async def test_model_stream(
     body: ChatTestRequest | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
-    """Streaming chat test — production-grade SSE (P11 · D4 parity).
+    """Streaming chat test — AG-UI v1 SSE (I-0017 / ADR 0010).
 
-    Event stream ( `text/event-stream` ):
-      event: meta      | data: {model, started_at_ms}
-      event: reasoning | data: {text}            # delta of reasoning_content (thinking models)
-      event: delta     | data: {text}            # delta of visible content
-      event: done      | data: {latency_ms, ttft_ms, reasoning_first_ms, usage,
-                                tokens_per_second, response, reasoning_text}
-      event: error     | data: {error, error_category, latency_ms}
+    Wire sequence:
+      RUN_STARTED -> CUSTOM(allhands.model_test_meta)
+        -> TEXT_MESSAGE_START -> TEXT_MESSAGE_CHUNK * N
+        -> (optional) REASONING_MESSAGE_CHUNK * N
+        -> TEXT_MESSAGE_END -> CUSTOM(allhands.model_test_metrics)
+        -> RUN_FINISHED
+      RUN_ERROR on failure (with CUSTOM allhands.model_test_error for legacy
+      `error_category` / `latency_ms` payload).
     """
     svc = await get_model_service(session)
     pair = await svc.resolve_with_provider(model_id)
@@ -219,10 +222,47 @@ async def test_model_stream(
     kwargs = _to_svc_kwargs(body)
 
     async def _sse() -> AsyncIterator[bytes]:
+        thread_id = f"mt_{int(time.time() * 1000)}_{secrets.token_hex(4)}"
+        run_id = f"run_{secrets.token_hex(8)}"
+        message_id = f"msg_{secrets.token_hex(8)}"
+        reasoning_id = f"msg_{secrets.token_hex(8)}"
+        yield agui.encode_sse(agui.run_started(thread_id, run_id))
+        started_text = False
+        started_reasoning = False
         async for evt in astream_chat_test(provider, model.name, **kwargs):
-            event = evt.get("type", "message")
-            payload = {k: v for k, v in evt.items() if k != "type"}
-            yield f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n".encode()
+            kind = evt.get("type")
+            if kind == "meta":
+                payload = {k: v for k, v in evt.items() if k != "type"}
+                yield agui.encode_sse(agui.custom("allhands.model_test_meta", payload))
+            elif kind == "delta":
+                text = evt.get("text", "")
+                if not started_text:
+                    yield agui.encode_sse(agui.text_message_start(message_id))
+                    started_text = True
+                yield agui.encode_sse(agui.text_message_chunk(message_id, text))
+            elif kind == "reasoning":
+                text = evt.get("text", "")
+                if not started_reasoning:
+                    started_reasoning = True
+                yield agui.encode_sse(agui.reasoning_message_chunk(reasoning_id, text))
+            elif kind == "done":
+                if started_reasoning:
+                    yield agui.encode_sse(agui.reasoning_message_end(reasoning_id))
+                if started_text:
+                    yield agui.encode_sse(agui.text_message_end(message_id))
+                metrics = {k: v for k, v in evt.items() if k != "type"}
+                yield agui.encode_sse(agui.custom("allhands.model_test_metrics", metrics))
+                yield agui.encode_sse(agui.run_finished(thread_id, run_id))
+            elif kind == "error":
+                err_msg = str(evt.get("error", "upstream error"))
+                err_code = str(evt.get("error_category", "INTERNAL"))
+                yield agui.encode_sse(
+                    agui.custom(
+                        "allhands.model_test_error",
+                        {k: v for k, v in evt.items() if k != "type"},
+                    )
+                )
+                yield agui.encode_sse(agui.run_error(err_msg, err_code))
 
     return StreamingResponse(
         _sse(),

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    from allhands.core import RenderPayload, ToolCall
+from allhands.core import RenderPayload, ToolCall
 
 
 class TokenEvent(BaseModel):
