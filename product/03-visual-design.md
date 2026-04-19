@@ -11,11 +11,12 @@
 
 ## 0. 三条最高纪律
 
-1. **不用 icon 字体 / icon 包**(Lucide、Heroicons、Phosphor 等都禁用)。图形信息必须通过以下四种手段之一表达:
+1. **不用第三方 icon 库 / icon 字体**(Lucide、Heroicons、Phosphor、Tabler、Font Awesome 等都禁用)。图形信息只能来自:
    - **排版 + 中性灰阶**(最优:文字本身就是信息)
    - **功能性几何元素**:激活色条、点阵 logo、状态点、键盘 chip、方括号
    - **Mono 字符**:`→` `←` `↑` `↓` `·` `…` `⌘` `↵` `Esc`,mono 字体下渲染整齐
-   - **1-line SVG**(最多):`1.5px stroke`、`round linecap/linejoin`、仅黑白单色、必要时(如箭头、复制、外链)才用
+   - **自有 icon 集**(Raycast-style,`web/components/icons/**`):2px stroke · round caps · currentColor · 24×24 viewBox · 仅允许本项目内相对导入
+   - **1-line SVG legacy**(`web/components/ui/icons.tsx`):logo 点阵 + 主题切换 sun/moon + 5 类旧图元(check / arrow-right / external / copy / plus-minus),保留不扩展
 2. **颜色密度 ≤ 3 种**(不含语义状态色)。整页只允许 `text / muted / primary`,其他一律用 opacity 叠加或 surface 变体。
 3. **动效克制**。时长只用 token 里的 4 档;位移不超过 `2px`;禁用无限循环动画(spinner / pulse 状态点 / shimmer 骨架除外)。
 
@@ -169,9 +170,9 @@ Keyframes 已在 [`globals.css`](../web/app/globals.css) 提供:`ah-spin`、`ah-
 
 ---
 
-## 2. Icon 替代方案(强约束)
+## 2. Icon 体系(强约束)
 
-禁止 icon 包。表达方式按优先级:
+**禁第三方 icon 库**,自有图形来源按优先级:
 
 ### 2.1 激活色条(主导航激活状态)
 
@@ -236,23 +237,56 @@ Mono 字 + 细边框 + surface-2 背景,`text-[10px]`:
 list → detail    ·    prev ← next    ·    ↑ up    ↓ down
 ```
 
-### 2.6 1-line SVG(仅 5 类允许)
+### 2.6 1-line SVG legacy(仅 5 类,不再扩展)
 
-必须是 `1.5px stroke` + `round linecap/linejoin`,**仅允许这 5 个场景**:
+历史产物,`1.5px stroke` + `round linecap/linejoin`。**仅允许这 5 个场景**,继续在 [`web/components/ui/icons.tsx`](../web/components/ui/icons.tsx):
 - **check**:操作成功反馈(表单、测试通过)
 - **arrow-right**:导航、跳转、"更多" 指示
 - **external**:外部链接(LangFuse、文档)
 - **copy**:复制按钮
 - **minus / plus**:展开收起
 
-新增 SVG 图标 **必须** 在本节登记理由 + 提交 ADR。写在 [`web/components/ui/icons.tsx`](../web/components/ui/icons.tsx)。
+新需求一律走 §2.7 自有 icon 集,不再往 1-line SVG legacy 里加。
 
-### 2.7 禁止清单
+### 2.7 自有 Icon 集(Raycast-style · ADR 0009)
+
+统一规格 · 承担 nav / composer / viz / 资源类型 的图形识别:
+
+- **路径**:[`web/components/icons/`](../web/components/icons/),每个 icon 一个 `.tsx` 文件,从 `./Base` import `IconBase`
+- **viewBox**:`0 0 24 24`
+- **stroke-width**:`2`(默认;props `strokeWidth` 可覆盖)
+- **stroke-linecap / linejoin**:`round`
+- **fill**:`none`(纯描边 · 不允许 duotone / 填充)
+- **color**:只能 `stroke="currentColor"`,颜色由父 `text-*` 类决定;**禁止**在 icon 内写 hex / `stroke-blue-500`
+- **default size**:`20px`(props `size` 可覆盖,常用 16 / 20 / 24 / 32)
+- **命名**:PascalCase + `Icon` 后缀(`ChatIcon` / `UserIcon` / ...),`index.ts` 聚合导出
+- **props contract**:`{ size?: number; strokeWidth?: number } & SVGProps`(见 `IconBase`)
+
+**当前集合(22 个)**:
+`ChatIcon` · `UserIcon` · `SkillIcon` · `ModelIcon` · `PluginIcon` · `ProviderIcon` · `TriggerIcon` · `TaskIcon` · `CockpitIcon` · `ObservatoryIcon` · `ChannelIcon` · `MarketIcon` · `StockIcon` · `SettingsIcon` · `SearchIcon` · `SendIcon` · `StopIcon` · `AttachIcon` · `ThinkIcon` · `ExternalIcon` · `CopyIcon` · `CheckIcon`
+
+**新增 icon 流程**(不需 ADR,但需过光学自检):
+1. 写 `web/components/icons/<Name>Icon.tsx`
+2. `index.ts` 加一行 export
+3. 在 [`/design-lab` Icon Gallery](../web/app/design-lab/page.tsx) 把它加入 `ICONS` 数组
+4. 视觉自检:和相邻 icon 在 `size=20` 下光学一样大 + 描边粗细一致;不过就重画
+
+**使用示例**:
+```tsx
+import { ChatIcon, UserIcon } from "@/components/icons";
+
+<ChatIcon size={20} className="text-text-muted" />
+<UserIcon size={16} className="text-primary" />
+```
+
+### 2.8 禁止清单
 
 - ❌ emoji(`☀` `☾` `🔧` `📊` `⚙` `💬`)
-- ❌ 任何 icon 库(Lucide、Heroicons、Phosphor、Tabler)
-- ❌ 彩色 icon / 多色 icon
+- ❌ 任何第三方 icon 库(Lucide、Heroicons、Phosphor、Tabler、Font Awesome 等)
+- ❌ icon 字体
+- ❌ 彩色 icon / 多色 icon / duotone / 填充形
 - ❌ icon 作为按钮的唯一内容且无 `aria-label`
+- ❌ icon 内写 hex / Tailwind 原色类(必须走 `currentColor`)
 
 ---
 
@@ -423,7 +457,7 @@ tool    #D97706 (amber)
 - ❌ 复杂图表驾驶舱
 - ❌ 全屏命令面板(Raycast 式,v2)
 - ❌ 任何动画库(Framer Motion、GSAP);CSS keyframes 足够
-- ❌ 任何 icon 包
+- ❌ 任何**第三方** icon 包(自有集 `web/components/icons/**` 允许,见 §2.7 + ADR 0009)
 
 ---
 
