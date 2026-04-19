@@ -2,8 +2,9 @@
 id: I-0007
 title: Shared state components (EmptyState / ErrorState / LoadingState / FirstRun) never built
 severity: P0
-status: open
+status: closed
 discovered_at: 2026-04-19
+closed_at: 2026-04-19
 discovered_by: track-2-qa audit
 affects: web/components/** (≥17 pages) · visual-upgrade spec
 reproducible: true
@@ -58,3 +59,11 @@ None of the components exist. Raw strings proliferate across the frontend. Every
 
 - spec: `docs/specs/agent-design/2026-04-18-visual-upgrade.md § 5 · DoD`
 - CLAUDE.md §3.5 视觉纪律(空态必须是设计 · 不能是纯文本)
+
+## 关闭记录
+
+- status: closed
+- closed_at: 2026-04-19
+- fix: shipped `web/components/state/{EmptyState,ErrorState,LoadingState,FirstRun}.tsx` with shared `StateAction` / `FirstRunStep` types. All use design tokens only (no icon libs, no raw Tailwind colors, no `dark:` parallel classes). Live samples added to `web/app/design-lab/page.tsx` (`StateShowcase` section).
+- regression tests: `backend/tests/acceptance/test_audit_regressions.py::test_i0007_state_component_exists[EmptyState|ErrorState|LoadingState|FirstRun]` (4 xfails → pass) + `web/components/state/__tests__/state.test.tsx` (6 cases across props / roles / action wiring).
+- consumer: `web/components/cockpit/Cockpit.tsx` is the first production site to use them (loading / empty / error branches). Full sweep of raw `"Loading…"` / `"No data"` / `"Error:"` literals is tracked separately under I-0010 (P1).
