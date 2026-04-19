@@ -688,6 +688,75 @@ async def test_astream_chat_test_anthropic_thinking_populates_reasoning_and_timi
 
 
 @pytest.mark.asyncio
+async def test_astream_chat_test_anthropic_enable_thinking_false_forwarded_and_filters_reasoning() -> (
+    None
+):
+    """B02: when the UI turns 'deep thinking' OFF on an anthropic-kind provider,
+    `enable_thinking=False` must reach the upstream request body, and any
+    `thinking_delta` frames the gateway still sends must be filtered out so
+    the reasoning panel does not appear.
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content.decode("utf-8"))
+        frames = _anthropic_sse_bytes(
+            [
+                ("message_start", {"message": {"usage": {"input_tokens": 5, "output_tokens": 0}}}),
+                (
+                    "content_block_start",
+                    {"index": 0, "content_block": {"type": "thinking", "thinking": ""}},
+                ),
+                (
+                    "content_block_delta",
+                    {"index": 0, "delta": {"type": "thinking_delta", "thinking": "leaked"}},
+                ),
+                ("content_block_stop", {"index": 0}),
+                (
+                    "content_block_start",
+                    {"index": 1, "content_block": {"type": "text", "text": ""}},
+                ),
+                (
+                    "content_block_delta",
+                    {"index": 1, "delta": {"type": "text_delta", "text": "Hi!"}},
+                ),
+                ("content_block_stop", {"index": 1}),
+                ("message_stop", {}),
+            ]
+        )
+        return httpx.Response(200, content=frames, headers={"Content-Type": "text/event-stream"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        events = [
+            e
+            async for e in astream_chat_test(
+                _anthropic_provider(
+                    base_url="https://coding.dashscope.aliyuncs.com/apps/anthropic"
+                ),
+                "qwen3.6-plus",
+                prompt="hi",
+                enable_thinking=False,
+                http_client=client,
+            )
+        ]
+
+    assert captured["body"].get("enable_thinking") is False, (
+        "enable_thinking=False must be forwarded to the upstream request body"
+    )
+    reasoning_events = [e for e in events if e["type"] == "reasoning"]
+    assert reasoning_events == [], (
+        "thinking_delta frames must be filtered when enable_thinking=False, "
+        "even if the gateway ignores the flag and still emits them"
+    )
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["reasoning_text"] == ""
+    assert done["reasoning_first_ms"] == 0
+    assert done["response"] == "Hi!"
+
+
+@pytest.mark.asyncio
 async def test_astream_chat_test_anthropic_4xx_emits_error() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(401, text="Unauthorized")

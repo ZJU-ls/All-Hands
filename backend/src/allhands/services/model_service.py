@@ -321,6 +321,7 @@ def _build_anthropic_body(
     max_tokens: int | None,
     stop: list[str] | None,
     stream: bool,
+    enable_thinking: bool | None = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "model": model_name,
@@ -338,6 +339,12 @@ def _build_anthropic_body(
         body["top_p"] = top_p
     if stop:
         body["stop_sequences"] = stop
+    if enable_thinking is not None:
+        # DashScope's anthropic-compat gateway honors the `enable_thinking` flag
+        # on reasoning-capable models (qwen3.6-plus, etc). Native Anthropic API
+        # silently ignores unknown top-level fields, so this is safe to always
+        # forward when the caller has an opinion.
+        body["enable_thinking"] = enable_thinking
     return body
 
 
@@ -369,6 +376,7 @@ async def _run_anthropic_chat(
     top_p: float | None,
     max_tokens: int | None,
     stop: list[str] | None,
+    enable_thinking: bool | None,
     http_client: httpx.AsyncClient | None,
 ) -> dict[str, Any]:
     sys_text, msgs = _split_system_and_messages(system=system, messages=messages, prompt=prompt)
@@ -381,6 +389,7 @@ async def _run_anthropic_chat(
         max_tokens=max_tokens,
         stop=stop,
         stream=False,
+        enable_thinking=enable_thinking,
     )
     url = _anthropic_url(provider)
     started = time.perf_counter()
@@ -460,6 +469,7 @@ async def run_chat_test(
             top_p=top_p,
             max_tokens=max_tokens,
             stop=stop,
+            enable_thinking=enable_thinking,
             http_client=http_client,
         )
     body = _build_openai_body(
@@ -549,6 +559,7 @@ async def _astream_anthropic_chat(
     top_p: float | None,
     max_tokens: int | None,
     stop: list[str] | None,
+    enable_thinking: bool | None,
     http_client: httpx.AsyncClient | None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Stream an Anthropic Messages API call, emitting the same event
@@ -569,6 +580,7 @@ async def _astream_anthropic_chat(
         max_tokens=max_tokens,
         stop=stop,
         stream=True,
+        enable_thinking=enable_thinking,
     )
     url = _anthropic_url(provider)
     started = time.perf_counter()
@@ -627,6 +639,12 @@ async def _astream_anthropic_chat(
                                 content_buf.append(text)
                                 yield {"type": "delta", "text": text}
                         elif delta.get("type") == "thinking_delta":
+                            # B02: honor explicit opt-out. Some DashScope
+                            # gateway builds emit thinking frames even when
+                            # enable_thinking=false; drop them here so the UI
+                            # never shows a reasoning panel the user disabled.
+                            if enable_thinking is False:
+                                continue
                             text = str(delta.get("thinking") or "")
                             if text:
                                 if first_reasoning_at is None:
@@ -717,6 +735,7 @@ async def astream_chat_test(
             top_p=top_p,
             max_tokens=max_tokens,
             stop=stop,
+            enable_thinking=enable_thinking,
             http_client=http_client,
         ):
             yield evt
