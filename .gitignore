@@ -32,6 +32,12 @@ pnpm-debug.log*
 data/*.db
 data/*.db-shm
 data/*.db-wal
+/backend/data/*.db
+/backend/data/*.db-shm
+/backend/data/*.db-wal
+/backend/.pytest_data/
+/backend/data/skills/*
+!/backend/data/skills/fixture-skill/
 .env
 .env.local
 .env.*.local
@@ -43,8 +49,11 @@ data/*.db-wal
 
 # ——— 个人 AI-paired 开发 harness(生产力链路,不进仓,别人 clone 不需要) ———
 /CLAUDE.local.md
+/RESUME-TRACK-*.md
 /docs/claude/
 /docs/meta/
+/docs/superpowers/plans/
+/.superpowers/
 /plans/
 # Playwright 视觉 baseline 是项目资产,要 commit,这里不排除。
 # 但跑测试产生的中间产物要排除:
@@ -66,3 +75,6 @@ Thumbs.db
 # Backups
 *.bak
 *~
+
+# TypeScript build info
+/web/tsconfig.tsbuildinfo
