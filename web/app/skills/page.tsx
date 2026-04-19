@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -279,10 +280,14 @@ function InstalledList({
         <div
           key={s.id}
           data-testid={`skill-${s.name}`}
-          className="rounded-xl border border-border bg-surface p-4"
+          className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors duration-base"
         >
           <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
+            <Link
+              href={`/skills/${encodeURIComponent(s.id)}`}
+              data-testid={`skill-link-${s.name}`}
+              className="flex-1 min-w-0"
+            >
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-medium text-text">{s.name}</span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">
@@ -298,7 +303,7 @@ function InstalledList({
                   {s.source_url}
                 </p>
               )}
-            </div>
+            </Link>
             {s.source !== "builtin" && (
               <button
                 onClick={() => onDelete(s)}
