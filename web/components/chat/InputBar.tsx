@@ -1,15 +1,19 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { sendMessage } from "@/lib/api";
+import { useCallback, useRef, useState } from "react";
+import { openStream, type StreamHandle } from "@/lib/stream-client";
 import { useChatStore } from "@/lib/store";
-import type { SSEEvent, ToolCall, RenderPayload } from "@/lib/protocol";
+import type { RenderPayload, SSEEvent, ToolCall } from "@/lib/protocol";
+import { Composer, ThinkingToggle } from "./Composer";
 
 type Props = { conversationId: string };
 
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
 export function InputBar({ conversationId }: Props) {
   const [value, setValue] = useState("");
-  const abortRef = useRef<AbortController | null>(null);
+  const [thinking, setThinking] = useState(false);
+  const streamRef = useRef<StreamHandle | null>(null);
   const {
     isStreaming,
     startStreaming,
@@ -21,7 +25,7 @@ export function InputBar({ conversationId }: Props) {
     stopStreaming,
   } = useChatStore();
 
-  const handleSend = useCallback(async () => {
+  const handleSend = useCallback(() => {
     if (!value.trim() || isStreaming) return;
     const content = value.trim();
     setValue("");
@@ -36,32 +40,33 @@ export function InputBar({ conversationId }: Props) {
       created_at: new Date().toISOString(),
     });
 
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
     let streamingMsgId = "";
 
-    try {
-      await sendMessage(
-        conversationId,
-        content,
-        (eventType, rawData) => {
-          let data: SSEEvent;
-          try {
-            data = JSON.parse(rawData) as SSEEvent;
-          } catch {
-            return;
+    const handle = openStream(
+      `${BASE}/api/conversations/${conversationId}/messages`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      },
+      {
+        tokenEvents: { token: "delta" },
+        onToken: (_delta, frame) => {
+          const ev = frame.data as { message_id?: string; delta?: string };
+          if (!ev.message_id) return;
+          if (!streamingMsgId) {
+            streamingMsgId = ev.message_id;
+            startStreaming(ev.message_id);
           }
+          appendToken(ev.message_id, ev.delta ?? "");
+        },
+        onMetaEvent: (frame) => {
+          const kind = (frame.data.kind as string | undefined) ?? frame.event;
+          if (!kind) return;
+          if (kind === "token") return;
+          const data = frame.data as SSEEvent;
 
-          const kind = (data.kind ?? eventType) as string;
-
-          if (kind === "token") {
-            const ev = data as { kind: "token"; message_id: string; delta: string };
-            if (!streamingMsgId) {
-              streamingMsgId = ev.message_id;
-              startStreaming(ev.message_id);
-            }
-            appendToken(ev.message_id, ev.delta);
-          } else if (kind === "tool_call_start" || kind === "tool_call_end") {
+          if (kind === "tool_call_start" || kind === "tool_call_end") {
             const ev = data as { kind: string; tool_call: ToolCall };
             updateToolCall(ev.tool_call);
           } else if (kind === "confirm_required") {
@@ -88,14 +93,18 @@ export function InputBar({ conversationId }: Props) {
             streamingMsgId = "";
           }
         },
-        ctrl.signal,
-      );
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") {
-        console.error("sendMessage error:", e);
-      }
-      stopStreaming();
-    }
+        onDone: () => {
+          stopStreaming();
+          streamRef.current = null;
+        },
+        onError: (err) => {
+          console.error("sendMessage error:", err);
+          stopStreaming();
+          streamRef.current = null;
+        },
+      },
+    );
+    streamRef.current = handle;
   }, [
     value,
     isStreaming,
@@ -109,31 +118,31 @@ export function InputBar({ conversationId }: Props) {
     stopStreaming,
   ]);
 
+  const handleAbort = useCallback(() => {
+    streamRef.current?.abort();
+    streamRef.current = null;
+    stopStreaming();
+  }, [stopStreaming]);
+
   return (
     <div className="border-t border-border p-3">
-      <div className="flex gap-2">
-        <textarea
-          className="flex-1 resize-none rounded-lg bg-surface border border-border px-3 py-2 text-sm text-text placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
-          rows={3}
-          placeholder="Message Lead Agent…"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void handleSend();
-            }
-          }}
-          disabled={isStreaming}
-        />
-        <button
-          onClick={() => void handleSend()}
-          disabled={isStreaming || !value.trim()}
-          className="self-end rounded-lg bg-surface-2 hover:bg-surface disabled:opacity-40 px-4 py-2 text-sm font-medium transition-colors"
-        >
-          {isStreaming ? "…" : "Send"}
-        </button>
-      </div>
+      <Composer
+        value={value}
+        onChange={setValue}
+        onSend={handleSend}
+        onAbort={handleAbort}
+        isStreaming={isStreaming}
+        placeholder="输入消息…"
+        rows={3}
+        controls={
+          <ThinkingToggle
+            enabled={thinking}
+            onChange={setThinking}
+            disabled={isStreaming}
+          />
+        }
+        controlsTrailing={<span className="font-mono">↵ 发送 · ⇧↵ 换行</span>}
+      />
     </div>
   );
 }
