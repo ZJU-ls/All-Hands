@@ -146,6 +146,40 @@ consistency; it will fail the next commit if (6) is skipped.
 
 ---
 
+## 5.5 · W1-W7 ownership map
+
+`backend/tests/acceptance/walkthrough_plan.json` now carries `dod`,
+`blocker_issues`, and `owner_track` on every stage. Use this to decide **who**
+fixes a red W-N and **which spec** governs the DoD.
+
+| W# | Story | v0-active | Owner track | Blocker issues | Primary Meta Tools |
+|---|---|---|---|---|---|
+| W1 | Bootstrap (provider + model + hello chat) | ✅ | main | — | `create_provider`, `create_model`, `chat_test_model` |
+| W2 | Self-build an employee (chat only) | ✅ | track-b-employee-chat | **I-0008** (EmployeeCard render missing) | `create_employee` |
+| W3 | Self-dispatch a task (fire-and-forget) | ✅ | main | — | `tasks_create`, `tasks_list`, `tasks_get`, `tasks_cancel` |
+| W4 | Build a trigger + fire it | ⬜ skeleton | main | — | `create_trigger`, `fire_trigger_now`, `list_trigger_fires` |
+| W5 | Artifacts live push (chat → panel) | ⬜ skeleton | track-a-artifacts | **I-0005** (artifact_changed SSE missing) | `artifact_create`, `artifact_list`, `artifact_update` |
+| W6 | External channel roundtrip (inbound → reply → outbound) | ⬜ skeleton | track-3-stock | — | `register_channel`, `test_channel`, `send_notification` |
+| W7 | Stock-assistant end-to-end (market → trigger → channel) | ⬜ skeleton | track-3-stock | — | `generate_briefing`, `explain_anomaly`, `fire_trigger_now`, `send_notification` |
+
+Rules of thumb:
+
+- A row with a blocker in the `blocker_issues` column stays **xfail**; the
+  `test_w{N}_*.py` file carries an xfail branch tagged with the issue ID.
+  When the issue closes, flip the xfail to a plain assert in the same commit
+  that closes the issue (see §4).
+- If a W4-W7 goes **v0-active** (we start asking the Meta Tool to walk it live),
+  toggle `v0_active: true` in `walkthrough_plan.json` and add the ID to
+  `V0_ACTIVE_IDS` in `backend/tests/acceptance/test_walkthrough_plan.py` **and**
+  the corresponding `V0_ACTIVE` array in
+  `web/tests/acceptance/walkthrough-plan.test.ts`. Both sides of the contract
+  must agree.
+- A W-N without a declared blocker but still sitting in skeleton is a signal
+  the track has not yet handed off its live invocation; raise it in the next
+  planning cycle rather than silently leaving the skeleton untouched.
+
+---
+
 ## 6 · Where the live review tools live
 
 | Tool | Spec section | Confirmation scope |
