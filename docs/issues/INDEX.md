@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(Track A/B/C 关 I-0005 + I-0006 + I-0007 · 用户产品评审新增 I-0015/I-0016)
+最后更新:2026-04-19(Track H 关 I-0008 + I-0010 · Track A/B/C 关 I-0005 + I-0006 + I-0007 · 用户产品评审新增 I-0015/I-0016)
 
 ---
 
@@ -14,9 +14,7 @@
 |---|---|---|---|---|---|---|---|
 | [I-0002](open/I-0002-model-context-window-zero.md) | P2 | open | `qwen3.6-plus` context_window=0 · 前端显示异常 / Agent token 预算失效 | backend(models seed) + web(settings) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0003](open/I-0003-provider-default-model-dangling.md) | P2 | open | Provider `百炼` default_model=`glm-5` · 但库里只有 `qwen3.6-plus` · 悬空引用 | backend(providers seed) | 2026-04-18 / api-probe | — | backend, data |
-| [I-0008](open/I-0008-employee-card-render-component-missing.md) | P1 | open | EmployeeCard render component not registered — create_employee result cannot render in chat | web/lib/component-registry · employee_tools | 2026-04-19 / track-2-qa walkthrough W2 | walkthrough W2 (N1) | ui, render-tools |
 | [I-0009](open/I-0009-architecture-doc-drift.md) | P1 | open | product/04-architecture.md never updated for triggers L5.9 + cockpit L7.1/L8.1 | product/04-architecture.md | 2026-04-19 / track-2-qa | L01 discoverability | docs, backend |
-| [I-0010](open/I-0010-raw-state-literals-no-lint-rule.md) | P1 | open | Raw "Loading…" / "Error" / "No data" literals across app · no ESLint rule enforces | web/** | 2026-04-19 / track-2-qa | visual-upgrade DoD | ui, visual, lint |
 | [I-0011](open/I-0011-missing-integration-e2e-tests.md) | P1 | open | Missing integration / e2e tests across 5 delivered specs | backend/tests/integration · web/tests/e2e | 2026-04-19 / track-2-qa | self-review R2, Wave 2 regression safety | backend, ui, tests |
 | [I-0012](open/I-0012-design-lab-missing-live-samples.md) | P2 | open | design-lab missing live samples for Viz components + Artifact.Preview | web/app/design-lab | 2026-04-19 / track-2-qa | — | ui, visual, docs |
 | [I-0013](open/I-0013-voice-tone-chapter-and-lead-welcome-missing.md) | P2 | open | Voice & Tone chapter + Lead welcome message never added | product/03-visual-design · employee_service | 2026-04-19 / track-2-qa | — | docs, ui |
@@ -31,9 +29,9 @@
 | 维度 | 数量 |
 |---|---|
 | P0 | 2 |
-| P1 | 4 |
+| P1 | 2 |
 | P2 | 5 |
-| **open** | 11 |
+| **open** | 9 |
 | **in-progress** | 0 |
 | **blocked** | 0 |
 
@@ -72,3 +70,5 @@
 - 2026-04-19 · 关闭 I-0005(track-A fix-artifacts-sse · ArtifactChangedEvent + bus 广播 + /api/artifacts/stream + tests/integration/test_artifacts_sse.py)
 - 2026-04-19 · Track B 关闭 I-0007(EmptyState / ErrorState / LoadingState / FirstRun 全量落地 · vitest 6 用例 · design-lab 活样本)
 - 2026-04-19 · Track B 关闭 I-0006(Cockpit 改 EventSource('/api/cockpit/stream') · snapshot + delta 帧 + 自愈重连 · 移除 POLL_MS/setInterval · vitest 4 用例消费 SSE)
+- 2026-04-19 · Track H 关闭 I-0008(EmployeeCard render component + 注册表 + `EmployeeCardProps` 前后端对齐 + `execute_create_employee` 回包为 render envelope · `test_w2_employee.py::test_render_card_for_employee_registered` xfail → hard assert · 新增 `test_create_employee_returns_render_envelope` + unit/web 18 用例)
+- 2026-04-19 · Track H 关闭 I-0010(`.eslintrc.json` `no-restricted-syntax` JSXText 规则 + `web/tests/no-raw-state-literal.test.ts` 86 用例守门 · 17 个 app/components 文件扫荡到 `<LoadingState/>` / `<EmptyState/>` / `<ErrorState/>` · `ConversationHeader` 保留 inline 占位 + per-line 豁免 1 处)
