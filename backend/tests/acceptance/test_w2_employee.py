@@ -5,20 +5,18 @@ Sign-of-life assertions (structural preconditions for the live W2 path):
 1. /employees list route exists.
 2. ``create_employee`` meta tool present + declared WRITE + gated
    (Tool-First redemption + CLAUDE.md §3.3).
-3. An ``EmployeeCard`` render component is registered — without it, Lead's
-   ``create_employee`` result cannot render inline in chat so the user has to
-   leave /chat to see what got built (N1 breach).
+3. An ``EmployeeCard`` render component is registered + ``create_employee``
+   returns a render envelope so Lead's result renders inline in chat
+   (N1 Tool-First redemption).
 
-(3) is the **open blocker** (issue I-0008); it stays ``xfail`` with the issue
-ID until Track B ships the EmployeeCard component. When that lands, this test
-flips to ``XPASS`` and the xfail should be removed.
+I-0008 closed 2026-04-19 (Track H): EmployeeCard component + registry entry +
+render envelope executor landed. The previous ``xfail`` block is now a hard
+assert — regressions fail loudly.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-
-import pytest
 
 STAGE_ID = "W2"
 
@@ -76,19 +74,44 @@ def test_create_employee_is_gated(meta_tools_dir: Path) -> None:
 def test_render_card_for_employee_registered(repo_root: Path) -> None:
     """W2 expects an Employee-shaped render component.
 
-    This currently xfails: the registry has MarkdownCard / PlanTimeline /
-    Viz.* / Artifact.Preview but no EmployeeCard. See issue I-0008
-    (audited gap from docs/specs/agent-design/2026-04-18-employee-chat.md).
-    Flip to ``assert`` once the issue is closed.
+    I-0008 closed 2026-04-19: EmployeeCard is registered in
+    web/lib/component-registry.ts so Lead's create_employee result renders
+    inline in chat. Regression check — keep the assert hard.
     """
     registry = repo_root / "web" / "lib" / "component-registry.ts"
-    if not registry.exists():
-        pytest.xfail("component-registry.ts not present")
+    assert registry.exists(), "component-registry.ts missing — required by W2"
     text = registry.read_text(encoding="utf-8")
-    if "Employee" not in text:
-        pytest.xfail(
-            "W2 audit gap (I-0008 · blocker declared in walkthrough_plan.json): "
-            "employee-chat spec ships /employees list + create_employee meta tool, "
-            "but no EmployeeCard render component is registered — Lead's "
-            "create_employee result cannot render inline in chat"
+    assert "EmployeeCard" in text, (
+        "W2 regression (I-0008): EmployeeCard must stay registered in "
+        "component-registry.ts so create_employee renders inline in chat"
+    )
+    component_file = repo_root / "web" / "components" / "render" / "EmployeeCard.tsx"
+    assert component_file.exists(), (
+        "W2 regression (I-0008): web/components/render/EmployeeCard.tsx missing"
+    )
+
+
+def test_create_employee_returns_render_envelope() -> None:
+    """W2 · create_employee meta tool wraps its result as a render envelope.
+
+    I-0008 closed 2026-04-19 (Track H): execute_create_employee returns
+    ``{component: "EmployeeCard", props}`` so the Lead chat surface renders
+    the new employee inline (no navigation to /employees required).
+    """
+    import asyncio
+
+    from allhands.execution.tools.meta.employee_tools import execute_create_employee
+
+    envelope = asyncio.run(
+        execute_create_employee(
+            name="Researcher",
+            description="desk research",
+            system_prompt="Cite sources.",
+            model_ref="openai/gpt-4o-mini",
+            tool_ids=[],
+            skill_ids=["allhands.render"],
         )
+    )
+    assert envelope["component"] == "EmployeeCard"
+    assert envelope["props"]["name"] == "Researcher"
+    assert envelope["props"]["model"]["provider"] == "openai"

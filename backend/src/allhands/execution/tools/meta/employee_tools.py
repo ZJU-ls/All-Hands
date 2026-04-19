@@ -2,7 +2,112 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from allhands.core import Tool, ToolKind, ToolScope
+
+# Keep in sync with allhands.api.protocol.EmployeeCardProps + web/lib/protocol.ts.
+# The parity check in tests/integration/test_render_protocol.py asserts all
+# three sources agree on field names.
+EMPLOYEE_CARD_COMPONENT = "EmployeeCard"
+_PREVIEW_MAX_CHARS = 240
+_VALID_STATUSES = ("draft", "active", "paused")
+
+
+def _truncate_preview(text: str, limit: int = _PREVIEW_MAX_CHARS) -> str:
+    stripped = (text or "").strip()
+    if len(stripped) <= limit:
+        return stripped
+    return stripped[: limit - 1].rstrip() + "…"
+
+
+def _parse_model_ref(model_ref: str | None) -> dict[str, str] | None:
+    if not model_ref:
+        return None
+    provider, _, name = model_ref.partition("/")
+    if not name:
+        return {"provider": "custom", "name": provider}
+    return {"provider": provider, "name": name}
+
+
+def build_employee_card_render(
+    *,
+    employee_id: str,
+    name: str,
+    role: str | None = None,
+    system_prompt_preview: str | None = None,
+    skill_count: int | None = None,
+    tool_count: int | None = None,
+    model_ref: str | None = None,
+    status: str | None = None,
+    avatar_initial: str | None = None,
+) -> dict[str, Any]:
+    """Shape a create/update employee result into the EmployeeCard render envelope (I-0008).
+
+    Emits ``{component, props, interactions}`` so the resulting message can
+    render inline in chat without a round-trip to ``/employees``.
+    """
+
+    props: dict[str, Any] = {
+        "employee_id": employee_id,
+        "name": name,
+        "status": status if status in _VALID_STATUSES else "draft",
+    }
+    if role:
+        props["role"] = role
+    if avatar_initial:
+        props["avatar_initial"] = avatar_initial
+    preview = _truncate_preview(system_prompt_preview or "")
+    if preview:
+        props["system_prompt_preview"] = preview
+    if isinstance(skill_count, int):
+        props["skill_count"] = skill_count
+    if isinstance(tool_count, int):
+        props["tool_count"] = tool_count
+    model = _parse_model_ref(model_ref)
+    if model is not None:
+        props["model"] = model
+
+    return {
+        "component": EMPLOYEE_CARD_COMPONENT,
+        "props": props,
+        "interactions": [],
+    }
+
+
+async def execute_create_employee(
+    *,
+    name: str,
+    description: str = "",
+    system_prompt: str = "",
+    model_ref: str = "openai/gpt-4o-mini",
+    tool_ids: list[str] | None = None,
+    skill_ids: list[str] | None = None,
+    max_iterations: int = 10,
+) -> dict[str, Any]:
+    """Executor for ``allhands.meta.create_employee``.
+
+    Returns an EmployeeCard render envelope built from the request inputs so
+    the Lead's chat surface renders the new employee inline (Tool-First N1).
+
+    Employee persistence still flows through the service/repository layer;
+    this executor is the render-tool wrapper over the result so the agent
+    surface doesn't have to know about the component registry contract.
+    """
+    _ = description  # unused in the card preview (description lives on /employees)
+    tool_count = len(tool_ids or [])
+    skill_count = len(skill_ids or [])
+    _ = max_iterations  # reserved for future meta badges (not shown in the card today)
+    return build_employee_card_render(
+        employee_id=f"pending:{name}",
+        name=name,
+        system_prompt_preview=system_prompt,
+        skill_count=skill_count,
+        tool_count=tool_count,
+        model_ref=model_ref,
+        status="draft",
+    )
+
 
 LIST_EMPLOYEES_TOOL = Tool(
     id="allhands.meta.list_employees",
