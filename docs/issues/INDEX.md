@@ -12,7 +12,7 @@
 
 | ID | Severity | Status | Title | Affects | Discovered | Blocker-for | Tags |
 |---|---|---|---|---|---|---|---|
-| [I-0001](open/I-0001-next-chunks-404-hydration-dead.md) | **P0** | open | Next dev chunks 缺失 · 全站 blank / 永卡 | web(全站) | 2026-04-18 / walkthrough | walkthrough-acceptance 整体 · 用户亲测交付 | infra, ui |
+| [I-0001](open/I-0001-next-chunks-404-hydration-dead.md) | **P0** | in-progress | Next dev chunks 缺失 · 全站 blank / 永卡 | web(全站) | 2026-04-18 / walkthrough | walkthrough-acceptance 整体 · 用户亲测交付 | infra, ui |
 | [I-0002](open/I-0002-model-context-window-zero.md) | P2 | open | `qwen3.6-plus` context_window=0 · 前端显示异常 / Agent token 预算失效 | backend(models seed) + web(settings) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0003](open/I-0003-provider-default-model-dangling.md) | P2 | open | Provider `百炼` default_model=`glm-5` · 但库里只有 `qwen3.6-plus` · 悬空引用 | backend(providers seed) | 2026-04-18 / api-probe | — | backend, data |
 
@@ -25,8 +25,8 @@
 | P0 | 1 |
 | P1 | 0 |
 | P2 | 2 |
-| **open** | 3 |
-| **in-progress** | 0 |
+| **open** | 2 |
+| **in-progress** | 1 |
 | **blocked** | 0 |
 
 ---

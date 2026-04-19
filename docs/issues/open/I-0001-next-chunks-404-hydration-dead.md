@@ -2,9 +2,11 @@
 id: I-0001
 title: Next dev · `.next` chunk 缺失导致客户端不 hydrate · 全站 blank / 永卡 loader
 severity: P0
-status: open
+status: in-progress
 discovered_at: 2026-04-18
 discovered_by: walkthrough
+picked_up_at: 2026-04-19
+picked_up_by: track-1
 affects: web · / · /chat · /employees · /gateway · /skills · /mcp-servers · 所有客户端路由
 reproducible: true
 blocker_for: plans/2026-04-18-gateway-skill-mcp.md(用户无法亲测交付)· walkthrough-acceptance spec 本身(W1-W7 全部跑不了)
