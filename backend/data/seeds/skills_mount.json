@@ -1,0 +1,8 @@
+{
+  "_comment": "Employee ↔ builtin skill mapping. Employees reference skill_ids directly; this file is the documented intent per preset. The actual mount happens inside employees.json:skill_ids.",
+  "mounts": {
+    "ResearchAgent": ["allhands.render", "allhands.artifacts"],
+    "CoderAgent": ["allhands.render", "allhands.artifacts"],
+    "MarketAnalyst": ["allhands.render", "allhands.artifacts"]
+  }
+}

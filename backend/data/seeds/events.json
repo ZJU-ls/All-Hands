@@ -1,0 +1,58 @@
+[
+  {
+    "id": "seed-run-001",
+    "kind": "run.started",
+    "employee_name": "ResearchAgent",
+    "published_at": "2026-04-18T08:30:00Z",
+    "payload": {
+      "run_id": "seed-run-001",
+      "depth": 0
+    },
+    "subject": "Pre-market briefing",
+    "severity": "info"
+  },
+  {
+    "id": "seed-run-002",
+    "kind": "run.completed",
+    "employee_name": "MarketAnalyst",
+    "published_at": "2026-04-18T08:32:14Z",
+    "payload": {
+      "run_id": "seed-run-002",
+      "depth": 0,
+      "duration_s": 12.4,
+      "tokens": 4210
+    },
+    "subject": "Holdings anomaly scan",
+    "severity": "info"
+  },
+  {
+    "id": "seed-run-003",
+    "kind": "run.failed",
+    "employee_name": "CoderAgent",
+    "published_at": "2026-04-18T09:05:41Z",
+    "payload": {
+      "run_id": "seed-run-003",
+      "depth": 1,
+      "duration_s": 3.1,
+      "tokens": 820,
+      "error": "tool allhands.artifacts.create rejected by confirmation gate"
+    },
+    "subject": "Refactor pass on cache layer",
+    "severity": "error"
+  },
+  {
+    "id": "seed-run-004",
+    "kind": "run.cancelled",
+    "employee_name": "ResearchAgent",
+    "published_at": "2026-04-18T10:12:00Z",
+    "payload": {
+      "run_id": "seed-run-004",
+      "depth": 0,
+      "duration_s": 41.2,
+      "tokens": 9800,
+      "reason": "user cancelled from composer"
+    },
+    "subject": "Long-running competitive-landscape sweep",
+    "severity": "warning"
+  }
+]

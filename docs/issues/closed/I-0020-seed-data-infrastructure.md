@@ -1,7 +1,7 @@
 ---
 id: I-0020
 severity: P1
-status: open
+status: closed
 title: Seed 数据基础设施 · 每个新功能交付时必须自带"满载状态"的真实 demo 数据
 affects: backend/services/seed_service.py(新) · backend/services/bootstrap_service.py(扩) · data/seeds/*.json(新) · CLI allhands seed dev(新) · 所有新 feature 的 DoD 约束
 discovered: 2026-04-19 / user-product-review(Wave-2 merge 后评审反馈)
@@ -76,3 +76,20 @@ tags: backend, infra, devx, data
 - feedback memory:`feedback_seed_data_for_new_features.md`(已落)
 - 被 I-0019(gateway nested)、I-0021(employee 设计页)消费 —— 它们的 DoD 依赖本 track 的 seed 基础设施
 - 不冲突:可以独立推进 · 其他 track 写 seed 时先 stub 本地 JSON · 本 track 统一收口
+
+## 关闭记录
+
+- **Branch:** `seed-data-infrastructure`
+- **交付日期:** 2026-04-19 (Track N)
+- **核心交付:**
+  - `backend/src/allhands/services/seed_service.py` · `ensure_all_dev_seeds()` + 7 个 domain 的 `ensure_*()`(providers / models / employees / skill-mounts / mcp-servers / conversations / events)
+  - `backend/data/seeds/*.json` · 7 份 seed(3 providers / 7 models / 3 employees / 1 mcp / 1 conversation / 4 events / 1 skill-mount manifest)· 真实可跑:Bailian(默认)+ OpenRouter + DeepSeek,base_url 与 `.env.example` 对齐;模型含 `qwen-plus` / `deepseek-coder` / `claude-3.5-sonnet`;员工无 `mode` 字段
+  - CLI · `allhands-seed dev` / `allhands-seed reset` via `[project.scripts]` + `allhands.cli.seed:main`;reset 在 `ALLHANDS_ENV != dev` 时 rc=2 拒绝
+  - `main.py::_should_seed` · env ∈ {dev, test} 或 `ALLHANDS_SEED=1` 才自动 seed,生产默认关闭
+  - `docs/claude/working-protocol.md` Stage 4 DoD 新增 "Seed 数据" 小节 + `docs/claude/learnings.md` L02 (Seed data is a contract) + `docs/claude/error-patterns.md` E01 (Empty-state drift)
+- **回归测试(全绿):**
+  - `backend/tests/integration/test_seed_service.py` · 10 cases,幂等(3 轮跑 0 增长)+ 最小行数(`MIN_*`)+ 真实字段(https base_url / 无 `foo/bar` / 唯一默认 provider)+ 无 `mode` 字段
+  - `backend/tests/unit/test_seed_cli.py` · 7 cases(`_should_seed` dev/test/prod/`ALLHANDS_SEED=1` + reset refuse + argparse)
+  - `web/tests/e2e/seed-full-house.spec.ts` · 5 cases,冷启 `/gateway` / `/employees` / `/skills` / `/mcp-servers` / `/traces` 每页 ≥ N 行
+- **check-script:** `./scripts/check.sh` 全绿(backend 805+ pass / web 975 pass / lint-imports / mypy strict / 视觉纪律 / L01 / walkthrough-acceptance)
+- **相关 learning:** L02(Seed data is a contract, not a convenience · `docs/claude/learnings.md`)

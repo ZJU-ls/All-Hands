@@ -1,0 +1,58 @@
+[
+  {
+    "id": "seed-model-qwen-plus",
+    "provider_name": "Bailian",
+    "name": "qwen-plus",
+    "display_name": "Qwen Plus",
+    "context_window": 131072,
+    "enabled": true
+  },
+  {
+    "id": "seed-model-qwen-coder-plus",
+    "provider_name": "Bailian",
+    "name": "qwen-coder-plus",
+    "display_name": "Qwen Coder Plus",
+    "context_window": 131072,
+    "enabled": true
+  },
+  {
+    "id": "seed-model-qwen-max",
+    "provider_name": "Bailian",
+    "name": "qwen-max",
+    "display_name": "Qwen Max",
+    "context_window": 32768,
+    "enabled": true
+  },
+  {
+    "id": "seed-model-claude-sonnet",
+    "provider_name": "OpenRouter",
+    "name": "anthropic/claude-3.5-sonnet",
+    "display_name": "Claude 3.5 Sonnet",
+    "context_window": 200000,
+    "enabled": true
+  },
+  {
+    "id": "seed-model-gpt-4o-mini",
+    "provider_name": "OpenRouter",
+    "name": "openai/gpt-4o-mini",
+    "display_name": "GPT-4o Mini",
+    "context_window": 128000,
+    "enabled": true
+  },
+  {
+    "id": "seed-model-deepseek-chat",
+    "provider_name": "DeepSeek",
+    "name": "deepseek-chat",
+    "display_name": "DeepSeek Chat",
+    "context_window": 65536,
+    "enabled": true
+  },
+  {
+    "id": "seed-model-deepseek-coder",
+    "provider_name": "DeepSeek",
+    "name": "deepseek-coder",
+    "display_name": "DeepSeek Coder",
+    "context_window": 65536,
+    "enabled": true
+  }
+]
