@@ -26,22 +26,21 @@ import pytest
 
 
 def test_i0005_artifact_changed_event_emitted(repo_root: Path) -> None:
-    """Once fixed, the string ``artifact_changed`` (or a semantic twin)
-    should appear in ``execution/events.py`` and in ``artifact_service.py``.
+    """The string ``artifact_changed`` / ``ArtifactChanged`` must appear in
+    ``execution/events.py`` (event shape declared) and in ``artifact_service.py``
+    (service publishes on every write path). Closed 2026-04-19 by fix-artifacts-sse.
     """
     events = repo_root / "backend" / "src" / "allhands" / "execution" / "events.py"
     service = repo_root / "backend" / "src" / "allhands" / "services" / "artifact_service.py"
-    events_text = events.read_text(encoding="utf-8") if events.exists() else ""
-    service_text = service.read_text(encoding="utf-8") if service.exists() else ""
+    events_text = events.read_text(encoding="utf-8")
+    service_text = service.read_text(encoding="utf-8")
 
-    has_event = "artifact_changed" in events_text or "ArtifactChanged" in events_text
-    has_publish = "artifact_changed" in service_text or "ArtifactChanged" in service_text
-
-    if not (has_event and has_publish):
-        pytest.xfail(
-            "I-0005: artifact_changed SSE event never emitted — artifacts-skill DoD "
-            "(agent create → panel realtime) cannot be satisfied"
-        )
+    assert "artifact_changed" in events_text or "ArtifactChanged" in events_text, (
+        "I-0005 regression: ArtifactChangedEvent removed from execution/events.py"
+    )
+    assert "artifact_changed" in service_text or "ArtifactChanged" in service_text, (
+        "I-0005 regression: ArtifactService no longer publishes artifact_changed"
+    )
 
 
 # ---------------------------------------------------------------------------

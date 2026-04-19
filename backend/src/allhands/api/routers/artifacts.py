@@ -5,19 +5,40 @@ operations are agent-managed and live in `execution/tools/meta/artifact_tools.py
 the REST surface only exposes browsing + content fetching for the UI panel.
 This keeps the L01 Tool First contract intact: no REST write endpoints for
 agent-managed resources.
+
+The `/stream` endpoint (I-0005) is pure event fan-out — it subscribes to the
+in-process EventBus for `artifact_changed` envelopes and re-emits them as SSE
+so `ArtifactPanel` can live-refresh without polling. No DB work inside the
+stream body, so we do not hit the TestClient+aiosqlite+SSE deadlock that
+forces `cockpit.stream` to be skipped in tests.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import json
+import logging
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from allhands.api.deps import get_artifact_service
 from allhands.core import BINARY_KINDS, Artifact, ArtifactKind, ArtifactVersion
 from allhands.services.artifact_service import ArtifactNotFound, ArtifactService
+
+if TYPE_CHECKING:
+    from allhands.core import EventEnvelope
+    from allhands.execution.event_bus import EventBus
+
+logger = logging.getLogger(__name__)
+
+# Matches cockpit.stream cadence: clients treat >3x idle as stale.
+_HEARTBEAT_SECONDS = 15.0
 
 router = APIRouter(prefix="/artifacts", tags=["artifacts"])
 
@@ -110,6 +131,71 @@ async def list_artifacts(
         limit=limit,
     )
     return [_to_response(a) for a in items]
+
+
+def _sse(event: str, data: object) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
+
+
+@router.get("/stream")
+async def stream_artifacts(request: Request) -> StreamingResponse:
+    """SSE feed of ``artifact_changed`` envelopes (I-0005).
+
+    Opens without a snapshot — the panel already lists artifacts via the REST
+    list endpoint on mount; this stream only carries incremental change
+    events so clients re-fetch (or patch their local copy). A 15s heartbeat
+    keeps proxies from idle-timeout killing the connection.
+    """
+    runtime = getattr(request.app.state, "trigger_runtime", None)
+    bus: EventBus | None = getattr(runtime, "bus", None) if runtime is not None else None
+
+    queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+    unsubscribe = None
+
+    if bus is not None:
+
+        async def _on_event(env: EventEnvelope) -> None:
+            if env.kind != "artifact_changed":
+                return
+            await queue.put(
+                {
+                    "id": env.id,
+                    "kind": env.kind,
+                    "ts": env.published_at.isoformat(),
+                    "payload": env.payload,
+                }
+            )
+
+        unsubscribe = bus.subscribe_all(_on_event)
+
+    async def event_stream() -> AsyncIterator[str]:
+        try:
+            yield _sse("ready", {"ts": datetime.now(UTC).isoformat()})
+            while True:
+                if await request.is_disconnected():
+                    return
+                try:
+                    frame = await asyncio.wait_for(queue.get(), timeout=_HEARTBEAT_SECONDS)
+                    yield _sse("artifact_changed", frame)
+                except TimeoutError:
+                    yield _sse("heartbeat", {"ts": datetime.now(UTC).isoformat()})
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("artifacts.stream.failed")
+            yield _sse(
+                "error",
+                {"code": "INTERNAL", "message": "artifact stream terminated"},
+            )
+        finally:
+            if unsubscribe is not None:
+                unsubscribe()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/{artifact_id}", response_model=ArtifactResponse)

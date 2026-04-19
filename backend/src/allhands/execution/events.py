@@ -91,3 +91,23 @@ AgentEvent = (
     | ErrorEvent
     | DoneEvent
 )
+
+
+class ArtifactChangedEvent(BaseModel):
+    """Fan-out envelope for artifact writes (I-0005).
+
+    Published on the in-process EventBus as ``kind="artifact_changed"`` by
+    ``ArtifactService`` at the end of each write path so ``ArtifactPanel`` can
+    live-refresh via ``/api/artifacts/stream`` instead of polling. Lives here
+    (next to the AgentEvent family) so the wire shape has a single home;
+    not part of the AgentEvent union because it is workspace-level, not
+    conversation-scoped.
+    """
+
+    kind: Literal["artifact_changed"] = "artifact_changed"
+    workspace_id: str
+    artifact_id: str
+    artifact_kind: str
+    op: Literal["created", "updated", "deleted", "pinned"]
+    version: int
+    conversation_id: str | None = None

@@ -21,7 +21,7 @@ import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from allhands.core import (
     BINARY_KINDS,
@@ -31,8 +31,10 @@ from allhands.core import (
     ArtifactVersion,
 )
 from allhands.core.errors import DomainError
+from allhands.execution.events import ArtifactChangedEvent
 
 if TYPE_CHECKING:
+    from allhands.execution.event_bus import EventBus
     from allhands.persistence.repositories import ArtifactRepo
 
 
@@ -68,9 +70,15 @@ class ArtifactNotFound(ArtifactError):
 
 
 class ArtifactService:
-    def __init__(self, repo: ArtifactRepo, data_dir: Path) -> None:
+    def __init__(
+        self,
+        repo: ArtifactRepo,
+        data_dir: Path,
+        bus: EventBus | None = None,
+    ) -> None:
         self._repo = repo
         self._data_dir = data_dir
+        self._bus = bus
 
     @property
     def _root(self) -> Path:
@@ -160,6 +168,7 @@ class ArtifactService:
                 created_at=now,
             )
         )
+        await self._publish_changed(artifact, op="created")
         return artifact
 
     async def get(self, artifact_id: str) -> Artifact:
@@ -246,6 +255,7 @@ class ArtifactService:
                     created_at=now,
                 )
             )
+            await self._publish_changed(updated, op="updated")
             return updated
 
         if mode == "patch":
@@ -285,6 +295,7 @@ class ArtifactService:
                 created_at=now,
             )
         )
+        await self._publish_changed(updated, op="updated")
         return updated
 
     async def delete(self, artifact_id: str) -> None:
@@ -292,6 +303,7 @@ class ArtifactService:
         if artifact.deleted_at is not None:
             return
         await self._repo.soft_delete(artifact_id, datetime.now(UTC))
+        await self._publish_changed(artifact, op="deleted")
 
     async def set_pinned(self, artifact_id: str, pinned: bool) -> Artifact:
         artifact = await self.get(artifact_id)
@@ -299,7 +311,33 @@ class ArtifactService:
             return artifact
         updated = artifact.model_copy(update={"pinned": pinned, "updated_at": datetime.now(UTC)})
         await self._repo.upsert(updated)
+        await self._publish_changed(updated, op="pinned")
         return updated
+
+    async def _publish_changed(
+        self,
+        artifact: Artifact,
+        *,
+        op: Literal["created", "updated", "deleted", "pinned"],
+    ) -> None:
+        """Fan out an ``artifact_changed`` envelope so ArtifactPanel can
+        live-refresh (I-0005). Silent no-op when no bus is wired (e.g. unit
+        tests that don't care about event emission).
+        """
+        if self._bus is None:
+            return
+        event = ArtifactChangedEvent(
+            workspace_id=artifact.workspace_id,
+            conversation_id=artifact.conversation_id,
+            artifact_id=artifact.id,
+            artifact_kind=artifact.kind.value,
+            op=op,
+            version=artifact.version,
+        )
+        await self._bus.publish(
+            kind="artifact_changed",
+            payload=event.model_dump(mode="json"),
+        )
 
     async def list_versions(self, artifact_id: str) -> list[ArtifactVersion]:
         await self.get(artifact_id)
