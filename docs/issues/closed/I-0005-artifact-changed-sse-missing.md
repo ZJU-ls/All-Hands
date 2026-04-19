@@ -2,14 +2,24 @@
 id: I-0005
 title: artifact_changed SSE event never emitted — artifact panel has no push signal
 severity: P0
-status: open
+status: closed
 discovered_at: 2026-04-19
+closed_at: 2026-04-19
+closed_by: fix-artifacts-sse (track-A)
 discovered_by: track-2-qa audit (walkthrough-acceptance scaffold)
 affects: backend/execution/events.py · services/artifact_service.py · chat/ArtifactPanel
 reproducible: true
 blocker_for: walkthrough-acceptance W3 (artifact live-update), artifacts-skill spec DoD
 tags: [backend, api, artifacts]
 ---
+
+## Resolution (2026-04-19)
+
+- `ArtifactChangedEvent` added to `execution/events.py` with `workspace_id / conversation_id / artifact_id / artifact_kind / op / version`.
+- `ArtifactService` now accepts an optional `EventBus` and publishes `kind="artifact_changed"` at the end of `create` / `update` / `delete` / `set_pinned` (silent no-op when no bus wired).
+- `deps.get_artifact_service` resolves the bus from `request.app.state.trigger_runtime.bus` so the REST surface and the meta tools share one fan-out path.
+- `GET /api/artifacts/stream` subscribes to the bus and forwards `artifact_changed` envelopes as SSE frames (with a 15 s heartbeat). Frontend subscription still TODO — tracked separately.
+- Regression: `tests/integration/test_artifacts_sse.py` exercises service → bus → SSE route directly. `test_audit_regressions.py::test_i0005_*` flipped from xfail to hard assert.
 
 # I-0005 · artifact_changed SSE event never emitted
 

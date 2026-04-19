@@ -155,11 +155,14 @@ async def get_mcp_service(session: AsyncSession = Depends(get_session)) -> MCPSe
 
 
 async def get_artifact_service(
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> ArtifactService:
     settings = get_settings()
     data_dir = Path(settings.data_dir)
-    return ArtifactService(SqlArtifactRepo(session), data_dir)
+    runtime = getattr(request.app.state, "trigger_runtime", None)
+    bus = getattr(runtime, "bus", None) if runtime is not None else None
+    return ArtifactService(SqlArtifactRepo(session), data_dir, bus=bus)
 
 
 async def get_trigger_service(
