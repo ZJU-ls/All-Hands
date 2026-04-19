@@ -32,6 +32,9 @@ type Stage = {
   north_star_focus: ("N1" | "N2" | "N3" | "N4" | "N5" | "N6")[];
   v0_active: boolean;
   preconditions: string;
+  dod: string[];
+  blocker_issues: string[];
+  owner_track: string;
 };
 type Plan = {
   spec: string;
@@ -61,6 +64,23 @@ describe("walkthrough acceptance plan · v0 scope", () => {
       for (const dim of s.north_star_focus) {
         expect(declared.has(dim), `${s.id} references unknown dim ${dim}`).toBe(true);
       }
+    }
+  });
+
+  it("every stage carries a non-empty dod + owner_track", () => {
+    for (const s of PLAN.stages) {
+      expect(
+        Array.isArray(s.dod) && s.dod.length > 0,
+        `${s.id} is missing dod bullets (walkthrough spec §3.2 contract)`,
+      ).toBe(true);
+      expect(
+        typeof s.owner_track === "string" && s.owner_track.length > 0,
+        `${s.id} is missing owner_track`,
+      ).toBe(true);
+      expect(
+        Array.isArray(s.blocker_issues),
+        `${s.id}.blocker_issues must be an array`,
+      ).toBe(true);
     }
   });
 });

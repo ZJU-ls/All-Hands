@@ -10,73 +10,129 @@
       "required_routers": ["providers.py", "models.py", "chat.py"],
       "north_star_focus": ["N1", "N3", "N4", "N5"],
       "v0_active": true,
-      "preconditions": "gateway router present"
+      "preconditions": "gateway router present + provider/model meta tools registered",
+      "dod": [
+        "/gateway renders provider + model create forms",
+        "POST /api/providers + /api/models create real rows",
+        "chat_test_model exercises a real LLM call (streaming + usage numbers)",
+        "first chat in /chat streams a response"
+      ],
+      "blocker_issues": [],
+      "owner_track": "main"
     },
     {
       "id": "W2",
       "name": "Self-build an employee (chat only)",
-      "goal": "in /chat, Lead creates an employee; /employees list reflects it",
+      "goal": "in /chat, Lead creates an employee via create_employee meta tool; /employees list reflects it + result renders as EmployeeCard",
       "entry_route": "/",
       "required_meta_tools": ["create_employee"],
       "required_routers": ["employees.py"],
       "north_star_focus": ["N1"],
       "v0_active": true,
-      "preconditions": "employee meta tool + render EmployeeCard component"
+      "preconditions": "employee meta tool + EmployeeCard render component registered",
+      "dod": [
+        "create_employee meta tool present + scope=WRITE + requires_confirmation=True",
+        "Lead invokes create_employee; confirmation card renders",
+        "post-confirm, /employees list has the new row",
+        "EmployeeCard render component registered → result shows inline in chat"
+      ],
+      "blocker_issues": ["I-0008"],
+      "owner_track": "track-b-employee-chat"
     },
     {
       "id": "W3",
       "name": "Self-dispatch a task (fire-and-forget)",
-      "goal": "/chat → Lead assigns task → /tasks running → artifact produced",
+      "goal": "/chat → Lead calls tasks_create → /tasks shows row → status walks queued → running → completed; artifact produced",
       "entry_route": "/",
-      "required_meta_tools": ["tasks.create"],
+      "required_meta_tools": ["tasks_create", "tasks_list", "tasks_get", "tasks_cancel"],
       "required_routers": ["tasks.py"],
       "north_star_focus": ["N2", "N4", "N6"],
       "v0_active": true,
-      "preconditions": "tasks spec merged (migration 0011) + /tasks route"
+      "preconditions": "tasks spec merged (migration 0011) + /tasks route + tasks meta tools",
+      "dod": [
+        "tasks_create meta tool with DoD-mandatory schema registered",
+        "POST /api/tasks + GET /api/tasks list + status enum covers queued/running/completed/failed/cancelled",
+        "/tasks + /tasks/[id] routes render",
+        "task result publishes an artifact"
+      ],
+      "blocker_issues": [],
+      "owner_track": "main"
     },
     {
       "id": "W4",
-      "name": "Install a skill for an employee (chat only)",
-      "goal": "Lead installs skill → employee.skills increments",
-      "entry_route": "/",
-      "required_meta_tools": ["install_skill", "bind_skill_to_employee"],
-      "required_routers": ["skills.py", "employees.py"],
-      "north_star_focus": ["N1", "N3"],
+      "name": "Build a trigger + fire it",
+      "goal": "Lead calls create_trigger → /triggers has row → manual fire_trigger_now → fire row + agent response visible",
+      "entry_route": "/triggers",
+      "required_meta_tools": ["create_trigger", "fire_trigger_now", "list_trigger_fires"],
+      "required_routers": ["triggers.py"],
+      "north_star_focus": ["N1", "N4", "N6"],
       "v0_active": false,
-      "preconditions": "skills spec delivered"
+      "preconditions": "triggers spec delivered + events table + cockpit/fires UI",
+      "dod": [
+        "create_trigger meta tool present + scope=WRITE",
+        "POST /api/triggers + /triggers/:id/fire work",
+        "fire_trigger_now produces a fire row visible at /triggers/[id]",
+        "agent response to the fire shows up in /cockpit activity"
+      ],
+      "blocker_issues": [],
+      "owner_track": "main"
     },
     {
       "id": "W5",
-      "name": "Install an MCP server + real invocation",
-      "goal": "Lead installs filesystem MCP → employee uses it",
+      "name": "Artifacts live push (chat → panel)",
+      "goal": "Lead writes an artifact via artifact_create → ArtifactPanel in /chat updates in realtime without refresh",
       "entry_route": "/",
-      "required_meta_tools": ["install_mcp_server"],
-      "required_routers": ["mcp_servers.py"],
-      "north_star_focus": ["N3", "N5"],
+      "required_meta_tools": ["artifact_create", "artifact_list", "artifact_update"],
+      "required_routers": ["artifacts.py"],
+      "north_star_focus": ["N4", "N6"],
       "v0_active": false,
-      "preconditions": "MCP spec delivered + real MCP fixture"
+      "preconditions": "artifact_changed SSE event wired (blocked by I-0005)",
+      "dod": [
+        "artifact_create meta tool registered + scope=WRITE",
+        "execution/events.py emits artifact_changed",
+        "services/artifact_service.py publishes on create/update",
+        "web ArtifactPanel subscribes to /api/artifacts/stream (or /api/events) and re-renders"
+      ],
+      "blocker_issues": ["I-0005"],
+      "owner_track": "track-a-artifacts"
     },
     {
       "id": "W6",
-      "name": "Build a trigger + wait for auto-fire",
-      "goal": "Lead defines daily trigger → manual fire_now → run + artifact visible",
-      "entry_route": "/",
-      "required_meta_tools": ["triggers.create", "fire_now"],
-      "required_routers": ["triggers.py"],
-      "north_star_focus": ["N4", "N6"],
+      "name": "External channel roundtrip (inbound → reply → outbound)",
+      "goal": "External channel webhook → conversation auto-created → Lead replies → channel outbound delivery",
+      "entry_route": "/channels",
+      "required_meta_tools": ["register_channel", "test_channel", "send_notification"],
+      "required_routers": ["channels.py", "webhooks.py"],
+      "north_star_focus": ["N1", "N3", "N6"],
       "v0_active": false,
-      "preconditions": "cockpit consumes events table"
+      "preconditions": "notification-channels spec merged (Wave 2 Track 3) + channel inbound webhook handler",
+      "dod": [
+        "register_channel + test_channel meta tools registered",
+        "POST /api/channels/:id/webhook accepts inbound messages",
+        "inbound creates a conversation + routes to Lead",
+        "Lead reply triggers send_notification on the same channel"
+      ],
+      "blocker_issues": [],
+      "owner_track": "track-3-stock"
     },
     {
       "id": "W7",
-      "name": "Observability · fail & recover",
-      "goal": "break a model key → run task → UI guides to Gateway to fix → re-run green",
-      "entry_route": "/gateway",
-      "required_meta_tools": [],
-      "required_routers": ["models.py"],
-      "north_star_focus": ["N6"],
+      "name": "Stock assistant end-to-end (market anomaly → trigger → channel)",
+      "goal": "Market data poller detects anomaly → trigger fires → stock briefing produced → notification sent via channel",
+      "entry_route": "/stock-assistant/setup",
+      "required_meta_tools": ["generate_briefing", "explain_anomaly", "fire_trigger_now", "send_notification"],
+      "required_routers": ["market.py", "triggers.py", "channels.py"],
+      "north_star_focus": ["N3", "N4", "N6"],
       "v0_active": false,
-      "preconditions": "observatory spec delivered"
+      "preconditions": "Wave 2 stock-assistant merged (market-data + channels + triggers joined)",
+      "dod": [
+        "market poller surfaces anomalies (/api/market/anomalies or equivalent)",
+        "trigger on anomaly fires generate_briefing",
+        "briefing artifact produced + delivered via send_notification",
+        "/stock-assistant/setup wizard runs end-to-end in a fresh install"
+      ],
+      "blocker_issues": [],
+      "owner_track": "track-3-stock"
     }
   ],
   "north_star_dims": {
