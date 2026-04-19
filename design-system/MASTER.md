@@ -11,7 +11,7 @@
 
 写任何 `web/` 组件之前,必须回答 yes:
 
-- [ ] 我没打算装 icon 库(Lucide / Heroicons / Phosphor / Tabler)
+- [ ] 我没打算装**第三方** icon 库(Lucide / Heroicons / Phosphor / Tabler / Font Awesome) — 自有 icon 集 `@/components/icons` 允许,见 §3
 - [ ] 我没在 JSX 里写十六进制或 Tailwind 原色类(`bg-blue-500`、`text-zinc-400`)
 - [ ] 我用的颜色都来自 `bg-*`、`text-*`、`border-*`、`primary`、`success`、`warning`、`danger` token
 - [ ] 我没加 `box-shadow` 做交互反馈(hover 只改边框)
@@ -241,7 +241,31 @@ URL / key 字段加 `font-mono`。
 
 ---
 
-## 3. Icon 替代清单(禁止安装 icon 包)
+## 3. Icon 体系(禁止第三方 icon 库 · 自有集允许)
+
+### 3.1 三类来源
+
+| 类别 | 路径 | 用途 |
+|---|---|---|
+| **功能性几何元素** | 组件内 inline | logo / 激活色条 / 状态点 / Kbd chip / 光标 |
+| **自有 icon 集(Raycast-style)** | [`web/components/icons/`](../web/components/icons/) | nav / composer / viz / 资源类型 |
+| **Legacy 1-line SVG(5 类 · 不扩展)** | [`web/components/ui/icons.tsx`](../web/components/ui/icons.tsx) | check / arrow-right / external / copy / plus-minus |
+
+### 3.2 自有 icon 集(22 个 · ADR 0009)
+
+**规格**:viewBox `0 0 24 24` · stroke-width 2 · round caps · fill none · `stroke="currentColor"` · default `size=20`。
+
+**导入**:
+```tsx
+import { ChatIcon, UserIcon, SendIcon } from "@/components/icons";
+<ChatIcon size={20} className="text-text-muted" />
+```
+
+**当前集合**:`ChatIcon` · `UserIcon` · `SkillIcon` · `ModelIcon` · `PluginIcon` · `ProviderIcon` · `TriggerIcon` · `TaskIcon` · `CockpitIcon` · `ObservatoryIcon` · `ChannelIcon` · `MarketIcon` · `StockIcon` · `SettingsIcon` · `SearchIcon` · `SendIcon` · `StopIcon` · `AttachIcon` · `ThinkIcon` · `ExternalIcon` · `CopyIcon` · `CheckIcon`
+
+**新增流程**:写 `.tsx` → `index.ts` export → 加到 [`/design-lab` Icon Gallery](../web/app/design-lab/page.tsx) → 光学一致性自检(和相邻 icon 在 `size=20` 下要看起来一样大)。不需要 ADR,但光学不过 review 直接打回。
+
+### 3.3 非 icon 图形速查
 
 | 场景 | 用法 |
 |---|---|
@@ -251,13 +275,6 @@ URL / key 字段加 `font-mono`。
 | 状态指示 | 7px 脉动色点 |
 | 方向 / 流向 | mono 字符 `→ ← ↑ ↓ ·` |
 | 键入光标 | 7×12px 矩形 `ah-caret 1s step-end infinite` |
-| 展开收起 | `plus/minus` 1-line SVG(仅此场景) |
-| 复制 | `copy` 1-line SVG(仅此场景) |
-| 外链 | `external` 1-line SVG(仅此场景) |
-| 跳转箭头 | `arrow-right` 1-line SVG 或 mono `→` |
-| 成功打勾 | `check` 1-line SVG |
-
-**新增 SVG 图标流程**:先在 [product/03-visual-design.md §2.6](../product/03-visual-design.md) 登记理由 → 写入 `web/components/ui/icons.tsx` → 文件评论注明用途。
 
 ---
 
@@ -339,4 +356,5 @@ import { ChevronRight, Sun, Moon } from "lucide-react";
 - 视觉契约(规范):[`product/03-visual-design.md`](../product/03-visual-design.md)
 - 设计 lab(活样本 & 回归基准):[`web/app/design-lab/page.tsx`](../web/app/design-lab/page.tsx)
 - Token 实现:[`web/app/globals.css`](../web/app/globals.css)、[`web/tailwind.config.ts`](../web/tailwind.config.ts)
-- Icon 组件:[`web/components/ui/icons.tsx`](../web/components/ui/icons.tsx)
+- Icon 组件:[`web/components/icons/` 自有集](../web/components/icons/) + [`web/components/ui/icons.tsx` legacy](../web/components/ui/icons.tsx)
+- ADR 0009 · 自有 Icon 系统决策:[`product/adr/0009-custom-icon-system.md`](../product/adr/0009-custom-icon-system.md)

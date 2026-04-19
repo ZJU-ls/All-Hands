@@ -4,46 +4,61 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { LogoDotgrid, SunIcon, MoonIcon } from "@/components/ui/icons";
+import {
+  ChatIcon,
+  UserIcon,
+  SkillIcon,
+  ModelIcon,
+  PluginIcon,
+  TriggerIcon,
+  TaskIcon,
+  ObservatoryIcon,
+  CheckIcon,
+  SettingsIcon,
+  ExternalIcon,
+  type IconProps,
+} from "@/components/icons";
 
-type MenuItem = { label: string; href: string };
+type IconComp = (props: IconProps) => JSX.Element;
+type MenuItem = { label: string; href: string; Icon: IconComp };
 type MenuSection = { title: string; items: MenuItem[] };
 
 const MENU: MenuSection[] = [
   {
     title: "工作区",
     items: [
-      { label: "对话", href: "/chat" },
-      { label: "任务", href: "/tasks" },
-      { label: "历史会话", href: "/conversations" },
+      { label: "对话", href: "/chat", Icon: ChatIcon },
+      { label: "任务", href: "/tasks", Icon: TaskIcon },
+      { label: "历史会话", href: "/conversations", Icon: ChatIcon },
     ],
   },
   {
     title: "团队与能力",
     items: [
-      { label: "员工", href: "/employees" },
-      { label: "技能", href: "/skills" },
-      { label: "MCP 服务器", href: "/mcp-servers" },
+      { label: "员工", href: "/employees", Icon: UserIcon },
+      { label: "技能", href: "/skills", Icon: SkillIcon },
+      { label: "MCP 服务器", href: "/mcp-servers", Icon: PluginIcon },
     ],
   },
   {
     title: "模型网关",
-    items: [{ label: "供应商与模型", href: "/gateway" }],
+    items: [{ label: "供应商与模型", href: "/gateway", Icon: ModelIcon }],
   },
   {
     title: "运行时",
     items: [
-      { label: "触发器", href: "/triggers" },
-      { label: "审批", href: "/confirmations" },
-      { label: "追踪", href: "/traces" },
-      { label: "观测中心", href: "/observatory" },
+      { label: "触发器", href: "/triggers", Icon: TriggerIcon },
+      { label: "审批", href: "/confirmations", Icon: CheckIcon },
+      { label: "追踪", href: "/traces", Icon: ExternalIcon },
+      { label: "观测中心", href: "/observatory", Icon: ObservatoryIcon },
     ],
   },
   {
     title: "系统",
     items: [
-      { label: "Review", href: "/review" },
-      { label: "设置", href: "/settings" },
-      { label: "关于", href: "/about" },
+      { label: "Review", href: "/review", Icon: CheckIcon },
+      { label: "设置", href: "/settings", Icon: SettingsIcon },
+      { label: "关于", href: "/about", Icon: SettingsIcon },
     ],
   },
 ];
@@ -63,12 +78,22 @@ function ThemeToggle() {
   );
 }
 
-function SidebarItem({ label, href, active }: { label: string; href: string; active: boolean }) {
+function SidebarItem({
+  label,
+  href,
+  active,
+  Icon,
+}: {
+  label: string;
+  href: string;
+  active: boolean;
+  Icon: IconComp;
+}) {
   return (
     <li>
       <Link
         href={href}
-        className={`relative flex items-center h-7 px-3 text-[12px] transition-colors duration-base ${
+        className={`relative flex items-center h-8 pl-5 pr-3 gap-2.5 text-[12px] transition-colors duration-base ${
           active
             ? "text-text font-medium"
             : "text-text-muted hover:text-text"
@@ -84,7 +109,8 @@ function SidebarItem({ label, href, active }: { label: string; href: string; act
             aria-hidden="true"
           />
         )}
-        <span>{label}</span>
+        <Icon size={16} className={active ? "text-text" : "text-text-muted"} />
+        <span className="truncate">{label}</span>
       </Link>
     </li>
   );
@@ -93,7 +119,7 @@ function SidebarItem({ label, href, active }: { label: string; href: string; act
 function Sidebar() {
   const pathname = usePathname();
   return (
-    <aside className="w-60 shrink-0 border-r border-border bg-surface flex flex-col">
+    <aside className="w-56 shrink-0 border-r border-border bg-surface flex flex-col">
       <div className="h-11 flex items-center px-4 gap-2 border-b border-border">
         <LogoDotgrid />
         <span className="text-[13px] font-semibold tracking-tight text-text">allhands</span>
@@ -101,7 +127,7 @@ function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-2">
         {MENU.map((section) => (
           <div key={section.title} className="mb-2">
-            <div className="px-3 mt-3 mb-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-text-subtle">
+            <div className="px-5 mt-3 mb-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-text-subtle">
               {section.title}
             </div>
             <ul>
@@ -113,6 +139,7 @@ function Sidebar() {
                     key={item.href}
                     label={item.label}
                     href={item.href}
+                    Icon={item.Icon}
                     active={active}
                   />
                 );

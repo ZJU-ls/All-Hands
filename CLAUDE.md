@@ -66,7 +66,7 @@
 
 **三条最高纪律:**
 
-1. **禁止 icon 库**(Lucide / Heroicons / Phosphor / Tabler)。图形信息只能来自:排版 · 激活色条 · 点阵 logo · 状态点 · Kbd chip · Mono 字符(`→ ← ⌘ ↵`)· 5 类 1-line SVG(check / arrow-right / external / copy / plus-minus)
+1. **禁止第三方 icon 库**(Lucide / Heroicons / Phosphor / Tabler / Font Awesome 等)。图形信息只能来自:排版 · 激活色条 · 点阵 logo · 状态点 · Kbd chip · Mono 字符(`→ ← ⌘ ↵`)· **自有 icon 集 `web/components/icons/**`**(Raycast-style · 2px stroke · round caps · currentColor · 见 ADR 0009)· 5 类 legacy 1-line SVG(`web/components/ui/icons.tsx`:check / arrow-right / external / copy / plus-minus,不再扩展)
 2. **颜色密度 ≤ 3** (不含语义状态色)。一律用 token(`bg-bg` `text-text-muted` `bg-primary`...),**禁止** 在 JSX 写十六进制或 `bg-blue-500`、`text-zinc-400` 等 Tailwind 原色类,**禁止** `dark:bg-zinc-900` 并行定义
 3. **动效克制**。位移不超过 2px,hover 只改边框亮度;时长走 `--dur-*`;禁止 `scale` / `box-shadow` 做交互反馈;禁止动画库(Framer Motion / GSAP)
 

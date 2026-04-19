@@ -19,6 +19,31 @@ import {
   LoadingState,
   FirstRun,
 } from "@/components/state";
+import {
+  ChatIcon,
+  UserIcon,
+  SkillIcon,
+  ModelIcon,
+  PluginIcon,
+  ProviderIcon,
+  TriggerIcon,
+  TaskIcon,
+  CockpitIcon,
+  ObservatoryIcon,
+  ChannelIcon,
+  MarketIcon,
+  StockIcon,
+  SettingsIcon,
+  SearchIcon,
+  SendIcon,
+  StopIcon,
+  AttachIcon,
+  ThinkIcon,
+  ExternalIcon,
+  CopyIcon,
+  CheckIcon,
+  type IconProps,
+} from "@/components/icons";
 
 /**
  * Design Lab: three concept variants side-by-side in both light & dark.
@@ -115,6 +140,8 @@ export default function DesignLabPage() {
           <ConceptADeepDive />
 
           <StateShowcase />
+
+          <IconGallery />
 
           <VizShowcase />
 
@@ -1454,6 +1481,139 @@ function ShowcaseCard({
         {title}
       </div>
       {children}
+    </div>
+  );
+}
+
+/* ---------- Icon Gallery (ADR-0009 · Raycast-style) ---------- */
+
+type IconEntry = { name: string; Icon: (p: IconProps) => JSX.Element };
+
+const ICONS: IconEntry[] = [
+  { name: "ChatIcon", Icon: ChatIcon },
+  { name: "UserIcon", Icon: UserIcon },
+  { name: "SkillIcon", Icon: SkillIcon },
+  { name: "ModelIcon", Icon: ModelIcon },
+  { name: "PluginIcon", Icon: PluginIcon },
+  { name: "ProviderIcon", Icon: ProviderIcon },
+  { name: "TriggerIcon", Icon: TriggerIcon },
+  { name: "TaskIcon", Icon: TaskIcon },
+  { name: "CockpitIcon", Icon: CockpitIcon },
+  { name: "ObservatoryIcon", Icon: ObservatoryIcon },
+  { name: "ChannelIcon", Icon: ChannelIcon },
+  { name: "MarketIcon", Icon: MarketIcon },
+  { name: "StockIcon", Icon: StockIcon },
+  { name: "SettingsIcon", Icon: SettingsIcon },
+  { name: "SearchIcon", Icon: SearchIcon },
+  { name: "SendIcon", Icon: SendIcon },
+  { name: "StopIcon", Icon: StopIcon },
+  { name: "AttachIcon", Icon: AttachIcon },
+  { name: "ThinkIcon", Icon: ThinkIcon },
+  { name: "ExternalIcon", Icon: ExternalIcon },
+  { name: "CopyIcon", Icon: CopyIcon },
+  { name: "CheckIcon", Icon: CheckIcon },
+];
+
+function IconGallery() {
+  const sizes = [16, 20, 24, 32];
+  return (
+    <section data-testid="icon-gallery">
+      <div className="flex items-baseline gap-3 mb-3">
+        <div className="text-3xl font-semibold tracking-tight">◢</div>
+        <div>
+          <h2 className="text-lg font-semibold">Icon Gallery</h2>
+          <p className="text-xs text-text-muted font-mono">
+            22 个自有 icon · 2px stroke · round caps · currentColor · web/components/icons/**
+          </p>
+        </div>
+      </div>
+      <ul className="mb-4 text-xs text-text-muted space-y-1 list-none pl-0">
+        <li className="flex gap-2">
+          <span className="text-text-subtle">·</span>
+          <span>ADR-0009 允许自有 icon 系统;第三方 icon 库(lucide / heroicons / phosphor / tabler)仍禁。</span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-text-subtle">·</span>
+          <span>Default size 20px · strokeWidth 2 · fill none · 仅通过 stroke=&ldquo;currentColor&rdquo; 继承文字色。</span>
+        </li>
+      </ul>
+
+      <div className="rounded-md border border-border bg-surface">
+        <div className="px-4 py-2 border-b border-border flex items-center justify-between">
+          <span className="text-[11px] font-mono text-text-muted uppercase tracking-wider">
+            size 20 · default color
+          </span>
+          <span className="text-[11px] font-mono text-text-subtle">{ICONS.length} icons</span>
+        </div>
+        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-px bg-border">
+          {ICONS.map(({ name, Icon }) => (
+            <div
+              key={name}
+              className="flex flex-col items-center justify-center gap-2 py-4 bg-surface text-text"
+            >
+              <Icon />
+              <span className="text-[10px] font-mono text-text-subtle text-center px-1 break-all">
+                {name}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-md border border-border bg-surface">
+        <div className="px-4 py-2 border-b border-border">
+          <span className="text-[11px] font-mono text-text-muted uppercase tracking-wider">
+            size scale · 16 / 20 / 24 / 32
+          </span>
+        </div>
+        <div className="flex items-center justify-around py-5 text-text">
+          {sizes.map((s) => (
+            <div key={s} className="flex flex-col items-center gap-2">
+              <ChatIcon size={s} />
+              <span className="text-[10px] font-mono text-text-subtle">{s}px</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-md border border-border bg-surface">
+        <div className="px-4 py-2 border-b border-border">
+          <span className="text-[11px] font-mono text-text-muted uppercase tracking-wider">
+            color · currentColor 继承
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-border">
+          <ColorSwatch label="text" className="text-text">
+            <UserIcon />
+          </ColorSwatch>
+          <ColorSwatch label="muted" className="text-text-muted">
+            <UserIcon />
+          </ColorSwatch>
+          <ColorSwatch label="primary" className="text-primary">
+            <UserIcon />
+          </ColorSwatch>
+          <ColorSwatch label="danger" className="text-danger">
+            <UserIcon />
+          </ColorSwatch>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ColorSwatch({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-5">
+      <div className={className}>{children}</div>
+      <span className="text-[10px] font-mono text-text-subtle">{label}</span>
     </div>
   );
 }
