@@ -36,6 +36,7 @@ from allhands.execution.skills import (
     render_skill_descriptors,
 )
 from allhands.execution.tools.meta.resolve_skill import make_resolve_skill_executor
+from allhands.execution.tools.meta.spawn_subagent import make_spawn_subagent_executor
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -44,10 +45,12 @@ if TYPE_CHECKING:
     from allhands.execution.dispatch import DispatchService
     from allhands.execution.gate import BaseGate
     from allhands.execution.registry import ToolRegistry
+    from allhands.execution.tools.meta.spawn_subagent import SpawnSubagentService
 
 
 DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
 RESOLVE_SKILL_TOOL_ID = "allhands.meta.resolve_skill"
+SPAWN_SUBAGENT_TOOL_ID = "allhands.meta.spawn_subagent"
 
 
 def _make_dispatch_executor(dispatch_service: DispatchService) -> Any:
@@ -106,6 +109,7 @@ class AgentRunner:
         dispatch_service: DispatchService | None = None,
         skill_registry: SkillRegistry | None = None,
         runtime: SkillRuntime | None = None,
+        spawn_subagent_service: SpawnSubagentService | None = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
@@ -113,6 +117,7 @@ class AgentRunner:
         self._provider = provider
         self._dispatch_service = dispatch_service
         self._skill_registry = skill_registry
+        self._spawn_subagent_service = spawn_subagent_service
         # Runtime is normally created and owned by ChatService (per-conversation
         # persistence across send_message calls). If the caller didn't supply
         # one, fall back to a throwaway runtime derived from employee.tool_ids
@@ -189,6 +194,12 @@ class AgentRunner:
                     )
                 )
                 continue
+
+            if tool_id == SPAWN_SUBAGENT_TOOL_ID and self._spawn_subagent_service is not None:
+                # Rebind the registry's no-op stub to the real service. We then
+                # fall through to the gate-wrap logic below so the user is
+                # prompted (spawn_subagent declares scope=WRITE + requires_confirmation=True).
+                executor = make_spawn_subagent_executor(self._spawn_subagent_service)
 
             needs_gate = (
                 tool.scope in (ToolScope.WRITE, ToolScope.IRREVERSIBLE, ToolScope.BOOTSTRAP)

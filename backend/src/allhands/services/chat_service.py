@@ -11,6 +11,7 @@ from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.execution.dispatch import DispatchService
 from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
+from allhands.execution.tools.meta.spawn_subagent import SpawnSubagentService
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -89,9 +90,14 @@ class ChatService:
         if self._providers is not None:
             provider = await self._providers.get_default()
 
+        runner_factory = self._build_runner_factory(provider)
         dispatch_service = DispatchService(
             employee_repo=self._employees,
-            runner_factory=self._build_runner_factory(provider),
+            runner_factory=runner_factory,
+        )
+        spawn_subagent_service = SpawnSubagentService(
+            employee_repo=self._employees,
+            runner_factory=runner_factory,
         )
         runner = AgentRunner(
             employee=employee,
@@ -101,6 +107,7 @@ class ChatService:
             dispatch_service=dispatch_service,
             skill_registry=self._skills,
             runtime=runtime,
+            spawn_subagent_service=spawn_subagent_service,
         )
         return runner.stream(messages=lc_messages, thread_id=conversation_id)
 
@@ -122,9 +129,14 @@ class ChatService:
             # throwaway SkillRuntime so resolve_skill calls inside the child's
             # task don't bleed into the parent's conversation state
             # (contract § 8.2 · isolation per runAgent iframe in V10).
+            nested_factory = self._build_runner_factory(provider)
             nested_dispatch = DispatchService(
                 employee_repo=employee_repo,
-                runner_factory=self._build_runner_factory(provider),
+                runner_factory=nested_factory,
+            )
+            nested_spawn = SpawnSubagentService(
+                employee_repo=employee_repo,
+                runner_factory=nested_factory,
             )
             child_runtime = bootstrap_employee_runtime(child, skill_registry, tool_registry)
             return AgentRunner(
@@ -135,6 +147,7 @@ class ChatService:
                 dispatch_service=nested_dispatch,
                 skill_registry=skill_registry,
                 runtime=child_runtime,
+                spawn_subagent_service=nested_spawn,
             )
 
         return factory
