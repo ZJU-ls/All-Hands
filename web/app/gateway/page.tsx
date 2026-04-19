@@ -218,8 +218,8 @@ function GatewayPageInner() {
         </button>
       }
     >
-      <div className="h-full flex min-h-0">
-        <ProviderRail
+      <div className="h-full flex flex-col min-h-0">
+        <ProviderTabs
           state={state}
           resolvedId={resolvedId}
           tests={tests}
@@ -311,7 +311,7 @@ function GatewayPageInner() {
   );
 }
 
-function ProviderRail({
+function ProviderTabs({
   state,
   resolvedId,
   tests,
@@ -327,104 +327,98 @@ function ProviderRail({
   onAddNew: () => void;
 }) {
   return (
-    <aside className="w-72 shrink-0 border-r border-border bg-surface flex flex-col min-h-0">
-      <div className="px-4 h-10 flex items-center justify-between border-b border-border">
-        <span className="text-[11px] font-mono uppercase tracking-wider text-text-subtle">
-          供应商 ({state.status === "ready" ? state.providers.length : "…"})
-        </span>
-        <button
-          onClick={onAddNew}
-          className="text-xs text-text-muted hover:text-text transition-colors"
-          title="添加供应商"
-        >
-          +
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto py-1">
+    <nav
+      aria-label="供应商"
+      className="shrink-0 border-b border-border bg-surface"
+    >
+      <div className="flex items-center gap-1 overflow-x-auto px-4">
         {state.status === "loading" && (
-          <p
+          <span
             data-testid="providers-loading"
-            className="px-4 py-6 text-xs text-text-muted text-center"
+            className="text-xs text-text-muted py-2.5"
           >
             加载中…
-          </p>
+          </span>
         )}
         {state.status === "error" && (
-          <div data-testid="providers-error" className="px-4 py-4">
-            <p className="text-xs text-danger mb-2">加载失败</p>
-            <p className="text-[10px] font-mono text-text-muted mb-2 break-all">
+          <div data-testid="providers-error" className="flex items-center gap-2 py-2">
+            <span className="text-xs text-danger">加载失败:</span>
+            <span className="text-[10px] font-mono text-text-muted break-all">
               {state.message}
-            </p>
+            </span>
             <button
               onClick={onRetry}
-              className="text-xs rounded-md border border-border px-2 py-1 hover:bg-surface-2 text-text transition-colors"
+              className="text-xs rounded border border-border px-2 py-0.5 hover:bg-surface-2 text-text transition-colors duration-base"
             >
               重试
             </button>
           </div>
         )}
         {state.status === "ready" && state.providers.length === 0 && (
-          <p
+          <span
             data-testid="providers-empty"
-            className="px-4 py-6 text-xs text-text-subtle text-center"
+            className="text-xs text-text-subtle py-2.5"
           >
-            列表为空
-          </p>
+            暂无供应商
+          </span>
         )}
-        <ul>
-          {state.status === "ready" &&
-            state.providers.map((p) => {
-              const active = p.id === resolvedId;
-              const test = tests[p.id];
-              return (
-                <li key={p.id}>
-                  <button
-                    onClick={() => onSelect(p.id)}
-                    data-testid={`provider-rail-${p.name}`}
-                    data-active={active}
-                    className={`w-full text-left px-4 py-2 border-l-2 transition-colors ${
-                      active
-                        ? "border-l-primary bg-surface-2"
-                        : "border-l-transparent hover:bg-surface-2/60"
+        {state.status === "ready" &&
+          state.providers.map((p) => {
+            const active = p.id === resolvedId;
+            const test = tests[p.id];
+            return (
+              <button
+                key={p.id}
+                onClick={() => onSelect(p.id)}
+                data-testid={`provider-rail-${p.name}`}
+                data-active={active}
+                className={`relative shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-[12px] transition-colors duration-base ${
+                  active
+                    ? "text-text"
+                    : "text-text-muted hover:text-text"
+                }`}
+              >
+                <span className={active ? "font-medium" : ""}>{p.name}</span>
+                {p.is_default && (
+                  <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-primary/15 text-primary">
+                    默认
+                  </span>
+                )}
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    p.api_key_set ? "bg-success" : "bg-border"
+                  }`}
+                  aria-hidden="true"
+                />
+                {test && (
+                  <span
+                    className={`font-mono text-[10px] ${
+                      test.ok ? "text-success" : "text-danger"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-sm truncate ${
-                          active ? "text-text font-medium" : "text-text-muted"
-                        }`}
-                      >
-                        {p.name}
-                      </span>
-                      {p.is_default && (
-                        <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-primary/15 text-primary shrink-0">
-                          默认
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-[10px] text-text-subtle">
-                      <span
-                        className={p.api_key_set ? "text-success" : "text-text-subtle"}
-                      >
-                        {p.api_key_set ? "● API Key" : "○ API Key"}
-                      </span>
-                      {test && (
-                        <span
-                          className={`truncate font-mono ${
-                            test.ok ? "text-success" : "text-danger"
-                          }`}
-                        >
-                          {test.msg.replace(/^[✓✗]\s*/, "")}
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-        </ul>
+                    {test.ok ? "✓" : "✗"}
+                  </span>
+                )}
+                {active && (
+                  <span
+                    className="absolute left-3 right-3 bottom-0 h-[2px] rounded-t bg-primary"
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            );
+          })}
+        <div className="ml-auto shrink-0">
+          <button
+            onClick={onAddNew}
+            className="text-[11px] font-mono text-text-muted hover:text-text transition-colors duration-base px-2 py-1"
+            title="添加供应商"
+          >
+            + 新增
+          </button>
+        </div>
       </div>
-    </aside>
+    </nav>
   );
 }
 
