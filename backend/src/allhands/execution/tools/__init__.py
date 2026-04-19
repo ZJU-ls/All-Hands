@@ -16,6 +16,9 @@ from allhands.execution.tools.meta.channel_tools import (
 )
 from allhands.execution.tools.meta.cockpit_tools import ALL_COCKPIT_META_TOOLS
 from allhands.execution.tools.meta.employee_tools import ALL_META_TOOLS
+from allhands.execution.tools.meta.market_tools import (  # single-line register: Wave 2 market-data
+    ALL_MARKET_META_TOOLS,
+)
 from allhands.execution.tools.meta.mcp_server_tools import ALL_MCP_SERVER_META_TOOLS
 from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
 from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
@@ -78,5 +81,6 @@ def discover_builtin_tools(registry: ToolRegistry) -> None:
         *ALL_ARTIFACT_TOOLS,
         *ALL_COCKPIT_META_TOOLS,
         *ALL_CHANNEL_META_TOOLS,  # single-line register: Wave 2 notification-channels
+        *ALL_MARKET_META_TOOLS,  # single-line register: Wave 2 market-data
     ):
         registry.register(tool, _async_noop)
