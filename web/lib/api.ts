@@ -4,11 +4,39 @@ export type EmployeeDto = {
   id: string;
   name: string;
   description: string;
+  system_prompt: string;
   is_lead_agent: boolean;
   tool_ids: string[];
   skill_ids: string[];
   max_iterations: number;
   model_ref: string;
+};
+
+export type EmployeeCreateInput = {
+  name: string;
+  description?: string;
+  system_prompt?: string;
+  model_ref?: string;
+  tool_ids?: string[];
+  skill_ids?: string[];
+  max_iterations?: number;
+};
+
+export type EmployeeUpdateInput = Partial<Omit<EmployeeCreateInput, "name">>;
+
+export type SkillDto = {
+  id: string;
+  name: string;
+  description: string;
+  tool_ids: string[];
+};
+
+export type McpServerDto = {
+  id: string;
+  name: string;
+  transport: string;
+  enabled: boolean;
+  health: string;
 };
 
 export type ConversationDto = {
@@ -73,4 +101,78 @@ export async function getPendingConfirmations(): Promise<unknown[]> {
   const res = await fetch(`${BASE}/api/confirmations/pending`);
   if (!res.ok) return [];
   return res.json() as Promise<unknown[]>;
+}
+
+export async function createEmployee(body: EmployeeCreateInput): Promise<EmployeeDto> {
+  const res = await fetch(`${BASE}/api/employees`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`createEmployee failed: ${res.status} ${text}`);
+  }
+  return res.json() as Promise<EmployeeDto>;
+}
+
+export async function updateEmployee(
+  id: string,
+  body: EmployeeUpdateInput,
+): Promise<EmployeeDto> {
+  const res = await fetch(`${BASE}/api/employees/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`updateEmployee failed: ${res.status} ${text}`);
+  }
+  return res.json() as Promise<EmployeeDto>;
+}
+
+export async function deleteEmployee(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/employees/${id}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`deleteEmployee failed: ${res.status}`);
+  }
+}
+
+export async function listSkills(): Promise<SkillDto[]> {
+  const res = await fetch(`${BASE}/api/skills`);
+  if (!res.ok) throw new Error(`listSkills failed: ${res.status}`);
+  return res.json() as Promise<SkillDto[]>;
+}
+
+export async function listMcpServers(): Promise<McpServerDto[]> {
+  const res = await fetch(`${BASE}/api/mcp-servers`);
+  if (!res.ok) throw new Error(`listMcpServers failed: ${res.status}`);
+  return res.json() as Promise<McpServerDto[]>;
+}
+
+export type EmployeePreset = "execute" | "plan" | "plan_with_subagent";
+
+export type EmployeePreviewResult = {
+  tool_ids: string[];
+  skill_ids: string[];
+  max_iterations: number;
+};
+
+export async function previewEmployeeComposition(body: {
+  preset: EmployeePreset;
+  custom_tool_ids?: string[];
+  custom_skill_ids?: string[];
+  custom_max_iterations?: number;
+}): Promise<EmployeePreviewResult> {
+  const res = await fetch(`${BASE}/api/employees/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`preview failed: ${res.status} ${text}`);
+  }
+  return res.json() as Promise<EmployeePreviewResult>;
 }

@@ -199,6 +199,80 @@ DELETE_EMPLOYEE_TOOL = Tool(
     requires_confirmation=True,
 )
 
+PREVIEW_EMPLOYEE_COMPOSITION_TOOL = Tool(
+    id="allhands.meta.preview_employee_composition",
+    kind=ToolKind.META,
+    name="preview_employee_composition",
+    description=(
+        "Dry-run preview · given a preset id (execute / plan / plan_with_subagent) "
+        "and optional custom_tool_ids / custom_skill_ids / custom_max_iterations, "
+        "return the fully-expanded {tool_ids, skill_ids, max_iterations} that "
+        "would be persisted. Does not touch the DB. See agent-runtime-contract §4.2."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "preset": {
+                "type": "string",
+                "enum": ["execute", "plan", "plan_with_subagent"],
+            },
+            "custom_tool_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+            },
+            "custom_skill_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+            },
+            "custom_max_iterations": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50,
+            },
+        },
+        "required": ["preset"],
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "tool_ids": {"type": "array", "items": {"type": "string"}},
+            "skill_ids": {"type": "array", "items": {"type": "string"}},
+            "max_iterations": {"type": "integer"},
+        },
+        "required": ["tool_ids", "skill_ids", "max_iterations"],
+    },
+    scope=ToolScope.READ,
+    requires_confirmation=False,
+)
+
+
+async def execute_preview_employee_composition(
+    *,
+    preset: str,
+    custom_tool_ids: list[str] | None = None,
+    custom_skill_ids: list[str] | None = None,
+    custom_max_iterations: int | None = None,
+) -> dict[str, Any]:
+    """Executor for ``allhands.meta.preview_employee_composition``.
+
+    Thin wrapper over :func:`allhands.execution.modes.compose_preview` so the
+    Lead Agent and the ``/employees/design`` dry-run panel share one code path.
+    """
+    from allhands.execution.modes import PRESETS, compose_preview
+
+    if preset not in PRESETS:
+        raise ValueError(f"unknown preset: {preset}")
+    preview = compose_preview(
+        PRESETS[preset],
+        custom_tool_ids=custom_tool_ids,
+        custom_skill_ids=custom_skill_ids,
+        custom_max_iterations=custom_max_iterations,
+    )
+    return preview.model_dump()
+
+
 DISPATCH_EMPLOYEE_TOOL = Tool(
     id="allhands.meta.dispatch_employee",
     kind=ToolKind.META,
@@ -245,5 +319,6 @@ ALL_META_TOOLS = [
     CREATE_EMPLOYEE_TOOL,
     UPDATE_EMPLOYEE_TOOL,
     DELETE_EMPLOYEE_TOOL,
+    PREVIEW_EMPLOYEE_COMPOSITION_TOOL,
     DISPATCH_EMPLOYEE_TOOL,
 ]
