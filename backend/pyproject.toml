@@ -16,6 +16,7 @@ dependencies = [
     "alembic>=1.14.0",
     "langchain>=0.3.7",
     "langchain-openai>=0.2.5",
+    "langchain-anthropic>=0.3.0",
     "langgraph>=0.2.45",
     "langgraph-checkpoint-sqlite>=2.0.0",
     "langfuse>=2.54.0",
@@ -80,6 +81,7 @@ module = [
     "mcp.*",
     "langchain.*",
     "langchain_openai.*",
+    "langchain_anthropic.*",
     "langgraph.*",
     "apscheduler.*",
 ]

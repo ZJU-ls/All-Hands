@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine
 
 
-MIN_PROVIDERS = 3
+MIN_PROVIDERS = 4  # Bailian(aliyun) + OpenRouter(openai) + DeepSeek(openai) + Anthropic(anthropic)
 MIN_MODELS = 6
 MIN_EMPLOYEES = 3
 MIN_MCP_SERVERS = 1

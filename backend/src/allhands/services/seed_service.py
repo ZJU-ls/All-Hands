@@ -108,9 +108,12 @@ async def ensure_providers(session: AsyncSession) -> int:
         existing = existing_by_name.get(name)
         provider_id = existing.id if existing else item["id"]
 
+        kind_raw = item.get("kind", "openai")
+        kind = kind_raw if kind_raw in ("openai", "anthropic", "aliyun") else "openai"
         provider = LLMProvider(
             id=provider_id,
             name=name,
+            kind=kind,  # type: ignore[arg-type]
             base_url=item["base_url"],
             api_key=item.get("api_key", ""),
             default_model=item.get("default_model", "gpt-4o-mini"),

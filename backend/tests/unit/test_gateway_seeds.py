@@ -123,16 +123,25 @@ async def test_gateway_seeds_idempotent_on_second_call() -> None:
     assert len(await prov_repo.list_all()) == first_count
 
 
-def test_gateway_seed_presets_cover_required_providers() -> None:
-    names = [p.name for p in GATEWAY_SEED_PRESETS]
-    assert "百炼 (DashScope)" in names
-    assert "OpenRouter" in names
-    assert "DeepSeek" in names
+def test_gateway_seed_presets_cover_all_three_supported_kinds() -> None:
+    """Seeds must showcase every format we support — so a fresh install
+    demonstrates the full matrix of providers the UI/Agent can drive.
+    """
+    kinds = {p.kind for p in GATEWAY_SEED_PRESETS}
+    assert kinds == {"openai", "anthropic", "aliyun"}
     total_models = sum(len(p.models) for p in GATEWAY_SEED_PRESETS)
     assert total_models >= 5
 
 
-def test_gateway_seed_presets_use_openai_compatible_base_urls() -> None:
+def test_gateway_seed_presets_use_correct_base_url_shape_per_kind() -> None:
+    """openai + aliyun (compat-mode) speak OpenAI wire → `/v1` style.
+    Anthropic native uses the Messages API root (no `/v1` suffix needed —
+    the factory appends it when probing). Verify the contract per-kind.
+    """
     for preset in GATEWAY_SEED_PRESETS:
         assert preset.base_url.startswith("https://")
-        assert preset.base_url.endswith(("/v1", "/v1/")) or "compatible" in preset.base_url
+        if preset.kind == "anthropic":
+            # Anthropic native root: no /v1 required.
+            assert "anthropic" in preset.base_url
+        else:
+            assert preset.base_url.endswith(("/v1", "/v1/")) or "compatible" in preset.base_url

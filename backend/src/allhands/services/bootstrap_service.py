@@ -83,57 +83,56 @@ class GatewayModelPreset:
 @dataclass(frozen=True)
 class GatewayProviderPreset:
     name: str
+    kind: str
     base_url: str
     default_model: str
     models: list[GatewayModelPreset] = field(default_factory=list)
 
 
-# Three popular OpenAI-compatible endpoints. Seeded with api_key="" so the
-# user sees them immediately but must fill a key before a ping succeeds —
-# PingIndicator's "auth" failure state then demos cleanly (I-0019 §PingIndicator).
+# One provider per supported format so a pristine install immediately shows
+# all three wire formats (openai / anthropic / aliyun). All start with
+# api_key="" so the user sees the 401/auth failure state cleanly in ping —
+# filling a real key is a single inline edit.
 GATEWAY_SEED_PRESETS: list[GatewayProviderPreset] = [
     GatewayProviderPreset(
-        name="百炼 (DashScope)",
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        default_model="qwen-plus",
+        name="OpenAI",
+        kind="openai",
+        base_url="https://api.openai.com/v1",
+        default_model="gpt-4o-mini",
         models=[
-            GatewayModelPreset(name="qwen-turbo", display_name="Qwen Turbo", context_window=8_192),
-            GatewayModelPreset(name="qwen-plus", display_name="Qwen Plus", context_window=32_768),
-            GatewayModelPreset(name="qwen-max", display_name="Qwen Max", context_window=8_192),
+            GatewayModelPreset(
+                name="gpt-4o-mini", display_name="GPT-4o Mini", context_window=128_000
+            ),
+            GatewayModelPreset(name="gpt-4o", display_name="GPT-4o", context_window=128_000),
         ],
     ),
     GatewayProviderPreset(
-        name="OpenRouter",
-        base_url="https://openrouter.ai/api/v1",
-        default_model="openrouter/auto",
+        name="Anthropic",
+        kind="anthropic",
+        base_url="https://api.anthropic.com",
+        default_model="claude-3-5-sonnet-latest",
         models=[
             GatewayModelPreset(
-                name="openrouter/auto",
-                display_name="Auto Router",
-                context_window=0,
+                name="claude-3-5-sonnet-latest",
+                display_name="Claude 3.5 Sonnet",
+                context_window=200_000,
             ),
             GatewayModelPreset(
-                name="anthropic/claude-3.5-sonnet",
-                display_name="Claude 3.5 Sonnet",
+                name="claude-3-5-haiku-latest",
+                display_name="Claude 3.5 Haiku",
                 context_window=200_000,
             ),
         ],
     ),
     GatewayProviderPreset(
-        name="DeepSeek",
-        base_url="https://api.deepseek.com/v1",
-        default_model="deepseek-chat",
+        name="阿里云 百炼",
+        kind="aliyun",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        default_model="qwen-plus",
         models=[
-            GatewayModelPreset(
-                name="deepseek-chat",
-                display_name="DeepSeek Chat",
-                context_window=64_000,
-            ),
-            GatewayModelPreset(
-                name="deepseek-reasoner",
-                display_name="DeepSeek Reasoner",
-                context_window=64_000,
-            ),
+            GatewayModelPreset(name="qwen-turbo", display_name="Qwen Turbo", context_window=8_192),
+            GatewayModelPreset(name="qwen-plus", display_name="Qwen Plus", context_window=32_768),
+            GatewayModelPreset(name="qwen-max", display_name="Qwen Max", context_window=32_768),
         ],
     ),
 ]
@@ -157,6 +156,7 @@ async def ensure_gateway_demo_seeds(
         provider = LLMProvider(
             id=str(uuid.uuid4()),
             name=preset.name,
+            kind=preset.kind,  # type: ignore[arg-type]
             base_url=preset.base_url,
             api_key="",
             default_model=preset.default_model,

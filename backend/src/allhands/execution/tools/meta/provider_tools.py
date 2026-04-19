@@ -43,13 +43,19 @@ CREATE_PROVIDER_TOOL = Tool(
     kind=ToolKind.META,
     name="create_provider",
     description=(
-        "Register a new LLM provider. Provide name, base_url, optional api_key "
-        "and default_model. Set set_as_default=true to make it the platform default."
+        "Register a new LLM provider. Provide name, base_url, optional api_key, "
+        "default_model, and kind (openai / anthropic / aliyun — defaults to openai). "
+        "Set set_as_default=true to make it the platform default."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "name": {"type": "string"},
+            "kind": {
+                "type": "string",
+                "enum": ["openai", "anthropic", "aliyun"],
+                "default": "openai",
+            },
             "base_url": {"type": "string"},
             "api_key": {"type": "string", "default": ""},
             "default_model": {"type": "string", "default": "gpt-4o-mini"},
@@ -72,6 +78,10 @@ UPDATE_PROVIDER_TOOL = Tool(
         "properties": {
             "provider_id": {"type": "string"},
             "name": {"type": "string"},
+            "kind": {
+                "type": "string",
+                "enum": ["openai", "anthropic", "aliyun"],
+            },
             "base_url": {"type": "string"},
             "api_key": {"type": "string"},
             "default_model": {"type": "string"},
@@ -82,6 +92,21 @@ UPDATE_PROVIDER_TOOL = Tool(
     output_schema={"type": "object"},
     scope=ToolScope.WRITE,
     requires_confirmation=True,
+)
+
+LIST_PROVIDER_PRESETS_TOOL = Tool(
+    id="allhands.meta.list_provider_presets",
+    kind=ToolKind.META,
+    name="list_provider_presets",
+    description=(
+        "List the supported provider kinds (openai / anthropic / aliyun) with their "
+        "canonical base_url + default_model presets. Use before calling create_provider "
+        "to show the user a format choice and auto-fill base_url."
+    ),
+    input_schema={"type": "object", "properties": {}},
+    output_schema={"type": "object"},
+    scope=ToolScope.READ,
+    requires_confirmation=False,
 )
 
 DELETE_PROVIDER_TOOL = Tool(
@@ -129,4 +154,5 @@ ALL_PROVIDER_META_TOOLS: list[Tool] = [
     DELETE_PROVIDER_TOOL,
     SET_DEFAULT_PROVIDER_TOOL,
     TEST_PROVIDER_CONNECTION_TOOL,
+    LIST_PROVIDER_PRESETS_TOOL,
 ]

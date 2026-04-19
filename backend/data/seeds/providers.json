@@ -2,6 +2,7 @@
   {
     "id": "seed-provider-bailian",
     "name": "Bailian",
+    "kind": "aliyun",
     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "api_key": "",
     "default_model": "qwen-plus",
@@ -11,6 +12,7 @@
   {
     "id": "seed-provider-openrouter",
     "name": "OpenRouter",
+    "kind": "openai",
     "base_url": "https://openrouter.ai/api/v1",
     "api_key": "",
     "default_model": "anthropic/claude-3.5-sonnet",
@@ -20,9 +22,20 @@
   {
     "id": "seed-provider-deepseek",
     "name": "DeepSeek",
+    "kind": "openai",
     "base_url": "https://api.deepseek.com/v1",
     "api_key": "",
     "default_model": "deepseek-chat",
+    "is_default": false,
+    "enabled": true
+  },
+  {
+    "id": "seed-provider-anthropic",
+    "name": "Anthropic",
+    "kind": "anthropic",
+    "base_url": "https://api.anthropic.com",
+    "api_key": "",
+    "default_model": "claude-3-5-sonnet-latest",
     "is_default": false,
     "enabled": true
   }

@@ -151,6 +151,7 @@ class LLMProviderRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    kind: Mapped[str] = mapped_column(String(32), default="openai")
     base_url: Mapped[str] = mapped_column(String(512))
     api_key: Mapped[str] = mapped_column(String(512), default="")
     default_model: Mapped[str] = mapped_column(String(128), default="gpt-4o-mini")

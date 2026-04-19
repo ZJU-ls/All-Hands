@@ -4,14 +4,23 @@ import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
 import { ModelRow, type GatewayModel } from "./ModelRow";
 import type { PingState } from "./PingIndicator";
 
+export type ProviderKind = "openai" | "anthropic" | "aliyun";
+
 export type GatewayProvider = {
   id: string;
   name: string;
+  kind: ProviderKind;
   base_url: string;
   api_key_set: boolean;
   default_model: string;
   is_default: boolean;
   enabled: boolean;
+};
+
+const KIND_BADGE: Record<ProviderKind, string> = {
+  openai: "OPENAI",
+  anthropic: "ANTHROPIC",
+  aliyun: "ALIYUN",
 };
 
 export function ProviderSection({
@@ -76,6 +85,12 @@ export function ProviderSection({
             size="md"
             testId={`gateway-provider-avatar-${provider.name}`}
           />
+          <span
+            data-testid={`gateway-provider-kind-${provider.name}`}
+            className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-2 text-text-muted border border-border shrink-0"
+          >
+            {KIND_BADGE[provider.kind]}
+          </span>
           <span className="text-sm font-medium text-text truncate">
             {provider.name}
           </span>

@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from allhands.core.provider import LLMProvider
+from allhands.core.provider_presets import ProviderKind
 from allhands.persistence.repositories import LLMProviderRepo
 
 
@@ -16,6 +17,7 @@ class LLMProviderService:
         self,
         name: str,
         base_url: str,
+        kind: ProviderKind = "openai",
         api_key: str = "",
         default_model: str = "gpt-4o-mini",
         set_as_default: bool = False,
@@ -23,6 +25,7 @@ class LLMProviderService:
         provider = LLMProvider(
             id=str(uuid.uuid4()),
             name=name,
+            kind=kind,
             base_url=base_url,
             api_key=api_key,
             default_model=default_model,
@@ -48,6 +51,7 @@ class LLMProviderService:
         provider_id: str,
         *,
         name: str | None = None,
+        kind: ProviderKind | None = None,
         base_url: str | None = None,
         api_key: str | None = None,
         default_model: str | None = None,
@@ -61,6 +65,7 @@ class LLMProviderService:
                 k: v
                 for k, v in {
                     "name": name,
+                    "kind": kind,
                     "base_url": base_url,
                     "api_key": api_key,
                     "default_model": default_model,

@@ -8,9 +8,19 @@ import { ModelTestDialog } from "@/components/gateway/ModelTestDialog";
 import {
   ProviderSection,
   type GatewayProvider,
+  type ProviderKind,
 } from "@/components/gateway/ProviderSection";
 import type { GatewayModel } from "@/components/gateway/ModelRow";
 import type { PingState } from "@/components/gateway/PingIndicator";
+
+type ProviderPreset = {
+  kind: ProviderKind;
+  label: string;
+  base_url: string;
+  default_model: string;
+  key_hint: string;
+  doc_hint: string;
+};
 
 type LoadState =
   | { status: "loading" }
@@ -18,6 +28,7 @@ type LoadState =
   | { status: "ready"; providers: GatewayProvider[]; models: GatewayModel[] };
 
 const EMPTY_PROVIDER_FORM = {
+  kind: "openai" as ProviderKind,
   name: "",
   base_url: "https://api.openai.com/v1",
   api_key: "",
@@ -41,6 +52,7 @@ export default function GatewayPage() {
 
 function GatewayPageInner() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [presets, setPresets] = useState<ProviderPreset[]>([]);
   const [openProviders, setOpenProviders] = useState<Set<string>>(new Set());
   const [openInitialised, setOpenInitialised] = useState(false);
   const [pingStates, setPingStates] = useState<Record<string, PingState>>({});
@@ -80,6 +92,18 @@ function GatewayPageInner() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/providers/presets");
+        if (!res.ok) return;
+        setPresets((await res.json()) as ProviderPreset[]);
+      } catch {
+        // non-fatal — dialog falls back to free-form input
+      }
+    })();
+  }, []);
 
   // Default: on first successful load, open every provider. User toggles after
   // that are preserved across refetches (we only seed the open set once).
@@ -210,6 +234,7 @@ function GatewayPageInner() {
         default_model: providerForm.default_model,
       };
       if (providerForm.api_key) body.api_key = providerForm.api_key;
+      // kind is set at creation time and not editable here
       await fetch(`/api/providers/${editingProviderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -351,6 +376,7 @@ function GatewayPageInner() {
                     onEdit={() => {
                       setEditingProviderId(p.id);
                       setProviderForm({
+                        kind: p.kind,
                         name: p.name,
                         base_url: p.base_url,
                         api_key: "",
@@ -377,6 +403,7 @@ function GatewayPageInner() {
         <ProviderFormDialog
           editing={editingProviderId !== null}
           form={providerForm}
+          presets={presets}
           onChange={setProviderForm}
           saving={saving}
           onCancel={() => {
@@ -432,6 +459,7 @@ function GatewayPageInner() {
 function ProviderFormDialog({
   editing,
   form,
+  presets,
   onChange,
   saving,
   onCancel,
@@ -439,14 +467,90 @@ function ProviderFormDialog({
 }: {
   editing: boolean;
   form: typeof EMPTY_PROVIDER_FORM;
+  presets: ProviderPreset[];
   onChange: (f: typeof EMPTY_PROVIDER_FORM) => void;
   saving: boolean;
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const currentPreset = presets.find((p) => p.kind === form.kind);
+  const keyPlaceholder = currentPreset?.key_hint || "sk-... (本地部署可留空)";
+  const baseUrlPlaceholder = currentPreset?.base_url || "https://api.openai.com/v1";
+  const defaultModelPlaceholder = currentPreset?.default_model || "gpt-4o-mini";
+
+  function handleKindChange(nextKind: ProviderKind) {
+    const next = presets.find((p) => p.kind === nextKind);
+    onChange({
+      ...form,
+      kind: nextKind,
+      // Autofill canonical values, but only overwrite if the user hasn't typed a
+      // different value yet (or is still sitting on the previous preset's default).
+      base_url:
+        next && (form.base_url === "" || presets.some((p) => p.base_url === form.base_url))
+          ? next.base_url
+          : form.base_url,
+      default_model:
+        next && (form.default_model === "" || presets.some((p) => p.default_model === form.default_model))
+          ? next.default_model
+          : form.default_model,
+    });
+  }
+
   return (
     <Modal onClose={onCancel} title={editing ? "编辑 LLM 供应商" : "添加 LLM 供应商"}>
       <div className="flex flex-col gap-3">
+        <div>
+          <label className="text-xs text-text-muted block mb-1.5">供应商格式</label>
+          {presets.length === 0 ? (
+            <p className="text-[11px] text-text-muted">加载预设中…</p>
+          ) : (
+            <div
+              role="radiogroup"
+              aria-label="供应商格式"
+              data-testid="provider-kind-radiogroup"
+              className="grid grid-cols-3 gap-1.5"
+            >
+              {presets.map((p) => {
+                const selected = form.kind === p.kind;
+                const disabled = editing && !selected;
+                return (
+                  <button
+                    key={p.kind}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={disabled}
+                    onClick={() => handleKindChange(p.kind)}
+                    data-testid={`provider-kind-${p.kind}`}
+                    className={`rounded border px-2 py-2 text-left transition-colors duration-base disabled:opacity-40 ${
+                      selected
+                        ? "border-primary bg-primary/10 text-text"
+                        : "border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text"
+                    }`}
+                  >
+                    <div className="font-mono text-[10px] text-text-subtle">
+                      {p.kind.toUpperCase()}
+                    </div>
+                    <div className="text-[12px] font-medium truncate">{p.label}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {currentPreset && (
+            <p
+              data-testid="provider-kind-hint"
+              className="mt-1.5 text-[11px] text-text-muted"
+            >
+              {currentPreset.doc_hint}
+            </p>
+          )}
+          {editing && (
+            <p className="mt-1 text-[11px] text-text-subtle">
+              已注册的供应商不支持切换格式(会破坏现有模型调用)。
+            </p>
+          )}
+        </div>
         <LabeledInput
           label="名称"
           placeholder="例: OpenAI / DeepSeek / 本地 Ollama"
@@ -455,7 +559,7 @@ function ProviderFormDialog({
         />
         <LabeledInput
           label="Base URL"
-          placeholder="https://api.openai.com/v1"
+          placeholder={baseUrlPlaceholder}
           mono
           value={form.base_url}
           onChange={(v) => onChange({ ...form, base_url: v })}
@@ -463,14 +567,14 @@ function ProviderFormDialog({
         <LabeledInput
           label={editing ? "API Key (留空则不变)" : "API Key"}
           type="password"
-          placeholder="sk-... (本地部署可留空)"
+          placeholder={keyPlaceholder}
           value={form.api_key}
           onChange={(v) => onChange({ ...form, api_key: v })}
         />
         <LabeledInput
           label="默认模型"
           mono
-          placeholder="gpt-4o-mini"
+          placeholder={defaultModelPlaceholder}
           value={form.default_model}
           onChange={(v) => onChange({ ...form, default_model: v })}
         />

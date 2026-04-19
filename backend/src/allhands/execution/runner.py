@@ -78,24 +78,22 @@ def _make_dispatch_executor(dispatch_service: DispatchService) -> Any:
 
 
 def _build_model(model_ref: str, provider: LLMProvider | None = None) -> Any:
+    if provider is not None:
+        from allhands.execution.llm_factory import build_llm
+
+        return build_llm(provider, model_ref)
+
+    # fallback path — no provider bound (dev / test), treat as OpenAI-compat
+    # and read creds from env config.
     from langchain_openai import ChatOpenAI
 
     model_name = model_ref.split("/", 1)[-1]
     kwargs: dict[str, Any] = {"model": model_name}
-
-    if provider is not None:
-        if provider.api_key:
-            kwargs["api_key"] = provider.api_key
-        if provider.base_url:
-            kwargs["base_url"] = provider.base_url
-    else:
-        # fallback to env config
-        settings = get_settings()
-        if settings.openai_api_key:
-            kwargs["api_key"] = settings.openai_api_key
-        if settings.openai_base_url:
-            kwargs["base_url"] = settings.openai_base_url
-
+    settings = get_settings()
+    if settings.openai_api_key:
+        kwargs["api_key"] = settings.openai_api_key
+    if settings.openai_base_url:
+        kwargs["base_url"] = settings.openai_base_url
     return ChatOpenAI(**kwargs)
 
 

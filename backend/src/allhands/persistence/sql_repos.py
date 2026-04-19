@@ -530,9 +530,11 @@ class SqlAgentPlanRepo:
 
 
 def _row_to_provider(row: LLMProviderRow) -> LLMProvider:
+    kind = row.kind if row.kind in ("openai", "anthropic", "aliyun") else "openai"
     return LLMProvider(
         id=row.id,
         name=row.name,
+        kind=kind,  # type: ignore[arg-type]
         base_url=row.base_url,
         api_key=row.api_key,
         default_model=row.default_model,
@@ -566,6 +568,7 @@ class SqlLLMProviderRepo:
         existing = await self._s.get(LLMProviderRow, provider.id)
         if existing:
             existing.name = provider.name
+            existing.kind = provider.kind
             existing.base_url = provider.base_url
             existing.api_key = provider.api_key
             existing.default_model = provider.default_model
@@ -576,6 +579,7 @@ class SqlLLMProviderRepo:
                 LLMProviderRow(
                     id=provider.id,
                     name=provider.name,
+                    kind=provider.kind,
                     base_url=provider.base_url,
                     api_key=provider.api_key,
                     default_model=provider.default_model,

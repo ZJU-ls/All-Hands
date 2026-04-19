@@ -54,5 +54,21 @@
     "display_name": "DeepSeek Coder",
     "context_window": 65536,
     "enabled": true
+  },
+  {
+    "id": "seed-model-claude-3-5-sonnet-native",
+    "provider_name": "Anthropic",
+    "name": "claude-3-5-sonnet-latest",
+    "display_name": "Claude 3.5 Sonnet (native)",
+    "context_window": 200000,
+    "enabled": true
+  },
+  {
+    "id": "seed-model-claude-3-5-haiku-native",
+    "provider_name": "Anthropic",
+    "name": "claude-3-5-haiku-latest",
+    "display_name": "Claude 3.5 Haiku (native)",
+    "context_window": 200000,
+    "enabled": true
   }
 ]

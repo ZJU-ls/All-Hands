@@ -16,12 +16,55 @@ import { test, expect } from "@playwright/test";
 type Provider = {
   id: string;
   name: string;
+  kind: "openai" | "anthropic" | "aliyun";
   base_url: string;
   api_key_set: boolean;
   default_model: string;
   is_default: boolean;
   enabled: boolean;
 };
+
+type Preset = {
+  kind: "openai" | "anthropic" | "aliyun";
+  label: string;
+  base_url: string;
+  default_model: string;
+  key_hint: string;
+  doc_hint: string;
+};
+
+const PRESETS: Preset[] = [
+  {
+    kind: "openai",
+    label: "OpenAI 兼容",
+    base_url: "https://api.openai.com/v1",
+    default_model: "gpt-4o-mini",
+    key_hint: "sk-...",
+    doc_hint: "OpenAI / OpenRouter / DeepSeek / Ollama / vLLM — Authorization: Bearer",
+  },
+  {
+    kind: "anthropic",
+    label: "Anthropic",
+    base_url: "https://api.anthropic.com",
+    default_model: "claude-3-5-sonnet-latest",
+    key_hint: "sk-ant-...",
+    doc_hint: "Anthropic Messages API — x-api-key + anthropic-version",
+  },
+  {
+    kind: "aliyun",
+    label: "阿里云 百炼",
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    default_model: "qwen-plus",
+    key_hint: "sk-...",
+    doc_hint: "DashScope compatible-mode — OpenAI 兼容 wire,Qwen 系列",
+  },
+];
+
+async function mockPresets(page: import("@playwright/test").Page) {
+  await page.route("**/api/providers/presets", async (route) => {
+    await route.fulfill({ json: PRESETS });
+  });
+}
 
 type Model = {
   id: string;
@@ -37,6 +80,7 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
     let providers: Provider[] = [];
     const models: Model[] = [];
 
+    await mockPresets(page);
     await page.route("**/api/providers", async (route) => {
       if (route.request().method() === "GET") {
         await route.fulfill({ json: providers });
@@ -48,6 +92,7 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
           {
             id: "prov-1",
             name: String(body.name ?? ""),
+            kind: (body.kind as Provider["kind"]) ?? "openai",
             base_url: String(body.base_url ?? ""),
             api_key_set: true,
             default_model: String(body.default_model ?? ""),
@@ -84,7 +129,7 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
 
     await page.getByText("添加第一个供应商 →").click();
     await page.getByPlaceholder("例: OpenAI / DeepSeek / 本地 Ollama").fill("OpenAI");
-    await page.getByPlaceholder("sk-... (本地部署可留空)").fill("sk-test");
+    await page.locator('input[type="password"]').fill("sk-test");
     await page.getByRole("button", { name: "保存" }).click();
 
     await expect(page.getByTestId("gateway-provider-OpenAI")).toBeVisible();
@@ -135,6 +180,7 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
       {
         id: "p1",
         name: "DemoCo",
+        kind: "openai",
         base_url: "https://demo.example.com/v1",
         api_key_set: true,
         default_model: "m-ok",
@@ -198,5 +244,83 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
     const failResult = page.getByTestId("gateway-ping-result-m-fail");
     await expect(failResult.locator('[data-ping-state="fail"]')).toBeVisible();
     await expect(failResult).toContainText("认证失败");
+  });
+});
+
+test.describe("gateway · 供应商格式 UX", () => {
+  test("add dialog: picking format autofills base_url + default_model", async ({
+    page,
+  }) => {
+    let providers: Provider[] = [];
+    await mockPresets(page);
+    let postBody: Record<string, unknown> | null = null;
+    await page.route("**/api/providers", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: providers });
+        return;
+      }
+      if (route.request().method() === "POST") {
+        postBody = route.request().postDataJSON() as Record<string, unknown>;
+        providers = [
+          {
+            id: "new-anthropic",
+            name: String(postBody.name ?? ""),
+            kind: (postBody.kind as Provider["kind"]) ?? "openai",
+            base_url: String(postBody.base_url ?? ""),
+            api_key_set: true,
+            default_model: String(postBody.default_model ?? ""),
+            is_default: false,
+            enabled: true,
+          },
+        ];
+        await route.fulfill({ json: providers[0], status: 201 });
+        return;
+      }
+      await route.continue();
+    });
+    await page.route("**/api/models", async (route) => {
+      await route.fulfill({ json: [] });
+    });
+
+    await page.goto("/gateway");
+    await expect(page.getByTestId("gateway-empty")).toBeVisible();
+    await page.getByText("添加第一个供应商 →").click();
+
+    // All 3 format tiles are visible; openai is selected by default.
+    await expect(page.getByTestId("provider-kind-openai")).toBeVisible();
+    await expect(page.getByTestId("provider-kind-anthropic")).toBeVisible();
+    await expect(page.getByTestId("provider-kind-aliyun")).toBeVisible();
+    await expect(page.getByTestId("provider-kind-openai")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+
+    // Click anthropic — base_url + default_model should autofill to the preset.
+    await page.getByTestId("provider-kind-anthropic").click();
+    await expect(page.getByTestId("provider-kind-anthropic")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    const baseUrlInput = page.locator('input[placeholder*="https://"]').first();
+    await expect(baseUrlInput).toHaveValue("https://api.anthropic.com");
+    await expect(
+      page.locator('input[value="claude-3-5-sonnet-latest"]'),
+    ).toBeVisible();
+
+    // Fill name + key and save — POST must carry kind=anthropic.
+    await page
+      .getByPlaceholder("例: OpenAI / DeepSeek / 本地 Ollama")
+      .fill("MyAnthropic");
+    await page.getByPlaceholder("sk-ant-...").fill("sk-ant-test");
+    await page.getByRole("button", { name: "保存" }).click();
+
+    // Card shows ANTHROPIC badge; POST body carried the right kind.
+    await expect(page.getByTestId("gateway-provider-MyAnthropic")).toBeVisible();
+    await expect(
+      page.getByTestId("gateway-provider-kind-MyAnthropic"),
+    ).toHaveText("ANTHROPIC");
+    expect(postBody).not.toBeNull();
+    const body = postBody as unknown as Record<string, unknown>;
+    expect(body.kind).toBe("anthropic");
   });
 });
