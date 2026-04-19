@@ -90,6 +90,31 @@ export async function getArtifactBinaryUrl(id: string): Promise<string> {
   return `${BASE}/api/artifacts/${id}/content`;
 }
 
+/** URL for the artifact SSE feed — consumed by `ArtifactPanel` via `EventSource`.
+ * The server emits `artifact_changed` frames for create / update / delete / pin
+ * (I-0005). Frames carry only the id + op; clients refetch the affected record. */
+export function artifactStreamUrl(): string {
+  return `${BASE}/api/artifacts/stream`;
+}
+
+export type ArtifactChangedOp = "created" | "updated" | "deleted" | "pinned";
+
+export type ArtifactChangedPayload = {
+  workspace_id: string;
+  artifact_id: string;
+  artifact_kind: string;
+  op: ArtifactChangedOp;
+  version: number;
+  conversation_id: string | null;
+};
+
+export type ArtifactChangedFrame = {
+  id: string;
+  kind: "artifact_changed";
+  ts: string;
+  payload: ArtifactChangedPayload;
+};
+
 export async function listArtifactVersions(id: string): Promise<ArtifactVersionDto[]> {
   const res = await fetch(`${BASE}/api/artifacts/${id}/versions`);
   if (!res.ok) throw new Error(`listArtifactVersions failed: ${res.status}`);

@@ -57,11 +57,15 @@ export async function retryBootstrap(): Promise<{
 export async function fetchTraces(params?: {
   employee_id?: string;
   status?: "ok" | "failed";
+  since?: string;
+  until?: string;
   limit?: number;
 }): Promise<{ traces: TraceSummaryDto[]; count: number }> {
   const q = new URLSearchParams();
   if (params?.employee_id) q.set("employee_id", params.employee_id);
   if (params?.status) q.set("status", params.status);
+  if (params?.since) q.set("since", params.since);
+  if (params?.until) q.set("until", params.until);
   if (params?.limit) q.set("limit", String(params.limit));
   const qs = q.toString();
   const res = await fetch(

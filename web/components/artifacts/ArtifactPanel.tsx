@@ -1,22 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { listArtifacts, type ArtifactDto } from "@/lib/artifacts-api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  artifactStreamUrl,
+  getArtifact,
+  listArtifacts,
+  type ArtifactChangedFrame,
+  type ArtifactDto,
+} from "@/lib/artifacts-api";
+import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import { ArtifactList } from "./ArtifactList";
 import { ArtifactDetail } from "./ArtifactDetail";
+
+type LoadState = "loading" | "ok" | "error";
+type StreamConnection = "connecting" | "open" | "error";
 
 export function ArtifactPanel({ onClose }: { onClose: () => void }) {
   const [artifacts, setArtifacts] = useState<ArtifactDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [streamConn, setStreamConn] = useState<StreamConnection>("connecting");
+
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
 
   const refresh = useCallback(async () => {
     try {
       const items = await listArtifacts({ limit: 200 });
       setArtifacts(items);
       setError(null);
+      setState("ok");
     } catch (e) {
       setError(String(e));
+      setState((prev) => (prev === "ok" ? "ok" : "error"));
     }
   }, []);
 
@@ -24,11 +41,63 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
     void refresh();
   }, [refresh]);
 
+  // Live feed: /api/artifacts/stream pushes `artifact_changed` frames for
+  // create / update / delete / pin. We patch local state in-place — the REST
+  // snapshot we pulled on mount stays the source of truth for everything else.
   useEffect(() => {
-    const t = setInterval(() => {
-      void refresh();
-    }, 10_000);
-    return () => clearInterval(t);
+    let cancelled = false;
+    const source = new EventSource(artifactStreamUrl());
+
+    const markOpen = () => {
+      if (!cancelled) setStreamConn("open");
+    };
+    source.addEventListener("open", markOpen);
+    source.addEventListener("ready", markOpen);
+    source.addEventListener("heartbeat", markOpen);
+    source.addEventListener("error", () => {
+      if (!cancelled) setStreamConn("error");
+    });
+
+    const onChanged = async (evt: Event) => {
+      if (cancelled) return;
+      let frame: ArtifactChangedFrame;
+      try {
+        frame = JSON.parse((evt as MessageEvent).data) as ArtifactChangedFrame;
+      } catch {
+        return; // malformed frame — the next snapshot refresh will reconcile
+      }
+      const payload = frame.payload;
+      if (!payload?.artifact_id || !payload.op) return;
+      const artifactId = payload.artifact_id;
+
+      if (payload.op === "deleted") {
+        setArtifacts((prev) => prev.filter((a) => a.id !== artifactId));
+        if (selectedIdRef.current === artifactId) setSelectedId(null);
+        return;
+      }
+
+      try {
+        const fresh = await getArtifact(artifactId);
+        if (cancelled) return;
+        setArtifacts((prev) => {
+          const idx = prev.findIndex((a) => a.id === artifactId);
+          if (idx === -1) return [fresh, ...prev];
+          const next = prev.slice();
+          next[idx] = fresh;
+          return next;
+        });
+      } catch {
+        // Fall back to a full refetch if the targeted GET fails — keeps the
+        // panel in sync even if the artifact was swapped for a new id.
+        if (!cancelled) void refresh();
+      }
+    };
+    source.addEventListener("artifact_changed", onChanged);
+
+    return () => {
+      cancelled = true;
+      source.close();
+    };
   }, [refresh]);
 
   return (
@@ -42,6 +111,14 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
           <span className="font-mono text-[10px] text-text-subtle">
             {artifacts.length}
           </span>
+          {streamConn === "error" && (
+            <span
+              className="font-mono text-[10px] text-warning"
+              title="实时流中断 · 浏览器会自动重连"
+            >
+              · offline
+            </span>
+          )}
         </div>
         <button
           onClick={onClose}
@@ -52,11 +129,6 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
           ×
         </button>
       </div>
-      {error && (
-        <div className="border-b border-border bg-surface-2 px-3 py-2 text-[11px] text-danger">
-          {error}
-        </div>
-      )}
       {selectedId ? (
         <div className="flex flex-1 flex-col overflow-hidden">
           <button
@@ -70,12 +142,30 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
-          <ArtifactList
-            artifacts={artifacts}
-            selectedId={selectedId}
-            onSelect={(id) => setSelectedId(id)}
-          />
+        <div className="flex-1 overflow-y-auto p-3">
+          {state === "loading" ? (
+            <LoadingState
+              title="加载制品区"
+              description="正在拉取工作区的制品列表"
+            />
+          ) : state === "error" && artifacts.length === 0 ? (
+            <ErrorState
+              title="制品列表加载失败"
+              detail={error ?? undefined}
+              action={{ label: "重试", onClick: () => void refresh() }}
+            />
+          ) : artifacts.length === 0 ? (
+            <EmptyState
+              title="还没有制品"
+              description="让员工产出一份文档、代码或图,制品会实时出现在这里。"
+            />
+          ) : (
+            <ArtifactList
+              artifacts={artifacts}
+              selectedId={selectedId}
+              onSelect={(id) => setSelectedId(id)}
+            />
+          )}
         </div>
       )}
     </aside>

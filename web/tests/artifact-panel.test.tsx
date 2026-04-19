@@ -15,9 +15,29 @@ import { ArtifactList } from "@/components/artifacts/ArtifactList";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
 import type { ArtifactDto } from "@/lib/artifacts-api";
 
+// jsdom ships no EventSource, and ArtifactPanel now subscribes to
+// /api/artifacts/stream on mount (I-0005 live feed). Stub it to a no-op so
+// the fetch-only assertions below don't trip on `new EventSource(...)`.
+class NoopEventSource {
+  addEventListener() {}
+  removeEventListener() {}
+  close() {}
+}
+const originalES = globalThis.EventSource;
+beforeEach(() => {
+  // @ts-expect-error — jsdom ships no EventSource
+  globalThis.EventSource = NoopEventSource;
+});
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  if (originalES) {
+    globalThis.EventSource = originalES;
+  } else {
+    // @ts-expect-error — drop the stub
+    delete globalThis.EventSource;
+  }
 });
 
 function make(
