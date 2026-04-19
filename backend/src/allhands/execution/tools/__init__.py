@@ -21,6 +21,7 @@ from allhands.execution.tools.meta.market_tools import (  # single-line register
 )
 from allhands.execution.tools.meta.mcp_server_tools import ALL_MCP_SERVER_META_TOOLS
 from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
+from allhands.execution.tools.meta.observatory_tools import ALL_OBSERVATORY_META_TOOLS
 from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
 from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
 from allhands.execution.tools.meta.review_tools import ALL_REVIEW_META_TOOLS
@@ -90,5 +91,6 @@ def discover_builtin_tools(registry: ToolRegistry) -> None:
         *ALL_MARKET_META_TOOLS,  # single-line register: Wave 2 market-data
         *ALL_STOCK_ASSISTANT_TOOLS,  # single-line register: Wave 2 stock-assistant
         *ALL_REVIEW_META_TOOLS,
+        *ALL_OBSERVATORY_META_TOOLS,
     ):
         registry.register(tool, _async_noop)

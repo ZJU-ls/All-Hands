@@ -28,6 +28,7 @@ from allhands.core import (
     MCPServer,
     MCPTransport,
     Message,
+    ObservabilityConfig,
     PlanStep,
     RenderPayload,
     Skill,
@@ -57,6 +58,7 @@ from allhands.persistence.orm.models import (
     LLMProviderRow,
     MCPServerRow,
     MessageRow,
+    ObservabilityConfigRow,
     SkillRow,
     TaskRow,
     TriggerFireRow,
@@ -1161,3 +1163,60 @@ class SqlTaskRepo:
             existing.completed_at = _naive(task.completed_at) if task.completed_at else None
         await self._s.flush()
         return task
+
+
+class SqlObservabilityConfigRepo:
+    """Single-row observability_config repo (spec § 4.1).
+
+    The id=1 row is seeded by migration 0012; `load()` materialises it even if
+    a caller hits the DB before the seed has landed (fresh SQLite in tests).
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def load(self) -> ObservabilityConfig:
+        from allhands.core import BootstrapStatus
+
+        row = await self._s.get(ObservabilityConfigRow, 1)
+        if row is None:
+            row = ObservabilityConfigRow(
+                id=1, bootstrap_status="pending", updated_at=datetime.now(UTC).replace(tzinfo=None)
+            )
+            self._s.add(row)
+            await self._s.flush()
+        return ObservabilityConfig(
+            public_key=row.public_key,
+            secret_key=row.secret_key,
+            host=row.host,
+            org_id=row.org_id,
+            project_id=row.project_id,
+            admin_email=row.admin_email,
+            admin_password=row.admin_password,
+            bootstrap_status=BootstrapStatus(row.bootstrap_status),
+            bootstrap_error=row.bootstrap_error,
+            bootstrapped_at=_utc(row.bootstrapped_at) if row.bootstrapped_at else None,
+            updated_at=_utc(row.updated_at) if row.updated_at else None,
+        )
+
+    async def save(self, config: ObservabilityConfig) -> ObservabilityConfig:
+        row = await self._s.get(ObservabilityConfigRow, 1)
+        now = datetime.now(UTC).replace(tzinfo=None)
+        if row is None:
+            row = ObservabilityConfigRow(
+                id=1, bootstrap_status=config.bootstrap_status.value, updated_at=now
+            )
+            self._s.add(row)
+        row.public_key = config.public_key
+        row.secret_key = config.secret_key
+        row.host = config.host
+        row.org_id = config.org_id
+        row.project_id = config.project_id
+        row.admin_email = config.admin_email
+        row.admin_password = config.admin_password
+        row.bootstrap_status = config.bootstrap_status.value
+        row.bootstrap_error = config.bootstrap_error
+        row.bootstrapped_at = _naive(config.bootstrapped_at) if config.bootstrapped_at else None
+        row.updated_at = now
+        await self._s.flush()
+        return config

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         LLMProvider,
         MCPServer,
         Message,
+        ObservabilityConfig,
         Skill,
         Task,
         TaskStatus,
@@ -163,3 +164,13 @@ class TaskRepo(Protocol):
     ) -> list[Task]: ...
     async def count_active(self, workspace_id: str = "default") -> int: ...
     async def upsert(self, task: Task) -> Task: ...
+
+
+class ObservabilityConfigRepo(Protocol):
+    """Single-row observability_config read/write.
+
+    Implementations ensure exactly one row (id=1) exists after migration 0012.
+    """
+
+    async def load(self) -> ObservabilityConfig: ...
+    async def save(self, config: ObservabilityConfig) -> ObservabilityConfig: ...

@@ -291,3 +291,20 @@ class TaskRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ObservabilityConfigRow(Base):
+    __tablename__ = "observability_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    public_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    secret_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    host: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    org_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    project_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    admin_email: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    admin_password: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    bootstrap_status: Mapped[str] = mapped_column(String(32), default="pending")
+    bootstrap_error: Mapped[str | None] = mapped_column(String, nullable=True)
+    bootstrapped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)

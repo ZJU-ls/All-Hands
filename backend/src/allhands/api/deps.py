@@ -28,6 +28,7 @@ from allhands.persistence.sql_repos import (
     SqlLLMModelRepo,
     SqlLLMProviderRepo,
     SqlMCPServerRepo,
+    SqlObservabilityConfigRepo,
     SqlSkillRepo,
     SqlTaskRepo,
     SqlTriggerFireRepo,
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from allhands.services.model_service import LLMModelService
+    from allhands.services.observatory_service import ObservatoryService
     from allhands.services.provider_service import LLMProviderService
 
 
@@ -178,6 +180,18 @@ async def get_trigger_service(
 @lru_cache(maxsize=1)
 def get_pause_switch() -> PauseSwitch:
     return PauseSwitch()
+
+
+async def get_observatory_service(
+    session: AsyncSession = Depends(get_session),
+) -> ObservatoryService:
+    from allhands.services.observatory_service import ObservatoryService
+
+    return ObservatoryService(
+        event_repo=SqlEventRepo(session),
+        employee_repo=SqlEmployeeRepo(session),
+        config_repo=SqlObservabilityConfigRepo(session),
+    )
 
 
 async def get_cockpit_service(

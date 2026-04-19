@@ -48,6 +48,13 @@ from allhands.core.errors import (
 )
 from allhands.core.mcp import MCPHealth, MCPServer, MCPTransport
 from allhands.core.model import LLMModel
+from allhands.core.observability import (
+    BootstrapStatus,
+    ObservabilityConfig,
+    ObservatoryEmployeeBreakdown,
+    ObservatorySummary,
+    TraceSummary,
+)
 from allhands.core.plan import AgentPlan, PlanStep, StepStatus
 from allhands.core.provider import LLMProvider
 from allhands.core.skill import Skill, SkillSource
@@ -93,6 +100,7 @@ __all__ = [
     "Artifact",
     "ArtifactKind",
     "ArtifactVersion",
+    "BootstrapStatus",
     "ComponentStatus",
     "ComponentStatusKind",
     "Confirmation",
@@ -120,6 +128,9 @@ __all__ = [
     "MaxIterationsReached",
     "Message",
     "MessageRole",
+    "ObservabilityConfig",
+    "ObservatoryEmployeeBreakdown",
+    "ObservatorySummary",
     "PlanStep",
     "RenderPayload",
     "Skill",
@@ -136,6 +147,7 @@ __all__ = [
     "ToolKind",
     "ToolNotFound",
     "ToolScope",
+    "TraceSummary",
     "Trigger",
     "TriggerAction",
     "TriggerActionType",

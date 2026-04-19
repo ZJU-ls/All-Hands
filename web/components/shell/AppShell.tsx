@@ -35,6 +35,7 @@ const MENU: MenuSection[] = [
       { label: "触发器", href: "/triggers" },
       { label: "审批", href: "/confirmations" },
       { label: "追踪", href: "/traces" },
+      { label: "观测中心", href: "/observatory" },
     ],
   },
   {
