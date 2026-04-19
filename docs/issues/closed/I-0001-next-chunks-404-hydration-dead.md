@@ -85,4 +85,15 @@ cd /Volumes/Storage/code/allhands/web && pnpm dev
 
 ## 工作记录
 
-_待执行端拾起_
+- 2026-04-19 · track-1 拾起。复核发现根因就是 E04(dev + build 共用 `.next`) · 修法直接照搬
+- `pkill -f 'next dev'` 杀掉 4-18 22:39 遗留的 stale dev(PID 69751 / 69763) · `rm -rf web/.next` · `pnpm dev` 冷启 · curl 全 10 条路由 200
+- 回归测试 `web/tests/routes-smoke.test.ts` 需要 `.next` 构建产物 · 停 dev → `pnpm build`(18 页编译齐 · 0 error / 0 warning) → `pnpm test -- routes-smoke` 31/31 绿
+- chrome-devtools MCP 实测 `/` · `/chat` · `/gateway` 三条原 500/永卡路由 · 截图见 `plans/screenshots/I-0001/after-fix-{root,chat,gateway}.png` · console 0 error
+
+## 关闭记录
+
+**关闭时间** 2026-04-19 10:03
+**commit** 待填(本次 commit sha)
+**回归测试** `web/tests/routes-smoke.test.ts`(31 tests,其中 10 条路由 200 断言 + 20 条 chunk on-disk 断言 + 1 条 SSR no-stale-error-shell 断言)
+**回归防御** 已在 `docs/claude/error-patterns.md § E04` 记录;回归测试跑绿是硬闸门
+**是否升级为 error-pattern** 否 · 已有 E04 覆盖本根因 · 本次是 E04 的一次复发实例 · 不另开新 pattern
