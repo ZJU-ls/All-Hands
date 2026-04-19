@@ -576,7 +576,9 @@ async def _astream_anthropic_chat(
     yield {"type": "meta", "model": model_name, "started_at_ms": int(started * 1000)}
 
     first_content_at: float | None = None
+    first_reasoning_at: float | None = None
     content_buf: list[str] = []
+    reasoning_buf: list[str] = []
     input_tokens = 0
     output_tokens = 0
 
@@ -627,6 +629,9 @@ async def _astream_anthropic_chat(
                         elif delta.get("type") == "thinking_delta":
                             text = str(delta.get("thinking") or "")
                             if text:
+                                if first_reasoning_at is None:
+                                    first_reasoning_at = time.perf_counter()
+                                reasoning_buf.append(text)
                                 yield {"type": "reasoning", "text": text}
                     elif etype == "message_delta":
                         u = data.get("usage") or {}
@@ -647,7 +652,9 @@ async def _astream_anthropic_chat(
 
     latency_ms = int((time.perf_counter() - started) * 1000)
     ttft_ms = int((first_content_at - started) * 1000) if first_content_at else latency_ms
+    reasoning_first_ms = int((first_reasoning_at - started) * 1000) if first_reasoning_at else 0
     response = "".join(content_buf)
+    reasoning_text = "".join(reasoning_buf)
     if first_content_at is not None and output_tokens:
         elapsed_s = max(time.perf_counter() - first_content_at, 1e-6)
         tok_per_sec = round(output_tokens / elapsed_s, 2)
@@ -658,7 +665,7 @@ async def _astream_anthropic_chat(
         "type": "done",
         "latency_ms": latency_ms,
         "ttft_ms": ttft_ms,
-        "reasoning_first_ms": 0,
+        "reasoning_first_ms": reasoning_first_ms,
         "usage": {
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
@@ -666,7 +673,7 @@ async def _astream_anthropic_chat(
         },
         "tokens_per_second": tok_per_sec,
         "response": response,
-        "reasoning_text": "",
+        "reasoning_text": reasoning_text,
     }
 
 

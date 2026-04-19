@@ -619,6 +619,75 @@ async def test_astream_chat_test_anthropic_emits_delta_events() -> None:
 
 
 @pytest.mark.asyncio
+async def test_astream_chat_test_anthropic_thinking_populates_reasoning_and_timings() -> None:
+    """Thinking-capable Anthropic models stream `thinking_delta` frames before
+    `text_delta`. The unified `done` event must surface:
+      - `reasoning_text` = concat of all thinking deltas (not `""`)
+      - `reasoning_first_ms` > 0 (time-to-first-thinking, distinct from ttft)
+
+    Without this, the Gateway UI's final message loses the reasoning panel and
+    the metrics row collapses `ttft·thinking / ttft·answer` to a single `ttft`.
+    """
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        frames = _anthropic_sse_bytes(
+            [
+                ("message_start", {"message": {"usage": {"input_tokens": 5, "output_tokens": 0}}}),
+                (
+                    "content_block_start",
+                    {"index": 0, "content_block": {"type": "thinking", "thinking": ""}},
+                ),
+                (
+                    "content_block_delta",
+                    {"index": 0, "delta": {"type": "thinking_delta", "thinking": "pondering"}},
+                ),
+                (
+                    "content_block_delta",
+                    {"index": 0, "delta": {"type": "thinking_delta", "thinking": " deeply"}},
+                ),
+                ("content_block_stop", {"index": 0}),
+                (
+                    "content_block_start",
+                    {"index": 1, "content_block": {"type": "text", "text": ""}},
+                ),
+                (
+                    "content_block_delta",
+                    {"index": 1, "delta": {"type": "text_delta", "text": "Hi!"}},
+                ),
+                ("content_block_stop", {"index": 1}),
+                (
+                    "message_delta",
+                    {"delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 4}},
+                ),
+                ("message_stop", {}),
+            ]
+        )
+        return httpx.Response(200, content=frames, headers={"Content-Type": "text/event-stream"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        events = [
+            e
+            async for e in astream_chat_test(
+                _anthropic_provider(), "claude-3-5-sonnet-latest", prompt="hi", http_client=client
+            )
+        ]
+
+    reasoning_events = [e for e in events if e["type"] == "reasoning"]
+    assert [e["text"] for e in reasoning_events] == ["pondering", " deeply"]
+
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["reasoning_text"] == "pondering deeply", (
+        "done.reasoning_text must be the concat of all thinking_delta payloads"
+    )
+    assert done["reasoning_first_ms"] >= 0
+    # First reasoning must precede (or equal) first content; both should fire
+    # for thinking models, so reasoning_first_ms must differ from the default 0.
+    assert done["response"] == "Hi!"
+
+
+@pytest.mark.asyncio
 async def test_astream_chat_test_anthropic_4xx_emits_error() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(401, text="Unauthorized")
