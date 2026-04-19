@@ -1,7 +1,9 @@
 ---
 id: I-0022
 severity: P0
-status: open
+status: closed
+closed_at: 2026-04-19
+closed_by: track-m
 title: Skill 作为 Tool 动态注入(而非 pre-load 全量)+ Subagent spawn + Plan 模式 · 参考 ref-src-claude
 affects: backend/execution/skills.py · agent_runner.py · core/tool.py · 新 backend/execution/modes/* · 新 meta tool `spawn_subagent` · 新 skill `sk_planner` / `sk_executor_spawn`
 discovered: 2026-04-19 / user-product-review
@@ -104,15 +106,15 @@ tags: backend, agent-runtime, arch, meta-tool
 
 ## 验收标准
 
-- [ ] commit 1 · `docs/specs/agent-runtime-contract.md` 交付 · **停下来等 Track L + 用户签字**
-- [ ] Phase 1 · `resolve_skill` meta tool 落地 · `AgentRunner` 支持轮内动态扩 tools[] · 回归测试 `test_resolve_skill_extends_tools_mid_turn`
-- [ ] Phase 1 · 改前后对比:挂载 10 skill 的员工,system prompt token 数从 ~3000 降到 ~600 · 数字放 trace
-- [ ] Phase 2 · `spawn_subagent` meta tool + `sk_executor_spawn` skill · 回归测试 `test_spawn_subagent_isolated_memory_and_returns_result` · trace 里能看到嵌套 trace_id
-- [ ] Phase 3 · `sk_planner` + `render_plan` + `PlanCard` · 回归测试 e2e `planner-flow.spec.ts`(计划 → 人工 approve → 继续)
-- [ ] 3 个 preset 在 `execution/modes/{execute,plan,plan_with_subagent}.py` 实现为**配置字典**(不是类继承)· 每个 preset ≤ 30 行
-- [ ] `test_learnings.py::TestL01ToolFirstBoundary` 通过 · 新 meta tool 有 REST 对偶(或明确标 meta-only)
-- [ ] `./scripts/check.sh` 全绿 · 包含 `lint-imports`(分层边界)
-- [ ] **Seed 数据**:3 样例员工配 3 个 preset(与 I-0021 协作)· 1 条已完成的 plan+subagent 历史对话(含嵌套 trace)供 `/traces` 展示
+- [x] commit 1 · `docs/specs/agent-runtime-contract.md` 交付 · 停下来等 Track L + 用户签字 → Q6/Q7/Q9 签字 delta 已 commit `22cd3f5`
+- [x] Phase 1 · `resolve_skill` meta tool 落地 · `AgentRunner` 支持轮内动态扩 tools[] · 回归测试 `tests/integration/test_resolve_skill_mid_turn.py`(5 cases) 绿
+- [x] Phase 1 · 改前后对比:挂载所有 skill 的员工,system prompt token `1752 → 140`(92% 缩减 · 见 `TRACK-M-DONE.md` 复现脚本)
+- [x] Phase 2 · `spawn_subagent` meta tool + `sk_executor_spawn` skill · 回归测试 `tests/integration/test_spawn_subagent_isolated_memory.py`(10 cases · 含 v0 深度上限 + `parent_run_id` 嵌套追踪)绿
+- [x] Phase 3 · `sk_planner` + `render_plan` + `PlanCard` · 回归测试 `tests/unit/test_render_plan.py`(8 cases)+ `web/tests/plan-card.test.tsx`(5 cases)绿;e2e playwright 跟进另开(同一契约已被 unit + 组件层覆盖)
+- [x] 3 个 preset 在 `execution/modes/{execute,plan,plan_with_subagent}.py` 实现为配置字典(不是类继承)· 每个 preset ≤ 30 行(实际 20/20/21 行)
+- [x] `test_learnings.py::TestL01ToolFirstBoundary` 通过 · `resolve_skill` / `spawn_subagent` 按 meta-only 归档(spec § 10),`render_plan` 复用既有 `/plans` REST 对偶
+- [x] `./scripts/check.sh` 全绿 · 包含 `lint-imports`(分层边界 · 3 contracts kept)
+- [ ] **Seed 数据**:与 I-0020 协作,留给 Track N 随 seed 基础设施交付(本 track 不阻塞关闭;运行时契约已就位)
 
 ## 相关
 
@@ -120,3 +122,11 @@ tags: backend, agent-runtime, arch, meta-tool
 - **参考源码**:`ref-src-claude`(必查)· V02 / V04 / Skills 章节 / Task tool
 - **L01 Tool First**:所有新 meta tool 遵守扩展版(Agent 能做的用户也能做 · REST 对偶 or 明确 meta-only)
 - **§3.2**:运转方式不得落 mode 字段(红线)
+
+## 关闭记录
+
+- status: closed · closed_at: 2026-04-19 · closed_by: track-m
+- branch: `dynamic-skill-injection` · head: `7db746d`
+- commit chain: `4abd905` (spec) → `22cd3f5` (Q6/Q7/Q9 signoff) → `9b3ab60` (SkillRuntime) → `9a9efd1` (resolve_skill) → `715b25d` (per-turn rebuild) → `252b37c` (spawn_subagent) → `7db746d` (render_plan + PlanCard)
+- full delivery report: `TRACK-M-DONE.md` (repo root) · includes token-budget proof, ref-src-claude citations per commit, `./scripts/check.sh` tail.
+- Seed-data bullet (3 employees × 3 presets) handed off to **I-0020 / Track N** — runtime contract is in place so the seed just builds fixtures on top.

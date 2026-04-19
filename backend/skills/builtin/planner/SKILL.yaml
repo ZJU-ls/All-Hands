@@ -1,0 +1,10 @@
+id: sk_planner
+name: Planning · Output before Act
+description: Always emit a full plan via render_plan before taking action.
+version: 0.1.0
+builtin: true
+
+tool_ids:
+  - allhands.builtin.render_plan
+
+prompt_fragment_file: prompts/guidance.md

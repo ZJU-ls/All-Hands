@@ -1,6 +1,19 @@
 """AgentRunner — wraps LangGraph create_react_agent.
 
 Yields AgentEvent stream. LangGraph types never escape this module.
+
+Contract § 8.1-8.4: holds a `SkillRuntime` across send_message calls
+(persisted by ChatService per conversation) and rebuilds `lc_tools` +
+`system_prompt` at the start of each stream() call from:
+
+    base_tool_ids = runtime.base_tool_ids
+    resolved_tool_ids = flatten(runtime.resolved_skills.values())
+    system_prompt = employee.system_prompt + descriptors + resolved_fragments
+
+Ref: ref-src-claude/V02-execution-kernel.md § 2.1 · query() while(true) main
+loop · rebuild context every turn.
+Ref: ref-src-claude/V04-tool-call-mechanism.md § 2.1 · Tool scope →
+partitioned gate pipeline.
 """
 
 from __future__ import annotations
@@ -17,6 +30,13 @@ from allhands.execution.events import (
     ErrorEvent,
     TokenEvent,
 )
+from allhands.execution.skills import (
+    SkillRegistry,
+    SkillRuntime,
+    render_skill_descriptors,
+)
+from allhands.execution.tools.meta.resolve_skill import make_resolve_skill_executor
+from allhands.execution.tools.meta.spawn_subagent import make_spawn_subagent_executor
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -25,9 +45,12 @@ if TYPE_CHECKING:
     from allhands.execution.dispatch import DispatchService
     from allhands.execution.gate import BaseGate
     from allhands.execution.registry import ToolRegistry
+    from allhands.execution.tools.meta.spawn_subagent import SpawnSubagentService
 
 
 DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
+RESOLVE_SKILL_TOOL_ID = "allhands.meta.resolve_skill"
+SPAWN_SUBAGENT_TOOL_ID = "allhands.meta.spawn_subagent"
 
 
 def _make_dispatch_executor(dispatch_service: DispatchService) -> Any:
@@ -84,30 +107,82 @@ class AgentRunner:
         gate: BaseGate,
         provider: LLMProvider | None = None,
         dispatch_service: DispatchService | None = None,
+        skill_registry: SkillRegistry | None = None,
+        runtime: SkillRuntime | None = None,
+        spawn_subagent_service: SpawnSubagentService | None = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
         self._gate = gate
         self._provider = provider
         self._dispatch_service = dispatch_service
+        self._skill_registry = skill_registry
+        self._spawn_subagent_service = spawn_subagent_service
+        # Runtime is normally created and owned by ChatService (per-conversation
+        # persistence across send_message calls). If the caller didn't supply
+        # one, fall back to a throwaway runtime derived from employee.tool_ids
+        # so legacy callers keep working.
+        self._runtime = runtime or SkillRuntime(base_tool_ids=list(employee.tool_ids))
+
+    def _active_tool_ids(self) -> list[str]:
+        """Contract § 8.2 · base + flatten(resolved_skills.values())."""
+        active: list[str] = list(self._runtime.base_tool_ids)
+        seen: set[str] = set(active)
+        for tids in self._runtime.resolved_skills.values():
+            for tid in tids:
+                if tid not in seen:
+                    active.append(tid)
+                    seen.add(tid)
+        return active
+
+    def _compose_system_prompt(self) -> str:
+        """Contract § 8.2 · employee.system_prompt + descriptors + resolved fragments.
+
+        The descriptor list is stamped at turn 0 (cheap · ≤ 600 tokens for 10
+        skills); resolved_fragments grow as the model activates skills.
+        """
+        parts: list[str] = []
+        base = (self._employee.system_prompt or "").strip()
+        if base:
+            parts.append(base)
+        if self._runtime.skill_descriptors:
+            parts.append(render_skill_descriptors(self._runtime.skill_descriptors))
+        if self._runtime.resolved_fragments:
+            parts.append("\n\n".join(self._runtime.resolved_fragments))
+        return "\n\n".join(parts).strip()
 
     async def stream(
         self,
         messages: list[dict[str, Any]],
         thread_id: str,
     ) -> AsyncIterator[AgentEvent]:
-        from langchain_core.messages import AIMessage, HumanMessage
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
         from langchain_core.tools import StructuredTool
         from langgraph.prebuilt import create_react_agent
 
         message_id = str(uuid.uuid4())
         gate = self._gate
 
-        lc_tools = []
-        for tool_id in self._employee.tool_ids:
+        lc_tools: list[Any] = []
+        for tool_id in self._active_tool_ids():
             try:
                 tool, executor = self._tool_registry.get(tool_id)
             except KeyError:
+                continue
+
+            if tool_id == RESOLVE_SKILL_TOOL_ID and self._skill_registry is not None:
+                executor = make_resolve_skill_executor(
+                    employee=self._employee,
+                    runtime=self._runtime,
+                    skill_registry=self._skill_registry,
+                )
+                lc_tools.append(
+                    StructuredTool.from_function(
+                        coroutine=executor,
+                        name=tool.name,
+                        description=tool.description,
+                    )
+                )
                 continue
 
             if tool_id == DISPATCH_TOOL_ID and self._dispatch_service is not None:
@@ -119,6 +194,12 @@ class AgentRunner:
                     )
                 )
                 continue
+
+            if tool_id == SPAWN_SUBAGENT_TOOL_ID and self._spawn_subagent_service is not None:
+                # Rebind the registry's no-op stub to the real service. We then
+                # fall through to the gate-wrap logic below so the user is
+                # prompted (spawn_subagent declares scope=WRITE + requires_confirmation=True).
+                executor = make_spawn_subagent_executor(self._spawn_subagent_service)
 
             needs_gate = (
                 tool.scope in (ToolScope.WRITE, ToolScope.IRREVERSIBLE, ToolScope.BOOTSTRAP)
@@ -160,13 +241,18 @@ class AgentRunner:
             lc_tools.append(lc_tool)
 
         model = _build_model(self._employee.model_ref, self._provider)
-        lc_messages = [
+
+        system_prompt = self._compose_system_prompt()
+        lc_messages: list[Any] = []
+        if system_prompt:
+            lc_messages.append(SystemMessage(content=system_prompt))
+        lc_messages.extend(
             HumanMessage(content=m["content"])
             if m["role"] == "user"
             else AIMessage(content=m["content"])
             for m in messages
             if m["role"] in ("user", "assistant")
-        ]
+        )
 
         try:
             agent = create_react_agent(model, lc_tools)

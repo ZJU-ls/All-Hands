@@ -10,7 +10,8 @@ from allhands.core import Conversation, Employee, Message
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.execution.dispatch import DispatchService
 from allhands.execution.runner import AgentRunner
-from allhands.execution.skills import expand_skills_to_tools
+from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
+from allhands.execution.tools.meta.spawn_subagent import SpawnSubagentService
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -38,6 +39,10 @@ class ChatService:
         self._skills = skill_registry
         self._gate = gate
         self._providers = provider_repo
+        # Per-conversation runtime · persists resolve_skill mutations across
+        # send_message calls (contract § 8.2 · V02 query() main loop carries
+        # the live tool pool turn-to-turn).
+        self._runtime_cache: dict[str, SkillRuntime] = {}
 
     async def create_conversation(self, employee_id: str) -> Conversation:
         conv = Conversation(
@@ -69,16 +74,10 @@ class ChatService:
         )
         await self._conversations.append_message(user_msg)
 
-        expanded_tools, prompt_fragment = expand_skills_to_tools(
-            employee, self._skills, self._tools
-        )
-        effective_employee = employee
-        if prompt_fragment:
-            effective_employee = employee.model_copy(
-                update={"system_prompt": employee.system_prompt + "\n\n" + prompt_fragment}
-            )
-        all_tool_ids = list(dict.fromkeys(employee.tool_ids + [t.id for t in expanded_tools]))
-        effective_employee = effective_employee.model_copy(update={"tool_ids": all_tool_ids})
+        runtime = self._runtime_cache.get(conversation_id)
+        if runtime is None:
+            runtime = bootstrap_employee_runtime(employee, self._skills, self._tools)
+            self._runtime_cache[conversation_id] = runtime
 
         history = await self._conversations.list_messages(conversation_id)
         lc_messages: list[dict[str, Any]] = [
@@ -91,16 +90,24 @@ class ChatService:
         if self._providers is not None:
             provider = await self._providers.get_default()
 
+        runner_factory = self._build_runner_factory(provider)
         dispatch_service = DispatchService(
             employee_repo=self._employees,
-            runner_factory=self._build_runner_factory(provider),
+            runner_factory=runner_factory,
+        )
+        spawn_subagent_service = SpawnSubagentService(
+            employee_repo=self._employees,
+            runner_factory=runner_factory,
         )
         runner = AgentRunner(
-            employee=effective_employee,
+            employee=employee,
             tool_registry=self._tools,
             gate=self._gate,
             provider=provider,
             dispatch_service=dispatch_service,
+            skill_registry=self._skills,
+            runtime=runtime,
+            spawn_subagent_service=spawn_subagent_service,
         )
         return runner.stream(messages=lc_messages, thread_id=conversation_id)
 
@@ -112,22 +119,35 @@ class ChatService:
         provider config is inherited (agent-design § 6.2 rules 4 + 7).
         """
         tool_registry = self._tools
+        skill_registry = self._skills
         gate = self._gate
         employee_repo = self._employees
 
         def factory(child: Employee, depth: int) -> AgentRunner:
             # Sub-runner also gets a dispatch_service so nested dispatch works
-            # until MAX_DISPATCH_DEPTH kicks in.
+            # until MAX_DISPATCH_DEPTH kicks in. Each sub-runner gets its own
+            # throwaway SkillRuntime so resolve_skill calls inside the child's
+            # task don't bleed into the parent's conversation state
+            # (contract § 8.2 · isolation per runAgent iframe in V10).
+            nested_factory = self._build_runner_factory(provider)
             nested_dispatch = DispatchService(
                 employee_repo=employee_repo,
-                runner_factory=self._build_runner_factory(provider),
+                runner_factory=nested_factory,
             )
+            nested_spawn = SpawnSubagentService(
+                employee_repo=employee_repo,
+                runner_factory=nested_factory,
+            )
+            child_runtime = bootstrap_employee_runtime(child, skill_registry, tool_registry)
             return AgentRunner(
                 employee=child,
                 tool_registry=tool_registry,
                 gate=gate,
                 provider=provider,
                 dispatch_service=nested_dispatch,
+                skill_registry=skill_registry,
+                runtime=child_runtime,
+                spawn_subagent_service=nested_spawn,
             )
 
         return factory

@@ -1,0 +1,10 @@
+id: sk_executor_spawn
+name: Coordinator · Break Down & Dispatch
+description: Decompose big tasks and dispatch subagents via spawn_subagent.
+version: 0.1.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.spawn_subagent
+
+prompt_fragment_file: prompts/guidance.md

@@ -29,8 +29,10 @@ from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
 from allhands.execution.tools.meta.observatory_tools import ALL_OBSERVATORY_META_TOOLS
 from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
 from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
+from allhands.execution.tools.meta.resolve_skill import RESOLVE_SKILL_TOOL
 from allhands.execution.tools.meta.review_tools import ALL_REVIEW_META_TOOLS
 from allhands.execution.tools.meta.skill_tools import ALL_SKILL_META_TOOLS
+from allhands.execution.tools.meta.spawn_subagent import SPAWN_SUBAGENT_TOOL
 from allhands.execution.tools.meta.stock_tools import (  # single-line register: Wave 2 stock-assistant
     ALL_STOCK_ASSISTANT_TOOLS,
 )
@@ -50,6 +52,8 @@ from allhands.execution.tools.render.link_card import TOOL as LINK_CARD_TOOL
 from allhands.execution.tools.render.link_card import execute as link_card_execute
 from allhands.execution.tools.render.markdown_card import TOOL as MARKDOWN_CARD_TOOL
 from allhands.execution.tools.render.markdown_card import execute as markdown_card_execute
+from allhands.execution.tools.render.plan import TOOL as RENDER_PLAN_TOOL
+from allhands.execution.tools.render.plan import execute as render_plan_execute
 from allhands.execution.tools.render.steps import TOOL as STEPS_TOOL
 from allhands.execution.tools.render.steps import execute as steps_execute
 from allhands.execution.tools.render.table import TOOL as TABLE_TOOL
@@ -73,6 +77,7 @@ _RENDER_TOOLS = (
     (DIFF_TOOL, diff_execute),
     (CALLOUT_TOOL, callout_execute),
     (LINK_CARD_TOOL, link_card_execute),
+    (RENDER_PLAN_TOOL, render_plan_execute),
 )
 
 
@@ -96,6 +101,8 @@ def discover_builtin_tools(registry: ToolRegistry) -> None:
     for meta_tool, meta_executor in _META_TOOLS_WITH_EXECUTORS:
         registry.register(meta_tool, meta_executor)
     for tool in (
+        RESOLVE_SKILL_TOOL,
+        SPAWN_SUBAGENT_TOOL,
         *ALL_META_TOOLS,
         *ALL_PROVIDER_META_TOOLS,
         *ALL_MODEL_META_TOOLS,

@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from allhands.core import Employee, EmployeeNotFound, InvariantViolation
+from allhands.execution.modes import expand_preset
 
 if TYPE_CHECKING:
     from allhands.persistence.repositories import EmployeeRepo
@@ -84,12 +85,32 @@ class EmployeeService:
         model_ref: str,
         tool_ids: list[str] | None = None,
         skill_ids: list[str] | None = None,
-        max_iterations: int = 10,
+        max_iterations: int | None = None,
         is_lead_agent: bool = False,
         created_by: str = "user",
+        preset: str | None = None,
     ) -> Employee:
-        tids = list(tool_ids) if tool_ids is not None else []
-        sids = list(skill_ids) if skill_ids is not None else list(DEFAULT_SKILL_IDS)
+        if preset is not None:
+            # contract § 4.2 · UI form preset collapses into (tool_ids,
+            # skill_ids, max_iterations). NO `mode` field is stored — CLAUDE.md
+            # §3.2 red line. The preset name is a *template choice* at creation
+            # time; the employee that comes out is an ordinary unified-react
+            # agent differentiated only by those three scalars. Passing
+            # `max_iterations=None` lets the preset's own budget win (contract
+            # § 4.2 default precedence).
+            tids_list, sids_list, max_iterations = expand_preset(
+                preset,
+                custom_tool_ids=tool_ids,
+                custom_skill_ids=skill_ids,
+                custom_max_iterations=max_iterations,
+            )
+            tids = tids_list
+            sids = sids_list
+        else:
+            tids = list(tool_ids) if tool_ids is not None else []
+            sids = list(skill_ids) if skill_ids is not None else list(DEFAULT_SKILL_IDS)
+            if max_iterations is None:
+                max_iterations = 10
         if is_lead_agent:
             tids = _inject_coordination_tools(tids)
         _validate_dispatch_mount(tids, is_lead_agent)
