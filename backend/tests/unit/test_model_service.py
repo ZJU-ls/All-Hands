@@ -405,3 +405,232 @@ async def test_astream_chat_test_emits_error_event_on_4xx() -> None:
     types = [e["type"] for e in events]
     assert types == ["meta", "error"]
     assert events[1]["error_category"] == "auth"
+
+
+# ---------------- Anthropic-kind dispatch (E13 regression) ----------------
+#
+# run_chat_test / astream_chat_test must recognize kind="anthropic" and hit
+# the Messages API (/v1/messages · x-api-key · anthropic-version). Without
+# this, providers whose only endpoint is /v1/messages (DashScope coding-plan,
+# Anthropic native, proxies in front of Claude) return 404 "model_not_found"
+# on ping even though the provider works from the Lead Agent runtime
+# (which uses build_llm → ChatAnthropic and therefore already routes
+# correctly). The gateway UI then shows "no models" next to a working
+# provider.
+
+
+def _anthropic_provider(base_url: str = "https://api.anthropic.com") -> LLMProvider:
+    return LLMProvider(
+        id="p-ant",
+        name="Anthro",
+        kind="anthropic",
+        base_url=base_url,
+        api_key="sk-ant-fake",
+        default_model="claude-3-5-sonnet-latest",
+        is_default=False,
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_chat_test_anthropic_hits_messages_endpoint() -> None:
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["headers"] = dict(request.headers)
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "id": "msg_1",
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": "pong"}],
+                "model": "claude-3-5-sonnet-latest",
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 5, "output_tokens": 2},
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        result = await run_chat_test(
+            _anthropic_provider(),
+            "claude-3-5-sonnet-latest",
+            prompt="ping",
+            http_client=client,
+        )
+
+    assert result["ok"] is True
+    assert result["response"] == "pong"
+    assert result["usage"] == {"input_tokens": 5, "output_tokens": 2, "total_tokens": 7}
+    # Messages API, not /chat/completions.
+    assert captured["url"] == "https://api.anthropic.com/v1/messages"
+    # Anthropic auth headers, not Bearer.
+    assert captured["headers"]["x-api-key"] == "sk-ant-fake"
+    assert captured["headers"]["anthropic-version"] == "2023-06-01"
+    assert "authorization" not in {k.lower() for k in captured["headers"]}
+    # Anthropic body shape: model + messages + max_tokens required.
+    assert captured["body"]["model"] == "claude-3-5-sonnet-latest"
+    assert captured["body"]["messages"] == [{"role": "user", "content": "ping"}]
+    assert captured["body"]["max_tokens"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_run_chat_test_anthropic_system_goes_top_level_not_a_role() -> None:
+    """Anthropic Messages API rejects `role: system` — it must be top-level."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "content": [{"type": "text", "text": "ok"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        await run_chat_test(
+            _anthropic_provider(),
+            "claude-3-5-sonnet-latest",
+            prompt="hello",
+            system="be terse",
+            http_client=client,
+        )
+
+    assert captured["body"]["system"] == "be terse"
+    # No system role leaked into messages[].
+    roles = [m["role"] for m in captured["body"]["messages"]]
+    assert "system" not in roles
+
+
+@pytest.mark.asyncio
+async def test_run_chat_test_anthropic_base_with_non_v1_suffix() -> None:
+    """DashScope coding plan lives at https://coding.dashscope.aliyuncs.com/apps/anthropic
+    with only /v1/messages exposed. The ping must append /v1/messages correctly.
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(
+            200,
+            json={
+                "content": [{"type": "text", "text": "ok"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    provider = _anthropic_provider(base_url="https://coding.dashscope.aliyuncs.com/apps/anthropic")
+    async with httpx.AsyncClient(transport=transport) as client:
+        await run_chat_test(provider, "qwen3.6-plus", prompt="ping", http_client=client)
+
+    assert captured["url"] == "https://coding.dashscope.aliyuncs.com/apps/anthropic/v1/messages"
+
+
+@pytest.mark.asyncio
+async def test_run_chat_test_anthropic_404_categorized_model_not_found() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text="not found")
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        result = await run_chat_test(
+            _anthropic_provider(),
+            "no-such-model",
+            prompt="ping",
+            http_client=client,
+        )
+    assert result["ok"] is False
+    assert result["error_category"] == "model_not_found"
+
+
+def _anthropic_sse_bytes(events: list[tuple[str, dict[str, Any]]]) -> bytes:
+    """Serialize a list of (event, data) pairs as Anthropic SSE frames.
+
+    Real Anthropic SSE always includes the event type *inside* the data
+    payload too, so parsers that only consume `data:` lines can still
+    recover the event type. Mirror that here.
+    """
+    out: list[str] = []
+    for event_name, payload in events:
+        data = {"type": event_name, **payload}
+        out.append(f"event: {event_name}\n")
+        out.append(f"data: {json.dumps(data)}\n\n")
+    return "".join(out).encode()
+
+
+@pytest.mark.asyncio
+async def test_astream_chat_test_anthropic_emits_delta_events() -> None:
+    """Anthropic stream uses `content_block_delta` frames with `delta.text`,
+    terminated by `message_delta` carrying `usage.output_tokens`. The streaming
+    test must parse these and emit the same `meta → delta* → done` sequence
+    the UI relies on, so Gateway ping works for anthropic-kind providers too.
+    """
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        frames = _anthropic_sse_bytes(
+            [
+                ("message_start", {"message": {"usage": {"input_tokens": 3, "output_tokens": 0}}}),
+                (
+                    "content_block_start",
+                    {"index": 0, "content_block": {"type": "text", "text": ""}},
+                ),
+                (
+                    "content_block_delta",
+                    {"index": 0, "delta": {"type": "text_delta", "text": "he"}},
+                ),
+                (
+                    "content_block_delta",
+                    {"index": 0, "delta": {"type": "text_delta", "text": "llo"}},
+                ),
+                ("content_block_stop", {"index": 0}),
+                (
+                    "message_delta",
+                    {"delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 2}},
+                ),
+                ("message_stop", {}),
+            ]
+        )
+        return httpx.Response(200, content=frames, headers={"Content-Type": "text/event-stream"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        events = [
+            e
+            async for e in astream_chat_test(
+                _anthropic_provider(), "claude-3-5-sonnet-latest", prompt="hi", http_client=client
+            )
+        ]
+
+    types = [e["type"] for e in events]
+    assert types[0] == "meta"
+    assert types[-1] == "done"
+    deltas = [e["text"] for e in events if e["type"] == "delta"]
+    assert "".join(deltas) == "hello"
+    done = events[-1]
+    assert done["response"] == "hello"
+    assert done["usage"]["input_tokens"] == 3
+    assert done["usage"]["output_tokens"] == 2
+
+
+@pytest.mark.asyncio
+async def test_astream_chat_test_anthropic_4xx_emits_error() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, text="Unauthorized")
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        events = [
+            e
+            async for e in astream_chat_test(
+                _anthropic_provider(), "m", prompt="ping", http_client=client
+            )
+        ]
+    types = [e["type"] for e in events]
+    assert types == ["meta", "error"]
+    assert events[1]["error_category"] == "auth"

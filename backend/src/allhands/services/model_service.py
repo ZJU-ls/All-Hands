@@ -16,6 +16,15 @@ We hit the OpenAI-compatible `/chat/completions` endpoint directly via
 17 s of silence followed by a one-shot paste instead of a live thinking
 stream. The test surface must faithfully reflect what the provider streams.
 
+Kind-aware dispatch (E13): when `provider.kind == "anthropic"` we speak the
+Anthropic Messages API natively (`/v1/messages` · `x-api-key` ·
+`anthropic-version`). Before this, providers whose ONLY endpoint is
+`/v1/messages` — DashScope coding-plan gateway, Anthropic native, proxies
+sitting in front of Claude — returned 404 on ping even though the Lead
+Agent runtime worked (the runtime goes through `build_llm → ChatAnthropic`
+which already dispatches correctly). The gateway UI then showed "no
+models" next to a working provider. Keep the two code paths in sync.
+
 Shared by the REST route and the `chat_test_model` meta tool.
 """
 
@@ -242,6 +251,178 @@ def _base_url(provider: LLMProvider) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Anthropic Messages API (used when provider.kind == "anthropic")
+# ---------------------------------------------------------------------------
+
+ANTHROPIC_VERSION = "2023-06-01"
+ANTHROPIC_DEFAULT_MAX_TOKENS = 1024
+
+
+def _is_anthropic(provider: LLMProvider) -> bool:
+    return getattr(provider, "kind", "openai") == "anthropic"
+
+
+def _anthropic_headers(provider: LLMProvider) -> dict[str, str]:
+    h = {
+        "Content-Type": "application/json",
+        "anthropic-version": ANTHROPIC_VERSION,
+    }
+    if provider.api_key:
+        h["x-api-key"] = provider.api_key
+    return h
+
+
+def _anthropic_url(provider: LLMProvider, endpoint: str = "/v1/messages") -> str:
+    base = (provider.base_url or "").rstrip("/")
+    if not base:
+        base = "https://api.anthropic.com"
+    if base.endswith("/v1"):
+        # Proxies advertising a /v1 root — don't double-prepend.
+        return base + endpoint[len("/v1") :]
+    return base + endpoint
+
+
+def _split_system_and_messages(
+    *, system: str | None, messages: list[dict[str, str]] | None, prompt: str | None
+) -> tuple[str | None, list[dict[str, str]]]:
+    """Split UI inputs into (system_text, non_system_messages) for Anthropic.
+
+    Anthropic's Messages API rejects `role: system` inside the messages array
+    — the system prompt must live at the top level. If the caller passes a
+    system role inside `messages[]` (legacy shape), we promote it.
+    """
+    sys_parts: list[str] = []
+    if system and system.strip():
+        sys_parts.append(system.strip())
+    out: list[dict[str, str]] = []
+    if messages:
+        for m in messages:
+            role = (m.get("role") or "user").lower()
+            content = m.get("content", "")
+            if role == "system":
+                if content:
+                    sys_parts.append(content)
+                continue
+            if role not in ("user", "assistant"):
+                role = "user"
+            out.append({"role": role, "content": content})
+    elif prompt is not None:
+        out.append({"role": "user", "content": prompt})
+    return ("\n\n".join(sys_parts) or None, out)
+
+
+def _build_anthropic_body(
+    *,
+    model_name: str,
+    system: str | None,
+    messages: list[dict[str, str]],
+    temperature: float | None,
+    top_p: float | None,
+    max_tokens: int | None,
+    stop: list[str] | None,
+    stream: bool,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "model": model_name,
+        "messages": messages,
+        # Anthropic requires max_tokens — fall back to a reasonable default.
+        "max_tokens": max_tokens if max_tokens is not None else ANTHROPIC_DEFAULT_MAX_TOKENS,
+    }
+    if system:
+        body["system"] = system
+    if stream:
+        body["stream"] = True
+    if temperature is not None:
+        body["temperature"] = temperature
+    if top_p is not None:
+        body["top_p"] = top_p
+    if stop:
+        body["stop_sequences"] = stop
+    return body
+
+
+def _anthropic_text_from_response(data: dict[str, Any]) -> str:
+    """Extract plain text from an Anthropic `messages.create` response body."""
+    blocks = data.get("content") or []
+    parts: list[str] = []
+    for b in blocks:
+        if isinstance(b, dict) and b.get("type") == "text":
+            parts.append(str(b.get("text") or ""))
+    return "".join(parts)
+
+
+def _anthropic_usage(data: dict[str, Any]) -> dict[str, int]:
+    u = data.get("usage") or {}
+    input_t = int(u.get("input_tokens") or 0)
+    output_t = int(u.get("output_tokens") or 0)
+    return {"input_tokens": input_t, "output_tokens": output_t, "total_tokens": input_t + output_t}
+
+
+async def _run_anthropic_chat(
+    provider: LLMProvider,
+    model_name: str,
+    *,
+    prompt: str | None,
+    messages: list[dict[str, str]] | None,
+    system: str | None,
+    temperature: float | None,
+    top_p: float | None,
+    max_tokens: int | None,
+    stop: list[str] | None,
+    http_client: httpx.AsyncClient | None,
+) -> dict[str, Any]:
+    sys_text, msgs = _split_system_and_messages(system=system, messages=messages, prompt=prompt)
+    body = _build_anthropic_body(
+        model_name=model_name,
+        system=sys_text,
+        messages=msgs,
+        temperature=temperature,
+        top_p=top_p,
+        max_tokens=max_tokens,
+        stop=stop,
+        stream=False,
+    )
+    url = _anthropic_url(provider)
+    started = time.perf_counter()
+
+    client = http_client or httpx.AsyncClient(timeout=120)
+    owns_client = http_client is None
+    try:
+        try:
+            resp = await client.post(url, headers=_anthropic_headers(provider), json=body)
+        except Exception as exc:
+            return {
+                "ok": False,
+                "model": model_name,
+                "latency_ms": int((time.perf_counter() - started) * 1000),
+                "error": str(exc),
+                "error_category": categorize_error(exc),
+            }
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        if resp.status_code >= 400:
+            return {
+                "ok": False,
+                "model": model_name,
+                "latency_ms": latency_ms,
+                "error": f"HTTP {resp.status_code}: {resp.text[:500]}",
+                "error_category": categorize_http_status(resp.status_code),
+            }
+        data = resp.json()
+    finally:
+        if owns_client:
+            await client.aclose()
+
+    return {
+        "ok": True,
+        "model": model_name,
+        "response": _anthropic_text_from_response(data),
+        "reasoning_text": "",
+        "latency_ms": latency_ms,
+        "usage": _anthropic_usage(data),
+    }
+
+
+# ---------------------------------------------------------------------------
 # run_chat_test — single non-streaming call
 # ---------------------------------------------------------------------------
 
@@ -268,6 +449,19 @@ async def run_chat_test(
     `message.reasoning_content` field is preserved as `reasoning_text` when
     present so tests surface what production would reveal.
     """
+    if _is_anthropic(provider):
+        return await _run_anthropic_chat(
+            provider,
+            model_name,
+            prompt=prompt,
+            messages=messages,
+            system=system,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            stop=stop,
+            http_client=http_client,
+        )
     body = _build_openai_body(
         model_name=model_name,
         messages=_build_openai_messages(system=system, messages=messages, prompt=prompt),
@@ -344,6 +538,138 @@ def _parse_sse_data(line: str) -> dict[str, Any] | None:
         return None
 
 
+async def _astream_anthropic_chat(
+    provider: LLMProvider,
+    model_name: str,
+    *,
+    prompt: str | None,
+    messages: list[dict[str, str]] | None,
+    system: str | None,
+    temperature: float | None,
+    top_p: float | None,
+    max_tokens: int | None,
+    stop: list[str] | None,
+    http_client: httpx.AsyncClient | None,
+) -> AsyncIterator[dict[str, Any]]:
+    """Stream an Anthropic Messages API call, emitting the same event
+    vocabulary (`meta`/`delta`/`done`/`error`) the OpenAI streamer uses.
+
+    Anthropic's SSE uses typed frames (`message_start`, `content_block_delta`,
+    `message_delta`, `message_stop`) — we translate them into unified events
+    so upstream consumers (the AG-UI encoder, the Gateway UI) don't have to
+    care which wire format a given provider speaks.
+    """
+    sys_text, msgs = _split_system_and_messages(system=system, messages=messages, prompt=prompt)
+    body = _build_anthropic_body(
+        model_name=model_name,
+        system=sys_text,
+        messages=msgs,
+        temperature=temperature,
+        top_p=top_p,
+        max_tokens=max_tokens,
+        stop=stop,
+        stream=True,
+    )
+    url = _anthropic_url(provider)
+    started = time.perf_counter()
+
+    yield {"type": "meta", "model": model_name, "started_at_ms": int(started * 1000)}
+
+    first_content_at: float | None = None
+    content_buf: list[str] = []
+    input_tokens = 0
+    output_tokens = 0
+
+    client = http_client or httpx.AsyncClient(timeout=120)
+    owns_client = http_client is None
+    try:
+        try:
+            async with client.stream(
+                "POST", url, headers=_anthropic_headers(provider), json=body
+            ) as resp:
+                if resp.status_code >= 400:
+                    raw = await resp.aread()
+                    yield {
+                        "type": "error",
+                        "error": f"HTTP {resp.status_code}: {raw.decode('utf-8', errors='replace')[:500]}",
+                        "error_category": categorize_http_status(resp.status_code),
+                        "latency_ms": int((time.perf_counter() - started) * 1000),
+                    }
+                    return
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if not payload or payload == "[DONE]":
+                        continue
+                    try:
+                        data = json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
+                    etype = data.get("type")
+                    if etype == "message_start":
+                        u = (data.get("message") or {}).get("usage") or {}
+                        input_tokens = int(u.get("input_tokens") or input_tokens)
+                        output_tokens = int(u.get("output_tokens") or output_tokens)
+                    elif etype == "content_block_delta":
+                        delta = data.get("delta") or {}
+                        # Visible text deltas. Extended thinking models emit
+                        # `thinking_delta` separately — treat it as reasoning
+                        # so the UI's reasoning panel populates, mirroring
+                        # OpenAI-compat reasoning_content behaviour.
+                        if delta.get("type") == "text_delta":
+                            text = str(delta.get("text") or "")
+                            if text:
+                                if first_content_at is None:
+                                    first_content_at = time.perf_counter()
+                                content_buf.append(text)
+                                yield {"type": "delta", "text": text}
+                        elif delta.get("type") == "thinking_delta":
+                            text = str(delta.get("thinking") or "")
+                            if text:
+                                yield {"type": "reasoning", "text": text}
+                    elif etype == "message_delta":
+                        u = data.get("usage") or {}
+                        # message_delta emits the cumulative output_tokens.
+                        if "output_tokens" in u:
+                            output_tokens = int(u["output_tokens"])
+        except Exception as exc:
+            yield {
+                "type": "error",
+                "error": str(exc),
+                "error_category": categorize_error(exc),
+                "latency_ms": int((time.perf_counter() - started) * 1000),
+            }
+            return
+    finally:
+        if owns_client:
+            await client.aclose()
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    ttft_ms = int((first_content_at - started) * 1000) if first_content_at else latency_ms
+    response = "".join(content_buf)
+    if first_content_at is not None and output_tokens:
+        elapsed_s = max(time.perf_counter() - first_content_at, 1e-6)
+        tok_per_sec = round(output_tokens / elapsed_s, 2)
+    else:
+        tok_per_sec = 0.0
+
+    yield {
+        "type": "done",
+        "latency_ms": latency_ms,
+        "ttft_ms": ttft_ms,
+        "reasoning_first_ms": 0,
+        "usage": {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens,
+        },
+        "tokens_per_second": tok_per_sec,
+        "response": response,
+        "reasoning_text": "",
+    }
+
+
 async def astream_chat_test(
     provider: LLMProvider,
     model_name: str,
@@ -373,6 +699,21 @@ async def astream_chat_test(
       - `reasoning_first_ms` = time to first reasoning chunk (0 if no reasoning)
       - `ttft_ms`            = time to first **visible content** chunk (what the user waits for)
     """
+    if _is_anthropic(provider):
+        async for evt in _astream_anthropic_chat(
+            provider,
+            model_name,
+            prompt=prompt,
+            messages=messages,
+            system=system,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            stop=stop,
+            http_client=http_client,
+        ):
+            yield evt
+        return
     body = _build_openai_body(
         model_name=model_name,
         messages=_build_openai_messages(system=system, messages=messages, prompt=prompt),
