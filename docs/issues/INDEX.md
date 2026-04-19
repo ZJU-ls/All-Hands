@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(Track N 关闭 I-0020 seed 基础设施 + Track K 关闭 I-0019 gateway 嵌套 · Wave-3 前段合流)
+最后更新:2026-04-19(Track L 关闭 I-0021 /employees/design preset selector + dry-run · Track N 关闭 I-0020 · Track K 关闭 I-0019 · Wave-3 中段合流)
 
 ---
 
@@ -15,7 +15,6 @@
 | [I-0017](open/I-0017-ag-ui-protocol-migration.md) | P0 | open | 前后端 SSE/streaming 协议统一迁移到 AG-UI Protocol · 自定义事件名不符合 AI-native 行业标准 | backend/api/routers/*.py · web/lib/stream-client.ts · 所有 SSE 消费点 | 2026-04-19 / user-product-review | Wave-3 AI-native · CopilotKit 接入 | arch, api, streaming, protocol |
 | [I-0018](open/I-0018-model-test-stream-not-streaming.md) | P0 | open | /gateway 模型对话测试观感为非流式 · 字符一次性蹦出 | web/components/gateway/ModelTestDialog · backend/services/model_service · Next rewrites | 2026-04-19 / user-product-review | AI-native DoD(I-0016 本该已覆盖) | ui, streaming, bug |
 | [I-0022](open/I-0022-dynamic-skill-injection-and-subagent.md) | P0 | open | Skill 作为 Tool 动态注入 + Subagent spawn + Plan 模式 · 参考 ref-src-claude | backend/execution/skills.py · agent_runner · core/tool.py · 新 execution/modes/* | 2026-04-19 / user-product-review | I-0021 员工设计页 · Wave-3 reasoning-light model 可用性 | backend, agent-runtime, arch |
-| [I-0021](open/I-0021-employee-design-page.md) | P1 | open | /employees 员工设计(招聘)页 · preset + skill/mcp 挂载 · Dry run 预览 | web/app/employees · web/components/employee-design · employee_tools meta | 2026-04-19 / user-product-review | Wave-3 员工组织能力闭环 | ui, ux, employees |
 | [I-0002](open/I-0002-model-context-window-zero.md) | P2 | open | `qwen3.6-plus` context_window=0 · 前端显示异常 / Agent token 预算失效 | backend(models seed) + web(settings) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0003](open/I-0003-provider-default-model-dangling.md) | P2 | open | Provider `百炼` default_model=`glm-5` · 但库里只有 `qwen3.6-plus` · 悬空引用 | backend(providers seed) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0012](open/I-0012-design-lab-missing-live-samples.md) | P2 | open | design-lab missing live samples for Viz components + Artifact.Preview | web/app/design-lab | 2026-04-19 / track-2-qa | — | ui, visual, docs |
@@ -29,9 +28,9 @@
 | 维度 | 数量 |
 |---|---|
 | P0 | 3 |
-| P1 | 1 |
+| P1 | 0 |
 | P2 | 5 |
-| **open** | 9 |
+| **open** | 8 |
 | **in-progress** | 0 |
 | **blocked** | 0 |
 
@@ -79,3 +78,4 @@
 - 2026-04-19 · Wave-3 并行分发 · 新增 I-0019(gateway 嵌套)+ I-0020(seed 基础设施)+ I-0021(员工设计页)+ I-0022(skill 动态注入)· 分发 Track K/N/L/M(复用 `allhands-track-a/e/b/c` · 端口 3010-3013/8010-8013)
 - 2026-04-19 · Track N 关闭 I-0020(seed 数据基础设施 · `seed_service.py` + `ensure_all_dev_seeds()` + 7 domain `ensure_*` + `data/seeds/*.json` × 7 + `allhands-seed` CLI + `main.py::_should_seed` dev/test 自动 · `working-protocol.md` §4 DoD seed 块 + L02 + E01 · 回归 `test_seed_service.py` 10 cases + `test_seed_cli.py` 7 cases + `seed-full-house.spec.ts` 冷启 5 页 ≥ N)· P1 3 → 2 · open 11 → 10
 - 2026-04-19 · Track K 关闭 I-0019(/gateway master-detail → accordion · PingIndicator 4 态状态机 · `POST /api/models/{id}/ping` + `allhands.meta.ping_model` 成对 · 6+5+5 后端用例 + 3 playwright smoke · provider/model seed 由 Track N 的 `seed_service` 统一供给)· P1 2 → 1 · open 10 → 9
+- 2026-04-19 · Track L 关闭 I-0021(/employees/design Phase-3B · `execution/modes/{execute,plan,plan_with_subagent,preview}.py` 单一展开算法 · `plan_with_subagent.max_iterations=15`(SIGNOFF Q7)· `POST /api/employees/preview` 配 `PREVIEW_EMPLOYEE_COMPOSITION_TOOL`(L01 REST+Meta 双入口)· PresetRadio 3 选一友好中文名 + DesignForm + DryRunPanel + SkillMultiPicker + max-iterations field · 10 preview + 6 e2e + L01 green · §3.2 6 层证据)· P1 1 → 0 · open 9 → 8
