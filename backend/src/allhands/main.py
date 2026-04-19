@@ -68,7 +68,9 @@ async def startup() -> None:
         log.warning("lead_agent.seed.failed", error=str(exc))
 
     # Dev / test seed: ensure every page has real "full house" data on cold start
-    # (I-0020). No-op in prod unless ALLHANDS_SEED=1.
+    # (I-0020). No-op in prod unless ALLHANDS_SEED=1. Track N's seed_service
+    # supersedes Track K's bootstrap_service.ensure_gateway_demo_seeds — the
+    # latter is retained as a util but no longer wired into startup.
     if _should_seed(settings.env):
         try:
             maker = get_sessionmaker()

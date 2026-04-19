@@ -64,16 +64,24 @@ describe("E02 · 长页面根容器必须 h-screen overflow-y-auto(禁止裸 min
 
 describe("E03 · useSearchParams 必须包在 Suspense 内", () => {
   const pages = allTsx.filter((p) => /\/page\.tsx$/.test(p));
+  const matching = pages.filter((p) =>
+    readFileSync(p, "utf8").includes("useSearchParams"),
+  );
 
-  it.each(
-    pages
-      .filter((p) => readFileSync(p, "utf8").includes("useSearchParams"))
-      .map((p) => [rel(p)]),
-  )("%s 使用 useSearchParams 时必须声明 Suspense", (file) => {
-    const src = readFileSync(path.join(REPO, file), "utf8");
-    expect(src).toMatch(/import\s*{[^}]*\bSuspense\b[^}]*}\s*from\s*["']react["']/);
-    expect(src).toMatch(/<Suspense\b/);
-  });
+  if (matching.length === 0) {
+    it("当前没有页面使用 useSearchParams — 规则处于 idle 状态", () => {
+      expect(matching.length).toBe(0);
+    });
+  } else {
+    it.each(matching.map((p) => [rel(p)]))(
+      "%s 使用 useSearchParams 时必须声明 Suspense",
+      (file) => {
+        const src = readFileSync(path.join(REPO, file), "utf8");
+        expect(src).toMatch(/import\s*{[^}]*\bSuspense\b[^}]*}\s*from\s*["']react["']/);
+        expect(src).toMatch(/<Suspense\b/);
+      },
+    );
+  }
 });
 
 describe("E05 · App Router 必须存在 error.tsx 与 not-found.tsx", () => {

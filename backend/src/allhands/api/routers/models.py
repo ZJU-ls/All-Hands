@@ -6,6 +6,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -13,6 +14,9 @@ from pydantic import BaseModel, Field
 from allhands.api.deps import get_model_service, get_session
 from allhands.core.model import LLMModel
 from allhands.services.model_service import astream_chat_test, run_chat_test
+
+PING_TIMEOUT_SECONDS = 5.0
+PING_MAX_TOKENS = 4
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -147,6 +151,33 @@ async def delete_model(
 ) -> None:
     svc = await get_model_service(session)
     await svc.delete(model_id)
+
+
+@router.post("/{model_id}/ping", response_model=dict)
+async def ping_model(
+    model_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object]:
+    """Fast connectivity ping for one model (I-0019).
+
+    Fires a single chat call with prompt="ping", max_tokens=4 and a
+    dedicated 5s httpx client so a dead provider cannot hold the UI for
+    120s. Shares the `run_chat_test` code path so error categorisation
+    matches the rest of the gateway surface.
+    """
+    svc = await get_model_service(session)
+    pair = await svc.resolve_with_provider(model_id)
+    if pair is None:
+        raise HTTPException(status_code=404, detail="Model or provider not found.")
+    model, provider = pair
+    async with httpx.AsyncClient(timeout=PING_TIMEOUT_SECONDS) as client:
+        return await run_chat_test(
+            provider,
+            model.name,
+            prompt="ping",
+            max_tokens=PING_MAX_TOKENS,
+            http_client=client,
+        )
 
 
 @router.post("/{model_id}/test", response_model=dict)

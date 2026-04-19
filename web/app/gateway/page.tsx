@@ -1,37 +1,21 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import { ModelTestDialog } from "@/components/gateway/ModelTestDialog";
-
-type Provider = {
-  id: string;
-  name: string;
-  base_url: string;
-  api_key_set: boolean;
-  default_model: string;
-  is_default: boolean;
-  enabled: boolean;
-};
-
-type Model = {
-  id: string;
-  provider_id: string;
-  name: string;
-  display_name: string;
-  context_window: number;
-  enabled: boolean;
-};
-
-type TestState = { ok: boolean; msg: string };
+import {
+  ProviderSection,
+  type GatewayProvider,
+} from "@/components/gateway/ProviderSection";
+import type { GatewayModel } from "@/components/gateway/ModelRow";
+import type { PingState } from "@/components/gateway/PingIndicator";
 
 type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; providers: Provider[]; models: Model[] };
+  | { status: "ready"; providers: GatewayProvider[]; models: GatewayModel[] };
 
 const EMPTY_PROVIDER_FORM = {
   name: "",
@@ -56,23 +40,27 @@ export default function GatewayPage() {
 }
 
 function GatewayPageInner() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const selectedId = params.get("provider") ?? "";
-
   const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [tests, setTests] = useState<Record<string, TestState>>({});
-  const [providerForm, setProviderForm] = useState<typeof EMPTY_PROVIDER_FORM | null>(
-    null
-  );
-  const [modelForm, setModelForm] = useState<typeof EMPTY_MODEL_FORM | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [deleteProviderTarget, setDeleteProviderTarget] = useState<Provider | null>(null);
-  const [deleteModelTarget, setDeleteModelTarget] = useState<Model | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [chatModel, setChatModel] = useState<Model | null>(null);
+  const [openProviders, setOpenProviders] = useState<Set<string>>(new Set());
+  const [openInitialised, setOpenInitialised] = useState(false);
+  const [pingStates, setPingStates] = useState<Record<string, PingState>>({});
+  const [bulkPing, setBulkPing] = useState<
+    Record<string, { done: number; total: number } | null>
+  >({});
 
-  const load = async () => {
+  const [providerForm, setProviderForm] = useState<typeof EMPTY_PROVIDER_FORM | null>(null);
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [modelFormFor, setModelFormFor] = useState<GatewayProvider | null>(null);
+  const [modelForm, setModelForm] = useState<typeof EMPTY_MODEL_FORM>(EMPTY_MODEL_FORM);
+
+  const [saving, setSaving] = useState(false);
+  const [deleteProviderTarget, setDeleteProviderTarget] =
+    useState<GatewayProvider | null>(null);
+  const [deleteModelTarget, setDeleteModelTarget] = useState<GatewayModel | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [chatModel, setChatModel] = useState<GatewayModel | null>(null);
+
+  const load = useCallback(async () => {
     setState({ status: "loading" });
     try {
       const [pRes, mRes] = await Promise.all([
@@ -81,57 +69,155 @@ function GatewayPageInner() {
       ]);
       if (!pRes.ok) throw new Error(`providers HTTP ${pRes.status}`);
       if (!mRes.ok) throw new Error(`models HTTP ${mRes.status}`);
-      const providers = (await pRes.json()) as Provider[];
-      const models = (await mRes.json()) as Model[];
+      const providers = (await pRes.json()) as GatewayProvider[];
+      const models = (await mRes.json()) as GatewayModel[];
       setState({ status: "ready", providers, models });
     } catch (err) {
       setState({ status: "error", message: String(err) });
     }
-  };
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
+
+  // Default: on first successful load, open every provider. User toggles after
+  // that are preserved across refetches (we only seed the open set once).
+  useEffect(() => {
+    if (state.status !== "ready" || openInitialised) return;
+    setOpenProviders(new Set(state.providers.map((p) => p.id)));
+    setOpenInitialised(true);
+  }, [state, openInitialised]);
 
   const providers = useMemo(
     () => (state.status === "ready" ? state.providers : []),
-    [state]
+    [state],
   );
   const allModels = useMemo(
     () => (state.status === "ready" ? state.models : []),
-    [state]
+    [state],
   );
 
-  const resolvedId = useMemo(() => {
-    if (selectedId && providers.some((p) => p.id === selectedId)) return selectedId;
-    const fallback = providers.find((p) => p.is_default) ?? providers[0];
-    return fallback?.id ?? "";
-  }, [selectedId, providers]);
+  const toggleProvider = useCallback((id: string) => {
+    setOpenProviders((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
-  const selected = providers.find((p) => p.id === resolvedId) ?? null;
-  const providerModels = selected
-    ? allModels.filter((m) => m.provider_id === selected.id)
-    : [];
+  const pingOne = useCallback(async (model: GatewayModel) => {
+    setPingStates((prev) => ({ ...prev, [model.id]: { status: "running" } }));
+    const started = performance.now();
+    try {
+      const res = await fetch(`/api/models/${model.id}/ping`, { method: "POST" });
+      const elapsed = Math.round(performance.now() - started);
+      if (!res.ok) {
+        setPingStates((prev) => ({
+          ...prev,
+          [model.id]: {
+            status: "fail",
+            category: "provider_error",
+            error: `HTTP ${res.status}`,
+            latencyMs: elapsed,
+          },
+        }));
+        return;
+      }
+      const data = (await res.json()) as {
+        ok: boolean;
+        latency_ms?: number;
+        error?: string;
+        error_category?: string;
+      };
+      if (data.ok) {
+        setPingStates((prev) => ({
+          ...prev,
+          [model.id]: {
+            status: "ok",
+            latencyMs: data.latency_ms ?? elapsed,
+          },
+        }));
+      } else {
+        setPingStates((prev) => ({
+          ...prev,
+          [model.id]: {
+            status: "fail",
+            category: data.error_category ?? "unknown",
+            error: data.error ?? "失败",
+            latencyMs: data.latency_ms ?? elapsed,
+          },
+        }));
+      }
+    } catch (err) {
+      const elapsed = Math.round(performance.now() - started);
+      setPingStates((prev) => ({
+        ...prev,
+        [model.id]: {
+          status: "fail",
+          category: "connection",
+          error: String(err),
+          latencyMs: elapsed,
+        },
+      }));
+    }
+  }, []);
 
-  const selectProvider = (id: string) => {
-    const qs = new URLSearchParams(Array.from(params.entries()));
-    qs.set("provider", id);
-    router.replace(`/gateway?${qs.toString()}`);
-  };
+  const bulkPingProvider = useCallback(
+    async (providerId: string, models: GatewayModel[]) => {
+      if (models.length === 0) return;
+      const enabled = models.filter((m) => m.enabled);
+      const total = enabled.length || models.length;
+      const targets = enabled.length > 0 ? enabled : models;
+      setBulkPing((prev) => ({ ...prev, [providerId]: { done: 0, total } }));
+      let done = 0;
+      await Promise.all(
+        targets.map(async (m) => {
+          await pingOne(m);
+          done += 1;
+          setBulkPing((prev) => ({ ...prev, [providerId]: { done, total } }));
+        }),
+      );
+      setBulkPing((prev) => ({ ...prev, [providerId]: null }));
+    },
+    [pingOne],
+  );
 
   async function handleCreateProvider() {
     if (!providerForm) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/providers", {
+      await fetch("/api/providers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(providerForm),
       });
-      const created = (await res.json()) as Provider;
       setProviderForm(null);
       await load();
-      if (created?.id) selectProvider(created.id);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEditProvider() {
+    if (!providerForm || !editingProviderId) return;
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        name: providerForm.name,
+        base_url: providerForm.base_url,
+        default_model: providerForm.default_model,
+      };
+      if (providerForm.api_key) body.api_key = providerForm.api_key;
+      await fetch(`/api/providers/${editingProviderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      setProviderForm(null);
+      setEditingProviderId(null);
+      await load();
     } finally {
       setSaving(false);
     }
@@ -148,47 +234,23 @@ function GatewayPageInner() {
     try {
       await fetch(`/api/providers/${deleteProviderTarget.id}`, { method: "DELETE" });
       setDeleteProviderTarget(null);
-      if (deleteProviderTarget.id === resolvedId) {
-        const qs = new URLSearchParams(Array.from(params.entries()));
-        qs.delete("provider");
-        router.replace(`/gateway${qs.toString() ? `?${qs}` : ""}`);
-      }
       await load();
     } finally {
       setDeleting(false);
     }
   }
 
-  async function handleTestProvider(id: string) {
-    setTests((p) => ({ ...p, [id]: { ok: false, msg: "连接中…" } }));
-    const started = performance.now();
-    const res = await fetch(`/api/providers/${id}/test`, { method: "POST" });
-    const elapsed = Math.round(performance.now() - started);
-    const data = (await res.json()) as {
-      ok: boolean;
-      endpoint?: string;
-      status?: number;
-      response?: string;
-      error?: string;
-    };
-    const msg = data.ok
-      ? data.endpoint
-        ? `✓ 端点可达 · HTTP ${data.status} · ${elapsed} ms`
-        : `✓ 端点可达 · ${elapsed} ms`
-      : `✗ ${data.error ?? "失败"} · ${elapsed} ms`;
-    setTests((p) => ({ ...p, [id]: { ok: data.ok, msg } }));
-  }
-
   async function handleCreateModel() {
-    if (!modelForm || !selected) return;
+    if (!modelFormFor) return;
     setSaving(true);
     try {
       await fetch("/api/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider_id: selected.id, ...modelForm }),
+        body: JSON.stringify({ provider_id: modelFormFor.id, ...modelForm }),
       });
-      setModelForm(null);
+      setModelFormFor(null);
+      setModelForm(EMPTY_MODEL_FORM);
       await load();
     } finally {
       setSaving(false);
@@ -212,76 +274,127 @@ function GatewayPageInner() {
       title="模型网关"
       actions={
         <button
-          onClick={() => setProviderForm({ ...EMPTY_PROVIDER_FORM })}
-          className="rounded-md bg-primary text-primary-fg hover:bg-primary-hover px-3 py-1.5 text-xs font-medium transition-colors"
+          type="button"
+          onClick={() => {
+            setEditingProviderId(null);
+            setProviderForm({ ...EMPTY_PROVIDER_FORM });
+          }}
+          data-testid="gateway-add-provider"
+          className="rounded bg-primary text-primary-fg hover:bg-primary-hover text-[12px] font-medium px-3 py-1.5 transition-colors duration-base"
         >
           + 添加供应商
         </button>
       }
     >
       <div className="h-full flex flex-col min-h-0">
-        <ProviderTabs
-          state={state}
-          resolvedId={resolvedId}
-          tests={tests}
-          onSelect={selectProvider}
-          onRetry={load}
-          onAddNew={() => setProviderForm({ ...EMPTY_PROVIDER_FORM })}
-        />
         <section className="flex-1 min-w-0 overflow-y-auto">
           {state.status === "loading" && (
-            <div data-testid="gateway-loading" className="h-full flex items-center justify-center">
+            <div
+              data-testid="gateway-loading"
+              className="h-full flex items-center justify-center p-6"
+            >
               <div className="max-w-md w-full">
-                <LoadingState title="加载供应商" />
+                <LoadingState title="加载供应商与模型" />
               </div>
             </div>
           )}
           {state.status === "error" && (
-            <ErrorPanel message={state.message} onRetry={() => void load()} />
+            <div
+              data-testid="gateway-error"
+              className="h-full flex items-center justify-center p-6"
+            >
+              <div className="max-w-md w-full">
+                <ErrorState
+                  title="加载失败"
+                  detail={state.message}
+                  action={{ label: "重试", onClick: () => void load() }}
+                />
+              </div>
+            </div>
           )}
-          {state.status === "ready" && !selected && providers.length === 0 && (
-            <Placeholder
-              testid="gateway-empty"
-              title="尚未配置任何供应商"
-              body="添加 OpenAI / DeepSeek / Ollama / 本地 vLLM 等兼容端点即可开始。"
-              action={{
-                label: "添加第一个供应商 →",
-                onClick: () => setProviderForm({ ...EMPTY_PROVIDER_FORM }),
-              }}
-            />
+          {state.status === "ready" && providers.length === 0 && (
+            <div
+              data-testid="gateway-empty"
+              className="h-full flex items-center justify-center p-6"
+            >
+              <div className="max-w-md w-full">
+                <EmptyState
+                  title="尚未配置任何供应商"
+                  description="添加 OpenAI / DeepSeek / Ollama / 本地 vLLM 等兼容端点即可开始。"
+                  action={{
+                    label: "添加第一个供应商 →",
+                    onClick: () => {
+                      setEditingProviderId(null);
+                      setProviderForm({ ...EMPTY_PROVIDER_FORM });
+                    },
+                  }}
+                />
+              </div>
+            </div>
           )}
-          {state.status === "ready" && selected && (
-            <ProviderDetail
-              provider={selected}
-              models={providerModels}
-              testResult={tests[selected.id]}
-              onTest={() => void handleTestProvider(selected.id)}
-              onSetDefault={() => void handleSetDefault(selected.id)}
-              onDeleteProvider={() => setDeleteProviderTarget(selected)}
-              onAddModel={() => setModelForm({ ...EMPTY_MODEL_FORM })}
-              onTestModel={(m) => setChatModel(m)}
-              onDeleteModel={(m) => setDeleteModelTarget(m)}
-            />
+          {state.status === "ready" && providers.length > 0 && (
+            <div data-testid="gateway-accordion">
+              {providers.map((p) => {
+                const models = allModels.filter((m) => m.provider_id === p.id);
+                return (
+                  <ProviderSection
+                    key={p.id}
+                    provider={p}
+                    models={models}
+                    open={openProviders.has(p.id)}
+                    onToggle={() => toggleProvider(p.id)}
+                    pingStates={pingStates}
+                    onPingModel={pingOne}
+                    onBulkPing={() => void bulkPingProvider(p.id, models)}
+                    bulkPingInProgress={bulkPing[p.id] ?? null}
+                    onSetDefault={() => void handleSetDefault(p.id)}
+                    onEdit={() => {
+                      setEditingProviderId(p.id);
+                      setProviderForm({
+                        name: p.name,
+                        base_url: p.base_url,
+                        api_key: "",
+                        default_model: p.default_model,
+                        set_as_default: p.is_default,
+                      });
+                    }}
+                    onDelete={() => setDeleteProviderTarget(p)}
+                    onAddModel={() => {
+                      setModelForm(EMPTY_MODEL_FORM);
+                      setModelFormFor(p);
+                    }}
+                    onChatTestModel={(m) => setChatModel(m)}
+                    onDeleteModel={(m) => setDeleteModelTarget(m)}
+                  />
+                );
+              })}
+            </div>
           )}
         </section>
       </div>
 
       {providerForm !== null && (
         <ProviderFormDialog
+          editing={editingProviderId !== null}
           form={providerForm}
           onChange={setProviderForm}
           saving={saving}
-          onCancel={() => setProviderForm(null)}
-          onSave={() => void handleCreateProvider()}
+          onCancel={() => {
+            setProviderForm(null);
+            setEditingProviderId(null);
+          }}
+          onSave={() =>
+            void (editingProviderId ? handleEditProvider() : handleCreateProvider())
+          }
         />
       )}
-      {modelForm !== null && selected && (
+      {modelFormFor !== null && (
         <ModelFormDialog
-          providerName={selected.name}
+          providerName={modelFormFor.name}
           form={modelForm}
           onChange={setModelForm}
           saving={saving}
-          onCancel={() => setModelForm(null)}
+          onCancel={() => setModelFormFor(null)}
           onSave={() => void handleCreateModel()}
         />
       )}
@@ -316,342 +429,15 @@ function GatewayPageInner() {
   );
 }
 
-function ProviderTabs({
-  state,
-  resolvedId,
-  tests,
-  onSelect,
-  onRetry,
-  onAddNew,
-}: {
-  state: LoadState;
-  resolvedId: string;
-  tests: Record<string, TestState>;
-  onSelect: (id: string) => void;
-  onRetry: () => void;
-  onAddNew: () => void;
-}) {
-  return (
-    <nav
-      aria-label="供应商"
-      className="shrink-0 border-b border-border bg-surface"
-    >
-      <div className="flex items-center gap-1 overflow-x-auto px-4">
-        {state.status === "loading" && (
-          <div data-testid="providers-loading" className="px-3 py-4">
-            <LoadingState title="加载供应商" />
-          </div>
-        )}
-        {state.status === "error" && (
-          <div data-testid="providers-error" className="flex items-center gap-2 py-2">
-            <span className="text-xs text-danger">加载失败:</span>
-            <span className="text-[10px] font-mono text-text-muted break-all">
-              {state.message}
-            </span>
-            <button
-              onClick={onRetry}
-              className="text-xs rounded border border-border px-2 py-0.5 hover:bg-surface-2 text-text transition-colors duration-base"
-            >
-              重试
-            </button>
-          </div>
-        )}
-        {state.status === "ready" && state.providers.length === 0 && (
-          <span
-            data-testid="providers-empty"
-            className="text-xs text-text-subtle py-2.5"
-          >
-            暂无供应商
-          </span>
-        )}
-        {state.status === "ready" &&
-          state.providers.map((p) => {
-            const active = p.id === resolvedId;
-            const test = tests[p.id];
-            return (
-              <button
-                key={p.id}
-                onClick={() => onSelect(p.id)}
-                data-testid={`provider-rail-${p.name}`}
-                data-active={active}
-                className={`relative shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-[12px] transition-colors duration-base ${
-                  active
-                    ? "text-text"
-                    : "text-text-muted hover:text-text"
-                }`}
-              >
-                <span className={active ? "font-medium" : ""}>{p.name}</span>
-                {p.is_default && (
-                  <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-primary/15 text-primary">
-                    默认
-                  </span>
-                )}
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    p.api_key_set ? "bg-success" : "bg-border"
-                  }`}
-                  aria-hidden="true"
-                />
-                {test && (
-                  <span
-                    className={`font-mono text-[10px] ${
-                      test.ok ? "text-success" : "text-danger"
-                    }`}
-                  >
-                    {test.ok ? "✓" : "✗"}
-                  </span>
-                )}
-                {active && (
-                  <span
-                    className="absolute left-3 right-3 bottom-0 h-[2px] rounded-t bg-primary"
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
-            );
-          })}
-        <div className="ml-auto shrink-0">
-          <button
-            onClick={onAddNew}
-            className="text-[11px] font-mono text-text-muted hover:text-text transition-colors duration-base px-2 py-1"
-            title="添加供应商"
-          >
-            + 新增
-          </button>
-        </div>
-      </div>
-    </nav>
-  );
-}
-
-function ProviderDetail({
-  provider,
-  models,
-  testResult,
-  onTest,
-  onSetDefault,
-  onDeleteProvider,
-  onAddModel,
-  onTestModel,
-  onDeleteModel,
-}: {
-  provider: Provider;
-  models: Model[];
-  testResult?: TestState;
-  onTest: () => void;
-  onSetDefault: () => void;
-  onDeleteProvider: () => void;
-  onAddModel: () => void;
-  onTestModel: (m: Model) => void;
-  onDeleteModel: (m: Model) => void;
-}) {
-  return (
-    <div className="max-w-3xl mx-auto px-8 py-6">
-      <header className="mb-5">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-text">{provider.name}</h2>
-          {provider.is_default && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">
-              默认
-            </span>
-          )}
-          {!provider.enabled && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">
-              已禁用
-            </span>
-          )}
-        </div>
-        <p className="text-xs font-mono text-text-subtle mt-1 truncate">
-          {provider.base_url}
-        </p>
-        <p className="text-xs text-text-muted mt-2">
-          API Key:{" "}
-          <span className={provider.api_key_set ? "text-success" : "text-text-subtle"}>
-            {provider.api_key_set ? "已设置" : "未设置"}
-          </span>
-          {" · "}
-          默认模型: <span className="text-text">{provider.default_model}</span>
-        </p>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          <button
-            onClick={onTest}
-            className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-2 text-text-muted hover:text-text transition-colors"
-          >
-            连通性测试
-          </button>
-          {!provider.is_default && (
-            <button
-              onClick={onSetDefault}
-              className="text-xs px-2 py-1 rounded border border-border hover:bg-surface-2 text-text-muted hover:text-text transition-colors"
-            >
-              设为默认
-            </button>
-          )}
-          <button
-            onClick={onDeleteProvider}
-            className="text-xs px-2 py-1 rounded border border-border text-danger hover:bg-danger/10 transition-colors"
-          >
-            删除供应商
-          </button>
-        </div>
-        {testResult && (
-          <div
-            className={`mt-2 text-xs px-3 py-1.5 rounded font-mono ${
-              testResult.ok ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
-            }`}
-          >
-            {testResult.msg}
-          </div>
-        )}
-        <p className="text-[11px] text-text-subtle mt-2">
-          连通性测试只确认端点可达;模型具体能力请在下方“对话测试”中验证。
-        </p>
-      </header>
-
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-sm font-semibold text-text">
-              模型 <span className="text-text-muted">({models.length})</span>
-            </h3>
-            <p className="text-[11px] text-text-subtle mt-0.5">
-              对话测试以流式请求真实调用,展示延迟 / TTFT / tokens / tok·s⁻¹,失败会给出分类原因。
-            </p>
-          </div>
-          <button
-            onClick={onAddModel}
-            className="rounded-md bg-primary text-primary-fg hover:bg-primary-hover px-3 py-1.5 text-xs font-medium transition-colors"
-          >
-            + 注册模型
-          </button>
-        </div>
-
-        {models.length === 0 ? (
-          <div
-            data-testid="models-empty"
-            className="rounded-xl border border-dashed border-border p-8 text-center"
-          >
-            <p className="text-sm text-text-muted mb-2">
-              此供应商下尚未注册任何模型
-            </p>
-            <button
-              onClick={onAddModel}
-              className="text-xs rounded-md bg-primary text-primary-fg hover:bg-primary-hover px-3 py-1.5 transition-colors"
-            >
-              注册第一个模型 →
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {models.map((m) => (
-              <div
-                key={m.id}
-                className="rounded-xl border border-border bg-surface p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-text">
-                        {m.display_name || m.name}
-                      </span>
-                      {!m.enabled && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">
-                          已禁用
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs font-mono text-text-subtle truncate mt-0.5">
-                      {m.name}
-                    </p>
-                    {m.context_window > 0 && (
-                      <p className="text-[11px] text-text-muted mt-0.5">
-                        上下文窗口: {m.context_window.toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => onTestModel(m)}
-                      className="text-xs px-2 py-1 rounded bg-primary text-primary-fg hover:bg-primary-hover transition-colors"
-                    >
-                      对话测试
-                    </button>
-                    <button
-                      onClick={() => onDeleteModel(m)}
-                      className="text-xs px-2 py-1 rounded border border-border text-danger hover:bg-danger/10 transition-colors"
-                    >
-                      删除
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function Placeholder({
-  title,
-  body,
-  action,
-  testid,
-}: {
-  title?: string;
-  body: string;
-  action?: { label: string; onClick: () => void };
-  testid?: string;
-}) {
-  return (
-    <div className="h-full flex items-center justify-center">
-      <div
-        data-testid={testid}
-        className="rounded-xl border border-dashed border-border p-10 text-center max-w-md"
-      >
-        {title && <p className="text-sm text-text mb-2">{title}</p>}
-        <p className="text-sm text-text-muted mb-3">{body}</p>
-        {action && (
-          <button
-            onClick={action.onClick}
-            className="text-xs rounded-md bg-primary text-primary-fg hover:bg-primary-hover px-3 py-1.5 transition-colors"
-          >
-            {action.label}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="h-full flex items-center justify-center">
-      <div
-        data-testid="gateway-error"
-        className="rounded-xl border border-danger/30 bg-danger/5 p-6 max-w-md"
-      >
-        <p className="text-sm text-danger mb-2">加载失败</p>
-        <p className="text-xs text-text-muted mb-3 font-mono break-all">{message}</p>
-        <button
-          onClick={onRetry}
-          className="text-xs rounded-md border border-border px-3 py-1.5 hover:bg-surface-2 text-text transition-colors"
-        >
-          重试
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function ProviderFormDialog({
+  editing,
   form,
   onChange,
   saving,
   onCancel,
   onSave,
 }: {
+  editing: boolean;
   form: typeof EMPTY_PROVIDER_FORM;
   onChange: (f: typeof EMPTY_PROVIDER_FORM) => void;
   saving: boolean;
@@ -659,7 +445,7 @@ function ProviderFormDialog({
   onSave: () => void;
 }) {
   return (
-    <Modal onClose={onCancel} title="添加 LLM 供应商">
+    <Modal onClose={onCancel} title={editing ? "编辑 LLM 供应商" : "添加 LLM 供应商"}>
       <div className="flex flex-col gap-3">
         <LabeledInput
           label="名称"
@@ -675,7 +461,7 @@ function ProviderFormDialog({
           onChange={(v) => onChange({ ...form, base_url: v })}
         />
         <LabeledInput
-          label="API Key"
+          label={editing ? "API Key (留空则不变)" : "API Key"}
           type="password"
           placeholder="sk-... (本地部署可留空)"
           value={form.api_key}
@@ -688,16 +474,18 @@ function ProviderFormDialog({
           value={form.default_model}
           onChange={(v) => onChange({ ...form, default_model: v })}
         />
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.set_as_default}
-            onChange={(e) => onChange({ ...form, set_as_default: e.target.checked })}
-          />
-          <span className="text-xs text-text-muted">设为默认供应商</span>
-        </label>
+        {!editing && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.set_as_default}
+              onChange={(e) => onChange({ ...form, set_as_default: e.target.checked })}
+            />
+            <span className="text-xs text-text-muted">设为默认供应商</span>
+          </label>
+        )}
         <DialogFooter
-          saveLabel={saving ? "保存中…" : "保存"}
+          saveLabel={saving ? "保存中" : "保存"}
           saveDisabled={saving || !form.name || !form.base_url}
           onCancel={onCancel}
           onSave={onSave}
@@ -742,12 +530,10 @@ function ModelFormDialog({
           label="上下文窗口 tokens (可选)"
           placeholder="128000"
           value={String(form.context_window || "")}
-          onChange={(v) =>
-            onChange({ ...form, context_window: Number(v) || 0 })
-          }
+          onChange={(v) => onChange({ ...form, context_window: Number(v) || 0 })}
         />
         <DialogFooter
-          saveLabel={saving ? "保存中…" : "保存"}
+          saveLabel={saving ? "保存中" : "保存"}
           saveDisabled={saving || !form.name}
           onCancel={onCancel}
           onSave={onSave}
@@ -768,16 +554,18 @@ function Modal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-xl"
+        className="w-full max-w-md rounded-xl border border-border bg-surface p-5"
+        style={{ animation: "ah-fade-up 220ms var(--ease-out) both" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-text">{title}</h3>
           <button
+            type="button"
             onClick={onClose}
             aria-label="关闭"
             className="text-text-muted hover:text-text text-lg leading-none"
@@ -803,19 +591,21 @@ function DialogFooter({
   onSave: () => void;
 }) {
   return (
-    <div className="flex gap-2 pt-1">
+    <div className="flex gap-2 pt-1 justify-end">
       <button
-        onClick={onSave}
-        disabled={saveDisabled}
-        className="rounded-md bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-40 px-4 py-2 text-sm font-medium transition-colors"
-      >
-        {saveLabel}
-      </button>
-      <button
+        type="button"
         onClick={onCancel}
-        className="rounded-md border border-border px-4 py-2 text-sm text-text-muted hover:text-text transition-colors"
+        className="rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text text-[12px] px-3 py-1.5 transition-colors duration-base"
       >
         取消
+      </button>
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={saveDisabled}
+        className="rounded bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-40 text-[12px] font-medium px-3 py-1.5 transition-colors duration-base"
+      >
+        {saveLabel}
       </button>
     </div>
   );
@@ -844,7 +634,7 @@ function LabeledInput({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text placeholder-text-subtle focus:outline-none focus:border-primary transition-colors ${
+        className={`w-full rounded-md bg-bg border border-border focus:border-primary outline-none px-3 py-2 text-sm text-text placeholder-text-subtle transition-colors duration-base ${
           mono ? "font-mono" : ""
         }`}
       />
