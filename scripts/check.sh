@@ -38,4 +38,7 @@ else
   printf "\n\033[1;33m[skip] web checks — run 'cd web && npm install' first.\033[0m\n"
 fi
 
+"$root/scripts/self-review.sh"
+"$root/scripts/walkthrough-acceptance.sh"
+
 printf "\n\033[1;32mAll checks passed.\033[0m\n"

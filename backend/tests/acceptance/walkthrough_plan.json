@@ -1,0 +1,90 @@
+{
+  "spec": "docs/specs/agent-design/2026-04-18-walkthrough-acceptance.md",
+  "stages": [
+    {
+      "id": "W1",
+      "name": "Bootstrap · from zero to usable",
+      "goal": "empty repo → one provider + one model + passing hello-world chat",
+      "entry_route": "/gateway",
+      "required_meta_tools": ["create_provider", "create_model", "chat_test_model"],
+      "required_routers": ["providers.py", "models.py", "chat.py"],
+      "north_star_focus": ["N1", "N3", "N4", "N5"],
+      "v0_active": true,
+      "preconditions": "gateway router present"
+    },
+    {
+      "id": "W2",
+      "name": "Self-build an employee (chat only)",
+      "goal": "in /chat, Lead creates an employee; /employees list reflects it",
+      "entry_route": "/",
+      "required_meta_tools": ["create_employee"],
+      "required_routers": ["employees.py"],
+      "north_star_focus": ["N1"],
+      "v0_active": true,
+      "preconditions": "employee meta tool + render EmployeeCard component"
+    },
+    {
+      "id": "W3",
+      "name": "Self-dispatch a task (fire-and-forget)",
+      "goal": "/chat → Lead assigns task → /tasks running → artifact produced",
+      "entry_route": "/",
+      "required_meta_tools": ["tasks.create"],
+      "required_routers": ["tasks.py"],
+      "north_star_focus": ["N2", "N4", "N6"],
+      "v0_active": true,
+      "preconditions": "tasks spec merged (migration 0011) + /tasks route"
+    },
+    {
+      "id": "W4",
+      "name": "Install a skill for an employee (chat only)",
+      "goal": "Lead installs skill → employee.skills increments",
+      "entry_route": "/",
+      "required_meta_tools": ["install_skill", "bind_skill_to_employee"],
+      "required_routers": ["skills.py", "employees.py"],
+      "north_star_focus": ["N1", "N3"],
+      "v0_active": false,
+      "preconditions": "skills spec delivered"
+    },
+    {
+      "id": "W5",
+      "name": "Install an MCP server + real invocation",
+      "goal": "Lead installs filesystem MCP → employee uses it",
+      "entry_route": "/",
+      "required_meta_tools": ["install_mcp_server"],
+      "required_routers": ["mcp_servers.py"],
+      "north_star_focus": ["N3", "N5"],
+      "v0_active": false,
+      "preconditions": "MCP spec delivered + real MCP fixture"
+    },
+    {
+      "id": "W6",
+      "name": "Build a trigger + wait for auto-fire",
+      "goal": "Lead defines daily trigger → manual fire_now → run + artifact visible",
+      "entry_route": "/",
+      "required_meta_tools": ["triggers.create", "fire_now"],
+      "required_routers": ["triggers.py"],
+      "north_star_focus": ["N4", "N6"],
+      "v0_active": false,
+      "preconditions": "cockpit consumes events table"
+    },
+    {
+      "id": "W7",
+      "name": "Observability · fail & recover",
+      "goal": "break a model key → run task → UI guides to Gateway to fix → re-run green",
+      "entry_route": "/gateway",
+      "required_meta_tools": [],
+      "required_routers": ["models.py"],
+      "north_star_focus": ["N6"],
+      "v0_active": false,
+      "preconditions": "observatory spec delivered"
+    }
+  ],
+  "north_star_dims": {
+    "N1": "Tool-First redemption: CRUD only via chat",
+    "N2": "One-screen decision: parent + key child visible together",
+    "N3": "Test is end-to-end: test button exercises the real thing",
+    "N4": "Critical numbers surfaced: latency/tokens/cost/etc",
+    "N5": "Test parity: test UI == production UI",
+    "N6": "Recoverable failure: empty/error states guide next step"
+  }
+}
