@@ -400,6 +400,16 @@ def expand_skills_to_tools(
 | `allhands.meta.switch_lead_agent_version` | BOOTSTRAP | yes + 写候选 |
 | `allhands.meta.cockpit.get_workspace_summary` | READ | no |
 | `allhands.meta.cockpit.pause_all_runs` | IRREVERSIBLE | yes + reason |
+| `allhands.meta.list_triggers` | READ | no |
+| `allhands.meta.get_trigger` | READ | no |
+| `allhands.meta.create_trigger` | WRITE | yes |
+| `allhands.meta.update_trigger` | WRITE | yes |
+| `allhands.meta.toggle_trigger` | WRITE | no |
+| `allhands.meta.delete_trigger` | IRREVERSIBLE | yes |
+| `allhands.meta.fire_trigger_now` | WRITE | no(绕过 min_interval · 仍受全局限额 / auto-disable 约束) |
+| `allhands.meta.list_trigger_fires` | READ | no |
+
+Trigger Meta Tool 走 `services/trigger_service.py` 同一份实现(REST `/api/triggers/*` 与 Meta Tool 共享),满足 L01 Tool First 硬要求 —— UI 能做的,Lead 用对话也能做。
 
 ### L5.8 内置 Render Tools
 
@@ -421,6 +431,86 @@ def expand_skills_to_tools(
 skill manifest 在 `backend/skills/builtin/render/SKILL.yaml`,guidance 在 `backend/skills/builtin/render/prompts/guidance.md`。
 
 **注意:** 大多数情况下,Meta Tool 返回数据,Lead Agent 决定**是否**调 render tool 把数据展示出来。也可以设计为:部分 Meta Tool 自动附带 render payload(通过 "auto-render" 标志)。v0 保持简单:**Meta Tool 纯数据,Lead Agent 显式调 render tool**。
+
+### L5.9 Triggers & Event Bus
+
+**位置:** `backend/src/allhands/execution/triggers/` + `backend/src/allhands/execution/event_bus.py`
+**spec:** [`docs/specs/agent-design/2026-04-18-triggers.md`](../docs/specs/agent-design/2026-04-18-triggers.md) + [`docs/specs/agent-design/2026-04-18-cockpit.md § 7`](../docs/specs/agent-design/2026-04-18-cockpit.md)
+
+内置一个**进程内 EventBus** + 一套 **Trigger 抽象**,让工作区内的事件(artifact 变更 / run 生命周期 / confirmation / MCP / webhook)能被 **Timer / Event / Webhook** 三种触发器订阅并派发成 `dispatch_employee` / `continue_conversation` / `invoke_tool` / `notify_user` 四类 action。
+
+#### L5.9.1 Trigger 抽象
+
+```python
+class TriggerKind(StrEnum):
+    TIMER   = "timer"    # cron 表达式 + 时区
+    EVENT   = "event"    # 订阅 EventBus 的 EventPattern
+    WEBHOOK = "webhook"  # 外部 POST /api/webhooks/{id}
+
+class ActionType(StrEnum):
+    DISPATCH_EMPLOYEE     = "dispatch_employee"
+    CONTINUE_CONVERSATION = "continue_conversation"
+    INVOKE_TOOL           = "invoke_tool"
+    NOTIFY_USER           = "notify_user"
+
+class Trigger(BaseModel):
+    id: str
+    name: str                         # 唯一
+    kind: TriggerKind
+    enabled: bool
+    timer_spec: TimerSpec | None      # cron + tz
+    event_pattern: EventPattern | None
+    action: TriggerAction             # type + template(模板变量见 spec § 6)
+    min_interval_seconds: int = 300   # 最小 60
+    auto_disabled_reason: str | None
+    fires_total: int
+    fires_failed_streak: int
+    last_fired_at: datetime | None
+```
+
+- `EventPattern.type` 严格等于 event kind · `filter` 支持字段相等 + `*_pattern` 的 fnmatch glob
+- 事件来源是 `EventBus.publish(kind, payload, trigger_id=?)`;发布方至少包括 artifacts · AgentRunner · Gate · MCPClient · EmployeeService · `/api/webhooks/{id}`
+
+#### L5.9.2 文件速查
+
+| 文件 | 职责 |
+|---|---|
+| `event_bus.py` | 进程内 pub/sub + persist 回调(events 表)· `subscribe(pattern, handler)` + `subscribe_all(handler)` |
+| `triggers/runtime.py` | lifespan 持有的运行时 · 绑定 bus · scheduler · event listener |
+| `triggers/executor.py` | `fire()` 流程 · 五道防爆一条不跳(每触发器限速 / 全局限额 / auto-disable / 防环 / paused) |
+| `triggers/timer_scheduler.py` | APScheduler `AsyncIOScheduler` · cron 触发 |
+| `triggers/event_listener.py` | `subscribe_all` · 匹配所有 `kind=event` trigger |
+| `triggers/handlers.py` | 四类 action handler(dispatch / continue / invoke / notify)· `invoke_tool` 拒绝 WRITE+ scope,避免旁路 Gate |
+| `triggers/templating.py` | `string.Template` 轻量变量渲染(`{{trigger.*}}` · `{{event.*}}` · `{{timer.scheduled_at}}` · `{{@yesterday/@today/@last_run.*}}`)· 不引 Jinja2 |
+| `triggers/defenses.py` | 五道防爆规则实现 |
+
+#### L5.9.3 events 表(与 Cockpit 活动流共享)
+
+```
+events  (id ULID PRIMARY KEY, ts TIMESTAMPTZ, kind TEXT,
+         actor TEXT?, subject TEXT?, payload JSONB,
+         severity TEXT DEFAULT 'info', link TEXT?, workspace_id TEXT,
+         trigger_id TEXT?)
+  INDEX (workspace_id, ts DESC)
+  INDEX (workspace_id, kind, ts DESC)
+```
+
+- 每次 `EventBus.publish()` 同步写一条(给 cockpit 回放 / observatory 分析用)
+- 保留策略:v0 不清理,v1 归档 90 天
+- `trigger_id` 字段支持嵌套防环:Trigger 产生的 run 如果又发事件,该事件不得**直接**触发同一 trigger(executor 侧 cycle 检测)
+
+#### L5.9.4 发布点枚举(协议)
+
+| event kind | 发布方 | 关键 payload |
+|---|---|---|
+| `artifact.created / updated / deleted` | `services/artifact_service.py` | `{id, kind, name, version?, run_id?}` |
+| `run.started / completed / failed` | `execution/runner.py` | `{run_id, employee_id, trigger_id?, parent_run_id?, depth}` |
+| `confirmation.requested / resolved / expired` | `ConfirmationGate` | `{confirmation_id, tool_id, scope, conversation_id, decision?}` |
+| `mcp.unreachable` | `MCPClient` | `{server_id, retry_count}` |
+| `employee.created` | `EmployeeService` | `{employee_id, name}` |
+| `webhook.external` | `POST /api/webhooks/{trigger_id}` | `{body, headers}` |
+
+发布方对这张表负责:新增事件类型必须同时更新本表和 spec § 4.2。
 
 ---
 
@@ -471,6 +561,36 @@ event: done
 data: {"message_id": "..."}
 ```
 
+**Workspace-level SSE**(`GET /api/cockpit/stream` · 一条流订阅整个 workspace,见 [cockpit spec § 4.2](../docs/specs/agent-design/2026-04-18-cockpit.md#42))。**首帧** 服务端 push `snapshot`,之后全是增量:
+
+```
+event: snapshot
+data: <WorkspaceSummary 完整 DTO>        # 首次连接 / 重连后整体刷新
+
+event: activity
+data: <ActivityEvent>                     # events 表新增一条,插到活动流顶部
+
+event: run_update
+data: <ActiveRunCard>                     # 中列 run 卡片原地更新
+
+event: run_done
+data: {"run_id": "..."}                   # 从"正在执行"移除
+
+event: health
+data: <HealthSnapshot>                    # 整体健康快照
+
+event: kpi
+data: {"key": "...", "value": ...}        # 单个 KPI 变化,顶部 counter 跳一下
+
+event: heartbeat
+data: {"ts": "..."}                       # 15s 一次;前端 > 45s 没收到则主动重连
+
+event: error
+data: {"code": "...", "message": "..."}
+```
+
+per-conversation SSE(`POST /api/conversations/{id}/messages` · 聊天页)与 workspace-level SSE(`/api/cockpit/stream` · 驾驶舱)**两条流并存**,互不覆盖;映射规则在 `api/routers/cockpit.py::_KIND_TO_SSE_EVENT`。
+
 ### L8.2 Confirmation 回传
 
 前端点击 Approve/Reject 后:
@@ -519,10 +639,20 @@ Content-Type: application/json
 | GET  | `/api/cockpit/stream` | Workspace-level SSE(snapshot + 增量) · 见 cockpit spec § 4.2 |
 | POST | `/api/cockpit/pause-all` | 急停(要 `X-Confirmation-Token`;幂等) |
 | POST | `/api/cockpit/resume-all` | 恢复 · 对称 |
+| GET  | `/api/triggers` | 列出所有 trigger |
+| GET  | `/api/triggers/{id}` | 详情 + 最近 fire |
+| POST | `/api/triggers` | 新建(要 confirmation) |
+| PATCH | `/api/triggers/{id}` | 修改 action / cron / pattern / min_interval |
+| POST | `/api/triggers/{id}/toggle` | 启停切换 |
+| POST | `/api/triggers/{id}/fire` | 手动触发一次(仍受全局限额 / auto-disable) |
+| DELETE | `/api/triggers/{id}` | 删(要 confirmation) |
+| GET  | `/api/triggers/{id}/fires` | fire 历史 |
+| POST | `/api/webhooks/{trigger_id}` | 外部 webhook 入口 · 匹配 `event.type = "webhook.external"` + `trigger_id` filter |
 
 **注意:**
 - v0 **无鉴权**。依赖 docker compose 内网,不暴露公网。
 - API 表面故意极小 —— 员工 / MCP / Skill 的 CRUD 走**对话里的 Meta Tool**,不开 REST endpoint。
+- **Trigger 是 Tool First 例外之一**:CRUD 同时暴露 REST(给独立 `/triggers` UI)+ Meta Tool(给 Lead 对话操作),`services/trigger_service.py` 一份实现,两个入口语义等价。
 
 ### L7.2 FastAPI 约定
 

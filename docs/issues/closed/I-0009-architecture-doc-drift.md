@@ -2,8 +2,9 @@
 id: I-0009
 title: product/04-architecture.md never updated for triggers L5.9 + cockpit L7.1/L8.1
 severity: P1
-status: open
+status: closed
 discovered_at: 2026-04-19
+closed_at: 2026-04-19
 discovered_by: track-2-qa audit
 affects: product/04-architecture.md
 reproducible: true
@@ -51,3 +52,29 @@ Code landed, tests green, doc untouched. The arch map is stale.
 
 - spec: `docs/specs/agent-design/2026-04-18-triggers.md § DoD`
 - spec: `docs/specs/agent-design/2026-04-18-cockpit.md § DoD`
+
+## 关闭记录
+
+- status: closed
+- closed_at: 2026-04-19
+- fix: `product/04-architecture.md` now ships the three missing pieces:
+  - **L5.7 Meta Tools table** extended with 8 trigger meta tools
+    (`list_triggers` / `get_trigger` / `create_trigger` / `update_trigger` /
+    `delete_trigger` / `enable_trigger` / `disable_trigger` / `fire_trigger`)
+  - New **L5.9 Triggers & Event Bus** subsection covering the `Trigger`
+    domain model, `execution/triggers/**` file-level speedread, the
+    `events` table schema, the event-bus contract (`publish` /
+    `subscribe(EventPattern, handler)` / `subscribe_all`), and a
+    producer→kind enumeration
+  - **L7.1 API table** extended with 8 trigger routes + the public
+    `/webhooks/{secret}` route, each annotated with its Meta-Tool
+    counterpart per Tool First (§ 3.1)
+  - **L8.1 SSE frame list** extended with the workspace-level
+    `/api/cockpit/stream` frames (`snapshot` / `activity` / `run_update` /
+    `run_done` / `health` / `kpi` / `heartbeat` / `error`)
+- regression test: flipped
+  `backend/tests/acceptance/test_audit_regressions.py::test_i0009_arch_doc_updated_for_triggers_and_cockpit`
+  from `pytest.xfail(...)` to plain asserts — deleting the L5.9 heading
+  or the `/api/cockpit` rows now fails CI loudly.
+- commit: `30b03aa` ([track-i] docs(arch): sync 04-architecture.md with
+  L5.9 triggers + L7.1/L8.1 cockpit)
