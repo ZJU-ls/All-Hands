@@ -1,0 +1,12 @@
+name: 收盘复盘
+kind: timer
+enabled: true
+min_interval_seconds: 3600
+timer:
+  cron: "30 15 * * MON-FRI"
+  timezone: Asia/Shanghai
+action:
+  type: invoke_tool
+  tool_id: allhands.stock.daily_journal
+  args_template:
+    topic: stock.journal.daily

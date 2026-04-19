@@ -11,13 +11,22 @@ from allhands.execution.tools.builtin.fetch_url import execute as fetch_url_exec
 from allhands.execution.tools.builtin.write_file import TOOL as WRITE_FILE_TOOL
 from allhands.execution.tools.builtin.write_file import execute as write_file_execute
 from allhands.execution.tools.meta.artifact_tools import ALL_ARTIFACT_TOOLS
+from allhands.execution.tools.meta.channel_tools import (
+    ALL_CHANNEL_META_TOOLS,  # single-line register: Wave 2 notification-channels
+)
 from allhands.execution.tools.meta.cockpit_tools import ALL_COCKPIT_META_TOOLS
 from allhands.execution.tools.meta.employee_tools import ALL_META_TOOLS
+from allhands.execution.tools.meta.market_tools import (  # single-line register: Wave 2 market-data
+    ALL_MARKET_META_TOOLS,
+)
 from allhands.execution.tools.meta.mcp_server_tools import ALL_MCP_SERVER_META_TOOLS
 from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
 from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
 from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
 from allhands.execution.tools.meta.skill_tools import ALL_SKILL_META_TOOLS
+from allhands.execution.tools.meta.stock_tools import (  # single-line register: Wave 2 stock-assistant
+    ALL_STOCK_ASSISTANT_TOOLS,
+)
 from allhands.execution.tools.meta.task_tools import ALL_TASK_META_TOOLS
 from allhands.execution.tools.meta.trigger_tools import ALL_TRIGGER_META_TOOLS
 from allhands.execution.tools.render.callout import TOOL as CALLOUT_TOOL
@@ -76,5 +85,8 @@ def discover_builtin_tools(registry: ToolRegistry) -> None:
         *ALL_ARTIFACT_TOOLS,
         *ALL_COCKPIT_META_TOOLS,
         *ALL_TASK_META_TOOLS,
+        *ALL_CHANNEL_META_TOOLS,  # single-line register: Wave 2 notification-channels
+        *ALL_MARKET_META_TOOLS,  # single-line register: Wave 2 market-data
+        *ALL_STOCK_ASSISTANT_TOOLS,  # single-line register: Wave 2 stock-assistant
     ):
         registry.register(tool, _async_noop)

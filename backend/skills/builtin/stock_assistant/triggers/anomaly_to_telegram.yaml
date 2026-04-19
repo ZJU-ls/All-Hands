@@ -1,0 +1,20 @@
+name: 持仓异动 → 推通知
+kind: event
+enabled: true
+min_interval_seconds: 60
+event:
+  type: market.anomaly
+  filter:
+    severity:
+      - P0
+      - P1
+action:
+  type: notify_user
+  channel: cockpit
+  message: |
+    {{ event.kind | upper }} · {{ event.symbol_name }} ({{ event.symbol }})
+    价格 {{ event.from_price }} → {{ event.to_price }} ({{ event.change_pct }}%)
+    窗口 {{ event.window_s }}s
+  # notifications are fan-out by the channel service based on subscriptions
+  # with topic=stock.anomaly.  The "notify_user" action publishes a
+  # trigger.notify event which the channel bridge forwards into send_notification.
