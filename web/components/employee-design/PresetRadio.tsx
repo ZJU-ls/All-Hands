@@ -1,55 +1,71 @@
 "use client";
 
 /**
- * Preset 单选 · Phase 3B 才启用(I-0022 Track M 交付
- * docs/specs/agent-runtime-contract.md 之后)。此处渲染为 disabled 占位,
- * 保证视觉完整,并显式标注"等 Track M 契约"。
+ * Preset 单选 · Phase 3B 启用(SIGNOFF-agent-runtime-contract.md Q6-Q10 签完)。
  *
- * §3.2 红线:preset **不落 mode 字段**,保存时展开为
- * tool_ids[] + skill_ids[] + max_iterations。当前占位仅展示,不回写 state。
+ * §3.2 红线:preset **不落 mode 字段**。切换 preset 时父表单订阅 onChange,
+ * 把展开后的 (tool_ids, skill_ids, max_iterations) 写进 POST /api/employees
+ * 的 body —— preset 本身只是 UI/契约层的一个 recipe,不入库。
  */
 
-type Preset = "execute" | "plan" | "plan_with_subagent";
+export type Preset = "execute" | "plan" | "plan_with_subagent";
 
 const OPTIONS: Array<{ id: Preset; label: string; caption: string }> = [
-  { id: "execute", label: "Execute", caption: "执行型 · 基础 tools + 10 轮" },
-  { id: "plan", label: "Plan", caption: "计划型 · sk_planner · 3 轮" },
+  {
+    id: "execute",
+    label: "标准执行",
+    caption: "直接干活 · fetch + write · 10 轮上限",
+  },
+  {
+    id: "plan",
+    label: "先出计划",
+    caption: "只出结构化 plan · sk_planner · 3 轮上限",
+  },
   {
     id: "plan_with_subagent",
-    label: "Plan + Subagent",
-    caption: "计划+子代理 · 挂载 spawn_subagent · 20 轮",
+    label: "计划+派子代理",
+    caption: "出计划并派发 · spawn_subagent · 15 轮上限",
   },
 ];
 
-export function PresetRadio() {
+export function PresetRadio({
+  value,
+  onChange,
+}: {
+  value: Preset;
+  onChange: (next: Preset) => void;
+}) {
   return (
-    <div className="rounded-md border border-dashed border-border p-4 bg-surface-2/30">
-      <div className="flex flex-col gap-2">
-        {OPTIONS.map((o) => (
+    <div
+      role="radiogroup"
+      aria-label="运转方式"
+      className="rounded-md border border-border p-4 bg-surface-2/30 flex flex-col gap-2"
+    >
+      {OPTIONS.map((o) => {
+        const checked = value === o.id;
+        return (
           <label
             key={o.id}
-            className="flex items-start gap-3 opacity-60 cursor-not-allowed"
+            className={`flex items-start gap-3 cursor-pointer rounded-md px-2 py-1.5 transition-colors duration-base ${
+              checked ? "bg-primary/5" : "hover:bg-surface-2"
+            }`}
           >
             <input
               type="radio"
               name="preset"
               data-testid={`preset-${o.id}`}
-              disabled
+              value={o.id}
+              checked={checked}
+              onChange={() => onChange(o.id)}
               className="mt-0.5 accent-primary"
             />
-            <div>
+            <div className="min-w-0">
               <div className="text-[12px] font-medium text-text">{o.label}</div>
               <div className="text-[11px] text-text-muted">{o.caption}</div>
             </div>
           </label>
-        ))}
-      </div>
-      <p
-        data-testid="preset-locked-notice"
-        className="mt-3 font-mono text-[10px] uppercase tracking-wider text-text-subtle"
-      >
-        等 Track M 契约 · docs/specs/agent-runtime-contract.md(I-0022)
-      </p>
+        );
+      })}
     </div>
   );
 }

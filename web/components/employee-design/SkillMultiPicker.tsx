@@ -46,7 +46,15 @@ export function SkillMultiPicker({
               <span className="font-mono text-[10px] text-text-subtle shrink-0">
                 {s.tool_ids.length} tools
               </span>
-              {on && <CheckIcon size={14} className="text-primary shrink-0" />}
+              {on && (
+                <span
+                  data-testid={`skill-${s.id}-checked`}
+                  className="shrink-0"
+                  aria-hidden
+                >
+                  <CheckIcon size={14} className="text-primary" />
+                </span>
+              )}
             </button>
           </li>
         );

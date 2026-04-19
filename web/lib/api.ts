@@ -150,3 +150,29 @@ export async function listMcpServers(): Promise<McpServerDto[]> {
   if (!res.ok) throw new Error(`listMcpServers failed: ${res.status}`);
   return res.json() as Promise<McpServerDto[]>;
 }
+
+export type EmployeePreset = "execute" | "plan" | "plan_with_subagent";
+
+export type EmployeePreviewResult = {
+  tool_ids: string[];
+  skill_ids: string[];
+  max_iterations: number;
+};
+
+export async function previewEmployeeComposition(body: {
+  preset: EmployeePreset;
+  custom_tool_ids?: string[];
+  custom_skill_ids?: string[];
+  custom_max_iterations?: number;
+}): Promise<EmployeePreviewResult> {
+  const res = await fetch(`${BASE}/api/employees/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`preview failed: ${res.status} ${text}`);
+  }
+  return res.json() as Promise<EmployeePreviewResult>;
+}

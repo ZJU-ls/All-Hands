@@ -12,13 +12,17 @@ L01 扩展(CLAUDE.md §3.1 · 2026-04-18):Employee 是 agent-managed 资源,
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from allhands.api.deps import get_employee_service, get_session
+from allhands.api.deps import (
+    get_employee_service,
+    get_session,
+)
 from allhands.core.errors import EmployeeNotFound
+from allhands.execution.modes import PRESETS, compose_preview
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,6 +66,30 @@ class EmployeeUpdateRequest(BaseModel):
     max_iterations: int | None = Field(default=None, ge=1, le=100)
 
 
+Preset = Literal["execute", "plan", "plan_with_subagent"]
+
+
+class EmployeePreviewRequest(BaseModel):
+    """Phase 3B preset-expansion 请求 · 只计算展开结果,不落库。
+
+    §3.2 红线:forbid extra → rogue ``mode`` 字段直接 422;响应里也不暴露
+    ``preset`` / ``mode`` 字样,以免前端误把它当作持久化字段。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    preset: Preset
+    custom_tool_ids: list[str] = Field(default_factory=list)
+    custom_skill_ids: list[str] | None = None
+    custom_max_iterations: int | None = Field(default=None, ge=1, le=50)
+
+
+class EmployeePreviewResponse(BaseModel):
+    tool_ids: list[str]
+    skill_ids: list[str]
+    max_iterations: int
+
+
 def _to_response(emp: object) -> EmployeeResponse:
     return EmployeeResponse(
         id=emp.id,  # type: ignore[attr-defined]
@@ -73,6 +101,32 @@ def _to_response(emp: object) -> EmployeeResponse:
         skill_ids=list(emp.skill_ids),  # type: ignore[attr-defined]
         max_iterations=emp.max_iterations,  # type: ignore[attr-defined]
         model_ref=emp.model_ref,  # type: ignore[attr-defined]
+    )
+
+
+@router.post("/preview", response_model=EmployeePreviewResponse)
+async def preview_employee_composition(
+    body: EmployeePreviewRequest,
+) -> EmployeePreviewResponse:
+    """Phase 3B · 把 UI 的 ``preset`` 概念展开为 ``(tool_ids, skill_ids,
+    max_iterations)`` 三列表示,**不落库**、**不触发 Gate**。Meta Tool
+    ``preview_employee_composition`` 是等价入口(L01 扩展 · §3.1),两者共用
+    ``allhands.execution.modes.compose_preview`` 作为唯一展开算法。
+
+    §3.2 红线:request / response 都不出现 ``mode`` / ``preset`` 字样。
+    """
+    if body.preset not in PRESETS:
+        raise HTTPException(status_code=400, detail=f"Unknown preset {body.preset!r}")
+    preview = compose_preview(
+        PRESETS[body.preset],
+        custom_tool_ids=list(body.custom_tool_ids),
+        custom_skill_ids=list(body.custom_skill_ids) if body.custom_skill_ids is not None else None,
+        custom_max_iterations=body.custom_max_iterations,
+    )
+    return EmployeePreviewResponse(
+        tool_ids=preview.tool_ids,
+        skill_ids=preview.skill_ids,
+        max_iterations=preview.max_iterations,
     )
 
 

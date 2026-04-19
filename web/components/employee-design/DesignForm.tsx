@@ -1,19 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   createEmployee,
+  previewEmployeeComposition,
   type EmployeeDto,
+  type EmployeePreset,
   type SkillDto,
   type McpServerDto,
 } from "@/lib/api";
 import { SkillMultiPicker } from "./SkillMultiPicker";
 import { McpMultiPicker } from "./McpMultiPicker";
 import { PresetRadio } from "./PresetRadio";
+import { DryRunPanel } from "./DryRunPanel";
 
 /**
  * 设计表单 · 受控 state 全部在这里,**无 mode 字段**(§3.2 红线)。
- * 保存走 POST /api/employees(L01 扩展 · 与 create_employee meta tool 对偶)。
+ *
+ * 流程:
+ *  - 选 preset → 调 ``/api/employees/preview`` 拿到展开的
+ *    ``(tool_ids, skill_ids, max_iterations)``,写进表单默认值
+ *  - 用户可再改 skill / MCP / max_iterations
+ *  - 提交前再调一次 preview 把 customs 合进去,**再** POST /api/employees
+ *    —— 这样 REST(UI)与 meta tool(Lead Agent)共用同一个展开算法。
  */
 
 export function DesignForm({
@@ -31,8 +40,10 @@ export function DesignForm({
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [modelRef, setModelRef] = useState("openai/gpt-4o-mini");
+  const [preset, setPreset] = useState<EmployeePreset>("execute");
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [mcpIds, setMcpIds] = useState<string[]>([]);
+  const [maxIterations, setMaxIterations] = useState<number>(10);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string>("");
 
@@ -42,30 +53,50 @@ export function DesignForm({
     setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   }
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const p = await previewEmployeeComposition({ preset });
+        if (cancelled) return;
+        setSkillIds(p.skill_ids);
+        setMaxIterations(p.max_iterations);
+      } catch (e) {
+        if (!cancelled) setErr(String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [preset]);
+
   async function submit() {
     if (!canSave) return;
     setBusy(true);
     setErr("");
     try {
-      // 每个勾选的 MCP 服务器暴露出若干 tool,这里先把选中 ID 作为 tool 前缀注入
-      // tool_ids —— 后端把它们与 skill 合并去重。Phase 3B 契约落地后改走 preset。
-      const tool_ids = mcpIds.map((id) => `mcp:${id}`);
+      const customToolIds = mcpIds.map((id) => `mcp:${id}`);
+      const expanded = await previewEmployeeComposition({
+        preset,
+        custom_tool_ids: customToolIds,
+        custom_skill_ids: skillIds,
+        custom_max_iterations: maxIterations,
+      });
       const emp = await createEmployee({
         name: name.trim(),
         description: description.trim(),
         system_prompt: systemPrompt,
         model_ref: modelRef,
-        tool_ids,
-        skill_ids: skillIds,
-        max_iterations: 10,
+        tool_ids: expanded.tool_ids,
+        skill_ids: expanded.skill_ids,
+        max_iterations: expanded.max_iterations,
       });
       onCreated(emp);
-      // 清空表单
       setName("");
       setDescription("");
       setSystemPrompt("");
-      setSkillIds([]);
       setMcpIds([]);
+      setPreset("execute");
     } catch (e) {
       setErr(String(e));
     } finally {
@@ -109,15 +140,12 @@ export function DesignForm({
 
       <Section
         title="运转方式"
-        subtitle="单选 · 落库时展开为 tool_ids / skill_ids / max_iterations(不存 mode)"
+        subtitle="选一种 · 落库时展开为 tool_ids / skill_ids / max_iterations(不存 preset)"
       >
-        <PresetRadio />
+        <PresetRadio value={preset} onChange={setPreset} />
       </Section>
 
-      <Section
-        title="挂载技能"
-        subtitle="勾选的 skill 在员工启动时与基础 tool 合并"
-      >
+      <Section title="挂载技能" subtitle="preset 默认已勾选,可自由增减">
         <SkillMultiPicker
           skills={skills}
           selected={skillIds}
@@ -136,6 +164,27 @@ export function DesignForm({
         />
       </Section>
 
+      <Section
+        title="迭代上限"
+        subtitle="Agent 单次会话的最大工具调用轮次(1-50)"
+      >
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={1}
+            max={50}
+            data-testid="field-max-iterations"
+            value={String(maxIterations)}
+            onChange={(e) => {
+              const v = Number.parseInt(e.target.value, 10);
+              if (Number.isFinite(v)) setMaxIterations(v);
+            }}
+            className="w-24 rounded-md bg-bg border border-border px-3 py-2 text-[12px] font-mono text-text focus:outline-none focus:border-primary transition-colors duration-base"
+          />
+          <span className="text-[11px] text-text-muted">轮</span>
+        </div>
+      </Section>
+
       <Section title="系统提示词片段">
         <textarea
           data-testid="field-system-prompt"
@@ -144,6 +193,18 @@ export function DesignForm({
           rows={6}
           placeholder="员工性格 / 风格 / 禁止事项"
           className="w-full rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text placeholder-text-subtle focus:outline-none focus:border-primary transition-colors duration-base"
+        />
+      </Section>
+
+      <Section
+        title="Dry run 预览"
+        subtitle="展开后的三列 —— 与落库 payload 一致"
+      >
+        <DryRunPanel
+          preset={preset}
+          customToolIds={mcpIds.map((id) => `mcp:${id}`)}
+          customSkillIds={skillIds}
+          customMaxIterations={maxIterations}
         />
       </Section>
 
@@ -189,7 +250,9 @@ function Section({
     <section className="flex flex-col gap-2">
       <div>
         <h3 className="text-[12px] font-semibold text-text">{title}</h3>
-        {subtitle && <p className="text-[11px] text-text-muted mt-0.5">{subtitle}</p>}
+        {subtitle && (
+          <p className="text-[11px] text-text-muted mt-0.5">{subtitle}</p>
+        )}
       </div>
       <div>{children}</div>
     </section>

@@ -1,8 +1,8 @@
 """End-to-end tests for /api/employees · L01 扩展(2026-04-18)的 REST 对偶。
 
 Employee 走 "一份实现(EmployeeService)· 两个入口(REST + Meta Tool)" · 这里
-验证 REST 入口的 POST / PATCH / DELETE + /preview 行为。Preset → tool_ids/
-skill_ids/max_iterations 映射属于 Phase 3B,等 Track M 契约落地后补。
+验证 REST 入口的 POST / PATCH / DELETE 行为。``/preview`` 的 preset 展开契约
+由 ``test_preview_employee_composition.py`` 独立覆盖(Track M 交付)。
 
 **红线:** 提交体不得包含 `mode` 字段;数据库不得持有 preset。
 """
@@ -148,3 +148,8 @@ def test_delete_employee_204_then_404(client: TestClient) -> None:
 
 def test_delete_missing_returns_404(client: TestClient) -> None:
     assert client.delete("/api/employees/missing").status_code == 404
+
+
+# /api/employees/preview 的 preset 展开契约由
+# ``test_preview_employee_composition.py`` 覆盖 — 它复用 ``allhands.execution.
+# modes.compose_preview``,是 Phase 3B Track M 落地的权威契约测试。
