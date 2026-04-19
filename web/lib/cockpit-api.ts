@@ -87,6 +87,11 @@ export type PauseResponseDto = {
   already_paused?: boolean;
 };
 
+/** URL for the workspace SSE stream — consumed by `Cockpit.tsx` via `EventSource`. */
+export function cockpitStreamUrl(): string {
+  return `${BASE}/api/cockpit/stream`;
+}
+
 export async function getCockpitSummary(): Promise<WorkspaceSummaryDto> {
   const res = await fetch(`${BASE}/api/cockpit/summary`);
   if (!res.ok) throw new Error(`getCockpitSummary failed: ${res.status}`);

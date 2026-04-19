@@ -50,17 +50,20 @@ def test_i0005_artifact_changed_event_emitted(repo_root: Path) -> None:
 
 
 def test_i0006_cockpit_consumes_sse(repo_root: Path) -> None:
+    """Closed 2026-04-19: Cockpit now subscribes to /api/cockpit/stream via
+    EventSource and the POLL_MS/setInterval loop is gone. See
+    ``web/components/cockpit/__tests__/cockpit-sse.test.tsx`` for the consumer
+    contract (snapshot / activity / error branches).
+    """
     cockpit = repo_root / "web" / "components" / "cockpit" / "Cockpit.tsx"
-    text = cockpit.read_text(encoding="utf-8") if cockpit.exists() else ""
-    # When fixed, Cockpit.tsx subscribes to an EventSource pointing at the
-    # stream endpoint and the setInterval polling loop is gone.
-    uses_event_source = "EventSource" in text or "/api/cockpit/stream" in text
-    still_polls = "setInterval" in text and "POLL_MS" in text
-    if not uses_event_source or still_polls:
-        pytest.xfail(
-            "I-0006: cockpit Cockpit.tsx still polls every POLL_MS; SSE stream at "
-            "/api/cockpit/stream is built but never consumed"
-        )
+    assert cockpit.exists(), "Cockpit.tsx missing — pre-condition for I-0006"
+    text = cockpit.read_text(encoding="utf-8")
+    assert "EventSource" in text, "Cockpit.tsx must subscribe via EventSource"
+    assert "/api/cockpit/stream" in text or "cockpitStreamUrl" in text, (
+        "Cockpit.tsx must point the EventSource at /api/cockpit/stream"
+    )
+    assert "POLL_MS" not in text, "POLL_MS polling constant must be removed"
+    assert "setInterval(" not in text, "setInterval polling loop must be removed"
 
 
 # ---------------------------------------------------------------------------

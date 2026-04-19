@@ -2,8 +2,9 @@
 id: I-0006
 title: Cockpit frontend polls every 5s instead of consuming the SSE stream
 severity: P0
-status: open
+status: closed
 discovered_at: 2026-04-19
+closed_at: 2026-04-19
 discovered_by: track-2-qa audit
 affects: web/components/cockpit/Cockpit.tsx · /api/cockpit/stream
 reproducible: true
@@ -54,3 +55,11 @@ Frontend uses interval polling of `/api/cockpit/summary`. This means:
 ## Related
 
 - spec: `docs/specs/agent-design/2026-04-18-cockpit.md § L7 + §11 DoD`
+
+## 关闭记录
+
+- status: closed
+- closed_at: 2026-04-19
+- fix: `web/components/cockpit/Cockpit.tsx` replaced `setInterval(POLL_MS)` with `new EventSource(cockpitStreamUrl())`. Handles `snapshot` / `activity` / `run_update` / `run_done` / `health` / `kpi` / `heartbeat` / `error` frames. Initial `/summary` fetch kept only for instant first paint; snapshot frame remains the source of truth.
+- regression test: `backend/tests/acceptance/test_audit_regressions.py::test_i0006_cockpit_consumes_sse` (xfail → pass) + `web/components/cockpit/__tests__/cockpit-sse.test.tsx` (4 cases: loading / hydration / delta append / stream error).
+- UI states: loading / error / empty branches go through `EmptyState` / `ErrorState` / `LoadingState` (I-0007). setInterval polling is gone.
