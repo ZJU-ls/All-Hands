@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { ArrowRightIcon } from "@/components/ui/icons";
+import { ArrowUpIcon } from "@/components/icons";
 
 /**
  * Composer — unified AI-native chat input (I-0015 spec).
@@ -173,7 +173,7 @@ function SendOrStopButton({
           data-testid="composer-stop-glyph"
         />
       ) : (
-        <ArrowRightIcon size={14} />
+        <ArrowUpIcon size={14} />
       )}
     </button>
   );

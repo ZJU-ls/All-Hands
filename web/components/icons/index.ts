@@ -34,3 +34,5 @@ export { ThinkIcon } from "./ThinkIcon";
 export { ExternalIcon } from "./ExternalIcon";
 export { CopyIcon } from "./CopyIcon";
 export { CheckIcon } from "./CheckIcon";
+export { ArrowUpIcon } from "./ArrowUpIcon";
+export { ArrowDownIcon } from "./ArrowDownIcon";
