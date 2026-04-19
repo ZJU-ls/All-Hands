@@ -262,6 +262,17 @@ def _is_anthropic(provider: LLMProvider) -> bool:
     return getattr(provider, "kind", "openai") == "anthropic"
 
 
+def _is_native_anthropic_base(base_url: str | None) -> bool:
+    """True when base_url points at api.anthropic.com (not a compat gateway).
+
+    Native Anthropic only accepts `thinking.type == "enabled"`; sending
+    `"disabled"` 400s. DashScope / Zhipu / coding-plan gateways reuse the
+    Anthropic wire but accept `"disabled"` as the official off-switch.
+    """
+    base = (base_url or "").lower()
+    return "api.anthropic.com" in base
+
+
 def _anthropic_headers(provider: LLMProvider) -> dict[str, str]:
     h = {
         "Content-Type": "application/json",
@@ -322,11 +333,11 @@ def _build_anthropic_body(
     stop: list[str] | None,
     stream: bool,
     enable_thinking: bool | None = None,
+    native_anthropic: bool = False,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "model": model_name,
         "messages": messages,
-        # Anthropic requires max_tokens — fall back to a reasonable default.
         "max_tokens": max_tokens if max_tokens is not None else ANTHROPIC_DEFAULT_MAX_TOKENS,
     }
     if system:
@@ -340,11 +351,22 @@ def _build_anthropic_body(
     if stop:
         body["stop_sequences"] = stop
     if enable_thinking is not None:
-        # DashScope's anthropic-compat gateway honors the `enable_thinking` flag
-        # on reasoning-capable models (qwen3.6-plus, etc). Native Anthropic API
-        # silently ignores unknown top-level fields, so this is safe to always
-        # forward when the caller has an opinion.
+        # Multi-vendor reasoning switch. Different gateways honor different
+        # field names, so we speak all of them at once:
+        #   - Qwen / DashScope: `enable_thinking: bool` at body root
+        #   - Zhipu GLM / DashScope coding-plan (Anthropic-compat) / Anthropic
+        #     native: `thinking: {"type": "enabled"|"disabled"}`
+        # Native Anthropic rejects `"disabled"`, so we suppress that variant
+        # when we know we're talking to api.anthropic.com directly (its
+        # default is already off when the field is omitted).
         body["enable_thinking"] = enable_thinking
+        if enable_thinking:
+            body["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": ANTHROPIC_DEFAULT_MAX_TOKENS // 2,
+            }
+        elif not native_anthropic:
+            body["thinking"] = {"type": "disabled"}
     return body
 
 
@@ -390,6 +412,7 @@ async def _run_anthropic_chat(
         stop=stop,
         stream=False,
         enable_thinking=enable_thinking,
+        native_anthropic=_is_native_anthropic_base(provider.base_url),
     )
     url = _anthropic_url(provider)
     started = time.perf_counter()
@@ -581,6 +604,7 @@ async def _astream_anthropic_chat(
         stop=stop,
         stream=True,
         enable_thinking=enable_thinking,
+        native_anthropic=_is_native_anthropic_base(provider.base_url),
     )
     url = _anthropic_url(provider)
     started = time.perf_counter()
@@ -639,12 +663,6 @@ async def _astream_anthropic_chat(
                                 content_buf.append(text)
                                 yield {"type": "delta", "text": text}
                         elif delta.get("type") == "thinking_delta":
-                            # B02: honor explicit opt-out. Some DashScope
-                            # gateway builds emit thinking frames even when
-                            # enable_thinking=false; drop them here so the UI
-                            # never shows a reasoning panel the user disabled.
-                            if enable_thinking is False:
-                                continue
                             text = str(delta.get("thinking") or "")
                             if text:
                                 if first_reasoning_at is None:
