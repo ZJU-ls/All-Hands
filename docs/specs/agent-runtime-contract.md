@@ -1,7 +1,7 @@
 # Agent Runtime Contract · 运转方式 preset + 动态 skill 注入 + subagent + plan 模式
 
 **日期** 2026-04-19
-**状态** Draft — **commit 1 · 停等 Track L(I-0021)+ 用户签字**
+**状态** Signed-off — Q6/Q7/Q9 delta applied 2026-04-19 (see § 12.4)
 **产出方** Track M(I-0022)
 **消费方** Track L(I-0021 · 员工设计页 UI)· 执行端 Phase 1+(本 track)
 **位置** `docs/specs/agent-runtime-contract.md`(**顶层 spec** · 员工运转方式是整个 runtime 的契约级约束)
@@ -115,7 +115,7 @@ employee_preset:
     skill_ids_whitelist:
       - sk_planner
       - sk_executor_spawn
-    max_iterations: 20                    # 多轮 plan → dispatch → 复盘
+    max_iterations: 15                    # Q7 signoff: 20→15 (UX: 20 过高)
 ```
 
 ### 4.2 展开算法(落库 service 层)
@@ -126,7 +126,9 @@ POST /employees { preset: "execute", name, model_ref, custom_tool_ids?, custom_s
   ↓
 preset_def = MODES[preset]                       # 读 Python 常量模块
 employee.tool_ids = dedupe(preset_def.tool_ids_base + (custom_tool_ids or []))
-employee.skill_ids = dedupe(preset_def.skill_ids_whitelist ∩ (custom_skill_ids or ALL))
+# Q6 signoff: skill_ids_whitelist 仅作 UI seed。UI 填入 preset default 后允许用户任意增删,
+# service 层以 UI 最终提交的 custom_skill_ids 为准(不再 ∩ 白名单)。
+employee.skill_ids = list(custom_skill_ids) if custom_skill_ids is not None else list(preset_def.skill_ids_whitelist)
 employee.max_iterations = custom_max_iterations or preset_def.max_iterations
   ↓
 employee.preset NO — 不落列!preset 只留在 API request 里作为便捷 seed。
@@ -525,10 +527,22 @@ Available skills (call resolve_skill("<id>") to activate):
 - **Q7**:`plan_with_subagent` preset 的默认 `max_iterations=20` 是否过高? → 等 L 评估 UX(滑杆默认值)
 - **Q8**:PlanCard 的 Approve 按钮点击后,是否需要用户在 composer 补一句"继续" 才能让 agent 继续? → 建议 **否**(approve 自带 "继续" 语义 · 自动 send 系统 message)· 等 L 确认
 
-### 12.3 待用户签字
+### 12.3 已签字(本 spec 初稿决定)
 
-- 三个 preset 名称(`execute` / `plan` / `plan_with_subagent`)是否对用户可见?或只在后台?
-- v0 是否要支持第四个 preset `lead`(is_lead_agent=true · 带全套 meta tools)?→ 建议 **否**(is_lead_agent 是独立维度 · 任何 preset 都可以叠加 is_lead_agent=true)
+- ~~三个 preset 名称(`execute` / `plan` / `plan_with_subagent`)是否对用户可见?~~ → Q9 **对用户可见** · 友好中文名由 preset 模块 `LABEL_ZH` 暴露(UI 展示)· 底层 id 保英文(API / DB)
+- ~~v0 是否要支持第四个 preset `lead`?~~ → Q10 **否** · `is_lead_agent` 是正交标志
+
+### 12.4 Q6-Q10 签字 delta(2026-04-19)
+
+签字文件:`/Volumes/Storage/code/allhands/docs/specs/SIGNOFF-agent-runtime-contract.md`(main `18cfacf`)。
+
+| Q | 签字答复 | 本 spec 已应用 |
+|---|----------|----------------|
+| Q6 | UI preset 填入 tool_ids + skill_ids 后允许用户增删 | § 4.2 展开算法(skill_ids 改为 UI 直传,不再与白名单取交集) |
+| Q7 | `plan_with_subagent.max_iterations` 20 过高 → **15** | § 4.1 YAML |
+| Q8 | PlanCard Approve 后无需用户补"继续" | 无需改契约(§ 6.1 Approve 回流已描述自动 send system message) |
+| Q9 | Preset 名对用户可见 · 友好中文名 | § 4.1 YAML 注:UI 层由 preset 模块 `LABEL_ZH` 导出 |
+| Q10 | 不加 `lead` preset | § 12.3 已标注 `is_lead_agent` 正交 |
 
 ---
 
