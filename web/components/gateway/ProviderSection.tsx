@@ -1,6 +1,6 @@
 "use client";
 
-import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { ModelRow, type GatewayModel } from "./ModelRow";
 import type { PingState } from "./PingIndicator";
 
@@ -80,9 +80,11 @@ export function ProviderSection({
           onClick={onToggle}
           className="flex items-center gap-2.5 min-w-0 text-left"
         >
-          <DotGridAvatar
-            initial={initialFromName(provider.name)}
+          <BrandMark
+            kind={provider.kind}
+            name={provider.name}
             size="md"
+            fallbackName={provider.name}
             testId={`gateway-provider-avatar-${provider.name}`}
           />
           <span

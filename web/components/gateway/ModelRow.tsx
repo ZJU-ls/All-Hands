@@ -1,6 +1,6 @@
 "use client";
 
-import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { PingIndicator, type PingState } from "./PingIndicator";
 
 export type GatewayModel = {
@@ -31,9 +31,10 @@ export function ModelRow({
       data-testid={`gateway-model-${model.name}`}
       className="group flex items-center gap-3 py-1.5 pl-4 pr-3 border-l border-border ml-6 hover:bg-surface-2 transition-colors duration-base"
     >
-      <DotGridAvatar
-        initial={initialFromName(model.display_name || model.name)}
+      <BrandMark
+        name={model.display_name || model.name}
         size="sm"
+        fallbackName={model.display_name || model.name}
         testId={`gateway-model-avatar-${model.name}`}
       />
       <div className="flex items-center gap-2 min-w-0">
