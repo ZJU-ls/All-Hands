@@ -88,14 +88,20 @@ def test_i0007_state_component_exists(repo_root: Path, component: str) -> None:
 
 
 def test_i0009_arch_doc_updated_for_triggers_and_cockpit(repo_root: Path) -> None:
+    """Closed 2026-04-19: product/04-architecture.md now ships L5.9
+    Triggers & Event Bus, L7.1 cockpit + triggers API rows, and the L8.1
+    cockpit workspace SSE frame list. Flip-to-assert guards against
+    someone accidentally deleting those sections during later edits."""
     arch = (repo_root / "product" / "04-architecture.md").read_text(encoding="utf-8")
-    has_triggers_section = bool(re.search(r"L5\.9|Triggers & Event Bus", arch))
-    has_cockpit_api = "/api/cockpit" in arch or "cockpit.stream" in arch
-    if not (has_triggers_section and has_cockpit_api):
-        pytest.xfail(
-            "I-0009: product/04-architecture.md missing L5.9 triggers section and/or "
-            "cockpit API rows. New contributors cannot discover these via the arch map."
-        )
+    assert re.search(r"L5\.9|Triggers & Event Bus", arch), (
+        "I-0009 regression: L5.9 Triggers & Event Bus subsection removed from "
+        "product/04-architecture.md — new contributors cannot discover the trigger "
+        "runtime from the arch map."
+    )
+    assert "/api/cockpit" in arch or "cockpit.stream" in arch, (
+        "I-0009 regression: cockpit API rows removed from L7.1 / L8.1 — the "
+        "cockpit subsystem is undiscoverable from the arch doc."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -141,5 +147,10 @@ _REQUIRED_TESTS = [
 
 @pytest.mark.parametrize("required_path", _REQUIRED_TESTS)
 def test_i0011_required_coverage_file_exists(repo_root: Path, required_path: str) -> None:
-    if not (repo_root / required_path).exists():
-        pytest.xfail(f"I-0011: {required_path} is listed in a spec DoD but does not exist yet")
+    """Closed 2026-04-19: all 7 integration / e2e files named in Wave 1 spec
+    DoDs now exist. Flip-to-assert means deleting any of them fails CI
+    loudly, so the audit gap cannot silently re-open."""
+    assert (repo_root / required_path).exists(), (
+        f"I-0011 regression: {required_path} is listed in a spec DoD but is missing. "
+        "Re-create the smoke skeleton before the wave's acceptance can pass."
+    )
