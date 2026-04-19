@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(Track I 关 I-0009 架构文档漂移 + I-0011 缺失 integration/e2e 测试)
+最后更新:2026-04-19(Wave-2:Track I 关 I-0009 + I-0011 · Track D 关 I-0015 + I-0016 · chat UX AI-native)
 
 ---
 
@@ -19,8 +19,6 @@
 | [I-0012](open/I-0012-design-lab-missing-live-samples.md) | P2 | open | design-lab missing live samples for Viz components + Artifact.Preview | web/app/design-lab | 2026-04-19 / track-2-qa | — | ui, visual, docs |
 | [I-0013](open/I-0013-voice-tone-chapter-and-lead-welcome-missing.md) | P2 | open | Voice & Tone chapter + Lead welcome message never added | product/03-visual-design · employee_service | 2026-04-19 / track-2-qa | — | docs, ui |
 | [I-0014](open/I-0014-coachmark-firstrun-guide-missing.md) | P2 | open | Coachmark system + first-run guided tour not built | web/components/ui · lib/first-run | 2026-04-19 / track-2-qa | — | ui, onboarding |
-| [I-0015](open/I-0015-composer-ergonomics-ai-native.md) | P0 | open | Composer 布局不符合 AI 原生产品惯例 · thinking 位置错 · 中止按钮缺失 | web/components/chat · /models · 所有对话入口 | 2026-04-19 / user-product-review | AI-native UX DoD | ui, ux, product-quality |
-| [I-0016](open/I-0016-streaming-output-universal.md) | P0 | open | 流式输出(打字机)没有覆盖所有 AI 输出位置 · 非 AI 原生体验 | web/lib/stream-client · MessageBubble · 所有 agent 消费点 | 2026-04-19 / user-product-review | AI-native UX DoD | ui, api, streaming |
 
 ---
 
@@ -28,10 +26,10 @@
 
 | 维度 | 数量 |
 |---|---|
-| P0 | 2 |
+| P0 | 0 |
 | P1 | 2 |
 | P2 | 5 |
-| **open** | 9 |
+| **open** | 7 |
 | **in-progress** | 0 |
 | **blocked** | 0 |
 
@@ -72,3 +70,4 @@
 - 2026-04-19 · Track B 关闭 I-0006(Cockpit 改 EventSource('/api/cockpit/stream') · snapshot + delta 帧 + 自愈重连 · 移除 POLL_MS/setInterval · vitest 4 用例消费 SSE)
 - 2026-04-19 · Track I 关闭 I-0009(product/04-architecture.md 补齐 L5.9 Triggers & Event Bus + L5.7 8 条 trigger meta tool + L7.1 触发器/webhook/cockpit 路由 + L8.1 cockpit workspace SSE 帧清单 · test_i0009 xfail → assert)
 - 2026-04-19 · Track I 关闭 I-0011(7 份 spec DoD 测试骨架全部落地 · backend 2 份 integration + web 4 份 e2e smoke · xfail/test.fixme 标注被阻塞的 follow-up · test_i0011 参数化 xfail → assert)
+- 2026-04-19 · Track D 关闭 I-0015(Composer AI-native layout · 统一 send/stop)+ I-0016(全平台流式输出 + 打字机效果)· P0 2 → 0

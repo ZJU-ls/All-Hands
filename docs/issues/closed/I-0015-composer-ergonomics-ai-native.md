@@ -1,7 +1,7 @@
 ---
 id: I-0015
 severity: P0
-status: open
+status: closed
 title: Composer 布局不符合 AI 原生产品惯例 · 深度思考位置错 · 中止按钮缺失
 affects: web/components/chat/Composer · web/app/models(测试对话) · 所有有对话框的页面
 discovered: 2026-04-19 / user-product-review
@@ -44,3 +44,15 @@ tags: ui, ux, product-quality
 ## 触发来源
 
 - 2026-04-19 用户产品评审:"深度思考一般是放在对话框下边 · 发起一般是对话框右侧 · 中止是跟发起在一个按钮上 · 发起后进行中的时候点击就可以中止"
+
+## 关闭记录
+
+- 2026-04-19 · fix-chat-ux (Track D):
+  - `aae5a6b` — unified stream-client + Composer + MessageBubble streaming cursor
+  - `3e2b7c3` — backend: abort agent stream on client disconnect (`chat.py`)
+  - `2a83152` — migrate chat consumers (InputBar + ModelTestDialog) to Composer + stream-client
+- 回归测试:
+  - `web/components/chat/__tests__/Composer.test.tsx` — send/stop toggle, Enter during streaming aborts, thinking toggle
+  - `web/components/chat/__tests__/MessageBubble.test.tsx` — streaming cursor rules
+  - `backend/tests/integration/test_chat_cancel.py::test_event_stream_closes_agent_on_disconnect` — backend aclose on disconnect
+  - `web/tests/e2e/chat-ux.spec.ts` — full playwright flow: send → stop glyph → typewriter grows → abort → resend

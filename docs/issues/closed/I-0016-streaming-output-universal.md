@@ -1,7 +1,7 @@
 ---
 id: I-0016
 severity: P0
-status: open
+status: closed
 title: AI 输出没有打字机/流式效果 · 所有消费点都应接 SSE · AI 原生基本条件
 affects: web/lib/chat-client · web/components/chat/MessageBubble · `/models` 测试 · 所有调用 agent 的页面
 discovered: 2026-04-19 / user-product-review
@@ -48,3 +48,16 @@ backend `chat.py` 已经用 `StreamingResponse(text/event-stream)` 了 · 但前
 ## 配合 I-0015
 
 I-0015 的 send→stop 切换依赖这个 streaming 状态机 · 建议同一 track 做。
+
+## 关闭记录
+
+- 2026-04-19 · fix-chat-ux (Track D):
+  - `aae5a6b` — unified `web/lib/stream-client.ts` (SSE consumer · onToken/onMetaEvent/onDone/onError/abort · tokenEvents routing)
+  - `aae5a6b` — `MessageBubble.tsx` streaming cursor (`▍`, via `ah-caret` CSS keyframe · no animation lib)
+  - `3e2b7c3` — backend `chat.py` drains generator on disconnect → streams stay abortable end-to-end
+  - `2a83152` — InputBar + ModelTestDialog migrated to stream-client (every agent consumer now streams; dead `sendMessage` helper removed)
+- 审计范围:`docs/chat-ux-audit.md` 枚举所有 agent 输出入口。主对话 + ModelTestDialog 是仅有的两个流式消费点;其余(tasks 面板、cockpit log)是只读日志/表单,本次豁免说明见 audit 文档。
+- 回归测试:
+  - `web/lib/__tests__/stream-client.test.ts` — parser + abort + reasoning routing + HTTP 500 onError
+  - `backend/tests/integration/test_chat_cancel.py` — generator `aclose()` fires on disconnect
+  - `web/tests/e2e/chat-ux.spec.ts` — typewriter 效果(assistant text length 持续增长)· abort mid-stream · resend 正常

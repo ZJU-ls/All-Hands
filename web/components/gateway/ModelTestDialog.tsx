@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Composer, ThinkingToggle } from "@/components/chat/Composer";
+import { openStream, type StreamHandle } from "@/lib/stream-client";
 
 export type ModelTestDialogProps = {
   model: {
@@ -78,13 +80,13 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
   const [phase, setPhase] = useState<"idle" | "thinking" | "answering">("idle");
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+  const streamRef = useRef<StreamHandle | null>(null);
 
   useEffect(() => {
-    return () => abortRef.current?.abort();
+    return () => streamRef.current?.abort();
   }, []);
 
-  async function runStreaming(outbound: Message) {
+  function runStreaming(outbound: Message) {
     const history: Message[] = [...messages, outbound];
     setMessages(history);
     setPrompt("");
@@ -94,8 +96,6 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
     setLastRun({ streaming: true });
     setIsLoading(true);
 
-    const controller = new AbortController();
-    abortRef.current = controller;
     const body: Record<string, unknown> = {
       messages: history.map((m) => ({ role: m.role, content: m.content })),
       temperature,
@@ -105,40 +105,32 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
     };
     if (system.trim()) body.system = system.trim();
 
-    try {
-      const res = await fetch(`/api/models/${model.id}/test/stream`, {
+    let acc = "";
+    let accReasoning = "";
+
+    const handle = openStream(
+      `/api/models/${model.id}/test/stream`,
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      if (!res.ok || !res.body) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let acc = "";
-      let accReasoning = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let sepIdx: number;
-        while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
-          const frame = buffer.slice(0, sepIdx);
-          buffer = buffer.slice(sepIdx + 2);
-          const { event, data } = parseSseFrame(frame);
-          if (!event) continue;
-          if (event === "reasoning") {
-            accReasoning += (data.text as string) ?? "";
+      },
+      {
+        tokenEvents: { delta: "text", reasoning: "text" },
+        onToken: (delta, frame) => {
+          if (frame.event === "reasoning") {
+            accReasoning += delta;
             setStreamReasoning(accReasoning);
             setPhase("thinking");
-          } else if (event === "delta") {
-            acc += (data.text as string) ?? "";
+          } else if (frame.event === "delta") {
+            acc += delta;
             setStreamContent(acc);
             setPhase("answering");
-          } else if (event === "done") {
+          }
+        },
+        onMetaEvent: (frame) => {
+          const { event, data } = frame;
+          if (event === "done") {
             const final = (data.response as string) ?? acc;
             const finalReasoning = (data.reasoning_text as string) ?? accReasoning;
             const usage = (data.usage ?? {}) as {
@@ -182,26 +174,28 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
               metrics: { latencyMs: data.latency_ms as number },
             });
           }
-        }
-      }
-    } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        setLastRun({ streaming: false });
-      } else {
-        setLastRun({
-          streaming: false,
-          error: { category: "connection", message: String(err) },
-        });
-      }
-      setPhase("idle");
-    } finally {
-      setIsLoading(false);
-      abortRef.current = null;
-    }
+        },
+        onDone: () => {
+          setIsLoading(false);
+          streamRef.current = null;
+        },
+        onError: (err) => {
+          setLastRun({
+            streaming: false,
+            error: { category: "connection", message: String(err) },
+          });
+          setPhase("idle");
+          setIsLoading(false);
+          streamRef.current = null;
+        },
+      },
+    );
+    streamRef.current = handle;
   }
 
   function resetConversation() {
-    abortRef.current?.abort();
+    streamRef.current?.abort();
+    streamRef.current = null;
     setMessages([]);
     setStreamContent("");
     setStreamReasoning("");
@@ -211,7 +205,15 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
 
   function onSubmit() {
     if (!prompt.trim() || isLoading) return;
-    void runStreaming({ role: "user", content: prompt.trim() });
+    runStreaming({ role: "user", content: prompt.trim() });
+  }
+
+  function onAbort() {
+    streamRef.current?.abort();
+    streamRef.current = null;
+    setIsLoading(false);
+    setPhase("idle");
+    setLastRun({ streaming: false });
   }
 
   return (
@@ -254,21 +256,6 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
             </button>
             {showAdvanced && (
               <div className="mt-2 rounded-md border border-border bg-bg p-3 flex flex-col gap-3">
-                <label
-                  data-testid="model-test-thinking-toggle"
-                  className="flex items-center gap-2 text-xs text-text cursor-pointer select-none"
-                >
-                  <input
-                    type="checkbox"
-                    checked={enableThinking}
-                    onChange={(e) => setEnableThinking(e.target.checked)}
-                    className="accent-primary"
-                  />
-                  <span className="font-medium">深度思考</span>
-                  <span className="text-text-subtle">
-                    (Qwen3 / DeepSeek-R1 / o1 等 · 不支持则自动忽略)
-                  </span>
-                </label>
                 <div>
                   <label className="text-xs text-text-muted block mb-1">
                     System prompt
@@ -316,7 +303,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
           >
             {messages.length === 0 && !streamContent && !streamReasoning && (
               <p className="text-xs text-text-subtle text-center py-4">
-                输入消息后按 ⌘↵ 发送。多轮对话会保留上下文。
+                输入消息后按 ↵ 或 ⌘↵ 发送。多轮对话会保留上下文。
               </p>
             )}
             {messages.map((m, i) => (
@@ -365,47 +352,40 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
         </div>
 
         <footer className="px-5 pb-4 pt-2 border-t border-border flex flex-col gap-2">
-          <textarea
+          <Composer
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                onSubmit();
-              }
-            }}
-            rows={2}
+            onChange={setPrompt}
+            onSend={onSubmit}
+            onAbort={onAbort}
+            isStreaming={isLoading}
             placeholder="输入消息..."
-            disabled={isLoading}
-            className="w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text focus:outline-none focus:border-primary transition-colors resize-none disabled:opacity-60"
+            rows={2}
+            testId="model-test-composer"
+            controls={
+              <>
+                <ThinkingToggle
+                  enabled={enableThinking}
+                  onChange={setEnableThinking}
+                  label="深度思考"
+                />
+                <button
+                  type="button"
+                  onClick={resetConversation}
+                  disabled={isLoading || (messages.length === 0 && !lastRun)}
+                  data-testid="model-test-clear"
+                  className="inline-flex h-6 items-center rounded border border-border px-2 text-[11px] text-text-muted hover:text-text hover:border-border-strong disabled:opacity-40 transition-colors duration-fast"
+                >
+                  清空会话
+                </button>
+              </>
+            }
+            controlsTrailing={
+              <>
+                ↵ 发送 · ⇧↵ 换行
+                {messages.length > 0 ? ` · ${messages.length} 轮` : ""}
+              </>
+            }
           />
-          <div className="flex gap-2 items-center">
-            <button
-              onClick={onSubmit}
-              disabled={isLoading || !prompt.trim()}
-              data-testid="model-test-send"
-              className="rounded-md bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-40 px-4 py-1.5 text-sm font-medium transition-colors"
-            >
-              {isLoading ? "请求中…" : "发送 ⌘↵"}
-            </button>
-            <button
-              onClick={() => abortRef.current?.abort()}
-              disabled={!isLoading}
-              className="rounded-md border border-border px-3 py-1.5 text-xs text-text-muted hover:text-text disabled:opacity-40 transition-colors"
-            >
-              中止
-            </button>
-            <button
-              onClick={resetConversation}
-              disabled={messages.length === 0 && !lastRun}
-              className="rounded-md border border-border px-3 py-1.5 text-xs text-text-muted hover:text-text disabled:opacity-40 transition-colors"
-            >
-              清空会话
-            </button>
-            <span className="ml-auto text-[10px] text-text-subtle font-mono">
-              {messages.length > 0 && `${messages.length} 轮`}
-            </span>
-          </div>
         </footer>
       </div>
     </div>
@@ -429,7 +409,6 @@ function MessageRow({
   const [expanded, setExpanded] = useState<boolean>(
     Boolean(streaming && phase === "thinking"),
   );
-  // while streaming, auto-expand during thinking and auto-collapse once answer begins
   useEffect(() => {
     if (!streaming) return;
     if (phase === "thinking") setExpanded(true);
@@ -470,9 +449,14 @@ function MessageRow({
               <span
                 className={`inline-block w-1.5 h-1.5 rounded-full ${
                   streaming && phase === "thinking"
-                    ? "bg-primary animate-pulse"
+                    ? "bg-primary"
                     : "bg-text-subtle"
                 }`}
+                style={
+                  streaming && phase === "thinking"
+                    ? { animation: "ah-pulse 1.6s ease-in-out infinite" }
+                    : undefined
+                }
               />
               思考过程 · {reasoning!.length} 字
             </span>
@@ -490,8 +474,15 @@ function MessageRow({
           {content || (
             <span className="text-text-subtle italic">等待回复…</span>
           )}
-          {streaming && phase === "answering" && (
-            <span className="inline-block w-1 h-3 ml-0.5 align-middle bg-primary animate-pulse" />
+          {streaming && (
+            <span
+              data-testid="model-test-cursor"
+              aria-hidden="true"
+              className="ml-0.5 inline-block align-baseline font-mono text-text"
+              style={{ animation: "ah-caret 1s step-end infinite" }}
+            >
+              ▍
+            </span>
           )}
         </>
       ) : null}
@@ -634,26 +625,4 @@ function NumberField({
       />
     </div>
   );
-}
-
-function parseSseFrame(frame: string): {
-  event: string | null;
-  data: Record<string, unknown>;
-} {
-  let event: string | null = null;
-  const dataParts: string[] = [];
-  for (const line of frame.split("\n")) {
-    if (line.startsWith("event:")) {
-      event = line.slice(6).trim();
-    } else if (line.startsWith("data:")) {
-      dataParts.push(line.slice(5).trim());
-    }
-  }
-  const raw = dataParts.join("\n");
-  if (!raw) return { event, data: {} };
-  try {
-    return { event, data: JSON.parse(raw) };
-  } catch {
-    return { event, data: { _raw: raw } };
-  }
 }
