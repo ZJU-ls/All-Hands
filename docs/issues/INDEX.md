@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(Track J 阶段 1 诊断 I-0018 · Track M 关闭 I-0022 + Track L 关闭 I-0021 + Track N 关闭 I-0020 + Track K 关闭 I-0019 · Wave-3 主段合流完成)
+最后更新:2026-04-19(Track J 关闭 I-0017 AG-UI 迁移 + I-0018 流式观感 · Track M 关闭 I-0022 + Track L 关闭 I-0021 + Track N 关闭 I-0020 + Track K 关闭 I-0019 · Wave-3 全合流 · P0 → 0)
 
 ---
 
@@ -12,8 +12,6 @@
 
 | ID | Severity | Status | Title | Affects | Discovered | Blocker-for | Tags |
 |---|---|---|---|---|---|---|---|
-| [I-0017](open/I-0017-ag-ui-protocol-migration.md) | P0 | open | 前后端 SSE/streaming 协议统一迁移到 AG-UI Protocol · 自定义事件名不符合 AI-native 行业标准 | backend/api/routers/*.py · web/lib/stream-client.ts · 所有 SSE 消费点 | 2026-04-19 / user-product-review | Wave-3 AI-native · CopilotKit 接入 | arch, api, streaming, protocol |
-| [I-0018](open/I-0018-model-test-stream-not-streaming.md) | P0 | open | /gateway 模型对话测试观感为非流式 · 字符一次性蹦出 | web/components/gateway/ModelTestDialog · backend/services/model_service · Next rewrites | 2026-04-19 / user-product-review | AI-native DoD(I-0016 本该已覆盖) | ui, streaming, bug |
 | [I-0002](open/I-0002-model-context-window-zero.md) | P2 | open | `qwen3.6-plus` context_window=0 · 前端显示异常 / Agent token 预算失效 | backend(models seed) + web(settings) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0003](open/I-0003-provider-default-model-dangling.md) | P2 | open | Provider `百炼` default_model=`glm-5` · 但库里只有 `qwen3.6-plus` · 悬空引用 | backend(providers seed) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0012](open/I-0012-design-lab-missing-live-samples.md) | P2 | open | design-lab missing live samples for Viz components + Artifact.Preview | web/app/design-lab | 2026-04-19 / track-2-qa | — | ui, visual, docs |
@@ -26,10 +24,10 @@
 
 | 维度 | 数量 |
 |---|---|
-| P0 | 2 |
+| P0 | 0 |
 | P1 | 0 |
 | P2 | 5 |
-| **open** | 7 |
+| **open** | 5 |
 | **in-progress** | 0 |
 | **blocked** | 0 |
 
@@ -80,3 +78,5 @@
 - 2026-04-19 · Track L 关闭 I-0021(/employees/design Phase-3B · `execution/modes/{execute,plan,plan_with_subagent,preview}.py` 单一展开算法 · `plan_with_subagent.max_iterations=15`(SIGNOFF Q7)· `POST /api/employees/preview` 配 `PREVIEW_EMPLOYEE_COMPOSITION_TOOL`(L01 REST+Meta 双入口)· PresetRadio 3 选一友好中文名 + DesignForm + DryRunPanel + SkillMultiPicker + max-iterations field · 10 preview + 6 e2e + L01 green · §3.2 6 层证据)· P1 1 → 0 · open 9 → 8
 - 2026-04-19 · Track M 关闭 I-0022(skill 动态注入 + Subagent + PlanCard · Phase 1 `resolve_skill` + `SkillDescriptor` + `SkillRuntime` + `bootstrap_employee_runtime` + AgentRunner per-turn rebuild (V02 §2.1) · Phase 2 `spawn_subagent` + `sk_executor_spawn` + depth-cap (V10 §4.5) · Phase 3 `sk_planner` + `render_plan` + PlanCard · system-prompt token 1752→140 / 92% 缩减 · 7 ref-src-claude citations · 10 integration + 8 unit + 5 web + L01 green)· P0 3 → 2 · open 8 → 7
 - 2026-04-19 · Track J 阶段 1 诊断 I-0018 · `docs/tracks/J-diagnosis.md` · Next rewrites **证伪** · 根因两层叠加(H1 上游 batching · H2 前端 React 18 同步 batching)
+- 2026-04-19 · Track J 关闭 I-0018(`stream-client.ts` WHILE 循环每帧 `await setTimeout(0)` 让出宏任务 · `web/lib/__tests__/stream-client.test.ts` + `web/tests/e2e/model-test-streaming.spec.ts` 两条回归)
+- 2026-04-19 · Track J 关闭 I-0017(AG-UI Protocol v1 全链路迁移 · ADR 0010 · `backend/api/ag_ui_encoder.py` v1 事件工厂 + camelCase + `encode_sse()` · 后端 4 端点 chat/model-test/cockpit/artifacts 同步切换 · `stream-client.ts` 重写为 AG-UI v1 parser + 11 typed 回调 + `onCustom` + `onEvent` · 4 web 消费者切语义钩子 · `test_ag_ui_wire_format.py` + e2e 两本 spec · P0 2 → 0 · open 7 → 5)

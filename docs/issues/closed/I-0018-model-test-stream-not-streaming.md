@@ -2,9 +2,11 @@
 id: I-0018
 title: `/gateway` 模型测试 · 字符一次性蹦出而非逐帧流 · 前端看不见打字机效果
 severity: P0
-status: open
+status: closed
 discovered_at: 2026-04-19
 discovered_by: user
+closed_at: 2026-04-19
+closed_by: track-j
 affects: web/components/gateway/ModelTestDialog · web/lib/stream-client · backend/services/model_service
 reproducible: true
 blocker_for: I-0017(AG-UI 迁移需先确定 streaming 基线正确)
@@ -164,4 +166,12 @@ for raw in sys.stdin.buffer:
 
 ## 关闭记录
 
-_留待修完填。_
+**2026-04-19 · track-j · 关闭**
+
+- 根因定性:**H2 前端 React 18 automatic batching**(H1 上游 batching 是可能的放大器,但 H2 一旦修好,H1 也不再产生症状;H1 在 provider 侧无法强改,且本次修复使前端对 H1 不再敏感)
+- 修复:`602d310` 诊断 + issue 登记 · `0d23ba5` `stream-client.ts` 加 macrotask yield · `3f519db` 两条回归测试
+- 回归测试:
+  - `web/lib/__tests__/stream-client.test.ts::spreads onToken across macrotasks when frames arrive in one chunk (I-0018)` — 5 帧打包到一个 ReadableStream chunk · 用 `setTimeout(0)` marker 分区 token · 断言 ≥1 个 token 落在 marker 之后
+  - `web/tests/e2e/model-test-streaming.spec.ts::ModelTestDialog · typewriter with one-chunk SSE (I-0018)` — Playwright page-level fetch mock · MutationObserver 捕获 assistant bubble textContent · 10 帧打包到一个 chunk · 断言 ≥5 个 distinct 中间态
+- `./scripts/check.sh` 全绿(976 vitest · 783 pytest)
+- 受益面:**同一 stream-client 被 chat / cockpit / artifacts / model-test 四路 SSE 消费者共享**,一次修复全链路受益;AG-UI 迁移(I-0017)无需重做此修
