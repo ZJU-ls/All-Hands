@@ -40,6 +40,7 @@ const MENU: MenuSection[] = [
   {
     title: "系统",
     items: [
+      { label: "Review", href: "/review" },
       { label: "设置", href: "/settings" },
       { label: "关于", href: "/about" },
     ],
