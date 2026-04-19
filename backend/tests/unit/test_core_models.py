@@ -66,11 +66,24 @@ def test_mcp_server_defaults() -> None:
     assert mcp.health == "unknown"
 
 
-def test_employee_name_pattern_rejects_bad_names() -> None:
+def test_employee_name_accepts_display_names() -> None:
+    """B01: name 是用户可见的展示名,允许 CJK / 空格 / emoji / 数字打头。"""
     assert is_valid_employee_name("Researcher")
-    assert not is_valid_employee_name("1bad")
-    assert not is_valid_employee_name("has space")
+    assert is_valid_employee_name("技能测试员")
+    assert is_valid_employee_name("研究员 Alpha")
+    assert is_valid_employee_name("🧠 thinker")
+    assert is_valid_employee_name("1st analyst")
+    assert is_valid_employee_name("has space")
+
+
+def test_employee_name_rejects_edge_cases() -> None:
+    """B01: 仍需拒绝空串 / 前后空格 / 控制字符 / 过长。"""
     assert not is_valid_employee_name("")
+    assert not is_valid_employee_name("  ")
+    assert not is_valid_employee_name(" leading")
+    assert not is_valid_employee_name("trailing ")
+    assert not is_valid_employee_name("a\x00b")
+    assert not is_valid_employee_name("x" * 65)
 
 
 def test_employee_rejects_reserved_role_name() -> None:
