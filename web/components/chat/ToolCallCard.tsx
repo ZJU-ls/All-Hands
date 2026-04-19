@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ToolCall } from "@/lib/protocol";
+import { PlusIcon, MinusIcon } from "@/components/ui/icons";
 
 type Props = { toolCall: ToolCall };
 
@@ -21,15 +22,18 @@ export function ToolCallCard({ toolCall }: Props) {
   return (
     <div className="rounded-lg border border-border bg-bg text-xs overflow-hidden">
       <button
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-surface transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-2 transition-colors duration-base"
         onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
       >
-        <span className={`font-mono ${color}`}>⚙</span>
+        <span className="font-mono text-[10px] text-text-subtle shrink-0">fn</span>
         <span className="font-mono text-text truncate">
           {toolCall.tool_id.split(".").pop()}
         </span>
         <span className={`ml-auto font-medium ${color}`}>{toolCall.status}</span>
-        <span className="text-text-muted">{expanded ? "▲" : "▼"}</span>
+        <span className="text-text-muted shrink-0" aria-hidden="true">
+          {expanded ? <MinusIcon size={12} /> : <PlusIcon size={12} />}
+        </span>
       </button>
       {expanded && (
         <div className="border-t border-border px-3 py-2 space-y-2">

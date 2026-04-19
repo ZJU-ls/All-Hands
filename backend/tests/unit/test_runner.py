@@ -41,8 +41,10 @@ async def test_runner_yields_done_event() -> None:
 
     mock_agent.astream = fake_astream
 
-    with patch("langgraph.prebuilt.create_react_agent", return_value=mock_agent), \
-         patch("allhands.execution.runner._build_model", return_value=MagicMock()):
+    with (
+        patch("langgraph.prebuilt.create_react_agent", return_value=mock_agent),
+        patch("allhands.execution.runner._build_model", return_value=MagicMock()),
+    ):
         runner = AgentRunner(
             employee=employee,
             tool_registry=tool_registry,

@@ -125,11 +125,25 @@ async def test_provider(
     provider_id: str,
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, object]:
-    """Test provider connectivity by making a minimal chat completion."""
+    """Connectivity test: HEAD the /models endpoint if available, else a tiny chat call."""
     svc = await get_provider_service(session)
     provider = await svc.get(provider_id)
     if provider is None:
         raise HTTPException(status_code=404, detail="Provider not found.")
+
+    # Prefer /models listing for a pure connectivity check (no token usage).
+    try:
+        import httpx
+
+        url = provider.base_url.rstrip("/") + "/models"
+        headers = {"Authorization": f"Bearer {provider.api_key}"} if provider.api_key else {}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers)
+        if resp.status_code < 400:
+            return {"ok": True, "endpoint": url, "status": resp.status_code}
+        # Fall back to a chat completion if /models is missing.
+    except Exception:
+        pass
 
     try:
         from langchain_core.messages import HumanMessage
@@ -141,7 +155,7 @@ async def test_provider(
         if provider.base_url:
             kwargs["base_url"] = provider.base_url
         llm = ChatOpenAI(**kwargs)
-        resp = await llm.ainvoke([HumanMessage(content="ping")])
-        return {"ok": True, "model": provider.default_model, "response": str(resp.content)[:100]}
+        resp2 = await llm.ainvoke([HumanMessage(content="ping")])
+        return {"ok": True, "model": provider.default_model, "response": str(resp2.content)[:100]}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}

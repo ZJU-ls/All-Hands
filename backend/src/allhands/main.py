@@ -1,4 +1,10 @@
-"""Application entry point. Runs Alembic migrations and seeds Lead Agent on startup."""
+"""Application entry point. Runs Alembic migrations and seeds Lead Agent on startup.
+
+Trigger scheduler + event listener come up via `api.app._lifespan`; this
+startup hook only handles the one-shot bootstrap (migrations + Lead Agent).
+We keep `on_event` rather than collapsing into the lifespan CM because the
+bootstrap needs a running event loop but must not block scheduler start.
+"""
 
 from __future__ import annotations
 

@@ -2,24 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens: product/03-visual-design.md. Dark theme is default. */
-:root {
-  --font-sans: "Geist Sans", "Inter", system-ui, sans-serif;
-  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+/* ==========================================================================
+ * allhands · Design Tokens · "Linear Precise"
+ * ------------------------------------------------------------------------
+ * Canonical source: product/03-visual-design.md
+ * Editing these values without updating that spec is a contract violation.
+ * Neutral ramp = Zinc. Brand = Indigo #6366F1. Never write hex inline.
+ * ======================================================================== */
 
-  --color-bg: #0a0a0a;
+:root,
+.light {
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --color-bg: #ffffff;
+  --color-surface: #fafafa;
+  --color-surface-2: #f4f4f5;
+  --color-surface-3: #ededef;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-text: #18181b;
+  --color-text-muted: #71717a;
+  --color-text-subtle: #a1a1aa;
+
+  --color-primary: #6366f1;
+  --color-primary-hover: #7c7ff3;
+  --color-primary-fg: #ffffff;
+
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+
+  --color-role-user: #6366f1;
+  --color-role-lead: #8b5cf6;
+  --color-role-worker: #0d9488;
+  --color-role-tool: #d97706;
+}
+
+.dark {
+  --color-bg: #09090b;
   --color-surface: #111113;
-  --color-surface-2: #17181b;
-  --color-border: #26272b;
-  --color-text: #e6e7ea;
-  --color-text-muted: #8a8d94;
+  --color-surface-2: #18181b;
+  --color-surface-3: #1f1f22;
+  --color-border: #27272a;
+  --color-border-strong: #3f3f46;
+  --color-text: #fafafa;
+  --color-text-muted: #a1a1aa;
+  --color-text-subtle: #71717a;
 
-  --color-primary: #3b82f6;
-  --color-primary-fg: #f8fafc;
+  --color-primary: #6366f1;
+  --color-primary-hover: #818cf8;
+  --color-primary-fg: #ffffff;
 
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+
+  --color-role-user: #818cf8;
+  --color-role-lead: #a78bfa;
+  --color-role-worker: #2dd4bf;
+  --color-role-tool: #fbbf24;
+}
+
+/* Motion tokens — shared duration + easing. Use var() not literals. */
+:root,
+.light,
+.dark {
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 150ms;
+  --dur-mid: 220ms;
+  --dur-slow: 320ms;
 }
 
 html,
@@ -27,8 +80,58 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
   border-color: var(--color-border);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 6px;
+  border: 2px solid var(--color-bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
+}
+
+/* ==========================================================================
+ * Keyframes — shared across the app
+ * ======================================================================== */
+
+@keyframes ah-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes ah-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.92); }
+}
+@keyframes ah-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes ah-bar-in {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes ah-caret {
+  0%, 45%  { opacity: 1; }
+  50%, 95% { opacity: 0; }
+}
+@keyframes ah-dot {
+  0%   { opacity: 0.2; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.2; }
+}
+@keyframes ah-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

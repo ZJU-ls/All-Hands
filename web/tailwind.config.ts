@@ -15,10 +15,14 @@ const config: Config = {
         bg: "var(--color-bg)",
         surface: "var(--color-surface)",
         "surface-2": "var(--color-surface-2)",
+        "surface-3": "var(--color-surface-3)",
         border: "var(--color-border)",
+        "border-strong": "var(--color-border-strong)",
         text: "var(--color-text)",
         "text-muted": "var(--color-text-muted)",
+        "text-subtle": "var(--color-text-subtle)",
         primary: "var(--color-primary)",
+        "primary-hover": "var(--color-primary-hover)",
         "primary-fg": "var(--color-primary-fg)",
         success: "var(--color-success)",
         warning: "var(--color-warning)",
@@ -33,6 +37,17 @@ const config: Config = {
         md: "6px",
         lg: "10px",
         xl: "16px",
+      },
+      // Motion tokens — see product/06-ux-principles.md §P08 & globals.css.
+      // Raw `duration-NNN` is banned by ux-principles.test.ts.
+      transitionDuration: {
+        fast: "var(--dur-fast)",
+        base: "var(--dur-base)",
+        mid: "var(--dur-mid)",
+        slow: "var(--dur-slow)",
+      },
+      transitionTimingFunction: {
+        out: "var(--ease-out)",
       },
     },
   },

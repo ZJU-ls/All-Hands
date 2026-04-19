@@ -38,7 +38,9 @@ class Tool(BaseModel):
     """The domain representation of a Tool. Executor is NOT bound here;
     L5 ToolRegistry maps (tool.id -> executor)."""
 
-    id: str = Field(..., min_length=1, description="Stable registry key, e.g. 'allhands.core.create_employee'")
+    id: str = Field(
+        ..., min_length=1, description="Stable registry key, e.g. 'allhands.core.create_employee'"
+    )
     kind: ToolKind
     name: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)

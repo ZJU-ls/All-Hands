@@ -58,18 +58,20 @@ async def test_employee_service_create_rejects_no_capability() -> None:
 
 async def test_employee_service_list() -> None:
     repo = _make_mock_employee_repo()
-    repo.list_all = AsyncMock(return_value=[
-        Employee(
-            id="e1",
-            name="Alice",
-            description="",
-            system_prompt="x",
-            model_ref="openai/gpt-4o-mini",
-            tool_ids=["t1"],
-            created_by="user",
-            created_at=datetime.now(UTC),
-        )
-    ])
+    repo.list_all = AsyncMock(
+        return_value=[
+            Employee(
+                id="e1",
+                name="Alice",
+                description="",
+                system_prompt="x",
+                model_ref="openai/gpt-4o-mini",
+                tool_ids=["t1"],
+                created_by="user",
+                created_at=datetime.now(UTC),
+            )
+        ]
+    )
     svc = EmployeeService(repo)
     employees = await svc.list_all()
     assert len(employees) == 1

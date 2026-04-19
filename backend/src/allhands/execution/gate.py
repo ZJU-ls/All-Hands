@@ -94,14 +94,16 @@ class PersistentConfirmationGate(BaseGate):
         )
         await self._repo.save(confirmation)
 
-        await self._queue.put({
-            "type": "confirm_required",
-            "confirmation_id": confirmation.id,
-            "tool_call_id": tool_call_id,
-            "summary": summary,
-            "rationale": rationale,
-            "diff": diff,
-        })
+        await self._queue.put(
+            {
+                "type": "confirm_required",
+                "confirmation_id": confirmation.id,
+                "tool_call_id": tool_call_id,
+                "summary": summary,
+                "rationale": rationale,
+                "diff": diff,
+            }
+        )
 
         deadline = confirmation.expires_at
         while True:
@@ -110,24 +112,30 @@ class PersistentConfirmationGate(BaseGate):
             if updated is None:
                 return "expired"
             if updated.status == ConfirmationStatus.APPROVED:
-                await self._queue.put({
-                    "type": "confirm_resolved",
-                    "confirmation_id": confirmation.id,
-                    "status": "approved",
-                })
+                await self._queue.put(
+                    {
+                        "type": "confirm_resolved",
+                        "confirmation_id": confirmation.id,
+                        "status": "approved",
+                    }
+                )
                 return "approved"
             if updated.status == ConfirmationStatus.REJECTED:
-                await self._queue.put({
-                    "type": "confirm_resolved",
-                    "confirmation_id": confirmation.id,
-                    "status": "rejected",
-                })
+                await self._queue.put(
+                    {
+                        "type": "confirm_resolved",
+                        "confirmation_id": confirmation.id,
+                        "status": "rejected",
+                    }
+                )
                 return "rejected"
             if datetime.now(UTC) > deadline:
                 await self._repo.update_status(confirmation.id, ConfirmationStatus.EXPIRED)
-                await self._queue.put({
-                    "type": "confirm_resolved",
-                    "confirmation_id": confirmation.id,
-                    "status": "expired",
-                })
+                await self._queue.put(
+                    {
+                        "type": "confirm_resolved",
+                        "confirmation_id": confirmation.id,
+                        "status": "expired",
+                    }
+                )
                 return "expired"

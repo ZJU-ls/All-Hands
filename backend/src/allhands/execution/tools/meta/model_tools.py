@@ -100,14 +100,37 @@ CHAT_TEST_MODEL_TOOL = Tool(
     kind=ToolKind.META,
     name="chat_test_model",
     description=(
-        "Send one prompt through (provider, model) and return the reply. "
-        "Use this to verify a newly-added model is reachable before binding it to employees."
+        "Send chat request(s) through (provider, model) and return the reply + "
+        "latency + token usage + categorized error. Supports multi-turn messages, "
+        "system prompt, temperature / top_p / max_tokens. Returned metrics match "
+        "the Gateway Test UI so results are comparable end-to-end."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "model_id": {"type": "string"},
-            "prompt": {"type": "string", "default": "ping"},
+            "prompt": {
+                "type": "string",
+                "default": "ping",
+                "description": "Simple single-turn shortcut. Ignored if messages[] is provided.",
+            },
+            "messages": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {"type": "string", "enum": ["system", "user", "assistant"]},
+                        "content": {"type": "string"},
+                    },
+                    "required": ["role", "content"],
+                },
+                "description": "Multi-turn history. Takes precedence over `prompt`.",
+            },
+            "system": {"type": "string", "description": "System prompt."},
+            "temperature": {"type": "number", "minimum": 0.0, "maximum": 2.0},
+            "top_p": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "max_tokens": {"type": "integer", "minimum": 1, "maximum": 32000},
+            "stop": {"type": "array", "items": {"type": "string"}},
         },
         "required": ["model_id"],
     },
