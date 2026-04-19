@@ -306,3 +306,64 @@ git merge --no-ff track-2-ui    # 或 track-3-ops
 - **"我的 check.sh 挂了 · 但代码没改"** → 可能 Track X 在 main 改了某个你依赖的文件 · 不要 pull · 在 worktree 里自己解决 · 最终 merge 窗口一起修
 - **"我的 test 依赖另一 track 的 feature"** → 说明白名单设计有漏 · 立即停 · 通知用户 · 不要跨白名单写代码
 - **"我看到 INDEX.md 有 P0 但不是我这 track 的"** → 按 § 5.2 · Track 3 独占 issue · 你不许拾 · 继续做你的 spec
+
+---
+
+## 9 · Wave 2(2026-04-19 夜 · 重新分工)
+
+### 9.1 Wave 1 实际结果
+
+- **T1(main)**:超额完成 — 完成 Wave B.3 triggers + Wave C 全三份(employee-chat / artifacts / cockpit)+ visual-upgrade + 关 I-0001 + 关 I-0004。
+- **T2(track-2-ui)**:新 Claude 未启动 · 0 commit · 被 T1 替代。
+- **T3(track-3-ops)**:起床后发现 I-0004 阻塞 · 写完 issue 停机 · 被动退休(I-0004 已由 T1 关)。
+
+剩余 32-41h + 新增 stock 套件 22-28h · 重新开 Wave 2 · 3 条并行。
+
+### 9.2 Wave 2 三轨
+
+#### Track 1(main 沿用 · 当前 Claude 继续)
+- 分支 `main` · 端口 8000/3000
+- scope:toolset(12-15h)+ tasks(6-8h)
+- 白名单:`execution/tools/builtin/**` · `services/task_service.py` · `core/task.py` · `api/routers/tasks.py` · migration 0011 · `web/app/tasks/**` + tests
+- 不动其他 track 白名单
+
+#### Track 2(新 · `track-2-qa`)
+- 复用 `/Volumes/Storage/code/allhands-track-2` worktree · 端口 8001/3001
+- scope:self-review + walkthrough-acceptance + harness-review(9-12h)+ 审计已交付 7 份 spec
+- 白名单:`scripts/{self-review,walkthrough-acceptance}.sh` · `backend/tests/acceptance/**` · `web/tests/acceptance/**` · `docs/claude/qa-playbook.md` · `harness/**`
+- **只动测试 / 脚本 / 文档 · 不动 feature 代码**
+
+#### Track 3(新 · `track-3-stock`)
+- 复用 `/Volumes/Storage/code/allhands-track-3` worktree · 端口 8002/3002
+- scope:notification-channels + market-data + stock-assistant(22-28h · v0 三份)
+- 白名单:`core/{channel,market}.py` · `services/{channel,market}_service.py` · `execution/{channels,market}/**` · `execution/tools/meta/{channel,market}_tools.py` · `api/routers/{channels,market,notifications}.py` · `skills/stock_assistant/**` · migration 0009+0010 · `web/app/{channels,market,stock-assistant}/**` · `web/components/{channels,market,stock-assistant}/**`
+- **严格只新增 · 零修改既有文件**
+
+### 9.3 Wave 2 migration 预分配
+
+| ID | 归属 | 表 |
+|---|---|---|
+| 0009 | T3 | channels / channel_subscriptions / channel_messages |
+| 0010 | T3 | watched_symbols / holdings / market_snapshots / market_news |
+| 0011 | T1 | tasks |
+
+### 9.4 Merge 信号
+
+- T2 完成 → `allhands-track-2/TRACK-2-QA-READY.md`
+- T3 完成 → `allhands-track-3/TRACK-3-STOCK-READY.md`
+- T1 就在 main · 无信号
+
+协调 Claude(cron 9afb88dd)每 30 min 扫 · 试 `git merge --no-ff <branch>` + check.sh · 冲突走 MERGE-BLOCKED 文件。
+
+### 9.5 汇合后最终串行
+
+1. observatory(5-6h · non-blocking)
+2. 视觉 + stock / market / channels 三组新页的 Linear Precise 微调(~2h)
+3. walkthrough-acceptance 全仓 W1-W7(由 T2 铺完的框架跑)
+4. v0 tag
+
+### 9.6 一句话
+
+- **T1(main · 当前 Claude)** 继续推 toolset + tasks · 按白名单
+- **T2(track-2-qa · 新 Claude)** QA 闸门三件套 + 审计 · 只动测试/脚本
+- **T3(track-3-stock · 新 Claude)** 落 3 份新 spec · 严格只新增
