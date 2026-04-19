@@ -28,7 +28,18 @@ export default function EmployeesPage() {
   }, []);
 
   return (
-    <AppShell title="员工">
+    <AppShell
+      title="员工"
+      actions={
+        <Link
+          href="/employees/design"
+          data-testid="goto-employee-design"
+          className="rounded-md border border-border px-3 py-1 text-[12px] text-text hover:bg-surface-2 transition-colors duration-base"
+        >
+          设计员工
+        </Link>
+      }
+    >
       <div className="h-full overflow-y-auto">
         <div className="max-w-4xl mx-auto p-6 space-y-4">
           {error && (
