@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(Wave-3 并行分发 · 新增 I-0019 gateway 嵌套 / I-0020 seed 基础设施 / I-0021 员工设计页 / I-0022 skill 动态注入)
+最后更新:2026-04-19(Track N 关闭 I-0020 seed 基础设施 · Wave-3 基础设施闭环)
 
 ---
 
@@ -16,7 +16,6 @@
 | [I-0018](open/I-0018-model-test-stream-not-streaming.md) | P0 | open | /gateway 模型对话测试观感为非流式 · 字符一次性蹦出 | web/components/gateway/ModelTestDialog · backend/services/model_service · Next rewrites | 2026-04-19 / user-product-review | AI-native DoD(I-0016 本该已覆盖) | ui, streaming, bug |
 | [I-0022](open/I-0022-dynamic-skill-injection-and-subagent.md) | P0 | open | Skill 作为 Tool 动态注入 + Subagent spawn + Plan 模式 · 参考 ref-src-claude | backend/execution/skills.py · agent_runner · core/tool.py · 新 execution/modes/* | 2026-04-19 / user-product-review | I-0021 员工设计页 · Wave-3 reasoning-light model 可用性 | backend, agent-runtime, arch |
 | [I-0019](open/I-0019-gateway-nested-view-and-per-model-tests.md) | P1 | open | /gateway 改单页嵌套展开 · 每个 model 行 ping + 对话测试双按钮 | web/app/gateway · web/components/gateway · backend 新 ping endpoint | 2026-04-19 / user-product-review | Wave-3 gateway 体验闭环 | ui, ux, gateway |
-| [I-0020](open/I-0020-seed-data-infrastructure.md) | P1 | open | Seed 数据基础设施 · 每个新功能交付时自带"满载状态"真实 demo 数据 | backend/services/seed_service.py · bootstrap_service · CLI `allhands seed dev` | 2026-04-19 / user-product-review | 所有 Wave-3+ 新功能验收 | backend, infra, devx |
 | [I-0021](open/I-0021-employee-design-page.md) | P1 | open | /employees 员工设计(招聘)页 · preset + skill/mcp 挂载 · Dry run 预览 | web/app/employees · web/components/employee-design · employee_tools meta | 2026-04-19 / user-product-review | Wave-3 员工组织能力闭环 | ui, ux, employees |
 | [I-0002](open/I-0002-model-context-window-zero.md) | P2 | open | `qwen3.6-plus` context_window=0 · 前端显示异常 / Agent token 预算失效 | backend(models seed) + web(settings) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0003](open/I-0003-provider-default-model-dangling.md) | P2 | open | Provider `百炼` default_model=`glm-5` · 但库里只有 `qwen3.6-plus` · 悬空引用 | backend(providers seed) | 2026-04-18 / api-probe | — | backend, data |
@@ -31,9 +30,9 @@
 | 维度 | 数量 |
 |---|---|
 | P0 | 3 |
-| P1 | 3 |
+| P1 | 2 |
 | P2 | 5 |
-| **open** | 11 |
+| **open** | 10 |
 | **in-progress** | 0 |
 | **blocked** | 0 |
 
@@ -79,3 +78,4 @@
 - 2026-04-19 · Track H 关闭 I-0010(`.eslintrc.json` `no-restricted-syntax` JSXText 规则 + `web/tests/no-raw-state-literal.test.ts` 86 用例守门 · 17 个 app/components 文件扫荡到 `<LoadingState/>` / `<EmptyState/>` / `<ErrorState/>` · `ConversationHeader` 保留 inline 占位 + per-line 豁免 1 处)
 - 2026-04-19 · 用户产品评审 Wave-2 merge 后新增 I-0017(AG-UI 协议迁移)+ I-0018(模型测试非流式 bug)· 分发 Track J(复用 `allhands-track-d` worktree · 分支 `ag-ui-migration-and-stream-fix`)
 - 2026-04-19 · Wave-3 并行分发 · 新增 I-0019(gateway 嵌套)+ I-0020(seed 基础设施)+ I-0021(员工设计页)+ I-0022(skill 动态注入)· 分发 Track K/N/L/M(复用 `allhands-track-a/e/b/c` · 端口 3010-3013/8010-8013)
+- 2026-04-19 · Track N 关闭 I-0020(seed 数据基础设施 · `seed_service.py` + `ensure_all_dev_seeds()` + 7 domain `ensure_*` + `data/seeds/*.json` × 7 + `allhands-seed` CLI + `main.py::_should_seed` dev/test 自动 · `working-protocol.md` §4 DoD seed 块 + L02 + E01 · 回归 `test_seed_service.py` 10 cases + `test_seed_cli.py` 7 cases + `seed-full-house.spec.ts` 冷启 5 页 ≥ N)· P1 3 → 2 · open 11 → 10
