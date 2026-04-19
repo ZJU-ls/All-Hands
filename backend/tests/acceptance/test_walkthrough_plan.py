@@ -22,6 +22,9 @@ REQUIRED_STAGE_FIELDS = {
     "north_star_focus",
     "v0_active",
     "preconditions",
+    "dod",
+    "blocker_issues",
+    "owner_track",
 }
 
 NORTH_STAR_DIMS = {"N1", "N2", "N3", "N4", "N5", "N6"}
@@ -60,6 +63,50 @@ class TestPlanShape:
         for stage in walkthrough_plan["stages"]:
             unknown = set(stage["north_star_focus"]) - NORTH_STAR_DIMS
             assert not unknown, f"stage {stage['id']} references unknown dim {unknown}"
+
+    def test_dod_is_non_empty_bullets(self, walkthrough_plan: dict[str, Any]) -> None:
+        for stage in walkthrough_plan["stages"]:
+            dod = stage["dod"]
+            assert isinstance(dod, list) and dod, (
+                f"stage {stage['id']} has empty dod — each walkthrough must declare "
+                f"what 'done' means (spec §3.2 row 'walkthrough.md template')"
+            )
+            assert all(isinstance(b, str) and b.strip() for b in dod), (
+                f"stage {stage['id']} dod must be a list of non-empty strings"
+            )
+
+    def test_blocker_issues_are_filed(self, walkthrough_plan: dict[str, Any], repo_root) -> None:
+        """If a stage declares a blocker issue, that issue file must exist.
+
+        Stops plan.json from pointing at issues that were renamed or closed
+        without updating the walkthrough matrix.
+        """
+        issues_dir = repo_root / "docs" / "issues"
+        all_issue_ids = {
+            p.stem.split("-", 2)[0] + "-" + p.stem.split("-", 2)[1]
+            for p in list(issues_dir.rglob("I-*.md"))
+        }
+        for stage in walkthrough_plan["stages"]:
+            for blocker in stage["blocker_issues"]:
+                assert blocker in all_issue_ids, (
+                    f"stage {stage['id']} declares blocker {blocker} but no "
+                    f"docs/issues/**/{blocker}-*.md file exists"
+                )
+
+    def test_owner_track_is_declared(self, walkthrough_plan: dict[str, Any]) -> None:
+        allowed = {
+            "main",
+            "track-a-artifacts",
+            "track-b-employee-chat",
+            "track-3-stock",
+            "track-2-qa",
+            "track-c",
+        }
+        for stage in walkthrough_plan["stages"]:
+            assert stage["owner_track"] in allowed, (
+                f"stage {stage['id']} owner_track={stage['owner_track']!r} not in "
+                f"{sorted(allowed)} — add the track or fix the stage"
+            )
 
 
 class TestPreconditionsExist:
