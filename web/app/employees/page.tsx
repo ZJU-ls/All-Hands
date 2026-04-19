@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 import { listEmployees, type EmployeeDto } from "@/lib/api";
 import { deriveProfile, BADGE_LABEL } from "@/lib/employee-profile";
 
@@ -36,7 +37,7 @@ export default function EmployeesPage() {
             </div>
           )}
           {employees === null ? (
-            <p className="text-[12px] text-text-muted">加载中…</p>
+            <LoadingState title="加载员工" />
           ) : employees.length === 0 ? (
             <p className="text-[12px] text-text-muted">
               还没有员工。通过与 Lead Agent 对话,用 create_employee 工具来创建。

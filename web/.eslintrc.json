@@ -1,3 +1,24 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"]
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "overrides": [
+    {
+      "files": ["app/**/*.tsx", "components/**/*.tsx"],
+      "excludedFiles": [
+        "app/design-lab/**",
+        "components/state/**",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/__tests__/**"
+      ],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "JSXText[value=/(加载中…?|Loading\\.\\.\\.|Loading…|暂无(数据|消息|活动)|No data\\.?)/]",
+            "message": "no-raw-state-literal: use <LoadingState />, <EmptyState />, <ErrorState /> from @/components/state instead of a raw JSX literal. If this is truly illustrative (e.g., a button demo), move it to app/design-lab or add `// eslint-disable-next-line no-restricted-syntax` with a one-line reason."
+          }
+        ]
+      }
+    }
+  ]
 }

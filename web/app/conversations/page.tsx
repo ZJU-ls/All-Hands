@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 import {
   listConversations,
   listEmployees,
@@ -74,7 +75,7 @@ export default function ConversationsPage() {
             </div>
           )}
           {loading ? (
-            <p className="text-[12px] text-text-muted">加载中…</p>
+            <LoadingState title="加载会话" />
           ) : groups.length === 0 ? (
             <p className="text-[12px] text-text-muted">
               还没有任何对话。打开一个员工主页,创建新对话开始。

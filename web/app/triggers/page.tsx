@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type Kind = "timer" | "event";
@@ -143,11 +144,8 @@ export default function TriggersPage() {
           </p>
 
           {status === "loading" && (
-            <div
-              data-testid="triggers-loading"
-              className="rounded-xl border border-border bg-surface p-10 text-center"
-            >
-              <p className="text-sm text-text-muted">加载中…</p>
+            <div data-testid="triggers-loading">
+              <LoadingState title="加载触发器" />
             </div>
           )}
 

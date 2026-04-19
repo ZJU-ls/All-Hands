@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { use } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { EmptyState, LoadingState } from "@/components/state";
 
 type ChannelKind = "telegram" | "bark" | "wecom" | "feishu" | "email" | "pushdeer";
 
@@ -134,11 +135,7 @@ export default function ChannelDetailPage({
     >
       <div className="h-full overflow-y-auto">
         <div className="max-w-4xl mx-auto px-8 py-8 space-y-8">
-          {status === "loading" && (
-            <div className="rounded-xl border border-border bg-surface p-10 text-center">
-              <p className="text-sm text-text-muted">加载中…</p>
-            </div>
-          )}
+          {status === "loading" && <LoadingState title="加载渠道" />}
           {status === "error" && (
             <div className="rounded-xl border border-danger/30 bg-danger/5 p-6">
               <p className="text-sm text-danger mb-2">加载失败</p>
@@ -226,7 +223,7 @@ export default function ChannelDetailPage({
               <Card title="近 50 条消息" subtitle="新→旧 · 入/出混合">
                 <div className="space-y-2">
                   {messages.length === 0 && (
-                    <p className="text-xs text-text-subtle">暂无消息</p>
+                    <EmptyState title="暂无消息" />
                   )}
                   {messages.map((m) => (
                     <div

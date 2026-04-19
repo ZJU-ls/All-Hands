@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
@@ -75,9 +76,7 @@ export default function TaskDetailPage() {
       <AppShell title="任务">
         <div className="h-full overflow-y-auto">
           <div className="max-w-4xl mx-auto px-8 py-8">
-            <div className="rounded-xl border border-border bg-surface p-10 text-center">
-              <p className="text-sm text-text-muted">加载中…</p>
-            </div>
+            <LoadingState title="加载任务" />
           </div>
         </div>
       </AppShell>

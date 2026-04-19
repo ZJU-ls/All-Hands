@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { ErrorState, LoadingState } from "@/components/state";
 import {
   fetchObservatorySummary,
   fetchTraces,
@@ -178,10 +179,12 @@ export default function ObservatoryPage() {
                   />
                 </>
               ) : (
-                <div className="py-6 text-[12px] text-text-muted">
-                  {state === "error"
-                    ? `加载失败 · ${error}`
-                    : "加载中…"}
+                <div className="py-3">
+                  {state === "error" ? (
+                    <ErrorState title="加载失败" detail={error ?? undefined} />
+                  ) : (
+                    <LoadingState title="加载观测数据" />
+                  )}
                 </div>
               )}
             </div>

@@ -70,4 +70,7 @@ if (typeof window !== "undefined") {
   import("../components/render/Artifact/Preview").then(({ ArtifactPreview }) => {
     safeRegister("Artifact.Preview", ArtifactPreview);
   });
+  import("../components/render/EmployeeCard").then(({ EmployeeCard }) => {
+    safeRegister("EmployeeCard", EmployeeCard);
+  });
 }

@@ -44,6 +44,7 @@ import {
   CheckIcon,
   type IconProps,
 } from "@/components/icons";
+import { EmployeeCard } from "@/components/render/EmployeeCard";
 
 /**
  * Design Lab: three concept variants side-by-side in both light & dark.
@@ -142,6 +143,8 @@ export default function DesignLabPage() {
           <StateShowcase />
 
           <IconGallery />
+
+          <EmployeeCardShowcase />
 
           <VizShowcase />
 
@@ -1269,6 +1272,87 @@ function StateShowcase() {
             ]}
             primaryAction={{ label: "开始", onClick: () => undefined }}
             secondaryAction={{ label: "先看文档", onClick: () => undefined }}
+          />
+        </ShowcaseCard>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- EmployeeCard showcase (I-0008 · create_employee render target) ---------- */
+
+function EmployeeCardShowcase() {
+  return (
+    <section className="rounded-2xl border border-border p-6 bg-surface">
+      <header className="mb-5">
+        <h2 className="text-sm font-semibold mb-1">
+          EmployeeCard · create_employee 的回包长这样
+        </h2>
+        <p className="text-xs text-text-muted">
+          meta tool <span className="font-mono text-text">create_employee</span>{" "}
+          成功后返回 <span className="font-mono text-text">{"{component: \"EmployeeCard\", props}"}</span> · Lead
+          的回话里就直接渲染这个卡片 · 用户不用离开 /chat。
+        </p>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <ShowcaseCard title="active · 带 2px 激活色条">
+          <EmployeeCard
+            props={{
+              employee_id: "emp_01HACTIVE",
+              name: "Researcher",
+              role: "Desk research specialist",
+              system_prompt_preview:
+                "你是一名擅长桌面研究的助手 · 必须引用来源 · 对存疑结论用 markdown 脚注标注。",
+              skill_count: 2,
+              tool_count: 7,
+              model: { provider: "openai", name: "gpt-4o-mini" },
+              status: "active",
+            }}
+            interactions={[]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="draft · 刚建完还没跑过">
+          <EmployeeCard
+            props={{
+              employee_id: "emp_02HDRAFT",
+              name: "Writer",
+              role: "稿件起草 + 排版润色",
+              system_prompt_preview:
+                "把输入材料改写成 300-500 字正式版 · 结尾不加 emoji · 标题控制在 18 字以内。",
+              skill_count: 1,
+              tool_count: 3,
+              model: { provider: "deepseek", name: "deepseek-chat" },
+              status: "draft",
+            }}
+            interactions={[]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="paused · 临时停用">
+          <EmployeeCard
+            props={{
+              employee_id: "emp_03HPAUSE",
+              name: "Trader-Sim",
+              role: "A 股行情观察 · 纯模拟不下单",
+              system_prompt_preview: "只做只读观察 · 严禁调用任何 WRITE 工具。",
+              skill_count: 3,
+              tool_count: 5,
+              model: { provider: "anthropic", name: "haiku" },
+              status: "paused",
+            }}
+            interactions={[]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="极简 props · 只塞 id + 名字">
+          <EmployeeCard
+            props={{
+              employee_id: "emp_04HBARE",
+              name: "Minimal",
+            }}
+            interactions={[]}
           />
         </ShowcaseCard>
       </div>

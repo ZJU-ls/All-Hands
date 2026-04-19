@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ModelTestDialog } from "@/components/gateway/ModelTestDialog";
 
@@ -229,7 +230,11 @@ function GatewayPageInner() {
         />
         <section className="flex-1 min-w-0 overflow-y-auto">
           {state.status === "loading" && (
-            <Placeholder testid="gateway-loading" body="加载中…" />
+            <div data-testid="gateway-loading" className="h-full flex items-center justify-center">
+              <div className="max-w-md w-full">
+                <LoadingState title="加载供应商" />
+              </div>
+            </div>
           )}
           {state.status === "error" && (
             <ErrorPanel message={state.message} onRetry={() => void load()} />
@@ -333,12 +338,9 @@ function ProviderTabs({
     >
       <div className="flex items-center gap-1 overflow-x-auto px-4">
         {state.status === "loading" && (
-          <span
-            data-testid="providers-loading"
-            className="text-xs text-text-muted py-2.5"
-          >
-            加载中…
-          </span>
+          <div data-testid="providers-loading" className="px-3 py-4">
+            <LoadingState title="加载供应商" />
+          </div>
         )}
         {state.status === "error" && (
           <div data-testid="providers-error" className="flex items-center gap-2 py-2">

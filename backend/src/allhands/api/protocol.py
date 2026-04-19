@@ -40,3 +40,43 @@ class ConfirmationResponse(BaseModel):
 class ErrorResponse(BaseModel):
     code: str
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Render-tool payload schemas
+# ---------------------------------------------------------------------------
+#
+# The `component` field of a RenderPayload targets a named React component in
+# web/lib/component-registry.ts. Each supported `component` has a matching
+# Props model here so backend executors can build the payload by name rather
+# than by ad-hoc dicts. web/lib/protocol.ts carries the TypeScript twin — the
+# schema-parity check in tests/integration/test_render_protocol.py keeps the
+# two in lock-step.
+
+
+EmployeeCardStatus = Literal["draft", "active", "paused"]
+
+
+class EmployeeCardModelRef(BaseModel):
+    provider: str
+    name: str
+
+
+class EmployeeCardProps(BaseModel):
+    """Props for the EmployeeCard render component (see I-0008).
+
+    Consumed by the `create_employee` meta tool wrapper: after an employee is
+    created, the meta tool returns
+    `{component: "EmployeeCard", props: EmployeeCardProps(...).model_dump()}`
+    so Lead's chat surface can render the new employee inline.
+    """
+
+    employee_id: str
+    name: str
+    role: str | None = None
+    avatar_initial: str | None = None
+    system_prompt_preview: str | None = None
+    skill_count: int | None = None
+    tool_count: int | None = None
+    model: EmployeeCardModelRef | None = None
+    status: EmployeeCardStatus | None = None

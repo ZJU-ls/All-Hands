@@ -38,6 +38,29 @@ export type RenderPayload = {
   interactions: RenderInteraction[];
 };
 
+/**
+ * EmployeeCardProps — mirrors backend EmployeeCardProps in protocol.py.
+ * Target component is `EmployeeCard` (registered in component-registry).
+ */
+export type EmployeeCardStatus = "draft" | "active" | "paused";
+
+export type EmployeeCardModelRef = {
+  provider: string;
+  name: string;
+};
+
+export type EmployeeCardProps = {
+  employee_id: string;
+  name: string;
+  role?: string;
+  avatar_initial?: string;
+  system_prompt_preview?: string;
+  skill_count?: number;
+  tool_count?: number;
+  model?: EmployeeCardModelRef;
+  status?: EmployeeCardStatus;
+};
+
 export type Message = {
   id: string;
   conversation_id: string;

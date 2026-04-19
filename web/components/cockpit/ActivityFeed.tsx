@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { EmptyState } from "@/components/state";
 import type { ActivityEventDto } from "@/lib/cockpit-api";
 
 function severityBarClass(severity: ActivityEventDto["severity"]): string {
@@ -22,10 +23,10 @@ function timeAgo(iso: string, now: Date = new Date()): string {
 
 export function ActivityFeed({
   events,
-  emptyHint = "暂无活动",
+  emptyTitle = "暂无活动",
 }: {
   events: ActivityEventDto[];
-  emptyHint?: string;
+  emptyTitle?: string;
 }) {
   return (
     <section className="flex flex-col min-h-0 h-full">
@@ -38,9 +39,9 @@ export function ActivityFeed({
         </span>
       </header>
       {events.length === 0 ? (
-        <p className="flex-1 flex items-center justify-center text-[12px] text-text-muted">
-          {emptyHint}
-        </p>
+        <div className="flex-1 flex items-center justify-center p-3">
+          <EmptyState title={emptyTitle} />
+        </div>
       ) : (
         <ul className="flex-1 overflow-y-auto">
           {events.map((e) => {
