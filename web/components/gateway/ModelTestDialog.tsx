@@ -11,11 +11,16 @@ export type ModelTestDialogProps = {
   onClose: () => void;
 };
 
-type Message = { role: "user" | "assistant"; content: string };
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  reasoning?: string;
+};
 
 type TestMetrics = {
   latencyMs?: number;
   ttftMs?: number;
+  reasoningFirstMs?: number;
   tokensPerSecond?: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -54,6 +59,7 @@ const DEFAULT_PARAMS = {
   temperature: 0.7,
   top_p: 1.0,
   max_tokens: 512,
+  enable_thinking: true,
 };
 
 export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
@@ -63,8 +69,13 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
   const [temperature, setTemperature] = useState(DEFAULT_PARAMS.temperature);
   const [topP, setTopP] = useState(DEFAULT_PARAMS.top_p);
   const [maxTokens, setMaxTokens] = useState(DEFAULT_PARAMS.max_tokens);
+  const [enableThinking, setEnableThinking] = useState(
+    DEFAULT_PARAMS.enable_thinking,
+  );
   const [isLoading, setIsLoading] = useState(false);
-  const [streamBuffer, setStreamBuffer] = useState("");
+  const [streamContent, setStreamContent] = useState("");
+  const [streamReasoning, setStreamReasoning] = useState("");
+  const [phase, setPhase] = useState<"idle" | "thinking" | "answering">("idle");
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -77,17 +88,20 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
     const history: Message[] = [...messages, outbound];
     setMessages(history);
     setPrompt("");
-    setStreamBuffer("");
+    setStreamContent("");
+    setStreamReasoning("");
+    setPhase("thinking");
     setLastRun({ streaming: true });
     setIsLoading(true);
 
     const controller = new AbortController();
     abortRef.current = controller;
     const body: Record<string, unknown> = {
-      messages: history,
+      messages: history.map((m) => ({ role: m.role, content: m.content })),
       temperature,
       top_p: topP,
       max_tokens: maxTokens,
+      enable_thinking: enableThinking,
     };
     if (system.trim()) body.system = system.trim();
 
@@ -105,6 +119,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
       const decoder = new TextDecoder();
       let buffer = "";
       let acc = "";
+      let accReasoning = "";
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -115,23 +130,39 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
           buffer = buffer.slice(sepIdx + 2);
           const { event, data } = parseSseFrame(frame);
           if (!event) continue;
-          if (event === "delta") {
+          if (event === "reasoning") {
+            accReasoning += (data.text as string) ?? "";
+            setStreamReasoning(accReasoning);
+            setPhase("thinking");
+          } else if (event === "delta") {
             acc += (data.text as string) ?? "";
-            setStreamBuffer(acc);
+            setStreamContent(acc);
+            setPhase("answering");
           } else if (event === "done") {
             const final = (data.response as string) ?? acc;
+            const finalReasoning = (data.reasoning_text as string) ?? accReasoning;
             const usage = (data.usage ?? {}) as {
               input_tokens?: number;
               output_tokens?: number;
               total_tokens?: number;
             };
-            setMessages([...history, { role: "assistant", content: final }]);
-            setStreamBuffer("");
+            setMessages([
+              ...history,
+              {
+                role: "assistant",
+                content: final,
+                reasoning: finalReasoning || undefined,
+              },
+            ]);
+            setStreamContent("");
+            setStreamReasoning("");
+            setPhase("idle");
             setLastRun({
               streaming: false,
               metrics: {
                 latencyMs: data.latency_ms as number,
                 ttftMs: data.ttft_ms as number,
+                reasoningFirstMs: data.reasoning_first_ms as number,
                 tokensPerSecond: data.tokens_per_second as number,
                 inputTokens: usage.input_tokens ?? 0,
                 outputTokens: usage.output_tokens ?? 0,
@@ -139,7 +170,9 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
               },
             });
           } else if (event === "error") {
-            setStreamBuffer("");
+            setStreamContent("");
+            setStreamReasoning("");
+            setPhase("idle");
             setLastRun({
               streaming: false,
               error: {
@@ -160,6 +193,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
           error: { category: "connection", message: String(err) },
         });
       }
+      setPhase("idle");
     } finally {
       setIsLoading(false);
       abortRef.current = null;
@@ -169,7 +203,9 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
   function resetConversation() {
     abortRef.current?.abort();
     setMessages([]);
-    setStreamBuffer("");
+    setStreamContent("");
+    setStreamReasoning("");
+    setPhase("idle");
     setLastRun(null);
   }
 
@@ -218,6 +254,21 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
             </button>
             {showAdvanced && (
               <div className="mt-2 rounded-md border border-border bg-bg p-3 flex flex-col gap-3">
+                <label
+                  data-testid="model-test-thinking-toggle"
+                  className="flex items-center gap-2 text-xs text-text cursor-pointer select-none"
+                >
+                  <input
+                    type="checkbox"
+                    checked={enableThinking}
+                    onChange={(e) => setEnableThinking(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  <span className="font-medium">深度思考</span>
+                  <span className="text-text-subtle">
+                    (Qwen3 / DeepSeek-R1 / o1 等 · 不支持则自动忽略)
+                  </span>
+                </label>
                 <div>
                   <label className="text-xs text-text-muted block mb-1">
                     System prompt
@@ -263,16 +314,27 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
             className="flex flex-col gap-2 mb-3"
             data-testid="model-test-transcript"
           >
-            {messages.length === 0 && !streamBuffer && (
+            {messages.length === 0 && !streamContent && !streamReasoning && (
               <p className="text-xs text-text-subtle text-center py-4">
                 输入消息后按 ⌘↵ 发送。多轮对话会保留上下文。
               </p>
             )}
             {messages.map((m, i) => (
-              <MessageRow key={i} role={m.role} content={m.content} />
+              <MessageRow
+                key={i}
+                role={m.role}
+                content={m.content}
+                reasoning={m.reasoning}
+              />
             ))}
-            {streamBuffer && (
-              <MessageRow role="assistant" content={streamBuffer} streaming />
+            {(streamContent || streamReasoning) && (
+              <MessageRow
+                role="assistant"
+                content={streamContent}
+                reasoning={streamReasoning}
+                streaming
+                phase={phase}
+              />
             )}
           </div>
 
@@ -353,13 +415,29 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
 function MessageRow({
   role,
   content,
+  reasoning,
   streaming,
+  phase,
 }: {
   role: "user" | "assistant";
   content: string;
+  reasoning?: string;
   streaming?: boolean;
+  phase?: "idle" | "thinking" | "answering";
 }) {
   const isUser = role === "user";
+  const [expanded, setExpanded] = useState<boolean>(
+    Boolean(streaming && phase === "thinking"),
+  );
+  // while streaming, auto-expand during thinking and auto-collapse once answer begins
+  useEffect(() => {
+    if (!streaming) return;
+    if (phase === "thinking") setExpanded(true);
+    if (phase === "answering") setExpanded(false);
+  }, [streaming, phase]);
+
+  const hasReasoning = Boolean(reasoning && reasoning.length > 0);
+
   return (
     <div
       data-role={role}
@@ -371,17 +449,59 @@ function MessageRow({
       }`}
     >
       <span className="text-[10px] font-semibold uppercase tracking-wide text-text-subtle block mb-0.5">
-        {isUser ? "USER" : streaming ? "ASSISTANT · 流式" : "ASSISTANT"}
+        {isUser
+          ? "USER"
+          : streaming
+            ? phase === "thinking"
+              ? "ASSISTANT · 思考中"
+              : "ASSISTANT · 流式"
+            : "ASSISTANT"}
       </span>
-      {content}
-      {streaming && (
-        <span className="inline-block w-1 h-3 ml-0.5 align-middle bg-primary animate-pulse" />
+      {hasReasoning && !isUser && (
+        <div
+          data-testid="model-test-reasoning"
+          className="mb-2 rounded border border-border/60 bg-surface-2/60"
+        >
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-medium text-text-muted hover:text-text transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <span
+                className={`inline-block w-1.5 h-1.5 rounded-full ${
+                  streaming && phase === "thinking"
+                    ? "bg-primary animate-pulse"
+                    : "bg-text-subtle"
+                }`}
+              />
+              思考过程 · {reasoning!.length} 字
+            </span>
+            <span className="font-mono">{expanded ? "▾" : "▸"}</span>
+          </button>
+          {expanded && (
+            <div className="px-2 pb-2 pt-1 text-xs font-mono text-text-muted whitespace-pre-wrap border-t border-border/60 max-h-48 overflow-y-auto">
+              {reasoning}
+            </div>
+          )}
+        </div>
       )}
+      {content || (streaming && phase === "thinking" && !hasReasoning) ? (
+        <>
+          {content || (
+            <span className="text-text-subtle italic">等待回复…</span>
+          )}
+          {streaming && phase === "answering" && (
+            <span className="inline-block w-1 h-3 ml-0.5 align-middle bg-primary animate-pulse" />
+          )}
+        </>
+      ) : null}
     </div>
   );
 }
 
 function MetricsRow({ metrics }: { metrics: TestMetrics }) {
+  const showReasoningMetric =
+    metrics.reasoningFirstMs !== undefined && metrics.reasoningFirstMs > 0;
   return (
     <div
       data-testid="model-test-metrics"
@@ -392,19 +512,32 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
         value={metrics.latencyMs !== undefined ? `${metrics.latencyMs} ms` : "—"}
       />
       <Metric
-        label="ttft"
-        value={metrics.ttftMs !== undefined ? `${metrics.ttftMs} ms` : "—"}
-      />
-      <Metric
-        label="tok in/out/total"
+        label={showReasoningMetric ? "ttft·thinking" : "ttft"}
         value={
-          metrics.inputTokens !== undefined
-            ? `${metrics.inputTokens}/${metrics.outputTokens ?? 0}/${
-                metrics.totalTokens ?? 0
-              }`
-            : "—"
+          showReasoningMetric
+            ? `${metrics.reasoningFirstMs} ms`
+            : metrics.ttftMs !== undefined
+              ? `${metrics.ttftMs} ms`
+              : "—"
         }
       />
+      {showReasoningMetric ? (
+        <Metric
+          label="ttft·answer"
+          value={metrics.ttftMs !== undefined ? `${metrics.ttftMs} ms` : "—"}
+        />
+      ) : (
+        <Metric
+          label="tok in/out/total"
+          value={
+            metrics.inputTokens !== undefined
+              ? `${metrics.inputTokens}/${metrics.outputTokens ?? 0}/${
+                  metrics.totalTokens ?? 0
+                }`
+              : "—"
+          }
+        />
+      )}
       <Metric
         label="tok/s"
         value={
@@ -413,6 +546,18 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
             : "—"
         }
       />
+      {showReasoningMetric && (
+        <Metric
+          label="tok in/out/total"
+          value={
+            metrics.inputTokens !== undefined
+              ? `${metrics.inputTokens}/${metrics.outputTokens ?? 0}/${
+                  metrics.totalTokens ?? 0
+                }`
+              : "—"
+          }
+        />
+      )}
     </div>
   );
 }

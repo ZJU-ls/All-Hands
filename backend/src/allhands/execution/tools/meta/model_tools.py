@@ -101,9 +101,11 @@ CHAT_TEST_MODEL_TOOL = Tool(
     name="chat_test_model",
     description=(
         "Send chat request(s) through (provider, model) and return the reply + "
-        "latency + token usage + categorized error. Supports multi-turn messages, "
-        "system prompt, temperature / top_p / max_tokens. Returned metrics match "
-        "the Gateway Test UI so results are comparable end-to-end."
+        "latency + token usage + reasoning text (for thinking models) + "
+        "categorized error. Supports multi-turn messages, system prompt, "
+        "temperature / top_p / max_tokens, and an enable_thinking toggle for "
+        "Qwen3 / DeepSeek-R1 / o1-class reasoning models. Returned metrics "
+        "match the Gateway Test UI so results are comparable end-to-end."
     ),
     input_schema={
         "type": "object",
@@ -131,6 +133,13 @@ CHAT_TEST_MODEL_TOOL = Tool(
             "top_p": {"type": "number", "minimum": 0.0, "maximum": 1.0},
             "max_tokens": {"type": "integer", "minimum": 1, "maximum": 32000},
             "stop": {"type": "array", "items": {"type": "string"}},
+            "enable_thinking": {
+                "type": "boolean",
+                "description": (
+                    "Turn on provider-side reasoning (thinking models). Omit "
+                    "for provider default. Non-thinking models ignore this field."
+                ),
+            },
         },
         "required": ["model_id"],
     },

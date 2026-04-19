@@ -58,6 +58,13 @@ class ChatTestRequest(BaseModel):
     top_p: float | None = Field(default=None, ge=0.0, le=1.0)
     max_tokens: int | None = Field(default=None, ge=1, le=32_000)
     stop: list[str] | None = None
+    enable_thinking: bool | None = Field(
+        default=None,
+        description=(
+            "Turn provider-side reasoning on/off for thinking models "
+            "(Qwen3 / DeepSeek-R1 / o1). Passed through as OpenAI extra body."
+        ),
+    )
 
 
 def _to_response(m: LLMModel) -> ModelResponse:
@@ -83,6 +90,7 @@ def _to_svc_kwargs(body: ChatTestRequest | None) -> dict[str, Any]:
         "top_p": body.top_p,
         "max_tokens": body.max_tokens,
         "stop": body.stop,
+        "enable_thinking": body.enable_thinking,
     }
 
 
@@ -165,10 +173,12 @@ async def test_model_stream(
     """Streaming chat test — production-grade SSE (P11 · D4 parity).
 
     Event stream ( `text/event-stream` ):
-      event: meta  | data: {model, started_at_ms}
-      event: delta | data: {text}
-      event: done  | data: {latency_ms, ttft_ms, usage, tokens_per_second, response}
-      event: error | data: {error, error_category, latency_ms}
+      event: meta      | data: {model, started_at_ms}
+      event: reasoning | data: {text}            # delta of reasoning_content (thinking models)
+      event: delta     | data: {text}            # delta of visible content
+      event: done      | data: {latency_ms, ttft_ms, reasoning_first_ms, usage,
+                                tokens_per_second, response, reasoning_text}
+      event: error     | data: {error, error_category, latency_ms}
     """
     svc = await get_model_service(session)
     pair = await svc.resolve_with_provider(model_id)
