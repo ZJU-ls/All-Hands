@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { createConversation } from "@/lib/api";
 import { AppShell } from "@/components/shell/AppShell";
 
+// Same key the conversation page reads when cleaning up a stale pointer (B05).
+const CONVERSATION_STORAGE_KEY = "allhands_conversation_id";
+
 export default function ChatPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -12,7 +15,7 @@ export default function ChatPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        const existingId = localStorage.getItem("allhands_conversation_id");
+        const existingId = localStorage.getItem(CONVERSATION_STORAGE_KEY);
         if (existingId) {
           router.replace(`/chat/${existingId}`);
           return;
@@ -25,7 +28,7 @@ export default function ChatPage() {
         }
         const lead = (await res.json()) as { id: string };
         const conv = await createConversation(lead.id);
-        localStorage.setItem("allhands_conversation_id", conv.id);
+        localStorage.setItem(CONVERSATION_STORAGE_KEY, conv.id);
         router.replace(`/chat/${conv.id}`);
       } catch (e) {
         setError(String(e));

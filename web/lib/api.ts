@@ -1,5 +1,19 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+function throwApiError(label: string, status: number): never {
+  throw new ApiError(status, `${label} failed: ${status}`);
+}
+
 export type EmployeeDto = {
   id: string;
   name: string;
@@ -48,13 +62,13 @@ export type ConversationDto = {
 
 export async function getConversation(id: string): Promise<ConversationDto> {
   const res = await fetch(`${BASE}/api/conversations/${id}`);
-  if (!res.ok) throw new Error(`getConversation failed: ${res.status}`);
+  if (!res.ok) throwApiError("getConversation", res.status);
   return res.json() as Promise<ConversationDto>;
 }
 
 export async function getEmployee(id: string): Promise<EmployeeDto> {
   const res = await fetch(`${BASE}/api/employees/${id}`);
-  if (!res.ok) throw new Error(`getEmployee failed: ${res.status}`);
+  if (!res.ok) throwApiError("getEmployee", res.status);
   return res.json() as Promise<EmployeeDto>;
 }
 

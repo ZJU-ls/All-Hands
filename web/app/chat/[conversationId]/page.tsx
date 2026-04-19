@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { MessageList } from "@/components/chat/MessageList";
 import { InputBar } from "@/components/chat/InputBar";
 import { ConfirmationDialog } from "@/components/chat/ConfirmationDialog";
@@ -12,11 +12,14 @@ import {
 import { AppShell } from "@/components/shell/AppShell";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
 import {
+  ApiError,
   getConversation,
   getEmployee,
   type ConversationDto,
   type EmployeeDto,
 } from "@/lib/api";
+
+const CONVERSATION_STORAGE_KEY = "allhands_conversation_id";
 
 function toHeaderEmployee(e: EmployeeDto): ConversationHeaderEmployee {
   return {
@@ -30,6 +33,7 @@ function toHeaderEmployee(e: EmployeeDto): ConversationHeaderEmployee {
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
+  const router = useRouter();
   const [conv, setConv] = useState<ConversationDto | null>(null);
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,14 +50,30 @@ export default function ConversationPage() {
         if (cancelled) return;
         setEmployee(e);
       } catch (e) {
-        if (!cancelled) setError(String(e));
+        if (cancelled) return;
+        // B05 · a 404 means the conversation id in the URL (typically
+        // restored from localStorage after a db reset or manual deletion)
+        // no longer exists. Silently evict the stale pointer and bounce
+        // back to /chat — the landing page will mint a fresh conversation.
+        // Surfacing the raw "404" error card would suggest the backend is
+        // broken, which it isn't.
+        if (e instanceof ApiError && e.status === 404) {
+          try {
+            localStorage.removeItem(CONVERSATION_STORAGE_KEY);
+          } catch {
+            // SSR / private-mode guard — safe to ignore
+          }
+          router.replace("/chat");
+          return;
+        }
+        setError(String(e));
       }
     }
     void load();
     return () => {
       cancelled = true;
     };
-  }, [conversationId]);
+  }, [conversationId, router]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
