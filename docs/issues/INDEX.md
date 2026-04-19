@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(track-2-qa audit)
+最后更新:2026-04-19(Track B 关 I-0007)
 
 ---
 
@@ -16,7 +16,6 @@
 | [I-0003](open/I-0003-provider-default-model-dangling.md) | P2 | open | Provider `百炼` default_model=`glm-5` · 但库里只有 `qwen3.6-plus` · 悬空引用 | backend(providers seed) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0005](open/I-0005-artifact-changed-sse-missing.md) | P0 | open | artifact_changed SSE event never emitted — artifact panel has no push signal | backend/execution/events · artifact_service | 2026-04-19 / track-2-qa | walkthrough W3, artifacts-skill DoD | backend, api, artifacts |
 | [I-0006](open/I-0006-cockpit-frontend-polling-not-sse.md) | P0 | open | Cockpit frontend polls every 5s instead of consuming the SSE stream | web/components/cockpit | 2026-04-19 / track-2-qa | cockpit DoD | ui, api, perf |
-| [I-0007](open/I-0007-state-components-missing.md) | P0 | open | Shared state components (EmptyState / ErrorState / LoadingState / FirstRun) never built | web/components/** | 2026-04-19 / track-2-qa | visual-upgrade DoD, self-review R3, walkthrough N6 | ui, visual |
 | [I-0008](open/I-0008-employee-card-render-component-missing.md) | P1 | open | EmployeeCard render component not registered — create_employee result cannot render in chat | web/lib/component-registry · employee_tools | 2026-04-19 / track-2-qa walkthrough W2 | walkthrough W2 (N1) | ui, render-tools |
 | [I-0009](open/I-0009-architecture-doc-drift.md) | P1 | open | product/04-architecture.md never updated for triggers L5.9 + cockpit L7.1/L8.1 | product/04-architecture.md | 2026-04-19 / track-2-qa | L01 discoverability | docs, backend |
 | [I-0010](open/I-0010-raw-state-literals-no-lint-rule.md) | P1 | open | Raw "Loading…" / "Error" / "No data" literals across app · no ESLint rule enforces | web/** | 2026-04-19 / track-2-qa | visual-upgrade DoD | ui, visual, lint |
@@ -31,10 +30,10 @@
 
 | 维度 | 数量 |
 |---|---|
-| P0 | 3 |
+| P0 | 2 |
 | P1 | 4 |
 | P2 | 5 |
-| **open** | 12 |
+| **open** | 11 |
 | **in-progress** | 0 |
 | **blocked** | 0 |
 
@@ -70,3 +69,4 @@
 - 2026-04-18 · 初建 · 录入 I-0001(E04 chunks blank)· I-0002(context_window=0)· I-0003(default_model 悬空)
 - 2026-04-19 · 关闭 I-0001(E04 复发实例 · track-1 拾起 · dev 冷启 + routes-smoke 31/31 绿)
 - 2026-04-19 · track-2-qa 审计 7 份交付 spec · 新增 I-0005…I-0014(3 P0 / 4 P1 / 3 P2)
+- 2026-04-19 · Track B 关闭 I-0007(EmptyState / ErrorState / LoadingState / FirstRun 全量落地 · vitest 6 用例 · design-lab 活样本)

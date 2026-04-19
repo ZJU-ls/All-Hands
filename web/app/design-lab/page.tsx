@@ -13,6 +13,12 @@ import {
   Callout,
   LinkCard,
 } from "@/components/render/Viz";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  FirstRun,
+} from "@/components/state";
 
 /**
  * Design Lab: three concept variants side-by-side in both light & dark.
@@ -107,6 +113,8 @@ export default function DesignLabPage() {
           </ConceptSection>
 
           <ConceptADeepDive />
+
+          <StateShowcase />
 
           <VizShowcase />
 
@@ -1174,6 +1182,70 @@ function Copy({ t }: { t: Tokens }) {
       <rect x="5" y="5" width="8" height="8" rx="1.5" stroke={t.muted} strokeWidth="1.5" />
       <path d="M11 5 V3.5 A1 1 0 0 0 10 2.5 H4 A1 1 0 0 0 3 3.5 V10 A1 1 0 0 0 4 11 H5" stroke={t.muted} strokeWidth="1.5" strokeLinecap="round" />
     </svg>
+  );
+}
+
+/* ---------- Shared state components (I-0007) ---------- */
+
+function StateShowcase() {
+  return (
+    <section className="rounded-2xl border border-border p-6 bg-surface">
+      <header className="mb-5">
+        <h2 className="text-sm font-semibold mb-1">State 组件样本(EmptyState / ErrorState / LoadingState / FirstRun)</h2>
+        <p className="text-xs text-text-muted">
+          每个现有页面的空 / 错 / 载入 / 首次态都走这四个组件 · 禁止再写裸
+          <span className="font-mono text-text"> &quot;Loading…&quot; / &quot;No data&quot; / &quot;Error&quot;</span> 字面量。
+        </p>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <ShowcaseCard title="EmptyState · 基础 + action">
+          <EmptyState
+            title="尚未配置任何供应商"
+            description="添加 OpenAI / DeepSeek / Ollama 等兼容端点即可开始"
+            action={{ label: "新建供应商", onClick: () => undefined }}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="ErrorState · 可回退 + detail">
+          <ErrorState
+            title="拉取供应商失败"
+            description="连接超时 · 可重试"
+            detail="GET /api/providers → timeout after 10s"
+            action={{ label: "重试", onClick: () => undefined }}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="LoadingState · 三点 + skeleton">
+          <div className="space-y-3">
+            <LoadingState title="正在建立 SSE 连接" description="首次 snapshot < 1s" />
+            <LoadingState variant="skeleton" />
+          </div>
+        </ShowcaseCard>
+
+        <ShowcaseCard title="FirstRun · 首次访问引导">
+          <FirstRun
+            title="欢迎来到 allhands"
+            description="先做这 3 步,5 分钟上手对话式员工组织"
+            steps={[
+              {
+                title: "配置模型网关",
+                description: "OpenAI / DeepSeek / 本地 vLLM",
+                done: true,
+              },
+              {
+                title: "和 Lead 说一句话,让它帮你建 1 个员工",
+              },
+              {
+                title: "开第一个对话 · 观察 cockpit 实时推送",
+              },
+            ]}
+            primaryAction={{ label: "开始", onClick: () => undefined }}
+            secondaryAction={{ label: "先看文档", onClick: () => undefined }}
+          />
+        </ShowcaseCard>
+      </div>
+    </section>
   );
 }
 

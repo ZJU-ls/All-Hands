@@ -70,12 +70,14 @@ def test_i0006_cockpit_consumes_sse(repo_root: Path) -> None:
 
 @pytest.mark.parametrize("component", ["EmptyState", "ErrorState", "LoadingState", "FirstRun"])
 def test_i0007_state_component_exists(repo_root: Path, component: str) -> None:
-    hits = list((repo_root / "web" / "components").rglob(f"{component}.tsx"))
-    if not hits:
-        pytest.xfail(
-            f"I-0007: {component} component not built — visual-upgrade DoD "
-            f"(no raw Loading/Error/No data) cannot be enforced"
-        )
+    """Closed 2026-04-19: the four shared state components live under
+    ``web/components/state/`` and have vitest coverage + design-lab live
+    samples. Regression test just asserts the file is still there."""
+    hits = list((repo_root / "web" / "components" / "state").glob(f"{component}.tsx"))
+    assert hits, (
+        f"I-0007 regression: {component}.tsx missing from web/components/state/. "
+        "Visual-upgrade DoD requires it."
+    )
 
 
 # ---------------------------------------------------------------------------
