@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(Wave-2 全部 merge:Track D/E/F/G/H/I · P0/P1 清零 · 仅剩 5 条 P2 backlog)
+最后更新:2026-04-19(用户产品评审新增 I-0017 AG-UI 协议迁移 + I-0018 模型测试非流式 bug · 分发 Track J)
 
 ---
 
@@ -12,6 +12,8 @@
 
 | ID | Severity | Status | Title | Affects | Discovered | Blocker-for | Tags |
 |---|---|---|---|---|---|---|---|
+| [I-0017](open/I-0017-ag-ui-protocol-migration.md) | P0 | open | 前后端 SSE/streaming 协议统一迁移到 AG-UI Protocol · 自定义事件名不符合 AI-native 行业标准 | backend/api/routers/*.py · web/lib/stream-client.ts · 所有 SSE 消费点 | 2026-04-19 / user-product-review | Wave-3 AI-native · CopilotKit 接入 | arch, api, streaming, protocol |
+| [I-0018](open/I-0018-model-test-stream-not-streaming.md) | P0 | open | /gateway 模型对话测试观感为非流式 · 字符一次性蹦出 | web/components/gateway/ModelTestDialog · backend/services/model_service · Next rewrites | 2026-04-19 / user-product-review | AI-native DoD(I-0016 本该已覆盖) | ui, streaming, bug |
 | [I-0002](open/I-0002-model-context-window-zero.md) | P2 | open | `qwen3.6-plus` context_window=0 · 前端显示异常 / Agent token 预算失效 | backend(models seed) + web(settings) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0003](open/I-0003-provider-default-model-dangling.md) | P2 | open | Provider `百炼` default_model=`glm-5` · 但库里只有 `qwen3.6-plus` · 悬空引用 | backend(providers seed) | 2026-04-18 / api-probe | — | backend, data |
 | [I-0012](open/I-0012-design-lab-missing-live-samples.md) | P2 | open | design-lab missing live samples for Viz components + Artifact.Preview | web/app/design-lab | 2026-04-19 / track-2-qa | — | ui, visual, docs |
@@ -24,10 +26,10 @@
 
 | 维度 | 数量 |
 |---|---|
-| P0 | 0 |
+| P0 | 2 |
 | P1 | 0 |
 | P2 | 5 |
-| **open** | 5 |
+| **open** | 7 |
 | **in-progress** | 0 |
 | **blocked** | 0 |
 
@@ -71,3 +73,4 @@
 - 2026-04-19 · Track D 关闭 I-0015(Composer AI-native layout · 统一 send/stop)+ I-0016(全平台流式输出 + 打字机效果)· P0 2 → 0
 - 2026-04-19 · Track H 关闭 I-0008(EmployeeCard render component + 注册表 + `EmployeeCardProps` 前后端对齐 + `execute_create_employee` 回包为 render envelope · `test_w2_employee.py::test_render_card_for_employee_registered` xfail → hard assert · 新增 `test_create_employee_returns_render_envelope` + unit/web 18 用例)
 - 2026-04-19 · Track H 关闭 I-0010(`.eslintrc.json` `no-restricted-syntax` JSXText 规则 + `web/tests/no-raw-state-literal.test.ts` 86 用例守门 · 17 个 app/components 文件扫荡到 `<LoadingState/>` / `<EmptyState/>` / `<ErrorState/>` · `ConversationHeader` 保留 inline 占位 + per-line 豁免 1 处)
+- 2026-04-19 · 用户产品评审 Wave-2 merge 后新增 I-0017(AG-UI 协议迁移)+ I-0018(模型测试非流式 bug)· 分发 Track J(复用 `allhands-track-d` worktree · 分支 `ag-ui-migration-and-stream-fix`)
