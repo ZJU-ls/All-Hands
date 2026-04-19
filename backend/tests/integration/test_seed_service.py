@@ -57,7 +57,7 @@ MIN_SEED_EMPLOYEES = 3
 # has no default landing agent and the entire Tool-First conversational
 # admin surface is unreachable.
 MIN_EMPLOYEES = MIN_SEED_EMPLOYEES + 1
-MIN_MCP_SERVERS = 1
+MIN_MCP_SERVERS = 2  # allhands-core (bundled, enabled) + Filesystem (npx, disabled example)
 MIN_CONVERSATIONS = 1
 MIN_EVENTS = 4
 MIN_MESSAGES = 2  # 1 conversation with a user + assistant round-trip

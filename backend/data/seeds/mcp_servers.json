@@ -1,5 +1,18 @@
 [
   {
+    "id": "seed-mcp-allhands-core",
+    "name": "allhands-core",
+    "transport": "stdio",
+    "config": {
+      "command": "python",
+      "args": ["-m", "allhands.mcp_servers.allhands_core"],
+      "env": {}
+    },
+    "enabled": true,
+    "exposed_tool_ids": [],
+    "health": "unknown"
+  },
+  {
     "id": "seed-mcp-filesystem",
     "name": "Filesystem",
     "transport": "stdio",
@@ -8,7 +21,7 @@
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/allhands-demo"],
       "env": {}
     },
-    "enabled": true,
+    "enabled": false,
     "exposed_tool_ids": [],
     "health": "unknown"
   }
