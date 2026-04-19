@@ -16,6 +16,19 @@ log = structlog.get_logger()
 app = create_app()
 
 
+def _should_seed(env: str) -> bool:
+    """I-0020: auto-seed only in dev/test or when ALLHANDS_SEED=1.
+
+    Prod operators who explicitly opt in (e.g. first-run of a staging env)
+    can flip the flag without changing code.
+    """
+    import os
+
+    if env in ("dev", "test"):
+        return True
+    return os.environ.get("ALLHANDS_SEED") == "1"
+
+
 @app.on_event("startup")
 async def startup() -> None:
     import subprocess
@@ -23,6 +36,7 @@ async def startup() -> None:
     from allhands.config import get_settings
     from allhands.persistence.db import get_sessionmaker
     from allhands.persistence.sql_repos import SqlEmployeeRepo
+    from allhands.services import seed_service
     from allhands.services.bootstrap_service import ensure_lead_agent
 
     settings = get_settings()
@@ -52,3 +66,22 @@ async def startup() -> None:
             log.info("lead_agent.ready", id=lead.id, name=lead.name)
     except Exception as exc:
         log.warning("lead_agent.seed.failed", error=str(exc))
+
+    # Dev / test seed: ensure every page has real "full house" data on cold start
+    # (I-0020). No-op in prod unless ALLHANDS_SEED=1.
+    if _should_seed(settings.env):
+        try:
+            maker = get_sessionmaker()
+            async with maker() as session, session.begin():
+                report = await seed_service.ensure_all_dev_seeds(session)
+            log.info(
+                "seed.dev.ready",
+                providers=report.providers,
+                models=report.models,
+                employees=report.employees,
+                mcp_servers=report.mcp_servers,
+                conversations=report.conversations,
+                events=report.events,
+            )
+        except Exception as exc:
+            log.warning("seed.dev.failed", error=str(exc))
