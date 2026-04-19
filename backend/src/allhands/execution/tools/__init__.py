@@ -52,6 +52,8 @@ from allhands.execution.tools.render.link_card import TOOL as LINK_CARD_TOOL
 from allhands.execution.tools.render.link_card import execute as link_card_execute
 from allhands.execution.tools.render.markdown_card import TOOL as MARKDOWN_CARD_TOOL
 from allhands.execution.tools.render.markdown_card import execute as markdown_card_execute
+from allhands.execution.tools.render.plan import TOOL as RENDER_PLAN_TOOL
+from allhands.execution.tools.render.plan import execute as render_plan_execute
 from allhands.execution.tools.render.steps import TOOL as STEPS_TOOL
 from allhands.execution.tools.render.steps import execute as steps_execute
 from allhands.execution.tools.render.table import TOOL as TABLE_TOOL
@@ -75,6 +77,7 @@ _RENDER_TOOLS = (
     (DIFF_TOOL, diff_execute),
     (CALLOUT_TOOL, callout_execute),
     (LINK_CARD_TOOL, link_card_execute),
+    (RENDER_PLAN_TOOL, render_plan_execute),
 )
 
 

@@ -61,6 +61,25 @@ export type EmployeeCardProps = {
   status?: EmployeeCardStatus;
 };
 
+/**
+ * PlanCardProps — mirrors backend PlanCardProps in protocol.py.
+ * Target component is `PlanCard` (spec § 6.1 · awaits human approval).
+ */
+export type PlanCardStepStatus = "pending" | "approved" | "rejected";
+
+export type PlanCardStep = {
+  id: string;
+  title: string;
+  body?: string;
+  status: PlanCardStepStatus;
+};
+
+export type PlanCardProps = {
+  plan_id: string;
+  title: string;
+  steps: PlanCardStep[];
+};
+
 export type Message = {
   id: string;
   conversation_id: string;

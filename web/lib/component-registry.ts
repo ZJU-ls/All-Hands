@@ -73,4 +73,7 @@ if (typeof window !== "undefined") {
   import("../components/render/EmployeeCard").then(({ EmployeeCard }) => {
     safeRegister("EmployeeCard", EmployeeCard);
   });
+  import("../components/render/PlanCard").then(({ PlanCard }) => {
+    safeRegister("PlanCard", PlanCard);
+  });
 }

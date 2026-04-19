@@ -80,3 +80,28 @@ class EmployeeCardProps(BaseModel):
     tool_count: int | None = None
     model: EmployeeCardModelRef | None = None
     status: EmployeeCardStatus | None = None
+
+
+PlanCardStepStatus = Literal["pending", "approved", "rejected"]
+
+
+class PlanCardStep(BaseModel):
+    """One step in a PlanCard (spec § 6.1)."""
+
+    id: str
+    title: str
+    body: str = ""
+    status: PlanCardStepStatus = "pending"
+
+
+class PlanCardProps(BaseModel):
+    """Props for the PlanCard render component (spec § 6.1).
+
+    Emitted by `allhands.builtin.render_plan` when a planner agent needs human
+    sign-off before taking side-effecting action. Keep in lock-step with
+    `PlanCardProps` in web/lib/protocol.ts.
+    """
+
+    plan_id: str
+    title: str
+    steps: list[PlanCardStep]
