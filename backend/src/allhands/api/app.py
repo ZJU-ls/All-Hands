@@ -12,6 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from allhands import __version__
 from allhands.api.routers import health
 from allhands.api.routers.artifacts import router as artifacts_router
+from allhands.api.routers.channels import (  # single-line register: Wave 2 notification-channels
+    notifications_router,
+)
+from allhands.api.routers.channels import (
+    router as channels_router,
+)
 from allhands.api.routers.chat import router as chat_router
 from allhands.api.routers.cockpit import router as cockpit_router
 from allhands.api.routers.confirmations import router as confirmations_router
@@ -94,4 +100,10 @@ def create_app() -> FastAPI:
     app.include_router(webhooks_router, prefix="/api")
     app.include_router(artifacts_router, prefix="/api")
     app.include_router(cockpit_router, prefix="/api")
+    app.include_router(
+        channels_router, prefix="/api"
+    )  # single-line register: Wave 2 notification-channels
+    app.include_router(
+        notifications_router, prefix="/api"
+    )  # single-line register: Wave 2 notification-channels
     return app
