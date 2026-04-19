@@ -409,13 +409,25 @@ async def ensure_all_dev_seeds(session: AsyncSession) -> SeedReport:
     """Populate every domain in a single pass.
 
     Order matters because cross-references exist:
-    providers → models → employees → skill mounts → conversations → events.
+    providers → models → employees → Lead → skill mounts → conversations → events.
     MCP servers stand alone and can be seeded anywhere after providers.
+
+    Lead Agent (B03): we call `ensure_lead_agent` after `ensure_employees`
+    so the partial-unique `is_lead_agent` index has room (seed JSON carries
+    no lead), and so the conversations seed that follows can attach history
+    to the Lead by name if needed.
     """
+    from allhands.services.bootstrap_service import ensure_lead_agent
+
     report = SeedReport()
     report.providers = await ensure_providers(session)
     report.models = await ensure_models(session)
     report.employees = await ensure_employees(session)
+    # Lead is always +1 on top of the JSON-seeded preset employees (different
+    # name), so bumping the reported count reflects the true "full house"
+    # size surfaced in startup logs.
+    await ensure_lead_agent(SqlEmployeeRepo(session))
+    report.employees += 1
     report.skills_mount = await ensure_skill_mounts(session)
     report.mcp_servers = await ensure_mcp_servers(session)
     report.conversations = await ensure_conversations(session)

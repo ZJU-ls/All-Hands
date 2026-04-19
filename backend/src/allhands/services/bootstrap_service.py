@@ -1,11 +1,19 @@
 """BootstrapService — ensure Lead Agent exists on startup.
 
-The Lead Agent gets:
+The Lead Agent gets the **full L01 admin surface** so the user can run every
+platform operation via conversation alone (CLAUDE.md §3.1 扩展):
 
-- All employee meta tools (list/get_detail/create/update/delete/dispatch)
-- All Plan family tools — Lead should plan its own delegation flow
+- Employee CRUD + dispatch (`employee_tools`)
+- Plan family (`plan_tools`) — Lead plans its own delegation flow
+- Skill management (`skill_tools`) — install / update / remove
+- MCP server management (`mcp_server_tools`) — add / test / enable / remove
+- Provider & Model management (`provider_tools`, `model_tools`)
+- Cockpit workspace summary + emergency pause (`cockpit_tools`)
 - Default `skill_ids` (render + artifacts) so the Lead can output visible
   work without extra wiring
+
+Dropping any admin tool above silently breaks the "对话驱动全平台" promise —
+pinned by `tests/unit/test_bootstrap.py::test_ensure_lead_agent_ships_full_admin_surface`.
 
 System prompt is loaded from `execution/prompts/lead_agent.md` so we can
 iterate on wording without a code deploy.
@@ -22,8 +30,13 @@ from typing import TYPE_CHECKING
 from allhands.core import Employee
 from allhands.core.model import LLMModel
 from allhands.core.provider import LLMProvider
+from allhands.execution.tools.meta.cockpit_tools import ALL_COCKPIT_META_TOOLS
 from allhands.execution.tools.meta.employee_tools import ALL_META_TOOLS
+from allhands.execution.tools.meta.mcp_server_tools import ALL_MCP_SERVER_META_TOOLS
+from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
 from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
+from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
+from allhands.execution.tools.meta.skill_tools import ALL_SKILL_META_TOOLS
 from allhands.services.employee_service import DEFAULT_SKILL_IDS
 
 if TYPE_CHECKING:
@@ -50,13 +63,41 @@ def load_lead_prompt() -> str:
         return FALLBACK_PROMPT
 
 
+def default_lead_tool_ids() -> list[str]:
+    """The Lead Agent's baseline tool surface.
+
+    Covers every agent-managed resource's CRUD + runtime actions. Exposed as
+    a function (not a module constant) so callers outside bootstrap — e.g.
+    seed_service, or a future `upgrade-lead-tools` admin op — can reuse the
+    same list without risking import cycles or stale caching.
+    """
+    bundles = [
+        ALL_META_TOOLS,
+        ALL_PLAN_TOOLS,
+        ALL_SKILL_META_TOOLS,
+        ALL_MCP_SERVER_META_TOOLS,
+        ALL_PROVIDER_META_TOOLS,
+        ALL_MODEL_META_TOOLS,
+        ALL_COCKPIT_META_TOOLS,
+    ]
+    seen: set[str] = set()
+    out: list[str] = []
+    for bundle in bundles:
+        for tool in bundle:
+            if tool.id in seen:
+                continue
+            seen.add(tool.id)
+            out.append(tool.id)
+    return out
+
+
 async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
     """Create the Lead Agent if it doesn't exist yet. Idempotent."""
     existing = await repo.get_lead()
     if existing is not None:
         return existing
 
-    tool_ids = [t.id for t in ALL_META_TOOLS] + [t.id for t in ALL_PLAN_TOOLS]
+    tool_ids = default_lead_tool_ids()
     lead = Employee(
         id=str(uuid.uuid4()),
         name="LeadAgent",

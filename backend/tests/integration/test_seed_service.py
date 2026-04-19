@@ -50,7 +50,13 @@ if TYPE_CHECKING:
 
 MIN_PROVIDERS = 4  # Bailian(aliyun) + OpenRouter(openai) + DeepSeek(openai) + Anthropic(anthropic)
 MIN_MODELS = 6
-MIN_EMPLOYEES = 3
+# Preset employees seeded from `employees.json`: researcher / coder / analyst.
+MIN_SEED_EMPLOYEES = 3
+# 3 preset employees + 1 Lead Agent (B03). Lead is added by
+# `ensure_all_dev_seeds` on top of the JSON presets — without it, `/chat`
+# has no default landing agent and the entire Tool-First conversational
+# admin surface is unreachable.
+MIN_EMPLOYEES = MIN_SEED_EMPLOYEES + 1
 MIN_MCP_SERVERS = 1
 MIN_CONVERSATIONS = 1
 MIN_EVENTS = 4
@@ -112,6 +118,28 @@ async def test_ensure_all_dev_seeds_populates_every_domain(
     assert len(mcp_servers) >= MIN_MCP_SERVERS
     assert len(convs) >= MIN_CONVERSATIONS
     assert len(events) >= MIN_EVENTS
+
+
+async def test_ensure_all_dev_seeds_creates_lead_agent(
+    session_maker: async_sessionmaker[AsyncSession],
+) -> None:
+    """B03 · dev seed must include a singleton Lead Agent so /chat has a
+    default landing agent and Tool-First admin (`/api/employees/lead`) is
+    reachable from cold start. Without Lead, the conversational platform
+    administration promise (CLAUDE.md §3.1) is completely broken.
+    """
+    async with session_maker() as session, session.begin():
+        await seed_service.ensure_all_dev_seeds(session)
+
+    async with session_maker() as session:
+        repo = SqlEmployeeRepo(session)
+        lead = await repo.get_lead()
+
+    assert lead is not None, "ensure_all_dev_seeds must create a Lead Agent (B03)"
+    assert lead.is_lead_agent is True
+    assert lead.name == "LeadAgent"
+    # Coordination toolkit is invariant #4 in Employee domain model.
+    assert "allhands.meta.dispatch_employee" in lead.tool_ids
 
 
 async def test_ensure_all_dev_seeds_is_idempotent(
@@ -213,7 +241,7 @@ async def test_ensure_employees_idempotent_no_mode_field(
     async with session_maker() as session, session.begin():
         count_2 = await seed_service.ensure_employees(session)
 
-    assert count_1 == count_2 >= MIN_EMPLOYEES
+    assert count_1 == count_2 >= MIN_SEED_EMPLOYEES
 
     async with session_maker() as session:
         employees = await SqlEmployeeRepo(session).list_all()
