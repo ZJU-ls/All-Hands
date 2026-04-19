@@ -95,6 +95,23 @@ DELETE_MODEL_TOOL = Tool(
     requires_confirmation=True,
 )
 
+PING_MODEL_TOOL = Tool(
+    id="allhands.meta.ping_model",
+    kind=ToolKind.META,
+    name="ping_model",
+    description=(
+        "Fast connectivity + health ping for a single model. Sends one "
+        "`ping` prompt with max_tokens=4 and a short timeout, then returns "
+        "`{ok, model, latency_ms, error?, error_category?}`. Use this to "
+        "probe whether a registered (provider, model) pair is reachable "
+        "before a full chat test."
+    ),
+    input_schema=_MODEL_ID_REQUIRED,
+    output_schema={"type": "object"},
+    scope=ToolScope.READ,
+    requires_confirmation=False,
+)
+
 CHAT_TEST_MODEL_TOOL = Tool(
     id="allhands.meta.chat_test_model",
     kind=ToolKind.META,
@@ -155,5 +172,6 @@ ALL_MODEL_META_TOOLS: list[Tool] = [
     CREATE_MODEL_TOOL,
     UPDATE_MODEL_TOOL,
     DELETE_MODEL_TOOL,
+    PING_MODEL_TOOL,
     CHAT_TEST_MODEL_TOOL,
 ]
