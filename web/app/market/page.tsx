@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 
 type Quote = {
   symbol: string;
@@ -135,11 +136,7 @@ export default function MarketPage() {
             </TabButton>
           </nav>
 
-          {loading && (
-            <div className="rounded-xl border border-border bg-surface p-10 text-center">
-              <p className="text-sm text-text-muted">加载中…</p>
-            </div>
-          )}
+          {loading && <LoadingState title="加载行情" />}
           {error && (
             <div className="rounded-xl border border-danger/30 bg-danger/5 p-5">
               <p className="text-sm text-danger font-mono">{error}</p>

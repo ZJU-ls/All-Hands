@@ -17,7 +17,15 @@ type Props = {
 export function ConversationHeader({ employee, conversationTitle }: Props) {
   if (!employee) {
     return (
-      <div className="flex items-center gap-2 text-text-muted text-[13px]">
+      <div
+        className="flex items-center gap-2 text-text-muted text-[13px]"
+        role="status"
+        aria-live="polite"
+      >
+        {/* Inline header placeholder — a full LoadingState card would break the
+            chat header layout (single flex row, 13px). Keeping a minimal inline
+            label + aria-live so screen readers still hear the state. */}
+        {/* eslint-disable-next-line no-restricted-syntax */}
         <span className="font-medium text-text">加载中…</span>
       </div>
     );

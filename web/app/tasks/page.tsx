@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 import { NewTaskDrawer } from "@/components/tasks/NewTaskDrawer";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
 import { listEmployees, type EmployeeDto } from "@/lib/api";
@@ -133,11 +134,8 @@ export default function TasksPage() {
           </nav>
 
           {status === "loading" && (
-            <div
-              data-testid="tasks-loading"
-              className="rounded-xl border border-border bg-surface p-10 text-center"
-            >
-              <p className="text-sm text-text-muted">加载中…</p>
+            <div data-testid="tasks-loading">
+              <LoadingState title="加载任务" />
             </div>
           )}
 

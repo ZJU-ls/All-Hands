@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type Skill = {
@@ -168,11 +169,8 @@ export default function SkillsPage() {
           </div>
 
           {loadStatus === "loading" && (
-            <div
-              data-testid="skills-loading"
-              className="rounded-xl border border-border bg-surface p-10 text-center"
-            >
-              <p className="text-sm text-text-muted">加载中…</p>
+            <div data-testid="skills-loading">
+              <LoadingState title="加载技能" />
             </div>
           )}
 

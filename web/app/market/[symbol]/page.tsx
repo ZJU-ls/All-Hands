@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { EmptyState, LoadingState } from "@/components/state";
 
 type Bar = {
   symbol: string;
@@ -98,11 +99,7 @@ export default function SymbolDetailPage({
     >
       <div className="h-full overflow-y-auto">
         <div className="max-w-5xl mx-auto px-8 py-8 space-y-6">
-          {loading && (
-            <div className="rounded-xl border border-border bg-surface p-10 text-center">
-              <p className="text-sm text-text-muted">加载中…</p>
-            </div>
-          )}
+          {loading && <LoadingState title="加载行情" />}
           {error && (
             <p className="text-xs text-danger font-mono">{error}</p>
           )}
@@ -129,7 +126,10 @@ export default function SymbolDetailPage({
             </header>
             <div className="px-4 py-3">
               {bars.length === 0 ? (
-                <p className="text-xs text-text-subtle">暂无数据 · provider 可能未返回 / 未缓存</p>
+                <EmptyState
+                  title="暂无 K 线数据"
+                  description="provider 可能未返回 / 未缓存"
+                />
               ) : (
                 <AsciiSpark bars={bars} />
               )}
@@ -207,9 +207,7 @@ function NewsCard({ title, rows }: { title: string; rows: News[] }) {
         </h3>
       </header>
       <div className="px-4 py-3 space-y-2">
-        {rows.length === 0 && (
-          <p className="text-xs text-text-subtle">暂无数据</p>
-        )}
+        {rows.length === 0 && <EmptyState title="暂无内容" />}
         {rows.map((n) => (
           <a
             key={n.id}

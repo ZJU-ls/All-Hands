@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type Transport = "stdio" | "sse" | "http";
@@ -144,11 +145,8 @@ export default function McpServersPage() {
           </div>
 
           {tab === "registered" && loadStatus === "loading" && (
-            <div
-              data-testid="mcp-loading"
-              className="rounded-xl border border-border bg-surface p-10 text-center"
-            >
-              <p className="text-sm text-text-muted">加载中…</p>
+            <div data-testid="mcp-loading">
+              <LoadingState title="加载 MCP 服务器" />
             </div>
           )}
 

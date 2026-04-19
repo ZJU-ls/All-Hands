@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type ChannelKind = "telegram" | "bark" | "wecom" | "feishu" | "email" | "pushdeer";
@@ -152,11 +153,8 @@ export default function ChannelsPage() {
           </p>
 
           {status === "loading" && (
-            <div
-              data-testid="channels-loading"
-              className="rounded-xl border border-border bg-surface p-10 text-center"
-            >
-              <p className="text-sm text-text-muted">加载中…</p>
+            <div data-testid="channels-loading">
+              <LoadingState title="加载渠道" />
             </div>
           )}
 
