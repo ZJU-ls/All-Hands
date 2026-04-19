@@ -18,6 +18,7 @@
  * - Status label + meta line use mono characters (`· → ⌘`) per CLAUDE.md §3.5.
  */
 
+import { DotGridAvatar } from "@/components/ui/DotGridAvatar";
 import type { RenderProps } from "@/lib/component-registry";
 
 type Status = "draft" | "active" | "paused";
@@ -133,21 +134,3 @@ function MetaItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DotGridAvatar({ initial }: { initial: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="relative inline-flex items-center justify-center w-7 h-7 shrink-0 rounded-sm border border-border bg-surface-2 text-[11px] font-mono text-text"
-    >
-      <span
-        className="absolute inset-0 opacity-30"
-        style={{
-          backgroundImage:
-            "radial-gradient(var(--color-text-subtle) 0.5px, transparent 0.5px)",
-          backgroundSize: "4px 4px",
-        }}
-      />
-      <span className="relative z-[1]">{initial}</span>
-    </span>
-  );
-}

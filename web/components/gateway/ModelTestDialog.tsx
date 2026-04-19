@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Composer, ThinkingToggle } from "@/components/chat/Composer";
+import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
 import { openStream, type StreamHandle } from "@/lib/stream-client";
 
 export type ModelTestDialogProps = {
@@ -254,13 +255,20 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 pt-4 pb-3 border-b border-border flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-text truncate">
-              对话测试 · {model.display_name || model.name}
-            </h3>
-            <p className="text-xs font-mono text-text-subtle truncate mt-0.5">
-              {model.name}
-            </p>
+          <div className="min-w-0 flex items-start gap-3">
+            <DotGridAvatar
+              initial={initialFromName(model.display_name || model.name)}
+              size="md"
+              testId="model-test-avatar"
+            />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-text truncate">
+                对话测试 · {model.display_name || model.name}
+              </h3>
+              <p className="text-xs font-mono text-text-subtle truncate mt-0.5">
+                {model.name}
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
