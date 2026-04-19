@@ -213,3 +213,39 @@ def test_pause_all_with_token_then_resume(
     summary2 = client.get("/api/cockpit/summary").json()
     assert summary2["paused"] is False
     assert summary2["paused_reason"] is None
+
+
+@pytest.mark.skip(
+    reason="TestClient + aiosqlite + SSE streaming deadlocks: TestClient runs ASGI "
+    "in a thread portal while aiosqlite serialises all DB ops on a single background "
+    "thread. Rewrite as an async test with httpx.AsyncClient or move to E2E."
+)
+def test_stream_first_frame_is_snapshot(
+    client: TestClient,
+    maker: async_sessionmaker[AsyncSession],
+) -> None:
+    """Opening /api/cockpit/stream immediately pushes a `snapshot` SSE with
+    the full WorkspaceSummary payload. Spec § 4.2: "连接开始时服务端立刻 push 一条 snapshot".
+    """
+    _seed(maker)
+
+    with client.stream("GET", "/api/cockpit/stream") as resp:
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+
+        buf = ""
+        for chunk in resp.iter_text():
+            buf += chunk
+            if "\n\n" in buf:
+                break
+
+        first_frame, _ = buf.split("\n\n", 1)
+        lines = first_frame.splitlines()
+        assert lines[0] == "event: snapshot"
+        assert lines[1].startswith("data: ")
+        import json as _json
+
+        payload = _json.loads(lines[1][len("data: ") :])
+        assert payload["employees_total"] == 1
+        assert payload["triggers_active"] == 1
+        assert "recent_events" in payload
