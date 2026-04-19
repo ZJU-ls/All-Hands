@@ -24,6 +24,9 @@ from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
 from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
 from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
 from allhands.execution.tools.meta.skill_tools import ALL_SKILL_META_TOOLS
+from allhands.execution.tools.meta.stock_tools import (  # single-line register: Wave 2 stock-assistant
+    ALL_STOCK_ASSISTANT_TOOLS,
+)
 from allhands.execution.tools.meta.trigger_tools import ALL_TRIGGER_META_TOOLS
 from allhands.execution.tools.render.callout import TOOL as CALLOUT_TOOL
 from allhands.execution.tools.render.callout import execute as callout_execute
@@ -82,5 +85,6 @@ def discover_builtin_tools(registry: ToolRegistry) -> None:
         *ALL_COCKPIT_META_TOOLS,
         *ALL_CHANNEL_META_TOOLS,  # single-line register: Wave 2 notification-channels
         *ALL_MARKET_META_TOOLS,  # single-line register: Wave 2 market-data
+        *ALL_STOCK_ASSISTANT_TOOLS,  # single-line register: Wave 2 stock-assistant
     ):
         registry.register(tool, _async_noop)

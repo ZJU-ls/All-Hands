@@ -1,0 +1,22 @@
+id: allhands.skills.stock_assistant
+name: Stock Assistant · 老张
+description: 监测持仓 / 自选股异动 · 开盘前 briefing · 异动归因 · 收盘复盘 · 反人性刹车
+version: 0.1.0
+builtin: true
+
+tool_ids:
+  - allhands.stock.generate_briefing
+  - allhands.stock.explain_anomaly
+  - allhands.stock.daily_journal
+  - allhands.stock.portfolio_health
+  - allhands.stock.sanity_check_order
+  - allhands.stock.screen_by_logic
+  # Composition primitives — the skill expects these platform tools to exist.
+  - allhands.meta.list_holdings
+  - allhands.meta.list_watched
+  - allhands.meta.get_quote
+  - allhands.meta.get_news
+  - allhands.meta.get_announcements
+  - allhands.meta.send_notification
+
+prompt_fragment_file: prompts/guidance.md

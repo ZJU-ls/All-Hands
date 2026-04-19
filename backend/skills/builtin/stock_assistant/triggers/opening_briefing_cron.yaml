@@ -1,0 +1,12 @@
+name: 开盘前 briefing
+kind: timer
+enabled: true
+min_interval_seconds: 3600
+timer:
+  cron: "30 8 * * MON-FRI"   # 工作日 8:30 (本地时区)
+  timezone: Asia/Shanghai
+action:
+  type: invoke_tool
+  tool_id: allhands.stock.generate_briefing
+  args_template:
+    topic: stock.briefing.daily
