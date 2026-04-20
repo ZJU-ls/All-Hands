@@ -4,7 +4,7 @@
 > `closed` 的在 `closed/` 目录 · 不再出现在此表。
 > **新建 / 关闭 issue 必须同步更新本表。**
 
-最后更新:2026-04-19(Track J 关闭 I-0017 AG-UI 迁移 + I-0018 流式观感 · Track M 关闭 I-0022 + Track L 关闭 I-0021 + Track N 关闭 I-0020 + Track K 关闭 I-0019 · Wave-3 全合流 · P0 → 0)
+最后更新:2026-04-20(关闭全部 5 条 P2 · I-0002/I-0003/I-0012/I-0013/I-0014 · P0/P1/P2 = 0 · open → 0)
 
 ---
 
@@ -12,11 +12,7 @@
 
 | ID | Severity | Status | Title | Affects | Discovered | Blocker-for | Tags |
 |---|---|---|---|---|---|---|---|
-| [I-0002](open/I-0002-model-context-window-zero.md) | P2 | open | `qwen3.6-plus` context_window=0 · 前端显示异常 / Agent token 预算失效 | backend(models seed) + web(settings) | 2026-04-18 / api-probe | — | backend, data |
-| [I-0003](open/I-0003-provider-default-model-dangling.md) | P2 | open | Provider `百炼` default_model=`glm-5` · 但库里只有 `qwen3.6-plus` · 悬空引用 | backend(providers seed) | 2026-04-18 / api-probe | — | backend, data |
-| [I-0012](open/I-0012-design-lab-missing-live-samples.md) | P2 | open | design-lab missing live samples for Viz components + Artifact.Preview | web/app/design-lab | 2026-04-19 / track-2-qa | — | ui, visual, docs |
-| [I-0013](open/I-0013-voice-tone-chapter-and-lead-welcome-missing.md) | P2 | open | Voice & Tone chapter + Lead welcome message never added | product/03-visual-design · employee_service | 2026-04-19 / track-2-qa | — | docs, ui |
-| [I-0014](open/I-0014-coachmark-firstrun-guide-missing.md) | P2 | open | Coachmark system + first-run guided tour not built | web/components/ui · lib/first-run | 2026-04-19 / track-2-qa | — | ui, onboarding |
+| — | — | — | open 清单已清空 | — | — | — | — |
 
 ---
 
@@ -26,8 +22,8 @@
 |---|---|
 | P0 | 0 |
 | P1 | 0 |
-| P2 | 5 |
-| **open** | 5 |
+| P2 | 0 |
+| **open** | 0 |
 | **in-progress** | 0 |
 | **blocked** | 0 |
 
@@ -80,3 +76,8 @@
 - 2026-04-19 · Track J 阶段 1 诊断 I-0018 · `docs/tracks/J-diagnosis.md` · Next rewrites **证伪** · 根因两层叠加(H1 上游 batching · H2 前端 React 18 同步 batching)
 - 2026-04-19 · Track J 关闭 I-0018(`stream-client.ts` WHILE 循环每帧 `await setTimeout(0)` 让出宏任务 · `web/lib/__tests__/stream-client.test.ts` + `web/tests/e2e/model-test-streaming.spec.ts` 两条回归)
 - 2026-04-19 · Track J 关闭 I-0017(AG-UI Protocol v1 全链路迁移 · ADR 0010 · `backend/api/ag_ui_encoder.py` v1 事件工厂 + camelCase + `encode_sse()` · 后端 4 端点 chat/model-test/cockpit/artifacts 同步切换 · `stream-client.ts` 重写为 AG-UI v1 parser + 11 typed 回调 + `onCustom` + `onEvent` · 4 web 消费者切语义钩子 · `test_ag_ui_wire_format.py` + e2e 两本 spec · P0 2 → 0 · open 7 → 5)
+- 2026-04-20 · 关闭 I-0002(`LLMModelService` 加 `ModelConfigError` + create/update 守 `context_window > 0` · seed 数据补 positive-ctx 回归)· P2 5 → 4
+- 2026-04-20 · 关闭 I-0003(`LLMProviderService.set_default_model` 新增 · cross-check 依赖 `LLMModelRepo` 里存在且 `enabled=True` 的同名 model · seed 数据补 default-model-exists 回归)· P2 4 → 3
+- 2026-04-20 · 关闭 I-0012(`web/app/design-lab/page.tsx` 新增 `RenderLibraryShowcase` · 活样本覆盖 MarkdownCard / PlanTimeline / PlanCard / Artifact.Preview · `web/tests/render-library-coverage.test.ts` 14 用例守门)· P2 3 → 2
+- 2026-04-20 · 关闭 I-0013(`product/03-visual-design.md §9.1` Voice & Tone 章 + `design-system/MASTER.md §6.5` 速查表 + `lead_agent.md` Welcome message + 扩 Style 节 · `backend/tests/unit/test_lead_welcome.py` 6 用例 + `web/tests/voice-tone.test.ts` 4 用例 扫 emoji / `!` / 咱们 / 按钮文案)· P2 2 → 1
+- 2026-04-20 · 关闭 I-0014(`web/lib/first-run.ts` localStorage 持久化 + `web/components/ui/Coachmark.tsx` 组件 + `Cockpit.tsx` 埋 3 条 coachmark · `web/vitest.setup.ts` 加 Node-25 localStorage shim · 8+4 用例守门首次显示 / dismiss / 持久化语义)· P2 1 → 0 · open → 0
