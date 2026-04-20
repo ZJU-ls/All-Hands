@@ -552,8 +552,11 @@ function MessageRow({
             <span className="font-mono">{expanded ? "▾" : "▸"}</span>
           </button>
           {expanded && (
-            <div className="px-2 pb-2 pt-1 text-xs font-mono text-text-muted whitespace-pre-wrap border-t border-border/60 max-h-48 overflow-y-auto">
-              {reasoning}
+            <div className="px-2 pb-2 pt-1 text-xs text-text-muted border-t border-border/60 max-h-48 overflow-y-auto">
+              <AgentMarkdown
+                content={reasoning!}
+                className="prose prose-invert prose-sm max-w-none text-text-muted [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+              />
             </div>
           )}
         </div>
