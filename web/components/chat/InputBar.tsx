@@ -50,6 +50,7 @@ export function InputBar({
     addConfirmation,
     addMessage,
     stopStreaming,
+    setStreamError,
   } = useChatStore();
 
   const handleSend = useCallback(() => {
@@ -57,6 +58,7 @@ export function InputBar({
     const content = value.trim();
     setValue("");
 
+    setStreamError(null);
     addMessage({
       id: crypto.randomUUID(),
       conversation_id: conversationId,
@@ -137,7 +139,12 @@ export function InputBar({
           }
         },
         onRunError: (err) => {
-          console.error("sendMessage run error:", err.message, err.code);
+          // Surface the failure inline so 没有任何反应 stops being the
+          // default when provider creds are missing / upstream 401s.
+          setStreamError({
+            message: err.message || "助手没能完成这次回复。",
+            code: err.code,
+          });
           stopStreaming();
         },
         onRunFinished: () => {
@@ -148,7 +155,7 @@ export function InputBar({
           streamRef.current = null;
         },
         onError: (err) => {
-          console.error("sendMessage error:", err);
+          setStreamError({ message: err.message || String(err) });
           stopStreaming();
           streamRef.current = null;
         },
@@ -166,6 +173,7 @@ export function InputBar({
     addRenderPayload,
     addConfirmation,
     stopStreaming,
+    setStreamError,
   ]);
 
   const handleAbort = useCallback(() => {

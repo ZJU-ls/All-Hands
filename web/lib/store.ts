@@ -18,12 +18,27 @@ type StreamingMessage = {
   created_at: string;
 };
 
+/**
+ * A failed agent turn the UI needs to surface. Set by InputBar on
+ * `RUN_ERROR` / transport errors so the chat doesn't swallow the failure
+ * silently (the "试用 没有任何反应" bug — seed providers ship without api
+ * keys, the upstream 401s, the backend emits `RUN_ERROR`, and before this
+ * field the UI just `console.error`d it). MessageList renders the banner
+ * inline so the user sees the failure exactly where the assistant reply
+ * would have landed.
+ */
+export type StreamError = {
+  message: string;
+  code?: string;
+};
+
 type ChatState = {
   conversationId: string | null;
   messages: Message[];
   streamingMessage: StreamingMessage | null;
   pendingConfirmations: PendingConfirmation[];
   isStreaming: boolean;
+  streamError: StreamError | null;
 
   setConversationId: (id: string) => void;
   addMessage: (msg: Message) => void;
@@ -36,6 +51,7 @@ type ChatState = {
   addConfirmation: (conf: PendingConfirmation) => void;
   removeConfirmation: (confirmationId: string) => void;
   stopStreaming: () => void;
+  setStreamError: (err: StreamError | null) => void;
   reset: () => void;
 };
 
@@ -45,6 +61,7 @@ export const useChatStore = create<ChatState>((set) => ({
   streamingMessage: null,
   pendingConfirmations: [],
   isStreaming: false,
+  streamError: null,
 
   setConversationId: (id) => set({ conversationId: id }),
 
@@ -56,6 +73,7 @@ export const useChatStore = create<ChatState>((set) => ({
   startStreaming: (messageId) =>
     set({
       isStreaming: true,
+      streamError: null,
       streamingMessage: {
         id: messageId,
         role: "assistant",
@@ -126,11 +144,14 @@ export const useChatStore = create<ChatState>((set) => ({
   stopStreaming: () =>
     set({ isStreaming: false, streamingMessage: null }),
 
+  setStreamError: (err) => set({ streamError: err }),
+
   reset: () =>
     set({
       messages: [],
       streamingMessage: null,
       pendingConfirmations: [],
       isStreaming: false,
+      streamError: null,
     }),
 }));

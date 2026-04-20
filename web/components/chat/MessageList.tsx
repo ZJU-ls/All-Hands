@@ -12,7 +12,7 @@ type Props = { conversationId: string };
 const STICK_THRESHOLD_PX = 64;
 
 export function MessageList({ conversationId }: Props) {
-  const { messages, streamingMessage } = useChatStore();
+  const { messages, streamingMessage, streamError } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
 
@@ -34,13 +34,13 @@ export function MessageList({ conversationId }: Props) {
 
   useLayoutEffect(() => {
     if (stickToBottom) scrollToBottom("auto");
-  }, [messages, streamingMessage, stickToBottom, scrollToBottom]);
+  }, [messages, streamingMessage, streamError, stickToBottom, scrollToBottom]);
 
   useEffect(() => {
     scrollToBottom("auto");
   }, [conversationId, scrollToBottom]);
 
-  const hasAnything = messages.length > 0 || !!streamingMessage;
+  const hasAnything = messages.length > 0 || !!streamingMessage || !!streamError;
 
   const streamingAsMessage: Message | null = streamingMessage
     ? {
@@ -72,6 +72,12 @@ export function MessageList({ conversationId }: Props) {
             {streamingAsMessage && (
               <MessageBubble message={streamingAsMessage} isStreaming />
             )}
+            {streamError && !streamingAsMessage && (
+              <StreamErrorBanner
+                message={streamError.message}
+                code={streamError.code}
+              />
+            )}
           </div>
         )}
       </div>
@@ -91,6 +97,46 @@ export function MessageList({ conversationId }: Props) {
           回到最新
         </button>
       )}
+    </div>
+  );
+}
+
+/** Inline failure surface for a broken agent turn.
+ *
+ * Most "chat 没有任何反应" reports trace back to provider auth — a seed
+ * provider without an API key, a typoed base_url, or a model the
+ * upstream rejects. The previous failure mode was a silent `console.error`
+ * inside `openStream`'s `onRunError` handler, which meant the user saw
+ * their own message echoed and then nothing. Rendering this banner inline,
+ * right where the assistant reply would have appeared, makes the failure
+ * visible without pushing the user off to a toast or a console they never
+ * open.
+ */
+function StreamErrorBanner({
+  message,
+  code,
+}: {
+  message: string;
+  code?: string;
+}) {
+  const hint =
+    code === "INTERNAL" || code === undefined
+      ? "多半是模型凭证没配好或上游拒绝。去 /gateway 核对 provider 的 API Key 与 base_url。"
+      : null;
+  return (
+    <div
+      data-testid="message-list-stream-error"
+      role="alert"
+      className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-[12px] text-danger"
+    >
+      <div className="font-medium">助手没能完成这次回复。</div>
+      <div className="mt-1 font-mono text-[11px] text-danger/80 break-all">
+        {message}
+        {code ? (
+          <span className="ml-2 text-danger/60">[{code}]</span>
+        ) : null}
+      </div>
+      {hint && <div className="mt-1 text-[11px] text-text-muted">{hint}</div>}
     </div>
   );
 }

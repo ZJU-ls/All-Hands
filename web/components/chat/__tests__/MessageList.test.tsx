@@ -62,6 +62,7 @@ beforeEach(() => {
     streamingMessage: null,
     isStreaming: false,
     pendingConfirmations: [],
+    streamError: null,
   });
 });
 
@@ -138,6 +139,54 @@ describe("MessageList · Track α · sticky-bottom autoscroll", () => {
     // not at bottom → no new scrollTo
     expect(scrollToSpy).not.toHaveBeenCalled();
     expect(screen.getByTestId("jump-to-bottom")).toBeDefined();
+  });
+
+  it("renders streamError inline when a run fails (regression: 试用 没有任何反应)", () => {
+    // When the backend emits RUN_ERROR (e.g. seed provider with no api key →
+    // 401 from upstream), the chat store lifts the failure into
+    // `streamError`. The MessageList has to surface that banner inline or
+    // the user just sees their own message echoed and nothing else.
+    primeScrollGeometry(SCROLL_HEIGHT - CLIENT_HEIGHT);
+    render(<MessageList conversationId="c1" />);
+
+    act(() => {
+      useChatStore.setState({
+        streamError: {
+          message: "upstream 401: invalid api key",
+          code: "INTERNAL",
+        },
+      });
+    });
+
+    const banner = screen.getByTestId("message-list-stream-error");
+    expect(banner).toBeDefined();
+    expect(banner.textContent).toContain("助手没能完成这次回复");
+    expect(banner.textContent).toContain("upstream 401");
+    expect(banner.textContent).toContain("[INTERNAL]");
+  });
+
+  it("suppresses streamError banner while a reply is actively streaming", () => {
+    // Defensive: if the store picks up a stale error from the previous turn
+    // but a new assistant reply is already streaming, render the reply — not
+    // the old error — so the user sees progress, not a contradiction.
+    primeScrollGeometry(SCROLL_HEIGHT - CLIENT_HEIGHT);
+    render(<MessageList conversationId="c1" />);
+
+    act(() => {
+      useChatStore.setState({
+        streamError: { message: "old failure" },
+        streamingMessage: {
+          id: "stream-1",
+          role: "assistant",
+          content: "partial …",
+          tool_calls: [],
+          render_payloads: [],
+          created_at: "2026-04-20T00:00:00Z",
+        },
+      });
+    });
+
+    expect(screen.queryByTestId("message-list-stream-error")).toBeNull();
   });
 
   it("clicking jump-to-bottom scrolls + re-arms sticky autoscroll", () => {
