@@ -108,6 +108,7 @@ class AgentRunner:
         skill_registry: SkillRegistry | None = None,
         runtime: SkillRuntime | None = None,
         spawn_subagent_service: SpawnSubagentService | None = None,
+        model_ref_override: str | None = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
@@ -116,6 +117,10 @@ class AgentRunner:
         self._dispatch_service = dispatch_service
         self._skill_registry = skill_registry
         self._spawn_subagent_service = spawn_subagent_service
+        # Resolution chain (Track ζ): conversation override > employee default.
+        # Kept as a separate field so tests can assert what the runner will
+        # actually hit without reading employee state.
+        self._model_ref_override = model_ref_override
         # Runtime is normally created and owned by ChatService (per-conversation
         # persistence across send_message calls). If the caller didn't supply
         # one, fall back to a throwaway runtime derived from employee.tool_ids
@@ -238,7 +243,8 @@ class AgentRunner:
                 )
             lc_tools.append(lc_tool)
 
-        model = _build_model(self._employee.model_ref, self._provider)
+        effective_model_ref = self._model_ref_override or self._employee.model_ref
+        model = _build_model(effective_model_ref, self._provider)
 
         system_prompt = self._compose_system_prompt()
         lc_messages: list[Any] = []

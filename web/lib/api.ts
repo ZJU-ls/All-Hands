@@ -57,12 +57,41 @@ export type ConversationDto = {
   id: string;
   employee_id: string;
   title: string | null;
+  model_ref_override: string | null;
   created_at: string;
 };
 
 export async function getConversation(id: string): Promise<ConversationDto> {
   const res = await fetch(`${BASE}/api/conversations/${id}`);
   if (!res.ok) throwApiError("getConversation", res.status);
+  return res.json() as Promise<ConversationDto>;
+}
+
+/**
+ * Partial metadata update. Use `clear_model_ref_override: true` to reset the
+ * override to null (inherit the employee's model_ref). Omit the
+ * `model_ref_override` field to leave it unchanged — Pydantic can't tell
+ * "omitted" from "null" so the explicit clear flag avoids that ambiguity.
+ */
+export type UpdateConversationInput = {
+  title?: string;
+  model_ref_override?: string;
+  clear_model_ref_override?: boolean;
+};
+
+export async function updateConversation(
+  id: string,
+  body: UpdateConversationInput,
+): Promise<ConversationDto> {
+  const res = await fetch(`${BASE}/api/conversations/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ApiError(res.status, `updateConversation failed: ${res.status} ${text}`);
+  }
   return res.json() as Promise<ConversationDto>;
 }
 

@@ -25,6 +25,7 @@ from allhands.api.protocol import (
     ConversationResponse,
     CreateConversationRequest,
     SendMessageRequest,
+    UpdateConversationRequest,
 )
 from allhands.core.errors import DomainError, EmployeeNotFound
 
@@ -56,6 +57,7 @@ async def create_conversation(
         id=conv.id,
         employee_id=conv.employee_id,
         title=conv.title,
+        model_ref_override=conv.model_ref_override,
         created_at=conv.created_at.isoformat(),
     )
 
@@ -93,6 +95,7 @@ async def list_conversations(
             id=c.id,
             employee_id=c.employee_id,
             title=c.title,
+            model_ref_override=c.model_ref_override,
             created_at=c.created_at.isoformat(),
         )
         for c in convs
@@ -112,7 +115,42 @@ async def get_conversation(
         id=conv.id,
         employee_id=conv.employee_id,
         title=conv.title,
+        model_ref_override=conv.model_ref_override,
         created_at=conv.created_at.isoformat(),
+    )
+
+
+@router.patch("/{conversation_id}", response_model=ConversationResponse)
+async def update_conversation(
+    conversation_id: str,
+    body: UpdateConversationRequest,
+    session: AsyncSession = Depends(get_session),
+) -> ConversationResponse:
+    """Partial metadata update (Track ζ).
+
+    The only mutable fields right now are ``title`` and the per-conversation
+    ``model_ref_override``. Because Pydantic can't distinguish "omitted" from
+    "null" on the default model, clients clear the override by sending
+    ``{"clear_model_ref_override": true}`` rather than relying on null.
+    """
+
+    conv_repo = await get_conversation_repo(session)
+    conv = await conv_repo.get(conversation_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+    if body.title is not None:
+        conv.title = body.title
+    if body.clear_model_ref_override:
+        conv.model_ref_override = None
+    elif body.model_ref_override is not None:
+        conv.model_ref_override = body.model_ref_override
+    updated = await conv_repo.update(conv)
+    return ConversationResponse(
+        id=updated.id,
+        employee_id=updated.employee_id,
+        title=updated.title,
+        model_ref_override=updated.model_ref_override,
+        created_at=updated.created_at.isoformat(),
     )
 
 

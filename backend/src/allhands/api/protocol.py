@@ -15,7 +15,24 @@ class ConversationResponse(BaseModel):
     id: str
     employee_id: str
     title: str | None = None
+    model_ref_override: str | None = None
     created_at: str
+
+
+class UpdateConversationRequest(BaseModel):
+    """Partial update for conversation metadata.
+
+    Only fields provided in the JSON body are touched. An explicit ``null``
+    for ``model_ref_override`` clears the override (falls back to the
+    employee's model_ref); omitting the field leaves it unchanged. Because
+    Pydantic doesn't distinguish "omitted" from "null" in the default model,
+    clients send either ``{"clear_model_ref_override": true}`` to clear or
+    ``{"model_ref_override": "Provider/model"}`` to set.
+    """
+
+    title: str | None = None
+    model_ref_override: str | None = None
+    clear_model_ref_override: bool = False
 
 
 class SendMessageRequest(BaseModel):

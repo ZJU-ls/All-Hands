@@ -62,4 +62,9 @@ class Conversation(BaseModel):
     title: str | None = None
     employee_id: str
     created_at: datetime
+    # Per-conversation override for the effective model ref. Priority at
+    # dispatch time is: conversation.model_ref_override > employee.model_ref
+    # > platform default. `None` (the default) means "inherit the employee's
+    # model" — the common case for most chats.
+    model_ref_override: str | None = None
     metadata: dict[str, object] = Field(default_factory=dict)

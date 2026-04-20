@@ -192,6 +192,7 @@ class ChatService:
             skill_registry=self._skills,
             runtime=runtime,
             spawn_subagent_service=spawn_subagent_service,
+            model_ref_override=conv.model_ref_override,
         )
         return runner.stream(messages=lc_messages, thread_id=conversation_id)
 

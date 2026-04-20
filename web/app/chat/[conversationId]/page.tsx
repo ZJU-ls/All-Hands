@@ -9,6 +9,7 @@ import {
   ConversationHeader,
   type ConversationHeaderEmployee,
 } from "@/components/chat/ConversationHeader";
+import { ModelOverrideChip } from "@/components/chat/ModelOverrideChip";
 import { AppShell } from "@/components/shell/AppShell";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
 import {
@@ -120,6 +121,13 @@ export default function ConversationPage() {
             employee={headerEmployee}
             conversationTitle={conv?.title ?? null}
           />
+          {conv && employee && (
+            <ModelOverrideChip
+              conversation={conv}
+              employee={employee}
+              onConversationChange={setConv}
+            />
+          )}
           <button
             onClick={() => setPanelOpen((v) => !v)}
             aria-pressed={panelOpen}

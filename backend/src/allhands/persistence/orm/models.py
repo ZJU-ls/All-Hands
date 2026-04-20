@@ -88,6 +88,7 @@ class ConversationRow(Base):
     title: Mapped[str | None] = mapped_column(String(256), nullable=True)
     employee_id: Mapped[str] = mapped_column(String(64), ForeignKey("employees.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    model_ref_override: Mapped[str | None] = mapped_column(String(256), nullable=True)
     extra_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
 
     messages: Mapped[list[MessageRow]] = relationship(

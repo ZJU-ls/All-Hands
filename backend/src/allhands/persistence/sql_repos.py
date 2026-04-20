@@ -114,6 +114,7 @@ def _row_to_conversation(row: ConversationRow) -> Conversation:
         title=row.title,
         employee_id=row.employee_id,
         created_at=_utc(row.created_at),
+        model_ref_override=row.model_ref_override,
         metadata=dict(row.extra_metadata),
     )
 
@@ -259,9 +260,20 @@ class SqlConversationRepo:
             title=conversation.title,
             employee_id=conversation.employee_id,
             created_at=_naive(conversation.created_at),
+            model_ref_override=conversation.model_ref_override,
             extra_metadata=dict(conversation.metadata),
         )
         self._s.add(row)
+        await self._s.flush()
+        return conversation
+
+    async def update(self, conversation: Conversation) -> Conversation:
+        row = await self._s.get(ConversationRow, conversation.id)
+        if row is None:
+            raise KeyError(f"Conversation {conversation.id!r} not found.")
+        row.title = conversation.title
+        row.model_ref_override = conversation.model_ref_override
+        row.extra_metadata = dict(conversation.metadata)
         await self._s.flush()
         return conversation
 
