@@ -4,14 +4,22 @@ import { useCallback, useRef, useState } from "react";
 import { openStream, type StreamHandle } from "@/lib/stream-client";
 import { useChatStore } from "@/lib/store";
 import type { RenderPayload, ToolCall, ToolCallStatus } from "@/lib/protocol";
+import type { ConversationDto, EmployeeDto } from "@/lib/api";
 import { Composer, ThinkingToggle } from "./Composer";
 import { UsageChip } from "./UsageChip";
+import { ModelOverrideChip } from "./ModelOverrideChip";
 
 type Props = {
   conversationId: string;
   /** The employee's default model ref, used to resolve the context window
    * size for the usage chip. Omit to hide the chip. */
   employeeModelRef?: string;
+  /** Conversation + employee passed through so the Composer controls can
+   * host the per-conversation model override directly (picker next to the
+   * thinking toggle, same surface as ChatGPT / DeepSeek). Omit to hide. */
+  conversation?: ConversationDto | null;
+  employee?: EmployeeDto | null;
+  onConversationChange?: (next: ConversationDto) => void;
 };
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -23,7 +31,13 @@ type ToolCallAccumulator = {
   started: boolean;
 };
 
-export function InputBar({ conversationId, employeeModelRef }: Props) {
+export function InputBar({
+  conversationId,
+  employeeModelRef,
+  conversation,
+  employee,
+  onConversationChange,
+}: Props) {
   const [value, setValue] = useState("");
   const [thinking, setThinking] = useState(false);
   const streamRef = useRef<StreamHandle | null>(null);
@@ -171,12 +185,19 @@ export function InputBar({ conversationId, employeeModelRef }: Props) {
         placeholder="输入消息…"
         rows={3}
         controls={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <ThinkingToggle
               enabled={thinking}
               onChange={setThinking}
               disabled={isStreaming}
             />
+            {conversation && employee && onConversationChange && (
+              <ModelOverrideChip
+                conversation={conversation}
+                employee={employee}
+                onConversationChange={onConversationChange}
+              />
+            )}
             {employeeModelRef && (
               <UsageChip
                 conversationId={conversationId}

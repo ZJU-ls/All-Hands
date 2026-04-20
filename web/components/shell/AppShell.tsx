@@ -36,6 +36,7 @@ const MENU: MenuSection[] = [
     title: "团队与能力",
     items: [
       { label: "员工", href: "/employees", Icon: UserIcon },
+      { label: "员工设计", href: "/employees/design", Icon: UserIcon },
       { label: "技能", href: "/skills", Icon: SkillIcon },
       { label: "MCP 服务器", href: "/mcp-servers", Icon: PluginIcon },
     ],
@@ -116,8 +117,23 @@ function SidebarItem({
   );
 }
 
+function matchActive(pathname: string, href: string, allHrefs: string[]): boolean {
+  // Exact match always wins.
+  if (pathname === href) return true;
+  // Prefix match only when no sibling href is a longer prefix of pathname.
+  // Fixes the "员工 vs 员工设计" conflict at `/employees/design` — without
+  // this the shorter `/employees` would also light up.
+  if (!pathname.startsWith(href + "/")) return false;
+  for (const other of allHrefs) {
+    if (other === href) continue;
+    if (other.length > href.length && pathname.startsWith(other)) return false;
+  }
+  return true;
+}
+
 function Sidebar() {
   const pathname = usePathname();
+  const allHrefs = MENU.flatMap((s) => s.items.map((i) => i.href));
   return (
     <aside className="w-56 shrink-0 border-r border-border bg-surface flex flex-col">
       <div className="h-11 flex items-center px-4 gap-2 border-b border-border">
@@ -132,8 +148,7 @@ function Sidebar() {
             </div>
             <ul>
               {section.items.map((item) => {
-                const active =
-                  pathname === item.href || pathname.startsWith(item.href + "/");
+                const active = matchActive(pathname, item.href, allHrefs);
                 return (
                   <SidebarItem
                     key={item.href}

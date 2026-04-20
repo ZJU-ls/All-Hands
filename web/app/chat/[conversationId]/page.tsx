@@ -9,7 +9,6 @@ import {
   ConversationHeader,
   type ConversationHeaderEmployee,
 } from "@/components/chat/ConversationHeader";
-import { ModelOverrideChip } from "@/components/chat/ModelOverrideChip";
 import { AppShell } from "@/components/shell/AppShell";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
 import {
@@ -120,14 +119,9 @@ export default function ConversationPage() {
           <ConversationHeader
             employee={headerEmployee}
             conversationTitle={conv?.title ?? null}
+            effectiveModelRef={conv?.model_ref_override ?? employee?.model_ref ?? null}
+            isOverridden={Boolean(conv?.model_ref_override)}
           />
-          {conv && employee && (
-            <ModelOverrideChip
-              conversation={conv}
-              employee={employee}
-              onConversationChange={setConv}
-            />
-          )}
           <button
             onClick={() => setPanelOpen((v) => !v)}
             aria-pressed={panelOpen}
@@ -157,6 +151,9 @@ export default function ConversationPage() {
           <InputBar
             conversationId={conversationId}
             employeeModelRef={employee?.model_ref}
+            conversation={conv}
+            employee={employee}
+            onConversationChange={setConv}
           />
         </div>
         {panelOpen && <ArtifactPanel onClose={() => setPanelOpen(false)} />}

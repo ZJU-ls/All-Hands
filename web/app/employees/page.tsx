@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState } from "@/components/state";
-import { listEmployees, type EmployeeDto } from "@/lib/api";
+import { createConversation, listEmployees, type EmployeeDto } from "@/lib/api";
 import { deriveProfile, BADGE_LABEL } from "@/lib/employee-profile";
 import { BrandMark } from "@/components/brand/BrandMark";
 
@@ -26,8 +27,10 @@ function modelDisplay(modelRef: string): string {
 }
 
 export default function EmployeesPage() {
+  const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +47,19 @@ export default function EmployeesPage() {
       cancelled = true;
     };
   }, []);
+
+  async function startChat(employeeId: string) {
+    if (busyId) return;
+    setBusyId(employeeId);
+    setError(null);
+    try {
+      const conv = await createConversation(employeeId);
+      router.push(`/chat/${conv.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusyId(null);
+    }
+  }
 
   return (
     <AppShell
@@ -83,7 +99,13 @@ export default function EmployeesPage() {
               className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
             >
               {employees.map((e) => (
-                <EmployeeCard key={e.id} employee={e} />
+                <EmployeeCard
+                  key={e.id}
+                  employee={e}
+                  onStartChat={startChat}
+                  busy={busyId === e.id}
+                  anyBusy={busyId !== null}
+                />
               ))}
             </div>
           )}
@@ -93,16 +115,32 @@ export default function EmployeesPage() {
   );
 }
 
-function EmployeeCard({ employee }: { employee: EmployeeDto }) {
+function EmployeeCard({
+  employee,
+  onStartChat,
+  busy,
+  anyBusy,
+}: {
+  employee: EmployeeDto;
+  onStartChat: (employeeId: string) => void;
+  busy: boolean;
+  anyBusy: boolean;
+}) {
   const badges = deriveProfile(employee);
   const isLead = employee.is_lead_agent;
   return (
-    <Link
-      href={`/employees/${employee.id}`}
+    <div
       data-testid={`employee-card-${employee.name}`}
       className="group flex flex-col gap-3 rounded border border-border bg-surface-2 p-4 hover:border-border-strong transition-colors duration-base min-w-0"
     >
-      <div className="flex items-start gap-3">
+      <button
+        type="button"
+        onClick={() => onStartChat(employee.id)}
+        disabled={anyBusy}
+        aria-label={`与 ${employee.name} 开始新对话`}
+        data-testid={`employee-card-start-${employee.name}`}
+        className="flex items-start gap-3 text-left disabled:opacity-60"
+      >
         <BrandMark
           name={employee.model_ref}
           fallbackName={employee.name}
@@ -124,10 +162,10 @@ function EmployeeCard({ employee }: { employee: EmployeeDto }) {
             )}
           </div>
           <p className="font-mono text-[10px] text-text-subtle truncate mt-0.5">
-            {modelDisplay(employee.model_ref)}
+            {modelDisplay(employee.model_ref) || "跟随默认"}
           </p>
         </div>
-      </div>
+      </button>
 
       {employee.description ? (
         <p className="text-[12px] text-text-muted leading-snug line-clamp-2 min-h-[30px]">
@@ -155,11 +193,26 @@ function EmployeeCard({ employee }: { employee: EmployeeDto }) {
       <div className="flex items-center gap-3 pt-1 mt-auto border-t border-border">
         <Stat label="tools" value={employee.tool_ids.length} />
         <Stat label="skills" value={employee.skill_ids.length} />
-        <span className="ml-auto font-mono text-[10px] text-text-subtle group-hover:text-text transition-colors duration-base">
-          打开 →
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <Link
+            href={`/employees/${employee.id}`}
+            data-testid={`employee-card-detail-${employee.name}`}
+            className="font-mono text-[10px] text-text-subtle hover:text-text transition-colors duration-base"
+          >
+            详情
+          </Link>
+          <button
+            type="button"
+            onClick={() => onStartChat(employee.id)}
+            disabled={anyBusy}
+            data-testid={`employee-card-chat-${employee.name}`}
+            className="inline-flex h-6 items-center gap-1 rounded border border-border bg-bg px-2 font-mono text-[10px] text-text group-hover:border-border-strong disabled:opacity-60 transition-colors duration-base"
+          >
+            {busy ? "打开中…" : "对话 →"}
+          </button>
+        </div>
       </div>
-    </Link>
+    </div>
   );
 }
 

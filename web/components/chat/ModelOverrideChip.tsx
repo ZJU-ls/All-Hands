@@ -29,7 +29,12 @@ type Props = {
 };
 
 function splitRef(ref: string | null | undefined): { provider: string; name: string } {
-  if (!ref) return { provider: "", name: "—" };
+  // Employees seeded without a pinned model (model_ref = "") inherit the
+  // bound provider's default at runtime. The chip has no cheap way to reach
+  // that default synchronously, so we surface it as "默认模型" — same label
+  // the /employees card uses — rather than showing an em dash that reads
+  // like a broken state.
+  if (!ref) return { provider: "", name: "默认模型" };
   const slash = ref.indexOf("/");
   if (slash < 0) return { provider: "", name: ref };
   return { provider: ref.slice(0, slash), name: ref.slice(slash + 1) };
