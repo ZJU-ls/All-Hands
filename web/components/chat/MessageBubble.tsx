@@ -1,6 +1,7 @@
 import type { Message } from "@/lib/protocol";
 import { ToolCallCard } from "./ToolCallCard";
 import { RenderSlot } from "./RenderSlot";
+import { AgentMarkdown } from "./AgentMarkdown";
 
 type Props = {
   message: Message;
@@ -18,12 +19,18 @@ export function MessageBubble({ message, isStreaming }: Props) {
           isUser ? "bg-surface-2 text-text" : "bg-surface text-text"
         }`}
       >
-        {(message.content || showCursor) && (
-          <p className="whitespace-pre-wrap">
-            {message.content}
-            {showCursor && <StreamingCursor />}
-          </p>
-        )}
+        {(message.content || showCursor) &&
+          (isUser ? (
+            <p className="whitespace-pre-wrap">
+              {message.content}
+              {showCursor && <StreamingCursor />}
+            </p>
+          ) : (
+            <div>
+              {message.content && <AgentMarkdown content={message.content} />}
+              {showCursor && <StreamingCursor />}
+            </div>
+          ))}
         {message.tool_calls.length > 0 && (
           <div className="mt-2 flex flex-col gap-1">
             {message.tool_calls.map((tc) => (

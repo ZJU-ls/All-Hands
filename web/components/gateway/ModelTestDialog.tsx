@@ -1,9 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { Composer, ThinkingToggle } from "@/components/chat/Composer";
+import { ArrowDownIcon } from "@/components/icons";
 import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
 import { openStream, type StreamHandle } from "@/lib/stream-client";
+
+const STICK_THRESHOLD_PX = 64;
 
 export type ModelTestDialogProps = {
   model: {
@@ -82,6 +92,28 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const streamRef = useRef<StreamHandle | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [stickToBottom, setStickToBottom] = useState(true);
+
+  const isAtBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.clientHeight - el.scrollTop < STICK_THRESHOLD_PX;
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    setStickToBottom(isAtBottom());
+  }, [isAtBottom]);
+
+  useLayoutEffect(() => {
+    if (stickToBottom) scrollToBottom("auto");
+  }, [messages, streamContent, streamReasoning, stickToBottom, scrollToBottom]);
 
   useEffect(() => {
     return () => streamRef.current?.abort();
@@ -279,7 +311,13 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-5 py-3">
+        <div className="relative flex-1 min-h-0">
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            data-testid="model-test-scroll"
+            className="absolute inset-0 overflow-y-auto px-5 py-3"
+          >
           <div className="mb-3">
             <button
               onClick={() => setShowAdvanced((v) => !v)}
@@ -383,6 +421,23 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
               </p>
             </div>
           )}
+          </div>
+          {!stickToBottom &&
+            (messages.length > 0 || streamContent || streamReasoning) && (
+              <button
+                type="button"
+                onClick={() => {
+                  scrollToBottom("smooth");
+                  setStickToBottom(true);
+                }}
+                data-testid="model-test-jump-to-bottom"
+                aria-label="回到最新"
+                className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] text-text-muted transition-colors duration-fast hover:text-text hover:border-border-strong"
+              >
+                <ArrowDownIcon size={12} />
+                回到最新
+              </button>
+            )}
         </div>
 
         <footer className="px-5 pb-4 pt-2 border-t border-border flex flex-col gap-2">
@@ -455,7 +510,7 @@ function MessageRow({
     <div
       data-role={role}
       data-streaming={streaming ? "true" : undefined}
-      className={`rounded-md px-3 py-2 text-sm whitespace-pre-wrap ${
+      className={`rounded-md px-3 py-2 text-sm ${isUser ? "whitespace-pre-wrap" : ""} ${
         isUser
           ? "bg-surface-2 text-text ml-auto max-w-[85%]"
           : "bg-bg border border-border text-text mr-auto max-w-[85%]"
@@ -505,7 +560,13 @@ function MessageRow({
       )}
       {content || (streaming && phase === "thinking" && !hasReasoning) ? (
         <>
-          {content || (
+          {content ? (
+            isUser ? (
+              content
+            ) : (
+              <AgentMarkdown content={content} />
+            )
+          ) : (
             <span className="text-text-subtle italic">等待回复…</span>
           )}
           {streaming && (
