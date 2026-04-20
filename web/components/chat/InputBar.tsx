@@ -31,6 +31,27 @@ type ToolCallAccumulator = {
   started: boolean;
 };
 
+/**
+ * Sentinel values for the per-turn override drawer. `null` means "don't
+ * send this field — let the backend inherit from the employee / provider
+ * default" (contract on the server-side RunOverrides: None ≡ inherit).
+ * The user only ever sees numeric state in the sliders; the null state
+ * lives behind the drawer's open/closed gate.
+ */
+type AdvancedState = {
+  system: string;
+  temperature: number;
+  topP: number;
+  maxTokens: number;
+};
+
+const DEFAULT_ADVANCED: AdvancedState = {
+  system: "",
+  temperature: 0.7,
+  topP: 1.0,
+  maxTokens: 2048,
+};
+
 export function InputBar({
   conversationId,
   employeeModelRef,
@@ -40,18 +61,31 @@ export function InputBar({
 }: Props) {
   const [value, setValue] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  // `advancedDirty` flips the first time the user edits any advanced field.
+  // Before that, the drawer just displays defaults *for reference* and we
+  // don't send anything — matches the server's "inherit default" contract.
+  const [advancedDirty, setAdvancedDirty] = useState(false);
+  const [advanced, setAdvanced] = useState<AdvancedState>(DEFAULT_ADVANCED);
   const streamRef = useRef<StreamHandle | null>(null);
   const {
     isStreaming,
     startStreaming,
     appendToken,
+    appendReasoning,
     updateToolCall,
     addRenderPayload,
     addConfirmation,
     addMessage,
-    stopStreaming,
+    finalizeStreaming,
+    cancelStreaming,
     setStreamError,
   } = useChatStore();
+
+  const patchAdvanced = useCallback((patch: Partial<AdvancedState>) => {
+    setAdvancedDirty(true);
+    setAdvanced((a) => ({ ...a, ...patch }));
+  }, []);
 
   const handleSend = useCallback(() => {
     if (!value.trim() || isStreaming) return;
@@ -69,6 +103,20 @@ export function InputBar({
       created_at: new Date().toISOString(),
     });
 
+    // Build the POST body. Always include `thinking` when the toggle is on
+    // (it's a per-turn action the user explicitly chose); only include
+    // temperature / top_p / max_tokens / system_override when the user has
+    // actively touched the advanced drawer. Bare-default fields stay
+    // omitted so the backend inherits the employee's defaults.
+    const body: Record<string, unknown> = { content };
+    if (thinking) body.thinking = true;
+    if (advancedDirty) {
+      body.temperature = advanced.temperature;
+      body.top_p = advanced.topP;
+      body.max_tokens = advanced.maxTokens;
+      if (advanced.system.trim()) body.system_override = advanced.system.trim();
+    }
+
     const toolCalls = new Map<string, ToolCallAccumulator>();
 
     const handle = openStream(
@@ -76,7 +124,7 @@ export function InputBar({
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(body),
       },
       {
         onTextMessageStart: (f) => {
@@ -84,6 +132,9 @@ export function InputBar({
         },
         onTextMessageContent: (f) => {
           appendToken(f.messageId, f.delta);
+        },
+        onReasoningMessageChunk: (f) => {
+          appendReasoning(f.messageId, f.delta);
         },
         onToolCallStart: (f) => {
           toolCalls.set(f.toolCallId, {
@@ -139,24 +190,31 @@ export function InputBar({
           }
         },
         onRunError: (err) => {
-          // Surface the failure inline so 没有任何反应 stops being the
+          // Surface the failure inline so "没有任何反应" stops being the
           // default when provider creds are missing / upstream 401s.
+          // Preserve whatever the assistant managed to stream before the
+          // failure — the user wants to see partial progress next to the
+          // banner, not lose both signals.
           setStreamError({
             message: err.message || "助手没能完成这次回复。",
             code: err.code,
           });
-          stopStreaming();
+          finalizeStreaming(conversationId);
         },
         onRunFinished: () => {
-          stopStreaming();
+          finalizeStreaming(conversationId);
         },
         onDone: () => {
-          stopStreaming();
+          // Transport EOF (happy or graceful). If RUN_FINISHED already
+          // fired, finalizeStreaming is a no-op; if the server closed
+          // without an explicit RUN_FINISHED (older backends), this
+          // promotes the in-flight message so nothing is lost.
+          finalizeStreaming(conversationId);
           streamRef.current = null;
         },
         onError: (err) => {
           setStreamError({ message: err.message || String(err) });
-          stopStreaming();
+          cancelStreaming();
           streamRef.current = null;
         },
       },
@@ -165,25 +223,42 @@ export function InputBar({
   }, [
     value,
     isStreaming,
+    thinking,
+    advancedDirty,
+    advanced,
     conversationId,
     addMessage,
     startStreaming,
     appendToken,
+    appendReasoning,
     updateToolCall,
     addRenderPayload,
     addConfirmation,
-    stopStreaming,
+    finalizeStreaming,
+    cancelStreaming,
     setStreamError,
   ]);
 
   const handleAbort = useCallback(() => {
     streamRef.current?.abort();
     streamRef.current = null;
-    stopStreaming();
-  }, [stopStreaming]);
+    cancelStreaming();
+  }, [cancelStreaming]);
 
   return (
-    <div className="border-t border-border p-3">
+    <div className="border-t border-border p-3 flex flex-col gap-2">
+      {showAdvanced && (
+        <AdvancedDrawer
+          value={advanced}
+          onChange={patchAdvanced}
+          onReset={() => {
+            setAdvanced(DEFAULT_ADVANCED);
+            setAdvancedDirty(false);
+          }}
+          dirty={advancedDirty}
+          disabled={isStreaming}
+        />
+      )}
       <Composer
         value={value}
         onChange={setValue}
@@ -197,6 +272,12 @@ export function InputBar({
             <ThinkingToggle
               enabled={thinking}
               onChange={setThinking}
+              disabled={isStreaming}
+            />
+            <AdvancedToggle
+              open={showAdvanced}
+              onToggle={() => setShowAdvanced((v) => !v)}
+              dirty={advancedDirty}
               disabled={isStreaming}
             />
             {conversation && employee && onConversationChange && (
@@ -216,6 +297,195 @@ export function InputBar({
           </div>
         }
         controlsTrailing={<span className="font-mono">↵ 发送 · ⇧↵ 换行</span>}
+      />
+    </div>
+  );
+}
+
+function AdvancedToggle({
+  open,
+  onToggle,
+  dirty,
+  disabled,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  dirty: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      data-testid="composer-advanced-toggle"
+      data-state={open ? "open" : "closed"}
+      aria-pressed={open}
+      className={`inline-flex h-6 items-center gap-1.5 rounded border px-2 text-[11px] transition-colors duration-fast disabled:opacity-40 ${
+        open
+          ? "border-primary/60 bg-primary/10 text-primary"
+          : "border-border bg-transparent text-text-muted hover:text-text hover:border-border-strong"
+      }`}
+    >
+      <span aria-hidden className="font-mono">{open ? "▾" : "▸"}</span>
+      高级参数{dirty ? " ·" : ""}
+    </button>
+  );
+}
+
+function AdvancedDrawer({
+  value,
+  onChange,
+  onReset,
+  dirty,
+  disabled,
+}: {
+  value: AdvancedState;
+  onChange: (patch: Partial<AdvancedState>) => void;
+  onReset: () => void;
+  dirty: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      data-testid="composer-advanced-drawer"
+      className="rounded-md border border-border bg-bg p-3 flex flex-col gap-3"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] text-text-muted">
+          每次发送生效 · 未修改则沿用员工默认
+        </span>
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={disabled || !dirty}
+          data-testid="composer-advanced-reset"
+          className="text-[11px] text-text-muted hover:text-text disabled:opacity-40"
+        >
+          恢复默认
+        </button>
+      </div>
+      <div>
+        <label className="text-[11px] text-text-muted block mb-1">
+          System prompt 覆盖（可选）
+        </label>
+        <textarea
+          value={value.system}
+          onChange={(e) => onChange({ system: e.target.value })}
+          disabled={disabled}
+          rows={2}
+          placeholder="例：你是简洁精确的工程师助手。"
+          data-testid="composer-advanced-system"
+          className="w-full rounded-md bg-surface-2 border border-border px-2.5 py-1.5 text-xs text-text focus:outline-none focus:border-primary transition-colors disabled:opacity-60"
+        />
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <SliderField
+          label="temperature"
+          value={value.temperature}
+          min={0}
+          max={2}
+          step={0.1}
+          onChange={(v) => onChange({ temperature: v })}
+          disabled={disabled}
+          testId="composer-advanced-temperature"
+        />
+        <SliderField
+          label="top_p"
+          value={value.topP}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => onChange({ topP: v })}
+          disabled={disabled}
+          testId="composer-advanced-top-p"
+        />
+        <NumberField
+          label="max_tokens"
+          value={value.maxTokens}
+          min={1}
+          max={32000}
+          onChange={(v) => onChange({ maxTokens: v })}
+          disabled={disabled}
+          testId="composer-advanced-max-tokens"
+        />
+      </div>
+    </div>
+  );
+}
+
+function SliderField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  disabled,
+  testId,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+  testId?: string;
+}) {
+  return (
+    <div>
+      <div className="flex justify-between text-[10px] text-text-muted mb-0.5">
+        <span>{label}</span>
+        <span className="font-mono text-text">{value.toFixed(2)}</span>
+      </div>
+      <input
+        type="range"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => onChange(Number(e.target.value))}
+        disabled={disabled}
+        data-testid={testId}
+        className="w-full"
+      />
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+  disabled,
+  testId,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+  testId?: string;
+}) {
+  return (
+    <div>
+      <label className="text-[10px] text-text-muted block mb-0.5">{label}</label>
+      <input
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          if (Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v)));
+        }}
+        disabled={disabled}
+        data-testid={testId}
+        className="w-full rounded-md bg-surface-2 border border-border px-2 py-1 text-xs font-mono text-text focus:outline-none focus:border-primary transition-colors disabled:opacity-60"
       />
     </div>
   );

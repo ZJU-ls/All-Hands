@@ -36,7 +36,23 @@ class UpdateConversationRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
+    """A single user turn sent to the chat streaming endpoint.
+
+    The optional fields are **per-turn** model knobs. They override whatever
+    the employee's default config has for this one run — think of them the
+    same way the ModelTestDialog "高级参数" drawer does. Unset fields fall
+    back to provider / model defaults (no clamping, no 0-defaults — the
+    model gets whatever it would have without the field).
+    """
+
     content: str
+    # Per-turn model knobs (all optional). Scoped to this run only — nothing
+    # persists across turns unless the caller threads them again.
+    thinking: bool | None = None
+    temperature: float | None = None
+    top_p: float | None = None
+    max_tokens: int | None = None
+    system_override: str | None = None
 
 
 class ChatMessageResponse(BaseModel):

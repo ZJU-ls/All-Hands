@@ -15,6 +15,22 @@ class TokenEvent(BaseModel):
     delta: str
 
 
+class ReasoningEvent(BaseModel):
+    """Thinking-channel delta from reasoning models.
+
+    Emitted when the underlying chat model returns structured content blocks
+    with ``type == "thinking"`` (Anthropic Extended Thinking, Qwen3 enable_thinking,
+    DeepSeek-R1 reasoning_content). Kept separate from ``TokenEvent`` so the
+    router can wire it to AG-UI's ``REASONING_MESSAGE_CHUNK`` frame instead of
+    inlining the raw reasoning string into the user-visible text (the
+    ``[{'thinking': ..., 'type': 'thinking'}]`` bug).
+    """
+
+    kind: Literal["reasoning"] = "reasoning"
+    message_id: str
+    delta: str
+
+
 class ToolCallStartEvent(BaseModel):
     kind: Literal["tool_call_start"] = "tool_call_start"
     tool_call: ToolCall
@@ -79,6 +95,7 @@ class DoneEvent(BaseModel):
 
 AgentEvent = (
     TokenEvent
+    | ReasoningEvent
     | ToolCallStartEvent
     | ToolCallEndEvent
     | ConfirmRequiredEvent

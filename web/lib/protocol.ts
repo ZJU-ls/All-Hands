@@ -85,6 +85,17 @@ export type Message = {
   conversation_id: string;
   role: MessageRole;
   content: string;
+  /**
+   * Reasoning / thinking transcript. Populated from AG-UI
+   * ``REASONING_MESSAGE_CHUNK`` frames for assistant messages coming from
+   * thinking-capable models (Anthropic Extended Thinking, Qwen3
+   * enable_thinking, DeepSeek-R1). UI-only — the server-side ``Message``
+   * schema does not yet persist reasoning across reloads; we keep it on
+   * the wire type here so the in-flight streaming bubble can hand its
+   * reasoning to MessageBubble on finalize. Optional so legacy fixtures
+   * remain valid.
+   */
+  reasoning?: string;
   tool_calls: ToolCall[];
   render_payloads: RenderPayload[];
   tool_call_id?: string | null;

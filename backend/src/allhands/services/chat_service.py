@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from allhands.core import Conversation, Employee, Message
 from allhands.core.errors import DomainError, EmployeeNotFound
+from allhands.core.run_overrides import RunOverrides
 from allhands.execution.dispatch import DispatchService
 from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
@@ -140,6 +141,7 @@ class ChatService:
         self,
         conversation_id: str,
         user_content: str,
+        overrides: RunOverrides | None = None,
     ) -> AsyncIterator[AgentEvent]:
         conv = await self._conversations.get(conversation_id)
         if conv is None:
@@ -194,7 +196,11 @@ class ChatService:
             spawn_subagent_service=spawn_subagent_service,
             model_ref_override=conv.model_ref_override,
         )
-        return runner.stream(messages=lc_messages, thread_id=conversation_id)
+        return runner.stream(
+            messages=lc_messages,
+            thread_id=conversation_id,
+            overrides=overrides,
+        )
 
     def _build_runner_factory(self, provider: Any) -> Any:
         """Closure used by DispatchService to spawn sub-runners.

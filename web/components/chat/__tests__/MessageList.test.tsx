@@ -179,6 +179,7 @@ describe("MessageList · Track α · sticky-bottom autoscroll", () => {
           id: "stream-1",
           role: "assistant",
           content: "partial …",
+          reasoning: "",
           tool_calls: [],
           render_payloads: [],
           created_at: "2026-04-20T00:00:00Z",

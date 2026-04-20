@@ -13,6 +13,16 @@ type StreamingMessage = {
   id: string;
   role: "assistant";
   content: string;
+  /**
+   * Reasoning / thinking channel accumulated from AG-UI
+   * ``REASONING_MESSAGE_CHUNK`` frames. Kept alongside ``content`` so the
+   * bubble can render the two distinctly — thinking lives in a collapsible
+   * block above the answer, visible content is the final markdown. Before
+   * this field the runner was stringifying Python reasoning blocks straight
+   * into ``content`` and leaking ``[{'thinking': ..., 'type': 'thinking'}]``
+   * repr into the chat.
+   */
+  reasoning: string;
   tool_calls: ToolCall[];
   render_payloads: RenderPayload[];
   created_at: string;
@@ -45,12 +55,20 @@ type ChatState = {
   replaceMessages: (msgs: Message[]) => void;
   startStreaming: (messageId: string) => void;
   appendToken: (messageId: string, delta: string) => void;
-  finalizeMessage: (msg: Message) => void;
+  appendReasoning: (messageId: string, delta: string) => void;
+  /** Persist the in-flight streaming message into `messages[]` and clear
+   * streaming state. Idempotent — safe to call from both TEXT_MESSAGE_END
+   * and RUN_FINISHED / transport onDone. If `streamingMessage` is null
+   * (already finalized / nothing streamed), this just clears `isStreaming`. */
+  finalizeStreaming: (conversationId: string) => void;
+  /** Discard the in-flight streaming message (abort / fatal error). The
+   * user's own message in `messages[]` stays. Pair with setStreamError to
+   * keep the failure visible. */
+  cancelStreaming: () => void;
   updateToolCall: (toolCall: ToolCall) => void;
   addRenderPayload: (messageId: string, payload: RenderPayload) => void;
   addConfirmation: (conf: PendingConfirmation) => void;
   removeConfirmation: (confirmationId: string) => void;
-  stopStreaming: () => void;
   setStreamError: (err: StreamError | null) => void;
   reset: () => void;
 };
@@ -78,6 +96,7 @@ export const useChatStore = create<ChatState>((set) => ({
         id: messageId,
         role: "assistant",
         content: "",
+        reasoning: "",
         tool_calls: [],
         render_payloads: [],
         created_at: new Date().toISOString(),
@@ -95,12 +114,60 @@ export const useChatStore = create<ChatState>((set) => ({
       };
     }),
 
-  finalizeMessage: (msg) =>
-    set((state) => ({
-      messages: [...state.messages, msg],
-      streamingMessage: null,
-      isStreaming: false,
-    })),
+  appendReasoning: (messageId, delta) =>
+    set((state) => {
+      // Reasoning may start before the first text token, so we may need to
+      // seed the streaming message ourselves. Once it exists, we accumulate.
+      if (!state.streamingMessage) {
+        return {
+          isStreaming: true,
+          streamError: null,
+          streamingMessage: {
+            id: messageId,
+            role: "assistant",
+            content: "",
+            reasoning: delta,
+            tool_calls: [],
+            render_payloads: [],
+            created_at: new Date().toISOString(),
+          },
+        };
+      }
+      return {
+        streamingMessage: {
+          ...state.streamingMessage,
+          reasoning: state.streamingMessage.reasoning + delta,
+        },
+      };
+    }),
+
+  finalizeStreaming: (conversationId) =>
+    set((state) => {
+      if (!state.streamingMessage) {
+        return { isStreaming: false };
+      }
+      const finalized: Message = {
+        id: state.streamingMessage.id,
+        conversation_id: conversationId,
+        role: "assistant",
+        content: state.streamingMessage.content,
+        reasoning: state.streamingMessage.reasoning || undefined,
+        tool_calls: state.streamingMessage.tool_calls,
+        render_payloads: state.streamingMessage.render_payloads,
+        created_at: state.streamingMessage.created_at,
+        tool_call_id: null,
+        trace_ref: null,
+        parent_run_id: null,
+      };
+      return {
+        messages: [...state.messages, finalized],
+        streamingMessage: null,
+        isStreaming: false,
+      };
+    }),
+
+  cancelStreaming: () =>
+    set({ isStreaming: false, streamingMessage: null }),
 
   updateToolCall: (toolCall) =>
     set((state) => {
@@ -140,9 +207,6 @@ export const useChatStore = create<ChatState>((set) => ({
         (c) => c.confirmationId !== confirmationId,
       ),
     })),
-
-  stopStreaming: () =>
-    set({ isStreaming: false, streamingMessage: null }),
 
   setStreamError: (err) => set({ streamError: err }),
 

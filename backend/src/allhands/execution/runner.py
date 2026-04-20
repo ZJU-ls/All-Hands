@@ -23,11 +23,13 @@ from typing import TYPE_CHECKING, Any
 
 from allhands.config import get_settings
 from allhands.core.provider import LLMProvider
+from allhands.core.run_overrides import RunOverrides
 from allhands.core.tool import ToolScope
 from allhands.execution.events import (
     AgentEvent,
     DoneEvent,
     ErrorEvent,
+    ReasoningEvent,
     TokenEvent,
 )
 from allhands.execution.skills import (
@@ -77,11 +79,16 @@ def _make_dispatch_executor(dispatch_service: DispatchService) -> Any:
     return _dispatch_executor
 
 
-def _build_model(model_ref: str, provider: LLMProvider | None = None) -> Any:
+def _build_model(
+    model_ref: str,
+    provider: LLMProvider | None = None,
+    overrides: RunOverrides | None = None,
+) -> Any:
     if provider is not None:
         from allhands.execution.llm_factory import build_llm
 
-        return build_llm(provider, model_ref)
+        model = build_llm(provider, model_ref)
+        return _apply_overrides(model, overrides)
 
     # fallback path — no provider bound (dev / test), treat as OpenAI-compat
     # and read creds from env config.
@@ -94,7 +101,94 @@ def _build_model(model_ref: str, provider: LLMProvider | None = None) -> Any:
         kwargs["api_key"] = settings.openai_api_key
     if settings.openai_base_url:
         kwargs["base_url"] = settings.openai_base_url
-    return ChatOpenAI(**kwargs)
+    return _apply_overrides(ChatOpenAI(**kwargs), overrides)
+
+
+def _split_content_blocks(content: Any) -> tuple[str, str]:
+    """Normalize ``AIMessageChunk.content`` into ``(text_delta, thinking_delta)``.
+
+    LangChain adapters return content in one of two shapes:
+
+    * ``str`` — OpenAI-style plain text. Entirely user-facing.
+    * ``list[block]`` — provider-structured content. Blocks have a ``type``
+      key; common values are ``"text"`` (user-facing) and ``"thinking"`` /
+      ``"reasoning"`` (model's internal chain-of-thought from Anthropic
+      Extended Thinking, Qwen3 ``enable_thinking``, DeepSeek-R1, etc.).
+
+    Stringifying a list-of-blocks leaks the Python repr into the chat
+    transcript — the exact ``[{'thinking': ..., 'type': 'thinking'}]`` UI
+    bug this normalizer fixes. We route ``text`` to the user-visible
+    stream and ``thinking`` to a separate reasoning stream so the chat UI
+    can render them distinctly (inline transcript vs collapsible block).
+    Unknown block types are dropped rather than leaked as repr.
+    """
+    if isinstance(content, str):
+        return content, ""
+    if not isinstance(content, list):
+        return str(content), ""
+
+    text_parts: list[str] = []
+    thinking_parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            text_parts.append(block)
+            continue
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "text":
+            val = block.get("text")
+            if isinstance(val, str):
+                text_parts.append(val)
+        elif btype in ("thinking", "reasoning"):
+            # Anthropic uses "thinking"; some OpenAI-compat providers use
+            # "reasoning". The text lives under whichever key the block
+            # type names ("thinking" → block["thinking"], etc.); fall
+            # back to a "text" field for adapters that normalize it there.
+            val = block.get(btype) or block.get("text")
+            if isinstance(val, str):
+                thinking_parts.append(val)
+        # ignore tool_use / image_url / etc. — those surface through the
+        # tool-call events path, not chat text.
+    return "".join(text_parts), "".join(thinking_parts)
+
+
+def _apply_overrides(model: Any, overrides: RunOverrides | None) -> Any:
+    """Fold per-turn knobs onto a freshly-built chat model.
+
+    LangChain chat models expose ``.bind(**kwargs)`` which returns a
+    runnable with the kwargs merged into every downstream call. We use it
+    instead of rebuilding the model with different constructor args because
+    some knobs (``extra_body``, ``thinking``) aren't constructor parameters
+    on every adapter — bind passes them through as call-time kwargs where
+    the adapter will forward them into its HTTP request body. Providers
+    that don't understand a key silently ignore it, which matches the
+    "inherit default on None" contract on :class:`RunOverrides`.
+    """
+    if overrides is None:
+        return model
+
+    bind_kwargs: dict[str, Any] = {}
+    if overrides.temperature is not None:
+        bind_kwargs["temperature"] = overrides.temperature
+    if overrides.top_p is not None:
+        bind_kwargs["top_p"] = overrides.top_p
+    if overrides.max_tokens is not None:
+        bind_kwargs["max_tokens"] = overrides.max_tokens
+    if overrides.thinking is not None:
+        # DashScope / Qwen3-style reasoning toggle rides in extra_body;
+        # OpenAI-compat adapters treat extra_body as pass-through.
+        bind_kwargs["extra_body"] = {"enable_thinking": overrides.thinking}
+
+    if not bind_kwargs:
+        return model
+    try:
+        return model.bind(**bind_kwargs)
+    except Exception:
+        # Adapter doesn't support .bind(...) — fall back to returning the
+        # naked model rather than crashing. The user sees default-param
+        # behavior; worse than expected, but not a hang.
+        return model
 
 
 class AgentRunner:
@@ -158,6 +252,7 @@ class AgentRunner:
         self,
         messages: list[dict[str, Any]],
         thread_id: str,
+        overrides: RunOverrides | None = None,
     ) -> AsyncIterator[AgentEvent]:
         from langchain_core.messages import (
             AIMessage,
@@ -249,9 +344,22 @@ class AgentRunner:
             lc_tools.append(lc_tool)
 
         effective_model_ref = self._model_ref_override or self._employee.model_ref
-        model = _build_model(effective_model_ref, self._provider)
+        model = _build_model(effective_model_ref, self._provider, overrides)
 
-        system_prompt = self._compose_system_prompt()
+        # Per-turn system override (overrides.system_override) is a prepend,
+        # not a replace — the employee's skill descriptors + resolved
+        # fragments must still be in scope for tool use. The override lands
+        # first so the user's framing is the most salient instruction.
+        system_parts: list[str] = []
+        if overrides and overrides.system_override:
+            override_text = overrides.system_override.strip()
+            if override_text:
+                system_parts.append(override_text)
+        base_prompt = self._compose_system_prompt()
+        if base_prompt:
+            system_parts.append(base_prompt)
+        system_prompt = "\n\n".join(system_parts).strip()
+
         lc_messages: list[Any] = []
         if system_prompt:
             lc_messages.append(SystemMessage(content=system_prompt))
@@ -291,10 +399,17 @@ class AgentRunner:
                     continue
                 if not msg.content:
                     continue
-                yield TokenEvent(
-                    message_id=message_id,
-                    delta=str(msg.content),
-                )
+                text_delta, thinking_delta = _split_content_blocks(msg.content)
+                if thinking_delta:
+                    yield ReasoningEvent(
+                        message_id=message_id,
+                        delta=thinking_delta,
+                    )
+                if text_delta:
+                    yield TokenEvent(
+                        message_id=message_id,
+                        delta=text_delta,
+                    )
             yield DoneEvent(message_id=message_id, reason="done")
         except Exception as exc:
             yield ErrorEvent(code="INTERNAL", message=str(exc))

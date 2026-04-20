@@ -34,7 +34,10 @@ class CancelTrackingChatService:
         self.tokens_emitted = 0
 
     async def send_message(
-        self, conversation_id: str, user_content: str
+        self,
+        conversation_id: str,
+        user_content: str,
+        overrides: object | None = None,
     ) -> AsyncIterator[TokenEvent]:
         async def gen() -> AsyncIterator[TokenEvent]:
             try:

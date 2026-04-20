@@ -57,6 +57,7 @@ from allhands.core.observability import (
 )
 from allhands.core.plan import AgentPlan, PlanStep, StepStatus
 from allhands.core.provider import LLMProvider
+from allhands.core.run_overrides import RunOverrides
 from allhands.core.skill import Skill, SkillSource
 from allhands.core.task import (
     ACTIVE_STATUSES,
@@ -134,6 +135,7 @@ __all__ = [
     "ObservatorySummary",
     "PlanStep",
     "RenderPayload",
+    "RunOverrides",
     "Skill",
     "SkillSource",
     "StepStatus",

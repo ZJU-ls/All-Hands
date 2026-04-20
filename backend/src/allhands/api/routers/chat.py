@@ -28,6 +28,7 @@ from allhands.api.protocol import (
     UpdateConversationRequest,
 )
 from allhands.core.errors import DomainError, EmployeeNotFound
+from allhands.core.run_overrides import RunOverrides
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -254,6 +255,7 @@ async def send_message(
 
         stream = None
         current_message_id: str | None = None
+        current_reasoning_id: str | None = None
         finished = False
 
         def _close_open_message() -> bytes | None:
@@ -264,8 +266,27 @@ async def send_message(
             current_message_id = None
             return closing
 
+        def _close_open_reasoning() -> bytes | None:
+            nonlocal current_reasoning_id
+            if current_reasoning_id is None:
+                return None
+            closing = agui.encode_sse(agui.reasoning_message_end(current_reasoning_id))
+            current_reasoning_id = None
+            return closing
+
         try:
-            stream = await chat_svc.send_message(conversation_id, body.content)
+            overrides = RunOverrides(
+                thinking=body.thinking,
+                temperature=body.temperature,
+                top_p=body.top_p,
+                max_tokens=body.max_tokens,
+                system_override=body.system_override,
+            )
+            stream = await chat_svc.send_message(
+                conversation_id,
+                body.content,
+                overrides=overrides,
+            )
             stream_iter = stream.__aiter__()
             while True:
                 if await request.is_disconnected():
@@ -279,6 +300,13 @@ async def send_message(
                 except StopAsyncIteration:
                     break
                 if event.kind == "token":
+                    # Seeing user-visible text closes any still-open reasoning
+                    # block — thinking always precedes the final answer in
+                    # the turn, so once text starts we seal the reasoning
+                    # stream off for that message id.
+                    closing_r = _close_open_reasoning()
+                    if closing_r is not None:
+                        yield closing_r
                     if current_message_id != event.message_id:
                         closing = _close_open_message()
                         if closing is not None:
@@ -286,6 +314,21 @@ async def send_message(
                         yield agui.encode_sse(agui.text_message_start(event.message_id))
                         current_message_id = event.message_id
                     yield agui.encode_sse(agui.text_message_content(event.message_id, event.delta))
+                elif event.kind == "reasoning":
+                    # Pipe thinking-content blocks through the AG-UI
+                    # REASONING_MESSAGE_CHUNK envelope so the chat client
+                    # can render them in a collapsible reasoning panel
+                    # instead of inlining them as raw text (the Python
+                    # repr leak bug). We share the same message_id so the
+                    # UI can correlate reasoning with the answer.
+                    if current_reasoning_id != event.message_id:
+                        closing_r = _close_open_reasoning()
+                        if closing_r is not None:
+                            yield closing_r
+                        current_reasoning_id = event.message_id
+                    yield agui.encode_sse(
+                        agui.reasoning_message_chunk(event.message_id, event.delta)
+                    )
                 elif event.kind == "tool_call_start":
                     tc = event.tool_call
                     yield agui.encode_sse(agui.tool_call_start(tc.id, tc.tool_id))
@@ -345,18 +388,27 @@ async def send_message(
                         )
                     )
                 elif event.kind == "error":
+                    closing_r = _close_open_reasoning()
+                    if closing_r is not None:
+                        yield closing_r
                     closing = _close_open_message()
                     if closing is not None:
                         yield closing
                     yield agui.encode_sse(agui.run_error(event.message, event.code))
                     finished = True
                 elif event.kind == "done":
+                    closing_r = _close_open_reasoning()
+                    if closing_r is not None:
+                        yield closing_r
                     closing = _close_open_message()
                     if closing is not None:
                         yield closing
                     yield agui.encode_sse(agui.run_finished(conversation_id, run_id))
                     finished = True
         except DomainError as exc:
+            closing_r = _close_open_reasoning()
+            if closing_r is not None:
+                yield closing_r
             closing = _close_open_message()
             if closing is not None:
                 yield closing
@@ -369,6 +421,9 @@ async def send_message(
             )
             raise
         except Exception as exc:
+            closing_r = _close_open_reasoning()
+            if closing_r is not None:
+                yield closing_r
             closing = _close_open_message()
             if closing is not None:
                 yield closing
@@ -376,6 +431,9 @@ async def send_message(
             finished = True
         finally:
             if not finished:
+                closing_r = _close_open_reasoning()
+                if closing_r is not None:
+                    yield closing_r
                 closing = _close_open_message()
                 if closing is not None:
                     yield closing

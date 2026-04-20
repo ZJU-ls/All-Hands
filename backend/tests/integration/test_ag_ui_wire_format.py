@@ -264,7 +264,12 @@ async def test_chat_stream_emits_ag_ui_envelope(monkeypatch: pytest.MonkeyPatch)
     ]
 
     class _FakeChatSvc:
-        async def send_message(self, _cid: str, _content: str) -> _FakeAsyncIter:
+        async def send_message(
+            self,
+            _cid: str,
+            _content: str,
+            overrides: object | None = None,
+        ) -> _FakeAsyncIter:
             return _FakeAsyncIter(list(events))
 
     async def _fake_get_chat_service(_sess: Any) -> _FakeChatSvc:
