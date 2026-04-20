@@ -159,7 +159,12 @@ class AgentRunner:
         messages: list[dict[str, Any]],
         thread_id: str,
     ) -> AsyncIterator[AgentEvent]:
-        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+        from langchain_core.messages import (
+            AIMessage,
+            AIMessageChunk,
+            HumanMessage,
+            SystemMessage,
+        )
         from langchain_core.tools import StructuredTool
         from langgraph.prebuilt import create_react_agent
 
@@ -260,17 +265,36 @@ class AgentRunner:
 
         try:
             agent = create_react_agent(model, lc_tools)
+            # `stream_mode="messages"` is the only mode that gives per-token
+            # deltas from the LLM (each chunk is an `AIMessageChunk`). The
+            # alternatives — `updates` / `values` — emit completed messages
+            # only, which means the UI would see "nothing, nothing, entire
+            # paragraph at once". Token-level streaming is the whole point
+            # of the chat surface.
+            #
+            # Each chunk is `(message, metadata)`. `metadata["langgraph_node"]`
+            # tells us which graph node produced it — we only forward the
+            # `agent` node's assistant output; `tools` node output is the
+            # raw tool result, which is surfaced separately via the gate
+            # pipeline (not as chat text).
             async for chunk in agent.astream(
                 {"messages": lc_messages},
                 config={"configurable": {"thread_id": thread_id}},
+                stream_mode="messages",
             ):
-                msgs = chunk.get("messages", [])
-                for msg in msgs:
-                    if isinstance(msg, AIMessage) and msg.content:
-                        yield TokenEvent(
-                            message_id=message_id,
-                            delta=str(msg.content),
-                        )
+                if not isinstance(chunk, tuple) or len(chunk) != 2:
+                    continue
+                msg, meta = chunk
+                if not isinstance(meta, dict) or meta.get("langgraph_node") != "agent":
+                    continue
+                if not isinstance(msg, AIMessage | AIMessageChunk):
+                    continue
+                if not msg.content:
+                    continue
+                yield TokenEvent(
+                    message_id=message_id,
+                    delta=str(msg.content),
+                )
             yield DoneEvent(message_id=message_id, reason="done")
         except Exception as exc:
             yield ErrorEvent(code="INTERNAL", message=str(exc))
