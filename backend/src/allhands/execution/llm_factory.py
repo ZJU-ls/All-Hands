@@ -15,15 +15,45 @@ from typing import Any
 from allhands.core.provider import LLMProvider
 
 
+def resolve_model_name(provider: LLMProvider, model_ref: str) -> str:
+    """Pick the concrete model name to send upstream.
+
+    Rules:
+      1. Bare name (no slash) → pass through.
+      2. ``{prefix}/{name}`` whose prefix matches this provider's ``name``
+         (case-insensitive) or ``kind`` → strip prefix, send ``name``.
+      3. Mismatched prefix + ``kind == "openai"`` → pass the full ref through.
+         OpenRouter/DeepSeek aggregators use slashes as routing (e.g.
+         ``anthropic/claude-3``); we can't tell them apart from bare OpenAI
+         at the kind level, so we err on the side of preserving intent.
+      4. Mismatched prefix + other kinds (``anthropic`` / ``aliyun``) → the
+         ref was meant for a different provider that is no longer bound;
+         fall back to ``provider.default_model`` rather than sending an
+         unknown model to an upstream that doesn't do slash routing.
+      5. Empty / missing ref → fall back to ``provider.default_model``.
+         Seeds may leave ``model_ref`` blank to pick up whatever the
+         currently bound provider recommends.
+    """
+    if not model_ref:
+        return provider.default_model
+    if "/" not in model_ref:
+        return model_ref
+    prefix, name = model_ref.split("/", 1)
+    if prefix.lower() == provider.name.lower() or prefix.lower() == provider.kind:
+        return name
+    if provider.kind == "openai":
+        return model_ref
+    return provider.default_model
+
+
 def build_llm(provider: LLMProvider, model_ref: str) -> Any:
     """Return a LangChain BaseChatModel bound to `provider` + `model_ref`.
 
-    `model_ref` may be either a bare model name (``"gpt-4o-mini"``) or a
-    ``provider/model`` composite — we split on the last slash *only* when
-    the composite shape is intentional (legacy quirks). Anthropic model
-    names contain dots, not slashes, so this is safe for all 3 kinds.
+    `model_ref` may be bare (``"gpt-4o-mini"``) or a ``provider/model``
+    composite — see ``resolve_model_name`` for the matching rules. This
+    function just picks the right LangChain adapter by ``provider.kind``.
     """
-    model_name = model_ref.split("/", 1)[-1] if "/" in model_ref else model_ref
+    model_name = resolve_model_name(provider, model_ref)
 
     if provider.kind == "anthropic":
         from langchain_anthropic import ChatAnthropic
@@ -35,10 +65,9 @@ def build_llm(provider: LLMProvider, model_ref: str) -> Any:
             kwargs["base_url"] = provider.base_url
         return ChatAnthropic(**kwargs)
 
-    # openai + aliyun (DashScope compatible-mode) share the OpenAI wire format.
     from langchain_openai import ChatOpenAI
 
-    kwargs = {"model": model_ref if provider.kind == "openai" and "/" in model_ref else model_name}
+    kwargs = {"model": model_name}
     if provider.api_key:
         kwargs["api_key"] = provider.api_key
     if provider.base_url:

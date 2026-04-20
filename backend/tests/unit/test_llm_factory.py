@@ -9,7 +9,7 @@ Covers:
 from __future__ import annotations
 
 from allhands.core.provider import LLMProvider
-from allhands.execution.llm_factory import build_llm, probe_endpoint
+from allhands.execution.llm_factory import build_llm, probe_endpoint, resolve_model_name
 
 
 def _p(
@@ -103,3 +103,60 @@ def test_probe_endpoint_openai_no_api_key_omits_auth_header() -> None:
     url, headers = probe_endpoint(provider)
     assert url == "http://localhost:11434/v1/models"
     assert "Authorization" not in headers
+
+
+# --- resolve_model_name --------------------------------------------------
+
+
+def _provider(*, kind: str, name: str = "T", default_model: str = "fallback-x") -> LLMProvider:
+    return LLMProvider(
+        id="p1",
+        name=name,
+        kind=kind,  # type: ignore[arg-type]
+        base_url="http://x",
+        api_key="sk",
+        default_model=default_model,
+        is_default=False,
+    )
+
+
+def test_resolve_bare_name_passes_through() -> None:
+    p = _provider(kind="openai")
+    assert resolve_model_name(p, "gpt-4o-mini") == "gpt-4o-mini"
+
+
+def test_resolve_prefix_matching_kind_is_stripped() -> None:
+    p = _provider(kind="anthropic")
+    assert resolve_model_name(p, "anthropic/claude-3") == "claude-3"
+
+
+def test_resolve_prefix_matching_provider_name_is_stripped_case_insensitive() -> None:
+    p = _provider(kind="aliyun", name="DashScope")
+    assert resolve_model_name(p, "dashscope/qwen-plus") == "qwen-plus"
+
+
+def test_resolve_mismatched_prefix_on_aliyun_falls_back_to_default() -> None:
+    """Stale seed `bailian/qwen-plus` on an aliyun provider should not 400."""
+    p = _provider(kind="aliyun", name="CodingPlan", default_model="qwen3.6-plus")
+    assert resolve_model_name(p, "bailian/qwen-plus") == "qwen3.6-plus"
+
+
+def test_resolve_mismatched_prefix_on_anthropic_falls_back_to_default() -> None:
+    p = _provider(kind="anthropic", name="Anthropic", default_model="claude-3-5-sonnet-latest")
+    assert resolve_model_name(p, "deepseek/deepseek-coder") == "claude-3-5-sonnet-latest"
+
+
+def test_resolve_mismatched_prefix_on_openai_passes_through_for_aggregator_routing() -> None:
+    """OpenRouter/DeepSeek aggregators use slashes as routing — don't strip."""
+    p = _provider(kind="openai", name="OpenRouter", default_model="gpt-4o-mini")
+    assert resolve_model_name(p, "anthropic/claude-3") == "anthropic/claude-3"
+
+
+def test_resolve_prefix_matching_openai_kind_is_stripped() -> None:
+    p = _provider(kind="openai", name="OpenAI")
+    assert resolve_model_name(p, "openai/gpt-4o-mini") == "gpt-4o-mini"
+
+
+def test_resolve_empty_ref_falls_back_to_default() -> None:
+    p = _provider(kind="aliyun", default_model="qwen3.6-plus")
+    assert resolve_model_name(p, "") == "qwen3.6-plus"
