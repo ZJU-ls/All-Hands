@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,8 @@ from allhands.execution.dispatch import DispatchService
 from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
 from allhands.execution.tools.meta.spawn_subagent import SpawnSubagentService
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -196,11 +199,75 @@ class ChatService:
             spawn_subagent_service=spawn_subagent_service,
             model_ref_override=conv.model_ref_override,
         )
-        return runner.stream(
-            messages=lc_messages,
-            thread_id=conversation_id,
-            overrides=overrides,
+        return self._persist_assistant_reply(
+            conversation_id,
+            runner.stream(
+                messages=lc_messages,
+                thread_id=conversation_id,
+                overrides=overrides,
+            ),
         )
+
+    async def _persist_assistant_reply(
+        self,
+        conversation_id: str,
+        stream: AsyncIterator[AgentEvent],
+    ) -> AsyncIterator[AgentEvent]:
+        """Tap the runner stream, persist the assistant's reply to the DB.
+
+        Without this, assistant replies evaporate the moment the SSE stream
+        closes — the next turn reloads history via ``list_messages`` (see the
+        replay in ``send_message``) and sees N user messages with 0 answers.
+        The React agent interprets each prior user turn as unanswered and
+        re-replies to all of them, surfacing as the "AI keeps re-answering
+        old questions" bug.
+
+        Contract: exactly one assistant ``Message`` row is appended per
+        ``send_message`` call, keyed by the runner's per-turn ``message_id``.
+        Content is the concatenation of all ``TokenEvent.delta`` seen; tool
+        calls / reasoning are not yet persisted (no DB column — reasoning is
+        ephemeral by design, tool calls get their own schema later). On
+        client disconnect / runtime cancellation the ``finally`` block still
+        salvages whatever partial content was accumulated so history stays
+        internally consistent.
+        """
+        buffer: list[str] = []
+        message_id: str | None = None
+        first_seen: datetime | None = None
+        persisted = False
+
+        async def flush() -> None:
+            nonlocal persisted
+            if persisted or not buffer or message_id is None:
+                return
+            persisted = True
+            msg = Message(
+                id=message_id,
+                conversation_id=conversation_id,
+                role="assistant",
+                content="".join(buffer),
+                created_at=first_seen or datetime.now(UTC),
+            )
+            try:
+                await self._conversations.append_message(msg)
+            except Exception:
+                log.exception(
+                    "Failed to persist assistant reply",
+                    extra={"conversation_id": conversation_id, "message_id": message_id},
+                )
+
+        try:
+            async for event in stream:
+                if event.kind == "token":
+                    buffer.append(event.delta)
+                    message_id = event.message_id
+                    if first_seen is None:
+                        first_seen = datetime.now(UTC)
+                elif event.kind in ("done", "error"):
+                    await flush()
+                yield event
+        finally:
+            await flush()
 
     def _build_runner_factory(self, provider: Any) -> Any:
         """Closure used by DispatchService to spawn sub-runners.

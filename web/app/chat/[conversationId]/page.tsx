@@ -9,6 +9,7 @@ import {
   ConversationHeader,
   type ConversationHeaderEmployee,
 } from "@/components/chat/ConversationHeader";
+import { ConversationSwitcher } from "@/components/chat/ConversationSwitcher";
 import { AppShell } from "@/components/shell/AppShell";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
 import {
@@ -121,6 +122,10 @@ export default function ConversationPage() {
             conversationTitle={conv?.title ?? null}
             effectiveModelRef={conv?.model_ref_override ?? employee?.model_ref ?? null}
             isOverridden={Boolean(conv?.model_ref_override)}
+          />
+          <ConversationSwitcher
+            employeeId={employee?.id ?? null}
+            currentConversationId={conversationId}
           />
           <button
             onClick={() => setPanelOpen((v) => !v)}
