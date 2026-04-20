@@ -36,7 +36,9 @@ export default function EmployeesPage() {
     let cancelled = false;
     async function load() {
       try {
-        const list = await listEmployees();
+        // Roster surface shows only published employees; drafts live in
+        // /employees/design until the user explicitly publishes.
+        const list = await listEmployees({ status: "published" });
         if (!cancelled) setEmployees(list);
       } catch (e) {
         if (!cancelled) setError(String(e));

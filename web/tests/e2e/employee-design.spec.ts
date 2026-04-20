@@ -120,7 +120,7 @@ function installRoutes(
       await route.fulfill({ status: 422, json: { detail: "unknown preset" } });
     }
   });
-  page.route("**/api/employees", async (route) => {
+  page.route(/\/api\/employees(\?[^/]*)?$/, async (route) => {
     const method = route.request().method();
     if (method === "GET") {
       await route.fulfill({ json: state.employees });
@@ -141,9 +141,53 @@ function installRoutes(
         skill_ids: body.skill_ids ?? [],
         max_iterations: body.max_iterations ?? 10,
         model_ref: body.model_ref ?? "openai/gpt-4o-mini",
+        status: body.status ?? "draft",
+        published_at: body.status === "published" ? "2026-04-20T00:00:00Z" : null,
       };
       state.employees.push(created);
       await route.fulfill({ status: 201, json: created });
+      return;
+    }
+    await route.continue();
+  });
+  page.route(/\/api\/employees\/[^/]+\/publish$/, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    const url = route.request().url();
+    const id = url.split("/").slice(-2)[0];
+    const emp = state.employees.find((e) => (e as { id: string }).id === id) as
+      | (Json & { status: string; published_at: string | null })
+      | undefined;
+    if (!emp) {
+      await route.fulfill({ status: 404, json: { detail: "missing" } });
+      return;
+    }
+    emp.status = "published";
+    emp.published_at = "2026-04-20T00:00:00Z";
+    await route.fulfill({ json: emp });
+  });
+  page.route(/\/api\/employees\/[^/]+$/, async (route) => {
+    const method = route.request().method();
+    const url = route.request().url();
+    const id = url.split("/").pop()!.split("?")[0];
+    const idx = state.employees.findIndex(
+      (e) => (e as { id: string }).id === id,
+    );
+    if (method === "PATCH") {
+      if (idx < 0) {
+        await route.fulfill({ status: 404, json: { detail: "missing" } });
+        return;
+      }
+      const body = route.request().postDataJSON() as Json;
+      state.employees[idx] = { ...state.employees[idx], ...body };
+      await route.fulfill({ json: state.employees[idx] });
+      return;
+    }
+    if (method === "DELETE") {
+      if (idx >= 0) state.employees.splice(idx, 1);
+      await route.fulfill({ status: 204 });
       return;
     }
     await route.continue();
@@ -265,5 +309,74 @@ test.describe("/employees/design · Phase 3B preset + dry run", () => {
     // nor surface `mode:` in quoted string content.
     expect(html).not.toContain("mode=");
     expect(html).not.toMatch(/\bmode\b\s*:\s*['"]/);
+  });
+});
+
+test.describe("/employees/design · Round 3 lifecycle (publish + delete + try)", () => {
+  const draftEmp = {
+    id: "emp-draft-1",
+    name: "drafty",
+    description: "a draft",
+    system_prompt: "",
+    is_lead_agent: false,
+    tool_ids: ["allhands.builtin.fetch_url"],
+    skill_ids: [],
+    max_iterations: 10,
+    model_ref: "openai/gpt-4o-mini",
+    status: "draft",
+    published_at: null,
+  } satisfies Json;
+
+  const pubEmp = {
+    id: "emp-pub-1",
+    name: "onroster",
+    description: "roster",
+    system_prompt: "",
+    is_lead_agent: false,
+    tool_ids: ["allhands.builtin.fetch_url"],
+    skill_ids: [],
+    max_iterations: 10,
+    model_ref: "openai/gpt-4o-mini",
+    status: "published",
+    published_at: "2026-04-20T00:00:00Z",
+  } satisfies Json;
+
+  test("draft shows 草稿 tag in sidebar; published does not", async ({ page }) => {
+    installRoutes(page, { employees: [{ ...draftEmp }, { ...pubEmp }] });
+    await page.goto("/employees/design");
+    await expect(page.getByTestId(`design-emp-${draftEmp.id}-draft-tag`)).toBeVisible();
+    await expect(
+      page.getByTestId(`design-emp-${pubEmp.id}-draft-tag`),
+    ).toHaveCount(0);
+  });
+
+  test("selecting a draft shows publish + delete toolbar; publish flips status", async ({
+    page,
+  }) => {
+    installRoutes(page, { employees: [{ ...draftEmp }] });
+    await page.goto("/employees/design");
+    await page.getByTestId(`design-emp-${draftEmp.id}`).click();
+
+    await expect(page.getByTestId("design-status-chip-draft")).toBeVisible();
+    await expect(page.getByTestId("design-publish")).toBeVisible();
+
+    await page.getByTestId("design-publish").click();
+    await expect(page.getByTestId("design-status-chip-published")).toBeVisible();
+    // Publish button hides once already published.
+    await expect(page.getByTestId("design-publish")).toHaveCount(0);
+  });
+
+  test("delete button confirms then removes employee and resets selection", async ({
+    page,
+  }) => {
+    installRoutes(page, { employees: [{ ...draftEmp }] });
+    page.on("dialog", (d) => void d.accept());
+    await page.goto("/employees/design");
+    await page.getByTestId(`design-emp-${draftEmp.id}`).click();
+    await page.getByTestId("design-delete").click();
+
+    // After delete: back to "new employee" form (empty name).
+    await expect(page.getByTestId("field-name")).toHaveValue("");
+    await expect(page.getByTestId(`design-emp-${draftEmp.id}`)).toHaveCount(0);
   });
 });

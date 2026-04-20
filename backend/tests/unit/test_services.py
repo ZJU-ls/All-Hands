@@ -77,6 +77,70 @@ async def test_employee_service_list() -> None:
     assert len(employees) == 1
 
 
+async def test_employee_service_create_defaults_to_draft() -> None:
+    repo = _make_mock_employee_repo()
+    svc = EmployeeService(repo)
+    emp = await svc.create(
+        name="Drafter",
+        description="d",
+        system_prompt="x",
+        model_ref="openai/gpt-4o-mini",
+        tool_ids=["allhands.builtin.fetch_url"],
+    )
+    assert emp.status == "draft"
+    assert emp.published_at is None
+
+
+async def test_employee_service_publish_flips_status() -> None:
+    repo = _make_mock_employee_repo()
+    draft = Employee(
+        id="e1",
+        name="Drafty",
+        description="",
+        system_prompt="x",
+        model_ref="openai/gpt-4o-mini",
+        tool_ids=["t1"],
+        status="draft",
+        created_by="user",
+        created_at=datetime.now(UTC),
+    )
+    repo.get = AsyncMock(return_value=draft)
+    svc = EmployeeService(repo)
+    published = await svc.publish("e1")
+    assert published.status == "published"
+    assert published.published_at is not None
+
+
+async def test_employee_service_publish_is_idempotent() -> None:
+    repo = _make_mock_employee_repo()
+    now = datetime.now(UTC)
+    already = Employee(
+        id="e1",
+        name="OnRoster",
+        description="",
+        system_prompt="x",
+        model_ref="openai/gpt-4o-mini",
+        tool_ids=["t1"],
+        status="published",
+        created_by="user",
+        created_at=now,
+        published_at=now,
+    )
+    repo.get = AsyncMock(return_value=already)
+    svc = EmployeeService(repo)
+    out = await svc.publish("e1")
+    assert out.published_at == now
+    # published_at must NOT advance on re-publish; upsert should not run either
+    repo.upsert.assert_not_called()
+
+
+async def test_employee_service_list_passes_status_filter() -> None:
+    repo = _make_mock_employee_repo()
+    svc = EmployeeService(repo)
+    await svc.list_all(status="published")
+    repo.list_all.assert_called_once_with(status="published")
+
+
 async def test_employee_service_delete_calls_repo() -> None:
     repo = _make_mock_employee_repo()
     emp = Employee(

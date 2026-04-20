@@ -40,6 +40,8 @@ class EmployeeResponse(BaseModel):
     skill_ids: list[str]
     max_iterations: int
     model_ref: str
+    status: Literal["draft", "published"]
+    published_at: str | None = None
 
 
 class EmployeeCreateRequest(BaseModel):
@@ -53,6 +55,11 @@ class EmployeeCreateRequest(BaseModel):
     tool_ids: list[str] = Field(default_factory=list)
     skill_ids: list[str] = Field(default_factory=list)
     max_iterations: int = Field(default=10, ge=1, le=100)
+    # New employees POSTed from the UI / Meta Tool default to ``draft`` so
+    # they can be iterated on in /employees/design without surfacing on the
+    # roster. The Lead Agent may override to ``published`` when it creates
+    # an employee that's ready to ship.
+    status: Literal["draft", "published"] = "draft"
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -91,6 +98,7 @@ class EmployeePreviewResponse(BaseModel):
 
 
 def _to_response(emp: object) -> EmployeeResponse:
+    published_at = emp.published_at  # type: ignore[attr-defined]
     return EmployeeResponse(
         id=emp.id,  # type: ignore[attr-defined]
         name=emp.name,  # type: ignore[attr-defined]
@@ -101,6 +109,8 @@ def _to_response(emp: object) -> EmployeeResponse:
         skill_ids=list(emp.skill_ids),  # type: ignore[attr-defined]
         max_iterations=emp.max_iterations,  # type: ignore[attr-defined]
         model_ref=emp.model_ref,  # type: ignore[attr-defined]
+        status=emp.status,  # type: ignore[attr-defined]
+        published_at=published_at.isoformat() if published_at else None,
     )
 
 
@@ -143,10 +153,16 @@ async def get_lead_employee(
 
 @router.get("", response_model=list[EmployeeResponse])
 async def list_employees(
+    status: Literal["draft", "published"] | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> list[EmployeeResponse]:
+    """Browse list. ``status`` filter:
+    - omitted → every employee (used by the design desk which shows both)
+    - ``published`` → roster surfaces (home grid / @mentions / picker)
+    - ``draft`` → design-desk drafts tab
+    """
     svc = await get_employee_service(session)
-    employees = await svc.list_all()
+    employees = await svc.list_all(status=status)
     return [_to_response(e) for e in employees]
 
 
@@ -166,9 +182,24 @@ async def create_employee(
             skill_ids=list(body.skill_ids),
             max_iterations=body.max_iterations,
             created_by="user",
+            status=body.status,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _to_response(emp)
+
+
+@router.post("/{employee_id}/publish", response_model=EmployeeResponse)
+async def publish_employee(
+    employee_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> EmployeeResponse:
+    """Flip a draft to published. Idempotent when already published."""
+    svc = await get_employee_service(session)
+    try:
+        emp = await svc.publish(employee_id)
+    except EmployeeNotFound as exc:
+        raise HTTPException(status_code=404, detail=f"Employee {employee_id!r} not found.") from exc
     return _to_response(emp)
 
 

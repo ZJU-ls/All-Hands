@@ -68,6 +68,8 @@ const employee: EmployeeDto = {
   skill_ids: [],
   max_iterations: 10,
   model_ref: "OpenRouter/gpt-4o-mini",
+  status: "published",
+  published_at: "2026-04-18T00:00:00Z",
 };
 
 function makeConv(overrides: Partial<ConversationDto> = {}): ConversationDto {

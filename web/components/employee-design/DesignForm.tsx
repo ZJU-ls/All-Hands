@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   createEmployee,
   previewEmployeeComposition,
+  updateEmployee,
   type EmployeeDto,
   type EmployeePreset,
   type SkillDto,
@@ -30,21 +31,34 @@ export function DesignForm({
   skills,
   mcpServers,
   onCreated,
+  onSaved,
   onCancel,
+  initial,
 }: {
   skills: SkillDto[];
   mcpServers: McpServerDto[];
-  onCreated: (emp: EmployeeDto) => void;
+  onCreated?: (emp: EmployeeDto) => void;
+  onSaved?: (emp: EmployeeDto) => void;
   onCancel?: () => void;
+  /** When provided, the form enters *edit* mode: fields pre-fill from this
+   * employee, submit calls PATCH instead of POST, and name is readonly
+   * (it's an identifier surface and renaming would break references). */
+  initial?: EmployeeDto;
 }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
-  const [modelRef, setModelRef] = useState("");
+  const isEdit = Boolean(initial);
+  // Skill IDs from initial's skill_ids; MCP IDs are stripped from the
+  // ``mcp:<id>`` prefix pattern we push into tool_ids on save.
+  const initialMcpIds = (initial?.tool_ids ?? [])
+    .filter((t) => t.startsWith("mcp:"))
+    .map((t) => t.slice(4));
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [systemPrompt, setSystemPrompt] = useState(initial?.system_prompt ?? "");
+  const [modelRef, setModelRef] = useState(initial?.model_ref ?? "");
   const [preset, setPreset] = useState<EmployeePreset>("execute");
-  const [skillIds, setSkillIds] = useState<string[]>([]);
-  const [mcpIds, setMcpIds] = useState<string[]>([]);
-  const [maxIterations, setMaxIterations] = useState<number>(10);
+  const [skillIds, setSkillIds] = useState<string[]>(initial?.skill_ids ?? []);
+  const [mcpIds, setMcpIds] = useState<string[]>(initialMcpIds);
+  const [maxIterations, setMaxIterations] = useState<number>(initial?.max_iterations ?? 10);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string>("");
 
@@ -55,6 +69,10 @@ export function DesignForm({
   }
 
   useEffect(() => {
+    // In edit mode the form must not trample the stored skill_ids /
+    // max_iterations with the preset defaults — those are the employee's
+    // actual composition the user expects to see and tweak.
+    if (isEdit) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -69,7 +87,7 @@ export function DesignForm({
     return () => {
       cancelled = true;
     };
-  }, [preset]);
+  }, [preset, isEdit]);
 
   async function submit() {
     if (!canSave) return;
@@ -83,21 +101,34 @@ export function DesignForm({
         custom_skill_ids: skillIds,
         custom_max_iterations: maxIterations,
       });
-      const emp = await createEmployee({
-        name: name.trim(),
-        description: description.trim(),
-        system_prompt: systemPrompt,
-        model_ref: modelRef,
-        tool_ids: expanded.tool_ids,
-        skill_ids: expanded.skill_ids,
-        max_iterations: expanded.max_iterations,
-      });
-      onCreated(emp);
-      setName("");
-      setDescription("");
-      setSystemPrompt("");
-      setMcpIds([]);
-      setPreset("execute");
+      if (isEdit && initial) {
+        const emp = await updateEmployee(initial.id, {
+          description: description.trim(),
+          system_prompt: systemPrompt,
+          model_ref: modelRef,
+          tool_ids: expanded.tool_ids,
+          skill_ids: expanded.skill_ids,
+          max_iterations: expanded.max_iterations,
+        });
+        onSaved?.(emp);
+      } else {
+        const emp = await createEmployee({
+          name: name.trim(),
+          description: description.trim(),
+          system_prompt: systemPrompt,
+          model_ref: modelRef,
+          tool_ids: expanded.tool_ids,
+          skill_ids: expanded.skill_ids,
+          max_iterations: expanded.max_iterations,
+        });
+        onCreated?.(emp);
+        onSaved?.(emp);
+        setName("");
+        setDescription("");
+        setSystemPrompt("");
+        setMcpIds([]);
+        setPreset("execute");
+      }
     } catch (e) {
       setErr(String(e));
     } finally {

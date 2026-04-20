@@ -33,7 +33,7 @@ from allhands.core.conversation import (
     ToolCall,
     ToolCallStatus,
 )
-from allhands.core.employee import Employee
+from allhands.core.employee import Employee, EmployeeStatus
 from allhands.core.errors import (
     ConfirmationExpired,
     ConfirmationRejected,
@@ -113,6 +113,7 @@ __all__ = [
     "DomainError",
     "Employee",
     "EmployeeNotFound",
+    "EmployeeStatus",
     "EventEnvelope",
     "EventPattern",
     "HealthSnapshot",

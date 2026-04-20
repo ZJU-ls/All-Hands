@@ -14,6 +14,8 @@ function throwApiError(label: string, status: number): never {
   throw new ApiError(status, `${label} failed: ${status}`);
 }
 
+export type EmployeeStatus = "draft" | "published";
+
 export type EmployeeDto = {
   id: string;
   name: string;
@@ -24,6 +26,8 @@ export type EmployeeDto = {
   skill_ids: string[];
   max_iterations: number;
   model_ref: string;
+  status: EmployeeStatus;
+  published_at: string | null;
 };
 
 export type EmployeeCreateInput = {
@@ -34,9 +38,10 @@ export type EmployeeCreateInput = {
   tool_ids?: string[];
   skill_ids?: string[];
   max_iterations?: number;
+  status?: EmployeeStatus;
 };
 
-export type EmployeeUpdateInput = Partial<Omit<EmployeeCreateInput, "name">>;
+export type EmployeeUpdateInput = Partial<Omit<EmployeeCreateInput, "name" | "status">>;
 
 export type SkillDto = {
   id: string;
@@ -101,10 +106,22 @@ export async function getEmployee(id: string): Promise<EmployeeDto> {
   return res.json() as Promise<EmployeeDto>;
 }
 
-export async function listEmployees(): Promise<EmployeeDto[]> {
-  const res = await fetch(`${BASE}/api/employees`);
+export async function listEmployees(opts: { status?: EmployeeStatus } = {}): Promise<
+  EmployeeDto[]
+> {
+  const qs = opts.status ? `?status=${encodeURIComponent(opts.status)}` : "";
+  const res = await fetch(`${BASE}/api/employees${qs}`);
   if (!res.ok) throw new Error(`listEmployees failed: ${res.status}`);
   return res.json() as Promise<EmployeeDto[]>;
+}
+
+export async function publishEmployee(id: string): Promise<EmployeeDto> {
+  const res = await fetch(`${BASE}/api/employees/${id}/publish`, { method: "POST" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`publishEmployee failed: ${res.status} ${text}`);
+  }
+  return res.json() as Promise<EmployeeDto>;
 }
 
 export async function listConversations(

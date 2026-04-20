@@ -14,12 +14,14 @@ Invariants:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 _RESERVED_ROLE_NAMES = frozenset({"system", "user", "tool", "assistant"})
 _MAX_NAME_LEN = 64
+
+EmployeeStatus = Literal["draft", "published"]
 
 
 def is_valid_employee_name(name: str) -> bool:
@@ -53,8 +55,10 @@ class Employee(BaseModel):
     skill_ids: list[str] = Field(default_factory=list)
     max_iterations: int = Field(default=10, ge=1, le=100)
     is_lead_agent: bool = False
+    status: EmployeeStatus = "published"
     created_by: str
     created_at: datetime
+    published_at: datetime | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
 
     @field_validator("name")

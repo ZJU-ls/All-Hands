@@ -200,6 +200,11 @@ async def ensure_employees(session: AsyncSession) -> int:
         employee_id = existing.id if existing else item["id"]
         created_at = existing.created_at if existing else datetime.now(UTC)
 
+        # Seeds are always published so the roster looks fully populated on
+        # first run — a clean install should feel like a staffed team, not a
+        # drafts folder.
+        existing_status = existing.status if existing else "published"
+        existing_published_at = existing.published_at if existing else created_at
         employee = Employee(
             id=employee_id,
             name=name,
@@ -210,8 +215,10 @@ async def ensure_employees(session: AsyncSession) -> int:
             skill_ids=list(item.get("skill_ids", [])),
             max_iterations=int(item.get("max_iterations", 10)),
             is_lead_agent=bool(item.get("is_lead_agent", False)),
+            status=existing_status,
             created_by=item.get("created_by", "seed"),
             created_at=created_at,
+            published_at=existing_published_at,
             metadata=dict(item.get("metadata", {})),
         )
         await repo.upsert(employee)

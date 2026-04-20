@@ -27,8 +27,12 @@ class EmployeeRow(Base):
     skill_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     max_iterations: Mapped[int] = mapped_column(Integer, default=10)
     is_lead_agent: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default="published", server_default="published", index=True
+    )
     created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     extra_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
 
     # The "only one lead agent" invariant is enforced by a partial unique

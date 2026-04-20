@@ -199,6 +199,26 @@ DELETE_EMPLOYEE_TOOL = Tool(
     requires_confirmation=True,
 )
 
+PUBLISH_EMPLOYEE_TOOL = Tool(
+    id="allhands.meta.publish_employee",
+    kind=ToolKind.META,
+    name="publish_employee",
+    description=(
+        "Flip a draft employee to published so it appears on the main "
+        "roster and becomes available for chat and dispatch. Pair with "
+        "create_employee(status='draft')."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    },
+    output_schema={"type": "object"},
+    scope=ToolScope.WRITE,
+    requires_confirmation=True,
+)
+
+
 PREVIEW_EMPLOYEE_COMPOSITION_TOOL = Tool(
     id="allhands.meta.preview_employee_composition",
     kind=ToolKind.META,
@@ -319,6 +339,7 @@ ALL_META_TOOLS = [
     CREATE_EMPLOYEE_TOOL,
     UPDATE_EMPLOYEE_TOOL,
     DELETE_EMPLOYEE_TOOL,
+    PUBLISH_EMPLOYEE_TOOL,
     PREVIEW_EMPLOYEE_COMPOSITION_TOOL,
     DISPATCH_EMPLOYEE_TOOL,
 ]

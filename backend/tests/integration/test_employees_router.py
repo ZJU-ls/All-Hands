@@ -150,6 +150,64 @@ def test_delete_missing_returns_404(client: TestClient) -> None:
     assert client.delete("/api/employees/missing").status_code == 404
 
 
+def test_create_defaults_to_draft_then_publish(client: TestClient) -> None:
+    """Lifecycle contract: POST lands as draft → published only via explicit publish."""
+    created = client.post(
+        "/api/employees",
+        json={
+            "name": "draft-1",
+            "description": "d",
+            "system_prompt": "p",
+            "model_ref": "openai/gpt-4o-mini",
+            "tool_ids": ["allhands.builtin.fetch_url"],
+            "skill_ids": [],
+        },
+    ).json()
+    assert created["status"] == "draft"
+    assert created["published_at"] is None
+
+    # Drafts MUST NOT show up when the browse surface filters by status=published
+    listed = client.get("/api/employees?status=published").json()
+    assert all(e["id"] != created["id"] for e in listed)
+
+    # Drafts tab sees it
+    drafts = client.get("/api/employees?status=draft").json()
+    assert any(e["id"] == created["id"] for e in drafts)
+
+    # Publish endpoint flips it
+    r = client.post(f"/api/employees/{created['id']}/publish")
+    assert r.status_code == 200
+    pub = r.json()
+    assert pub["status"] == "published"
+    assert pub["published_at"] is not None
+
+    # Now it shows on the published list
+    listed2 = client.get("/api/employees?status=published").json()
+    assert any(e["id"] == created["id"] for e in listed2)
+
+
+def test_publish_missing_employee_404(client: TestClient) -> None:
+    assert client.post("/api/employees/nope/publish").status_code == 404
+
+
+def test_create_as_published_skips_draft_phase(client: TestClient) -> None:
+    """Lead Agent path: creating a ready-to-ship employee with status=published."""
+    body = client.post(
+        "/api/employees",
+        json={
+            "name": "ready-1",
+            "description": "d",
+            "system_prompt": "p",
+            "model_ref": "openai/gpt-4o-mini",
+            "tool_ids": ["allhands.builtin.fetch_url"],
+            "skill_ids": [],
+            "status": "published",
+        },
+    ).json()
+    assert body["status"] == "published"
+    assert body["published_at"] is not None
+
+
 # /api/employees/preview 的 preset 展开契约由
 # ``test_preview_employee_composition.py`` 覆盖 — 它复用 ``allhands.execution.
 # modes.compose_preview``,是 Phase 3B Track M 落地的权威契约测试。

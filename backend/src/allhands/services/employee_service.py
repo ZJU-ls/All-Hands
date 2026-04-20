@@ -89,6 +89,7 @@ class EmployeeService:
         is_lead_agent: bool = False,
         created_by: str = "user",
         preset: str | None = None,
+        status: str = "draft",
     ) -> Employee:
         if preset is not None:
             # contract § 4.2 · UI form preset collapses into (tool_ids,
@@ -116,6 +117,9 @@ class EmployeeService:
         _validate_dispatch_mount(tids, is_lead_agent)
         if not tids and not sids:
             raise ValueError("Employee must have at least one tool or skill capability.")
+        if status not in ("draft", "published"):
+            raise ValueError(f"Invalid employee status: {status!r}")
+        now = datetime.now(UTC)
         employee = Employee(
             id=str(uuid.uuid4()),
             name=name,
@@ -126,8 +130,10 @@ class EmployeeService:
             skill_ids=sids,
             max_iterations=max_iterations,
             is_lead_agent=is_lead_agent,
+            status=status,  # type: ignore[arg-type]
             created_by=created_by,
-            created_at=datetime.now(UTC),
+            created_at=now,
+            published_at=now if status == "published" else None,
         )
         return await self._repo.upsert(employee)
 
@@ -143,8 +149,15 @@ class EmployeeService:
     async def get_lead(self) -> Employee | None:
         return await self._repo.get_lead()
 
-    async def list_all(self) -> list[Employee]:
-        return await self._repo.list_all()
+    async def list_all(self, *, status: str | None = None) -> list[Employee]:
+        return await self._repo.list_all(status=status)
+
+    async def publish(self, employee_id: str) -> Employee:
+        emp = await self.get(employee_id)
+        if emp.status == "published":
+            return emp
+        updated = emp.model_copy(update={"status": "published", "published_at": datetime.now(UTC)})
+        return await self._repo.upsert(updated)
 
     async def update(
         self,

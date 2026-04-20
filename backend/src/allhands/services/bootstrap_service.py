@@ -98,6 +98,7 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
         return existing
 
     tool_ids = default_lead_tool_ids()
+    now = datetime.now(UTC)
     lead = Employee(
         id=str(uuid.uuid4()),
         name="LeadAgent",
@@ -108,8 +109,10 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
         skill_ids=list(DEFAULT_SKILL_IDS),
         max_iterations=20,
         is_lead_agent=True,
+        status="published",
         created_by="system",
-        created_at=datetime.now(UTC),
+        created_at=now,
+        published_at=now,
     )
     return await repo.upsert(lead)
 

@@ -85,8 +85,10 @@ def _row_to_employee(row: EmployeeRow) -> Employee:
         skill_ids=list(row.skill_ids),
         max_iterations=row.max_iterations,
         is_lead_agent=row.is_lead_agent,
+        status=row.status if row.status in ("draft", "published") else "published",  # type: ignore[arg-type]
         created_by=row.created_by,
         created_at=_utc(row.created_at),
+        published_at=_utc(row.published_at) if row.published_at else None,
         metadata=dict(row.extra_metadata),
     )
 
@@ -102,8 +104,10 @@ def _employee_to_row(emp: Employee) -> EmployeeRow:
         skill_ids=list(emp.skill_ids),
         max_iterations=emp.max_iterations,
         is_lead_agent=emp.is_lead_agent,
+        status=emp.status,
         created_by=emp.created_by,
         created_at=_naive(emp.created_at),
+        published_at=_naive(emp.published_at) if emp.published_at else None,
         extra_metadata=dict(emp.metadata),
     )
 
@@ -218,8 +222,11 @@ class SqlEmployeeRepo:
         row = result.scalar_one_or_none()
         return _row_to_employee(row) if row else None
 
-    async def list_all(self) -> list[Employee]:
-        result = await self._s.execute(select(EmployeeRow))
+    async def list_all(self, *, status: str | None = None) -> list[Employee]:
+        stmt = select(EmployeeRow)
+        if status is not None:
+            stmt = stmt.where(EmployeeRow.status == status)
+        result = await self._s.execute(stmt)
         return [_row_to_employee(r) for r in result.scalars().all()]
 
     async def upsert(self, employee: Employee) -> Employee:
@@ -233,6 +240,8 @@ class SqlEmployeeRepo:
             existing.skill_ids = list(employee.skill_ids)
             existing.max_iterations = employee.max_iterations
             existing.is_lead_agent = employee.is_lead_agent
+            existing.status = employee.status
+            existing.published_at = _naive(employee.published_at) if employee.published_at else None
             existing.extra_metadata = dict(employee.metadata)
         else:
             self._s.add(_employee_to_row(employee))
