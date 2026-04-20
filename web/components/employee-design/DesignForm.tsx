@@ -13,6 +13,7 @@ import { SkillMultiPicker } from "./SkillMultiPicker";
 import { McpMultiPicker } from "./McpMultiPicker";
 import { PresetRadio } from "./PresetRadio";
 import { DryRunPanel } from "./DryRunPanel";
+import { ModelPicker } from "@/components/model-picker/ModelPicker";
 
 /**
  * 设计表单 · 受控 state 全部在这里,**无 mode 字段**(§3.2 红线)。
@@ -39,7 +40,7 @@ export function DesignForm({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [modelRef, setModelRef] = useState("openai/gpt-4o-mini");
+  const [modelRef, setModelRef] = useState("");
   const [preset, setPreset] = useState<EmployeePreset>("execute");
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [mcpIds, setMcpIds] = useState<string[]>([]);
@@ -128,14 +129,17 @@ export function DesignForm({
           onChange={setDescription}
           placeholder="一句话说明员工的职责"
         />
-        <TextField
-          label="Model"
-          mono
-          testid="field-model"
-          value={modelRef}
-          onChange={setModelRef}
-          placeholder="openai/gpt-4o-mini"
-        />
+        <div className="flex flex-col gap-1 mb-3 last:mb-0">
+          <label className="text-[11px] text-text-muted">Model</label>
+          <ModelPicker
+            value={modelRef}
+            onChange={setModelRef}
+            testId="field-model"
+          />
+          <p className="text-[10px] text-text-subtle">
+            默认沿用平台默认模型;下拉切换时会落到员工 profile 上。
+          </p>
+        </div>
       </Section>
 
       <Section

@@ -165,6 +165,56 @@ export async function listMcpServers(): Promise<McpServerDto[]> {
   return res.json() as Promise<McpServerDto[]>;
 }
 
+export type ProviderDto = {
+  id: string;
+  name: string;
+  kind: "openai" | "anthropic" | "aliyun";
+  base_url: string;
+  default_model: string;
+  is_default: boolean;
+  enabled: boolean;
+};
+
+export type ModelDto = {
+  id: string;
+  provider_id: string;
+  name: string;
+  display_name: string;
+  context_window: number;
+  enabled: boolean;
+};
+
+export async function listProviders(): Promise<ProviderDto[]> {
+  const res = await fetch(`${BASE}/api/providers`);
+  if (!res.ok) throw new Error(`listProviders failed: ${res.status}`);
+  return res.json() as Promise<ProviderDto[]>;
+}
+
+export async function listModels(): Promise<ModelDto[]> {
+  const res = await fetch(`${BASE}/api/models`);
+  if (!res.ok) throw new Error(`listModels failed: ${res.status}`);
+  return res.json() as Promise<ModelDto[]>;
+}
+
+/**
+ * model_ref in EmployeeDto is "provider_name/model_name" (e.g. "OpenRouter/gpt-4o-mini").
+ * Returns the reference string for a model, using its provider's name as the prefix.
+ */
+export function buildModelRef(provider: ProviderDto, model: ModelDto): string {
+  return `${provider.name}/${model.name}`;
+}
+
+/**
+ * Platform-default model ref: read the default provider (`is_default`) and its
+ * `default_model`. Returns null if nothing is configured — caller should fall
+ * back to leaving the field blank so the backend uses its own default.
+ */
+export function defaultModelRef(providers: ProviderDto[]): string | null {
+  const dp = providers.find((p) => p.is_default && p.enabled) ?? providers.find((p) => p.enabled);
+  if (!dp || !dp.default_model) return null;
+  return `${dp.name}/${dp.default_model}`;
+}
+
 export type EmployeePreset = "execute" | "plan" | "plan_with_subagent";
 
 export type EmployeePreviewResult = {
