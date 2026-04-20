@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
+import { Coachmark } from "@/components/ui/Coachmark";
 import {
   cockpitStreamUrl,
   getCockpitSummary,
@@ -264,10 +265,22 @@ export function Cockpit() {
             </>
           ) : (
             <>
+              <Coachmark
+                id="cockpit-overview"
+                title="这里是驾驶舱"
+                description="顶部四项 KPI 汇总今日工作区的活跃 run、排队、成本和 token 用量。数据来自实时流,打开页面即看到现状。"
+              />
               <KpiBar summary={summary} />
               <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] gap-4 min-h-[60vh]">
-                <div className="rounded border border-border bg-surface flex flex-col min-h-[40vh]">
-                  <ActivityFeed events={summary.recent_events} />
+                <div className="flex flex-col min-h-[40vh]">
+                  <Coachmark
+                    id="cockpit-activity"
+                    title="活动流实时更新"
+                    description="每条 tool 调用、run 状态变化都会在这里出现。点事件可以跳到对应 trace。"
+                  />
+                  <div className="rounded border border-border bg-surface flex-1">
+                    <ActivityFeed events={summary.recent_events} />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-4 min-w-0">
                   <div className="rounded border border-border bg-surface">
@@ -281,12 +294,19 @@ export function Cockpit() {
                   <div className="rounded border border-border bg-surface">
                     <HealthPanel health={summary.health} />
                   </div>
-                  <div className="rounded border border-border bg-surface">
-                    <QuickActions
-                      paused={summary.paused}
-                      onPause={() => setConfirmOpen(true)}
-                      onResume={onResume}
+                  <div>
+                    <Coachmark
+                      id="cockpit-pause"
+                      title="急停按钮在这里"
+                      description="出事时点一下可以刹停所有 run 和 trigger。这是不可撤销操作,系统会二次确认。"
                     />
+                    <div className="rounded border border-border bg-surface">
+                      <QuickActions
+                        paused={summary.paused}
+                        onPause={() => setConfirmOpen(true)}
+                        onResume={onResume}
+                      />
+                    </div>
                   </div>
                   <div className="rounded border border-border bg-surface">
                     <BudgetSummary summary={summary} />
