@@ -45,6 +45,9 @@ import {
   type IconProps,
 } from "@/components/icons";
 import { EmployeeCard } from "@/components/render/EmployeeCard";
+import { MarkdownCard } from "@/components/render/MarkdownCard";
+import { PlanTimeline } from "@/components/render/PlanTimeline";
+import { PlanCard } from "@/components/render/PlanCard";
 
 /**
  * Design Lab: three concept variants side-by-side in both light & dark.
@@ -147,6 +150,8 @@ export default function DesignLabPage() {
           <EmployeeCardShowcase />
 
           <VizShowcase />
+
+          <RenderLibraryShowcase />
 
           <div className="rounded-2xl border border-border p-6 bg-surface">
             <h3 className="text-sm font-semibold mb-2">下一步</h3>
@@ -1546,6 +1551,121 @@ function VizShowcase() {
             }}
             interactions={[]}
           />
+        </ShowcaseCard>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Render Library showcase (I-0012 · one sample per registered component) ---------- */
+
+function RenderLibraryShowcase() {
+  return (
+    <section data-testid="render-library-showcase">
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold mb-1">Render Library · 其余 render-tool 组件</h2>
+        <p className="text-xs text-text-muted font-mono">
+          MarkdownCard · PlanCard · PlanTimeline · Artifact.Preview — 对齐
+          component-registry.ts 的全量清单(Viz.* 和 EmployeeCard 见前两节)。
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ShowcaseCard title="MarkdownCard · 富文本 / 代码块">
+          <MarkdownCard
+            props={{
+              title: "研究笔记",
+              content: [
+                "# 日报 · 2026-04-20",
+                "",
+                "- 修掉 I-0002 / I-0003(gateway 数据健康)",
+                "- **阶段 4.5** 自驱跑完,截图见验收包",
+                "",
+                "```python",
+                "def budget(ctx: int, out: int) -> int:",
+                "    return ctx - out  # ctx 必须 > 0(I-0002)",
+                "```",
+              ].join("\n"),
+            }}
+            interactions={[
+              {
+                kind: "button",
+                label: "Copy",
+                action: "copy_to_clipboard",
+                payload: {},
+              },
+            ]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="PlanCard · 等待人工审批(plan_id + steps)">
+          <PlanCard
+            props={{
+              plan_id: "plan-demo-1",
+              title: "迁移 provider.default_model",
+              steps: [
+                {
+                  id: "s1",
+                  title: "停用 glm-5 引用",
+                  body: "把 Bailian.default_model 改成 qwen3.6-plus。",
+                  status: "pending",
+                },
+                {
+                  id: "s2",
+                  title: "回归测试 set_default_model cross-check",
+                  body: "新增 test_model_service_validation.py",
+                  status: "pending",
+                },
+              ],
+            }}
+            interactions={[
+              {
+                kind: "button",
+                label: "Approve",
+                action: "invoke_tool",
+                payload: { tool: "plan_approve", plan_id: "plan-demo-1" },
+              },
+              {
+                kind: "button",
+                label: "Reject",
+                action: "invoke_tool",
+                payload: { tool: "plan_reject", plan_id: "plan-demo-1" },
+              },
+            ]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="PlanTimeline · 对话内进度备忘">
+          <PlanTimeline
+            props={{
+              title: "发布 v0.4",
+              steps: [
+                { index: 1, title: "Round 1 · UI polish", status: "done" },
+                { index: 2, title: "Round 2 · 多模态", status: "done" },
+                {
+                  index: 3,
+                  title: "Round 3 · lifecycle",
+                  status: "running",
+                  note: "当前迭代",
+                },
+                { index: 4, title: "收尾 · 回归测试", status: "pending" },
+                { index: 5, title: "热修 · I-0018", status: "skipped" },
+              ],
+            }}
+            interactions={[]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="Artifact.Preview · 真工件落地页">
+          <div className="rounded-lg border border-border bg-surface p-4 text-xs text-text-muted font-mono">
+            <p className="mb-2 text-text">Artifact.Preview</p>
+            <p className="leading-relaxed">
+              组件形如 <span className="font-mono text-text">{`{component: "Artifact.Preview", props: {artifact_id}}`}</span>
+              · 实际内容需要已落库的 artifact,在 chat surface
+              通过 render-tool 动态插入。活样本见
+              <span className="font-mono text-text"> /chat</span> 中调用
+              <span className="font-mono text-text"> render_artifact</span> 的轨迹。
+            </p>
+          </div>
         </ShowcaseCard>
       </div>
     </section>
