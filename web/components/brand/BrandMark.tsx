@@ -1,22 +1,33 @@
 "use client";
 
 /**
- * BrandMark · mono brand logo for providers + models.
+ * BrandMark · provider / model brand glyph.
  *
- * Linear Precise compliant (product/03-visual-design.md §3.5):
- *   - Glyphs are rendered via CSS `mask-image` over `background-color: currentColor`,
- *     so every logo inherits the surrounding text token color. No independent
- *     color is introduced for the brand.
- *   - Source SVGs live in /public/brand/*.svg (vendored from @lobehub/icons-static-svg,
- *     MIT). We only ship the mono variants (no `-color`, no `-text`).
- *   - When no brand can be resolved, we fall back to DotGridAvatar so the row
- *     keeps its rhythm instead of showing an empty box.
+ * Visual-contract scope (product/03-visual-design.md §3.5):
+ *   Brand identity glyphs are the one carved-out exception to the
+ *   "颜色密度 ≤ 3" rule — same way semantic state colors (success/warn/
+ *   danger) don't count. Renders the vendor's own brand colors so
+ *   provider/model recognition doesn't rely on reading the name at
+ *   small sizes (Anthropic's rust-orange, DeepSeek's blue, Qwen's purple,
+ *   etc. — this is product, not decoration). When no color asset exists
+ *   (OpenAI ships a mono mark officially; OpenRouter likewise), we keep
+ *   the mono SVG rendered at currentColor via mask-image so the row
+ *   still reads as a brand and doesn't drop to an empty box.
  *
- * Why mask-image not <img>: <img src="/brand/x.svg"> ignores currentColor. Using
- * the SVG as a mask lets bg-current paint the shape in the active text token,
- * keeping the whole Gateway page inside the §3.5 "颜色密度 ≤ 3" guard while
- * still being recognisably OpenAI / Qwen / etc.
+ * Sources:
+ *   - Color variants vendored from @lobehub/icons-static-svg (MIT) as
+ *     /public/brand/<slug>-color.svg — only for brands with an
+ *     official color glyph.
+ *   - Mono fallbacks at /public/brand/<slug>.svg — always present.
+ *
+ * Why an <img> for color, mask-image for mono: <img> preserves the
+ * vendor-authored fill colors exactly. mask-image strips them and uses
+ * currentColor, which is what we want for brands without a color mark
+ * (so they tint with the surrounding text token and don't look faded
+ * against a dark shell).
  */
+
+import Image from "next/image";
 
 import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
 
@@ -41,6 +52,21 @@ const BRAND_LABEL: Record<BrandSlug, string> = {
   zhipu: "Zhipu",
   openrouter: "OpenRouter",
   bailian: "Bailian",
+};
+
+// Brands whose vendor ships an official color glyph. Keeps the set
+// explicit so we fail loudly (fall back to mono) if a new slug is
+// added without a corresponding /public/brand/<slug>-color.svg.
+const HAS_COLOR_VARIANT: Record<BrandSlug, boolean> = {
+  openai: false,
+  anthropic: true,
+  qwen: true,
+  deepseek: true,
+  moonshot: true,
+  minimax: true,
+  zhipu: true,
+  openrouter: false,
+  bailian: true,
 };
 
 /**
@@ -120,13 +146,36 @@ export function BrandMark({
   }
   const px = SIZE_MAP[size];
   const label = BRAND_LABEL[slug];
+
+  if (HAS_COLOR_VARIANT[slug]) {
+    // Use next/image with unoptimized for SVG assets — we want them pixel-
+    // perfect at small sizes, and SVG doesn't benefit from the image pipeline.
+    return (
+      <Image
+        src={`/brand/${slug}-color.svg`}
+        alt={label}
+        width={px}
+        height={px}
+        unoptimized
+        role="img"
+        aria-label={label}
+        data-testid={testId ?? `brand-mark-${slug}`}
+        data-brand={slug}
+        data-variant="color"
+        className={`inline-block shrink-0 ${className}`}
+      />
+    );
+  }
+
+  // Mono fallback — vendor-mono SVG painted at currentColor via mask-image.
   return (
     <span
       role="img"
       aria-label={label}
       data-testid={testId ?? `brand-mark-${slug}`}
       data-brand={slug}
-      className={`inline-block shrink-0 bg-current text-text-muted ${className}`}
+      data-variant="mono"
+      className={`inline-block shrink-0 bg-current text-text ${className}`}
       style={{
         width: px,
         height: px,

@@ -17,7 +17,8 @@
    - **Mono 字符**:`→` `←` `↑` `↓` `·` `…` `⌘` `↵` `Esc`,mono 字体下渲染整齐
    - **自有 icon 集**(Raycast-style,`web/components/icons/**`):2px stroke · round caps · currentColor · 24×24 viewBox · 仅允许本项目内相对导入
    - **1-line SVG legacy**(`web/components/ui/icons.tsx`):logo 点阵 + 主题切换 sun/moon + 5 类旧图元(check / arrow-right / external / copy / plus-minus),保留不扩展
-2. **颜色密度 ≤ 3 种**(不含语义状态色)。整页只允许 `text / muted / primary`,其他一律用 opacity 叠加或 surface 变体。
+2. **颜色密度 ≤ 3 种**(不含语义状态色 + 不含品牌识别色)。整页只允许 `text / muted / primary`,其他一律用 opacity 叠加或 surface 变体。
+   - **品牌识别色豁免**:provider / model 的官方品牌标(`<BrandMark />`)渲染厂商自有色彩(Anthropic 铁锈橙 / DeepSeek 蓝 / Qwen 紫 / Kimi / MiniMax / Zhipu / Bailian)。这是产品识别信息,不是装饰;和语义状态色一样不计入三色预算。**豁免仅限 BrandMark 组件**,其他地方仍禁止引入品牌色 literal。无官方彩色标的品牌(OpenAI / OpenRouter)继续走 mono + `currentColor`。
 3. **动效克制**。时长只用 token 里的 4 档;位移不超过 `2px`;禁用无限循环动画(spinner / pulse 状态点 / shimmer 骨架除外)。
 
 违反以上三条 = review 打回,无协商空间。

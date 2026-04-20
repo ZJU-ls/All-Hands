@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { ModelPicker } from "@/components/model-picker/ModelPicker";
 import {
   updateConversation,
@@ -27,11 +28,11 @@ type Props = {
   onConversationChange: (next: ConversationDto) => void;
 };
 
-function modelShortLabel(ref: string | null | undefined): string {
-  if (!ref) return "—";
-  const [provider, name] = ref.split("/", 2);
-  if (!name) return ref;
-  return `${provider} · ${name}`;
+function splitRef(ref: string | null | undefined): { provider: string; name: string } {
+  if (!ref) return { provider: "", name: "—" };
+  const slash = ref.indexOf("/");
+  if (slash < 0) return { provider: "", name: ref };
+  return { provider: ref.slice(0, slash), name: ref.slice(slash + 1) };
 }
 
 export function ModelOverrideChip({
@@ -46,6 +47,7 @@ export function ModelOverrideChip({
 
   const effectiveRef = conversation.model_ref_override ?? employee.model_ref;
   const isOverridden = conversation.model_ref_override !== null;
+  const { provider: effProvider, name: effModel } = splitRef(effectiveRef);
 
   useEffect(() => {
     if (!open) return;
@@ -84,10 +86,10 @@ export function ModelOverrideChip({
         aria-expanded={open}
         data-testid="model-override-chip"
         data-overridden={isOverridden ? "true" : "false"}
-        className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 font-mono text-[10px] uppercase tracking-wider transition-colors duration-base ${
+        className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 font-mono text-[11px] transition-colors duration-base ${
           isOverridden
-            ? "border-primary text-primary hover:border-border-strong"
-            : "border-border text-text-muted hover:text-text hover:border-border-strong"
+            ? "border-primary text-text hover:border-border-strong"
+            : "border-border text-text hover:border-border-strong"
         }`}
         title={
           isOverridden
@@ -95,8 +97,8 @@ export function ModelOverrideChip({
             : `跟随员工默认 · ${employee.model_ref}`
         }
       >
-        <span className="text-text-subtle">模型</span>
-        <span className="normal-case">{modelShortLabel(effectiveRef)}</span>
+        <BrandMark kind={null} name={effProvider || effModel} size="sm" />
+        <span className="truncate max-w-[140px]">{effModel}</span>
         {isOverridden && (
           <span
             className="text-primary"

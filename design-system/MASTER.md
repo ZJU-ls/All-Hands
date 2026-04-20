@@ -14,6 +14,7 @@
 - [ ] 我没打算装**第三方** icon 库(Lucide / Heroicons / Phosphor / Tabler / Font Awesome) — 自有 icon 集 `@/components/icons` 允许,见 §3
 - [ ] 我没在 JSX 里写十六进制或 Tailwind 原色类(`bg-blue-500`、`text-zinc-400`)
 - [ ] 我用的颜色都来自 `bg-*`、`text-*`、`border-*`、`primary`、`success`、`warning`、`danger` token
+- [ ] 要显示 provider / model 品牌,用 `<BrandMark />`(§3.5 豁免,走厂商彩色 SVG),不要自己拼 `<img>`
 - [ ] 我没加 `box-shadow` 做交互反馈(hover 只改边框)
 - [ ] 我的过渡时长来自 `--dur-*` 或 Tailwind `duration-150 / 220 / 320`
 - [ ] 激活 / 选中状态用 **2px 左色条**,不用背景色高亮

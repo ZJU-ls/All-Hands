@@ -45,15 +45,31 @@ describe("resolveBrand", () => {
 });
 
 describe("<BrandMark />", () => {
-  it("renders a mask-based mono tile for a resolved brand", () => {
+  it("renders a mask-based mono tile for a brand without a color asset", () => {
+    // OpenAI / OpenRouter ship only a mono glyph officially; falling back to
+    // mask-image keeps them on the surrounding text token rather than going
+    // faded gray.
     const { getByRole } = render(<BrandMark kind="openai" name="openai" />);
     const el = getByRole("img");
     expect(el.getAttribute("data-brand")).toBe("openai");
+    expect(el.getAttribute("data-variant")).toBe("mono");
     expect(el.getAttribute("aria-label")).toBe("OpenAI");
-    // inline style drives the mask — we verify the url anchor (both prefixed and
-    // unprefixed, since jsdom may strip -webkit- vendor prefixes).
     const style = el.getAttribute("style") ?? "";
     expect(style).toContain("/brand/openai.svg");
+  });
+
+  it("renders the vendor-color asset for brands that ship one", () => {
+    // Anthropic, Qwen, DeepSeek, Kimi, MiniMax, Zhipu, Bailian all ship an
+    // official color mark. §3.5 exempts brand identity from the colour-
+    // density rule, so we surface those straight rather than masking them.
+    const { getByRole } = render(<BrandMark kind="anthropic" name="claude" />);
+    const el = getByRole("img") as HTMLImageElement;
+    expect(el.getAttribute("data-brand")).toBe("anthropic");
+    expect(el.getAttribute("data-variant")).toBe("color");
+    expect(el.getAttribute("aria-label")).toBe("Anthropic");
+    // next/image may rewrite the src through its own pipeline, so match on
+    // suffix rather than equality.
+    expect(el.getAttribute("src") ?? "").toMatch(/anthropic-color\.svg/);
   });
 
   it("falls back to DotGridAvatar when brand cannot be resolved", () => {
