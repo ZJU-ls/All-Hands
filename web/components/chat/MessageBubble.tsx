@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Message } from "@/lib/protocol";
 import { ToolCallCard } from "./ToolCallCard";
 import { RenderSlot } from "./RenderSlot";
@@ -60,13 +60,55 @@ export function MessageBubble({ message, isStreaming }: Props) {
 
 /**
  * Collapsible thinking / reasoning transcript from thinking-capable models.
- * Rendered above the final answer, mono typography, subdued so it reads as
- * secondary context. Default-open while streaming (the user expects to see
- * progress when they explicitly opted into thinking), default-collapsed once
- * the final answer has landed (they want the answer, not the reasoning).
+ *
+ * Interaction model:
+ *   - Open by default while reasoning is actively streaming — the user
+ *     explicitly opted into thinking and wants to watch progress.
+ *   - While streaming, the body is a fixed 240px window that auto-pins the
+ *     scroll to the bottom, so 5000-char thinking transcripts don't take
+ *     over the chat viewport.
+ *   - Auto-collapses when reasoning ends (falling edge on `isStreaming`) so
+ *     the final answer lands without a wall of deliberation pushing it off
+ *     screen. The answer is what the user actually came for.
+ *   - Any explicit user toggle (open→close or close→open) takes over — we
+ *     stop auto-managing for the rest of the turn. Their choice wins.
+ *   - Historical (post-finalize) reasoning expands to full height on demand;
+ *     the fixed-window constraint only helps during live streaming.
  */
 function ReasoningBlock({ text, isStreaming }: { text: string; isStreaming: boolean }) {
   const [open, setOpen] = useState(isStreaming);
+  const userTouched = useRef(false);
+  const prevStreamingRef = useRef(isStreaming);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // Falling edge on isStreaming → auto-collapse unless the user has already
+  // expressed a preference. Runs on every isStreaming change so the transition
+  // is caught exactly once (subsequent equal renders are no-ops).
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming && !userTouched.current) {
+      setOpen(false);
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  // Pin the fixed-height window to the bottom as new reasoning tokens land.
+  // AgentMarkdown updates its own innerHTML asynchronously (dynamic-imports
+  // `marked`), so we observe DOM mutations on the body and scroll *after* the
+  // paint — a scrollTop=scrollHeight call at text-change time would fire
+  // before marked had a chance to commit.
+  useEffect(() => {
+    if (!open || !isStreaming) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    body.scrollTop = body.scrollHeight;
+    if (typeof MutationObserver === "undefined") return;
+    const mo = new MutationObserver(() => {
+      body.scrollTop = body.scrollHeight;
+    });
+    mo.observe(body, { childList: true, subtree: true, characterData: true });
+    return () => mo.disconnect();
+  }, [open, isStreaming]);
+
   return (
     <div
       data-testid="reasoning-block"
@@ -74,7 +116,10 @@ function ReasoningBlock({ text, isStreaming }: { text: string; isStreaming: bool
     >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          userTouched.current = true;
+          setOpen((v) => !v);
+        }}
         className="flex w-full items-center justify-between gap-2 px-2.5 py-1 text-[11px] text-text-muted hover:text-text"
         aria-expanded={open}
         data-testid="reasoning-toggle"
@@ -86,7 +131,13 @@ function ReasoningBlock({ text, isStreaming }: { text: string; isStreaming: bool
         <span className="font-mono text-[10px]">{text.length}</span>
       </button>
       {open && (
-        <div className="border-t border-border px-2.5 py-1.5 text-[11px] leading-relaxed text-text-muted">
+        <div
+          ref={bodyRef}
+          data-testid="reasoning-body"
+          className={`border-t border-border px-2.5 py-1.5 text-[11px] leading-relaxed text-text-muted ${
+            isStreaming ? "max-h-60 overflow-y-auto" : ""
+          }`}
+        >
           <AgentMarkdown
             content={text}
             className="prose prose-invert prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:text-[10px] [&_code]:text-[10px]"

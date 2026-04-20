@@ -270,13 +270,16 @@ describe("MessageList · Track α · sticky-bottom autoscroll", () => {
     );
   });
 
-  it("keeps the reasoning panel open across the streaming → finalized transition", () => {
-    // Bug: "思考过程展示完之后会隐藏" — ReasoningBlock's `open` state is a
-    // `useState(isStreaming)`; if the bubble unmounts/remounts when the
-    // streaming message is promoted into `messages[]`, the state resets to
-    // the new mount's `isStreaming=false` default and the panel collapses.
-    // Fix is in MessageList: render streaming + finalized bubbles under the
-    // same message-id key so React reconciles instead of remounting.
+  it("auto-collapses the reasoning panel when streaming finishes", () => {
+    // Interaction contract: while the model is thinking, the panel is open
+    // so the user can watch progress; the moment streaming ends (falling
+    // edge on `isStreaming`), the panel collapses on its own so the final
+    // answer lands without a wall of deliberation pushing it off screen.
+    // If the bubble had remounted across the streaming → finalized
+    // transition, the `open` useState + userTouched ref + prevStreaming ref
+    // would all reset and the falling-edge collapse wouldn't fire at all —
+    // so this test doubles as the "keyed reconciliation survives finalize"
+    // regression guard.
     primeScrollGeometry(SCROLL_HEIGHT - CLIENT_HEIGHT);
     render(<MessageList conversationId="c1" />);
 
@@ -295,14 +298,9 @@ describe("MessageList · Track α · sticky-bottom autoscroll", () => {
       });
     });
 
-    // Streaming: reasoning block is mounted, `aria-expanded=true` (default
-    // open while streaming with no content yet).
     const toggleBefore = screen.getByTestId("reasoning-toggle");
     expect(toggleBefore.getAttribute("aria-expanded")).toBe("true");
 
-    // Simulate finalizeStreaming: move the in-flight message into messages[]
-    // and clear streamingMessage in one atomic setState (same as the real
-    // store action).
     act(() => {
       useChatStore.setState((s) => ({
         messages: [
@@ -326,9 +324,69 @@ describe("MessageList · Track α · sticky-bottom autoscroll", () => {
       }));
     });
 
-    // If the bubble remounted, the new instance would default to collapsed
-    // (isStreaming prop is false on a historical message). Assert it stays
-    // open — proof that reconciliation preserved the `open` useState.
+    const toggleAfter = screen.getByTestId("reasoning-toggle");
+    expect(toggleAfter.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("respects a manual toggle across the streaming → finalized transition", () => {
+    // If the user explicitly collapses (or re-opens) the panel mid-stream,
+    // that choice wins — the auto-collapse on falling edge must not
+    // override them. Tests two things at once:
+    //   1. `userTouched` ref is consulted before auto-collapse.
+    //   2. Keyed reconciliation preserves the component instance (and
+    //      therefore the ref) across the streaming → finalized swap.
+    primeScrollGeometry(SCROLL_HEIGHT - CLIENT_HEIGHT);
+    render(<MessageList conversationId="c1" />);
+
+    act(() => {
+      useChatStore.setState({
+        isStreaming: true,
+        streamingMessage: {
+          id: "a1",
+          role: "assistant",
+          content: "",
+          reasoning: "thinking…",
+          tool_calls: [],
+          render_payloads: [],
+          created_at: "2026-04-20T00:00:00Z",
+        },
+      });
+    });
+
+    // User collapses while streaming — userTouched.current becomes true.
+    const toggle = screen.getByTestId("reasoning-toggle");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    // Now user re-opens — userTouched is still true.
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    // Finalize — falling edge on isStreaming. Auto-collapse MUST NOT fire
+    // because userTouched has latched.
+    act(() => {
+      useChatStore.setState((s) => ({
+        messages: [
+          ...s.messages,
+          {
+            id: "a1",
+            conversation_id: "c1",
+            role: "assistant",
+            content: "final answer",
+            reasoning: "thinking…",
+            tool_calls: [],
+            render_payloads: [],
+            created_at: "2026-04-20T00:00:00Z",
+            tool_call_id: null,
+            trace_ref: null,
+            parent_run_id: null,
+          },
+        ],
+        streamingMessage: null,
+        isStreaming: false,
+      }));
+    });
+
     const toggleAfter = screen.getByTestId("reasoning-toggle");
     expect(toggleAfter.getAttribute("aria-expanded")).toBe("true");
   });
