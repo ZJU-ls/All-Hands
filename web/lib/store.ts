@@ -53,6 +53,13 @@ type ChatState = {
   setConversationId: (id: string) => void;
   addMessage: (msg: Message) => void;
   replaceMessages: (msgs: Message[]) => void;
+  /** Flip `isStreaming` on the instant the user hits send, before the POST
+   * even returns. Without this, `isStreaming` stays false until the first
+   * TEXT_MESSAGE_START / REASONING_MESSAGE_START frame arrives — seconds of
+   * wire latency during which the UI looked dead ("像是没连接上"). Also
+   * clears any stale `streamError` from the previous turn so the banner
+   * doesn't linger under the new in-flight bubble. */
+  beginTurn: () => void;
   startStreaming: (messageId: string) => void;
   appendToken: (messageId: string, delta: string) => void;
   appendReasoning: (messageId: string, delta: string) => void;
@@ -88,19 +95,37 @@ export const useChatStore = create<ChatState>((set) => ({
 
   replaceMessages: (msgs) => set({ messages: msgs }),
 
+  beginTurn: () => set({ isStreaming: true, streamError: null }),
+
   startStreaming: (messageId) =>
-    set({
-      isStreaming: true,
-      streamError: null,
-      streamingMessage: {
-        id: messageId,
-        role: "assistant",
-        content: "",
-        reasoning: "",
-        tool_calls: [],
-        render_payloads: [],
-        created_at: new Date().toISOString(),
-      },
+    set((state) => {
+      // If REASONING_MESSAGE_CHUNK already seeded the streaming message
+      // (thinking frames often precede the first text token), preserve the
+      // accumulated reasoning + any tool calls. Previously we unconditionally
+      // reset here, which wiped the thinking buffer the moment TEXT_MESSAGE_START
+      // fired — the "思考过程展示完之后会隐藏" regression: the panel rendered
+      // mid-stream, dropped to zero length on TEXT_MESSAGE_START, then
+      // disappeared for the rest of the turn because `hasReasoning` went false.
+      if (state.streamingMessage) {
+        return {
+          isStreaming: true,
+          streamError: null,
+          streamingMessage: { ...state.streamingMessage, id: messageId },
+        };
+      }
+      return {
+        isStreaming: true,
+        streamError: null,
+        streamingMessage: {
+          id: messageId,
+          role: "assistant",
+          content: "",
+          reasoning: "",
+          tool_calls: [],
+          render_payloads: [],
+          created_at: new Date().toISOString(),
+        },
+      };
     }),
 
   appendToken: (_messageId, delta) =>

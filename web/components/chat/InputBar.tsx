@@ -70,6 +70,7 @@ export function InputBar({
   const streamRef = useRef<StreamHandle | null>(null);
   const {
     isStreaming,
+    beginTurn,
     startStreaming,
     appendToken,
     appendReasoning,
@@ -92,7 +93,10 @@ export function InputBar({
     const content = value.trim();
     setValue("");
 
-    setStreamError(null);
+    // Flip `isStreaming` now so the MessageList can paint a pending bubble
+    // before the first token lands — otherwise the UI sits silent for the
+    // POST round-trip + provider cold-start latency and looks broken.
+    beginTurn();
     addMessage({
       id: crypto.randomUUID(),
       conversation_id: conversationId,
@@ -228,6 +232,7 @@ export function InputBar({
     advanced,
     conversationId,
     addMessage,
+    beginTurn,
     startStreaming,
     appendToken,
     appendReasoning,

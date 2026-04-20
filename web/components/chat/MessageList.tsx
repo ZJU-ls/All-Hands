@@ -12,7 +12,7 @@ type Props = { conversationId: string };
 const STICK_THRESHOLD_PX = 64;
 
 export function MessageList({ conversationId }: Props) {
-  const { messages, streamingMessage, streamError } = useChatStore();
+  const { messages, streamingMessage, streamError, isStreaming } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
 
@@ -32,25 +32,45 @@ export function MessageList({ conversationId }: Props) {
     setStickToBottom(isAtBottom());
   }, [isAtBottom]);
 
+  // Between send and first frame, `streamingMessage` is still null but the
+  // user expects *some* reaction — a pending placeholder tracks that gap so
+  // "像是没连接上一样" stops being the default. It also makes the pending
+  // state a first-class scroll anchor so the stick-to-bottom autoscroll
+  // lands the user on the breathing dots.
+  const isPendingAssistant = isStreaming && !streamingMessage;
+
   useLayoutEffect(() => {
     if (stickToBottom) scrollToBottom("auto");
-  }, [messages, streamingMessage, streamError, stickToBottom, scrollToBottom]);
+  }, [messages, streamingMessage, streamError, isPendingAssistant, stickToBottom, scrollToBottom]);
 
   useEffect(() => {
     scrollToBottom("auto");
   }, [conversationId, scrollToBottom]);
 
-  const hasAnything = messages.length > 0 || !!streamingMessage || !!streamError;
+  const hasAnything =
+    messages.length > 0 || !!streamingMessage || !!streamError || isPendingAssistant;
 
-  const streamingAsMessage: Message | null = streamingMessage
-    ? {
+  // Unify historical + in-flight assistant bubbles under `message.id` keys so
+  // React reconciles across the streaming → finalized transition. Previously
+  // the streaming bubble was an unkeyed positional child and the finalized
+  // one was keyed, which unmounted/remounted the component at finalize-time
+  // and reset ReasoningBlock's `open` useState back to false — the "思考过程
+  // 展示完之后会隐藏" bug.
+  const renderRows: Array<{ msg: Message; streaming: boolean }> = messages.map(
+    (msg) => ({ msg, streaming: false }),
+  );
+  if (streamingMessage) {
+    renderRows.push({
+      msg: {
         ...streamingMessage,
         conversation_id: conversationId,
         tool_call_id: null,
         trace_ref: null,
         parent_run_id: null,
-      }
-    : null;
+      },
+      streaming: true,
+    });
+  }
 
   return (
     <div className="relative h-full min-h-0">
@@ -66,13 +86,11 @@ export function MessageList({ conversationId }: Props) {
           </div>
         ) : (
           <div className="flex flex-col gap-4 p-4">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+            {renderRows.map(({ msg, streaming }) => (
+              <MessageBubble key={msg.id} message={msg} isStreaming={streaming} />
             ))}
-            {streamingAsMessage && (
-              <MessageBubble message={streamingAsMessage} isStreaming />
-            )}
-            {streamError && !streamingAsMessage && (
+            {isPendingAssistant && <PendingAssistantBubble />}
+            {streamError && !streamingMessage && (
               <StreamErrorBanner
                 message={streamError.message}
                 code={streamError.code}
@@ -98,6 +116,40 @@ export function MessageList({ conversationId }: Props) {
         </button>
       )}
     </div>
+  );
+}
+
+/** Pre-first-frame placeholder. Shown the moment the user hits send, kept
+ * on screen until TEXT_MESSAGE_START / REASONING_MESSAGE_START arrives. The
+ * three dots cycle opacity via the shared `ah-dot` keyframe (see
+ * `globals.css` · same pattern LoadingState uses) — no translate / scale /
+ * box-shadow, honouring the §3.5 motion contract. */
+function PendingAssistantBubble() {
+  return (
+    <div
+      data-testid="pending-assistant-bubble"
+      role="status"
+      aria-label="模型正在处理"
+      className="flex justify-start"
+    >
+      <div className="max-w-[80%] rounded-xl bg-surface px-4 py-2.5 text-sm text-text-muted">
+        <span className="inline-flex items-center gap-1 align-middle">
+          <PendingDot delay={0} />
+          <PendingDot delay={160} />
+          <PendingDot delay={320} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function PendingDot({ delay }: { delay: number }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-block h-1.5 w-1.5 rounded-full bg-text-muted"
+      style={{ animation: `ah-dot 1.2s ease-in-out ${delay}ms infinite` }}
+    />
   );
 }
 
