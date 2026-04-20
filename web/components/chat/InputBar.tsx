@@ -5,8 +5,14 @@ import { openStream, type StreamHandle } from "@/lib/stream-client";
 import { useChatStore } from "@/lib/store";
 import type { RenderPayload, ToolCall, ToolCallStatus } from "@/lib/protocol";
 import { Composer, ThinkingToggle } from "./Composer";
+import { UsageChip } from "./UsageChip";
 
-type Props = { conversationId: string };
+type Props = {
+  conversationId: string;
+  /** The employee's default model ref, used to resolve the context window
+   * size for the usage chip. Omit to hide the chip. */
+  employeeModelRef?: string;
+};
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -17,7 +23,7 @@ type ToolCallAccumulator = {
   started: boolean;
 };
 
-export function InputBar({ conversationId }: Props) {
+export function InputBar({ conversationId, employeeModelRef }: Props) {
   const [value, setValue] = useState("");
   const [thinking, setThinking] = useState(false);
   const streamRef = useRef<StreamHandle | null>(null);
@@ -165,11 +171,20 @@ export function InputBar({ conversationId }: Props) {
         placeholder="输入消息…"
         rows={3}
         controls={
-          <ThinkingToggle
-            enabled={thinking}
-            onChange={setThinking}
-            disabled={isStreaming}
-          />
+          <div className="flex items-center gap-3">
+            <ThinkingToggle
+              enabled={thinking}
+              onChange={setThinking}
+              disabled={isStreaming}
+            />
+            {employeeModelRef && (
+              <UsageChip
+                conversationId={conversationId}
+                employeeModelRef={employeeModelRef}
+                disabled={isStreaming}
+              />
+            )}
+          </div>
         }
         controlsTrailing={<span className="font-mono">↵ 发送 · ⇧↵ 换行</span>}
       />

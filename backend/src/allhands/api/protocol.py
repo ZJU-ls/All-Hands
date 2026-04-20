@@ -22,6 +22,32 @@ class SendMessageRequest(BaseModel):
     content: str
 
 
+class ChatMessageResponse(BaseModel):
+    """A single persisted conversation message, as returned by GET/compact.
+
+    Tool-call / render-payload details are omitted deliberately — the UI
+    reconstructs those from its SSE stream for the live turn and doesn't need
+    to reload them for a history read. Keep this shape narrow so it stays
+    stable as the internal Message model evolves.
+    """
+
+    id: str
+    conversation_id: str
+    role: str
+    content: str
+    created_at: str
+
+
+class CompactConversationRequest(BaseModel):
+    keep_last: int | None = None
+
+
+class CompactConversationResponse(BaseModel):
+    dropped: int
+    summary_id: str | None
+    messages: list[ChatMessageResponse]
+
+
 class ConfirmationDecisionRequest(BaseModel):
     decision: Literal["approve", "reject"]
 

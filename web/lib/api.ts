@@ -87,6 +87,44 @@ export async function listConversations(
   return res.json() as Promise<ConversationDto[]>;
 }
 
+export type ChatMessageDto = {
+  id: string;
+  conversation_id: string;
+  role: "user" | "assistant" | "tool" | "system";
+  content: string;
+  created_at: string;
+};
+
+export async function listConversationMessages(
+  conversationId: string,
+): Promise<ChatMessageDto[]> {
+  const res = await fetch(`${BASE}/api/conversations/${conversationId}/messages`);
+  if (!res.ok) throwApiError("listConversationMessages", res.status);
+  return res.json() as Promise<ChatMessageDto[]>;
+}
+
+export type CompactResult = {
+  dropped: number;
+  summary_id: string | null;
+  messages: ChatMessageDto[];
+};
+
+export async function compactConversation(
+  conversationId: string,
+  keepLast?: number,
+): Promise<CompactResult> {
+  const res = await fetch(`${BASE}/api/conversations/${conversationId}/compact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(keepLast !== undefined ? { keep_last: keepLast } : {}),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ApiError(res.status, `compactConversation failed: ${res.status} ${text}`);
+  }
+  return res.json() as Promise<CompactResult>;
+}
+
 export async function createConversation(employeeId: string): Promise<{ id: string }> {
   const res = await fetch(`${BASE}/api/conversations`, {
     method: "POST",

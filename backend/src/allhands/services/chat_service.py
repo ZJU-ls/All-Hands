@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from allhands.core import Conversation, Employee, Message
@@ -21,6 +22,24 @@ if TYPE_CHECKING:
     from allhands.execution.registry import ToolRegistry
     from allhands.execution.skills import SkillRegistry
     from allhands.persistence.repositories import ConversationRepo, EmployeeRepo, LLMProviderRepo
+
+
+DEFAULT_COMPACT_KEEP_LAST = 20
+MIN_COMPACT_THRESHOLD = 4
+
+
+@dataclass(frozen=True)
+class CompactResult:
+    """Outcome of compact_conversation.
+
+    ``dropped`` is the number of messages deleted from the tail; ``summary_id``
+    is the synthetic system-role marker inserted in their place (None if nothing
+    was compacted).
+    """
+
+    dropped: int
+    summary_id: str | None
+    messages: list[Message]
 
 
 class ChatService:
@@ -43,6 +62,71 @@ class ChatService:
         # send_message calls (contract § 8.2 · V02 query() main loop carries
         # the live tool pool turn-to-turn).
         self._runtime_cache: dict[str, SkillRuntime] = {}
+
+    async def list_messages(self, conversation_id: str) -> list[Message]:
+        conv = await self._conversations.get(conversation_id)
+        if conv is None:
+            raise DomainError(f"Conversation {conversation_id!r} not found.")
+        return await self._conversations.list_messages(conversation_id)
+
+    async def compact_conversation(
+        self,
+        conversation_id: str,
+        keep_last: int = DEFAULT_COMPACT_KEEP_LAST,
+    ) -> CompactResult:
+        """Deterministically collapse earlier messages into a summary marker.
+
+        No LLM call — this is the cheap, always-available lever. The agent's
+        next turn will read a shorter history (N kept + 1 synthetic system
+        marker) so the prompt token budget drops immediately. A future track
+        can swap in an LLM summarisation path; this function's contract
+        (return shape + side-effects) stays stable so the UI doesn't have to
+        change.
+
+        The runtime cache for this conversation is cleared because the live
+        SkillRuntime's "which tools are currently resolved" state was built
+        against the old history. Letting it persist would surface skills the
+        user can no longer see a trace of, which violates P05 (don't let
+        hidden state surprise the user).
+        """
+
+        if keep_last < MIN_COMPACT_THRESHOLD:
+            raise DomainError(f"keep_last must be >= {MIN_COMPACT_THRESHOLD}; got {keep_last}")
+
+        conv = await self._conversations.get(conversation_id)
+        if conv is None:
+            raise DomainError(f"Conversation {conversation_id!r} not found.")
+
+        messages = await self._conversations.list_messages(conversation_id)
+        if len(messages) <= keep_last:
+            return CompactResult(dropped=0, summary_id=None, messages=messages)
+
+        to_drop = messages[:-keep_last]
+        to_keep = messages[-keep_last:]
+
+        earliest_kept = to_keep[0].created_at
+        # 1µs earlier so ORDER BY created_at ASC surfaces the summary before
+        # the first kept turn.
+        summary_created_at = earliest_kept - timedelta(microseconds=1)
+        summary = Message(
+            id=str(uuid.uuid4()),
+            conversation_id=conversation_id,
+            role="system",
+            content=f"[系统] 已压缩 {len(to_drop)} 条较早消息以节省上下文。",
+            created_at=summary_created_at,
+        )
+
+        await self._conversations.delete_messages([m.id for m in to_drop])
+        await self._conversations.append_message(summary)
+
+        self._runtime_cache.pop(conversation_id, None)
+
+        new_messages = await self._conversations.list_messages(conversation_id)
+        return CompactResult(
+            dropped=len(to_drop),
+            summary_id=summary.id,
+            messages=new_messages,
+        )
 
     async def create_conversation(self, employee_id: str) -> Conversation:
         conv = Conversation(

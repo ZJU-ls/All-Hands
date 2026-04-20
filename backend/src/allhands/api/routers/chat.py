@@ -19,6 +19,9 @@ from allhands.api.deps import (
     get_session,
 )
 from allhands.api.protocol import (
+    ChatMessageResponse,
+    CompactConversationRequest,
+    CompactConversationResponse,
     ConversationResponse,
     CreateConversationRequest,
     SendMessageRequest,
@@ -110,6 +113,71 @@ async def get_conversation(
         employee_id=conv.employee_id,
         title=conv.title,
         created_at=conv.created_at.isoformat(),
+    )
+
+
+@router.get("/{conversation_id}/messages", response_model=list[ChatMessageResponse])
+async def list_messages(
+    conversation_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> list[ChatMessageResponse]:
+    """History read — used by the UI to rehydrate a conversation on reload
+    and by the usage chip to read the live message list after a compaction.
+    """
+
+    chat_svc = await get_chat_service(session)
+    try:
+        messages = await chat_svc.list_messages(conversation_id)
+    except DomainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [
+        ChatMessageResponse(
+            id=m.id,
+            conversation_id=m.conversation_id,
+            role=m.role,
+            content=m.content,
+            created_at=m.created_at.isoformat(),
+        )
+        for m in messages
+    ]
+
+
+@router.post("/{conversation_id}/compact", response_model=CompactConversationResponse)
+async def compact_conversation(
+    conversation_id: str,
+    body: CompactConversationRequest,
+    session: AsyncSession = Depends(get_session),
+) -> CompactConversationResponse:
+    """Manual context compaction — keeps the last `keep_last` messages and
+    replaces the older tail with a single synthetic system-role marker.
+
+    Body shape `{"keep_last": 20}`; `keep_last` is clamped on the service side
+    to its documented minimum. The response is the new message list so the
+    frontend can swap its store in one assignment instead of reloading the
+    whole page.
+    """
+
+    chat_svc = await get_chat_service(session)
+    try:
+        result = await chat_svc.compact_conversation(
+            conversation_id,
+            keep_last=body.keep_last if body.keep_last is not None else 20,
+        )
+    except DomainError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return CompactConversationResponse(
+        dropped=result.dropped,
+        summary_id=result.summary_id,
+        messages=[
+            ChatMessageResponse(
+                id=m.id,
+                conversation_id=m.conversation_id,
+                role=m.role,
+                content=m.content,
+                created_at=m.created_at.isoformat(),
+            )
+            for m in result.messages
+        ],
     )
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -303,6 +303,13 @@ class SqlConversationRepo:
         self._s.add(row)
         await self._s.flush()
         return message
+
+    async def delete_messages(self, message_ids: list[str]) -> int:
+        if not message_ids:
+            return 0
+        await self._s.execute(delete(MessageRow).where(MessageRow.id.in_(message_ids)))
+        await self._s.flush()
+        return len(message_ids)
 
 
 class SqlConfirmationRepo:

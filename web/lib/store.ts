@@ -27,6 +27,7 @@ type ChatState = {
 
   setConversationId: (id: string) => void;
   addMessage: (msg: Message) => void;
+  replaceMessages: (msgs: Message[]) => void;
   startStreaming: (messageId: string) => void;
   appendToken: (messageId: string, delta: string) => void;
   finalizeMessage: (msg: Message) => void;
@@ -49,6 +50,8 @@ export const useChatStore = create<ChatState>((set) => ({
 
   addMessage: (msg) =>
     set((state) => ({ messages: [...state.messages, msg] })),
+
+  replaceMessages: (msgs) => set({ messages: msgs }),
 
   startStreaming: (messageId) =>
     set({

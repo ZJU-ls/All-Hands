@@ -15,9 +15,12 @@ import {
   ApiError,
   getConversation,
   getEmployee,
+  listConversationMessages,
   type ConversationDto,
   type EmployeeDto,
 } from "@/lib/api";
+import { useChatStore } from "@/lib/store";
+import type { Message } from "@/lib/protocol";
 
 const CONVERSATION_STORAGE_KEY = "allhands_conversation_id";
 
@@ -38,6 +41,7 @@ export default function ConversationPage() {
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const replaceMessages = useChatStore((s) => s.replaceMessages);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +53,25 @@ export default function ConversationPage() {
         const e = await getEmployee(c.employee_id);
         if (cancelled) return;
         setEmployee(e);
+        // Rehydrate persisted history so MessageList + UsageChip reflect the
+        // conversation immediately on reload. New SSE-streamed messages get
+        // appended via addMessage; this is just the initial snapshot.
+        try {
+          const history = await listConversationMessages(conversationId);
+          if (cancelled) return;
+          const asMessages: Message[] = history.map((m) => ({
+            id: m.id,
+            conversation_id: m.conversation_id,
+            role: m.role,
+            content: m.content,
+            tool_calls: [],
+            render_payloads: [],
+            created_at: m.created_at,
+          }));
+          replaceMessages(asMessages);
+        } catch {
+          // history load failure is non-fatal — chat still works for new turns
+        }
       } catch (e) {
         if (cancelled) return;
         // B05 · a 404 means the conversation id in the URL (typically
@@ -73,7 +96,7 @@ export default function ConversationPage() {
     return () => {
       cancelled = true;
     };
-  }, [conversationId, router]);
+  }, [conversationId, router, replaceMessages]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -123,7 +146,10 @@ export default function ConversationPage() {
           <div className="flex-1 min-h-0">
             <MessageList conversationId={conversationId} />
           </div>
-          <InputBar conversationId={conversationId} />
+          <InputBar
+            conversationId={conversationId}
+            employeeModelRef={employee?.model_ref}
+          />
         </div>
         {panelOpen && <ArtifactPanel onClose={() => setPanelOpen(false)} />}
       </div>
