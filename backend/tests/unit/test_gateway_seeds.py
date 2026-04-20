@@ -145,3 +145,39 @@ def test_gateway_seed_presets_use_correct_base_url_shape_per_kind() -> None:
             assert "anthropic" in preset.base_url
         else:
             assert preset.base_url.endswith(("/v1", "/v1/")) or "compatible" in preset.base_url
+
+
+# ---------------------------------------------------------------------------
+# I-0002 · every seeded model must have a positive context_window
+# ---------------------------------------------------------------------------
+
+
+def test_gateway_seed_every_model_has_positive_context_window() -> None:
+    """Regression for I-0002: a zero context_window is a data bug — the
+    Agent's token budget goes negative and the UI shows '0 tokens'. No seed
+    preset may ship a non-positive window.
+    """
+    for preset in GATEWAY_SEED_PRESETS:
+        for m in preset.models:
+            assert m.context_window > 0, (
+                f"{preset.name}/{m.name} has context_window={m.context_window}; "
+                "seed values must be positive (see I-0002)."
+            )
+
+
+# ---------------------------------------------------------------------------
+# I-0003 · every seeded provider.default_model must resolve to a seeded model
+# ---------------------------------------------------------------------------
+
+
+def test_gateway_seed_default_model_points_to_existing_model() -> None:
+    """Regression for I-0003: provider.default_model must be one of the
+    models seeded under the same provider. A dangling value cascades through
+    AgentRunner / Meta Tools / the /settings UI as a silent 404.
+    """
+    for preset in GATEWAY_SEED_PRESETS:
+        names = {m.name for m in preset.models}
+        assert preset.default_model in names, (
+            f"{preset.name}: default_model={preset.default_model!r} is not "
+            f"in seeded models {sorted(names)} (see I-0003)."
+        )

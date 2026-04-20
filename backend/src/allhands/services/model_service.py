@@ -54,6 +54,10 @@ ErrorCategory = Literal[
 ]
 
 
+class ModelConfigError(ValueError):
+    """Raised when a model payload is structurally valid but semantically broken."""
+
+
 class LLMModelService:
     def __init__(self, model_repo: LLMModelRepo, provider_repo: LLMProviderRepo) -> None:
         self._models = model_repo
@@ -66,6 +70,15 @@ class LLMModelService:
         display_name: str = "",
         context_window: int = 0,
     ) -> LLMModel | None:
+        # I-0002: a zero / negative context window cascades into garbage
+        # downstream — the Agent's token budget becomes `ctx - max_output`
+        # which is negative, and the UI shows "0 tokens". Force a positive
+        # integer at the service boundary so bad values never reach the DB.
+        if context_window <= 0:
+            raise ModelConfigError(
+                f"context_window must be > 0 (got {context_window}); "
+                "provide the model's real context window (e.g. 128000)."
+            )
         provider = await self._providers.get(provider_id)
         if provider is None:
             return None
@@ -96,6 +109,8 @@ class LLMModelService:
         context_window: int | None = None,
         enabled: bool | None = None,
     ) -> LLMModel | None:
+        if context_window is not None and context_window <= 0:
+            raise ModelConfigError(f"context_window must be > 0 (got {context_window}).")
         model = await self._models.get(model_id)
         if model is None:
             return None
