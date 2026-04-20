@@ -462,6 +462,45 @@ tool    #D97706 (amber)
 
 ---
 
+## 9.1 Voice & Tone(文案纪律 · I-0013)
+
+视觉是骨架,文案是骨架的气息。allhands 的 UI 文案和 Lead Agent 的回应必须听起来像同一个产品 —— 冷静、以事实为准、指向下一步,而不是讨好或演绎。
+
+**硬规则(违反打回,无协商):**
+
+1. **禁 emoji**(UI 文本、Agent 回应、日志皆禁)。图形语义只能来自 §2 的 icon 体系。
+2. **禁感叹号 `!`**(包括"太好了!""搞定!""失败!")。句号结尾即可。
+3. **代词**用 `我` / `你`,**禁止** `咱们` / `我们` —— 它稀释责任主体,让"谁在做、谁拿结果"模糊掉。
+4. **按钮文案用动宾短语**(动词开头)。`发布` / `删除` / `测试发送` / `切换默认` / `保存草稿`。**禁止** `确定` / `OK` / `提交`(无语义)。Danger 按钮写清后果:`删除员工` 而不是 `删除`。
+5. **空状态 ≠ "暂无数据"**,必须给出"下一步可以做什么"。范式:`还没有 X · [动作建议]`。
+6. **错误文案指向修复**,不指向失败本身。写 `可以试试改成 X` / `填入 base_url 后重试`,不写 `调用失败!` / `Error: 500`。
+7. **Lead Agent 欢迎语**(首轮空对话)必须给出 **3 条具体可点的示例 prompt**,不许只留空气。模板见 [`backend/src/allhands/execution/prompts/lead_agent.md` §Welcome message](../backend/src/allhands/execution/prompts/lead_agent.md)。
+
+**语气梯度(按语境选一档,不跨档混用):**
+
+| 场景 | 语气 | 示例 | 反例 |
+|---|---|---|---|
+| 数据密集(cockpit / traces) | 事实,无修饰 | `12 runs running · 3 queued · $0.42 今日` | `运行中啦~ 看起来一切正常!` |
+| 表单 / 设置 | 平实,指向生效范围 | `保存后立刻对所有新对话生效,已在跑的 run 不受影响` | `点击保存让我们搞定它!` |
+| 空状态 / 引导 | 主动给下一步 | `还没有员工 · "帮我建一个每天写日报的员工"` | `暂无数据` |
+| 错误 | 指向修复 | `base_url 格式不对,试试 https://api.example.com/v1` | `调用失败! 请检查!` |
+
+**Lead Agent 专属:**
+
+- 选员工要说 `选 X,因为 Y`,不要只说 `我来安排`。
+- 并行派发要预告:`我并行派 A/B,完成后合并回你`。
+- 模糊需求问 **一个** 关键问题,不要一次甩五个。
+- `list_*` 没确认前,禁止造名字或工具。
+
+**检查钩子:**
+
+- `web/tests/voice-tone.test.ts` — 扫 `web/app/**` + `product/**` 里的 emoji / `!` / `咱们` / `我们` 泄漏。
+- `backend/tests/unit/test_lead_welcome.py` — 断言 Lead prompt 含 "Welcome message" 节 + `欢迎` + 至少 3 条 `- "..."` 示例。
+
+Token / 组件契约变更要同步改 §1 ~ §3;**Voice & Tone 变更要同步改 `backend/src/allhands/execution/prompts/lead_agent.md` 的 Style 节和 `design-system/MASTER.md` 的 Voice 速查表**。
+
+---
+
 ## 10. 变更流程
 
 1. 修改本文件 token / 契约

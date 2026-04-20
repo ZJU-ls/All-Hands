@@ -352,6 +352,26 @@ import { ChevronRight, Sun, Moon } from "lucide-react";
 
 ---
 
+## 6.5 Voice & Tone 速查(详见 03-visual-design.md §9.1)
+
+| 规则 | 做 | 不做 |
+|---|---|---|
+| emoji / `!` | 事实陈述,句号结尾 | `搞定!` / `太棒了 🎉` |
+| 代词 | `我` / `你` | `咱们` / `我们` |
+| 按钮 | 动宾(`发布` / `删除员工` / `测试发送`) | `确定` / `OK` / `提交` |
+| 空状态 | `还没有 X · [动作建议]` | `暂无数据` |
+| 错误 | 指向修复(`可以试试改成 X`) | 指向失败(`调用失败!`) |
+| Lead 欢迎语 | 首轮空对话给 3 条示例 prompt | 留空 / 单句寒暄 |
+
+检查钩子:
+
+- `web/tests/voice-tone.test.ts` — 静态扫 emoji / `!` / `咱们` / `我们`
+- `backend/tests/unit/test_lead_welcome.py` — 断言 Lead prompt 含 Welcome + 3 条示例
+
+Voice & Tone 变更要同步三处:[`product/03-visual-design.md §9.1`](../product/03-visual-design.md#91-voice--tone文案纪律--i-0013) · [`backend/src/allhands/execution/prompts/lead_agent.md`](../backend/src/allhands/execution/prompts/lead_agent.md) Style 节 · 本节速查表。
+
+---
+
 ## 7. 参考
 
 - 视觉契约(规范):[`product/03-visual-design.md`](../product/03-visual-design.md)
