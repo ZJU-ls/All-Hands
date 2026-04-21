@@ -20,11 +20,18 @@
  */
 
 export type PopoverSide = "top" | "bottom";
+/**
+ * "start" = panel left edge aligns with trigger's left edge (extends rightward).
+ * "end"   = panel right edge aligns with trigger's right edge (extends leftward).
+ * Names are LTR-neutral so RTL rework is a prop rename, not a rule flip.
+ */
+export type PopoverAlign = "start" | "end";
 
-export type TriggerRectLike = Pick<DOMRect, "top" | "bottom">;
+export type VerticalRectLike = Pick<DOMRect, "top" | "bottom">;
+export type HorizontalRectLike = Pick<DOMRect, "left" | "right">;
 
 export function computePopoverSide(
-  triggerRect: TriggerRectLike,
+  triggerRect: VerticalRectLike,
   estimatedPanelHeight: number,
   viewportHeight: number,
   preferredSide: PopoverSide = "bottom",
@@ -39,4 +46,32 @@ export function computePopoverSide(
   if (spaceAbove >= estimatedPanelHeight) return "top";
   if (spaceBelow > spaceAbove) return "bottom";
   return "top";
+}
+
+/**
+ * Horizontal analog of `computePopoverSide`. Prevents the "panel is wider
+ * than trigger and overflows into the sidebar / off the other edge" bug —
+ * fresh example: the ModelOverrideChip in the chat composer row sat in the
+ * left-packed control strip, so `end`-align (right-0) extended the 240px
+ * panel leftward across the AppShell sidebar. Flip to `start` when the
+ * preferred align overflows the viewport AND the opposite align fits.
+ */
+export function computePopoverAlign(
+  triggerRect: HorizontalRectLike,
+  panelWidth: number,
+  viewportWidth: number,
+  preferredAlign: PopoverAlign = "start",
+): PopoverAlign {
+  // start: panel covers [trigger.left, trigger.left + panelWidth]
+  // end:   panel covers [trigger.right - panelWidth, trigger.right]
+  const overflowsRightIfStart = triggerRect.left + panelWidth > viewportWidth;
+  const overflowsLeftIfEnd = triggerRect.right - panelWidth < 0;
+  if (preferredAlign === "start") {
+    if (!overflowsRightIfStart) return "start";
+    if (!overflowsLeftIfEnd) return "end";
+    return "start";
+  }
+  if (!overflowsLeftIfEnd) return "end";
+  if (!overflowsRightIfStart) return "start";
+  return "end";
 }

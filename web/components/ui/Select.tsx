@@ -42,7 +42,9 @@ import {
 import { ChevronDownIcon } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import {
+  computePopoverAlign,
   computePopoverSide,
+  type PopoverAlign,
   type PopoverSide,
 } from "@/lib/popover-placement";
 
@@ -133,6 +135,9 @@ export function Select(props: SelectProps) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const [side, setSide] = useState<PopoverSide>("bottom");
+  const [align, setAlign] = useState<PopoverAlign>(
+    popoverAlign === "right" ? "end" : "start",
+  );
   const [panelMaxHeight, setPanelMaxHeight] = useState(maxHeight);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -157,19 +162,34 @@ export function Select(props: SelectProps) {
   // Flip placement on open based on viewport room. Prefer bottom; fall back to
   // top when cramped. Also clamp panel height to what actually fits on the
   // chosen side so the list never bleeds off-screen (user L09 bug).
+  //
+  // Horizontal axis: same logic — panel is often wider than the trigger
+  // (min-w-full + content-driven). With chip-style triggers in left-packed
+  // toolbars, `end` alignment (right-0) can spill past the sidebar, so flip
+  // to `start` (left-0) when that overflows. See L10 follow-up.
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const vh = window.innerHeight;
-    const picked = computePopoverSide(rect, maxHeight, vh, "bottom");
-    setSide(picked);
+    const vw = window.innerWidth;
+    const pickedSide = computePopoverSide(rect, maxHeight, vh, "bottom");
+    setSide(pickedSide);
     // Leave an 8px cushion to the viewport edge — keeps the panel from
     // kissing the boundary, matches our base 4/8/12 spacing rhythm.
     const GUTTER = 8;
-    const avail =
-      picked === "bottom" ? vh - rect.bottom - GUTTER : rect.top - GUTTER;
-    setPanelMaxHeight(Math.max(120, Math.min(maxHeight, avail)));
-  }, [open, maxHeight]);
+    const vAvail =
+      pickedSide === "bottom" ? vh - rect.bottom - GUTTER : rect.top - GUTTER;
+    setPanelMaxHeight(Math.max(120, Math.min(maxHeight, vAvail)));
+    // Panel width for align-check: use the trigger's width as a lower bound
+    // (we're `min-w-full`). Real rendered width can be larger, but for the
+    // "will this spill off an edge?" question the trigger width is usually
+    // enough to flip correctly — consumers with very wide content should
+    // use the explicit `popoverAlign` prop.
+    const preferredAlign: PopoverAlign = popoverAlign === "right" ? "end" : "start";
+    setAlign(
+      computePopoverAlign(rect, rect.right - rect.left, vw, preferredAlign),
+    );
+  }, [open, maxHeight, popoverAlign]);
 
   // Scroll the highlighted option into view as the user arrows through the
   // list — essential for long model lists that overflow maxHeight.
@@ -325,7 +345,7 @@ export function Select(props: SelectProps) {
     );
   };
 
-  const panelAlign = popoverAlign === "right" ? "right-0" : "left-0";
+  const panelAlignClass = align === "end" ? "right-0" : "left-0";
 
   // Precompute the starting flat index for each group so options share a
   // single numbering used by highlight + aria-activedescendant.
@@ -380,9 +400,10 @@ export function Select(props: SelectProps) {
           role="listbox"
           aria-label={ariaLabel}
           data-side={side}
+          data-align={align}
           className={cn(
             "absolute z-30 min-w-full overflow-y-auto rounded-md border border-border bg-surface py-1 shadow-lg",
-            panelAlign,
+            panelAlignClass,
             side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
           )}
           style={{

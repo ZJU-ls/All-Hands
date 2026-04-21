@@ -51,8 +51,9 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Flip the history popover when opening near the bottom of the viewport
-  // (e.g. short windows, split panels). Preferred side is still bottom —
-  // "历史" triggers sit in the header so bottom almost always wins.
+  // (e.g. short windows, split panels). Horizontal alignment stays right-end
+  // since the trigger sits at the right edge of the chat header; an h-flip
+  // would only matter on sub-400px viewports we don't support yet.
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();

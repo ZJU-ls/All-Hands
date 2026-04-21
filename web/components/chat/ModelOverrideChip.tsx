@@ -9,7 +9,9 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import {
+  computePopoverAlign,
   computePopoverSide,
+  type PopoverAlign,
   type PopoverSide,
 } from "@/lib/popover-placement";
 
@@ -18,6 +20,8 @@ import {
 // but opening the Select upward inside can add another ~280px of options.
 // Estimate generously so we flip early when cramped.
 const POPOVER_HEIGHT_ESTIMATE = 320;
+// `w-60` on the popover — keep in sync if the width class below changes.
+const POPOVER_WIDTH = 240;
 
 /**
  * Per-conversation model override control (Track ζ).
@@ -59,6 +63,7 @@ export function ModelOverrideChip({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [side, setSide] = useState<PopoverSide>("bottom");
+  const [align, setAlign] = useState<PopoverAlign>("end");
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -76,16 +81,22 @@ export function ModelOverrideChip({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  // Pick side on open. The chip lives in the chat header — near the top of
-  // the viewport — so `bottom` almost always wins; but on short viewports
-  // or dense layouts we flip up rather than letting the panel stream off-
-  // screen (L09). Always preferred-bottom; never overlap the header by
-  // default as the old `bottom-full` did.
+  // Pick side + align on open. The chip is now used in two spots:
+  //   - chat header (right-packed controls)  → end-align, bottom-prefer wins
+  //   - composer control row (left-packed)   → `end` would extend left and
+  //     overflow the AppShell sidebar; flip to `start`. This was the L10
+  //     follow-up bug the user showed on 2026-04-22.
+  // The chip sits just above the composer bottom in that second usage, so
+  // vertical prefers `bottom` but we expect the flip to `top` most of the
+  // time. Either way we never hard-code now.
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     setSide(
       computePopoverSide(rect, POPOVER_HEIGHT_ESTIMATE, window.innerHeight, "bottom"),
+    );
+    setAlign(
+      computePopoverAlign(rect, POPOVER_WIDTH, window.innerWidth, "end"),
     );
   }, [open]);
 
@@ -143,8 +154,10 @@ export function ModelOverrideChip({
           role="dialog"
           aria-label="选择本对话使用的模型"
           data-side={side}
+          data-align={align}
           className={cn(
-            "absolute right-0 z-20 w-60 rounded-md border border-border bg-surface-1 p-2 shadow-lg",
+            "absolute z-20 w-60 rounded-md border border-border bg-surface-1 p-2 shadow-lg",
+            align === "end" ? "right-0" : "left-0",
             side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
           )}
           data-testid="model-override-popover"

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computePopoverSide } from "../popover-placement";
+import {
+  computePopoverAlign,
+  computePopoverSide,
+} from "../popover-placement";
 
 const VIEWPORT = 800;
 
@@ -44,5 +47,45 @@ describe("computePopoverSide", () => {
     // 300 below, 100 above — fits exactly below
     const side = computePopoverSide(rect, 300, VIEWPORT, "bottom");
     expect(side).toBe("bottom");
+  });
+});
+
+const VIEWPORT_W = 1200;
+
+describe("computePopoverAlign", () => {
+  it("keeps preferred start when panel fits within viewport right", () => {
+    const rect = { left: 100, right: 140 };
+    // start → [100, 340]; fits within 1200.
+    expect(computePopoverAlign(rect, 240, VIEWPORT_W, "start")).toBe("start");
+  });
+
+  it("flips start→end when start overflows right and end fits", () => {
+    const rect = { left: 1050, right: 1100 };
+    // start → [1050, 1290] overflows 1200.
+    // end   → [860, 1100] fits.
+    expect(computePopoverAlign(rect, 240, VIEWPORT_W, "start")).toBe("end");
+  });
+
+  it("keeps preferred end when panel fits", () => {
+    const rect = { left: 900, right: 960 };
+    // end → [720, 960] fits within 1200.
+    expect(computePopoverAlign(rect, 240, VIEWPORT_W, "end")).toBe("end");
+  });
+
+  it("flips end→start when end overflows left (ModelOverrideChip case)", () => {
+    const rect = { left: 80, right: 140 };
+    // end   → [-100, 140] overflows left (chip too close to sidebar edge).
+    // start → [80, 320] fits.
+    expect(computePopoverAlign(rect, 240, VIEWPORT_W, "end")).toBe("start");
+  });
+
+  it("sticks with preferred when both sides overflow", () => {
+    const rect = { left: 50, right: 90 };
+    const vw = 100; // artificially tight viewport
+    // start → [50, 290] overflows right (290 > 100)
+    // end   → [-150, 90] overflows left (-150 < 0)
+    // preferred wins.
+    expect(computePopoverAlign(rect, 240, vw, "end")).toBe("end");
+    expect(computePopoverAlign(rect, 240, vw, "start")).toBe("start");
   });
 });

@@ -377,34 +377,47 @@ import { ChatIcon, UserIcon } from "@/components/icons";
 任何"触发器 + 可展开面板"(下拉、历史菜单、overlay picker)都必须遵守:
 
 1. **默认方向 = 向下**(`top-full mt-1`)。往上展(`bottom-full mb-1`)是 header-chip 级别的例外,且**不许**硬编码 —— 必须走 flip 逻辑。
-2. **必须 flip**:使用 [`web/lib/popover-placement.ts`](../web/lib/popover-placement.ts) 的 `computePopoverSide(rect, estimatedHeight, window.innerHeight, preferredSide)`。规则:
+2. **垂直必须 flip**:使用 [`web/lib/popover-placement.ts`](../web/lib/popover-placement.ts) 的 `computePopoverSide(rect, estimatedHeight, window.innerHeight, preferredSide)`。规则:
    - 优先边能装下 → 用优先边
    - 装不下但对面空间更多 → 翻到对面
    - 两边都挤 → 仍然守优先边(抖动比拥挤更让人恼火)
-3. **必须 clamp maxHeight 到可用空间**:`Select` 示范做法 ——
+3. **水平也必须 flip(面板宽于触发器时)**:使用同一份 `popover-placement.ts` 的 `computePopoverAlign(rect, panelWidth, window.innerWidth, preferredAlign)`。`start` = 面板左对齐触发器左缘(向右延展) · `end` = 面板右对齐触发器右缘(向左延展)。典型反例:chip-style 面板(240–320px)在 composer **左半区**按 `end` 对齐 → 面板往左延 240px → 撞 AppShell 侧栏。必须 flip。
+4. **必须 clamp maxHeight 到可用空间**:`Select` 示范做法 ——
    ```ts
    const avail = picked === "bottom" ? vh - rect.bottom - 8 : rect.top - 8;
    setPanelMaxHeight(Math.max(120, Math.min(maxHeight, avail)));
    ```
    8px 是对齐 4/8/12 间距阶梯的视口边距。最小 120px 是"至少一屏选项"的保底。
-4. **不许硬编码方向**。以下模式看到就打回:
+5. **不许硬编码方向**。以下模式看到就打回:
    ```tsx
    // ❌ 硬上展 · 撞头部
    className="absolute bottom-full mb-1 ..."
    // ❌ 硬下展 · 出视口
    className="absolute top-full mt-1 max-h-96 ..."
-   // ✅ 必须带 computePopoverSide 决定的 side 变量
-   className={side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"}
+   // ❌ 硬右对齐 · 触发器偏左时撞侧栏
+   className="absolute right-0 w-60 ..."
+   // ✅ 两个轴都由 state 驱动
+   className={cn(
+     side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
+     align === "end" ? "right-0" : "left-0",
+   )}
    ```
-5. **z-index**:面板 `z-20` 起步,命令面板 / 全局抽屉 `z-30+`。嵌在 `role="dialog"` 里的面板用比 dialog 低 10 的值(`z-40` vs `z-50`),保证点击区分层但不打架。
-6. **DOM 位置**:面板渲染在触发器同 DOM 子树(非 portal),这样外层"click-outside"判断仍把面板里的点击看成"内部",嵌套 popover 不会互相关(见 `Select` 的 `mousedown` 选项 handler 避开外层关闭的设计)。
-7. **关闭时不抖动**:`open=true` 期间不许动态切 side(`useLayoutEffect` 仅依赖 `[open]` / `[open, maxHeight]`,不依赖滚动),滚动视口时面板随触发器走位是可接受的,但 side 不可反转。
+6. **z-index**:面板 `z-20` 起步,命令面板 / 全局抽屉 `z-30+`。嵌在 `role="dialog"` 里的面板用比 dialog 低 10 的值(`z-40` vs `z-50`),保证点击区分层但不打架。
+7. **DOM 位置**:面板渲染在触发器同 DOM 子树(非 portal),这样外层"click-outside"判断仍把面板里的点击看成"内部",嵌套 popover 不会互相关(见 `Select` 的 `mousedown` 选项 handler 避开外层关闭的设计)。
+8. **关闭时不抖动**:`open=true` 期间不许动态切 side/align(`useLayoutEffect` 仅依赖 `[open]` / `[open, maxHeight]`,不依赖滚动),滚动视口时面板随触发器走位是可接受的,但方向不可反转。
 
-**当前实现的四个守门:**
-- `Select.tsx`(通用原语 · 6 个下拉已迁移 · 自带 flip + clamp)
-- `ModelOverrideChip.tsx`(chat header chip · flip)
-- `ConversationSwitcher.tsx`(历史 popover · flip)
-- `web/lib/__tests__/popover-placement.test.ts`(flip 决策矩阵 6 用例回归)
+**什么时候该用 flip、什么时候不需要**
+
+- 面板宽度 > 触发器宽度 → **两轴都要 flip**(Select · ModelOverrideChip)
+- 面板宽度 ≤ 触发器宽度 + 触发器位置稳定在视口一侧 → 只需垂直 flip(ConversationSwitcher · 在 chat header 右侧)
+- 面板永远铺满一侧(drawer)→ 不是 popover,不适用
+
+**当前实现的守门:**
+- `Select.tsx`(通用原语 · 6 个下拉已迁移 · side + align 都 flip + maxHeight clamp)
+- `ModelOverrideChip.tsx`(chat header + composer chip · side + align 都 flip)
+- `ConversationSwitcher.tsx`(历史 popover · 只 side flip · 详见"什么时候不需要")
+- `web/lib/__tests__/popover-placement.test.ts`(flip 决策矩阵 11 用例:6 vertical + 5 horizontal)
+- `web/tests/popover-placement-contract.test.ts`(静态扫描:`top-full`/`bottom-full` 出现就必须有 flip 三元)
 
 **不要**用 Floating UI / Popper.js / Radix —— 这条规则的整个价值就是让我们**拥有**位置策略,不是再加一层库。
 
