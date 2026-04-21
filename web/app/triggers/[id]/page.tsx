@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type Kind = "timer" | "event";
@@ -237,12 +237,12 @@ export default function TriggerDetailPage() {
 
               <Section title={`最近触发记录 · ${fires.length}`}>
                 {fires.length === 0 ? (
-                  <p
-                    data-testid="fires-empty"
-                    className="text-xs text-text-muted"
-                  >
-                    还没有触发记录。
-                  </p>
+                  <div data-testid="fires-empty">
+                    <EmptyState
+                      title="还没有触发记录"
+                      description="触发后会列出最近的调度执行"
+                    />
+                  </div>
                 ) : (
                   <div
                     data-testid="fires-list"

@@ -135,3 +135,14 @@ body {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+/* One-shot celebratory sheen for "test passed" / "task complete" moments.
+ * Single pass, no loop — honours §0.3 no-infinite-animation rule. */
+@keyframes ah-sheen {
+  from { background-position: -150% 0; opacity: 0.6; }
+  to   { background-position:  150% 0; opacity: 0;   }
+}
+/* One-shot value-change highlight. Color only, honours §10.5 — no tween libs. */
+@keyframes ah-flash {
+  0%   { color: var(--color-primary); }
+  100% { color: inherit; }
+}

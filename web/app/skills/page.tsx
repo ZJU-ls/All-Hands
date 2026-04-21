@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type Skill = {
   id: string;
@@ -135,14 +136,20 @@ export default function SkillsPage() {
   return (
     <AppShell title="技能">
       <div className="h-full overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-8 py-8">
-          <p className="mb-6 text-sm text-text-muted">
-            技能包 = 工具 ID 列表 + 提示片段。可从 GitHub、官方市场(<span className="font-mono">anthropics/skills</span>)或本地 .zip 安装,并分配给任意员工。
-          </p>
+        <div className="max-w-3xl mx-auto px-8 py-8 space-y-5">
+          <PageHeader
+            title="技能"
+            count={skills.length || undefined}
+            subtitle={
+              <>
+                技能包 = 工具 ID 列表 + 提示片段。从 GitHub、官方市场(<span className="font-mono">anthropics/skills</span>)或本地 .zip 安装,并分配给任意员工。
+              </>
+            }
+          />
 
           <div
             role="tablist"
-            className="mb-6 flex items-center gap-1 border-b border-border"
+            className="flex items-center gap-1 border-b border-border"
           >
             {(
               [
@@ -262,13 +269,11 @@ function InstalledList({
 }) {
   if (skills.length === 0) {
     return (
-      <div
-        data-testid="skills-empty"
-        className="rounded-xl border border-dashed border-border p-10 text-center"
-      >
-        <p className="text-sm text-text-muted">
-          尚未安装任何技能。切换到&ldquo;官方市场&rdquo;开始。
-        </p>
+      <div data-testid="skills-empty">
+        <EmptyState
+          title="尚未安装任何技能"
+          description={"切换到“官方市场”开始,或直接从 GitHub 克隆"}
+        />
       </div>
     );
   }
@@ -357,13 +362,11 @@ function MarketList({
       </div>
 
       {entries.length === 0 ? (
-        <div
-          data-testid="market-empty"
-          className="rounded-xl border border-dashed border-border p-10 text-center"
-        >
-          <p className="text-sm text-text-muted">
-            {query ? `未找到匹配 "${query}" 的技能。` : "市场目录为空。"}
-          </p>
+        <div data-testid="market-empty">
+          <EmptyState
+            title={query ? `未找到匹配 "${query}" 的技能` : "市场目录为空"}
+            description={query ? "换个关键词试试" : undefined}
+          />
         </div>
       ) : (
         <div data-testid="market-list" className="flex flex-col gap-2">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { ErrorState, LoadingState } from "@/components/state";
+import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import {
   fetchObservatorySummary,
   fetchTraces,
@@ -229,9 +229,10 @@ export default function ObservatoryPage() {
               </div>
 
               {traces.length === 0 && state === "ok" ? (
-                <div className="border border-dashed border-border rounded-md p-8 text-center text-[12px] text-text-muted">
-                  还没有 run 事件 · 和 Lead 对话发起第一条任务,这里会出现 trace 摘要。
-                </div>
+                <EmptyState
+                  title="还没有 run 事件"
+                  description="和 Lead 对话发起第一条任务,这里会出现 trace 摘要。"
+                />
               ) : (
                 <table className="w-full border-collapse text-[12px]">
                   <thead>

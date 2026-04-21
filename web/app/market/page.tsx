@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { EmptyState, LoadingState } from "@/components/state";
 
 type Quote = {
   symbol: string;
@@ -236,9 +236,10 @@ function WatchedTable({
 }) {
   if (rows.length === 0)
     return (
-      <div className="rounded-xl border border-border bg-surface p-10 text-center">
-        <p className="text-sm text-text-muted">尚未添加自选 · 点右上 + 加自选</p>
-      </div>
+      <EmptyState
+        title="还没有自选"
+        description="点右上「+ 加自选」添加第一只,可贴 SSE: / SZSE: 代码"
+      />
     );
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
@@ -311,9 +312,10 @@ function HoldingsTable({
 }) {
   if (rows.length === 0)
     return (
-      <div className="rounded-xl border border-border bg-surface p-10 text-center">
-        <p className="text-sm text-text-muted">尚无持仓 · + 加持仓 或用 CSV 导入</p>
-      </div>
+      <EmptyState
+        title="还没有持仓"
+        description="点右上「+ 加持仓」录入第一笔,或用 CSV 批量导入"
+      />
     );
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">

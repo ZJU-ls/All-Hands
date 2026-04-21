@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { EmptyState, LoadingState } from "@/components/state";
+import { PageHeader } from "@/components/ui/PageHeader";
 import {
   listConversations,
   listEmployees,
@@ -69,6 +70,11 @@ export default function ConversationsPage() {
     <AppShell title="历史会话">
       <div className="h-full overflow-y-auto">
         <div className="max-w-4xl mx-auto p-6 space-y-6">
+          <PageHeader
+            title="历史会话"
+            count={conversations?.length}
+            subtitle="按员工分组 · 最新对话在顶部"
+          />
           {error && (
             <div className="rounded border border-border bg-surface-2 px-3 py-2 text-[12px] text-danger">
               {error}
@@ -77,9 +83,10 @@ export default function ConversationsPage() {
           {loading ? (
             <LoadingState title="加载会话" />
           ) : groups.length === 0 ? (
-            <p className="text-[12px] text-text-muted">
-              还没有任何对话。打开一个员工主页,创建新对话开始。
-            </p>
+            <EmptyState
+              title="还没有任何对话"
+              description="打开一个员工主页 · 创建新对话开始"
+            />
           ) : (
             groups.map((g) => {
               const empId = g.employee?.id ?? "unknown";

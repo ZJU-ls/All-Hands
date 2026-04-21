@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type ChannelKind = "telegram" | "bark" | "wecom" | "feishu" | "email" | "pushdeer";
 
@@ -146,11 +147,17 @@ export default function ChannelsPage() {
       }
     >
       <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-8">
-          <p className="mb-6 text-sm text-text-muted">
-            平台级通知渠道:任何 skill / trigger / agent 调用{" "}
-            <code className="text-xs font-mono">send_notification</code> 即可触达用户。Telegram 与 Bark 为 v0 真实可用渠道;其他为 stub,仅接受注册不发送。
-          </p>
+        <div className="max-w-4xl mx-auto px-8 py-8 space-y-5">
+          <PageHeader
+            title="通知渠道"
+            count={channels.length || undefined}
+            subtitle={
+              <>
+                平台级通知渠道:任何 skill / trigger / agent 调用{" "}
+                <code className="text-[11px] font-mono">send_notification</code> 即可触达用户。Telegram 与 Bark 为 v0 真实可用渠道;其他为 stub,仅接受注册不发送。
+              </>
+            }
+          />
 
           {status === "loading" && (
             <div data-testid="channels-loading">
@@ -175,15 +182,11 @@ export default function ChannelsPage() {
           )}
 
           {status === "ready" && channels.length === 0 && (
-            <div
-              data-testid="channels-empty"
-              className="rounded-xl border border-border bg-surface p-10 text-center"
-            >
-              <p className="text-sm text-text-muted mb-1">还没有注册任何渠道</p>
-              <p className="text-xs text-text-subtle">
-                点右上角注册 · 或在对话里让 Lead Agent 用{" "}
-                <code className="font-mono">register_channel</code> Meta Tool 代办
-              </p>
+            <div data-testid="channels-empty">
+              <EmptyState
+                title="还没有注册任何渠道"
+                description="点右上角注册,或在对话里让 Lead Agent 用 register_channel Meta Tool 代办"
+              />
             </div>
           )}
 

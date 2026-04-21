@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import { Coachmark } from "@/components/ui/Coachmark";
+import { DotGridBackdrop } from "@/components/ui/DotGridBackdrop";
 import {
   cockpitStreamUrl,
   getCockpitSummary,
@@ -258,10 +259,15 @@ export function Cockpit() {
           ) : isWorkspaceEmpty(summary) ? (
             <>
               <KpiBar summary={summary} />
-              <EmptyState
-                title="工作区还没有活动"
-                description="创建第一个员工或触发一次对话后,活动流会实时出现在这里"
-              />
+              <div className="relative overflow-hidden rounded-md border border-border bg-surface px-6 py-12">
+                <DotGridBackdrop opacity={0.3} />
+                <div className="relative mx-auto max-w-md">
+                  <EmptyState
+                    title="工作区还没有活动"
+                    description="创建第一个员工或触发一次对话后,活动流会实时出现在这里"
+                  />
+                </div>
+              </div>
             </>
           ) : (
             <>

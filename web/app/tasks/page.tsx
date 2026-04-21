@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState } from "@/components/state";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { NewTaskDrawer } from "@/components/tasks/NewTaskDrawer";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
 import { listEmployees, type EmployeeDto } from "@/lib/api";
@@ -94,15 +95,21 @@ export default function TasksPage() {
       }
     >
       <div className="h-full overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-8 py-6">
-          <p className="mb-5 text-sm text-text-muted">
-            任务是异步工作单元 · 发起后可以直接关掉页面,员工在后台跑完后你回来看结果。
-            让 Lead Agent 在对话里派,也可以右上 &ldquo;+ 新任务&rdquo; 手动建。
-          </p>
+        <div className="max-w-5xl mx-auto px-8 py-6 space-y-5">
+          <PageHeader
+            title="任务"
+            count={tasks.length || undefined}
+            subtitle={
+              <>
+                异步工作单元 · 发起后可以关掉页面,员工在后台跑完后你回来看结果。
+                让 Lead Agent 在对话里派,或右上 &ldquo;+ 新任务&rdquo; 手动建。
+              </>
+            }
+          />
 
           <nav
             aria-label="任务筛选"
-            className="mb-4 flex items-center gap-1 rounded-md border border-border bg-surface p-1 w-fit"
+            className="flex items-center gap-1 rounded-md border border-border bg-surface p-1 w-fit"
           >
             {FILTER_DEFS.map((f) => {
               const active = filter === f.key;

@@ -72,6 +72,18 @@
 
 **违反以上三条任意一条 → review 直接打回,无协商。**
 
+**允许的装饰原语(composition primitives · 不松绑硬纪律,把既有语汇列明):**
+
+- **Sparkline / micro-viz** — 纯 SVG,描边 `currentColor` 或 `var(--color-primary)`,无填充渐变,高度 ≤ 32px。用于 KPI 趋势、活动密度。
+- **Dotgrid backdrop** — CSS `radial-gradient` + `var(--color-border)` 圆点,间距 ≥ 16px,整体不透明度 ≤ 40%。用于 hero / 空状态视觉锚。
+- **Hairline accent(1px)** — 卡片顶部或左侧 1px 高度的 `linear-gradient(var(--color-primary), transparent)` 条,不透明度 ≤ 25%。用于标记推荐/默认项;**不替代** 激活色条(激活仍走 2px primary)。
+- **入场动效** — `ah-fade-up`(4px translateY)用于路由切换、列表初渲染、modal 入场。`scaleY 0→1` 仅限激活色条(`ah-bar-in`),其他 scale 全禁。
+- **数值变动** — KPI 数字更新只用 `transition: color 150ms` 或 ≤ 2px `translateY`,禁止第三方 tween 库。
+
+**对三条硬纪律的澄清:**
+- #3 中"禁止 scale 做交互反馈"= 禁止 `hover:scale-*` / `active:scale-*`;一次性入场的 `scaleY 0→1`(激活色条)不属于反馈,允许。
+- #2 颜色密度不计 `primary/10` / `primary/20` / `border/40` 这类透明度叠加 —— 仍走 token,不计新色号。
+
 新增任何 `web/` 组件前,先过一遍 [`design-system/MASTER.md` §0 自检清单](design-system/MASTER.md#0-每次开发前的自检)。Token 或组件契约变更需同步修改:`product/03-visual-design.md`(规范)→ `globals.css` + `tailwind.config.ts`(实现)→ `design-system/MASTER.md`(速查)。
 
 ---

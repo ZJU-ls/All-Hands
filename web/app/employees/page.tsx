@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { EmptyState, LoadingState } from "@/components/state";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { createConversation, listEmployees, type EmployeeDto } from "@/lib/api";
 import { deriveProfile, BADGE_LABEL } from "@/lib/employee-profile";
 import { BrandMark } from "@/components/brand/BrandMark";
@@ -77,7 +78,12 @@ export default function EmployeesPage() {
       }
     >
       <div className="h-full overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-6">
+        <div className="max-w-6xl mx-auto p-6 space-y-5">
+          <PageHeader
+            title="员工"
+            count={employees?.length}
+            subtitle="按卡片浏览已发布员工 · 点头像直接起新对话 · 右上「设计员工」进入草稿工作区"
+          />
           {error && (
             <div
               data-testid="employees-error"
@@ -89,11 +95,11 @@ export default function EmployeesPage() {
           {employees === null ? (
             <LoadingState title="加载员工" />
           ) : employees.length === 0 ? (
-            <div
-              data-testid="employees-empty"
-              className="rounded border border-border bg-surface-2 px-6 py-10 text-center text-[12px] text-text-muted"
-            >
-              还没有员工。与 Lead Agent 对话,用 create_employee 工具即可创建。
+            <div data-testid="employees-empty">
+              <EmptyState
+                title="还没有员工"
+                description="与 Lead Agent 对话,用 create_employee 工具即可创建"
+              />
             </div>
           ) : (
             <div

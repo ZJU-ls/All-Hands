@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type Transport = "stdio" | "sse" | "http";
 type Health = "unknown" | "ok" | "unreachable" | "auth_failed";
@@ -116,12 +117,14 @@ export default function McpServersPage() {
   return (
     <AppShell title="MCP 服务器">
       <div className="h-full overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-8 py-8">
-          <p className="mb-6 text-sm text-text-muted">
-            接入外部 MCP 服务器以扩展工具集。支持 stdio / sse / http 三种 transport,测试连通性后可被 Lead Agent 调用。
-          </p>
+        <div className="max-w-3xl mx-auto px-8 py-8 space-y-5">
+          <PageHeader
+            title="MCP 服务器"
+            count={servers.length || undefined}
+            subtitle="接入外部 MCP 服务器以扩展工具集。支持 stdio / sse / http 三种 transport,测试连通性后可被 Lead Agent 调用。"
+          />
 
-          <div role="tablist" className="mb-6 flex items-center gap-1 border-b border-border">
+          <div role="tablist" className="flex items-center gap-1 border-b border-border">
             {(
               [
                 ["registered", "已注册"],
@@ -236,13 +239,11 @@ function RegisteredList({
 }) {
   if (servers.length === 0) {
     return (
-      <div
-        data-testid="mcp-empty"
-        className="rounded-xl border border-dashed border-border p-10 text-center"
-      >
-        <p className="text-sm text-text-muted">
-          尚未注册任何 MCP 服务器。切换到&ldquo;添加&rdquo;开始。
-        </p>
+      <div data-testid="mcp-empty">
+        <EmptyState
+          title="尚未注册任何 MCP 服务器"
+          description={"切换到“添加”开始,或在对话里让 Lead Agent 用 register_mcp_server Meta Tool 代办"}
+        />
       </div>
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { EmptyState } from "@/components/state";
 import type { ConvCardDto } from "@/lib/cockpit-api";
 
 function dateShort(iso: string): string {
@@ -26,9 +27,12 @@ export function RecentConvList({ conversations }: { conversations: ConvCardDto[]
         </Link>
       </header>
       {conversations.length === 0 ? (
-        <p className="py-6 text-center text-[12px] text-text-muted">
-          还没有对话。去 /chat 起一段。
-        </p>
+        <div className="p-3">
+          <EmptyState
+            title="还没有对话"
+            description="去 /chat 起一段,最近对话会自动出现在这里"
+          />
+        </div>
       ) : (
         <ul className="divide-y divide-border">
           {conversations.map((c) => (

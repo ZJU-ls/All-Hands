@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type Kind = "timer" | "event";
 
@@ -138,10 +139,12 @@ export default function TriggersPage() {
       }
     >
       <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-8">
-          <p className="mb-6 text-sm text-text-muted">
-            按时间表(cron)或事件匹配(event pattern)自动执行动作。创建 / 启停 / 手动触发 / 删除都可以在对话里让 Lead Agent 代办。
-          </p>
+        <div className="max-w-4xl mx-auto px-8 py-8 space-y-5">
+          <PageHeader
+            title="触发器"
+            count={triggers.length || undefined}
+            subtitle="按时间表(cron)或事件匹配自动执行动作。创建 / 启停 / 手动触发 / 删除都可以让 Lead Agent 在对话里代办。"
+          />
 
           {status === "loading" && (
             <div data-testid="triggers-loading">
@@ -166,16 +169,13 @@ export default function TriggersPage() {
           )}
 
           {status === "ready" && triggers.length === 0 && (
-            <div
-              data-testid="triggers-empty"
-              className="rounded-xl border border-dashed border-border p-10 text-center"
-            >
-              <p className="text-sm text-text-muted mb-2">
-                还没有触发器。
-              </p>
-              <p className="text-xs text-text-subtle">
-                用右上&ldquo;+ 新触发器&rdquo;开始,或直接对 Lead Agent 说&ldquo;帮我每天早上 8 点通知今日日程&rdquo;。
-              </p>
+            <div data-testid="triggers-empty">
+              <EmptyState
+                title="还没有触发器"
+                description={
+                  "用右上“+ 新触发器”开始,或直接对 Lead Agent 说“帮我每天早上 8 点通知今日日程”。"
+                }
+              />
             </div>
           )}
 

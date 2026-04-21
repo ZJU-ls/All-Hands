@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { LogoDotgrid, SunIcon, MoonIcon } from "@/components/ui/icons";
 import {
@@ -17,8 +18,10 @@ import {
   CheckIcon,
   SettingsIcon,
   ExternalIcon,
+  SearchIcon,
   type IconProps,
 } from "@/components/icons";
+import { CommandPalette } from "@/components/ui/CommandPalette";
 
 type IconComp = (props: IconProps) => JSX.Element;
 type MenuItem = { label: string; href: string; Icon: IconComp };
@@ -65,6 +68,28 @@ const MENU: MenuSection[] = [
     ],
   },
 ];
+
+function CmdKHint({ onOpen }: { onOpen: () => void }) {
+  const [isMac, setIsMac] = useState(true);
+  useEffect(() => {
+    setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
+  }, []);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group hidden md:inline-flex items-center gap-2 h-7 px-2 rounded-md border border-border bg-surface hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text transition-colors duration-base"
+      aria-label="打开命令面板"
+      title="⌘K 打开命令面板"
+    >
+      <SearchIcon size={12} />
+      <span className="text-[11px]">跳转到…</span>
+      <span className="font-mono text-[10px] px-1 py-0.5 rounded border border-border bg-surface-2 text-text-subtle group-hover:text-text-muted">
+        {isMac ? "⌘K" : "Ctrl K"}
+      </span>
+    </button>
+  );
+}
 
 function ThemeToggle() {
   const { theme, toggle } = useTheme();
@@ -181,6 +206,7 @@ export function AppShell({
   title?: string;
   actions?: React.ReactNode;
 }) {
+  const [paletteOpen, setPaletteOpen] = useState(false);
   return (
     <div className="flex h-screen w-full bg-bg text-text">
       <Sidebar />
@@ -188,12 +214,19 @@ export function AppShell({
         <header className="h-11 shrink-0 border-b border-border flex items-center justify-between px-6">
           <h1 className="text-[13px] font-semibold tracking-tight">{title}</h1>
           <div className="flex items-center gap-2">
+            <CmdKHint onOpen={() => setPaletteOpen(true)} />
             {actions}
             <ThemeToggle />
           </div>
         </header>
-        <main className="flex-1 overflow-hidden">{children}</main>
+        <main
+          className="flex-1 overflow-hidden"
+          style={{ animation: "ah-fade-up 220ms var(--ease-out) both" }}
+        >
+          {children}
+        </main>
       </div>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }

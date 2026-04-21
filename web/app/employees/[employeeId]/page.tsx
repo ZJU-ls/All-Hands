@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { EmptyState, LoadingState } from "@/components/state";
 import {
   getEmployee,
   listConversations,
@@ -128,9 +128,10 @@ export default function EmployeePage() {
             {conversations === null ? (
               <LoadingState title="加载对话" />
             ) : conversations.length === 0 ? (
-              <p className="text-[12px] text-text-muted">
-                还没有和 {employee?.name ?? "该员工"} 的对话。点「新对话」开始。
-              </p>
+              <EmptyState
+                title={`还没有和 ${employee?.name ?? "该员工"} 的对话`}
+                description="点右上「新对话」开始第一段"
+              />
             ) : (
               <ul className="divide-y divide-border border border-border rounded">
                 {conversations.map((c) => (

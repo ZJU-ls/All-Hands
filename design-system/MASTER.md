@@ -220,7 +220,63 @@ URL / key 字段加 `font-mono`。
 </div>
 ```
 
-### 2.15 Modal
+### 2.15 Sparkline(micro-viz · §10.1)
+
+```tsx
+<svg viewBox="0 0 100 32" className="w-full h-8 text-primary" aria-hidden="true">
+  <polyline
+    points={pts.map((y, x) => `${(x / (pts.length - 1)) * 100},${32 - Math.max(0, Math.min(1, y)) * 32}`).join(" ")}
+    stroke="currentColor"
+    strokeWidth="1.5"
+    fill="none"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  />
+</svg>
+```
+
+### 2.16 Dotgrid Backdrop(§10.2)
+
+```tsx
+<div
+  aria-hidden="true"
+  className="pointer-events-none absolute inset-0 opacity-40"
+  style={{
+    backgroundImage: "radial-gradient(var(--color-border) 1px, transparent 1px)",
+    backgroundSize: "16px 16px",
+  }}
+/>
+```
+
+### 2.17 Hairline Accent(§10.3)
+
+```tsx
+{/* 顶部 1px */}
+<div
+  aria-hidden="true"
+  className="absolute inset-x-0 top-0 h-px opacity-20"
+  style={{ background: "linear-gradient(to right, var(--color-primary), transparent)" }}
+/>
+```
+
+### 2.18 PageHeader(标题 · 计数 · 元数据 · 操作)
+
+```tsx
+<header className="flex items-end justify-between gap-4 px-8 pt-6 pb-4 border-b border-border">
+  <div className="min-w-0">
+    <div className="flex items-center gap-2">
+      <h2 className="text-lg font-semibold tracking-tight text-text">{title}</h2>
+      {count !== undefined && (
+        <span className="font-mono text-[11px] text-text-subtle">· {count}</span>
+      )}
+    </div>
+    {subtitle && <p className="text-[12px] text-text-muted mt-0.5">{subtitle}</p>}
+  </div>
+  {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+</header>
+```
+
+### 2.19 Modal
 
 ```tsx
 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
