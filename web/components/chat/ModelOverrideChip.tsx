@@ -1,12 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ModelPicker } from "@/components/model-picker/ModelPicker";
 import {
   updateConversation,
   type ConversationDto,
   type EmployeeDto,
 } from "@/lib/api";
+import { cn } from "@/lib/cn";
+import {
+  computePopoverSide,
+  type PopoverSide,
+} from "@/lib/popover-placement";
+
+// The chip sits in the chat header; its popover carries the ModelPicker.
+// Rough footprint: label row + Select trigger + one error line ≈ 140px,
+// but opening the Select upward inside can add another ~280px of options.
+// Estimate generously so we flip early when cramped.
+const POPOVER_HEIGHT_ESTIMATE = 320;
 
 /**
  * Per-conversation model override control (Track ζ).
@@ -47,7 +58,9 @@ export function ModelOverrideChip({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [side, setSide] = useState<PopoverSide>("bottom");
   const popoverRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const effectiveRef = conversation.model_ref_override ?? employee.model_ref;
   const isOverridden = conversation.model_ref_override !== null;
@@ -61,6 +74,19 @@ export function ModelOverrideChip({
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  // Pick side on open. The chip lives in the chat header — near the top of
+  // the viewport — so `bottom` almost always wins; but on short viewports
+  // or dense layouts we flip up rather than letting the panel stream off-
+  // screen (L09). Always preferred-bottom; never overlap the header by
+  // default as the old `bottom-full` did.
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setSide(
+      computePopoverSide(rect, POPOVER_HEIGHT_ESTIMATE, window.innerHeight, "bottom"),
+    );
   }, [open]);
 
   async function handleChange(next: string) {
@@ -84,6 +110,7 @@ export function ModelOverrideChip({
   return (
     <div className="relative" ref={popoverRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
@@ -115,7 +142,11 @@ export function ModelOverrideChip({
         <div
           role="dialog"
           aria-label="选择本对话使用的模型"
-          className="absolute right-0 bottom-full mb-1 z-20 w-60 rounded-md border border-border bg-surface-1 p-2 shadow-lg"
+          data-side={side}
+          className={cn(
+            "absolute right-0 z-20 w-60 rounded-md border border-border bg-surface-1 p-2 shadow-lg",
+            side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
+          )}
           data-testid="model-override-popover"
         >
           <div className="mb-1.5 text-[10px] font-mono uppercase tracking-wider text-text-subtle">

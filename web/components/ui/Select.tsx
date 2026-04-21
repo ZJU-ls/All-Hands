@@ -41,6 +41,10 @@ import {
 } from "react";
 import { ChevronDownIcon } from "@/components/icons";
 import { cn } from "@/lib/cn";
+import {
+  computePopoverSide,
+  type PopoverSide,
+} from "@/lib/popover-placement";
 
 export type SelectOption = {
   value: string;
@@ -128,6 +132,8 @@ export function Select(props: SelectProps) {
 
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
+  const [side, setSide] = useState<PopoverSide>("bottom");
+  const [panelMaxHeight, setPanelMaxHeight] = useState(maxHeight);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
@@ -147,6 +153,23 @@ export function Select(props: SelectProps) {
       setHighlight(nextEnabledIndex(flatOptions, -1, 1));
     }
   }, [open, value, flatOptions]);
+
+  // Flip placement on open based on viewport room. Prefer bottom; fall back to
+  // top when cramped. Also clamp panel height to what actually fits on the
+  // chosen side so the list never bleeds off-screen (user L09 bug).
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const vh = window.innerHeight;
+    const picked = computePopoverSide(rect, maxHeight, vh, "bottom");
+    setSide(picked);
+    // Leave an 8px cushion to the viewport edge — keeps the panel from
+    // kissing the boundary, matches our base 4/8/12 spacing rhythm.
+    const GUTTER = 8;
+    const avail =
+      picked === "bottom" ? vh - rect.bottom - GUTTER : rect.top - GUTTER;
+    setPanelMaxHeight(Math.max(120, Math.min(maxHeight, avail)));
+  }, [open, maxHeight]);
 
   // Scroll the highlighted option into view as the user arrows through the
   // list — essential for long model lists that overflow maxHeight.
@@ -356,12 +379,14 @@ export function Select(props: SelectProps) {
           id={listboxId}
           role="listbox"
           aria-label={ariaLabel}
+          data-side={side}
           className={cn(
-            "absolute z-30 mt-1 min-w-full overflow-y-auto rounded-md border border-border bg-surface py-1 shadow-lg",
+            "absolute z-30 min-w-full overflow-y-auto rounded-md border border-border bg-surface py-1 shadow-lg",
             panelAlign,
+            side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
           )}
           style={{
-            maxHeight,
+            maxHeight: panelMaxHeight,
             animation: "ah-fade-up 160ms var(--ease-out, ease-out) both",
           }}
         >
