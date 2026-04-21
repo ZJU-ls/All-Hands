@@ -91,9 +91,30 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
   const [phase, setPhase] = useState<"idle" | "thinking" | "answering">("idle");
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const startAtRef = useRef<number | null>(null);
   const streamRef = useRef<StreamHandle | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
+
+  // Reasoning-heavy models (Qwen3, DeepSeek-R1, o1…) can sit silent for 10–60s
+  // before their first chunk lands. Tick an elapsed counter while loading so
+  // the waiting state has visible progress — the composer alone flipping to
+  // "stop" isn't enough feedback (P03/P04 long-op affordance).
+  useEffect(() => {
+    if (!isLoading) {
+      startAtRef.current = null;
+      return;
+    }
+    startAtRef.current = Date.now();
+    setElapsedMs(0);
+    const id = window.setInterval(() => {
+      if (startAtRef.current !== null) {
+        setElapsedMs(Date.now() - startAtRef.current);
+      }
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [isLoading]);
 
   const isAtBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -386,6 +407,10 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 reasoning={m.reasoning}
               />
             ))}
+            {isLoading &&
+              phase === "thinking" &&
+              !streamContent &&
+              !streamReasoning && <ThinkingPlaceholder elapsedMs={elapsedMs} />}
             {(streamContent || streamReasoning) && (
               <MessageRow
                 role="assistant"
@@ -477,6 +502,34 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
           />
         </footer>
       </div>
+    </div>
+  );
+}
+
+function ThinkingPlaceholder({ elapsedMs }: { elapsedMs: number }) {
+  return (
+    <div
+      data-testid="model-test-thinking"
+      data-role="assistant"
+      data-streaming="true"
+      className="rounded-md px-3 py-2 text-sm bg-bg border border-border text-text mr-auto max-w-[85%]"
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-text-subtle block mb-0.5">
+        ASSISTANT · 思考中
+      </span>
+      <span className="inline-flex items-center gap-2 text-text-subtle">
+        <span
+          aria-hidden="true"
+          className="inline-block w-1.5 h-1.5 rounded-full bg-primary"
+          style={{ animation: "ah-pulse 1.6s ease-in-out infinite" }}
+        />
+        <span className="italic">正在处理请求</span>
+        {elapsedMs >= 1000 && (
+          <span className="ml-1 font-mono not-italic text-[10px] tabular-nums">
+            {(elapsedMs / 1000).toFixed(1)}s
+          </span>
+        )}
+      </span>
     </div>
   );
 }
