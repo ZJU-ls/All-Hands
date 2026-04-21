@@ -205,6 +205,8 @@ async def get_observatory_service(
         event_repo=SqlEventRepo(session),
         employee_repo=SqlEmployeeRepo(session),
         config_repo=SqlObservabilityConfigRepo(session),
+        conversation_repo=SqlConversationRepo(session),
+        task_repo=SqlTaskRepo(session),
     )
 
 

@@ -54,6 +54,12 @@ class Message(BaseModel):
     render_payloads: list[RenderPayload] = Field(default_factory=list)
     trace_ref: str | None = None
     parent_run_id: str | None = None
+    # Populated on finalize when the assistant message came from a
+    # thinking-capable model (Anthropic Extended Thinking, Qwen3
+    # enable_thinking, DeepSeek-R1). Lets the trace viewer reconstruct the
+    # reasoning channel for past runs; live chat still streams via
+    # ReasoningEvent / AG-UI REASONING_MESSAGE_CHUNK.
+    reasoning: str | None = None
     created_at: datetime
 
 

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState } from "@/components/state";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
+import { RunTracePanel } from "@/components/runs/RunTracePanel";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   answerTask,
@@ -247,45 +248,38 @@ export default function TaskDetailPage() {
             <MarkdownLike text={task.goal} />
           </Section>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Section title="运行">
-              {task.run_ids.length === 0 ? (
-                <p className="text-xs text-text-subtle">
-                  尚未分配 run · 一旦 TaskExecutor 起来就会出现。
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-1">
-                  {task.run_ids.map((r) => (
-                    <li
-                      key={r}
-                      className="font-mono text-[11px] text-text-muted border-l-2 border-primary pl-2"
-                    >
-                      {r}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Section>
+          <Section title="运行">
+            {task.run_ids.length === 0 ? (
+              <p className="text-xs text-text-subtle">
+                尚未分配 run · 一旦 TaskExecutor 起来就会出现。
+              </p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {task.run_ids.map((r) => (
+                  <RunTracePanel key={r} runId={r} />
+                ))}
+              </div>
+            )}
+          </Section>
 
-            <Section title="产出制品">
-              {task.artifact_ids.length === 0 ? (
-                <p className="text-xs text-text-subtle">还没有产出。</p>
-              ) : (
-                <ul className="flex flex-col gap-1">
-                  {task.artifact_ids.map((a) => (
-                    <li key={a}>
-                      <Link
-                        href={`/artifacts/${a}`}
-                        className="font-mono text-[11px] text-primary hover:underline"
-                      >
-                        {a}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Section>
-          </div>
+          <Section title="产出制品">
+            {task.artifact_ids.length === 0 ? (
+              <p className="text-xs text-text-subtle">还没有产出。</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {task.artifact_ids.map((a) => (
+                  <li key={a}>
+                    <Link
+                      href={`/artifacts/${a}`}
+                      className="font-mono text-[11px] text-primary hover:underline"
+                    >
+                      {a}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
 
           <Section title="元数据">
             <MetaGrid task={task} />

@@ -7,6 +7,7 @@ import { LoadingState } from "@/components/state";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { NewTaskDrawer } from "@/components/tasks/NewTaskDrawer";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
+import { TraceChip } from "@/components/runs/TraceChip";
 import { listEmployees, type EmployeeDto } from "@/lib/api";
 import {
   listTasks,
@@ -274,6 +275,9 @@ function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }
             <div className="font-mono text-[10px] text-text-subtle mt-1">
               {updated.toLocaleString()}
             </div>
+            {task.run_ids.length > 0 && task.run_ids[0] && (
+              <TraceChip runId={task.run_ids[0]} label="trace" />
+            )}
           </div>
         </div>
       </Link>

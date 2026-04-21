@@ -30,17 +30,30 @@ from typing import TYPE_CHECKING
 
 from allhands.core import (
     BootstrapStatus,
+    Message,
     ObservabilityConfig,
     ObservatoryEmployeeBreakdown,
     ObservatorySummary,
+    RunDetail,
+    RunError,
+    RunStatus,
+    RunTokenUsage,
     TraceSummary,
+    Turn,
+    TurnMessage,
+    TurnThinking,
+    TurnToolCall,
+    TurnUserInput,
 )
 
 if TYPE_CHECKING:
+    from allhands.core import EventEnvelope
     from allhands.persistence.repositories import (
+        ConversationRepo,
         EmployeeRepo,
         EventRepo,
         ObservabilityConfigRepo,
+        TaskRepo,
     )
 
 
@@ -62,11 +75,18 @@ class ObservatoryService:
         event_repo: EventRepo,
         employee_repo: EmployeeRepo,
         config_repo: ObservabilityConfigRepo,
+        conversation_repo: ConversationRepo | None = None,
+        task_repo: TaskRepo | None = None,
         workspace_id: str = "default",
     ) -> None:
         self._events = event_repo
         self._employees = employee_repo
         self._config = config_repo
+        # Optional for back-compat with callers that only need summary/list
+        # (the 4 Meta Tools). The `/runs/{id}` route passes both; get_run_detail
+        # will raise a clear error if either is missing.
+        self._conversations = conversation_repo
+        self._tasks = task_repo
         self._ws = workspace_id
 
     async def get_status(self) -> ObservabilityConfig:
@@ -196,6 +216,129 @@ class ObservatoryService:
                 return t
         return None
 
+    async def get_run_detail(self, run_id: str) -> RunDetail | None:
+        """Reconstruct the full trace for a single run (spec 2026-04-21 §3).
+
+        Sources:
+        - ``messages`` (filtered by ``parent_run_id``) → ordered Turn[] of
+          user input, thinking, tool_call (with its paired tool result), and
+          final assistant message. See ``_compose_turns``.
+        - ``events`` (``run.started`` / ``run.completed`` / ``run.failed``) →
+          status, start/finish timestamps, duration, tokens, error payload.
+
+        Returns ``None`` when neither messages nor a ``run.*`` event exist
+        for the id. The UI surfaces that as a 404 on the wrapper route so
+        stale ``?trace=`` URLs don't render an empty shell.
+        """
+        if self._conversations is None:
+            raise RuntimeError(
+                "ObservatoryService.get_run_detail requires conversation_repo; "
+                "pass one in at construction time."
+            )
+        messages = await self._conversations.list_messages_by_run_id(run_id)
+        events = await self._load_run_events(run_id)
+
+        if not messages and not events:
+            return None
+
+        started_event = next((e for e in events if e.kind == "run.started"), None)
+        terminator = next((e for e in events if e.kind in ("run.completed", "run.failed")), None)
+
+        if messages:
+            conversation_id = messages[0].conversation_id
+        elif started_event is not None:
+            cid = started_event.payload.get("conversation_id")
+            conversation_id = cid if isinstance(cid, str) else ""
+        else:
+            conversation_id = ""
+
+        employee_id: str | None = None
+        for e in events:
+            eid = e.payload.get("employee_id") or e.actor
+            if isinstance(eid, str):
+                employee_id = eid
+                break
+
+        employee_name: str | None = None
+        if employee_id:
+            emp = await self._employees.get(employee_id)
+            if emp is not None:
+                employee_name = emp.name
+
+        task_id: str | None = None
+        if self._tasks is not None:
+            task = await self._tasks.get_by_run_id(run_id)
+            if task is not None:
+                task_id = task.id
+
+        if messages:
+            started_at = messages[0].created_at
+        elif started_event is not None:
+            started_at = started_event.published_at
+        else:
+            started_at = datetime.now(UTC)
+
+        status: RunStatus
+        finished_at: datetime | None = None
+        duration_s: float | None = None
+        error: RunError | None = None
+        if terminator is not None:
+            finished_at = terminator.published_at
+            dur = terminator.payload.get("duration_s")
+            if isinstance(dur, (int, float)):
+                duration_s = float(dur)
+            if terminator.kind == "run.failed":
+                status = RunStatus.FAILED
+                err_msg = terminator.payload.get("error")
+                error = RunError(
+                    message=str(err_msg) if err_msg else "Run failed (no message captured).",
+                    kind=str(terminator.payload.get("error_kind") or "unknown"),
+                )
+            else:
+                status = RunStatus.SUCCEEDED
+        else:
+            status = RunStatus.RUNNING
+
+        tokens = RunTokenUsage()
+        if terminator is not None:
+            tok = terminator.payload.get("tokens")
+            if isinstance(tok, int):
+                tokens = RunTokenUsage(prompt=0, completion=0, total=tok)
+            elif isinstance(tok, dict):
+                tokens = RunTokenUsage(
+                    prompt=int(tok.get("prompt", 0) or 0),
+                    completion=int(tok.get("completion", 0) or 0),
+                    total=int(tok.get("total", 0) or 0),
+                )
+
+        turns = _compose_turns(messages)
+
+        return RunDetail(
+            run_id=run_id,
+            task_id=task_id,
+            conversation_id=conversation_id,
+            employee_id=employee_id,
+            employee_name=employee_name,
+            status=status,
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_s=duration_s,
+            tokens=tokens,
+            error=error,
+            turns=turns,
+        )
+
+    async def _load_run_events(self, run_id: str) -> list[EventEnvelope]:
+        """All ``run.*`` events matching ``payload.run_id``, oldest first."""
+        recent = await self._events.list_recent(
+            limit=500,
+            workspace_id=self._ws,
+            kind_prefixes=list(_RUN_KINDS),
+        )
+        matched = [e for e in recent if e.payload.get("run_id") == run_id]
+        matched.sort(key=lambda e: e.published_at)
+        return matched
+
     async def bootstrap_now(self) -> ObservabilityConfig:
         """Idempotent status refresh (spec § 7 BOOTSTRAP semantics).
 
@@ -204,6 +347,73 @@ class ObservatoryService:
         REST contract stays identical because both call through this method.
         """
         return await self._config.load()
+
+
+def _compose_turns(messages: list[Message]) -> list[Turn]:
+    """Project persisted ``messages`` into the Turn union the UI renders.
+
+    Rules (spec 2026-04-21 §3.2):
+    - ``role=user`` → ``user_input``
+    - ``role=assistant`` with reasoning → ``thinking`` first
+    - ``role=assistant`` with ``tool_calls`` → one ``tool_call`` per entry
+      (result starts empty, filled by the next ``role=tool`` message whose
+      ``tool_call_id`` matches)
+    - ``role=assistant`` with plain content → ``message``
+    - ``role=system`` → skipped (summary markers, bootstrap notes)
+
+    Any parsing hiccup falls through to a plain ``message`` turn so the
+    viewer always shows *something*.
+    """
+    turns: list[Turn] = []
+    pending_tool_turns: dict[str, TurnToolCall] = {}
+    turn_indices: dict[str, int] = {}
+
+    for msg in messages:
+        if msg.role == "user":
+            turns.append(TurnUserInput(content=msg.content, ts=msg.created_at))
+            continue
+        if msg.role == "system":
+            continue
+        if msg.role == "tool":
+            tc_id = msg.tool_call_id or ""
+            pending = pending_tool_turns.get(tc_id)
+            if pending is None:
+                continue
+            idx = turn_indices[tc_id]
+            try:
+                import json
+
+                parsed = json.loads(msg.content) if msg.content else msg.content
+            except (ValueError, TypeError):
+                parsed = msg.content
+            updated = pending.model_copy(update={"result": parsed, "ts_returned": msg.created_at})
+            turns[idx] = updated
+            pending_tool_turns.pop(tc_id, None)
+            turn_indices.pop(tc_id, None)
+            continue
+        if msg.role == "assistant":
+            if msg.reasoning:
+                turns.append(TurnThinking(content=msg.reasoning, ts=msg.created_at))
+            if msg.tool_calls:
+                for tc in msg.tool_calls:
+                    turn = TurnToolCall(
+                        tool_call_id=tc.id,
+                        name=tc.tool_id,
+                        args=tc.args,
+                        result=tc.result,
+                        error=tc.error,
+                        ts_called=msg.created_at,
+                        ts_returned=None,
+                    )
+                    turns.append(turn)
+                    if tc.result is None and tc.error is None:
+                        pending_tool_turns[tc.id] = turn
+                        turn_indices[tc.id] = len(turns) - 1
+            elif msg.content:
+                turns.append(TurnMessage(content=msg.content, ts=msg.created_at))
+            continue
+
+    return turns
 
 
 def _percentile(values: list[float], pct: float) -> float:

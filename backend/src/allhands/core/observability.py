@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -81,6 +82,100 @@ class ObservatorySummary(BaseModel):
     model_config = {"frozen": True}
 
 
+class RunStatus(StrEnum):
+    """Lifecycle of a single agent run as reconstructed by the trace viewer.
+
+    Derived — not persisted. A run is ``succeeded`` when a ``run.completed``
+    event landed, ``failed`` when a ``run.failed`` event landed, ``running``
+    otherwise (start event seen but no terminator yet).
+    """
+
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class TurnUserInput(BaseModel):
+    kind: Literal["user_input"] = "user_input"
+    content: str
+    ts: datetime
+
+    model_config = {"frozen": True}
+
+
+class TurnThinking(BaseModel):
+    kind: Literal["thinking"] = "thinking"
+    content: str
+    ts: datetime
+
+    model_config = {"frozen": True}
+
+
+class TurnToolCall(BaseModel):
+    kind: Literal["tool_call"] = "tool_call"
+    tool_call_id: str
+    name: str
+    args: object
+    result: object | None = None
+    error: str | None = None
+    ts_called: datetime
+    ts_returned: datetime | None = None
+
+    model_config = {"frozen": True}
+
+
+class TurnMessage(BaseModel):
+    kind: Literal["message"] = "message"
+    content: str
+    ts: datetime
+
+    model_config = {"frozen": True}
+
+
+Turn = TurnUserInput | TurnThinking | TurnToolCall | TurnMessage
+
+
+class RunTokenUsage(BaseModel):
+    prompt: int = 0
+    completion: int = 0
+    total: int = 0
+
+    model_config = {"frozen": True}
+
+
+class RunError(BaseModel):
+    message: str
+    kind: str = "unknown"
+
+    model_config = {"frozen": True}
+
+
+class RunDetail(BaseModel):
+    """Full run trace projection returned by ``ObservatoryService.get_run_detail``.
+
+    Reconstructed from ``messages`` (filtered by ``parent_run_id``) and
+    ``events`` (``run.started`` / ``run.completed`` / ``run.failed``). The UI
+    renders this as the RunTracePanel — drawer, standalone page, and the
+    inline block on ``/tasks/[id]`` all share the same shape.
+    """
+
+    run_id: str
+    task_id: str | None = None
+    conversation_id: str
+    employee_id: str | None = None
+    employee_name: str | None = None
+    status: RunStatus = RunStatus.RUNNING
+    started_at: datetime
+    finished_at: datetime | None = None
+    duration_s: float | None = None
+    tokens: RunTokenUsage = Field(default_factory=RunTokenUsage)
+    error: RunError | None = None
+    turns: list[Turn] = Field(default_factory=list)
+
+    model_config = {"frozen": True}
+
+
 class TraceSummary(BaseModel):
     """Row in the `observatory.query_traces` result list (spec § 7.1).
 
@@ -104,5 +199,14 @@ __all__ = [
     "ObservabilityConfig",
     "ObservatoryEmployeeBreakdown",
     "ObservatorySummary",
+    "RunDetail",
+    "RunError",
+    "RunStatus",
+    "RunTokenUsage",
     "TraceSummary",
+    "Turn",
+    "TurnMessage",
+    "TurnThinking",
+    "TurnToolCall",
+    "TurnUserInput",
 ]

@@ -28,6 +28,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Local dev server stdout/stderr captures
+logs/
+
 # Data / secrets
 data/*.db
 data/*.db-shm

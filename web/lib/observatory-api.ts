@@ -54,6 +54,90 @@ export async function retryBootstrap(): Promise<{
   return res.json();
 }
 
+export type TurnUserInputDto = {
+  kind: "user_input";
+  content: string;
+  ts: string;
+};
+
+export type TurnThinkingDto = {
+  kind: "thinking";
+  content: string;
+  ts: string;
+};
+
+export type TurnToolCallDto = {
+  kind: "tool_call";
+  tool_call_id: string;
+  name: string;
+  args: unknown;
+  result: unknown | null;
+  error: string | null;
+  ts_called: string;
+  ts_returned: string | null;
+};
+
+export type TurnMessageDto = {
+  kind: "message";
+  content: string;
+  ts: string;
+};
+
+export type TurnDto =
+  | TurnUserInputDto
+  | TurnThinkingDto
+  | TurnToolCallDto
+  | TurnMessageDto;
+
+export type RunStatusDto = "running" | "succeeded" | "failed" | "cancelled";
+
+export type RunTokenUsageDto = {
+  prompt: number;
+  completion: number;
+  total: number;
+};
+
+export type RunErrorDto = {
+  message: string;
+  kind: string;
+};
+
+export type RunDetailDto = {
+  run_id: string;
+  task_id: string | null;
+  conversation_id: string;
+  employee_id: string | null;
+  employee_name: string | null;
+  status: RunStatusDto;
+  started_at: string;
+  finished_at: string | null;
+  duration_s: number | null;
+  tokens: RunTokenUsageDto;
+  error: RunErrorDto | null;
+  turns: TurnDto[];
+};
+
+export async function fetchRunDetail(runId: string): Promise<RunDetailDto> {
+  const res = await fetch(
+    `${BASE}/api/observatory/runs/${encodeURIComponent(runId)}`,
+    { cache: "no-store" },
+  );
+  if (res.status === 404) {
+    throw new RunNotFoundError(runId);
+  }
+  if (!res.ok) {
+    throw new Error(`run detail failed: ${res.status}`);
+  }
+  return res.json() as Promise<RunDetailDto>;
+}
+
+export class RunNotFoundError extends Error {
+  constructor(public readonly runId: string) {
+    super(`run not found: ${runId}`);
+    this.name = "RunNotFoundError";
+  }
+}
+
 export async function fetchTraces(params?: {
   employee_id?: string;
   status?: "ok" | "failed";

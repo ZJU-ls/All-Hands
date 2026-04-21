@@ -1,26 +1,35 @@
 /**
- * /traces page · regression suite (track-g)
+ * /traces page · regression suite (track-g + trace-drawer wiring)
  *
- * Covers the DoD from the track prompt:
+ * Covers the DoD:
  *   1. LoadingState while the first fetch is in-flight.
  *   2. ErrorState when fetchTraces rejects on first load.
  *   3. EmptyState when the filtered result set is empty.
  *   4. Sort toggle on tokens column swaps row order.
- *   5. Row click opens the detail drawer and the Langfuse external link.
+ *   5. Row click routes to ?trace=<run_id> so the RunTraceDrawer opens.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ObservatorySummaryDto, TraceSummaryDto } from "@/lib/observatory-api";
+import type { TraceSummaryDto } from "@/lib/observatory-api";
 import type { EmployeeDto } from "@/lib/api";
 
 vi.mock("@/components/shell/AppShell", () => ({
   AppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-const { fetchTracesMock, fetchSummaryMock, listEmployeesMock } = vi.hoisted(() => ({
+const { routerReplaceMock } = vi.hoisted(() => ({
+  routerReplaceMock: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: routerReplaceMock, push: vi.fn() }),
+  usePathname: () => "/traces",
+  useSearchParams: () => new URLSearchParams(""),
+}));
+
+const { fetchTracesMock, listEmployeesMock } = vi.hoisted(() => ({
   fetchTracesMock: vi.fn(),
-  fetchSummaryMock: vi.fn(),
   listEmployeesMock: vi.fn(),
 }));
 
@@ -32,7 +41,6 @@ vi.mock("@/lib/observatory-api", async () => {
   return {
     ...actual,
     fetchTraces: fetchTracesMock,
-    fetchObservatorySummary: fetchSummaryMock,
   };
 });
 
@@ -57,26 +65,10 @@ function makeTrace(over: Partial<TraceSummaryDto> = {}): TraceSummaryDto {
   };
 }
 
-function makeSummary(over: Partial<ObservatorySummaryDto> = {}): ObservatorySummaryDto {
-  return {
-    traces_total: 2,
-    failure_rate_24h: 0,
-    latency_p50_s: 0,
-    avg_tokens_per_run: 0,
-    by_employee: [],
-    observability_enabled: true,
-    bootstrap_status: "ok",
-    bootstrap_error: null,
-    host: "https://lf.example",
-    ...over,
-  };
-}
-
 beforeEach(() => {
   fetchTracesMock.mockReset();
-  fetchSummaryMock.mockReset();
   listEmployeesMock.mockReset();
-  fetchSummaryMock.mockResolvedValue(makeSummary());
+  routerReplaceMock.mockReset();
   listEmployeesMock.mockResolvedValue([
     { id: "emp_1", name: "writer" } as EmployeeDto,
   ]);
@@ -182,18 +174,13 @@ describe("/traces page", () => {
     expect(dataRows()[0]?.textContent).toContain("tr_small");
   });
 
-  it("opens the detail drawer with a Langfuse external link", async () => {
+  it("row click routes to ?trace=<run_id> so RunTraceDrawer opens", async () => {
     fetchTracesMock.mockResolvedValue({
-      traces: [
-        makeTrace({ trace_id: "tr_open", status: "failed" }),
-      ],
+      traces: [makeTrace({ trace_id: "tr_open", status: "failed" })],
       count: 1,
     });
-    fetchSummaryMock.mockResolvedValue(makeSummary({ host: "https://lf.example" }));
     const { default: Page } = await import("../../../app/traces/page");
     render(<Page />);
-    await flush();
-    // summary fires after first paint — give it an extra turn.
     await flush();
 
     const row = document.querySelector<HTMLTableRowElement>("tbody tr");
@@ -202,10 +189,9 @@ describe("/traces page", () => {
       fireEvent.click(row!);
     });
 
-    expect(screen.getByRole("dialog")).toBeDefined();
-    const link = screen.getByText("在 Langfuse 中查看完整 trace").closest("a");
-    expect(link).toBeDefined();
-    expect(link?.getAttribute("href")).toBe("https://lf.example/trace/tr_open");
-    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(routerReplaceMock).toHaveBeenCalledWith(
+      "/traces?trace=tr_open",
+      expect.objectContaining({ scroll: false }),
+    );
   });
 });

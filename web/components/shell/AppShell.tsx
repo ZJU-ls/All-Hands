@@ -22,6 +22,7 @@ import {
   type IconProps,
 } from "@/components/icons";
 import { CommandPalette } from "@/components/ui/CommandPalette";
+import { RunTraceDrawer } from "@/components/runs/RunTraceDrawer";
 
 type IconComp = (props: IconProps) => JSX.Element;
 type MenuItem = { label: string; href: string; Icon: IconComp };
@@ -227,6 +228,7 @@ export function AppShell({
         </main>
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <RunTraceDrawer />
     </div>
   );
 }

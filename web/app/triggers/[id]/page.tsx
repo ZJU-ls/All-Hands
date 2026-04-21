@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { TraceChip } from "@/components/runs/TraceChip";
 
 type Kind = "timer" | "event";
 type ActionType = "notify_user" | "invoke_tool" | "dispatch_employee" | "continue_conversation";
@@ -426,14 +427,7 @@ function FireRow({ f }: { f: Fire }) {
       <span className={`font-mono ${statusClass} shrink-0`}>{f.status}</span>
       <span className="text-text-muted shrink-0">{formatTime(f.fired_at)}</span>
       <span className="text-text-subtle text-[10px] shrink-0">{f.source}</span>
-      {f.run_id && (
-        <Link
-          href={`/traces?run_id=${encodeURIComponent(f.run_id)}`}
-          className="font-mono text-text-muted hover:text-text transition-colors duration-base truncate"
-        >
-          {f.run_id}
-        </Link>
-      )}
+      {f.run_id && <TraceChip runId={f.run_id} label={f.run_id} />}
       {f.error_code && (
         <span className="font-mono text-danger truncate" title={f.error_detail ?? ""}>
           {f.error_code}

@@ -173,14 +173,41 @@ class ChatService:
         if employee is None:
             raise EmployeeNotFound(f"Employee {conv.employee_id!r} not found.")
 
+        # Each send_message call is one "run". We mint a run_id up front so
+        # user + assistant messages can be tagged with parent_run_id (the key
+        # the trace viewer joins on) and the event bus can publish a matching
+        # run.started / run.completed pair. Before this wiring, run ids only
+        # existed for seed fixtures and stubbed trigger handlers, so real
+        # chat runs never produced observatory entries.
+        run_id = f"run_{uuid.uuid4().hex[:16]}"
+        run_started_at = datetime.now(UTC)
+
         user_msg = Message(
             id=str(uuid.uuid4()),
             conversation_id=conversation_id,
             role="user",
             content=user_content,
-            created_at=datetime.now(UTC),
+            parent_run_id=run_id,
+            created_at=run_started_at,
         )
         await self._conversations.append_message(user_msg)
+
+        if self._bus is not None:
+            try:
+                await self._bus.publish(
+                    kind="run.started",
+                    payload={
+                        "run_id": run_id,
+                        "employee_id": employee.id,
+                        "conversation_id": conversation_id,
+                        "depth": 0,
+                    },
+                )
+            except Exception:
+                log.exception(
+                    "Failed to publish run.started",
+                    extra={"run_id": run_id, "conversation_id": conversation_id},
+                )
 
         runtime = self._runtime_cache.get(conversation_id)
         if runtime is None:
@@ -226,6 +253,8 @@ class ChatService:
                 overrides=overrides,
             ),
             employee=employee,
+            run_id=run_id,
+            run_started_at=run_started_at,
         )
 
     async def _persist_assistant_reply(
@@ -234,6 +263,8 @@ class ChatService:
         stream: AsyncIterator[AgentEvent],
         *,
         employee: Employee | None = None,
+        run_id: str | None = None,
+        run_started_at: datetime | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """Tap the runner stream, persist the assistant's reply to the DB.
 
@@ -246,17 +277,20 @@ class ChatService:
 
         Contract: exactly one assistant ``Message`` row is appended per
         ``send_message`` call, keyed by the runner's per-turn ``message_id``.
-        Content is the concatenation of all ``TokenEvent.delta`` seen; tool
-        calls / reasoning are not yet persisted (no DB column — reasoning is
-        ephemeral by design, tool calls get their own schema later). On
-        client disconnect / runtime cancellation the ``finally`` block still
-        salvages whatever partial content was accumulated so history stays
-        internally consistent.
+        Content is the concatenation of all ``TokenEvent.delta`` seen;
+        reasoning (thinking-channel) chunks land in ``message.reasoning`` so
+        the trace viewer can replay them after the SSE closes. Tool calls
+        still get their own schema later. On client disconnect / runtime
+        cancellation the ``finally`` block still salvages whatever partial
+        content was accumulated so history stays internally consistent.
         """
         buffer: list[str] = []
+        reasoning_buffer: list[str] = []
         message_id: str | None = None
         first_seen: datetime | None = None
         persisted = False
+        run_finalized = False
+        error_payload: dict[str, object] | None = None
 
         async def flush() -> None:
             nonlocal persisted
@@ -264,11 +298,14 @@ class ChatService:
                 return
             persisted = True
             content = "".join(buffer)
+            reasoning_text = "".join(reasoning_buffer) or None
             msg = Message(
                 id=message_id,
                 conversation_id=conversation_id,
                 role="assistant",
                 content=content,
+                reasoning=reasoning_text,
+                parent_run_id=run_id,
                 created_at=first_seen or datetime.now(UTC),
             )
             try:
@@ -301,6 +338,32 @@ class ChatService:
                         extra={"conversation_id": conversation_id},
                     )
 
+        async def finalize_run() -> None:
+            nonlocal run_finalized
+            if run_finalized or run_id is None or self._bus is None:
+                return
+            run_finalized = True
+            duration_s: float | None = None
+            if run_started_at is not None:
+                duration_s = (datetime.now(UTC) - run_started_at).total_seconds()
+            failed = error_payload is not None
+            try:
+                await self._bus.publish(
+                    kind="run.failed" if failed else "run.completed",
+                    payload={
+                        "run_id": run_id,
+                        "employee_id": employee.id if employee else None,
+                        "conversation_id": conversation_id,
+                        "duration_s": duration_s,
+                        "error": error_payload.get("message") if error_payload else None,
+                    },
+                )
+            except Exception:
+                log.exception(
+                    "Failed to publish run.completed/failed",
+                    extra={"run_id": run_id, "conversation_id": conversation_id},
+                )
+
         try:
             async for event in stream:
                 if event.kind == "token":
@@ -308,11 +371,19 @@ class ChatService:
                     message_id = event.message_id
                     if first_seen is None:
                         first_seen = datetime.now(UTC)
-                elif event.kind in ("done", "error"):
+                elif event.kind == "reasoning":
+                    reasoning_buffer.append(event.delta)
+                    if message_id is None:
+                        message_id = event.message_id
+                elif event.kind == "error":
+                    error_payload = {"code": event.code, "message": event.message}
+                    await flush()
+                elif event.kind == "done":
                     await flush()
                 yield event
         finally:
             await flush()
+            await finalize_run()
 
     def _build_runner_factory(self, provider: Any) -> Any:
         """Closure used by DispatchService to spawn sub-runners.

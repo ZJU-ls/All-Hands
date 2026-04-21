@@ -93,3 +93,20 @@ async def get_trace(
     if trace is None:
         raise HTTPException(status_code=404, detail=f"trace not found: {trace_id}")
     return trace.model_dump(mode="json")
+
+
+@router.get("/runs/{run_id}")
+async def get_run_detail(
+    run_id: str,
+    svc: ObservatoryService = Depends(get_observatory_service),
+) -> dict[str, object]:
+    """Full trace for a single run (spec 2026-04-21 §4.1).
+
+    Drives the hybrid trace viewer: the RunTraceDrawer (list-page overlay),
+    ``/runs/[id]`` standalone page, and inline blocks on ``/tasks/[id]``
+    all fetch this payload.
+    """
+    detail = await svc.get_run_detail(run_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"run not found: {run_id}")
+    return detail.model_dump(mode="json")

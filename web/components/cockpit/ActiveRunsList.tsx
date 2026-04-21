@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ActiveRunCardDto } from "@/lib/cockpit-api";
+import { TraceChip } from "@/components/runs/TraceChip";
 
 const STATUS_LABEL: Record<ActiveRunCardDto["status"], string> = {
   thinking: "思考",
@@ -46,9 +47,12 @@ export function ActiveRunsList({ runs }: { runs: ActiveRunCardDto[] }) {
                       {STATUS_LABEL[r.status]}
                     </span>
                   </div>
-                  <span className="font-mono text-[10px] text-text-subtle tabular-nums shrink-0">
-                    {r.iteration} / {r.max_iterations}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <TraceChip runId={r.run_id} variant="link" />
+                    <span className="font-mono text-[10px] text-text-subtle tabular-nums">
+                      {r.iteration} / {r.max_iterations}
+                    </span>
+                  </div>
                 </div>
                 <p className="mt-0.5 text-[12px] text-text-muted truncate">
                   {r.current_action_summary || "—"}

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from allhands.persistence.orm.base import Base
@@ -116,6 +116,7 @@ class MessageRow(Base):
     render_payloads: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
     trace_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     parent_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
     conversation: Mapped[ConversationRow] = relationship(back_populates="messages")

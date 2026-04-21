@@ -3,6 +3,7 @@ import type { Message } from "@/lib/protocol";
 import { ToolCallCard } from "./ToolCallCard";
 import { RenderSlot } from "./RenderSlot";
 import { AgentMarkdown } from "./AgentMarkdown";
+import { TraceChip } from "@/components/runs/TraceChip";
 
 type Props = {
   message: Message;
@@ -51,6 +52,11 @@ export function MessageBubble({ message, isStreaming }: Props) {
             {message.render_payloads.map((rp, i) => (
               <RenderSlot key={i} payload={rp} />
             ))}
+          </div>
+        )}
+        {!isUser && message.parent_run_id && (
+          <div className="mt-1.5 flex justify-end">
+            <TraceChip runId={message.parent_run_id} variant="link" />
           </div>
         )}
       </div>

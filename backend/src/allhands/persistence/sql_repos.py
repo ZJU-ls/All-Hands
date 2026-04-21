@@ -156,6 +156,7 @@ def _row_to_message(row: MessageRow) -> Message:
         render_payloads=render_payloads,
         trace_ref=row.trace_ref,
         parent_run_id=row.parent_run_id,
+        reasoning=row.reasoning,
         created_at=_utc(row.created_at),
     )
 
@@ -308,6 +309,14 @@ class SqlConversationRepo:
         )
         return [_row_to_message(r) for r in result.scalars().all()]
 
+    async def list_messages_by_run_id(self, run_id: str) -> list[Message]:
+        result = await self._s.execute(
+            select(MessageRow)
+            .where(MessageRow.parent_run_id == run_id)
+            .order_by(MessageRow.created_at)
+        )
+        return [_row_to_message(r) for r in result.scalars().all()]
+
     async def append_message(self, message: Message) -> Message:
         row = MessageRow(
             id=message.id,
@@ -319,6 +328,7 @@ class SqlConversationRepo:
             render_payloads=[rp.model_dump(mode="json") for rp in message.render_payloads],
             trace_ref=message.trace_ref,
             parent_run_id=message.parent_run_id,
+            reasoning=message.reasoning,
             created_at=_naive(message.created_at),
         )
         self._s.add(row)
@@ -1110,6 +1120,20 @@ class SqlTaskRepo:
     async def get(self, task_id: str) -> Task | None:
         row = await self._s.get(TaskRow, task_id)
         return _row_to_task(row) if row else None
+
+    async def get_by_run_id(self, run_id: str) -> Task | None:
+        """Return the first task whose ``run_ids`` JSON array contains ``run_id``.
+
+        v0 MVP: JSON array scans live in Python, not SQL — cross-dialect
+        JSON containment (SQLite / Postgres) is a pain to parametrise and
+        task counts are tiny at this stage. If task fan-out grows, move to a
+        normalised ``task_runs`` table.
+        """
+        rows = await self._s.execute(select(TaskRow))
+        for row in rows.scalars():
+            if run_id in (row.run_ids or []):
+                return _row_to_task(row)
+        return None
 
     async def list_all(
         self,

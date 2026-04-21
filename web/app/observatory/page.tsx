@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
+import { TraceChip } from "@/components/runs/TraceChip";
 import {
   fetchObservatorySummary,
   fetchTraces,
@@ -264,7 +265,7 @@ export default function ObservatoryPage() {
                         className="border-b border-border hover:bg-surface-2 transition-colors duration-base"
                       >
                         <td className="py-2 pr-4 font-mono text-[11px] text-text-muted truncate max-w-[180px]">
-                          {t.trace_id}
+                          <TraceChip runId={t.trace_id} label={t.trace_id} />
                         </td>
                         <td className="py-2 pr-4 text-text">
                           {t.employee_name ?? t.employee_id ?? "—"}

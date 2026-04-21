@@ -121,6 +121,11 @@ if run_section "triage"; then
   issues_dir="$root/docs/issues"
   if [ ! -d "$issues_dir" ]; then
     warn "docs/issues/ missing · skipping"
+  elif [ ! -d "$issues_dir/open" ]; then
+    # After 2026-04-20 triage sweep the open/ directory was removed because
+    # it was empty; without this branch `find open/ …` errors under
+    # `set -euo pipefail` and silently kills the whole gate.
+    pass "INDEX P0 = 0 (open/ directory absent — treated as empty)"
   else
     open_files=$(find "$issues_dir/open" -maxdepth 1 -type f -name 'I-*.md' 2>/dev/null | wc -l | tr -d ' ')
 

@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import {
-  fetchObservatorySummary,
   fetchTraces,
-  type ObservatorySummaryDto,
   type TraceSummaryDto,
 } from "@/lib/observatory-api";
 import { listEmployees, type EmployeeDto } from "@/lib/api";
@@ -22,7 +21,7 @@ import {
   sortTraces,
   type TraceSort,
 } from "@/components/traces/TraceTable";
-import { TraceDetailDrawer } from "@/components/traces/TraceDetailDrawer";
+import { TRACE_QUERY_KEY } from "@/components/runs/TraceChip";
 
 const PAGE_SIZE = 50;
 
@@ -52,6 +51,30 @@ function applyFilters(
 }
 
 export default function TracesPage() {
+  // Next.js 15 requires every `useSearchParams` consumer to sit inside a
+  // Suspense boundary (E03). Wrap the inner body so SSR can fall back to the
+  // list skeleton while the client hydrates the URL state.
+  return (
+    <Suspense
+      fallback={
+        <AppShell title="追踪">
+          <div className="flex-1 px-6 py-4">
+            <LoadingState title="加载追踪列表" />
+          </div>
+        </AppShell>
+      }
+    >
+      <TracesPageInner />
+    </Suspense>
+  );
+}
+
+function TracesPageInner() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const selectedId = searchParams?.get(TRACE_QUERY_KEY) ?? null;
+
   const [filters, setFilters] = useState<TraceFilterState>(DEFAULT_FILTERS);
   const [sort, setSort] = useState<TraceSort>(DEFAULT_SORT);
   const [traces, setTraces] = useState<TraceSummaryDto[]>([]);
@@ -59,15 +82,21 @@ export default function TracesPage() {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [employees, setEmployees] = useState<EmployeeDto[]>([]);
-  const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
-  const [selected, setSelected] = useState<TraceSummaryDto | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+
+  const openTrace = useCallback(
+    (runId: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.set(TRACE_QUERY_KEY, runId);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
 
   const load = useCallback(async (next: TraceFilterState) => {
     setState("loading");
     setError(null);
-    setSelected(null);
     try {
       const since = rangeToSinceISO(next.range);
       const [page, emps] = await Promise.all([
@@ -96,20 +125,6 @@ export default function TracesPage() {
     // only so it does not appear in the dep list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.range, filters.employeeId, filters.status, load]);
-
-  // The langfuse host lives behind a separate endpoint; load it once so the
-  // detail drawer can construct an external link.
-  useEffect(() => {
-    let cancelled = false;
-    fetchObservatorySummary()
-      .then((s) => {
-        if (!cancelled) setSummary(s);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const onLoadMore = useCallback(async () => {
     if (loadingMore || traces.length === 0) return;
@@ -181,10 +196,10 @@ export default function TracesPage() {
                 <div className="rounded-md border border-border bg-surface overflow-hidden">
                   <TraceTable
                     traces={visible}
-                    selectedId={selected?.trace_id ?? null}
+                    selectedId={selectedId}
                     sort={sort}
                     onSort={setSort}
-                    onSelect={(t) => setSelected(t)}
+                    onSelect={(t) => openTrace(t.trace_id)}
                   />
                 </div>
                 <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-text-muted">
@@ -207,13 +222,6 @@ export default function TracesPage() {
             )}
           </div>
         </div>
-        {selected ? (
-          <TraceDetailDrawer
-            trace={selected}
-            langfuseHost={summary?.host ?? null}
-            onClose={() => setSelected(null)}
-          />
-        ) : null}
       </div>
     </AppShell>
   );
