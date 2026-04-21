@@ -63,12 +63,16 @@ async def test_ensure_lead_agent_creates_if_none() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ensure_lead_agent_noop_if_exists() -> None:
+async def test_ensure_lead_agent_noop_if_prompt_already_in_sync() -> None:
+    """If the Lead exists AND its prompt already matches the file on disk,
+    boot is a pure no-op — no upsert, no refresh."""
+    from allhands.services.bootstrap_service import load_lead_prompt
+
     existing = Employee(
         id="e1",
         name="LeadAgent",
         description="existing",
-        system_prompt="x",
+        system_prompt=load_lead_prompt(),
         model_ref="openai/gpt-4o-mini",
         tool_ids=["allhands.meta.list_employees"],
         is_lead_agent=True,
@@ -82,6 +86,45 @@ async def test_ensure_lead_agent_noop_if_exists() -> None:
     lead = await ensure_lead_agent(repo)
     assert lead.id == "e1"
     repo.upsert.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ensure_lead_agent_resyncs_prompt_from_file() -> None:
+    """If the Lead exists but its prompt drifted from the file (prompt edits
+    after first boot — see L06), boot must refresh the record so the live
+    LLM sees the current file. Other fields (tool_ids, skill_ids) stay put.
+    """
+    from allhands.services.bootstrap_service import load_lead_prompt
+
+    existing = Employee(
+        id="e1",
+        name="LeadAgent",
+        description="existing",
+        system_prompt="stale prompt from last week",
+        model_ref="openai/gpt-4o-mini",
+        tool_ids=["allhands.meta.list_employees"],
+        skill_ids=["custom-skill-id"],
+        is_lead_agent=True,
+        created_by="system",
+        created_at=datetime.now(UTC),
+    )
+    captured: list[Employee] = []
+
+    async def upsert(emp: Employee) -> Employee:
+        captured.append(emp)
+        return emp
+
+    repo = AsyncMock()
+    repo.get_lead = AsyncMock(return_value=existing)
+    repo.upsert = upsert
+
+    lead = await ensure_lead_agent(repo)
+
+    assert len(captured) == 1
+    assert captured[0].system_prompt == load_lead_prompt()
+    assert captured[0].tool_ids == ["allhands.meta.list_employees"]
+    assert captured[0].skill_ids == ["custom-skill-id"]
+    assert lead.id == "e1"
 
 
 @pytest.mark.asyncio

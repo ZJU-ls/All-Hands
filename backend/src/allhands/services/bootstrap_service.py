@@ -92,9 +92,24 @@ def default_lead_tool_ids() -> list[str]:
 
 
 async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
-    """Create the Lead Agent if it doesn't exist yet. Idempotent."""
+    """Create the Lead Agent if it doesn't exist yet; sync its system prompt
+    from disk on every boot if it does.
+
+    The prompt file (`execution/prompts/lead_agent.md`) is the single source
+    of truth for Lead behaviour. Without the re-sync, a prompt edit would
+    never reach the already-bootstrapped record, so regression tests like
+    `TestL06CapabilityDiscovery` could stay green while the live LLM kept
+    running with the stale text — the exact gap that let L06 happen.
+
+    We only touch `system_prompt`; the user's customized tool_ids /
+    skill_ids / model_ref are preserved.
+    """
     existing = await repo.get_lead()
+    canonical_prompt = load_lead_prompt()
     if existing is not None:
+        if existing.system_prompt != canonical_prompt:
+            refreshed = existing.model_copy(update={"system_prompt": canonical_prompt})
+            return await repo.upsert(refreshed)
         return existing
 
     tool_ids = default_lead_tool_ids()
@@ -103,7 +118,7 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
         id=str(uuid.uuid4()),
         name="LeadAgent",
         description="The Lead Agent — user's primary interface to the platform.",
-        system_prompt=load_lead_prompt(),
+        system_prompt=canonical_prompt,
         model_ref="openai/gpt-4o-mini",
         tool_ids=tool_ids,
         skill_ids=list(DEFAULT_SKILL_IDS),

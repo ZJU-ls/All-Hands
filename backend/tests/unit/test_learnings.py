@@ -92,3 +92,41 @@ class TestL01ToolFirstBoundary:
             f" Agent-managed 资源的每个 UI 写操作必须有对应 Meta Tool,"
             f" 让 Lead Agent 通过对话也能做同样的事(Tool First 扩展 · L01 2026-04-18)。"
         )
+
+
+class TestL06CapabilityDiscovery:
+    """L06 · Capability-discovery 硬性先行(2026-04-21):
+
+    用户反馈触发:用户在聊天里说"我想要一个画图员工",Lead 直接按训练
+    数据编出"方案 A DALL·E / 方案 B matplotlib"两套方案,完全没调
+    `list_providers/list_skills/list_mcp_servers/list_employees`,导致
+    忽略用户其实已经装好的 `algorithmic-art` skill + provider。
+
+    修复:`lead_agent.md` 必须包含一节明确规定"能力类问题"→ **先并行
+    调 list_* 再回答",并禁止在未调用 list_* 的前提下以"平台目前没配
+    任何 …"开头。本测试用静态扫描钉住这一节,防止未来改掉。
+    """
+
+    PROMPT_PATH: ClassVar[Path] = (
+        REPO / "src" / "allhands" / "execution" / "prompts" / "lead_agent.md"
+    )
+
+    REQUIRED_SNIPPETS: ClassVar[list[str]] = [
+        "Capability-discovery protocol",
+        "list_providers",
+        "list_skills",
+        "list_mcp_servers",
+        "list_employees",
+        "Before writing anything visible to the user",
+    ]
+
+    def test_prompt_has_capability_discovery_section(self) -> None:
+        assert self.PROMPT_PATH.exists(), f"Lead Agent prompt 文件不存在:{self.PROMPT_PATH}"
+        src = self.PROMPT_PATH.read_text(encoding="utf-8")
+        missing = [s for s in self.REQUIRED_SNIPPETS if s not in src]
+        assert not missing, (
+            f"L06 违规:lead_agent.md 缺少 capability-discovery 强制条款。"
+            f"缺失的关键词:{missing}。"
+            f"用户已反馈过一次:Lead 不调 list_* 就凭空编'方案 A/B'"
+            f"(2026-04-21)。这一节是硬规则,不要删。"
+        )
