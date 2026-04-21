@@ -124,14 +124,11 @@ export function CommandPalette({
     return scored;
   }, [query]);
 
+  // ⌘K is owned by AppShell so the palette module can stay lazy-loaded until
+  // first open; this effect only handles Escape-to-close while mounted-and-open.
   useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      const isMod = e.metaKey || e.ctrlKey;
-      if (isMod && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setOpen((v) => !v);
-      }
-      if (!open) return;
       if (e.key === "Escape") {
         e.preventDefault();
         setOpen(false);

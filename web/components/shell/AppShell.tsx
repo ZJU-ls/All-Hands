@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { LogoDotgrid, SunIcon, MoonIcon } from "@/components/ui/icons";
 import {
@@ -21,8 +22,21 @@ import {
   SearchIcon,
   type IconProps,
 } from "@/components/icons";
-import { CommandPalette } from "@/components/ui/CommandPalette";
-import { RunTraceDrawer } from "@/components/runs/RunTraceDrawer";
+
+// Lazy-load the two global overlays so their module graph (DotGridBackdrop,
+// RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
+// into every route's dev cold-compile. ⌘K and `?trace=` are both infrequent
+// user-triggered surfaces, so a one-shot dynamic import on first open is
+// unnoticeable vs. the 2-6s per-route compile cost it saves. See L08.
+const CommandPalette = dynamic(
+  () => import("@/components/ui/CommandPalette").then((m) => m.CommandPalette),
+  { ssr: false },
+);
+const RunTraceDrawer = dynamic(
+  () => import("@/components/runs/RunTraceDrawer").then((m) => m.RunTraceDrawer),
+  { ssr: false },
+);
+const TRACE_QUERY_KEY = "trace";
 
 type IconComp = (props: IconProps) => JSX.Element;
 type MenuItem = { label: string; href: string; Icon: IconComp };
@@ -208,6 +222,32 @@ export function AppShell({
   actions?: React.ReactNode;
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Gate the dynamic-imported CommandPalette behind first-open so its module
+  // graph never loads on a dev session where the user never presses ⌘K.
+  const [paletteMounted, setPaletteMounted] = useState(false);
+  const searchParams = useSearchParams();
+  const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
+
+  // Global ⌘K is owned here (not inside CommandPalette) so the palette can
+  // stay unloaded until first open. CommandPalette's internal listener was
+  // removed when we moved it here — there's no uncontrolled usage.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k") {
+        ev.preventDefault();
+        setPaletteMounted(true);
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const openPalette = useCallback(() => {
+    setPaletteMounted(true);
+    setPaletteOpen(true);
+  }, []);
+
   return (
     <div className="flex h-screen w-full bg-bg text-text">
       <Sidebar />
@@ -215,7 +255,7 @@ export function AppShell({
         <header className="h-11 shrink-0 border-b border-border flex items-center justify-between px-6">
           <h1 className="text-[13px] font-semibold tracking-tight">{title}</h1>
           <div className="flex items-center gap-2">
-            <CmdKHint onOpen={() => setPaletteOpen(true)} />
+            <CmdKHint onOpen={openPalette} />
             {actions}
             <ThemeToggle />
           </div>
@@ -227,8 +267,10 @@ export function AppShell({
           {children}
         </main>
       </div>
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-      <RunTraceDrawer />
+      {paletteMounted && (
+        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      )}
+      {hasTrace && <RunTraceDrawer />}
     </div>
   );
 }
