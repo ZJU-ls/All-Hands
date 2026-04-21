@@ -188,9 +188,10 @@ describe("ModelOverrideChip", () => {
     fireEvent.click(screen.getByTestId("model-override-chip"));
     await flush();
 
-    const select = screen.getByTestId("model-override-picker") as HTMLSelectElement;
+    // Open the picker's listbox (custom Select trigger), then pick a model.
+    fireEvent.click(screen.getByTestId("model-override-picker"));
     await act(async () => {
-      fireEvent.change(select, { target: { value: "Anthropic/claude-opus-4-7" } });
+      fireEvent.mouseDown(screen.getByText("Claude Opus 4.7"));
     });
     await flush();
 
@@ -213,9 +214,9 @@ describe("ModelOverrideChip", () => {
     fireEvent.click(screen.getByTestId("model-override-chip"));
     await flush();
 
-    const select = screen.getByTestId("model-override-picker") as HTMLSelectElement;
+    fireEvent.click(screen.getByTestId("model-override-picker"));
     await act(async () => {
-      fireEvent.change(select, { target: { value: "" } });
+      fireEvent.mouseDown(screen.getByTestId("model-picker-inherit"));
     });
     await flush();
 

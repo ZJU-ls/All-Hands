@@ -36,3 +36,4 @@ export { CopyIcon } from "./CopyIcon";
 export { CheckIcon } from "./CheckIcon";
 export { ArrowUpIcon } from "./ArrowUpIcon";
 export { ArrowDownIcon } from "./ArrowDownIcon";
+export { ChevronDownIcon } from "./ChevronDownIcon";

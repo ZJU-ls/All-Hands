@@ -6,6 +6,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Select";
 
 type Transport = "stdio" | "sse" | "http";
 type Health = "unknown" | "ok" | "unreachable" | "auth_failed";
@@ -438,16 +439,19 @@ function AddForm({ onAdded }: { onAdded: () => Promise<void> }) {
 
         <div>
           <label className="text-xs text-text-muted block mb-1">Transport</label>
-          <select
-            data-testid="transport-select"
+          <Select
             value={transport}
-            onChange={(e) => setTransport(e.target.value as Transport)}
-            className="w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text focus:outline-none focus:border-primary transition-colors"
-          >
-            <option value="stdio">stdio</option>
-            <option value="sse">sse</option>
-            <option value="http">http</option>
-          </select>
+            onChange={(v) => setTransport(v as Transport)}
+            options={[
+              { value: "stdio", label: "stdio" },
+              { value: "sse", label: "sse" },
+              { value: "http", label: "http" },
+            ]}
+            testId="transport-select"
+            ariaLabel="传输协议"
+            className="w-full"
+            triggerClassName="font-mono"
+          />
         </div>
 
         {transport === "stdio" && (

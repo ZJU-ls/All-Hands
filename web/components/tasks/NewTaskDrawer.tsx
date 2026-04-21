@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Select } from "@/components/ui/Select";
 import type { EmployeeDto } from "@/lib/api";
 import { createTask } from "@/lib/tasks-api";
 
@@ -139,18 +140,18 @@ export function NewTaskDrawer({
                 还没有员工 · 请先在&ldquo;员工&rdquo;里新建一位。
               </p>
             ) : (
-              <select
-                data-testid="task-assignee"
+              <Select
                 value={draft.assignee_id}
-                onChange={(e) => setDraft({ ...draft, assignee_id: e.target.value })}
-                className="w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text focus:outline-none focus:border-primary transition-colors duration-base"
-              >
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} · {emp.id}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setDraft({ ...draft, assignee_id: v })}
+                options={employees.map((emp) => ({
+                  value: emp.id,
+                  label: emp.name,
+                  hint: emp.id,
+                }))}
+                testId="task-assignee"
+                ariaLabel="指派给"
+                className="w-full"
+              />
             )}
           </div>
 
