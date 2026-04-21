@@ -100,8 +100,18 @@ async def get_gate(session: AsyncSession) -> BaseGate:
     )
 
 
-async def get_chat_service(session: AsyncSession) -> ChatService:
+async def get_chat_service(
+    session: AsyncSession,
+    request: Request | None = None,
+) -> ChatService:
     gate = await get_gate(session)
+    # Pull the EventBus off the trigger runtime so chat turns surface in the
+    # cockpit activity feed. When there's no Request (CLI / tests), skip — the
+    # service still works, just without the cockpit beat.
+    bus = None
+    if request is not None:
+        runtime = getattr(request.app.state, "trigger_runtime", None)
+        bus = getattr(runtime, "bus", None) if runtime is not None else None
     return ChatService(
         employee_repo=SqlEmployeeRepo(session),
         conversation_repo=SqlConversationRepo(session),
@@ -109,6 +119,7 @@ async def get_chat_service(session: AsyncSession) -> ChatService:
         skill_registry=get_skill_registry(),
         gate=gate,
         provider_repo=SqlLLMProviderRepo(session),
+        bus=bus,
     )
 
 
@@ -201,6 +212,11 @@ async def get_cockpit_service(
     session: AsyncSession = Depends(get_session),
     pause_switch: PauseSwitch = Depends(get_pause_switch),
 ) -> CockpitService:
+    # token_stats_provider is intentionally not wired here — usage metrics
+    # require a schema change (MessageRow.usage_json or a dedicated run_stats
+    # table) plus runner instrumentation to capture LLM response metadata,
+    # neither of which exist yet. Until that lands, the cockpit KPI for
+    # tokens/cost renders 0; all other panels work off real data.
     return CockpitService(
         event_repo=SqlEventRepo(session),
         confirmation_repo=SqlConfirmationRepo(session),

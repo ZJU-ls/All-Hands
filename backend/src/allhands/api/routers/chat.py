@@ -247,7 +247,7 @@ async def send_message(
     LangGraph agent task is cancelled.
     """
 
-    chat_svc = await get_chat_service(session)
+    chat_svc = await get_chat_service(session, request=request)
 
     async def event_stream() -> AsyncIterator[bytes]:
         run_id = f"run_{secrets.token_hex(8)}"

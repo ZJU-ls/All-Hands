@@ -272,7 +272,7 @@ async def test_chat_stream_emits_ag_ui_envelope(monkeypatch: pytest.MonkeyPatch)
         ) -> _FakeAsyncIter:
             return _FakeAsyncIter(list(events))
 
-    async def _fake_get_chat_service(_sess: Any) -> _FakeChatSvc:
+    async def _fake_get_chat_service(_sess: Any, request: Any = None) -> _FakeChatSvc:
         return _FakeChatSvc()
 
     monkeypatch.setattr(chat_router, "get_chat_service", _fake_get_chat_service)

@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from allhands.execution.event_bus import EventBus
     from allhands.execution.events import AgentEvent
     from allhands.execution.gate import BaseGate
     from allhands.execution.registry import ToolRegistry
@@ -30,6 +31,19 @@ if TYPE_CHECKING:
 
 DEFAULT_COMPACT_KEEP_LAST = 20
 MIN_COMPACT_THRESHOLD = 4
+
+# Cap the first-line snippet shown in the cockpit activity feed — the feed
+# row is tight and a long reply would wrap into the next card.
+_TURN_SUMMARY_MAX_CHARS = 80
+
+
+def _summarize_turn(content: str, employee: Employee | None) -> str:
+    first_line = content.strip().splitlines()[0] if content.strip() else ""
+    snippet = first_line[:_TURN_SUMMARY_MAX_CHARS]
+    if len(first_line) > _TURN_SUMMARY_MAX_CHARS:
+        snippet += "…"
+    prefix = f"{employee.name} · " if employee and employee.name else ""
+    return f"{prefix}{snippet}" if snippet else f"{prefix}(空回复)"
 
 
 @dataclass(frozen=True)
@@ -55,6 +69,7 @@ class ChatService:
         skill_registry: SkillRegistry,
         gate: BaseGate,
         provider_repo: LLMProviderRepo | None = None,
+        bus: EventBus | None = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -62,6 +77,10 @@ class ChatService:
         self._skills = skill_registry
         self._gate = gate
         self._providers = provider_repo
+        # Optional: lets chat turns surface in the cockpit activity feed.
+        # The bus lives on the trigger_runtime singleton; we accept None so
+        # CLI / test constructions (no FastAPI Request) still work.
+        self._bus = bus
         # Per-conversation runtime · persists resolve_skill mutations across
         # send_message calls (contract § 8.2 · V02 query() main loop carries
         # the live tool pool turn-to-turn).
@@ -206,12 +225,15 @@ class ChatService:
                 thread_id=conversation_id,
                 overrides=overrides,
             ),
+            employee=employee,
         )
 
     async def _persist_assistant_reply(
         self,
         conversation_id: str,
         stream: AsyncIterator[AgentEvent],
+        *,
+        employee: Employee | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """Tap the runner stream, persist the assistant's reply to the DB.
 
@@ -241,11 +263,12 @@ class ChatService:
             if persisted or not buffer or message_id is None:
                 return
             persisted = True
+            content = "".join(buffer)
             msg = Message(
                 id=message_id,
                 conversation_id=conversation_id,
                 role="assistant",
-                content="".join(buffer),
+                content=content,
                 created_at=first_seen or datetime.now(UTC),
             )
             try:
@@ -255,6 +278,28 @@ class ChatService:
                     "Failed to persist assistant reply",
                     extra={"conversation_id": conversation_id, "message_id": message_id},
                 )
+                return
+            # Publish a cockpit beat for the activity feed. Best-effort — bus
+            # failure must not poison the SSE stream (the user already saw the
+            # reply; cockpit telemetry is secondary signal).
+            if self._bus is not None:
+                try:
+                    await self._bus.publish(
+                        kind="conversation.turn_completed",
+                        payload={
+                            "conversation_id": conversation_id,
+                            "message_id": message_id,
+                            "employee_id": employee.id if employee else None,
+                            "employee_name": employee.name if employee else None,
+                            "summary": _summarize_turn(content, employee),
+                            "link": f"/chat/{conversation_id}",
+                        },
+                    )
+                except Exception:
+                    log.exception(
+                        "Failed to publish conversation.turn_completed",
+                        extra={"conversation_id": conversation_id},
+                    )
 
         try:
             async for event in stream:

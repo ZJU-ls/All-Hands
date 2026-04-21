@@ -21,7 +21,8 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from allhands.core import Conversation, Employee, Message
+from allhands.core import Conversation, Employee, EventEnvelope, Message
+from allhands.execution.event_bus import EventBus
 from allhands.execution.events import AgentEvent, DoneEvent, ErrorEvent, TokenEvent
 from allhands.execution.gate import AutoApproveGate
 from allhands.execution.registry import ToolRegistry
@@ -180,6 +181,73 @@ async def test_no_tokens_means_no_empty_row(chat_svc: tuple) -> None:
     await _collect(svc._persist_assistant_reply("conv1", fake_stream()))
     msgs = await conv_repo.list_messages("conv1")
     assert [m.role for m in msgs] == []  # no user msg seeded, no assistant ghost
+
+
+@pytest.mark.asyncio
+async def test_turn_completion_publishes_cockpit_event(chat_svc: tuple) -> None:
+    """A successful turn fires a ``conversation.turn_completed`` event on the
+    bus so the cockpit activity feed has something to show during normal chat
+    use. Before this, the feed only lit up for triggers/webhooks/artifacts and
+    looked empty for a user who was mostly chatting."""
+    svc, _conv_repo, _ = chat_svc
+    bus = EventBus()
+    svc._bus = bus
+    published: list[tuple[str, dict]] = []
+
+    async def capture(env: EventEnvelope) -> None:
+        published.append((env.kind, env.payload))
+
+    bus.subscribe_all(capture)
+
+    msg_id = str(uuid.uuid4())
+    employee = _make_emp()
+
+    async def fake_stream() -> AsyncIterator[AgentEvent]:
+        yield TokenEvent(message_id=msg_id, delta="the answer is 42")
+        yield DoneEvent(message_id=msg_id, reason="done")
+
+    await _collect(svc._persist_assistant_reply("conv1", fake_stream(), employee=employee))
+
+    # subscribe_all fans out via create_task; give the loop one tick.
+    import asyncio
+
+    await asyncio.sleep(0)
+
+    kinds = [k for k, _ in published]
+    assert "conversation.turn_completed" in kinds, f"expected turn_completed; got {kinds}"
+    payload = next(p for k, p in published if k == "conversation.turn_completed")
+    assert payload["conversation_id"] == "conv1"
+    assert payload["message_id"] == msg_id
+    assert payload["employee_id"] == "emp1"
+    assert "persist-test" in payload["summary"]
+    assert "the answer is 42" in payload["summary"]
+    assert payload["link"] == "/chat/conv1"
+
+
+@pytest.mark.asyncio
+async def test_no_event_published_when_no_content(chat_svc: tuple) -> None:
+    """Ghost-row guard extends to the bus: if nothing was persisted (no tokens
+    seen), no cockpit beat should be published either. Prevents the activity
+    feed from filling up with empty-reply entries on stream errors."""
+    svc, _conv_repo, _ = chat_svc
+    bus = EventBus()
+    svc._bus = bus
+    published: list[str] = []
+
+    async def capture(env: EventEnvelope) -> None:
+        published.append(env.kind)
+
+    bus.subscribe_all(capture)
+
+    async def fake_stream() -> AsyncIterator[AgentEvent]:
+        yield ErrorEvent(code="INTERNAL", message="died early")
+
+    await _collect(svc._persist_assistant_reply("conv1", fake_stream()))
+
+    import asyncio
+
+    await asyncio.sleep(0)
+    assert "conversation.turn_completed" not in published
 
 
 @pytest.mark.asyncio

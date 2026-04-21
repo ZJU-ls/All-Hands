@@ -44,6 +44,10 @@ ACTIVITY_EVENT_KINDS = (
     "confirmation.",
     "mcp.",
     "task.",
+    # Chat turns are the most frequent "something just happened" signal in a
+    # normal workspace. Publishing them is what keeps the activity feed from
+    # looking empty when the user is mostly chatting and not running triggers.
+    "conversation.",
 )
 
 

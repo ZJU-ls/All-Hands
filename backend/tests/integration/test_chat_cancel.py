@@ -80,7 +80,7 @@ async def test_event_stream_closes_agent_on_disconnect(
 
     svc = CancelTrackingChatService()
 
-    async def _svc(_session: object) -> CancelTrackingChatService:
+    async def _svc(_session: object, request: object = None) -> CancelTrackingChatService:
         return svc
 
     monkeypatch.setattr(chat_router, "get_chat_service", _svc)

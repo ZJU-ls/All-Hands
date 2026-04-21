@@ -6,6 +6,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { LogoDotgrid, SunIcon, MoonIcon } from "@/components/ui/icons";
 import {
   ChatIcon,
+  CockpitIcon,
   UserIcon,
   SkillIcon,
   ModelIcon,
@@ -27,6 +28,7 @@ const MENU: MenuSection[] = [
   {
     title: "工作区",
     items: [
+      { label: "驾驶舱", href: "/", Icon: CockpitIcon },
       { label: "对话", href: "/chat", Icon: ChatIcon },
       { label: "任务", href: "/tasks", Icon: TaskIcon },
       { label: "历史会话", href: "/conversations", Icon: ChatIcon },
