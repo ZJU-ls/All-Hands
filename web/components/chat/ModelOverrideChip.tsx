@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BrandMark } from "@/components/brand/BrandMark";
 import { ModelPicker } from "@/components/model-picker/ModelPicker";
 import {
   updateConversation,
@@ -52,7 +51,7 @@ export function ModelOverrideChip({
 
   const effectiveRef = conversation.model_ref_override ?? employee.model_ref;
   const isOverridden = conversation.model_ref_override !== null;
-  const { provider: effProvider, name: effModel } = splitRef(effectiveRef);
+  const { name: effModel } = splitRef(effectiveRef);
 
   useEffect(() => {
     if (!open) return;
@@ -91,10 +90,10 @@ export function ModelOverrideChip({
         aria-expanded={open}
         data-testid="model-override-chip"
         data-overridden={isOverridden ? "true" : "false"}
-        className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 font-mono text-[11px] transition-colors duration-base ${
+        className={`inline-flex h-6 items-center gap-1 rounded border px-1.5 font-mono text-[11px] transition-colors duration-base ${
           isOverridden
             ? "border-primary text-text hover:border-border-strong"
-            : "border-border text-text hover:border-border-strong"
+            : "border-border text-text-muted hover:text-text hover:border-border-strong"
         }`}
         title={
           isOverridden
@@ -102,26 +101,24 @@ export function ModelOverrideChip({
             : `跟随员工默认 · ${employee.model_ref}`
         }
       >
-        <BrandMark kind={null} name={effProvider || effModel} size="sm" />
-        <span className="truncate max-w-[140px]">{effModel}</span>
         {isOverridden && (
           <span
-            className="text-primary"
-            aria-label="已覆盖"
+            aria-hidden="true"
+            className="inline-block h-1 w-1 rounded-full bg-primary shrink-0"
             data-testid="model-override-dot"
-          >
-            •
-          </span>
+          />
         )}
+        <span className="truncate max-w-[110px]">{effModel}</span>
+        <span aria-hidden className="font-mono text-text-subtle">▾</span>
       </button>
       {open && (
         <div
           role="dialog"
           aria-label="选择本对话使用的模型"
-          className="absolute right-0 top-full mt-1 z-20 w-72 rounded-md border border-border bg-surface-1 p-3 shadow-lg"
+          className="absolute right-0 bottom-full mb-1 z-20 w-60 rounded-md border border-border bg-surface-1 p-2 shadow-lg"
           data-testid="model-override-popover"
         >
-          <div className="mb-2 text-[10px] font-mono uppercase tracking-wider text-text-subtle">
+          <div className="mb-1.5 text-[10px] font-mono uppercase tracking-wider text-text-subtle">
             本对话使用的模型
           </div>
           <ModelPicker

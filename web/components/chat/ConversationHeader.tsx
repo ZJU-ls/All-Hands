@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { deriveProfile, BADGE_LABEL, type EmployeeForBadges } from "@/lib/employee-profile";
+import type { EmployeeForBadges } from "@/lib/employee-profile";
 
 export type ConversationHeaderEmployee = EmployeeForBadges & {
   id: string;
@@ -50,37 +50,20 @@ export function ConversationHeader({
     );
   }
 
-  const badges = deriveProfile(employee);
-  const extraBadges = badges.filter((b) => b !== "react");
-  const isLead = Boolean(employee.is_lead_agent);
-
+  // Header is intentionally lean: link to the employee (name only — the
+  // "lead/emp" prefix + capability badges live on the employee detail page,
+  // where they actually belong), optional conversation title, and the
+  // effective-model chip. Everything else was pushed into the employee page
+  // so each chat window surfaces only what changes per-conversation.
   return (
-    <div className="flex items-center gap-3 min-w-0">
+    <div className="flex items-center gap-2 min-w-0">
       <Link
         href={`/employees/${employee.id}`}
-        className="flex items-center gap-2 min-w-0 text-text hover:text-primary transition-colors duration-base"
+        className="min-w-0 text-text hover:text-primary transition-colors duration-base"
         aria-label={`查看员工 ${employee.name} 主页`}
       >
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-text-subtle shrink-0">
-          {isLead ? "lead" : "emp"}
-        </span>
         <span className="font-medium text-[13px] truncate">{employee.name}</span>
       </Link>
-      <div className="flex items-center gap-1 shrink-0">
-        {isLead && (
-          <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-text-muted">
-            全能
-          </span>
-        )}
-        {extraBadges.map((b) => (
-          <span
-            key={b}
-            className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-text-muted"
-          >
-            {BADGE_LABEL[b]}
-          </span>
-        ))}
-      </div>
       {conversationTitle && (
         <>
           <span className="text-text-subtle shrink-0" aria-hidden="true">
@@ -98,7 +81,7 @@ export function ConversationHeader({
               ? `本对话覆盖为 ${effectiveModelRef}`
               : `跟随员工默认 · ${effectiveModelRef}`
           }
-          className="ml-auto inline-flex h-5 items-center gap-1 rounded border border-border px-1.5 font-mono text-[10px] text-text-muted shrink-0"
+          className="inline-flex h-5 items-center gap-1 rounded border border-border px-1.5 font-mono text-[10px] text-text-muted shrink-0"
         >
           {isOverridden && (
             <span
