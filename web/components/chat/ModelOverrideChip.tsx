@@ -63,7 +63,7 @@ export function ModelOverrideChip({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [side, setSide] = useState<PopoverSide>("bottom");
-  const [align, setAlign] = useState<PopoverAlign>("end");
+  const [align, setAlign] = useState<PopoverAlign>("start");
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -81,14 +81,17 @@ export function ModelOverrideChip({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  // Pick side + align on open. The chip is now used in two spots:
-  //   - chat header (right-packed controls)  → end-align, bottom-prefer wins
-  //   - composer control row (left-packed)   → `end` would extend left and
-  //     overflow the AppShell sidebar; flip to `start`. This was the L10
-  //     follow-up bug the user showed on 2026-04-22.
-  // The chip sits just above the composer bottom in that second usage, so
-  // vertical prefers `bottom` but we expect the flip to `top` most of the
-  // time. Either way we never hard-code now.
+  // Pick side + align on open. The chip now lives in the composer control
+  // row (left-packed: thinking-toggle · model chip · usage · compact). That
+  // means the chip's x is anywhere from sidebar+pad to a few hundred px in,
+  // which puts `end` align (right-0 → panel extends left) visually close to
+  // the sidebar even when it doesn't formally overflow (computed gap is
+  // just ~300px on a 1920-wide viewport). The user's 2026-04-22 screenshot
+  // showed this "technically not overlapping but feels like it" case. Flip
+  // the preference: panel extends RIGHT from the chip into the empty
+  // message area, which is always the correct direction for a left-packed
+  // control. `computePopoverAlign` still handles the edge case where the
+  // viewport is narrow enough that `start` would spill off the right.
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
@@ -96,7 +99,7 @@ export function ModelOverrideChip({
       computePopoverSide(rect, POPOVER_HEIGHT_ESTIMATE, window.innerHeight, "bottom"),
     );
     setAlign(
-      computePopoverAlign(rect, POPOVER_WIDTH, window.innerWidth, "end"),
+      computePopoverAlign(rect, POPOVER_WIDTH, window.innerWidth, "start"),
     );
   }, [open]);
 
