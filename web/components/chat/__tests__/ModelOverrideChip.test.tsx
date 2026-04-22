@@ -147,8 +147,8 @@ async function flush() {
   });
 }
 
-describe("ModelOverrideChip", () => {
-  it("shows the employee default and no override dot when not overridden", () => {
+describe("ModelOverrideChip (L11 · one-click picker)", () => {
+  it("shows the employee default and no override dot when not overridden", async () => {
     render(
       <ModelOverrideChip
         conversation={makeConv()}
@@ -156,13 +156,13 @@ describe("ModelOverrideChip", () => {
         onConversationChange={() => {}}
       />,
     );
+    await flush();
     const chip = screen.getByTestId("model-override-chip");
-    expect(chip.getAttribute("data-overridden")).toBe("false");
     expect(chip.textContent).toContain("gpt-4o-mini");
     expect(screen.queryByTestId("model-override-dot")).toBeNull();
   });
 
-  it("shows the override value + dot when set", () => {
+  it("shows the override value + dot when set", async () => {
     render(
       <ModelOverrideChip
         conversation={makeConv({ model_ref_override: "Anthropic/claude-opus-4-7" })}
@@ -170,13 +170,29 @@ describe("ModelOverrideChip", () => {
         onConversationChange={() => {}}
       />,
     );
+    await flush();
     const chip = screen.getByTestId("model-override-chip");
-    expect(chip.getAttribute("data-overridden")).toBe("true");
     expect(chip.textContent).toContain("claude-opus-4-7");
     expect(screen.getByTestId("model-override-dot")).toBeTruthy();
   });
 
-  it("patches with model_ref_override when a concrete model is picked", async () => {
+  it("opens the listbox with ONE click (no nested popover)", async () => {
+    render(
+      <ModelOverrideChip
+        conversation={makeConv()}
+        employee={employee}
+        onConversationChange={() => {}}
+      />,
+    );
+    await flush();
+    // There should be no `model-override-popover` element — the chip is the
+    // trigger now. Clicking it directly reveals the listbox.
+    expect(screen.queryByTestId("model-override-popover")).toBeNull();
+    fireEvent.click(screen.getByTestId("model-override-chip"));
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+  });
+
+  it("patches with model_ref_override on a single click + pick", async () => {
     const onChange = vi.fn();
     render(
       <ModelOverrideChip
@@ -185,11 +201,9 @@ describe("ModelOverrideChip", () => {
         onConversationChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByTestId("model-override-chip"));
     await flush();
 
-    // Open the picker's listbox (custom Select trigger), then pick a model.
-    fireEvent.click(screen.getByTestId("model-override-picker"));
+    fireEvent.click(screen.getByTestId("model-override-chip"));
     await act(async () => {
       fireEvent.mouseDown(screen.getByText("Claude Opus 4.7"));
     });
@@ -211,10 +225,9 @@ describe("ModelOverrideChip", () => {
         onConversationChange={onChange}
       />,
     );
-    fireEvent.click(screen.getByTestId("model-override-chip"));
     await flush();
 
-    fireEvent.click(screen.getByTestId("model-override-picker"));
+    fireEvent.click(screen.getByTestId("model-override-chip"));
     await act(async () => {
       fireEvent.mouseDown(screen.getByTestId("model-picker-inherit"));
     });

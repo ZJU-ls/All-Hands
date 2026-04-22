@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Select, type SelectGroup } from "@/components/ui/Select";
+import { Select, type SelectGroup, type SelectOption } from "@/components/ui/Select";
 import {
   buildModelRef,
   defaultModelRef,
@@ -64,6 +64,20 @@ type Props = {
   testId?: string;
   /** Optional "leave empty to inherit" entry (used by per-conversation override). */
   inheritLabel?: string;
+  // Passthrough to the underlying Select so call sites can make the picker
+  // *be* the trigger (chip, inline button) without wrapping it in another
+  // popover. Added after L11 — two-level menus (chip → popover → picker →
+  // listbox) violate "一屏决策".
+  size?: "sm" | "md";
+  triggerClassName?: string;
+  renderTrigger?: (selected: SelectOption | null) => React.ReactNode;
+  popoverAlign?: "left" | "right";
+  /** Wrapper-level class. Defaults to `w-full` for the vertical form layout
+   * (DesignForm). Chip call-sites inside a flex row (ModelOverrideChip) pass
+   * `shrink-0` so the picker stays at content width instead of grabbing all
+   * horizontal space and collapsing its neighbours (ThinkingToggle /
+   * CompactChip) to one CJK-character-per-row min-content. */
+  className?: string;
 };
 
 export function ModelPicker({
@@ -73,6 +87,11 @@ export function ModelPicker({
   disabled = false,
   testId,
   inheritLabel,
+  size,
+  triggerClassName,
+  renderTrigger,
+  popoverAlign,
+  className = "w-full",
 }: Props) {
   const [state, setState] = useState<
     { status: "loading" } | { status: "ready"; providers: ProviderDto[]; models: ModelDto[] } | { status: "error"; message: string }
@@ -172,9 +191,12 @@ export function ModelPicker({
       groups={selectGroups}
       testId={testId ?? "model-picker"}
       ariaLabel="选择模型"
-      className="w-full"
-      triggerClassName="font-mono"
+      className={className}
+      triggerClassName={triggerClassName ?? "font-mono"}
       placeholder="选择模型…"
+      size={size}
+      renderTrigger={renderTrigger}
+      popoverAlign={popoverAlign}
     />
   );
 }
