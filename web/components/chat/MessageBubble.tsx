@@ -1,19 +1,59 @@
 import { useEffect, useRef, useState } from "react";
-import type { Message } from "@/lib/protocol";
+import type { Message, MessageSegment, ToolCall } from "@/lib/protocol";
 import { ToolCallCard } from "./ToolCallCard";
+import { SystemToolLine } from "./SystemToolLine";
 import { RenderSlot } from "./RenderSlot";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { TraceChip } from "@/components/runs/TraceChip";
+import { classifyToolId } from "@/lib/tool-kind";
+
+/**
+ * Dispatch a tool call to the right renderer based on its tool_id prefix.
+ *   - `allhands.*` (system) → inline `SystemToolLine`, non-interactive
+ *   - everything else → expandable `ToolCallCard`
+ * See product/06-ux-principles.md P13.
+ */
+function ToolCallNode({ toolCall }: { toolCall: ToolCall }) {
+  if (isRenderToolCall(toolCall)) return null;
+  if (classifyToolId(toolCall.tool_id) === "system") {
+    return <SystemToolLine toolCall={toolCall} />;
+  }
+  return <ToolCallCard toolCall={toolCall} />;
+}
 
 type Props = {
   message: Message;
   isStreaming?: boolean;
 };
 
+/**
+ * A render tool's visual IS its result — showing a `fn render_table ok …`
+ * chip next to the rendered table is just noise (user feedback from the
+ * "测试" conversation). We detect render tools by id prefix OR by a
+ * `component`-shaped result envelope, and suppress the ToolCallCard for
+ * those. Non-render (backend / meta) tool calls still get the card so the
+ * user can see `list_providers`, `create_employee`, etc.
+ */
+function isRenderToolCall(tc: ToolCall): boolean {
+  if (typeof tc.tool_id === "string" && tc.tool_id.startsWith("allhands.render.")) {
+    return true;
+  }
+  const result = tc.result;
+  if (
+    result &&
+    typeof result === "object" &&
+    "component" in (result as Record<string, unknown>)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function MessageBubble({ message, isStreaming }: Props) {
   const isUser = message.role === "user";
   const showCursor = Boolean(isStreaming) && !isUser;
   const hasReasoning = !isUser && !!message.reasoning && message.reasoning.length > 0;
+  const hasSegments = !isUser && Array.isArray(message.segments) && message.segments.length > 0;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -28,31 +68,17 @@ export function MessageBubble({ message, isStreaming }: Props) {
             isStreaming={Boolean(isStreaming) && !message.content}
           />
         )}
-        {(message.content || showCursor) &&
-          (isUser ? (
-            <p className="whitespace-pre-wrap">
-              {message.content}
-              {showCursor && <StreamingCursor />}
-            </p>
-          ) : (
-            <div>
-              {message.content && <AgentMarkdown content={message.content} />}
-              {showCursor && <StreamingCursor />}
-            </div>
-          ))}
-        {message.tool_calls.length > 0 && (
-          <div className="mt-2 flex flex-col gap-1">
-            {message.tool_calls.map((tc) => (
-              <ToolCallCard key={tc.id} toolCall={tc} />
-            ))}
-          </div>
-        )}
-        {message.render_payloads.length > 0 && (
-          <div className="mt-2 flex flex-col gap-2">
-            {message.render_payloads.map((rp, i) => (
-              <RenderSlot key={i} payload={rp} />
-            ))}
-          </div>
+        {hasSegments ? (
+          <SegmentedBody
+            message={message}
+            showCursor={showCursor}
+          />
+        ) : (
+          <LegacyBody
+            message={message}
+            isUser={isUser}
+            showCursor={showCursor}
+          />
         )}
         {!isUser && message.parent_run_id && (
           <div className="mt-1.5 flex justify-end">
@@ -61,6 +87,130 @@ export function MessageBubble({ message, isStreaming }: Props) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Time-ordered renderer. Walks `segments` and emits text / tool / render
+ * in the order they streamed. Render-tool cards are suppressed (their
+ * rendered payload lands right after via a render segment).
+ */
+function SegmentedBody({
+  message,
+  showCursor,
+}: {
+  message: Message;
+  showCursor: boolean;
+}) {
+  const segments = message.segments ?? [];
+  const toolById = new Map(message.tool_calls.map((tc) => [tc.id, tc]));
+  const lastIdx = segments.length - 1;
+
+  const nodes = segments.map((seg, i) => {
+    const isLast = i === lastIdx;
+    return renderSegment({
+      seg,
+      toolById,
+      renderPayloads: message.render_payloads,
+      key: i,
+      trailingCursor: isLast && showCursor,
+    });
+  });
+
+  // If the last segment wasn't text but we still need a cursor (assistant
+  // is about to say more after a tool call), surface the cursor standalone
+  // so the user sees the turn is still live.
+  const last = segments[lastIdx];
+  const cursorAlreadyAttached = last?.kind === "text";
+  return (
+    <div className="flex flex-col gap-2">
+      {nodes}
+      {showCursor && !cursorAlreadyAttached && (
+        <div>
+          <StreamingCursor />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderSegment({
+  seg,
+  toolById,
+  renderPayloads,
+  key,
+  trailingCursor,
+}: {
+  seg: MessageSegment;
+  toolById: Map<string, ToolCall>;
+  renderPayloads: Message["render_payloads"];
+  key: number;
+  trailingCursor: boolean;
+}) {
+  if (seg.kind === "text") {
+    return (
+      <div key={`t-${key}`}>
+        <AgentMarkdown content={seg.content} />
+        {trailingCursor && <StreamingCursor />}
+      </div>
+    );
+  }
+  if (seg.kind === "tool_call") {
+    const tc = toolById.get(seg.tool_call_id);
+    if (!tc) return null;
+    return <ToolCallNode key={`c-${key}`} toolCall={tc} />;
+  }
+  if (seg.kind === "render") {
+    const payload = renderPayloads[seg.index];
+    if (!payload) return null;
+    return <RenderSlot key={`r-${key}`} payload={payload} />;
+  }
+  return null;
+}
+
+/**
+ * Legacy rendering path for user messages and historical assistant messages
+ * loaded from the DB (which don't carry `segments`). Keeps the original
+ * bucketed layout so existing history doesn't regress.
+ */
+function LegacyBody({
+  message,
+  isUser,
+  showCursor,
+}: {
+  message: Message;
+  isUser: boolean;
+  showCursor: boolean;
+}) {
+  return (
+    <>
+      {(message.content || showCursor) &&
+        (isUser ? (
+          <p className="whitespace-pre-wrap">
+            {message.content}
+            {showCursor && <StreamingCursor />}
+          </p>
+        ) : (
+          <div>
+            {message.content && <AgentMarkdown content={message.content} />}
+            {showCursor && <StreamingCursor />}
+          </div>
+        ))}
+      {message.tool_calls.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1">
+          {message.tool_calls.filter((tc) => !isRenderToolCall(tc)).map((tc) => (
+            <ToolCallNode key={tc.id} toolCall={tc} />
+          ))}
+        </div>
+      )}
+      {message.render_payloads.length > 0 && (
+        <div className="mt-2 flex flex-col gap-2">
+          {message.render_payloads.map((rp, i) => (
+            <RenderSlot key={i} payload={rp} />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
