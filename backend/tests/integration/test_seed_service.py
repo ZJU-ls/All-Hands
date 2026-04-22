@@ -23,6 +23,7 @@ ORM `Base.metadata.create_all`, one session-per-test.
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
@@ -332,34 +333,43 @@ async def test_seed_content_is_real_not_placeholder(
     async with session_maker() as session, session.begin():
         await seed_service.ensure_all_dev_seeds(session)
 
+    # Word-boundary match instead of plain substring so legitimate tool
+    # names (``render_bar_chart``, ``dashboard``, ``baseline``) don't trip
+    # a false "bar" / "baz" hit. `\b` excludes `_` so ``render_bar_chart``
+    # still reads as one token — that's what we want.
     placeholders = ("foo", "bar", "baz", "lorem", "ipsum", "demo-model", "test-provider")
+    placeholder_patterns = [re.compile(rf"\b{re.escape(p)}\b") for p in placeholders]
 
     async with session_maker() as session:
         providers = await SqlLLMProviderRepo(session).list_all()
         models = await SqlLLMModelRepo(session).list_all()
         employees = await SqlEmployeeRepo(session).list_all()
 
+    def _scan(text: str) -> str | None:
+        lower = text.lower()
+        for pat in placeholder_patterns:
+            if pat.search(lower):
+                return pat.pattern
+        return None
+
     for p in providers:
-        lower = p.name.lower()
-        for bad in placeholders:
-            assert bad not in lower, f"provider {p.name} uses placeholder"
+        hit = _scan(p.name)
+        assert hit is None, f"provider {p.name} uses placeholder {hit}"
         # Realistic endpoint: https scheme + known path suffix v1-ish.
         assert p.base_url.startswith("https://"), (
             f"provider {p.name} base_url must be https: {p.base_url}"
         )
 
     for m in models:
-        lower = m.name.lower()
-        for bad in placeholders:
-            assert bad not in lower, f"model {m.name} uses placeholder"
+        hit = _scan(m.name)
+        assert hit is None, f"model {m.name} uses placeholder {hit}"
 
     for e in employees:
         # Names are NameStr pattern ^[A-Za-z][A-Za-z0-9_-]{0,63}$ — this is
         # enforced by Pydantic, but the "description" / "system_prompt" are
         # free-form, so scrub them for lorem.
-        lower_desc = (e.description + " " + e.system_prompt).lower()
-        for bad in placeholders:
-            assert bad not in lower_desc, f"employee {e.name} description/prompt contains {bad!r}"
+        hit = _scan(e.description + " " + e.system_prompt)
+        assert hit is None, f"employee {e.name} description/prompt contains {hit}"
 
 
 async def test_seed_provider_base_urls_align_with_env_example(
