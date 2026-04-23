@@ -7,9 +7,23 @@ import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { TraceChip } from "@/components/runs/TraceChip";
+import { Icon, type IconName } from "@/components/ui/icon";
+
+/**
+ * Trigger detail page · ADR 0016 V2 Azure Live polish.
+ *
+ * Breadcrumb · gradient hero (timer/event tile · enable dot · kind chip · run
+ * counts) · warning strip for auto-disabled state · sectioned body for
+ * condition / action / recent fires. Actions: 手动触发 · 启用/停用 · 删除.
+ * All fetch / mutation / navigation / data-testid preserved.
+ */
 
 type Kind = "timer" | "event";
-type ActionType = "notify_user" | "invoke_tool" | "dispatch_employee" | "continue_conversation";
+type ActionType =
+  | "notify_user"
+  | "invoke_tool"
+  | "dispatch_employee"
+  | "continue_conversation";
 
 type Trigger = {
   id: string;
@@ -56,7 +70,9 @@ export default function TriggerDetailPage() {
 
   const [trigger, setTrigger] = useState<Trigger | null>(null);
   const [fires, setFires] = useState<Fire[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "error" | "notfound">("loading");
+  const [status, setStatus] = useState<
+    "loading" | "ready" | "error" | "notfound"
+  >("loading");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"toggle" | "fire" | "">("");
   const [confirmFire, setConfirmFire] = useState(false);
@@ -117,7 +133,9 @@ export default function TriggerDetailPage() {
         body: JSON.stringify({}),
       });
       if (!res.ok) {
-        const detail = (await res.json().catch(() => ({}))) as { detail?: string };
+        const detail = (await res.json().catch(() => ({}))) as {
+          detail?: string;
+        };
         throw new Error(detail.detail || `HTTP ${res.status}`);
       }
       setConfirmFire(false);
@@ -142,15 +160,8 @@ export default function TriggerDetailPage() {
   return (
     <AppShell title={trigger?.name ?? "触发器"}>
       <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-8">
-          <div className="mb-4">
-            <Link
-              href="/triggers"
-              className="text-xs text-text-muted hover:text-text transition-colors duration-base"
-            >
-              ← 返回列表
-            </Link>
-          </div>
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
+          <Breadcrumb name={trigger?.name} />
 
           {status === "loading" && (
             <div data-testid="detail-loading">
@@ -161,32 +172,49 @@ export default function TriggerDetailPage() {
           {status === "notfound" && (
             <div
               data-testid="detail-notfound"
-              className="rounded-xl border border-dashed border-border p-10 text-center"
+              className="relative overflow-hidden rounded-2xl border border-dashed border-border bg-surface p-10 text-center"
             >
-              <p className="text-sm text-text-muted mb-2">触发器不存在或已被删除</p>
-              <p className="text-xs font-mono text-text-subtle">{id}</p>
+              <span className="grid h-12 w-12 place-items-center rounded-xl bg-surface-2 text-text-muted mx-auto mb-3">
+                <Icon name="alert-circle" size={22} />
+              </span>
+              <p className="text-sm font-semibold text-text mb-1">
+                触发器不存在或已被删除
+              </p>
+              <p className="font-mono text-caption text-text-subtle">{id}</p>
             </div>
           )}
 
           {status === "error" && (
             <div
               data-testid="detail-error"
-              className="rounded-xl border border-danger/30 bg-danger/5 p-6"
+              className="rounded-xl border border-danger/30 bg-danger-soft p-5"
             >
-              <p className="text-sm text-danger mb-2">加载失败</p>
-              <p className="text-xs text-text-muted mb-3 font-mono">{error}</p>
-              <button
-                onClick={() => void load()}
-                className="text-xs rounded-md border border-border px-3 py-1.5 hover:bg-surface-2 text-text transition-colors duration-base"
-              >
-                重试
-              </button>
+              <div className="flex items-start gap-3">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-danger/15 text-danger shrink-0">
+                  <Icon name="alert-circle" size={16} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-danger mb-1">
+                    加载失败
+                  </p>
+                  <p className="text-xs font-mono text-text-muted break-all mb-3">
+                    {error}
+                  </p>
+                  <button
+                    onClick={() => void load()}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
+                  >
+                    <Icon name="refresh" size={12} />
+                    重试
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
           {status === "ready" && trigger && (
             <>
-              <Header
+              <Hero
                 t={trigger}
                 busy={busy}
                 onToggle={() => void handleToggle()}
@@ -195,48 +223,74 @@ export default function TriggerDetailPage() {
               />
 
               {trigger.auto_disabled_reason && (
-                <div className="mb-4 rounded-xl border border-warning/40 bg-warning/5 p-4">
-                  <p className="text-xs text-warning font-medium mb-1">自动停用</p>
-                  <p className="text-xs text-text-muted">{trigger.auto_disabled_reason}</p>
-                  <p className="text-[11px] text-text-subtle mt-1">
-                    手动启用会清空失败计数。
-                  </p>
+                <div className="rounded-xl border border-warning/40 bg-warning-soft p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-warning/15 text-warning shrink-0">
+                      <Icon name="alert-triangle" size={16} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-warning mb-1">
+                        自动停用
+                      </p>
+                      <p className="text-[12px] text-text-muted leading-relaxed">
+                        {trigger.auto_disabled_reason}
+                      </p>
+                      <p className="font-mono text-caption text-text-subtle mt-1">
+                        手动启用会清空失败计数。
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              <Section title="触发条件">
+              <Section title="触发条件" icon="clock">
                 {trigger.kind === "timer" ? (
-                  <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-                    <dt className="text-text-muted">cron</dt>
-                    <dd className="font-mono text-text">{trigger.timer?.cron}</dd>
-                    <dt className="text-text-muted">时区</dt>
-                    <dd className="font-mono text-text">{trigger.timer?.timezone}</dd>
-                    <dt className="text-text-muted">最小间隔</dt>
-                    <dd className="font-mono text-text">
-                      {trigger.min_interval_seconds} s
-                    </dd>
-                  </dl>
+                  <MetaGrid
+                    items={[
+                      { k: "cron", v: trigger.timer?.cron ?? "—", mono: true },
+                      {
+                        k: "timezone",
+                        v: trigger.timer?.timezone ?? "—",
+                        mono: true,
+                      },
+                      {
+                        k: "min interval",
+                        v: `${trigger.min_interval_seconds} s`,
+                        mono: true,
+                      },
+                    ]}
+                  />
                 ) : (
-                  <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-                    <dt className="text-text-muted">event kind</dt>
-                    <dd className="font-mono text-text">{trigger.event?.type}</dd>
-                    <dt className="text-text-muted">filter</dt>
-                    <dd className="font-mono text-text-muted break-all">
-                      {JSON.stringify(trigger.event?.filter ?? {})}
-                    </dd>
-                    <dt className="text-text-muted">最小间隔</dt>
-                    <dd className="font-mono text-text">
-                      {trigger.min_interval_seconds} s
-                    </dd>
-                  </dl>
+                  <MetaGrid
+                    items={[
+                      {
+                        k: "event kind",
+                        v: trigger.event?.type ?? "—",
+                        mono: true,
+                      },
+                      {
+                        k: "filter",
+                        v: JSON.stringify(trigger.event?.filter ?? {}),
+                        mono: true,
+                      },
+                      {
+                        k: "min interval",
+                        v: `${trigger.min_interval_seconds} s`,
+                        mono: true,
+                      },
+                    ]}
+                  />
                 )}
               </Section>
 
-              <Section title="动作">
+              <Section title="动作" icon="play-circle">
                 <ActionPreview t={trigger} />
               </Section>
 
-              <Section title={`最近触发记录 · ${fires.length}`}>
+              <Section
+                title={`最近触发记录 · ${fires.length}`}
+                icon="activity"
+              >
                 {fires.length === 0 ? (
                   <div data-testid="fires-empty">
                     <EmptyState
@@ -247,7 +301,7 @@ export default function TriggerDetailPage() {
                 ) : (
                   <div
                     data-testid="fires-list"
-                    className="flex flex-col gap-1.5"
+                    className="flex flex-col gap-2"
                   >
                     {fires.map((f) => (
                       <FireRow key={f.id} f={f} />
@@ -283,7 +337,23 @@ export default function TriggerDetailPage() {
   );
 }
 
-function Header({
+function Breadcrumb({ name }: { name?: string }) {
+  return (
+    <div className="flex items-center gap-1.5 font-mono text-caption uppercase tracking-wider text-text-subtle">
+      <Link
+        href="/triggers"
+        className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md text-text-muted hover:text-primary hover:bg-primary-muted transition duration-base"
+      >
+        <Icon name="arrow-left" size={11} strokeWidth={2} />
+        Triggers
+      </Link>
+      <Icon name="chevron-right" size={11} className="text-text-subtle" />
+      <span className="text-text truncate max-w-[30ch]">{name ?? "…"}</span>
+    </div>
+  );
+}
+
+function Hero({
   t,
   busy,
   onToggle,
@@ -296,65 +366,201 @@ function Header({
   onFire: () => void;
   onDelete: () => void;
 }) {
+  const kindIcon: IconName = t.kind === "timer" ? "clock" : "zap";
   const dotClass = t.auto_disabled_reason
     ? "bg-warning"
     : t.enabled
       ? "bg-success"
-      : "bg-border-strong";
+      : "bg-text-subtle";
+  const stateChip = t.auto_disabled_reason
+    ? "text-warning border-warning/30 bg-warning-soft"
+    : t.enabled
+      ? "text-success border-success/30 bg-success-soft"
+      : "text-text-muted border-border bg-surface-2";
+  const stateLabel = t.auto_disabled_reason
+    ? "auto-disabled"
+    : t.enabled
+      ? "enabled"
+      : "disabled";
+  const stateIcon: IconName = t.auto_disabled_reason
+    ? "alert-triangle"
+    : t.enabled
+      ? "check-circle-2"
+      : "pause";
+
   return (
-    <div className="mb-6 flex items-start justify-between gap-4">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className={`inline-block h-2 w-2 rounded-full ${dotClass}`} aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-text truncate">{t.name}</h2>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">
-            {t.kind}
-          </span>
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-sm p-6">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent 0%, var(--color-primary) 50%, transparent 100%)",
+          opacity: 0.25,
+        }}
+      />
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-4 min-w-0 flex-1">
+          <div
+            className="grid h-14 w-14 place-items-center rounded-2xl text-primary-fg shadow-soft shrink-0"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+            }}
+            aria-hidden="true"
+          >
+            <Icon name={kindIcon} size={26} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${dotClass}`}
+                aria-hidden="true"
+              />
+              <h1 className="text-xl font-bold tracking-tight text-text truncate">
+                {t.name}
+              </h1>
+              <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
+                <Icon name={kindIcon} size={10} strokeWidth={2.25} />
+                {t.kind}
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 h-5 px-1.5 rounded-md border text-caption font-mono font-medium ${stateChip}`}
+              >
+                <Icon name={stateIcon} size={10} strokeWidth={2.25} />
+                {stateLabel}
+              </span>
+              <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
+                <Icon name="activity" size={10} strokeWidth={2.25} />
+                {t.fires_total} 次
+              </span>
+              {t.fires_failed_streak > 0 && (
+                <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-danger/30 bg-danger-soft text-danger text-caption font-mono font-medium">
+                  <Icon name="alert-circle" size={10} strokeWidth={2.25} />
+                  失败 × {t.fires_failed_streak}
+                </span>
+              )}
+            </div>
+            <p className="text-[12px] text-text-muted leading-relaxed mb-1">
+              {t.last_fired_at
+                ? `最近触发 ${formatTime(t.last_fired_at)}`
+                : "尚未触发"}
+            </p>
+            <p className="font-mono text-caption text-text-subtle truncate">
+              {t.id}
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-text-muted">
-          {t.fires_total} 次触发
-          {t.fires_failed_streak > 0 ? ` · 连续失败 ${t.fires_failed_streak}` : ""}
-          {t.last_fired_at ? ` · 最近 ${formatTime(t.last_fired_at)}` : " · 尚未触发"}
-        </p>
-        <p className="text-[11px] font-mono text-text-subtle mt-1">{t.id}</p>
-      </div>
-      <div className="flex gap-2 shrink-0">
-        <button
-          onClick={onFire}
-          disabled={busy !== ""}
-          data-testid="fire-now"
-          className="text-xs px-3 py-1.5 rounded-md border border-border text-text hover:bg-surface-2 disabled:opacity-40 transition-colors duration-base"
-        >
-          手动触发
-        </button>
-        <button
-          onClick={onToggle}
-          disabled={busy !== ""}
-          data-testid="toggle"
-          className="text-xs px-3 py-1.5 rounded-md border border-border text-text hover:bg-surface-2 disabled:opacity-40 transition-colors duration-base"
-        >
-          {busy === "toggle" ? "…" : t.enabled ? "停用" : "启用"}
-        </button>
-        <button
-          onClick={onDelete}
-          data-testid="delete"
-          className="text-xs px-3 py-1.5 rounded-md border border-border text-danger hover:bg-danger/10 transition-colors duration-base"
-        >
-          删除
-        </button>
+        <div className="flex gap-2 shrink-0 flex-wrap">
+          <button
+            onClick={onFire}
+            disabled={busy !== ""}
+            data-testid="fire-now"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-primary text-primary-fg text-[12px] font-semibold shadow-soft-sm hover:bg-primary-hover disabled:opacity-40 transition duration-base"
+          >
+            {busy === "fire" ? (
+              <>
+                <Icon name="loader" size={12} className="animate-spin-slow" />
+                触发中
+              </>
+            ) : (
+              <>
+                <Icon name="play" size={12} />
+                手动触发
+              </>
+            )}
+          </button>
+          <button
+            onClick={onToggle}
+            disabled={busy !== ""}
+            data-testid="toggle"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm disabled:opacity-40 transition duration-base"
+          >
+            {busy === "toggle" ? (
+              <>
+                <Icon name="loader" size={12} className="animate-spin-slow" />
+                …
+              </>
+            ) : t.enabled ? (
+              <>
+                <Icon name="pause" size={12} />
+                停用
+              </>
+            ) : (
+              <>
+                <Icon name="play" size={12} />
+                启用
+              </>
+            )}
+          </button>
+          <button
+            onClick={onDelete}
+            data-testid="delete"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/30 bg-danger-soft text-[12px] font-semibold text-danger hover:bg-danger/15 transition duration-base"
+          >
+            <Icon name="trash-2" size={12} />
+            删除
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: IconName;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="mb-6 rounded-xl border border-border bg-surface p-5">
-      <h3 className="text-[11px] uppercase tracking-wide text-text-subtle mb-3 font-mono">
-        {title}
-      </h3>
+    <section className="relative overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm p-5">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, var(--color-border-strong), transparent)",
+          opacity: 0.6,
+        }}
+      />
+      <header className="flex items-center gap-2 mb-4">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-muted text-primary">
+          <Icon name={icon} size={14} strokeWidth={2} />
+        </span>
+        <h2 className="text-sm font-semibold text-text">{title}</h2>
+      </header>
+      <div className="border-t border-border -mx-5 mb-4" />
       {children}
     </section>
+  );
+}
+
+function MetaGrid({
+  items,
+}: {
+  items: ReadonlyArray<{ k: string; v: React.ReactNode; mono?: boolean }>;
+}) {
+  return (
+    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+      {items.map((it, idx) => (
+        <div key={idx} className="flex flex-col gap-1 min-w-0">
+          <dt className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
+            {it.k}
+          </dt>
+          <dd
+            className={`text-sm text-text break-all ${
+              it.mono ? "font-mono" : ""
+            }`}
+          >
+            {it.v}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -362,79 +568,145 @@ function ActionPreview({ t }: { t: Trigger }) {
   const a = t.action;
   if (a.type === "notify_user") {
     return (
-      <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-        <dt className="text-text-muted">类型</dt>
-        <dd className="font-mono text-text">notify_user</dd>
-        <dt className="text-text-muted">channel</dt>
-        <dd className="font-mono text-text">{a.channel ?? "cockpit"}</dd>
-        <dt className="text-text-muted">消息模板</dt>
-        <dd className="text-text whitespace-pre-wrap">{a.message ?? "—"}</dd>
-      </dl>
+      <div className="space-y-4">
+        <MetaGrid
+          items={[
+            { k: "type", v: "notify_user", mono: true },
+            { k: "channel", v: a.channel ?? "cockpit", mono: true },
+          ]}
+        />
+        <div>
+          <p className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold mb-2">
+            message template
+          </p>
+          <pre className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-3 whitespace-pre-wrap break-words leading-relaxed">
+            {a.message ?? "—"}
+          </pre>
+        </div>
+      </div>
     );
   }
   if (a.type === "invoke_tool") {
     return (
-      <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-        <dt className="text-text-muted">类型</dt>
-        <dd className="font-mono text-text">invoke_tool</dd>
-        <dt className="text-text-muted">tool_id</dt>
-        <dd className="font-mono text-text">{a.tool_id ?? "—"}</dd>
-        <dt className="text-text-muted">args</dt>
-        <dd className="font-mono text-text-muted break-all">
-          {JSON.stringify(a.args_template ?? {})}
-        </dd>
-      </dl>
+      <div className="space-y-4">
+        <MetaGrid
+          items={[
+            { k: "type", v: "invoke_tool", mono: true },
+            { k: "tool_id", v: a.tool_id ?? "—", mono: true },
+          ]}
+        />
+        <div>
+          <p className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold mb-2">
+            args
+          </p>
+          <pre className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-3 whitespace-pre-wrap break-words leading-relaxed">
+            {JSON.stringify(a.args_template ?? {}, null, 2)}
+          </pre>
+        </div>
+      </div>
     );
   }
   if (a.type === "dispatch_employee") {
     return (
-      <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-        <dt className="text-text-muted">类型</dt>
-        <dd className="font-mono text-text">dispatch_employee</dd>
-        <dt className="text-text-muted">employee_id</dt>
-        <dd className="font-mono text-text">{a.employee_id ?? "—"}</dd>
-        <dt className="text-text-muted">任务模板</dt>
-        <dd className="text-text whitespace-pre-wrap">{a.task_template ?? "—"}</dd>
-      </dl>
+      <div className="space-y-4">
+        <MetaGrid
+          items={[
+            { k: "type", v: "dispatch_employee", mono: true },
+            { k: "employee_id", v: a.employee_id ?? "—", mono: true },
+          ]}
+        />
+        <div>
+          <p className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold mb-2">
+            task template
+          </p>
+          <pre className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-3 whitespace-pre-wrap break-words leading-relaxed">
+            {a.task_template ?? "—"}
+          </pre>
+        </div>
+      </div>
     );
   }
   return (
-    <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-      <dt className="text-text-muted">类型</dt>
-      <dd className="font-mono text-text">continue_conversation</dd>
-      <dt className="text-text-muted">conversation_id</dt>
-      <dd className="font-mono text-text">{a.conversation_id ?? "—"}</dd>
-      <dt className="text-text-muted">消息模板</dt>
-      <dd className="text-text whitespace-pre-wrap">{a.message_template ?? "—"}</dd>
-    </dl>
+    <div className="space-y-4">
+      <MetaGrid
+        items={[
+          { k: "type", v: "continue_conversation", mono: true },
+          { k: "conversation_id", v: a.conversation_id ?? "—", mono: true },
+        ]}
+      />
+      <div>
+        <p className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold mb-2">
+          message template
+        </p>
+        <pre className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-3 whitespace-pre-wrap break-words leading-relaxed">
+          {a.message_template ?? "—"}
+        </pre>
+      </div>
+    </div>
   );
 }
 
 function FireRow({ f }: { f: Fire }) {
-  const statusClass =
-    f.status === "dispatched" || f.status === "succeeded"
-      ? "text-success"
-      : f.status === "rate_limited" || f.status === "paused" || f.status === "cycle_blocked"
-        ? "text-warning"
-        : f.status === "failed"
-          ? "text-danger"
-          : "text-text-muted";
+  const statusMeta = fireStatusMeta(f.status);
   return (
     <div
       data-testid={`fire-${f.id}`}
-      className="rounded-md border border-border bg-bg px-3 py-2 flex items-center gap-3 text-xs"
+      className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 flex items-center gap-3 flex-wrap hover:border-border-strong transition duration-base"
     >
-      <span className={`font-mono ${statusClass} shrink-0`}>{f.status}</span>
-      <span className="text-text-muted shrink-0">{formatTime(f.fired_at)}</span>
-      <span className="text-text-subtle text-[10px] shrink-0">{f.source}</span>
+      <span
+        className={`inline-flex items-center gap-1 h-5 px-1.5 rounded-md border font-mono text-caption font-medium shrink-0 ${statusMeta.chip}`}
+      >
+        <Icon name={statusMeta.icon} size={10} strokeWidth={2.25} />
+        {f.status}
+      </span>
+      <span className="inline-flex items-center gap-1 font-mono text-caption text-text-muted shrink-0">
+        <Icon name="clock" size={11} className="text-text-subtle" />
+        {formatTime(f.fired_at)}
+      </span>
+      <span className="inline-flex items-center h-5 px-1.5 rounded-md bg-surface border border-border font-mono text-caption text-text-subtle shrink-0">
+        {f.source}
+      </span>
       {f.run_id && <TraceChip runId={f.run_id} label={f.run_id} />}
       {f.error_code && (
-        <span className="font-mono text-danger truncate" title={f.error_detail ?? ""}>
+        <span
+          className="inline-flex items-center gap-1 font-mono text-caption text-danger truncate"
+          title={f.error_detail ?? ""}
+        >
+          <Icon name="alert-circle" size={11} />
           {f.error_code}
         </span>
       )}
     </div>
   );
+}
+
+function fireStatusMeta(status: string): { icon: IconName; chip: string } {
+  if (status === "dispatched" || status === "succeeded") {
+    return {
+      icon: "check-circle-2",
+      chip: "text-success border-success/30 bg-success-soft",
+    };
+  }
+  if (
+    status === "rate_limited" ||
+    status === "paused" ||
+    status === "cycle_blocked"
+  ) {
+    return {
+      icon: "alert-triangle",
+      chip: "text-warning border-warning/30 bg-warning-soft",
+    };
+  }
+  if (status === "failed") {
+    return {
+      icon: "alert-circle",
+      chip: "text-danger border-danger/30 bg-danger-soft",
+    };
+  }
+  return {
+    icon: "circle-help",
+    chip: "text-text-muted border-border bg-surface",
+  };
 }
 
 function formatTime(iso: string): string {

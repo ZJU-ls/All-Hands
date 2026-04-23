@@ -12,6 +12,8 @@ import {
 import { ConversationSwitcher } from "@/components/chat/ConversationSwitcher";
 import { AppShell } from "@/components/shell/AppShell";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
+import { ErrorState } from "@/components/state";
+import { Icon } from "@/components/ui/icon";
 import {
   ApiError,
   BackendUnreachableError,
@@ -44,6 +46,13 @@ function toHeaderEmployee(e: EmployeeDto): ConversationHeaderEmployee {
   };
 }
 
+/**
+ * Offline banner · Brand Blue Dual Theme V2.
+ *
+ * Soft-warning rounded banner with a pulsing status dot, retry button and a
+ * short hint at the backend target so operators can correlate with the server
+ * log while Claude is reconnecting.
+ */
 function BackendOfflineBanner({
   attempt,
   onRetry,
@@ -56,24 +65,30 @@ function BackendOfflineBanner({
       role="status"
       aria-live="polite"
       data-testid="backend-offline-banner"
-      className="border-b border-border bg-surface-2 px-4 py-2"
+      className="mx-3 mt-3 flex items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft px-3 py-2 text-[12px] shadow-soft-sm"
     >
-      <div className="flex items-center gap-3 text-[12px]">
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning" aria-hidden="true" />
-        <span className="text-text">后端未就绪 · 正在自动重连</span>
-        <span className="font-mono text-text-subtle">尝试 {attempt}</span>
-        <span className="flex-1" />
-        <span className="hidden font-mono text-text-subtle md:inline">
-          backend · port 8000
-        </span>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="inline-flex h-6 items-center rounded-md border border-border px-2 font-mono text-[11px] text-text-muted transition-colors duration-base hover:border-border-strong hover:text-text"
-        >
-          立即重试
-        </button>
+      <span className="relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning">
+        <Icon name="plug" size={13} />
+        <span
+          aria-hidden="true"
+          className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-warning animate-ping"
+        />
+      </span>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="font-medium text-text">后端未就绪 · 正在自动重连</span>
+        <span className="font-mono text-[11px] text-text-muted">尝试 {attempt}</span>
       </div>
+      <span className="hidden font-mono text-[11px] text-text-subtle md:inline">
+        backend · :8000
+      </span>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-warning/40 bg-surface px-2.5 font-medium text-[11px] text-warning transition-colors duration-base hover:bg-warning/10"
+      >
+        <Icon name="refresh" size={11} />
+        立即重试
+      </button>
     </div>
   );
 }
@@ -187,8 +202,8 @@ export default function ConversationPage() {
 
   return (
     <AppShell title="One for All · 一个 Lead Agent 搞定一切">
-      <div className="flex h-full min-w-0">
-        <div className="flex h-full flex-1 flex-col min-w-0">
+      <div className="flex h-full min-h-0 min-w-0">
+        <div className="flex h-full min-h-0 flex-1 flex-col min-w-0">
           {loadState.kind === "unreachable" && (
             <BackendOfflineBanner
               attempt={loadState.attempt}
@@ -196,13 +211,18 @@ export default function ConversationPage() {
             />
           )}
           {loadState.kind === "error" && (
-            <div className="border-b border-border bg-surface-2 px-4 py-2 text-[12px] text-danger">
-              {loadState.message}
+            <div className="px-3 pt-3">
+              <ErrorState
+                title="对话加载失败"
+                description="可能是 backend 还在重启,或会话状态损坏。"
+                detail={loadState.message}
+                action={{ label: "重试", onClick: () => manualRetryRef.current() }}
+              />
             </div>
           )}
           <div
             data-testid="conversation-toolbar"
-            className="flex items-center gap-2 border-b border-border px-3 h-9 min-w-0"
+            className="flex h-11 items-center gap-2 border-b border-border bg-surface/60 px-3 min-w-0 backdrop-blur-sm"
           >
             <div className="min-w-0 flex-1">
               <ConversationHeader
@@ -221,16 +241,27 @@ export default function ConversationPage() {
               aria-pressed={panelOpen}
               aria-label="切换制品区"
               title="制品区 · Cmd/Ctrl+J"
-              className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 font-mono text-[11px] transition-colors duration-base ${
+              className={
                 panelOpen
-                  ? "border-border-strong bg-surface-2 text-text"
-                  : "border-border text-text-muted hover:text-text hover:border-border-strong"
-              }`}
+                  ? "inline-flex h-7 items-center gap-1.5 rounded-md border border-primary/40 bg-primary-muted px-2 text-[11px] font-medium text-primary transition-colors duration-base"
+                  : "inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-[11px] font-medium text-text-muted transition-colors duration-base hover:border-border-strong hover:text-text hover:bg-surface-2"
+              }
             >
-              制品 <span className="text-text-subtle">⌘J</span>
+              <Icon name="panel-right" size={12} />
+              <span>制品</span>
+              <span
+                aria-hidden="true"
+                className={
+                  panelOpen
+                    ? "inline-flex h-4 items-center gap-0.5 rounded bg-primary/15 px-1 font-mono text-[9px] text-primary"
+                    : "inline-flex h-4 items-center gap-0.5 rounded bg-surface-2 px-1 font-mono text-[9px] text-text-subtle"
+                }
+              >
+                <Icon name="command" size={9} />J
+              </span>
             </button>
           </div>
-          <div className="flex-1 min-h-0">
+          <div className="min-h-0 flex-1">
             <MessageList conversationId={conversationId} />
           </div>
           <InputBar

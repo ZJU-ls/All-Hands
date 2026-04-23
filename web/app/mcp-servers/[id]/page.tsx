@@ -6,6 +6,16 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
+import { Icon, type IconName } from "@/components/ui/icon";
+
+/**
+ * MCP server detail page · ADR 0016 V2 Azure Live polish.
+ *
+ * Breadcrumb · gradient hero (plug tile · health dot + chip · transport chip ·
+ * exposed-tool count · enable state) · tab pills · sectioned body cards for
+ * config / raw JSON / tools list (expandable schema) / health timeline /
+ * dependents. All fetch / mutation / navigation / data-testid preserved.
+ */
 
 type Transport = "stdio" | "sse" | "http";
 type Health = "unknown" | "ok" | "unreachable" | "auth_failed";
@@ -38,11 +48,11 @@ type Tab = "overview" | "tools" | "logs" | "health";
 
 type LoadStatus = "loading" | "ready" | "notfound" | "error";
 
-const TABS: [Tab, string][] = [
-  ["overview", "概览"],
-  ["tools", "工具"],
-  ["logs", "日志"],
-  ["health", "健康时间线"],
+const TABS: ReadonlyArray<readonly [Tab, string, IconName]> = [
+  ["overview", "概览", "layout-grid"],
+  ["tools", "工具", "zap"],
+  ["logs", "日志", "terminal"],
+  ["health", "健康时间线", "activity"],
 ];
 
 export default function McpServerDetailPage() {
@@ -164,15 +174,8 @@ export default function McpServerDetailPage() {
   return (
     <AppShell title={server?.name ?? "MCP 服务器"}>
       <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-8">
-          <div className="mb-4">
-            <Link
-              href="/mcp-servers"
-              className="text-xs text-text-muted hover:text-text transition-colors duration-base"
-            >
-              ← 返回 MCP 服务器列表
-            </Link>
-          </div>
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
+          <Breadcrumb name={server?.name} />
 
           {status === "loading" && (
             <div data-testid="mcp-detail-loading">
@@ -188,8 +191,9 @@ export default function McpServerDetailPage() {
               >
                 <Link
                   href="/mcp-servers"
-                  className="inline-block mt-2 rounded border border-border px-3 py-1.5 text-[12px] text-text hover:bg-surface-2 transition-colors duration-base"
+                  className="inline-flex items-center gap-1.5 mt-2 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
                 >
+                  <Icon name="arrow-left" size={12} />
                   回到列表
                 </Link>
               </EmptyState>
@@ -208,7 +212,7 @@ export default function McpServerDetailPage() {
 
           {status === "ready" && server && (
             <>
-              <Header
+              <Hero
                 server={server}
                 dependentCount={dependents.length}
                 busy={busy}
@@ -218,24 +222,29 @@ export default function McpServerDetailPage() {
 
               <div
                 role="tablist"
-                className="mb-5 flex items-center gap-1 border-b border-border"
+                aria-label="MCP 服务器视图"
+                className="inline-flex items-center gap-1 rounded-xl bg-surface-2 p-1 border border-border"
               >
-                {TABS.map(([key, label]) => (
-                  <button
-                    key={key}
-                    role="tab"
-                    data-testid={`tab-${key}`}
-                    aria-selected={tab === key}
-                    onClick={() => setTab(key)}
-                    className={`px-3 py-2 text-xs font-medium transition-colors duration-base border-b-2 -mb-px ${
-                      tab === key
-                        ? "text-text border-primary"
-                        : "text-text-muted border-transparent hover:text-text"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {TABS.map(([key, label, icon]) => {
+                  const active = tab === key;
+                  return (
+                    <button
+                      key={key}
+                      role="tab"
+                      data-testid={`tab-${key}`}
+                      aria-selected={active}
+                      onClick={() => setTab(key)}
+                      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] transition duration-base ${
+                        active
+                          ? "bg-surface text-text font-semibold shadow-soft-sm"
+                          : "text-text-muted hover:text-text font-medium"
+                      }`}
+                    >
+                      <Icon name={icon} size={12} strokeWidth={2} />
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
 
               {tab === "overview" && (
@@ -277,20 +286,64 @@ export default function McpServerDetailPage() {
   );
 }
 
-function healthLabel(h: Health): string {
-  if (h === "ok") return "健康";
-  if (h === "unreachable") return "不可达";
-  if (h === "auth_failed") return "鉴权失败";
-  return "未知";
+function Breadcrumb({ name }: { name?: string }) {
+  return (
+    <div className="flex items-center gap-1.5 font-mono text-caption uppercase tracking-wider text-text-subtle">
+      <Link
+        href="/mcp-servers"
+        className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md text-text-muted hover:text-primary hover:bg-primary-muted transition duration-base"
+      >
+        <Icon name="arrow-left" size={11} strokeWidth={2} />
+        MCP Servers
+      </Link>
+      <Icon name="chevron-right" size={11} className="text-text-subtle" />
+      <span className="text-text truncate max-w-[30ch]">{name ?? "…"}</span>
+    </div>
+  );
 }
 
-function healthDotClass(h: Health): string {
-  if (h === "ok") return "bg-success";
-  if (h === "unreachable" || h === "auth_failed") return "bg-danger";
-  return "bg-border-strong";
+function healthMeta(h: Health): {
+  label: string;
+  dot: string;
+  chip: string;
+  icon: IconName;
+} {
+  if (h === "ok")
+    return {
+      label: "健康",
+      dot: "bg-success",
+      chip: "text-success border-success/30 bg-success-soft",
+      icon: "check-circle-2",
+    };
+  if (h === "unreachable")
+    return {
+      label: "不可达",
+      dot: "bg-danger",
+      chip: "text-danger border-danger/30 bg-danger-soft",
+      icon: "alert-circle",
+    };
+  if (h === "auth_failed")
+    return {
+      label: "鉴权失败",
+      dot: "bg-danger",
+      chip: "text-danger border-danger/30 bg-danger-soft",
+      icon: "lock",
+    };
+  return {
+    label: "未知",
+    dot: "bg-text-subtle",
+    chip: "text-text-muted border-border bg-surface-2",
+    icon: "circle-help",
+  };
 }
 
-function Header({
+function transportMeta(t: Transport): { icon: IconName; label: string } {
+  if (t === "stdio") return { icon: "terminal", label: "stdio" };
+  if (t === "sse") return { icon: "activity", label: "sse" };
+  return { icon: "link", label: "http" };
+}
+
+function Hero({
   server,
   dependentCount,
   busy,
@@ -303,60 +356,108 @@ function Header({
   onReconnect: () => void;
   onDelete: () => void;
 }) {
+  const h = healthMeta(server.health);
+  const t = transportMeta(server.transport);
   return (
-    <div className="mb-6 flex items-start justify-between gap-4">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <span
-            data-testid="mcp-health-dot"
-            className={`inline-block h-2 w-2 rounded-full ${healthDotClass(server.health)}`}
-            aria-label={`health ${server.health}`}
-          />
-          <h2
-            data-testid="mcp-name"
-            className="text-lg font-semibold tracking-tight text-text"
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-sm p-6">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent 0%, var(--color-primary) 50%, transparent 100%)",
+          opacity: 0.25,
+        }}
+      />
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-4 min-w-0 flex-1">
+          <div
+            className="grid h-14 w-14 place-items-center rounded-2xl text-primary-fg shadow-soft shrink-0"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+            }}
+            aria-hidden="true"
           >
-            {server.name}
-          </h2>
-          <span
-            data-testid="mcp-transport"
-            className="text-[10px] px-1.5 py-0.5 rounded-sm bg-surface-2 text-text-muted font-mono"
-          >
-            {server.transport}
-          </span>
-          <span
-            data-testid="mcp-health-label"
-            className="text-[10px] px-1.5 py-0.5 rounded-sm bg-surface-2 text-text-muted"
-          >
-            {healthLabel(server.health)}
-          </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-surface-2 text-text-muted">
-            {server.enabled ? "已启用" : "已停用"}
-          </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-surface-2 text-text-muted">
-            {dependentCount} 员工引用
-          </span>
+            <Icon name="plug" size={26} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span
+                data-testid="mcp-health-dot"
+                className={`inline-block h-2 w-2 rounded-full ${h.dot}`}
+                aria-label={`health ${server.health}`}
+              />
+              <h1
+                data-testid="mcp-name"
+                className="text-xl font-bold tracking-tight text-text truncate"
+              >
+                {server.name}
+              </h1>
+              <span
+                data-testid="mcp-transport"
+                className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono"
+              >
+                <Icon name={t.icon} size={10} strokeWidth={2.25} />
+                {t.label}
+              </span>
+              <span
+                data-testid="mcp-health-label"
+                className={`inline-flex items-center gap-1 h-5 px-1.5 rounded-md border text-caption font-mono font-medium ${h.chip}`}
+              >
+                <Icon name={h.icon} size={10} strokeWidth={2.25} />
+                {h.label}
+              </span>
+              <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
+                <Icon
+                  name={server.enabled ? "check" : "pause"}
+                  size={10}
+                  strokeWidth={2.25}
+                />
+                {server.enabled ? "已启用" : "已停用"}
+              </span>
+              <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
+                <Icon name="zap" size={10} strokeWidth={2.25} />
+                {server.exposed_tool_ids.length} tools
+              </span>
+              <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
+                <Icon name="users" size={10} strokeWidth={2.25} />
+                {dependentCount} 引用
+              </span>
+            </div>
+            <p className="font-mono text-caption text-text-subtle truncate">
+              {server.id}
+            </p>
+          </div>
         </div>
-        <p className="text-[11px] font-mono text-text-subtle mt-1 truncate">
-          {server.id}
-        </p>
-      </div>
-      <div className="flex gap-2 shrink-0">
-        <button
-          onClick={onReconnect}
-          disabled={busy !== ""}
-          data-testid="mcp-reconnect"
-          className="text-xs px-3 py-1.5 rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text disabled:opacity-40 transition-colors duration-base"
-        >
-          {busy === "reconnect" ? "重连中…" : "重连"}
-        </button>
-        <button
-          onClick={onDelete}
-          data-testid="mcp-delete"
-          className="text-xs px-3 py-1.5 rounded border border-border text-danger hover:bg-danger/10 transition-colors duration-base"
-        >
-          删除
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={onReconnect}
+            disabled={busy !== ""}
+            data-testid="mcp-reconnect"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm disabled:opacity-40 transition duration-base"
+          >
+            {busy === "reconnect" ? (
+              <>
+                <Icon name="loader" size={12} className="animate-spin-slow" />
+                重连中
+              </>
+            ) : (
+              <>
+                <Icon name="refresh" size={12} />
+                重连
+              </>
+            )}
+          </button>
+          <button
+            onClick={onDelete}
+            data-testid="mcp-delete"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/30 bg-danger-soft text-[12px] font-semibold text-danger hover:bg-danger/15 transition duration-base"
+          >
+            <Icon name="trash-2" size={12} />
+            删除
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -364,18 +465,63 @@ function Header({
 
 function Section({
   title,
+  icon,
   children,
+  action,
 }: {
   title: string;
+  icon: IconName;
   children: React.ReactNode;
+  action?: React.ReactNode;
 }) {
   return (
-    <section className="mb-5 rounded-md border border-border bg-surface p-5">
-      <h3 className="text-[10px] uppercase tracking-wider font-mono text-text-subtle mb-3">
-        {title}
-      </h3>
+    <section className="relative overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm p-5">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, var(--color-border-strong), transparent)",
+          opacity: 0.6,
+        }}
+      />
+      <header className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-muted text-primary">
+            <Icon name={icon} size={14} strokeWidth={2} />
+          </span>
+          <h2 className="text-sm font-semibold text-text">{title}</h2>
+        </div>
+        {action}
+      </header>
+      <div className="border-t border-border -mx-5 mb-4" />
       {children}
     </section>
+  );
+}
+
+function MetaGrid({
+  items,
+}: {
+  items: ReadonlyArray<{ k: string; v: React.ReactNode; mono?: boolean }>;
+}) {
+  return (
+    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+      {items.map((it, idx) => (
+        <div key={idx} className="flex flex-col gap-1 min-w-0">
+          <dt className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
+            {it.k}
+          </dt>
+          <dd
+            className={`text-sm text-text break-all ${
+              it.mono ? "font-mono" : ""
+            }`}
+          >
+            {it.v}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -387,62 +533,88 @@ function Overview({
   dependents: Employee[];
 }) {
   return (
-    <div data-testid="tab-panel-overview">
-      <Section title="配置">
-        <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-          <dt className="text-text-muted">transport</dt>
-          <dd className="font-mono text-text">{server.transport}</dd>
-          <dt className="text-text-muted">健康</dt>
-          <dd className="font-mono text-text">{server.health}</dd>
-          <dt className="text-text-muted">启用</dt>
-          <dd className="font-mono text-text">
-            {server.enabled ? "true" : "false"}
-          </dd>
-          <dt className="text-text-muted">最近握手</dt>
-          <dd className="font-mono text-text">
-            {server.last_handshake_at
-              ? formatTime(server.last_handshake_at)
-              : "尚未握手"}
-          </dd>
-          <dt className="text-text-muted">已暴露工具</dt>
-          <dd className="font-mono text-text">
-            {server.exposed_tool_ids.length}
-          </dd>
-        </dl>
+    <div data-testid="tab-panel-overview" className="space-y-5">
+      <Section title="配置" icon="settings">
+        <MetaGrid
+          items={[
+            { k: "transport", v: server.transport, mono: true },
+            { k: "health", v: server.health, mono: true },
+            {
+              k: "enabled",
+              v: server.enabled ? "true" : "false",
+              mono: true,
+            },
+            {
+              k: "last handshake",
+              v: server.last_handshake_at
+                ? formatTime(server.last_handshake_at)
+                : "尚未握手",
+              mono: true,
+            },
+            {
+              k: "exposed tools",
+              v: String(server.exposed_tool_ids.length),
+              mono: true,
+            },
+          ]}
+        />
       </Section>
 
-      <Section title="原始 config">
+      <Section title="原始 config" icon="code">
         <pre
           data-testid="mcp-config-pre"
-          className="text-[11px] font-mono text-text bg-bg border border-border rounded p-3 whitespace-pre-wrap break-words"
+          className="text-[11px] font-mono text-text bg-surface-2 border border-border rounded-lg p-4 whitespace-pre-wrap break-words leading-relaxed"
         >
           {JSON.stringify(server.config, null, 2)}
         </pre>
       </Section>
 
-      <Section title={`使用该服务器的员工 · ${dependents.length}`}>
+      <Section
+        title={`使用该服务器的员工 · ${dependents.length}`}
+        icon="users"
+      >
         {dependents.length === 0 ? (
-          <p data-testid="dependents-empty" className="text-xs text-text-muted">
+          <p
+            data-testid="dependents-empty"
+            className="text-sm text-text-muted leading-relaxed"
+          >
             尚无员工引用该服务器暴露的工具。
           </p>
         ) : (
-          <div data-testid="dependents-list" className="flex flex-col gap-1.5">
+          <div
+            data-testid="dependents-list"
+            className="grid grid-cols-1 md:grid-cols-2 gap-2"
+          >
             {dependents.map((e) => (
               <Link
                 key={e.id}
                 href={`/employees/${encodeURIComponent(e.id)}`}
                 data-testid={`dependent-${e.id}`}
-                className="flex items-center gap-2 rounded border border-border bg-bg px-3 py-2 text-xs hover:border-border-strong hover:bg-surface-2 transition-colors duration-base"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2.5 hover:border-border-strong hover:shadow-soft-sm transition duration-base min-w-0"
               >
-                <span className="text-text">{e.name}</span>
-                {e.is_lead_agent && (
-                  <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border border-border text-text-muted">
-                    lead
-                  </span>
-                )}
-                <span className="font-mono text-text-subtle text-[10px] truncate">
-                  {e.id}
+                <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-muted text-primary shrink-0">
+                  <Icon name="user" size={13} strokeWidth={2} />
                 </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-text truncate">
+                      {e.name}
+                    </span>
+                    {e.is_lead_agent && (
+                      <span className="inline-flex items-center h-4 px-1.5 rounded-sm bg-primary-muted text-primary text-caption font-mono font-semibold uppercase tracking-wider shrink-0">
+                        lead
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-mono text-caption text-text-subtle truncate">
+                    {e.id}
+                  </p>
+                </div>
+                <Icon
+                  name="arrow-right"
+                  size={13}
+                  className="text-text-subtle shrink-0 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition duration-base"
+                />
               </Link>
             ))}
           </div>
@@ -468,21 +640,35 @@ function ToolsTab({
   onRefresh: () => void;
 }) {
   return (
-    <div data-testid="tab-panel-tools">
-      <Section title="暴露的工具">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-[11px] text-text-muted">
-            点击一行查看 input_schema。
-          </p>
+    <div data-testid="tab-panel-tools" className="space-y-5">
+      <Section
+        title="暴露的工具"
+        icon="zap"
+        action={
           <button
             onClick={onRefresh}
             disabled={loading}
             data-testid="tools-refresh"
-            className="text-[11px] px-2 py-1 rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text disabled:opacity-40 transition-colors duration-base"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text-muted hover:text-text hover:border-border-strong shadow-soft-sm disabled:opacity-40 transition duration-base"
           >
-            {loading ? "拉取中…" : "刷新"}
+            {loading ? (
+              <>
+                <Icon name="loader" size={12} className="animate-spin-slow" />
+                拉取中
+              </>
+            ) : (
+              <>
+                <Icon name="refresh" size={12} />
+                刷新
+              </>
+            )}
           </button>
-        </div>
+        }
+      >
+        <p className="text-sm text-text-muted leading-relaxed mb-4">
+          点击一行查看{" "}
+          <span className="font-mono text-text">input_schema</span>。
+        </p>
 
         {loading && (
           <div data-testid="tools-loading">
@@ -510,40 +696,47 @@ function ToolsTab({
         )}
 
         {!loading && !error && tools && tools.length > 0 && (
-          <div data-testid="tools-table" className="flex flex-col gap-1">
+          <div data-testid="tools-table" className="flex flex-col gap-2">
             {tools.map((t) => {
               const expanded = expandedTool === t.name;
               return (
                 <div
                   key={t.name}
                   data-testid={`tool-row-${t.name}`}
-                  className="rounded border border-border bg-bg"
+                  className="rounded-lg border border-border bg-surface-2 overflow-hidden"
                 >
                   <button
                     onClick={() => onToggleExpand(t.name)}
-                    className="w-full flex items-start gap-3 px-3 py-2 text-left hover:bg-surface-2 transition-colors duration-base"
+                    className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-surface-3 transition duration-base"
                   >
-                    <span className="font-mono text-xs text-text shrink-0">
+                    <Icon
+                      name="zap"
+                      size={13}
+                      className="text-primary shrink-0 mt-0.5"
+                    />
+                    <span className="font-mono text-[12px] font-semibold text-text shrink-0">
                       {t.name}
                     </span>
                     {t.description && (
-                      <span className="text-[11px] text-text-muted flex-1 truncate">
-                        — {t.description}
+                      <span className="text-[12px] text-text-muted flex-1 truncate">
+                        {t.description}
                       </span>
                     )}
-                    <span className="font-mono text-[10px] text-text-subtle shrink-0">
-                      {expanded ? "−" : "+"}
-                    </span>
+                    <Icon
+                      name={expanded ? "chevron-up" : "chevron-down"}
+                      size={13}
+                      className="text-text-subtle shrink-0 mt-0.5"
+                    />
                   </button>
                   {expanded && (
                     <div
                       data-testid={`tool-schema-${t.name}`}
-                      className="border-t border-border px-3 py-2"
+                      className="border-t border-border px-3 py-3 bg-bg"
                     >
-                      <p className="text-[10px] uppercase tracking-wider font-mono text-text-subtle mb-1.5">
+                      <p className="text-caption uppercase tracking-wider font-mono text-text-subtle font-semibold mb-2">
                         input schema
                       </p>
-                      <pre className="text-[11px] font-mono text-text whitespace-pre-wrap break-words">
+                      <pre className="text-[11px] font-mono text-text whitespace-pre-wrap break-words leading-relaxed">
                         {JSON.stringify(t.input_schema, null, 2)}
                       </pre>
                     </div>
@@ -560,8 +753,8 @@ function ToolsTab({
 
 function LogsTab() {
   return (
-    <div data-testid="tab-panel-logs">
-      <Section title="MCP 通信日志">
+    <div data-testid="tab-panel-logs" className="space-y-5">
+      <Section title="MCP 通信日志" icon="terminal">
         <div data-testid="logs-empty">
           <EmptyState
             title="暂无日志流"
@@ -590,34 +783,48 @@ function HealthTab({ server }: { server: Server }) {
     },
   ];
   return (
-    <div data-testid="tab-panel-health">
-      <Section title="当前状态">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-left text-[10px] uppercase tracking-wider text-text-subtle">
-              <th className="pb-2 font-mono font-normal">时间</th>
-              <th className="pb-2 font-mono font-normal">状态</th>
-              <th className="pb-2 font-mono font-normal">备注</th>
-            </tr>
-          </thead>
-          <tbody
-            data-testid="health-table-body"
-            className="border-t border-border"
-          >
-            {rows.map((r, idx) => (
-              <tr
-                key={idx}
-                className="border-b border-border last:border-b-0"
-              >
-                <td className="py-2 font-mono text-text-muted">
-                  {r.at ? formatTime(r.at) : "—"}
-                </td>
-                <td className="py-2 font-mono text-text">{r.state}</td>
-                <td className="py-2 text-text-muted">{r.note}</td>
+    <div data-testid="tab-panel-health" className="space-y-5">
+      <Section title="当前状态" icon="activity">
+        <div className="overflow-hidden rounded-lg border border-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-surface-2">
+                <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
+                  时间
+                </th>
+                <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
+                  状态
+                </th>
+                <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
+                  备注
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody data-testid="health-table-body">
+              {rows.map((r, idx) => {
+                const m = healthMeta(r.state);
+                return (
+                  <tr key={idx} className="border-t border-border">
+                    <td className="py-2 px-3 font-mono text-[12px] text-text-muted">
+                      {r.at ? formatTime(r.at) : "—"}
+                    </td>
+                    <td className="py-2 px-3">
+                      <span
+                        className={`inline-flex items-center gap-1 h-5 px-1.5 rounded-md border font-mono text-caption font-medium ${m.chip}`}
+                      >
+                        <Icon name={m.icon} size={10} strokeWidth={2.25} />
+                        {r.state}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-[12px] text-text-muted">
+                      {r.note}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </Section>
       <div data-testid="health-timeline-placeholder">
         <EmptyState

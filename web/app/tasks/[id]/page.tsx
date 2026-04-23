@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
+import { LoadingState, ErrorState } from "@/components/state";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
 import { RunTracePanel } from "@/components/runs/RunTracePanel";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { isImeComposing } from "@/lib/ime";
 import {
   answerTask,
@@ -19,10 +20,26 @@ import {
   statusLabel,
   TERMINAL_STATUSES,
   type TaskDto,
+  type TaskStatus,
 } from "@/lib/tasks-api";
 
 type LoadStatus = "loading" | "ready" | "notfound" | "error";
 
+/**
+ * Task detail page · Brand Blue Dual Theme V2 (ADR 0016).
+ *
+ * Layout:
+ *   Hero card (status-tinted icon tile + title/pill/id + assignee/dates)
+ *   → KPI strip (4 mini-stats: duration · tokens · runs · cost-placeholder)
+ *   → Pending-user banner (if needs_input / needs_approval)
+ *   → Outcome callouts (success summary / failure reason)
+ *   → Definition of Done / Goal (mono-text panels)
+ *   → Linked conversation chip (if any)
+ *   → Runs (RunTracePanel each)
+ *   → Artifacts / Metadata
+ *
+ * All data-fetch / polling / mutation / navigation semantics preserved.
+ */
 export default function TaskDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
@@ -77,7 +94,7 @@ export default function TaskDetailPage() {
     return (
       <AppShell title="任务">
         <div className="h-full overflow-y-auto">
-          <div className="max-w-4xl mx-auto px-8 py-8">
+          <div className="mx-auto max-w-5xl px-8 py-8 animate-fade-up">
             <LoadingState title="加载任务" />
           </div>
         </div>
@@ -89,21 +106,34 @@ export default function TaskDetailPage() {
     return (
       <AppShell title="任务">
         <div className="h-full overflow-y-auto">
-          <div className="max-w-4xl mx-auto px-8 py-8">
+          <div className="mx-auto max-w-3xl px-8 py-10 animate-fade-up">
             <div
               data-testid="task-notfound"
-              className="rounded-xl border border-dashed border-border p-10 text-center"
+              className="relative overflow-hidden rounded-2xl border border-dashed border-border bg-surface p-12 text-center shadow-soft-sm"
             >
-              <p className="text-sm text-text mb-2">找不到任务 {id}</p>
-              <p className="text-xs text-text-subtle mb-4">
-                可能已经被取消或删除。
-              </p>
-              <Link
-                href="/tasks"
-                className="text-xs rounded-md border border-border px-3 py-1.5 hover:bg-surface-2 text-text transition-colors duration-base"
-              >
-                回到收件箱
-              </Link>
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-50"
+                style={{
+                  background:
+                    "radial-gradient(400px 200px at 50% 0%, var(--color-primary-muted), transparent 70%)",
+                }}
+              />
+              <div className="relative">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-surface-2 text-text-muted shadow-soft-sm">
+                  <Icon name="alert-circle" size={24} />
+                </div>
+                <p className="mt-5 text-base font-semibold text-text">找不到任务</p>
+                <p className="mt-1 font-mono text-[11px] text-text-subtle">{id}</p>
+                <p className="mt-2 text-sm text-text-muted">可能已经被取消或删除。</p>
+                <Link
+                  href="/tasks"
+                  className="mt-6 inline-flex h-9 items-center gap-1.5 rounded-lg border border-border-strong bg-surface px-4 text-sm font-medium text-text shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
+                >
+                  <Icon name="arrow-left" size={13} />
+                  回到收件箱
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -115,20 +145,12 @@ export default function TaskDetailPage() {
     return (
       <AppShell title="任务">
         <div className="h-full overflow-y-auto">
-          <div className="max-w-4xl mx-auto px-8 py-8">
-            <div
-              data-testid="task-error"
-              className="rounded-xl border border-danger/30 bg-danger/5 p-6"
-            >
-              <p className="text-sm text-danger mb-2">加载任务失败</p>
-              <p className="text-xs text-text-muted mb-3 font-mono">{error}</p>
-              <button
-                onClick={() => void load()}
-                className="text-xs rounded-md border border-border px-3 py-1.5 hover:bg-surface-2 text-text transition-colors duration-base"
-              >
-                重试
-              </button>
-            </div>
+          <div className="mx-auto max-w-3xl px-8 py-8 animate-fade-up" data-testid="task-error">
+            <ErrorState
+              title="加载任务失败"
+              detail={error}
+              action={{ label: "重试", onClick: () => void load() }}
+            />
           </div>
         </div>
       </AppShell>
@@ -187,16 +209,18 @@ export default function TaskDetailPage() {
         <div className="flex items-center gap-2">
           <Link
             href="/tasks"
-            className="text-xs text-text-muted hover:text-text transition-colors duration-base"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] text-text-muted transition-colors duration-base hover:text-text hover:bg-surface-2"
           >
-            ← 收件箱
+            <Icon name="arrow-left" size={12} />
+            收件箱
           </Link>
           {canCancel && (
             <button
               onClick={() => setConfirmCancel(true)}
               data-testid="task-cancel"
-              className="text-xs px-3 py-1.5 rounded-md border border-border text-danger hover:bg-danger/10 transition-colors duration-base"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-surface px-3 text-[12px] font-medium text-danger shadow-soft-sm transition-colors duration-base hover:bg-danger/10 hover:border-danger/50"
             >
+              <Icon name="x" size={12} />
               取消任务
             </button>
           )}
@@ -204,8 +228,9 @@ export default function TaskDetailPage() {
       }
     >
       <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-6 flex flex-col gap-6">
-          <TaskHeader task={task} />
+        <div className="mx-auto flex max-w-5xl flex-col gap-6 px-8 py-6 animate-fade-up">
+          <TaskHero task={task} />
+          <TaskKpiStrip task={task} />
 
           {needsUser && task.status === "needs_input" && (
             <NeedsInputPanel
@@ -229,31 +254,41 @@ export default function TaskDetailPage() {
           )}
 
           {task.status === "completed" && task.result_summary && (
-            <Callout tone="success" title="完成摘要">
+            <Callout tone="success" title="完成摘要" icon="check-circle-2">
               <MarkdownLike text={task.result_summary} />
             </Callout>
           )}
 
           {(task.status === "failed" || task.status === "cancelled") &&
             task.error_summary && (
-              <Callout tone="danger" title={task.status === "failed" ? "失败原因" : "取消原因"}>
+              <Callout
+                tone="danger"
+                title={task.status === "failed" ? "失败原因" : "取消原因"}
+                icon="alert-circle"
+              >
                 <MarkdownLike text={task.error_summary} />
               </Callout>
             )}
 
-          <Section title="Definition of Done">
-            <MarkdownLike text={task.dod} />
-          </Section>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <Section title="目标" icon="sparkles">
+              <MarkdownLike text={task.goal} />
+            </Section>
+            <Section title="Definition of Done" icon="shield-check">
+              <MarkdownLike text={task.dod} />
+            </Section>
+          </div>
 
-          <Section title="目标">
-            <MarkdownLike text={task.goal} />
-          </Section>
+          {task.conversation_id && (
+            <LinkedConversation conversationId={task.conversation_id} />
+          )}
 
-          <Section title="运行">
+          <Section title="运行" icon="activity" count={task.run_ids.length}>
             {task.run_ids.length === 0 ? (
-              <p className="text-xs text-text-subtle">
-                尚未分配 run · 一旦 TaskExecutor 起来就会出现。
-              </p>
+              <EmptyHint
+                icon="clock"
+                text="尚未分配 run · 一旦 TaskExecutor 起来就会出现。"
+              />
             ) : (
               <div className="flex flex-col gap-4">
                 {task.run_ids.map((r) => (
@@ -263,18 +298,20 @@ export default function TaskDetailPage() {
             )}
           </Section>
 
-          <Section title="产出制品">
+          <Section title="产出制品" icon="file" count={task.artifact_ids.length}>
             {task.artifact_ids.length === 0 ? (
-              <p className="text-xs text-text-subtle">还没有产出。</p>
+              <EmptyHint icon="file" text="还没有产出。" />
             ) : (
-              <ul className="flex flex-col gap-1">
+              <ul className="flex flex-col gap-1.5">
                 {task.artifact_ids.map((a) => (
                   <li key={a}>
                     <Link
                       href={`/artifacts/${a}`}
-                      className="font-mono text-[11px] text-primary hover:underline"
+                      className="group inline-flex items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-primary transition-colors duration-base hover:border-primary/40 hover:bg-primary-muted"
                     >
+                      <Icon name="file" size={11} className="text-text-subtle group-hover:text-primary" />
                       {a}
+                      <Icon name="external-link" size={10} className="opacity-0 transition-opacity duration-fast group-hover:opacity-100" />
                     </Link>
                   </li>
                 ))}
@@ -282,7 +319,7 @@ export default function TaskDetailPage() {
             )}
           </Section>
 
-          <Section title="元数据">
+          <Section title="元数据" icon="database">
             <MetaGrid task={task} />
           </Section>
         </div>
@@ -302,36 +339,220 @@ export default function TaskDetailPage() {
   );
 }
 
-function TaskHeader({ task }: { task: TaskDto }) {
+/* ------------------------------- subcomponents ---------------------------- */
+
+type HeroTone = "warning" | "primary" | "success" | "danger" | "neutral";
+
+function heroToneFor(status: TaskStatus): { tone: HeroTone; icon: IconName; spin: boolean } {
+  if (status === "needs_input" || status === "needs_approval")
+    return { tone: "warning", icon: "alert-triangle", spin: false };
+  if (status === "running") return { tone: "primary", icon: "loader", spin: true };
+  if (status === "completed") return { tone: "success", icon: "check-circle-2", spin: false };
+  if (status === "failed") return { tone: "danger", icon: "alert-circle", spin: false };
+  if (status === "cancelled") return { tone: "danger", icon: "x", spin: false };
+  return { tone: "neutral", icon: "clock", spin: false };
+}
+
+const TONE_TILE: Record<HeroTone, string> = {
+  warning: "bg-warning-soft text-warning",
+  primary: "bg-primary-muted text-primary",
+  success: "bg-success-soft text-success",
+  danger: "bg-danger-soft text-danger",
+  neutral: "bg-surface-2 text-text-muted",
+};
+
+const TONE_ACCENT: Record<HeroTone, string> = {
+  warning: "from-transparent via-warning to-transparent",
+  primary: "from-transparent via-primary to-transparent",
+  success: "from-transparent via-success to-transparent",
+  danger: "from-transparent via-danger to-transparent",
+  neutral: "from-transparent via-border-strong to-transparent",
+};
+
+function TaskHero({ task }: { task: TaskDto }) {
   const created = new Date(task.created_at).toLocaleString();
+  const updated = new Date(task.updated_at).toLocaleString();
   const completed = task.completed_at ? new Date(task.completed_at).toLocaleString() : null;
+  const { tone, icon, spin } = heroToneFor(task.status);
   return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-soft-sm">
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r ${TONE_ACCENT[tone]}`}
+      />
+      <div className="flex items-start gap-4">
+        <div
+          className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${TONE_TILE[tone]}`}
+        >
+          <Icon name={icon} size={22} className={spin ? "animate-spin" : undefined} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <TaskStatusPill status={task.status} />
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">
+            <span className="inline-flex h-5 items-center rounded bg-surface-2 px-1.5 font-mono text-[10px] text-text-muted">
               {sourceLabel(task.source)}
             </span>
-            <span className="font-mono text-[10px] text-text-subtle">
-              {task.id}
-            </span>
+            <span className="font-mono text-[10px] text-text-subtle">{task.id}</span>
           </div>
-          <h2 className="text-base font-semibold text-text leading-tight">
+          <h2 className="mt-2 text-xl font-semibold leading-tight tracking-tight text-text">
             {task.title}
           </h2>
-          <p className="mt-1 text-[11px] text-text-subtle">
-            发起于 {created}
-            {completed ? ` · ${statusLabel(task.status)} 于 ${completed}` : ""}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-subtle">
+            <span className="inline-flex items-center gap-1">
+              <Icon name="clock" size={11} />
+              创建 {created}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Icon name="refresh" size={11} />
+              更新 {updated}
+            </span>
+            {completed && (
+              <span className="inline-flex items-center gap-1">
+                <Icon name="check" size={11} />
+                {statusLabel(task.status)} 于 {completed}
+              </span>
+            )}
+          </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-[11px] text-text-subtle">指派给</p>
-          <p className="font-mono text-xs text-text">{task.assignee_id}</p>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-text-subtle">
+            指派给
+          </div>
+          <div className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1">
+            <span
+              aria-hidden
+              className="grid h-5 w-5 place-items-center rounded-full text-[9px] font-bold text-primary-fg"
+              style={{
+                backgroundImage:
+                  "linear-gradient(135deg, var(--color-primary), var(--color-accent))",
+              }}
+            >
+              {task.assignee_id.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="font-mono text-[11px] text-text">{task.assignee_id}</span>
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function TaskKpiStrip({ task }: { task: TaskDto }) {
+  const duration = useMemo(() => {
+    const start = new Date(task.created_at).getTime();
+    const end = task.completed_at
+      ? new Date(task.completed_at).getTime()
+      : new Date(task.updated_at).getTime();
+    const ms = Math.max(0, end - start);
+    const s = Math.round(ms / 1000);
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+    return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+  }, [task.created_at, task.updated_at, task.completed_at]);
+
+  const tokensHint =
+    task.token_budget == null
+      ? "无预算上限"
+      : `预算 ${task.token_budget.toLocaleString()}`;
+
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <KpiCard
+        label="耗时"
+        value={duration}
+        hint={task.completed_at ? "已结束" : "进行中"}
+        icon="clock"
+        tone="primary"
+      />
+      <KpiCard
+        label="Token"
+        value={task.tokens_used.toLocaleString()}
+        hint={tokensHint}
+        icon="zap"
+        tone="warning"
+      />
+      <KpiCard
+        label="Runs"
+        value={String(task.run_ids.length)}
+        hint={task.run_ids.length === 0 ? "未分配" : "已派发"}
+        icon="activity"
+        tone="success"
+      />
+      <KpiCard
+        label="制品"
+        value={String(task.artifact_ids.length)}
+        hint={task.artifact_ids.length === 0 ? "暂无" : "可查看"}
+        icon="file"
+        tone="neutral"
+      />
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  hint,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  icon: IconName;
+  tone: "primary" | "warning" | "success" | "neutral";
+}) {
+  const toneClass: Record<typeof tone, string> = {
+    primary: "bg-primary-muted text-primary",
+    warning: "bg-warning-soft text-warning",
+    success: "bg-success-soft text-success",
+    neutral: "bg-surface-2 text-text-muted",
+  };
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm transition duration-base hover:-translate-y-px hover:border-border-strong hover:shadow-soft">
+      <div className="flex items-start justify-between">
+        <div className="min-w-0">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-text-muted">
+            {label}
+          </div>
+          <div className="mt-1.5 truncate text-xl font-bold tabular-nums text-text">
+            {value}
+          </div>
+          <div className="mt-0.5 truncate font-mono text-[10px] text-text-subtle">
+            {hint}
+          </div>
+        </div>
+        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${toneClass[tone]}`}>
+          <Icon name={icon} size={15} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LinkedConversation({ conversationId }: { conversationId: string }) {
+  return (
+    <Link
+      href={`/chat/${conversationId}`}
+      className="group flex items-center gap-3 rounded-xl border border-border bg-surface p-3.5 shadow-soft-sm transition duration-base hover:-translate-y-px hover:border-primary/40 hover:shadow-soft"
+    >
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary-muted text-primary">
+        <Icon name="message-square" size={15} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-mono uppercase tracking-wider text-text-subtle">
+          关联对话
+        </div>
+        <div className="mt-0.5 truncate font-mono text-[12px] text-text transition-colors duration-base group-hover:text-primary">
+          {conversationId}
+        </div>
+      </div>
+      <Icon
+        name="arrow-right"
+        size={14}
+        className="shrink-0 text-text-subtle transition-[transform,color] duration-fast group-hover:translate-x-0.5 group-hover:text-primary"
+      />
+    </Link>
   );
 }
 
@@ -353,47 +574,72 @@ function NeedsInputPanel({
   return (
     <div
       data-testid="needs-input-panel"
-      className="rounded-xl border border-warning/40 bg-warning/5 p-5"
+      className="relative overflow-hidden rounded-2xl border border-warning/40 bg-warning-soft p-5 shadow-soft-sm"
     >
-      <p className="text-[10px] font-mono uppercase tracking-wider text-warning mb-2">
-        等你回答
-      </p>
-      <p className="text-sm text-text mb-3">{question}</p>
-      <textarea
-        data-testid="answer-input"
-        value={answer}
-        onChange={(e) => onChange(e.target.value)}
-        onCompositionStart={() => {
-          isComposingRef.current = true;
-        }}
-        onCompositionEnd={() => {
-          isComposingRef.current = false;
-        }}
-        rows={3}
-        placeholder="一两句话回给员工 · Enter 发送 / Shift+Enter 换行"
-        onKeyDown={(e) => {
-          if (
-            e.key === "Enter" &&
-            !isImeComposing(e, isComposingRef.current) &&
-            !e.shiftKey &&
-            !busy &&
-            answer.trim()
-          ) {
-            e.preventDefault();
-            onSubmit();
-          }
-        }}
-        className="w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text placeholder-text-subtle focus:outline-none focus:border-warning transition-colors duration-base resize-y"
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-warning to-transparent"
       />
-      <div className="flex justify-end mt-2">
-        <button
-          data-testid="answer-submit"
-          onClick={onSubmit}
-          disabled={busy || !answer.trim()}
-          className="rounded-md bg-warning text-white hover:opacity-90 disabled:opacity-40 px-4 py-1.5 text-xs font-medium transition-opacity duration-base"
-        >
-          {busy ? "发送中…" : "发送答复"}
-        </button>
+      <div className="flex items-start gap-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-warning/15 text-warning">
+          <Icon name="message-square" size={16} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-mono uppercase tracking-wider text-warning">
+            等你回答
+          </p>
+          <p className="mt-1.5 text-sm text-text">{question}</p>
+          <textarea
+            data-testid="answer-input"
+            value={answer}
+            onChange={(e) => onChange(e.target.value)}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
+            }}
+            rows={3}
+            placeholder="一两句话回给员工 · Enter 发送 / Shift+Enter 换行"
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                !isImeComposing(e, isComposingRef.current) &&
+                !e.shiftKey &&
+                !busy &&
+                answer.trim()
+              ) {
+                e.preventDefault();
+                onSubmit();
+              }
+            }}
+            className="mt-3 w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder-text-subtle transition-colors duration-base focus:border-warning focus:outline-none"
+          />
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1 font-mono text-[10px] text-text-subtle">
+              <KbdChip>Enter</KbdChip>
+              <span>发送</span>
+              <span className="mx-1 opacity-40">·</span>
+              <KbdChip>Shift</KbdChip>
+              <span>+</span>
+              <KbdChip>Enter</KbdChip>
+              <span>换行</span>
+            </span>
+            <button
+              data-testid="answer-submit"
+              onClick={onSubmit}
+              disabled={busy || !answer.trim()}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-warning px-4 text-[12px] font-medium text-white shadow-soft-sm transition-opacity duration-base hover:-translate-y-px hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+            >
+              {busy ? (
+                <Icon name="loader" size={12} className="animate-spin" />
+              ) : (
+                <Icon name="send" size={12} />
+              )}
+              {busy ? "发送中…" : "发送答复"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -423,58 +669,100 @@ function NeedsApprovalPanel({
   return (
     <div
       data-testid="needs-approval-panel"
-      className="rounded-xl border border-warning/40 bg-warning/5 p-5"
+      className="relative overflow-hidden rounded-2xl border border-warning/40 bg-warning-soft p-5 shadow-soft-sm"
     >
-      <p className="text-[10px] font-mono uppercase tracking-wider text-warning mb-2">
-        等你审批
-      </p>
-      <p className="text-sm text-text mb-2">{summary}</p>
-      {toolId && (
-        <p className="text-[11px] font-mono text-text-muted mb-3">tool: {toolId}</p>
-      )}
-      {payload && Object.keys(payload).length > 0 && (
-        <pre
-          data-testid="approval-payload"
-          className="text-[11px] font-mono text-text-muted bg-bg border border-border rounded-md p-3 mb-3 overflow-x-auto"
-        >
-          {JSON.stringify(payload, null, 2)}
-        </pre>
-      )}
-      <input
-        data-testid="approve-note"
-        value={note}
-        onChange={(e) => onNoteChange(e.target.value)}
-        placeholder="可选 · 给员工留一句话"
-        className="w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text placeholder-text-subtle focus:outline-none focus:border-warning transition-colors duration-base mb-3"
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-warning to-transparent"
       />
-      <div className="flex justify-end gap-2">
-        <button
-          data-testid="deny-button"
-          onClick={onDeny}
-          disabled={busy}
-          className="rounded-md border border-border text-text-muted hover:text-danger hover:border-danger/40 disabled:opacity-40 px-4 py-1.5 text-xs transition-colors duration-base"
-        >
-          拒绝
-        </button>
-        <button
-          data-testid="approve-button"
-          onClick={onApprove}
-          disabled={busy}
-          className="rounded-md bg-success text-white hover:opacity-90 disabled:opacity-40 px-4 py-1.5 text-xs font-medium transition-opacity duration-base"
-        >
-          {busy ? "…" : "批准"}
-        </button>
+      <div className="flex items-start gap-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-warning/15 text-warning">
+          <Icon name="shield-check" size={16} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-mono uppercase tracking-wider text-warning">
+            等你审批
+          </p>
+          <p className="mt-1.5 text-sm text-text">{summary}</p>
+          {toolId && (
+            <p className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-0.5 font-mono text-[11px] text-text-muted">
+              <Icon name="terminal" size={10} />
+              tool: {toolId}
+            </p>
+          )}
+          {payload && Object.keys(payload).length > 0 && (
+            <pre
+              data-testid="approval-payload"
+              className="mt-3 overflow-x-auto rounded-md border border-border bg-surface p-3 font-mono text-[11px] text-text-muted"
+            >
+              {JSON.stringify(payload, null, 2)}
+            </pre>
+          )}
+          <input
+            data-testid="approve-note"
+            value={note}
+            onChange={(e) => onNoteChange(e.target.value)}
+            placeholder="可选 · 给员工留一句话"
+            className="mt-3 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder-text-subtle transition-colors duration-base focus:border-warning focus:outline-none"
+          />
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              data-testid="deny-button"
+              onClick={onDeny}
+              disabled={busy}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-4 text-[12px] text-text-muted transition-colors duration-base hover:border-danger/40 hover:text-danger disabled:pointer-events-none disabled:opacity-40"
+            >
+              <Icon name="x" size={12} />
+              拒绝
+            </button>
+            <button
+              data-testid="approve-button"
+              onClick={onApprove}
+              disabled={busy}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-success px-4 text-[12px] font-medium text-white shadow-soft-sm transition-opacity duration-base hover:-translate-y-px hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+            >
+              {busy ? (
+                <Icon name="loader" size={12} className="animate-spin" />
+              ) : (
+                <Icon name="check" size={12} />
+              )}
+              {busy ? "…" : "批准"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  icon,
+  count,
+  children,
+}: {
+  title: string;
+  icon?: IconName;
+  count?: number;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="rounded-xl border border-border bg-surface p-5">
-      <h3 className="text-[10px] font-mono uppercase tracking-wider text-text-subtle mb-3">
-        {title}
-      </h3>
+    <section className="rounded-xl border border-border bg-surface p-5 shadow-soft-sm">
+      <header className="mb-3 flex items-center gap-2">
+        {icon && (
+          <span className="grid h-6 w-6 place-items-center rounded-md bg-surface-2 text-text-muted">
+            <Icon name={icon} size={12} />
+          </span>
+        )}
+        <h3 className="text-[11px] font-mono uppercase tracking-wider text-text-subtle">
+          {title}
+        </h3>
+        {typeof count === "number" && count > 0 && (
+          <span className="inline-flex h-4 items-center rounded bg-primary-muted px-1.5 font-mono text-[10px] text-primary">
+            {count}
+          </span>
+        )}
+      </header>
       <div className="text-sm text-text">{children}</div>
     </section>
   );
@@ -483,21 +771,49 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Callout({
   tone,
   title,
+  icon,
   children,
 }: {
   tone: "success" | "danger";
   title: string;
+  icon: IconName;
   children: React.ReactNode;
 }) {
-  const border = tone === "success" ? "border-success/40" : "border-danger/40";
-  const bg = tone === "success" ? "bg-success/5" : "bg-danger/5";
-  const label = tone === "success" ? "text-success" : "text-danger";
+  const classes =
+    tone === "success"
+      ? {
+          border: "border-success/30",
+          bg: "bg-success-soft",
+          label: "text-success",
+          tile: "bg-success/15 text-success",
+          accent: "from-transparent via-success to-transparent",
+        }
+      : {
+          border: "border-danger/30",
+          bg: "bg-danger-soft",
+          label: "text-danger",
+          tile: "bg-danger/15 text-danger",
+          accent: "from-transparent via-danger to-transparent",
+        };
   return (
-    <div className={`rounded-xl border ${border} ${bg} p-5`}>
-      <p className={`text-[10px] font-mono uppercase tracking-wider ${label} mb-2`}>
-        {title}
-      </p>
-      <div className="text-sm text-text">{children}</div>
+    <div
+      className={`relative overflow-hidden rounded-2xl border ${classes.border} ${classes.bg} p-5 shadow-soft-sm`}
+    >
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r ${classes.accent}`}
+      />
+      <div className="flex items-start gap-3">
+        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${classes.tile}`}>
+          <Icon name={icon} size={15} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className={`text-[10px] font-mono uppercase tracking-wider ${classes.label}`}>
+            {title}
+          </p>
+          <div className="mt-1.5 text-sm text-text">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -505,31 +821,58 @@ function Callout({
 function MarkdownLike({ text }: { text: string }) {
   // Light preserve-whitespace rendering; full markdown rendering is out of scope.
   return (
-    <pre className="whitespace-pre-wrap font-sans text-sm text-text leading-relaxed">
+    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-text">
       {text}
     </pre>
   );
 }
 
+function EmptyHint({ icon, text }: { icon: IconName; text: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-surface-2/50 px-3 py-2.5 text-[11px] text-text-subtle">
+      <Icon name={icon} size={12} />
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function KbdChip({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded border border-border bg-surface px-1 font-mono text-[9px] text-text-muted shadow-soft-sm">
+      {children}
+    </kbd>
+  );
+}
+
 function MetaGrid({ task }: { task: TaskDto }) {
-  const rows: { k: string; v: string }[] = [
-    { k: "workspace", v: task.workspace_id },
-    { k: "created_by", v: task.created_by },
-    { k: "source", v: task.source },
-    { k: "parent_task", v: task.parent_task_id ?? "—" },
-    { k: "conversation", v: task.conversation_id ?? "—" },
-    { k: "token_budget", v: task.token_budget == null ? "无限制" : String(task.token_budget) },
-    { k: "tokens_used", v: String(task.tokens_used) },
-    { k: "updated_at", v: new Date(task.updated_at).toLocaleString() },
+  const rows: { k: string; v: string; icon: IconName }[] = [
+    { k: "workspace", v: task.workspace_id, icon: "layout-grid" },
+    { k: "created_by", v: task.created_by, icon: "user" },
+    { k: "source", v: task.source, icon: "zap" },
+    { k: "parent_task", v: task.parent_task_id ?? "—", icon: "link" },
+    { k: "conversation", v: task.conversation_id ?? "—", icon: "message-square" },
+    {
+      k: "token_budget",
+      v: task.token_budget == null ? "无限制" : String(task.token_budget),
+      icon: "sparkles",
+    },
+    { k: "tokens_used", v: String(task.tokens_used), icon: "activity" },
+    { k: "updated_at", v: new Date(task.updated_at).toLocaleString(), icon: "clock" },
   ];
   return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-2">
+    <dl className="grid grid-cols-1 gap-1.5 md:grid-cols-2 md:gap-x-6 md:gap-y-1.5">
       {rows.map((r) => (
-        <div key={r.k} className="flex justify-between gap-2 border-b border-border pb-1">
-          <dt className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+        <div
+          key={r.k}
+          className="flex items-center justify-between gap-3 border-b border-border py-1.5 last:border-b-0"
+        >
+          <dt className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+            <Icon name={r.icon} size={10} />
             {r.k}
           </dt>
-          <dd className="font-mono text-[11px] text-text truncate">{r.v}</dd>
+          <dd className="min-w-0 truncate font-mono text-[11px] text-text" title={r.v}>
+            {r.v}
+          </dd>
         </div>
       ))}
     </dl>

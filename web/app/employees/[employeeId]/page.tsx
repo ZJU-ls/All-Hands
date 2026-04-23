@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
-import { EmptyState, LoadingState } from "@/components/state";
+import { LoadingState } from "@/components/state";
+import { Icon } from "@/components/ui/icon";
 import {
   getEmployee,
   listConversations,
@@ -13,6 +14,34 @@ import {
   type EmployeeDto,
 } from "@/lib/api";
 import { deriveProfile, BADGE_LABEL } from "@/lib/employee-profile";
+
+/**
+ * Employee detail · single-employee dashboard (ADR 0016 · V2 Azure Live).
+ *
+ * Hero card (gradient primary · avatar · pill badges · action cluster) lands
+ * the user; a KPI meta-strip summarises volume and latency; read-only skill
+ * chip row + system-prompt preview explain the composition; recent
+ * conversations list gives a direct jump back into the chat.
+ *
+ * Data / mutation contract unchanged: parallel fetch of employee + its
+ * conversations, createConversation → push to /chat/:id.
+ */
+
+function avatarInitials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "·";
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+  }
+  return trimmed.slice(0, 2).toUpperCase();
+}
+
+function modelDisplay(modelRef: string): string {
+  if (!modelRef) return "默认模型";
+  const idx = modelRef.indexOf("/");
+  return idx >= 0 ? modelRef.slice(idx + 1) : modelRef;
+}
 
 export default function EmployeePage() {
   const { employeeId } = useParams<{ employeeId: string }>();
@@ -55,108 +84,539 @@ export default function EmployeePage() {
     }
   }
 
-  const badges = employee ? deriveProfile(employee) : [];
+  const badges = useMemo(
+    () => (employee ? deriveProfile(employee).filter((b) => b !== "react") : []),
+    [employee],
+  );
   const isLead = Boolean(employee?.is_lead_agent);
 
   return (
-    <AppShell title={employee?.name ?? "员工"}>
+    <AppShell
+      title={employee?.name ?? "员工"}
+      actions={
+        <Link
+          href="/employees"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition-colors duration-fast"
+        >
+          <Icon name="arrow-left" size={12} />
+          员工列表
+        </Link>
+      }
+    >
       <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-6 space-y-6">
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
           {error && (
-            <div className="rounded border border-border bg-surface-2 px-3 py-2 text-[12px] text-danger">
-              {error}
+            <div
+              data-testid="employee-detail-error"
+              className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-[12px] text-danger"
+            >
+              <Icon name="alert-circle" size={14} className="mt-0.5 shrink-0" />
+              <span className="min-w-0 break-words">{error}</span>
             </div>
           )}
 
-          {employee && (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-text-subtle">
-                  {isLead ? "lead" : "emp"}
-                </span>
-                <h2 className="text-[15px] font-semibold text-text">{employee.name}</h2>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {isLead && (
-                  <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-text-muted">
-                    全能
-                  </span>
-                )}
-                {badges
-                  .filter((b) => b !== "react")
-                  .map((b) => (
-                    <span
-                      key={b}
-                      className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-text-muted"
-                    >
-                      {BADGE_LABEL[b]}
-                    </span>
-                  ))}
-              </div>
-              {employee.description && (
-                <p className="text-[13px] text-text-muted leading-relaxed">
-                  {employee.description}
-                </p>
-              )}
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-[12px]">
-                <dt className="text-text-subtle">模型</dt>
-                <dd className="font-mono text-text">{employee.model_ref}</dd>
-                <dt className="text-text-subtle">工具数</dt>
-                <dd className="font-mono text-text">{employee.tool_ids.length}</dd>
-                <dt className="text-text-subtle">技能数</dt>
-                <dd className="font-mono text-text">{employee.skill_ids.length}</dd>
-                <dt className="text-text-subtle">最大迭代</dt>
-                <dd className="font-mono text-text">{employee.max_iterations}</dd>
-              </dl>
-            </section>
-          )}
-
-          <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[12px] font-mono uppercase tracking-wider text-text-subtle">
-                对话
-              </h3>
-              <button
-                type="button"
-                onClick={handleNewConversation}
-                disabled={creating || !employee}
-                className="text-[12px] px-3 py-1 rounded border border-border text-text hover:bg-surface-2 hover:border-border-strong transition-colors duration-base disabled:opacity-50"
-              >
-                {creating ? "创建中…" : "新对话"}
-              </button>
-            </div>
-            {conversations === null ? (
-              <LoadingState title="加载对话" />
-            ) : conversations.length === 0 ? (
-              <EmptyState
-                title={`还没有和 ${employee?.name ?? "该员工"} 的对话`}
-                description="点右上「新对话」开始第一段"
+          {employee === null && !error ? (
+            <LoadingState title="加载员工" />
+          ) : employee ? (
+            <>
+              <HeroCard
+                employee={employee}
+                isLead={isLead}
+                creating={creating}
+                onNewConversation={() => void handleNewConversation()}
               />
-            ) : (
-              <ul className="divide-y divide-border border border-border rounded">
-                {conversations.map((c) => (
-                  <li key={c.id}>
-                    <Link
-                      href={`/chat/${c.id}`}
-                      className="flex items-center gap-3 px-3 py-2 text-[12px] hover:bg-surface-2 transition-colors duration-base"
-                    >
-                      <span className="font-mono text-[10px] text-text-subtle shrink-0">
-                        {c.id.slice(0, 8)}
+
+              <MetaStrip
+                employee={employee}
+                conversationCount={conversations?.length ?? 0}
+              />
+
+              <Section
+                title="挂载技能"
+                subtitle={`${employee.skill_ids.length} 项 · 激活时才注入 runtime`}
+                icon="wand-2"
+              >
+                {employee.skill_ids.length === 0 ? (
+                  <p className="text-[12px] text-text-subtle italic">
+                    未挂载任何技能 · 仅具备基础工具调用能力。
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {employee.skill_ids.map((id) => (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary-muted text-primary text-caption font-mono font-medium"
+                      >
+                        <Icon name="sparkles" size={10} strokeWidth={2} />
+                        {id.replace(/^allhands\.(skills|builtin)\./, "")}
                       </span>
-                      <span className="flex-1 truncate text-text">
-                        {c.title ?? "(无标题)"}
+                    ))}
+                  </div>
+                )}
+                {badges.length > 0 && (
+                  <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+                    <span className="font-mono text-caption uppercase tracking-wider text-text-subtle">
+                      profile
+                    </span>
+                    {badges.map((b) => (
+                      <span
+                        key={b}
+                        className="inline-flex items-center h-5 px-2 rounded-full bg-surface-2 border border-border text-text-muted text-caption font-medium"
+                      >
+                        {BADGE_LABEL[b]}
                       </span>
-                      <time className="font-mono text-[10px] text-text-subtle shrink-0">
-                        {new Date(c.created_at).toLocaleString()}
-                      </time>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+                    ))}
+                  </div>
+                )}
+              </Section>
+
+              <Section
+                title="系统提示词片段"
+                subtitle="在员工 system prompt 里叠加的段落 · 影响语气 / 禁忌 / 聚焦"
+                icon="file-code-2"
+              >
+                {employee.system_prompt?.trim() ? (
+                  <pre className="rounded-lg bg-surface-2 border border-border p-4 text-[12px] font-mono text-text whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
+                    {employee.system_prompt}
+                  </pre>
+                ) : (
+                  <p className="text-[12px] text-text-subtle italic">
+                    无自定义提示词 · 使用平台默认人设。
+                  </p>
+                )}
+              </Section>
+
+              <Section
+                title="最近对话"
+                subtitle={
+                  conversations === null
+                    ? "加载中…"
+                    : conversations.length === 0
+                      ? "还没有对话"
+                      : `${conversations.length} 条 · 点开继续`
+                }
+                icon="message-square"
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => void handleNewConversation()}
+                    disabled={creating || !employee}
+                    data-testid="employee-detail-new-conversation"
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium bg-primary hover:bg-primary-hover text-primary-fg shadow-soft-sm transition-colors duration-fast disabled:opacity-60"
+                  >
+                    {creating ? (
+                      <>
+                        <Icon name="loader" size={12} className="animate-spin" />
+                        创建中
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="plus" size={12} strokeWidth={2.25} />
+                        新对话
+                      </>
+                    )}
+                  </button>
+                }
+              >
+                {conversations === null ? (
+                  <ConversationsSkeleton />
+                ) : conversations.length === 0 ? (
+                  <EmptyConversations employeeName={employee.name} />
+                ) : (
+                  <ul className="space-y-2">
+                    {conversations.map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          href={`/chat/${c.id}`}
+                          className="group flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 shadow-soft-sm hover:-translate-y-px hover:shadow-soft hover:border-border-strong transition duration-base"
+                        >
+                          <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-muted text-primary shrink-0">
+                            <Icon name="message-square" size={14} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] text-text truncate">
+                              {c.title ?? "(无标题)"}
+                            </p>
+                            <p className="mt-0.5 font-mono text-caption text-text-subtle truncate">
+                              {c.id.slice(0, 8)} ·{" "}
+                              {new Date(c.created_at).toLocaleString()}
+                            </p>
+                          </div>
+                          <Icon
+                            name="arrow-right"
+                            size={14}
+                            className="mt-1 text-text-subtle group-hover:text-primary group-hover:translate-x-0.5 transition duration-base"
+                          />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
+            </>
+          ) : null}
         </div>
       </div>
     </AppShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hero card
+// ---------------------------------------------------------------------------
+
+function HeroCard({
+  employee,
+  isLead,
+  creating,
+  onNewConversation,
+}: {
+  employee: EmployeeDto;
+  isLead: boolean;
+  creating: boolean;
+  onNewConversation: () => void;
+}) {
+  return (
+    <section
+      data-testid="employee-hero"
+      className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-surface to-surface border border-primary/20 shadow-soft-lg p-6"
+    >
+      {/* Decorative orb */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl opacity-60"
+        style={{ background: "var(--color-primary-glow)" }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/70 via-primary to-accent"
+      />
+
+      <div className="relative flex items-start gap-5 flex-wrap">
+        <div
+          className="grid h-16 w-16 place-items-center rounded-2xl text-primary-fg text-[20px] font-bold tracking-tight shadow-soft shrink-0"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+          }}
+          aria-hidden="true"
+        >
+          {avatarInitials(employee.name)}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-[24px] font-semibold tracking-tight text-text truncate">
+              {employee.name}
+            </h1>
+            {isLead && (
+              <span
+                data-testid="employee-hero-lead"
+                className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-primary text-primary-fg text-caption font-medium shadow-soft-sm"
+              >
+                <Icon name="sparkles" size={10} />
+                Lead
+              </span>
+            )}
+            <span
+              className={`inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-caption font-mono font-semibold uppercase tracking-wider ${
+                employee.status === "draft"
+                  ? "bg-warning-soft text-warning"
+                  : "bg-success-soft text-success"
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  employee.status === "draft" ? "bg-warning" : "bg-success"
+                }`}
+              />
+              {employee.status === "draft" ? "草稿" : "已上岗"}
+            </span>
+          </div>
+          {employee.description ? (
+            <p className="mt-2 text-[13px] text-text-muted leading-relaxed max-w-2xl">
+              {employee.description}
+            </p>
+          ) : (
+            <p className="mt-2 text-[13px] text-text-subtle italic">暂无描述</p>
+          )}
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-surface-2 border border-border font-mono text-caption text-text-muted">
+              <Icon name="brain" size={11} strokeWidth={2} />
+              {modelDisplay(employee.model_ref)}
+            </span>
+            <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-surface-2 border border-border font-mono text-caption text-text-muted">
+              <Icon name="zap" size={11} strokeWidth={2} />
+              {employee.tool_ids.length} tools
+            </span>
+            <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-surface-2 border border-border font-mono text-caption text-text-muted">
+              <Icon name="refresh" size={11} strokeWidth={2} />
+              {employee.max_iterations} 轮
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onNewConversation}
+            disabled={creating}
+            data-testid="employee-hero-chat"
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary hover:bg-primary-hover text-primary-fg text-[13px] font-semibold shadow-soft hover:-translate-y-px transition duration-base disabled:opacity-60"
+          >
+            {creating ? (
+              <>
+                <Icon name="loader" size={14} className="animate-spin" />
+                打开中
+              </>
+            ) : (
+              <>
+                <Icon name="send" size={14} />
+                开始对话
+              </>
+            )}
+          </button>
+          <Link
+            href={`/employees/design`}
+            data-testid="employee-hero-edit"
+            className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
+          >
+            <Icon name="edit" size={14} />
+            编辑
+          </Link>
+          <Link
+            href={`/chat?prefill=${encodeURIComponent(
+              `@${employee.name} 帮我完成一项任务:`,
+            )}`}
+            data-testid="employee-hero-dispatch"
+            className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
+          >
+            <Icon name="share-2" size={14} />
+            派发
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// KPI strip
+// ---------------------------------------------------------------------------
+
+function MetaStrip({
+  employee,
+  conversationCount,
+}: {
+  employee: EmployeeDto;
+  conversationCount: number;
+}) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <HeroKpi
+        label="Conversations"
+        value={conversationCount.toString()}
+        icon="message-square"
+        hint="累计对话数"
+      />
+      <StatKpi
+        label="Skills"
+        value={employee.skill_ids.length}
+        icon="wand-2"
+        hint="已挂载技能"
+      />
+      <StatKpi
+        label="Tools"
+        value={employee.tool_ids.length}
+        icon="zap"
+        hint="可调工具"
+      />
+      <StatKpi
+        label="Max iter"
+        value={employee.max_iterations}
+        icon="refresh"
+        hint="单次最大轮次"
+        monoHint
+      />
+    </div>
+  );
+}
+
+function HeroKpi({
+  label,
+  value,
+  icon,
+  hint,
+}: {
+  label: string;
+  value: string;
+  icon: "message-square";
+  hint?: string;
+}) {
+  return (
+    <div
+      data-testid={`employee-kpi-${label.toLowerCase()}`}
+      className="group relative overflow-hidden rounded-xl p-4 text-primary-fg shadow-soft transition duration-base hover:-translate-y-px hover:shadow-soft-lg"
+      style={{
+        background:
+          "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%)",
+      }}
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full blur-2xl"
+        style={{ background: "var(--color-primary-glow)", opacity: 0.4 }}
+      />
+      <div className="relative flex items-center justify-between">
+        <span className="font-mono text-caption font-semibold uppercase tracking-wider opacity-90">
+          {label}
+        </span>
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 backdrop-blur-sm">
+          <Icon name={icon} size={14} strokeWidth={2} />
+        </span>
+      </div>
+      <div className="relative mt-3 text-xl font-bold tabular-nums leading-none">
+        {value}
+      </div>
+      {hint && (
+        <div className="relative mt-2 font-mono text-caption opacity-85 truncate">
+          {hint}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatKpi({
+  label,
+  value,
+  icon,
+  hint,
+  monoHint = false,
+}: {
+  label: string;
+  value: number | string;
+  icon: "wand-2" | "zap" | "refresh";
+  hint?: string;
+  monoHint?: boolean;
+}) {
+  return (
+    <div
+      data-testid={`employee-kpi-${label.toLowerCase().replace(/\s+/g, "-")}`}
+      className="group relative flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft hover:border-border-strong"
+    >
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-caption font-semibold uppercase tracking-wider text-text-subtle truncate">
+          {label}
+        </span>
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary-muted text-primary">
+          <Icon name={icon} size={14} strokeWidth={2} />
+        </span>
+      </div>
+      <div className="text-xl font-bold tabular-nums leading-none text-text">
+        {value}
+      </div>
+      {hint && (
+        <div
+          className={`text-caption text-text-subtle truncate ${
+            monoHint ? "font-mono" : ""
+          }`}
+        >
+          {hint}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section wrapper
+// ---------------------------------------------------------------------------
+
+function Section({
+  title,
+  subtitle,
+  icon,
+  actions,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: "wand-2" | "file-code-2" | "message-square";
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-surface shadow-soft-sm overflow-hidden">
+      <header className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border">
+        <div className="min-w-0 flex-1 flex items-start gap-3">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary-muted text-primary shrink-0">
+            <Icon name={icon} size={14} strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-[14px] font-semibold tracking-tight text-text">
+              {title}
+            </h2>
+            {subtitle && (
+              <p className="mt-0.5 text-caption text-text-muted truncate">
+                {subtitle}
+              </p>
+            )}
+          </div>
+        </div>
+        {actions && <div className="shrink-0">{actions}</div>}
+      </header>
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Empty / skeleton states
+// ---------------------------------------------------------------------------
+
+function ConversationsSkeleton() {
+  return (
+    <ul className="space-y-2" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <li
+          key={i}
+          className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5"
+        >
+          <div className="h-8 w-8 rounded-lg bg-surface-2 animate-pulse" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3 w-48 rounded bg-surface-2 animate-pulse" />
+            <div className="h-2.5 w-32 rounded bg-surface-2 animate-pulse" />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function EmptyConversations({ employeeName }: { employeeName: string }) {
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 opacity-30 pointer-events-none"
+        style={{
+          backgroundImage:
+            "radial-gradient(var(--color-border) 1px, transparent 1px)",
+          backgroundSize: "16px 16px",
+        }}
+      />
+      <div className="relative">
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-primary-muted text-primary">
+          <Icon name="message-square" size={20} strokeWidth={2} />
+        </div>
+        <p className="text-[14px] text-text">
+          还没有和 {employeeName} 的对话
+        </p>
+        <p className="mt-1 text-[12px] text-text-muted">
+          点上方「新对话」开始第一段 · 对话会自动保存并出现在这里。
+        </p>
+      </div>
+    </div>
   );
 }

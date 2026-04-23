@@ -1,12 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { use } from "react";
+import { useCallback, useEffect, useState, use } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
+import { Icon, type IconName } from "@/components/ui/icon";
 
-type ChannelKind = "telegram" | "bark" | "wecom" | "feishu" | "email" | "pushdeer";
+/**
+ * Channel detail page · ADR 0016 V2 Azure Live polish.
+ *
+ * Breadcrumb · gradient hero (kind-specific tile · direction chips · enable
+ * state) · sectioned body for config / subscriptions (add-form + list) /
+ * message timeline with in/out direction coloring + status chips. All fetch /
+ * mutation / navigation preserved verbatim.
+ */
+
+type ChannelKind =
+  | "telegram"
+  | "bark"
+  | "wecom"
+  | "feishu"
+  | "email"
+  | "pushdeer";
 
 type Channel = {
   id: string;
@@ -43,6 +58,24 @@ type Message = {
   created_at: string;
 };
 
+const KIND_ICON: Record<ChannelKind, IconName> = {
+  telegram: "send",
+  bark: "bell",
+  wecom: "message-square",
+  feishu: "message-square",
+  email: "mail",
+  pushdeer: "zap",
+};
+
+const KIND_LABEL: Record<ChannelKind, string> = {
+  telegram: "Telegram",
+  bark: "Bark (iOS)",
+  wecom: "企业微信",
+  feishu: "飞书",
+  email: "邮件 (SMTP)",
+  pushdeer: "PushDeer",
+};
+
 export default function ChannelDetailPage({
   params,
 }: {
@@ -52,7 +85,9 @@ export default function ChannelDetailPage({
   const [channel, setChannel] = useState<Channel | null>(null);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
   const [error, setError] = useState("");
   const [newTopic, setNewTopic] = useState("");
   const [newFilter, setNewFilter] = useState("");
@@ -122,156 +157,177 @@ export default function ChannelDetailPage({
   }
 
   return (
-    <AppShell
-      title={channel ? channel.display_name : "渠道详情"}
-      actions={
-        <Link
-          href="/channels"
-          className="text-xs px-3 py-1.5 rounded-md border border-border hover:border-border-strong transition-colors duration-base"
-        >
-          ← 返回列表
-        </Link>
-      }
-    >
+    <AppShell title={channel ? channel.display_name : "渠道详情"}>
       <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-8 space-y-8">
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
+          <Breadcrumb name={channel?.display_name} />
+
           {status === "loading" && <LoadingState title="加载渠道" />}
+
           {status === "error" && (
-            <div className="rounded-xl border border-danger/30 bg-danger/5 p-6">
-              <p className="text-sm text-danger mb-2">加载失败</p>
-              <p className="text-xs font-mono text-text-muted">{error}</p>
+            <div className="rounded-xl border border-danger/30 bg-danger-soft p-5">
+              <div className="flex items-start gap-3">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-danger/15 text-danger shrink-0">
+                  <Icon name="alert-circle" size={16} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-danger mb-1">
+                    加载失败
+                  </p>
+                  <p className="text-xs font-mono text-text-muted break-all">
+                    {error}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
+
           {status === "ready" && channel && (
             <>
-              <Card title="基本信息">
-                <KVRow k="ID" v={channel.id} mono />
-                <KVRow k="Kind" v={channel.kind} />
-                <KVRow
-                  k="Inbound / Outbound"
-                  v={`${channel.inbound_enabled ? "← in" : "✕ in"}  /  ${
-                    channel.outbound_enabled ? "→ out" : "✕ out"
-                  }`}
-                />
-                <KVRow
-                  k="自动批准出站"
-                  v={channel.auto_approve_outbound ? "是 (跳过 Gate)" : "否"}
-                />
-                <KVRow
-                  k="Webhook URL"
-                  v={`/api/channels/${channel.id}/webhook`}
-                  mono
-                />
-                <KVRow k="创建时间" v={new Date(channel.created_at).toLocaleString()} />
-              </Card>
+              <Hero channel={channel} />
 
-              <Card
-                title="订阅"
-                subtitle={`按 topic 接收 · ${subs.length} 条订阅`}
+              <Section title="基本信息" icon="info">
+                <MetaGrid
+                  items={[
+                    { k: "id", v: channel.id, mono: true },
+                    { k: "kind", v: KIND_LABEL[channel.kind], mono: true },
+                    {
+                      k: "inbound",
+                      v: (
+                        <DirectionTag
+                          enabled={channel.inbound_enabled}
+                          direction="in"
+                        />
+                      ),
+                    },
+                    {
+                      k: "outbound",
+                      v: (
+                        <DirectionTag
+                          enabled={channel.outbound_enabled}
+                          direction="out"
+                        />
+                      ),
+                    },
+                    {
+                      k: "auto-approve outbound",
+                      v: channel.auto_approve_outbound ? (
+                        <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-warning/30 bg-warning-soft text-warning text-caption font-mono font-medium">
+                          <Icon
+                            name="shield-check"
+                            size={10}
+                            strokeWidth={2.25}
+                          />
+                          是 · 跳过 Gate
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
+                          <Icon name="lock" size={10} strokeWidth={2.25} />
+                          否
+                        </span>
+                      ),
+                    },
+                    {
+                      k: "webhook url",
+                      v: `/api/channels/${channel.id}/webhook`,
+                      mono: true,
+                    },
+                    {
+                      k: "created at",
+                      v: new Date(channel.created_at).toLocaleString(),
+                      mono: true,
+                    },
+                  ]}
+                />
+              </Section>
+
+              <Section
+                title={`订阅 · ${subs.length}`}
+                icon="bell"
+                subtitle={`按 topic 接收广播通知`}
               >
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   {subs.length === 0 && (
-                    <p className="text-xs text-text-subtle">无订阅 · 渠道不会接收按 topic 广播的通知</p>
+                    <p className="text-sm text-text-muted leading-relaxed">
+                      无订阅 · 渠道不会接收按 topic 广播的通知
+                    </p>
                   )}
                   {subs.map((s) => (
                     <div
                       key={s.id}
-                      className="flex items-center justify-between py-1.5 border-b border-border last:border-b-0"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2.5"
                     >
-                      <div className="min-w-0">
-                        <p className="text-xs font-mono text-text">{s.topic}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-[12px] text-text font-semibold truncate">
+                          {s.topic}
+                        </p>
                         {s.filter && (
-                          <p className="text-[11px] text-text-subtle font-mono truncate">
+                          <p className="font-mono text-caption text-text-subtle truncate mt-0.5">
                             filter: {JSON.stringify(s.filter)}
                           </p>
                         )}
                       </div>
                       <button
                         onClick={() => handleDeleteSub(s.id)}
-                        className="text-[11px] text-danger hover:underline"
+                        className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-caption font-medium text-danger hover:bg-danger-soft transition duration-base shrink-0"
                       >
+                        <Icon name="trash-2" size={11} />
                         移除
                       </button>
                     </div>
                   ))}
-                  <div className="pt-3 border-t border-border flex gap-2">
+                  <div className="pt-3 mt-2 border-t border-border flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
                       value={newTopic}
                       onChange={(e) => setNewTopic(e.target.value)}
                       placeholder="topic 例如 stock.anomaly"
-                      className="flex-1 px-3 py-1.5 text-xs bg-surface border border-border rounded-md font-mono focus:border-primary focus:outline-none transition-colors duration-base"
+                      className="flex-1 rounded-lg bg-surface border border-border px-3 py-2 text-sm font-mono text-text placeholder-text-subtle focus:outline-none focus:border-primary shadow-soft-sm transition duration-base"
                     />
                     <input
                       type="text"
                       value={newFilter}
                       onChange={(e) => setNewFilter(e.target.value)}
-                      placeholder='filter JSON 可选 {"severity": ["P0"]}'
-                      className="flex-1 px-3 py-1.5 text-xs bg-surface border border-border rounded-md font-mono focus:border-primary focus:outline-none transition-colors duration-base"
+                      placeholder='filter JSON {"severity": ["P0"]}'
+                      className="flex-1 rounded-lg bg-surface border border-border px-3 py-2 text-sm font-mono text-text placeholder-text-subtle focus:outline-none focus:border-primary shadow-soft-sm transition duration-base"
                     />
                     <button
                       onClick={handleAddSub}
                       disabled={addingSub}
-                      className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-fg hover:bg-primary-hover transition-colors duration-base disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-primary text-primary-fg text-[12px] font-semibold shadow-soft-sm hover:bg-primary-hover disabled:opacity-40 transition duration-base shrink-0"
                     >
-                      {addingSub ? "…" : "+ 添加"}
+                      {addingSub ? (
+                        <>
+                          <Icon
+                            name="loader"
+                            size={12}
+                            className="animate-spin-slow"
+                          />
+                          添加中
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="plus" size={12} />
+                          添加
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
-              </Card>
+              </Section>
 
-              <Card title="近 50 条消息" subtitle="新→旧 · 入/出混合">
-                <div className="space-y-2">
-                  {messages.length === 0 && (
-                    <EmptyState title="暂无消息" />
-                  )}
+              <Section
+                title={`近 50 条消息`}
+                icon="message-square"
+                subtitle="新 → 旧 · 入 / 出混合"
+              >
+                <div className="flex flex-col gap-2">
+                  {messages.length === 0 && <EmptyState title="暂无消息" />}
                   {messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className="border-b border-border last:border-b-0 py-2"
-                    >
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span
-                          className={`text-[11px] font-mono px-1.5 py-0.5 rounded ${
-                            m.direction === "in"
-                              ? "bg-role-user/10 text-role-user"
-                              : "bg-role-lead/10 text-role-lead"
-                          }`}
-                        >
-                          {m.direction === "in" ? "← in" : "→ out"}
-                        </span>
-                        {m.topic && (
-                          <span className="text-[11px] font-mono text-text-muted">
-                            {m.topic}
-                          </span>
-                        )}
-                        <span
-                          className={`text-[11px] font-mono ${
-                            m.status === "delivered" || m.status === "received"
-                              ? "text-success"
-                              : m.status === "failed"
-                                ? "text-danger"
-                                : "text-text-muted"
-                          }`}
-                        >
-                          {m.status}
-                        </span>
-                        <span className="text-[11px] text-text-subtle ml-auto">
-                          {new Date(m.created_at).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <pre className="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-all">
-                        {JSON.stringify(m.payload, null, 0).slice(0, 400)}
-                      </pre>
-                      {m.error_message && (
-                        <p className="text-[11px] text-danger font-mono mt-0.5">
-                          {m.error_message}
-                        </p>
-                      )}
-                    </div>
+                    <MessageRow key={m.id} m={m} />
                   ))}
                 </div>
-              </Card>
+              </Section>
             </>
           )}
         </div>
@@ -280,33 +336,257 @@ export default function ChannelDetailPage({
   );
 }
 
-function Card({
+function Breadcrumb({ name }: { name?: string }) {
+  return (
+    <div className="flex items-center gap-1.5 font-mono text-caption uppercase tracking-wider text-text-subtle">
+      <Link
+        href="/channels"
+        className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md text-text-muted hover:text-primary hover:bg-primary-muted transition duration-base"
+      >
+        <Icon name="arrow-left" size={11} strokeWidth={2} />
+        Channels
+      </Link>
+      <Icon name="chevron-right" size={11} className="text-text-subtle" />
+      <span className="text-text truncate max-w-[30ch]">{name ?? "…"}</span>
+    </div>
+  );
+}
+
+function Hero({ channel }: { channel: Channel }) {
+  const icon = KIND_ICON[channel.kind];
+  const enabledDot = channel.enabled ? "bg-success" : "bg-text-subtle";
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-sm p-6">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent 0%, var(--color-primary) 50%, transparent 100%)",
+          opacity: 0.25,
+        }}
+      />
+      <div className="flex items-start gap-4 flex-wrap min-w-0">
+        <div
+          className="grid h-14 w-14 place-items-center rounded-2xl text-primary-fg shadow-soft shrink-0"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+          }}
+          aria-hidden="true"
+        >
+          <Icon name={icon} size={26} strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${enabledDot}`}
+              aria-hidden="true"
+            />
+            <h1 className="text-xl font-bold tracking-tight text-text truncate">
+              {channel.display_name}
+            </h1>
+            <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
+              <Icon name={icon} size={10} strokeWidth={2.25} />
+              {KIND_LABEL[channel.kind]}
+            </span>
+            <DirectionTag
+              enabled={channel.inbound_enabled}
+              direction="in"
+              compact
+            />
+            <DirectionTag
+              enabled={channel.outbound_enabled}
+              direction="out"
+              compact
+            />
+            {channel.auto_approve_outbound && (
+              <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-warning/30 bg-warning-soft text-warning text-caption font-mono font-medium">
+                <Icon name="shield-check" size={10} strokeWidth={2.25} />
+                auto-approve
+              </span>
+            )}
+          </div>
+          <p className="font-mono text-caption text-text-subtle truncate">
+            {channel.id}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DirectionTag({
+  enabled,
+  direction,
+  compact = false,
+}: {
+  enabled: boolean;
+  direction: "in" | "out";
+  compact?: boolean;
+}) {
+  const icon: IconName =
+    direction === "in"
+      ? enabled
+        ? "arrow-down"
+        : "x"
+      : enabled
+        ? "arrow-up"
+        : "x";
+  const cls = enabled
+    ? direction === "in"
+      ? "text-role-user border-role-user/30 bg-role-user/10"
+      : "text-role-lead border-role-lead/30 bg-role-lead/10"
+    : "text-text-subtle border-border bg-surface-2";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 h-5 px-1.5 rounded-md border text-caption font-mono font-medium ${cls}`}
+    >
+      <Icon name={icon} size={10} strokeWidth={2.25} />
+      {compact
+        ? direction
+        : direction === "in"
+          ? enabled
+            ? "← in"
+            : "✕ in"
+          : enabled
+            ? "→ out"
+            : "✕ out"}
+    </span>
+  );
+}
+
+function Section({
   title,
+  icon,
   subtitle,
   children,
 }: {
   title: string;
+  icon: IconName;
   subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-surface">
-      <header className="px-4 py-3 border-b border-border">
-        <h3 className="text-sm font-medium text-text">{title}</h3>
-        {subtitle && <p className="text-xs text-text-muted mt-0.5">{subtitle}</p>}
+    <section className="relative overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm p-5">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, var(--color-border-strong), transparent)",
+          opacity: 0.6,
+        }}
+      />
+      <header className="flex items-center gap-3 mb-4">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-muted text-primary">
+          <Icon name={icon} size={14} strokeWidth={2} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-text">{title}</h2>
+          {subtitle && (
+            <p className="font-mono text-caption text-text-subtle mt-0.5">
+              {subtitle}
+            </p>
+          )}
+        </div>
       </header>
-      <div className="px-4 py-3">{children}</div>
+      <div className="border-t border-border -mx-5 mb-4" />
+      {children}
     </section>
   );
 }
 
-function KVRow({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
+function MetaGrid({
+  items,
+}: {
+  items: ReadonlyArray<{ k: string; v: React.ReactNode; mono?: boolean }>;
+}) {
   return (
-    <div className="flex items-start gap-4 py-1">
-      <span className="text-xs text-text-muted w-36 shrink-0">{k}</span>
-      <span className={`text-xs text-text break-all ${mono ? "font-mono" : ""}`}>
-        {v}
-      </span>
+    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+      {items.map((it, idx) => (
+        <div key={idx} className="flex flex-col gap-1 min-w-0">
+          <dt className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
+            {it.k}
+          </dt>
+          <dd
+            className={`text-sm text-text break-all ${
+              it.mono ? "font-mono" : ""
+            }`}
+          >
+            {it.v}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function MessageRow({ m }: { m: Message }) {
+  const dirMeta =
+    m.direction === "in"
+      ? {
+          icon: "arrow-down" as IconName,
+          cls: "text-role-user border-role-user/30 bg-role-user/10",
+          label: "← in",
+        }
+      : {
+          icon: "arrow-up" as IconName,
+          cls: "text-role-lead border-role-lead/30 bg-role-lead/10",
+          label: "→ out",
+        };
+  const statusMeta = messageStatusMeta(m.status);
+  return (
+    <div className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 hover:border-border-strong transition duration-base">
+      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+        <span
+          className={`inline-flex items-center gap-1 h-5 px-1.5 rounded-md border font-mono text-caption font-medium ${dirMeta.cls}`}
+        >
+          <Icon name={dirMeta.icon} size={10} strokeWidth={2.25} />
+          {dirMeta.label}
+        </span>
+        {m.topic && (
+          <span className="inline-flex items-center h-5 px-1.5 rounded-md bg-surface border border-border font-mono text-caption text-text-muted">
+            {m.topic}
+          </span>
+        )}
+        <span
+          className={`inline-flex items-center gap-1 h-5 px-1.5 rounded-md border font-mono text-caption font-medium ${statusMeta.chip}`}
+        >
+          <Icon name={statusMeta.icon} size={10} strokeWidth={2.25} />
+          {m.status}
+        </span>
+        <span className="ml-auto font-mono text-caption text-text-subtle">
+          {new Date(m.created_at).toLocaleTimeString()}
+        </span>
+      </div>
+      <pre className="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-all leading-relaxed">
+        {JSON.stringify(m.payload, null, 0).slice(0, 400)}
+      </pre>
+      {m.error_message && (
+        <p className="font-mono text-caption text-danger mt-1">
+          {m.error_message}
+        </p>
+      )}
     </div>
   );
+}
+
+function messageStatusMeta(status: string): { icon: IconName; chip: string } {
+  if (status === "delivered" || status === "received") {
+    return {
+      icon: "check-circle-2",
+      chip: "text-success border-success/30 bg-success-soft",
+    };
+  }
+  if (status === "failed") {
+    return {
+      icon: "alert-circle",
+      chip: "text-danger border-danger/30 bg-danger-soft",
+    };
+  }
+  return {
+    icon: "clock",
+    chip: "text-text-muted border-border bg-surface",
+  };
 }

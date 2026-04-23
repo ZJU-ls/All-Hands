@@ -6,6 +6,17 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
+import { Icon, type IconName } from "@/components/ui/icon";
+
+/**
+ * Skill detail page · ADR 0016 V2 Azure Live polish.
+ *
+ * Breadcrumb + eyebrow · gradient hero card (icon tile + name + meta chips +
+ * actions) · underline tab group · sectioned body cards with hairline top
+ * accent · shimmer-friendly loading / error / not-found states.
+ *
+ * All fetch / state / mutation / navigation / data-testid preserved verbatim.
+ */
 
 type SkillSource = "builtin" | "github" | "market" | "local";
 
@@ -37,11 +48,11 @@ type Tab = "overview" | "prompt" | "versions" | "dependencies";
 
 type LoadStatus = "loading" | "ready" | "notfound" | "error";
 
-const TABS: [Tab, string][] = [
-  ["overview", "概览"],
-  ["prompt", "参数 / 模板"],
-  ["versions", "版本历史"],
-  ["dependencies", "依赖图"],
+const TABS: ReadonlyArray<readonly [Tab, string, IconName]> = [
+  ["overview", "概览", "layout-grid"],
+  ["prompt", "参数 / 模板", "file-code-2"],
+  ["versions", "版本历史", "clock"],
+  ["dependencies", "依赖图", "share-2"],
 ];
 
 export default function SkillDetailPage() {
@@ -104,15 +115,8 @@ export default function SkillDetailPage() {
   return (
     <AppShell title={skill?.name ?? "技能"}>
       <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-8">
-          <div className="mb-4">
-            <Link
-              href="/skills"
-              className="text-xs text-text-muted hover:text-text transition-colors duration-base"
-            >
-              ← 返回技能列表
-            </Link>
-          </div>
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
+          <Breadcrumb name={skill?.name} />
 
           {status === "loading" && (
             <div data-testid="skill-detail-loading">
@@ -128,8 +132,9 @@ export default function SkillDetailPage() {
               >
                 <Link
                   href="/skills"
-                  className="inline-block mt-2 rounded border border-border px-3 py-1.5 text-[12px] text-text hover:bg-surface-2 transition-colors duration-base"
+                  className="inline-flex items-center gap-1.5 mt-2 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
                 >
+                  <Icon name="arrow-left" size={12} />
                   回到列表
                 </Link>
               </EmptyState>
@@ -148,7 +153,7 @@ export default function SkillDetailPage() {
 
           {status === "ready" && skill && (
             <>
-              <Header
+              <Hero
                 skill={skill}
                 dependentCount={dependents.length}
                 onDelete={() => setConfirmDelete(true)}
@@ -156,24 +161,29 @@ export default function SkillDetailPage() {
 
               <div
                 role="tablist"
-                className="mb-5 flex items-center gap-1 border-b border-border"
+                aria-label="技能详情视图"
+                className="inline-flex items-center gap-1 rounded-xl bg-surface-2 p-1 border border-border"
               >
-                {TABS.map(([key, label]) => (
-                  <button
-                    key={key}
-                    role="tab"
-                    data-testid={`tab-${key}`}
-                    aria-selected={tab === key}
-                    onClick={() => setTab(key)}
-                    className={`px-3 py-2 text-xs font-medium transition-colors duration-base border-b-2 -mb-px ${
-                      tab === key
-                        ? "text-text border-primary"
-                        : "text-text-muted border-transparent hover:text-text"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {TABS.map(([key, label, icon]) => {
+                  const active = tab === key;
+                  return (
+                    <button
+                      key={key}
+                      role="tab"
+                      data-testid={`tab-${key}`}
+                      aria-selected={active}
+                      onClick={() => setTab(key)}
+                      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] transition duration-base ${
+                        active
+                          ? "bg-surface text-text font-semibold shadow-soft-sm"
+                          : "text-text-muted hover:text-text font-medium"
+                      }`}
+                    >
+                      <Icon name={icon} size={12} strokeWidth={2} />
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
 
               {tab === "overview" && (
@@ -201,7 +211,45 @@ export default function SkillDetailPage() {
   );
 }
 
-function Header({
+function Breadcrumb({ name }: { name?: string }) {
+  return (
+    <div className="flex items-center gap-1.5 font-mono text-caption uppercase tracking-wider text-text-subtle">
+      <Link
+        href="/skills"
+        className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md text-text-muted hover:text-primary hover:bg-primary-muted transition duration-base"
+      >
+        <Icon name="arrow-left" size={11} strokeWidth={2} />
+        Skills
+      </Link>
+      <Icon name="chevron-right" size={11} className="text-text-subtle" />
+      <span className="text-text truncate max-w-[30ch]">{name ?? "…"}</span>
+    </div>
+  );
+}
+
+function SourceChip({ source }: { source: SkillSource }) {
+  const map: Record<SkillSource, { icon: IconName; cls: string }> = {
+    builtin: {
+      icon: "shield-check",
+      cls: "bg-primary-muted text-primary border-primary/20",
+    },
+    market: { icon: "store", cls: "bg-surface-2 text-text-muted border-border" },
+    github: { icon: "code", cls: "bg-surface-2 text-text-muted border-border" },
+    local: { icon: "upload", cls: "bg-surface-2 text-text-muted border-border" },
+  };
+  const m = map[source] ?? map.local;
+  return (
+    <span
+      data-testid="skill-source"
+      className={`inline-flex items-center gap-1 h-5 px-1.5 rounded-md border text-caption font-mono font-medium shrink-0 ${m.cls}`}
+    >
+      <Icon name={m.icon} size={10} strokeWidth={2.25} />
+      {source}
+    </span>
+  );
+}
+
+function Hero({
   skill,
   dependentCount,
   onDelete,
@@ -211,59 +259,80 @@ function Header({
   onDelete: () => void;
 }) {
   return (
-    <div className="mb-6 flex items-start justify-between gap-4">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <h2
-            data-testid="skill-name"
-            className="text-lg font-semibold tracking-tight text-text"
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-sm p-6">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent 0%, var(--color-primary) 50%, transparent 100%)",
+          opacity: 0.25,
+        }}
+      />
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-4 min-w-0 flex-1">
+          <div
+            className="grid h-14 w-14 place-items-center rounded-2xl text-primary-fg shadow-soft shrink-0"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+            }}
+            aria-hidden="true"
           >
-            {skill.name}
-          </h2>
-          <span
-            data-testid="skill-version"
-            className="text-[10px] px-1.5 py-0.5 rounded-sm bg-surface-2 text-text-muted font-mono"
-          >
-            v{skill.version}
-          </span>
-          <span
-            data-testid="skill-source"
-            className="text-[10px] px-1.5 py-0.5 rounded-sm bg-surface-2 text-text-muted"
-          >
-            {skill.source}
-          </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-surface-2 text-text-muted">
-            {dependentCount} 员工在用
-          </span>
+            <Icon name="wand-2" size={26} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <h1
+                data-testid="skill-name"
+                className="text-xl font-bold tracking-tight text-text truncate"
+              >
+                {skill.name}
+              </h1>
+              <span
+                data-testid="skill-version"
+                className="inline-flex items-center h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono shrink-0"
+              >
+                v{skill.version}
+              </span>
+              <SourceChip source={skill.source} />
+              <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
+                <Icon name="users" size={10} strokeWidth={2.25} />
+                {dependentCount} 在用
+              </span>
+            </div>
+            <p className="text-[13px] text-text-muted leading-relaxed mb-2">
+              {skill.description || "该技能暂无描述。"}
+            </p>
+            <p className="font-mono text-caption text-text-subtle truncate">
+              {skill.id}
+            </p>
+          </div>
         </div>
-        <p className="text-[13px] text-text-muted leading-relaxed">
-          {skill.description || "该技能暂无描述。"}
-        </p>
-        <p className="text-[11px] font-mono text-text-subtle mt-1 truncate">
-          {skill.id}
-        </p>
-      </div>
-      <div className="flex gap-2 shrink-0">
-        {skill.source_url && (
-          <a
-            href={skill.source_url}
-            target="_blank"
-            rel="noreferrer"
-            data-testid="skill-source-link"
-            className="text-xs px-3 py-1.5 rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text transition-colors duration-base"
-          >
-            源码 ↗
-          </a>
-        )}
-        {skill.source !== "builtin" && (
-          <button
-            onClick={onDelete}
-            data-testid="skill-delete"
-            className="text-xs px-3 py-1.5 rounded border border-border text-danger hover:bg-danger/10 transition-colors duration-base"
-          >
-            卸载
-          </button>
-        )}
+        <div className="flex gap-2 shrink-0">
+          {skill.source_url && (
+            <a
+              href={skill.source_url}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="skill-source-link"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text-muted hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
+            >
+              <Icon name="external-link" size={12} />
+              源码
+            </a>
+          )}
+          {skill.source !== "builtin" && (
+            <button
+              onClick={onDelete}
+              data-testid="skill-delete"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/30 bg-danger-soft text-[12px] font-semibold text-danger hover:bg-danger/15 transition duration-base"
+            >
+              <Icon name="trash-2" size={12} />
+              卸载
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -271,18 +340,63 @@ function Header({
 
 function Section({
   title,
+  icon,
   children,
+  action,
 }: {
   title: string;
+  icon: IconName;
   children: React.ReactNode;
+  action?: React.ReactNode;
 }) {
   return (
-    <section className="mb-5 rounded-md border border-border bg-surface p-5">
-      <h3 className="text-[10px] uppercase tracking-wider font-mono text-text-subtle mb-3">
-        {title}
-      </h3>
+    <section className="relative overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm p-5">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, var(--color-border-strong), transparent)",
+          opacity: 0.6,
+        }}
+      />
+      <header className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-muted text-primary">
+            <Icon name={icon} size={14} strokeWidth={2} />
+          </span>
+          <h2 className="text-sm font-semibold text-text">{title}</h2>
+        </div>
+        {action}
+      </header>
+      <div className="border-t border-border -mx-5 mb-4" />
       {children}
     </section>
+  );
+}
+
+function MetaGrid({
+  items,
+}: {
+  items: ReadonlyArray<{ k: string; v: React.ReactNode; mono?: boolean }>;
+}) {
+  return (
+    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+      {items.map((it, idx) => (
+        <div key={idx} className="flex flex-col gap-1 min-w-0">
+          <dt className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
+            {it.k}
+          </dt>
+          <dd
+            className={`text-sm text-text break-all ${
+              it.mono ? "font-mono" : ""
+            }`}
+          >
+            {it.v}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -294,69 +408,101 @@ function Overview({
   dependents: Employee[];
 }) {
   return (
-    <div data-testid="tab-panel-overview">
-      <Section title="元数据">
-        <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-          <dt className="text-text-muted">版本</dt>
-          <dd className="font-mono text-text">{skill.version}</dd>
-          <dt className="text-text-muted">来源</dt>
-          <dd className="font-mono text-text">{skill.source}</dd>
-          <dt className="text-text-muted">安装时间</dt>
-          <dd className="font-mono text-text">
-            {skill.installed_at ? formatTime(skill.installed_at) : "—"}
-          </dd>
-          <dt className="text-text-muted">本地路径</dt>
-          <dd className="font-mono text-text-muted break-all">
-            {skill.path ?? "—"}
-          </dd>
-          <dt className="text-text-muted">工具数</dt>
-          <dd className="font-mono text-text">{skill.tool_ids.length}</dd>
-        </dl>
+    <div data-testid="tab-panel-overview" className="space-y-5">
+      <Section title="元数据" icon="info">
+        <MetaGrid
+          items={[
+            { k: "version", v: `v${skill.version}`, mono: true },
+            { k: "source", v: skill.source, mono: true },
+            {
+              k: "installed at",
+              v: skill.installed_at ? formatTime(skill.installed_at) : "—",
+              mono: true,
+            },
+            { k: "tools", v: String(skill.tool_ids.length), mono: true },
+            {
+              k: "local path",
+              v: skill.path ?? "—",
+              mono: true,
+            },
+          ]}
+        />
       </Section>
 
-      <Section title={`依赖工具 · ${skill.tool_ids.length}`}>
+      <Section title={`依赖工具 · ${skill.tool_ids.length}`} icon="zap">
         {skill.tool_ids.length === 0 ? (
-          <p className="text-xs text-text-muted">
+          <p className="text-sm text-text-muted leading-relaxed">
             该技能未声明任何工具依赖。仅贡献提示片段。
           </p>
         ) : (
-          <ul data-testid="tool-id-list" className="flex flex-col gap-1">
+          <ul
+            data-testid="tool-id-list"
+            className="flex flex-col gap-1.5"
+          >
             {skill.tool_ids.map((tid) => (
               <li
                 key={tid}
                 data-testid={`tool-id-${tid}`}
-                className="text-xs font-mono text-text"
+                className="inline-flex items-center gap-2 h-8 px-3 rounded-lg bg-surface-2 border border-border font-mono text-[12px] text-text"
               >
-                {tid}
+                <Icon
+                  name="zap"
+                  size={11}
+                  className="text-primary shrink-0"
+                />
+                <span className="truncate">{tid}</span>
               </li>
             ))}
           </ul>
         )}
       </Section>
 
-      <Section title={`使用该技能的员工 · ${dependents.length}`}>
+      <Section
+        title={`使用该技能的员工 · ${dependents.length}`}
+        icon="users"
+      >
         {dependents.length === 0 ? (
-          <p data-testid="dependents-empty" className="text-xs text-text-muted">
+          <p
+            data-testid="dependents-empty"
+            className="text-sm text-text-muted leading-relaxed"
+          >
             尚无员工引用该技能。
           </p>
         ) : (
-          <div data-testid="dependents-list" className="flex flex-col gap-1.5">
+          <div
+            data-testid="dependents-list"
+            className="grid grid-cols-1 md:grid-cols-2 gap-2"
+          >
             {dependents.map((e) => (
               <Link
                 key={e.id}
                 href={`/employees/${encodeURIComponent(e.id)}`}
                 data-testid={`dependent-${e.id}`}
-                className="flex items-center gap-2 rounded border border-border bg-bg px-3 py-2 text-xs hover:border-border-strong hover:bg-surface-2 transition-colors duration-base"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2.5 hover:border-border-strong hover:shadow-soft-sm transition duration-base min-w-0"
               >
-                <span className="text-text">{e.name}</span>
-                {e.is_lead_agent && (
-                  <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border border-border text-text-muted">
-                    lead
-                  </span>
-                )}
-                <span className="font-mono text-text-subtle text-[10px] truncate">
-                  {e.id}
+                <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-muted text-primary shrink-0">
+                  <Icon name="user" size={13} strokeWidth={2} />
                 </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-text truncate">
+                      {e.name}
+                    </span>
+                    {e.is_lead_agent && (
+                      <span className="inline-flex items-center h-4 px-1.5 rounded-sm bg-primary-muted text-primary text-caption font-mono font-semibold uppercase tracking-wider shrink-0">
+                        lead
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-mono text-caption text-text-subtle truncate">
+                    {e.id}
+                  </p>
+                </div>
+                <Icon
+                  name="arrow-right"
+                  size={13}
+                  className="text-text-subtle shrink-0 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition duration-base"
+                />
               </Link>
             ))}
           </div>
@@ -368,40 +514,45 @@ function Overview({
 
 function PromptTab({ skill }: { skill: Skill }) {
   return (
-    <div data-testid="tab-panel-prompt">
-      <Section title="系统提示片段">
+    <div data-testid="tab-panel-prompt" className="space-y-5">
+      <Section title="系统提示片段" icon="file-code-2">
         {skill.prompt_fragment ? (
           <pre
             data-testid="prompt-fragment"
-            className="text-[12px] font-mono text-text bg-bg border border-border rounded p-3 whitespace-pre-wrap break-words"
+            className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-4 whitespace-pre-wrap break-words leading-relaxed"
           >
             {skill.prompt_fragment}
           </pre>
         ) : (
           <p
             data-testid="prompt-empty"
-            className="text-xs text-text-muted"
+            className="text-sm text-text-muted leading-relaxed"
           >
             该技能没有附带提示片段,仅通过工具注入能力。
           </p>
         )}
       </Section>
 
-      <Section title="调用示例">
-        <p className="text-xs text-text-muted mb-2">
-          将 <span className="font-mono">{skill.id}</span> 添加到员工的
-          <span className="font-mono"> skill_ids</span> 后,员工的 system prompt
-          会追加上方片段,并获得下列 tools:
+      <Section title="调用示例" icon="sparkles">
+        <p className="text-sm text-text-muted leading-relaxed mb-3">
+          将{" "}
+          <span className="font-mono text-text bg-surface-2 px-1.5 py-0.5 rounded border border-border">
+            {skill.id}
+          </span>{" "}
+          添加到员工的{" "}
+          <span className="font-mono text-text">skill_ids</span> 后,员工的
+          system prompt 会追加上方片段,并获得下列 tools:
         </p>
         {skill.tool_ids.length === 0 ? (
-          <p className="text-xs text-text-subtle">— 无 tool 依赖 —</p>
+          <p className="text-sm text-text-subtle italic">— 无 tool 依赖 —</p>
         ) : (
-          <ul className="flex flex-wrap gap-1">
+          <ul className="flex flex-wrap gap-1.5">
             {skill.tool_ids.map((tid) => (
               <li
                 key={tid}
-                className="text-[11px] font-mono px-1.5 py-0.5 rounded-sm bg-surface-2 text-text-muted"
+                className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-surface-2 border border-border font-mono text-caption text-text-muted"
               >
+                <Icon name="zap" size={10} className="text-primary" />
                 {tid}
               </li>
             ))}
@@ -414,20 +565,23 @@ function PromptTab({ skill }: { skill: Skill }) {
 
 function VersionsTab({ skill }: { skill: Skill }) {
   return (
-    <div data-testid="tab-panel-versions">
-      <Section title="当前版本">
-        <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-xs">
-          <dt className="text-text-muted">version</dt>
-          <dd className="font-mono text-text">v{skill.version}</dd>
-          <dt className="text-text-muted">安装时间</dt>
-          <dd className="font-mono text-text">
-            {skill.installed_at ? formatTime(skill.installed_at) : "—"}
-          </dd>
-          <dt className="text-text-muted">来源 URL</dt>
-          <dd className="font-mono text-text-muted break-all">
-            {skill.source_url ?? "—"}
-          </dd>
-        </dl>
+    <div data-testid="tab-panel-versions" className="space-y-5">
+      <Section title="当前版本" icon="clock">
+        <MetaGrid
+          items={[
+            { k: "version", v: `v${skill.version}`, mono: true },
+            {
+              k: "installed at",
+              v: skill.installed_at ? formatTime(skill.installed_at) : "—",
+              mono: true,
+            },
+            {
+              k: "source url",
+              v: skill.source_url ?? "—",
+              mono: true,
+            },
+          ]}
+        />
       </Section>
       <div data-testid="version-history-empty">
         <EmptyState
@@ -441,58 +595,79 @@ function VersionsTab({ skill }: { skill: Skill }) {
 
 function DependenciesTab({ skill }: { skill: Skill }) {
   return (
-    <div data-testid="tab-panel-dependencies">
-      <Section title={`技能 → 工具 · ${skill.tool_ids.length}`}>
-        <p className="text-[11px] text-text-muted mb-3">
+    <div data-testid="tab-panel-dependencies" className="space-y-5">
+      <Section
+        title={`技能 → 工具 · ${skill.tool_ids.length}`}
+        icon="share-2"
+      >
+        <p className="text-sm text-text-muted leading-relaxed mb-4">
           该技能注入到员工时会开放以下工具。点击 tool_id 跳 /gateway
           查看实际实现与 scope。
         </p>
         {skill.tool_ids.length === 0 ? (
-          <p data-testid="dep-empty" className="text-xs text-text-muted">
+          <p data-testid="dep-empty" className="text-sm text-text-muted">
             没有工具依赖。
           </p>
         ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wider text-text-subtle">
-                <th className="pb-2 font-mono font-normal">序号</th>
-                <th className="pb-2 font-mono font-normal">tool_id</th>
-                <th className="pb-2 font-mono font-normal">来源</th>
-              </tr>
-            </thead>
-            <tbody
-              data-testid="dep-table-body"
-              className="border-t border-border"
-            >
-              {skill.tool_ids.map((tid, idx) => {
-                const kind = tid.startsWith("allhands.mcp.")
-                  ? "mcp"
-                  : tid.startsWith("allhands.builtin.")
-                    ? "builtin"
-                    : "unknown";
-                return (
-                  <tr
-                    key={tid}
-                    data-testid={`dep-row-${tid}`}
-                    className="border-b border-border last:border-b-0"
-                  >
-                    <td className="py-2 font-mono text-text-subtle">
-                      {String(idx + 1).padStart(2, "0")}
-                    </td>
-                    <td className="py-2">
-                      <Link
-                        href={`/gateway?tool=${encodeURIComponent(tid)}`}
-                        className="font-mono text-text hover:text-primary transition-colors duration-base"
-                      >
-                        {tid}
-                      </Link>
-                    </td>
-                    <td className="py-2 font-mono text-text-muted">{kind}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-hidden rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-surface-2">
+                  <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold w-12">
+                    #
+                  </th>
+                  <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
+                    tool_id
+                  </th>
+                  <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold w-24">
+                    kind
+                  </th>
+                </tr>
+              </thead>
+              <tbody data-testid="dep-table-body">
+                {skill.tool_ids.map((tid, idx) => {
+                  const kind = tid.startsWith("allhands.mcp.")
+                    ? "mcp"
+                    : tid.startsWith("allhands.builtin.")
+                      ? "builtin"
+                      : "unknown";
+                  const kindChip =
+                    kind === "mcp"
+                      ? "text-primary bg-primary-muted border-primary/20"
+                      : kind === "builtin"
+                        ? "text-text-muted bg-surface-2 border-border"
+                        : "text-warning bg-warning-soft border-warning/30";
+                  return (
+                    <tr
+                      key={tid}
+                      data-testid={`dep-row-${tid}`}
+                      className="border-t border-border"
+                    >
+                      <td className="py-2 px-3 font-mono text-caption text-text-subtle tabular-nums">
+                        {String(idx + 1).padStart(2, "0")}
+                      </td>
+                      <td className="py-2 px-3">
+                        <Link
+                          href={`/gateway?tool=${encodeURIComponent(tid)}`}
+                          className="inline-flex items-center gap-1.5 font-mono text-[12px] text-text hover:text-primary transition duration-base"
+                        >
+                          <Icon name="zap" size={11} className="text-primary" />
+                          {tid}
+                        </Link>
+                      </td>
+                      <td className="py-2 px-3">
+                        <span
+                          className={`inline-flex items-center h-5 px-1.5 rounded-md border font-mono text-caption font-medium ${kindChip}`}
+                        >
+                          {kind}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </Section>
     </div>
