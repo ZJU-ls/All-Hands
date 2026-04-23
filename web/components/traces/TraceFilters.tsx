@@ -1,5 +1,6 @@
 "use client";
 
+import { Select, type SelectOption } from "@/components/ui/Select";
 import type { EmployeeDto } from "@/lib/api";
 
 export type TimeRange = "1h" | "24h" | "7d" | "30d" | "all";
@@ -44,7 +45,9 @@ export function rangeToSinceISO(range: TimeRange, now: Date = new Date()): strin
   return new Date(now.getTime() - ms[range]).toISOString();
 }
 
-const SELECT_CLS =
+const FIELD_LABEL =
+  "font-mono text-[10px] uppercase tracking-wider text-text-subtle";
+const INPUT_CLS =
   "h-7 rounded-md border border-border bg-surface px-2 text-[12px] text-text " +
   "transition-colors duration-base hover:border-border-strong " +
   "focus:outline-none focus:border-border-strong";
@@ -69,74 +72,53 @@ export function TraceFilters({
   const update = (patch: Partial<TraceFilterState>) =>
     onChange({ ...filters, ...patch });
 
+  const employeeOptions: SelectOption[] = [
+    { value: "all", label: "全部" },
+    ...employees.map((emp) => ({ value: emp.id, label: emp.name })),
+  ];
+
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-6 py-3">
-      <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-          时间
-        </span>
-        <select
-          aria-label="时间范围"
-          className={SELECT_CLS}
+      <div className="flex items-center gap-1.5">
+        <span className={FIELD_LABEL}>时间</span>
+        <Select
+          size="sm"
           value={filters.range}
-          onChange={(e) => update({ range: e.target.value as TimeRange })}
-        >
-          {RANGE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          onChange={(v) => update({ range: v as TimeRange })}
+          options={RANGE_OPTIONS}
+          ariaLabel="时间范围"
+        />
+      </div>
 
-      <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-          员工
-        </span>
-        <select
-          aria-label="员工"
-          className={SELECT_CLS}
+      <div className="flex items-center gap-1.5">
+        <span className={FIELD_LABEL}>员工</span>
+        <Select
+          size="sm"
           value={filters.employeeId}
-          onChange={(e) => update({ employeeId: e.target.value })}
-        >
-          <option value="all">全部</option>
-          {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>
-              {emp.name}
-            </option>
-          ))}
-        </select>
-      </label>
+          onChange={(v) => update({ employeeId: v })}
+          options={employeeOptions}
+          ariaLabel="员工"
+        />
+      </div>
 
-      <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-          状态
-        </span>
-        <select
-          aria-label="状态"
-          className={SELECT_CLS}
+      <div className="flex items-center gap-1.5">
+        <span className={FIELD_LABEL}>状态</span>
+        <Select
+          size="sm"
           value={filters.status}
-          onChange={(e) =>
-            update({ status: e.target.value as TraceStatusFilter })
-          }
-        >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          onChange={(v) => update({ status: v as TraceStatusFilter })}
+          options={STATUS_OPTIONS}
+          ariaLabel="状态"
+        />
+      </div>
 
       <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-          关键词
-        </span>
+        <span className={FIELD_LABEL}>关键词</span>
         <input
           aria-label="关键词"
           type="search"
           placeholder="trace_id / 员工名"
-          className={`${SELECT_CLS} w-48 placeholder:text-text-subtle`}
+          className={`${INPUT_CLS} w-48 placeholder:text-text-subtle`}
           value={filters.keyword}
           onChange={(e) => update({ keyword: e.target.value })}
         />
@@ -152,7 +134,7 @@ export function TraceFilters({
           type="button"
           onClick={onRefresh}
           disabled={busy}
-          className="h-7 rounded-md border border-border bg-surface px-3 text-[12px] text-text transition-colors duration-base hover:border-border-strong disabled:opacity-50"
+          className={`${INPUT_CLS} px-3 disabled:opacity-50`}
         >
           {busy ? "刷新中…" : "刷新"}
         </button>

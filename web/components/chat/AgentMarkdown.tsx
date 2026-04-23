@@ -37,10 +37,7 @@ export function AgentMarkdown({
     <div
       ref={ref}
       data-testid="agent-markdown"
-      className={
-        className ??
-        "prose prose-invert prose-sm max-w-none text-text [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-      }
+      className={className ?? "ah-prose max-w-none"}
     />
   );
 }

@@ -32,6 +32,7 @@ from allhands.core import (
     PlanStep,
     RenderPayload,
     Skill,
+    SkillRuntime,
     SkillSource,
     StepStatus,
     Task,
@@ -60,6 +61,7 @@ from allhands.persistence.orm.models import (
     MessageRow,
     ObservabilityConfigRow,
     SkillRow,
+    SkillRuntimeRow,
     TaskRow,
     TriggerFireRow,
     TriggerRow,
@@ -1276,3 +1278,46 @@ class SqlObservabilityConfigRepo:
         row.updated_at = now
         await self._s.flush()
         return config
+
+
+class SqlSkillRuntimeRepo:
+    """Per-conversation SkillRuntime checkpoint (ADR 0011 · 原则 7).
+
+    Body is ``SkillRuntime.model_dump()`` — a plain dict, stored in the JSON
+    column — so adding a new field on the domain model (with a Pydantic
+    default) doesn't require a migration. ``load()`` runs
+    ``SkillRuntime.model_validate()`` which enforces the current schema and
+    supplies defaults for any older row that pre-dates a field.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def load(self, conversation_id: str) -> SkillRuntime | None:
+        row = await self._s.get(SkillRuntimeRow, conversation_id)
+        if row is None:
+            return None
+        return SkillRuntime.model_validate(row.body)
+
+    async def save(self, conversation_id: str, runtime: SkillRuntime) -> None:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        row = await self._s.get(SkillRuntimeRow, conversation_id)
+        body = runtime.model_dump()
+        if row is None:
+            self._s.add(
+                SkillRuntimeRow(
+                    conversation_id=conversation_id,
+                    body=body,
+                    updated_at=now,
+                )
+            )
+        else:
+            row.body = body
+            row.updated_at = now
+        await self._s.flush()
+
+    async def delete(self, conversation_id: str) -> None:
+        row = await self._s.get(SkillRuntimeRow, conversation_id)
+        if row is not None:
+            await self._s.delete(row)
+            await self._s.flush()

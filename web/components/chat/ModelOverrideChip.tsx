@@ -1,24 +1,31 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ModelPicker } from "@/components/model-picker/ModelPicker";
 import {
   updateConversation,
   type ConversationDto,
   type EmployeeDto,
 } from "@/lib/api";
+import { cn } from "@/lib/cn";
 
 /**
- * Per-conversation model override control (Track ζ).
+ * Per-conversation model override — L11 redesign.
  *
- * Renders a compact chip in the chat header that shows the effective model
- * (override → falls back to the employee's model_ref) and, on click, opens
- * an inline popover with a ModelPicker offering "跟随员工默认" as the first
- * option. The "跟随" option clears the override via PATCH + clear flag.
+ * Before: chip → popover → ModelPicker → Select → listbox (four clicks from
+ * "I want to switch model" to actually seeing the options). That violated
+ * P11 子维度 "一屏决策" and showed up in the user's screenshot as a panel
+ * fighting with the composer + sidebar.
  *
- * The chip shape (dark border + 10-11px mono) tracks the rest of the chat
- * header so the override feels like a status readout rather than a primary
- * action — following P02 (prominence matches intent).
+ * After: the chip IS the Select trigger. Click once, options open. The
+ * override-state affordances (the pulse dot when a non-default is picked,
+ * the primary-border chip when overridden) live inside `renderTrigger`.
+ * The "跟随员工默认" sentinel goes straight into the options list as the
+ * first group, not a separate popover layer.
+ *
+ * Errors from PATCH: if the save fails we mark the chip in the danger hue
+ * and surface the message in `title` — no hidden inline error box that
+ * the user has to hunt for.
  */
 
 type Props = {
@@ -44,24 +51,12 @@ export function ModelOverrideChip({
   employee,
   onConversationChange,
 }: Props) {
-  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
 
   const effectiveRef = conversation.model_ref_override ?? employee.model_ref;
   const isOverridden = conversation.model_ref_override !== null;
   const { name: effModel } = splitRef(effectiveRef);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (!popoverRef.current) return;
-      if (!popoverRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
 
   async function handleChange(next: string) {
     setSaving(true);
@@ -73,7 +68,6 @@ export function ModelOverrideChip({
           : { model_ref_override: next };
       const updated = await updateConversation(conversation.id, body);
       onConversationChange(updated);
-      setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -81,66 +75,57 @@ export function ModelOverrideChip({
     }
   }
 
+  const title = error
+    ? `切换失败 · ${error}`
+    : isOverridden
+      ? `本对话覆盖为 ${effectiveRef} · 默认 ${employee.model_ref}`
+      : `跟随员工默认 · ${employee.model_ref}`;
+
+  // Chip styling lives here so the Select trigger visually inherits the
+  // prior look. `border-primary` when overridden keeps the original signal;
+  // `border-danger` if the last PATCH blew up.
+  const chipClass = cn(
+    "inline-flex h-6 items-center gap-1 whitespace-nowrap rounded border px-1.5 font-mono text-[11px] transition-colors duration-base",
+    error
+      ? "border-danger/60 text-danger"
+      : isOverridden
+        ? "border-primary text-text hover:border-border-strong"
+        : "border-border text-text-muted hover:text-text hover:border-border-strong",
+  );
+
   return (
-    <div className="relative" ref={popoverRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        data-testid="model-override-chip"
-        data-overridden={isOverridden ? "true" : "false"}
-        className={`inline-flex h-6 items-center gap-1 rounded border px-1.5 font-mono text-[11px] transition-colors duration-base ${
-          isOverridden
-            ? "border-primary text-text hover:border-border-strong"
-            : "border-border text-text-muted hover:text-text hover:border-border-strong"
-        }`}
-        title={
-          isOverridden
-            ? `本对话覆盖为 ${effectiveRef} · 默认 ${employee.model_ref}`
-            : `跟随员工默认 · ${employee.model_ref}`
-        }
-      >
-        {isOverridden && (
-          <span
-            aria-hidden="true"
-            className="inline-block h-1 w-1 rounded-full bg-primary shrink-0"
-            data-testid="model-override-dot"
-          />
-        )}
-        <span className="truncate max-w-[110px]">{effModel}</span>
-        <span aria-hidden className="font-mono text-text-subtle">▾</span>
-      </button>
-      {open && (
-        <div
-          role="dialog"
-          aria-label="选择本对话使用的模型"
-          className="absolute right-0 bottom-full mb-1 z-20 w-60 rounded-md border border-border bg-surface-1 p-2 shadow-lg"
-          data-testid="model-override-popover"
+    <ModelPicker
+      value={conversation.model_ref_override ?? ""}
+      onChange={(next) => {
+        void handleChange(next);
+      }}
+      autoPickDefault={false}
+      disabled={saving}
+      inheritLabel={`跟随员工默认 · ${employee.model_ref}`}
+      testId="model-override-chip"
+      size="sm"
+      triggerClassName={chipClass}
+      popoverAlign="left"
+      // Chip context: size to content, don't grab the flex row. Without
+      // this the composer controls row collapses the ThinkingToggle +
+      // CompactChip neighbours to one CJK-character-per-row min-content.
+      className="shrink-0"
+      renderTrigger={() => (
+        <span
+          className="inline-flex items-center gap-1"
+          title={title}
+          data-overridden={isOverridden ? "true" : "false"}
         >
-          <div className="mb-1.5 text-[10px] font-mono uppercase tracking-wider text-text-subtle">
-            本对话使用的模型
-          </div>
-          <ModelPicker
-            value={conversation.model_ref_override ?? ""}
-            onChange={(next) => {
-              void handleChange(next);
-            }}
-            autoPickDefault={false}
-            disabled={saving}
-            inheritLabel={`跟随员工默认 · ${employee.model_ref}`}
-            testId="model-override-picker"
-          />
-          {error && (
-            <div
-              className="mt-2 font-mono text-[11px] text-danger"
-              data-testid="model-override-error"
-            >
-              {error}
-            </div>
+          {isOverridden && (
+            <span
+              aria-hidden="true"
+              className="inline-block h-1 w-1 rounded-full bg-primary shrink-0"
+              data-testid="model-override-dot"
+            />
           )}
-        </div>
+          <span className="truncate max-w-[110px]">{effModel}</span>
+        </span>
       )}
-    </div>
+    />
   );
 }

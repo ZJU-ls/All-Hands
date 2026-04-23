@@ -5,7 +5,7 @@ import { useChatStore } from "@/lib/store";
 import { resolveConfirmation } from "@/lib/api";
 
 export function ConfirmationDialog() {
-  const { pendingConfirmations, removeConfirmation } = useChatStore();
+  const { pendingConfirmations, removeConfirmation, requestResume } = useChatStore();
   const [loading, setLoading] = useState(false);
 
   const current = pendingConfirmations[0];
@@ -17,7 +17,19 @@ export function ConfirmationDialog() {
   async function handle(decision: "approve" | "reject") {
     setLoading(true);
     try {
+      // /resolve updates the Confirmation row's status (both sources — legacy
+      // polling and interrupt-sourced — keep the audit trail in the same table).
       await resolveConfirmation(conf.confirmationId, decision);
+
+      // ADR 0014 Phase 4e · interrupt-sourced pauses need a second call to
+      // /conversations/{id}/resume so the paused LangGraph turn continues.
+      // We hand that off to InputBar (which owns the chat SSE lifecycle) by
+      // publishing the request; InputBar's useEffect picks it up, opens a
+      // resume SSE, and pipes tokens into the same message bubble so the UI
+      // experience is "one continuous turn with a pause in the middle".
+      if (conf.source === "interrupt" && conf.conversationId) {
+        requestResume({ conversationId: conf.conversationId, decision });
+      }
     } finally {
       removeConfirmation(conf.confirmationId);
       setLoading(false);

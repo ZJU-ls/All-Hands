@@ -355,6 +355,65 @@
 
 ---
 
+## P12 · 直接操作 · 触发器即选择器(2026-04-22 加入 · 见 L13)
+
+**立场:** 改一个值的操作链路 = **click to trigger + click to pick ≤ 2 步**。超过 2 步就是设计偷懒,不是设计精致。
+
+**硬规则(任一违反 → review 打回):**
+
+1. **"点 X 打开 popover,popover 里再放个 picker,picker 打开 listbox"是反模式**。这是 4 步(open chip · open picker · scroll · click)。picker 的触发器本身就是那个 chip,一级展开就能改。
+2. **状态装饰(dot / 高亮边框 / 错误色)必须直接画在触发器里**,用 `Select` 的 `renderTrigger`。不许"再套一个外层 div 专门给状态"。
+3. **默认 / inherit / "跟随上层"语义**作为选项列表的第一组出现,和其他选项并列。**不许**做"独立按钮 + 独立选项"两个入口。
+4. **错误态不在单独的 popover 里显示**。用触发器的 `border-danger` + `title` tooltip,或一过性 toast,或内联旁边 `aria-live=polite` 一行。开第二层 popover 显示错误 = 嵌套反模式复发。
+5. **review 问法**:不是"这个 UX 够不够酷",而是**"用户要改这个值,手指点几下?"** 超 2 就打回。
+
+**典型反例(2026-04-22 用户纠正):**
+- ❌ **旧 ModelOverrideChip**:chip(1 click)→ popover → Select trigger(2 click)→ listbox(3 click 之后才见选项)· 中间第 2 层 popover 全是壳子
+- ✅ **新 ModelOverrideChip**:chip 本身 = ModelPicker trigger · click → listbox(2 click 就完成选择)
+
+**与 P11 的关系**
+- P11 子维度"一屏决策"管**信息密度**(所需信息一屏能看全)
+- P12 管**操作深度**(改一个值点击数 ≤ 2)
+- 两者合起来 = "用户决策的物理成本"双轴约束
+
+**回归防御**
+- 静态扫描信号:同一个领域内同时出现 `[data-testid=X-popover]` + `[data-testid=X-picker]` 两个 testId 是嵌套反模式标志
+- 组件级断言:`web/components/chat/__tests__/ModelOverrideChip.test.tsx` 的 `opens the listbox with ONE click (no nested popover)` —— 任何选择器类组件都应写一条"一击见 listbox"的测试
+
+---
+
+## P13 · 工具调用分层可视化 · 系统工具内联、外部工具可展开(2026-04-22 加入 · 见 L14)
+
+**立场:** 用户在对话里看 agent 调用工具时,**系统自家的工具**(我们写的、我们维护的、payload 结构我们定的)和**外部工具**(MCP / 第三方 / 用户安装的 skill)需要**不同的展示粒度**。
+
+**规则:**
+
+1. **系统工具** = `allhands.*` 前缀(meta / builtin / render / artifacts / cockpit / skill / subagent 等)。渲染为**不可点击**的内联行 `SystemToolLine`:
+   - 状态点(`h-1.5 w-1.5 rounded-full`,primary/success/danger/warning)
+   - 短名(`allhands.meta.list_providers` → `list_providers`)
+   - `·` + 一行摘要(`3 项` / `provider=OpenRouter +2` / `运行中` / `database locked`)
+   - **禁止** 加展开按钮。用户在对话里不需要审计自家工具的 payload;要看细节走 trace / observatory
+2. **外部工具** = 其他一切(尤其 `mcp.*`)。保留现有 `ToolCallCard`(可展开、完整 args / result JSON)。理由:黑盒调用是信任边界,用户有合理诉求审计发了什么、收了什么
+3. **Render 工具**(`allhands.render.*`)**都不画工具卡**,因为渲染的**结果本身就是信息**(图表 / markdown / timeline)。画"fn render_table ok"卡只会加噪音
+4. **分类入口唯一**:[`web/lib/tool-kind.ts`](../web/lib/tool-kind.ts) 的 `classifyToolId(toolId)`,基于 tool_id 前缀 —— 不在后端加字段。未归类的 `allhands.*` **默认按系统处理**(allowlist 以外走 fallback 返回 `"system"`),防止新 Wave 的工具意外走成可展开卡
+
+**为什么不做成一致可展开的 ToolCallCard:** 用户口径"系统工具最好不要支持点击查看,而是可视化地渲染,让用户知道调用了什么工具即可" —— 系统工具的**信任成本**接近零(我们写的),**信息成本**接近零(结构已知且在其他 UI 已充分展示),唯一有意义的信号就是"它被调用了 · 返回了什么概要"。两层折叠是多余的。
+
+**与 P12 的区别**
+- P12 管"用户的操作深度"(change a value ≤ 2 clicks)
+- P13 管"agent 行为的展示粒度"(system = 一眼识别,external = 可审计)
+- 两者独立,但都属于"交互成本"维度
+
+**诊断副作用(有意)**
+- L06 / L12 的"Lead 不调 list_*"复发时,用户**一眼就能看出**:看不到 `SystemToolLine` 就是 agent 在编。之前 Lead 卡在编+展开卡里只能看"assistant 给了个 0" —— 看不出 agent 到底有没有执行。现在可见
+
+**回归防御**
+- [`web/lib/__tests__/tool-kind.test.ts`](../web/lib/__tests__/tool-kind.test.ts)(2 × 8 用例 · 每个已知前缀都钉)
+- [`web/components/chat/__tests__/SystemToolLine.test.tsx`](../web/components/chat/__tests__/SystemToolLine.test.tsx)(6 用例:count / list / kv / 运行中 / failed / non-interactive)
+- [`web/components/chat/__tests__/MessageBubble.test.tsx`](../web/components/chat/__tests__/MessageBubble.test.tsx)(分流 2 用例:meta → line / mcp → card)
+
+---
+
 ## 每次开发前的 UX 自检(60 秒过一遍)
 
 改任何 `web/` 代码前:
@@ -368,6 +427,8 @@
 - [ ] 默认视图是不是塞得太满?该折叠吗(P06)
 - [ ] 改了对象状态,所有订阅位置会同步吗(P09)
 - [ ] 有"测试 / 预览 / 试跑"按钮吗?4 条都过了吗(P11:一屏决策 / 测试有效性 / 关键数值露出 / 测试态≡生产态)
+- [ ] 有选择器 / picker / dropdown 吗?**改一个值点击数 ≤ 2 吗**(P12 · 触发器即选择器,不许 chip → popover → picker → listbox 的嵌套)
+- [ ] 有工具调用显示吗?`allhands.*` 系统工具走内联 `SystemToolLine`、外部工具走 `ToolCallCard` 了吗(P13 · 分层可视化)
 
 视觉层面的自检清单在 [`design-system/MASTER.md`](../design-system/MASTER.md),和本清单**互补,不重叠**。
 
@@ -392,7 +453,7 @@
 
 | 契约 | 管什么 |
 |---|---|
-| [`00-north-star.md`](00-north-star.md) | 产品哲学 + 4 条核心原则(最高仲裁) |
+| [`00-north-star.md`](00-north-star.md) | 产品哲学 + 6 条核心原则(v1 · 见 [ADR 0011](adr/0011-principles-refresh.md)) |
 | [`03-visual-design.md`](03-visual-design.md) | 视觉契约 · Linear Precise(颜色、字体、图标、动效) |
 | **`06-ux-principles.md`(本文件)** | **交互契约 · 用户感受到的流程** |
 | [`design-system/MASTER.md`](../design-system/MASTER.md) | 组件与 token 速查表(战术层) |

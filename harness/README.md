@@ -14,7 +14,7 @@ harness/
 The actual gate scripts live in `../scripts/` so they can also be invoked à la
 carte during development:
 
-- `scripts/self-review.sh`         · CLAUDE §3.5 + Tool-First + bug-triage + plan-loop
+- `scripts/self-review.sh`         · CLAUDE §3.8 视觉纪律 + Tool-First + bug-triage + plan-loop
 - `scripts/walkthrough-acceptance.sh` · W1-W7 matrix + v0 sign-of-life
 
 `scripts/check.sh` sources `harness/gates.sh` at its tail so every commit passes

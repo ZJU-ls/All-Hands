@@ -1,12 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createConversation,
   listConversations,
   type ConversationDto,
 } from "@/lib/api";
+import { cn } from "@/lib/cn";
+import {
+  computePopoverSide,
+  type PopoverSide,
+} from "@/lib/popover-placement";
+
+// Max-h-96 (384px) is the hard panel cap; use that as the flip threshold.
+const HISTORY_POPOVER_MAX = 384;
 
 type Props = {
   employeeId: string | null;
@@ -38,7 +46,21 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ConversationDto[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [side, setSide] = useState<PopoverSide>("bottom");
   const popRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Flip the history popover when opening near the bottom of the viewport
+  // (e.g. short windows, split panels). Horizontal alignment stays right-end
+  // since the trigger sits at the right edge of the chat header; an h-flip
+  // would only matter on sub-400px viewports we don't support yet.
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setSide(
+      computePopoverSide(rect, HISTORY_POPOVER_MAX, window.innerHeight, "bottom"),
+    );
+  }, [open]);
 
   const handleNew = useCallback(async () => {
     if (!employeeId || busy) return;
@@ -123,6 +145,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
         新建
       </button>
       <button
+        ref={triggerRef}
         type="button"
         onClick={toggleHistory}
         disabled={disabled}
@@ -140,7 +163,11 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
         <div
           role="menu"
           data-testid="chat-history-popover"
-          className="absolute right-0 top-full z-20 mt-1 w-80 max-h-96 overflow-y-auto rounded-md border border-border bg-surface shadow-sm"
+          data-side={side}
+          className={cn(
+            "absolute right-0 z-20 w-80 max-h-96 overflow-y-auto rounded-md border border-border bg-surface shadow-sm",
+            side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
+          )}
         >
           {loadError && (
             <div className="px-3 py-2 text-[11px] text-danger">

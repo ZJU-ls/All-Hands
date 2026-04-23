@@ -31,6 +31,10 @@ const REGISTERED = [
   { key: "Viz.Diff", aliases: ["Viz.Diff", "<Diff"] },
   { key: "Viz.Callout", aliases: ["Viz.Callout", "<Callout"] },
   { key: "Viz.LinkCard", aliases: ["Viz.LinkCard", "<LinkCard"] },
+  { key: "Viz.Stat", aliases: ["Viz.Stat", "<Stat"] },
+  { key: "Viz.LineChart", aliases: ["Viz.LineChart", "<LineChart"] },
+  { key: "Viz.BarChart", aliases: ["Viz.BarChart", "<BarChart"] },
+  { key: "Viz.PieChart", aliases: ["Viz.PieChart", "<PieChart"] },
   { key: "Artifact.Preview", aliases: ["Artifact.Preview", "ArtifactPreview"] },
   { key: "EmployeeCard", aliases: ["EmployeeCard"] },
 ];

@@ -1,5 +1,24 @@
 "use client";
 
+/**
+ * Cockpit · "Mission control" for an allhands workspace.
+ *
+ * Scope (per product direction 2026-04-22):
+ *   - Observe live runtime state (active runs, event flow, KPIs)
+ *   - Control _already-defined_ flows (pause/resume, refresh, approvals)
+ *   - NEVER host resource definitions (employees / skills / MCP / triggers
+ *     CRUD lives on its own dedicated page; the cockpit only links out).
+ *
+ * Layout: HUD strip → KPI console → 2-column main (activity | runs) with
+ * a 44px right-edge DrawerRail hosting secondary observation panels
+ * (Health · Budget · Convs). Runtime ops (急停 / resume / refresh) are
+ * always visible on the HUD's right cluster.
+ *
+ * Visual language: Linear Precise + allowed decorative primitives only
+ * (Sparkline · DotGridBackdrop · Hairline accent · status dots · mono
+ * typography). No glow, no scale, no drop-shadow, no third-party icons.
+ */
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -16,11 +35,9 @@ import {
 } from "@/lib/cockpit-api";
 import { ActiveRunsList } from "./ActiveRunsList";
 import { ActivityFeed } from "./ActivityFeed";
-import { BudgetSummary } from "./BudgetSummary";
-import { HealthPanel } from "./HealthPanel";
+import { DrawerRail } from "./DrawerRail";
+import { HUD } from "./HUD";
 import { KpiBar } from "./KpiBar";
-import { QuickActions } from "./QuickActions";
-import { RecentConvList } from "./RecentConvList";
 
 type StreamFrame = {
   id?: string;
@@ -41,9 +58,6 @@ export function Cockpit() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pauseBusy, setPauseBusy] = useState(false);
 
-  // Lazy refresher used when delta events (run_update / run_done / health /
-  // kpi) arrive — the snapshot remains the source of truth; deltas just
-  // prompt a re-read. Debounced so bursts of events don't thrash /summary.
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
 
@@ -66,8 +80,6 @@ export function Cockpit() {
   useEffect(() => {
     cancelledRef.current = false;
 
-    // Instant first paint — avoids a blank flash while SSE negotiates.
-    // If this fails we stay in LoadingState until the stream snapshot lands.
     void getCockpitSummary()
       .then((s) => {
         if (!cancelledRef.current && !summary) setSummary(s);
@@ -103,9 +115,6 @@ export function Cockpit() {
       if (refresh) scheduleRefresh();
     };
 
-    // AG-UI v1: every legacy cockpit frame is now a CUSTOM envelope whose
-    // `name` identifies the original event. We branch on `data.name` and
-    // peel the snake_case body out of `data.value`.
     source.addEventListener("CUSTOM", (evt) => {
       if (cancelledRef.current) return;
       let data: { name?: string; value?: unknown };
@@ -155,7 +164,7 @@ export function Cockpit() {
         const data = JSON.parse((evt as MessageEvent).data) as { message?: string };
         if (data.message) msg = data.message;
       } catch {
-        /* swallow — we already have a default message */
+        /* default message kept */
       }
       setConnection("error");
       setStreamError(msg);
@@ -163,7 +172,6 @@ export function Cockpit() {
 
     source.addEventListener("error", () => {
       if (cancelledRef.current) return;
-      // Browser EventSource auto-reconnects on its own; reflect the gap in UI.
       setConnection("error");
       setStreamError("实时流暂时中断 · 自动重连中");
     });
@@ -202,127 +210,91 @@ export function Cockpit() {
   }, [scheduleRefresh]);
 
   const onRetryConnection = useCallback(() => {
-    // EventSource auto-reconnects; this forces an immediate /summary refetch
-    // so the user gets feedback instead of a stuck "reconnecting" banner.
     setStreamError(null);
     setConnection("connecting");
     scheduleRefresh();
   }, [scheduleRefresh]);
 
-  // loading = no snapshot yet AND the stream hasn't raised an error yet.
-  // Keeps the three-state (loading / error / empty) branch explicit per P04.
   const isLoading = summary === null && connection !== "error";
 
   return (
     <AppShell title="驾驶舱">
-      <div className="h-full overflow-y-auto">
-        <div className="p-6 space-y-4">
-          {actionError && (
-            <ErrorState
-              title="操作失败"
-              detail={actionError}
-              action={{ label: "关闭", onClick: () => setActionError(null) }}
-            />
-          )}
-          {streamError && (
-            <ErrorState
-              title="实时连接中断"
-              description={streamError}
-              action={{ label: "立即重试", onClick: onRetryConnection }}
-            />
-          )}
-          {summary?.paused && (
-            <div className="rounded border border-warning/40 bg-warning/5 px-3 py-2 text-[12px] flex items-center justify-between">
-              <span className="text-warning font-medium">
-                全局已暂停 · {summary.paused_reason ?? "无说明"}
-              </span>
-              <button
-                type="button"
-                onClick={onResume}
-                className="rounded border border-warning/40 px-2 py-0.5 font-mono text-[11px] text-warning hover:bg-warning/10 transition-colors duration-base"
-              >
-                恢复运行
-              </button>
-            </div>
-          )}
-          {isLoading ? (
-            <LoadingState
-              title="加载驾驶舱"
-              description="正在建立实时连接 · 首帧快照应在 1 秒内到达"
-            />
-          ) : summary === null ? (
-            <ErrorState
-              title="驾驶舱加载失败"
-              description="后端暂不可达 · 连接恢复后会自动加载"
-              action={{ label: "重试", onClick: onRetryConnection }}
-            />
-          ) : isWorkspaceEmpty(summary) ? (
-            <>
-              <KpiBar summary={summary} />
-              <div className="relative overflow-hidden rounded-md border border-border bg-surface px-6 py-12">
-                <DotGridBackdrop opacity={0.3} />
-                <div className="relative mx-auto max-w-md">
-                  <EmptyState
-                    title="工作区还没有活动"
-                    description="创建第一个员工或触发一次对话后,活动流会实时出现在这里"
-                  />
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <Coachmark
-                id="cockpit-overview"
-                title="这里是驾驶舱"
-                description="顶部四项 KPI 汇总今日工作区的活跃 run、排队、成本和 token 用量。数据来自实时流,打开页面即看到现状。"
+      <div className="relative h-full flex overflow-hidden">
+        {/* Decorative dot-grid anchor, fixed, ≤ 25% opacity per §3.8 allowed */}
+        <DotGridBackdrop opacity={0.22} fade={false} />
+
+        <div className="relative flex-1 min-w-0 overflow-y-auto">
+          <div className="p-6 space-y-4 min-h-full flex flex-col">
+            {actionError && (
+              <ErrorState
+                title="操作失败"
+                detail={actionError}
+                action={{ label: "关闭", onClick: () => setActionError(null) }}
               />
-              <KpiBar summary={summary} />
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] gap-4 min-h-[60vh]">
-                <div className="flex flex-col min-h-[40vh]">
-                  <Coachmark
-                    id="cockpit-activity"
-                    title="活动流实时更新"
-                    description="每条 tool 调用、run 状态变化都会在这里出现。点事件可以跳到对应 trace。"
-                  />
-                  <div className="rounded border border-border bg-surface flex-1">
-                    <ActivityFeed events={summary.recent_events} />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-4 min-w-0">
-                  <div className="rounded border border-border bg-surface">
-                    <ActiveRunsList runs={summary.active_runs} />
-                  </div>
-                  <div className="rounded border border-border bg-surface">
-                    <RecentConvList conversations={summary.recent_conversations} />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-4">
-                  <div className="rounded border border-border bg-surface">
-                    <HealthPanel health={summary.health} />
-                  </div>
-                  <div>
-                    <Coachmark
-                      id="cockpit-pause"
-                      title="急停按钮在这里"
-                      description="出事时点一下可以刹停所有 run 和 trigger。这是不可撤销操作,系统会二次确认。"
-                    />
-                    <div className="rounded border border-border bg-surface">
-                      <QuickActions
-                        paused={summary.paused}
-                        onPause={() => setConfirmOpen(true)}
-                        onResume={onResume}
+            )}
+            {streamError && (
+              <ErrorState
+                title="实时连接中断"
+                description={streamError}
+                action={{ label: "立即重试", onClick: onRetryConnection }}
+              />
+            )}
+            {isLoading ? (
+              <LoadingState
+                title="装载驾驶舱"
+                description="建立实时连接 · 首帧快照应在 1 秒内到达"
+              />
+            ) : summary === null ? (
+              <ErrorState
+                title="驾驶舱加载失败"
+                description="后端暂不可达 · 连接恢复后会自动加载"
+                action={{ label: "重试", onClick: onRetryConnection }}
+              />
+            ) : (
+              <>
+                <HUD
+                  summary={summary}
+                  connection={connection}
+                  onPauseRequest={() => setConfirmOpen(true)}
+                  onResume={() => void onResume()}
+                  onRefresh={onRetryConnection}
+                />
+                <KpiBar summary={summary} />
+                {isWorkspaceEmpty(summary) ? (
+                  <div className="relative flex-1 flex items-center justify-center rounded-md border border-border bg-surface px-6 py-12 overflow-hidden min-h-[50vh]">
+                    <DotGridBackdrop opacity={0.3} />
+                    <div className="relative mx-auto max-w-md">
+                      <EmptyState
+                        title="系统待命 · 零活动"
+                        description="发起一次对话或触发任务,飞行记录会实时出现在这里"
                       />
                     </div>
                   </div>
-                  <div className="rounded border border-border bg-surface">
-                    <BudgetSummary summary={summary} />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
+                ) : (
+                  <>
+                    <Coachmark
+                      id="cockpit-activity"
+                      title="飞行记录 · 实时"
+                      description="tool 调用、run 状态变化按时间倒序排。序号 001 是最近一条,点事件跳到对应 trace。右侧 rail 的健康 / 消耗 / 对话抽屉提供次级观测。"
+                    />
+                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 flex-1 min-h-[55vh]">
+                      <div className="rounded border border-border bg-surface flex flex-col min-h-[40vh]">
+                        <ActivityFeed events={summary.recent_events} />
+                      </div>
+                      <div className="rounded border border-border bg-surface flex flex-col min-h-[40vh]">
+                        <ActiveRunsList runs={summary.active_runs} />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
+
+        {summary && <DrawerRail summary={summary} />}
       </div>
+
       <ConfirmDialog
         open={confirmOpen}
         title="急停所有 run"
@@ -350,8 +322,6 @@ function isWorkspaceEmpty(s: WorkspaceSummaryDto): boolean {
   );
 }
 
-/** Build an `ActivityEventDto` from a raw SSE frame payload. Returns `null`
- * if the shape is unrecognizable — the next snapshot will reconcile. */
 function buildActivityEvent(frame: StreamFrame): ActivityEventDto | null {
   if (!frame.id || !frame.kind) return null;
   const p = frame.payload ?? {};

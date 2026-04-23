@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Select, type SelectGroup, type SelectOption } from "@/components/ui/Select";
 import {
   buildModelRef,
   defaultModelRef,
@@ -63,6 +64,20 @@ type Props = {
   testId?: string;
   /** Optional "leave empty to inherit" entry (used by per-conversation override). */
   inheritLabel?: string;
+  // Passthrough to the underlying Select so call sites can make the picker
+  // *be* the trigger (chip, inline button) without wrapping it in another
+  // popover. Added after L11 — two-level menus (chip → popover → picker →
+  // listbox) violate "一屏决策".
+  size?: "sm" | "md";
+  triggerClassName?: string;
+  renderTrigger?: (selected: SelectOption | null) => React.ReactNode;
+  popoverAlign?: "left" | "right";
+  /** Wrapper-level class. Defaults to `w-full` for the vertical form layout
+   * (DesignForm). Chip call-sites inside a flex row (ModelOverrideChip) pass
+   * `shrink-0` so the picker stays at content width instead of grabbing all
+   * horizontal space and collapsing its neighbours (ThinkingToggle /
+   * CompactChip) to one CJK-character-per-row min-content. */
+  className?: string;
 };
 
 export function ModelPicker({
@@ -72,6 +87,11 @@ export function ModelPicker({
   disabled = false,
   testId,
   inheritLabel,
+  size,
+  triggerClassName,
+  renderTrigger,
+  popoverAlign,
+  className = "w-full",
 }: Props) {
   const [state, setState] = useState<
     { status: "loading" } | { status: "ready"; providers: ProviderDto[]; models: ModelDto[] } | { status: "error"; message: string }
@@ -134,36 +154,49 @@ export function ModelPicker({
 
   const defaultRef = defaultModelRef(state.providers);
 
+  const selectGroups: SelectGroup[] = [];
+  if (inheritLabel !== undefined) {
+    selectGroups.push({
+      id: "_inherit",
+      label: "默认",
+      options: [
+        {
+          value: "",
+          label: inheritLabel,
+          testId: "model-picker-inherit",
+        },
+      ],
+    });
+  }
+  for (const { provider, models } of grouped) {
+    selectGroups.push({
+      id: provider.id,
+      label: `${provider.name}${provider.is_default ? " · 默认" : ""}`,
+      options: models.map((m) => {
+        const ref = buildModelRef(provider, m);
+        return {
+          value: ref,
+          label: m.display_name || m.name,
+          hint: ref === defaultRef ? "默认" : undefined,
+        };
+      }),
+    });
+  }
+
   return (
-    <select
-      data-testid={testId ?? "model-picker"}
+    <Select
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={onChange}
       disabled={disabled}
-      className="w-full rounded-md bg-bg border border-border px-3 py-2 text-[12px] font-mono text-text focus:outline-none focus:border-primary transition-colors duration-base disabled:opacity-60"
-    >
-      {inheritLabel !== undefined && (
-        <option value="" data-testid="model-picker-inherit">
-          {inheritLabel}
-        </option>
-      )}
-      {grouped.map(({ provider, models }) => (
-        <optgroup
-          key={provider.id}
-          label={`${provider.name}${provider.is_default ? " · 默认" : ""}`}
-        >
-          {models.map((m) => {
-            const ref = buildModelRef(provider, m);
-            const isDefault = ref === defaultRef;
-            return (
-              <option key={m.id} value={ref}>
-                {m.display_name || m.name}
-                {isDefault ? " (默认)" : ""}
-              </option>
-            );
-          })}
-        </optgroup>
-      ))}
-    </select>
+      groups={selectGroups}
+      testId={testId ?? "model-picker"}
+      ariaLabel="选择模型"
+      className={className}
+      triggerClassName={triggerClassName ?? "font-mono"}
+      placeholder="选择模型…"
+      size={size}
+      renderTrigger={renderTrigger}
+      popoverAlign={popoverAlign}
+    />
   );
 }

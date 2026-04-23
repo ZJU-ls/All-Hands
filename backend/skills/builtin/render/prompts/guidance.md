@@ -16,6 +16,10 @@
 | 提示 / 警告 / 成功 / 错误 | `allhands.render.callout` |
 | 单条外链推荐 | `allhands.render.link_card` |
 | 长篇说明(> 500 字) | `allhands.render.markdown_card` |
+| 单个关键数值(KPI / 总数 / 延迟)| `allhands.render.stat` |
+| 数值随时间/顺序的趋势 | `allhands.render.line_chart` |
+| 跨类别对比数值(不超过 20 项) | `allhands.render.bar_chart` |
+| 占比 / 分摊(≤ 6 片)| `allhands.render.pie_chart` |
 
 ## 原则
 

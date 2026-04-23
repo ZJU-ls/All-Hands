@@ -21,9 +21,24 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from allhands.core import Conversation, Employee, EventEnvelope, Message
+from allhands.core import (
+    Conversation,
+    Employee,
+    EventEnvelope,
+    Message,
+    RenderPayload,
+    ToolCall,
+    ToolCallStatus,
+)
 from allhands.execution.event_bus import EventBus
-from allhands.execution.events import AgentEvent, DoneEvent, ErrorEvent, TokenEvent
+from allhands.execution.events import (
+    AgentEvent,
+    DoneEvent,
+    ErrorEvent,
+    RenderEvent,
+    TokenEvent,
+    ToolCallEndEvent,
+)
 from allhands.execution.gate import AutoApproveGate
 from allhands.execution.registry import ToolRegistry
 from allhands.execution.skills import SkillRegistry
@@ -208,10 +223,16 @@ async def test_turn_completion_publishes_cockpit_event(chat_svc: tuple) -> None:
 
     await _collect(svc._persist_assistant_reply("conv1", fake_stream(), employee=employee))
 
-    # subscribe_all fans out via create_task; give the loop one tick.
+    # E18: publish_best_effort now spawns a persist task which then spawns
+    # fan-out tasks. Need to yield enough loop cycles for both layers to
+    # drain. Poll with a bounded budget — far cheaper than a fixed sleep and
+    # less flaky on slow CI.
     import asyncio
 
-    await asyncio.sleep(0)
+    for _ in range(10):
+        if any(k == "conversation.turn_completed" for k, _ in published):
+            break
+        await asyncio.sleep(0.01)
 
     kinds = [k for k, _ in published]
     assert "conversation.turn_completed" in kinds, f"expected turn_completed; got {kinds}"
@@ -287,3 +308,57 @@ async def test_persisted_reply_appears_in_next_turn_history(chat_svc: tuple) -> 
         "next turn would see a user message with no answer, which is the "
         "exact state that makes the React agent re-answer prior turns"
     )
+
+
+@pytest.mark.asyncio
+async def test_render_and_tool_call_events_persist_with_assistant_message(
+    chat_svc: tuple,
+) -> None:
+    """Historical render rehydration: RenderEvent + ToolCallEndEvent fired during
+    a turn must land on the persisted assistant row so reopening the chat shows
+    charts/cards/tables instead of a silent paragraph."""
+    svc, _conv_repo, maker = chat_svc
+    msg_id = str(uuid.uuid4())
+    tc_id = str(uuid.uuid4())
+
+    async def fake_stream() -> AsyncIterator[AgentEvent]:
+        yield TokenEvent(message_id=msg_id, delta="Here is a chart:")
+        yield ToolCallEndEvent(
+            tool_call=ToolCall(
+                id=tc_id,
+                tool_id="allhands.render.bar_chart",
+                args={"title": "Tasks per employee"},
+                status=ToolCallStatus.SUCCEEDED,
+                result={"component": "BarChart", "props": {"bars": [1, 2, 3]}},
+            )
+        )
+        yield RenderEvent(
+            message_id=msg_id,
+            payload=RenderPayload(
+                component="BarChart",
+                props={"bars": [1, 2, 3]},
+            ),
+        )
+        yield DoneEvent(message_id=msg_id, reason="done")
+
+    await _collect(svc._persist_assistant_reply("conv1", fake_stream()))
+
+    async with maker() as session:
+        msgs = await SqlConversationRepo(session).list_messages("conv1")
+    assistants = [m for m in msgs if m.role == "assistant"]
+    assert len(assistants) == 1
+    persisted = assistants[0]
+
+    assert len(persisted.render_payloads) == 1, (
+        "RenderEvent was dropped on the floor; a page reload will show text "
+        "but not the chart the agent drew"
+    )
+    assert persisted.render_payloads[0].component == "BarChart"
+    assert persisted.render_payloads[0].props == {"bars": [1, 2, 3]}
+
+    assert len(persisted.tool_calls) == 1, (
+        "ToolCallEndEvent was dropped; the inline system-tool chip would not "
+        "reappear on history reload (L14)"
+    )
+    assert persisted.tool_calls[0].id == tc_id
+    assert persisted.tool_calls[0].tool_id == "allhands.render.bar_chart"

@@ -51,7 +51,7 @@ v0 视觉契约([`03-visual-design.md §2`](../03-visual-design.md))禁止使用
 
 ## Consequences
 
-- **必须更新的契约文件**:`product/03-visual-design.md §0/§2`、`CLAUDE.md §3.5`、`design-system/MASTER.md §3`
+- **必须更新的契约文件**:`product/03-visual-design.md §0/§2`、`CLAUDE.md §3.8`(2026-04-21 后由 §3.5 调整 · 见 ADR 0011 核心原则 refresh)、`design-system/MASTER.md §3`
 - **必须更新的回归测试**:`web/tests/error-patterns.test.ts E11` 已扫 `from "lucide-react"` 等导入,继续生效;新增 icon 不触发 E11(因为是本项目内部相对导入)
 - **新旧路径并存期**:`components/ui/icons.tsx` 保留 legacy 5 个 + logo + sun/moon,其他地方改用 `components/icons/`
 - **Gallery 活样本**:`/design-lab → Icon Gallery` 是 icon 光学一致性的事实基准,新增 icon 必须在这里可视化对齐再合入

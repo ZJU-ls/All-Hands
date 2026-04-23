@@ -68,6 +68,11 @@ from allhands.core.plan import AgentPlan, PlanStep, StepStatus
 from allhands.core.provider import LLMProvider
 from allhands.core.run_overrides import RunOverrides
 from allhands.core.skill import Skill, SkillSource
+from allhands.core.skill_runtime import (
+    DESCRIPTOR_MAX_CHARS,
+    SkillDescriptor,
+    SkillRuntime,
+)
 from allhands.core.task import (
     ACTIVE_STATUSES,
     PENDING_USER_STATUSES,
@@ -97,6 +102,7 @@ __all__ = [
     "ACTIVE_STATUSES",
     "BINARY_KINDS",
     "DEFAULT_MIN_INTERVAL_SECONDS",
+    "DESCRIPTOR_MAX_CHARS",
     "MIN_INTERVAL_SECONDS",
     "PENDING_USER_STATUSES",
     "TERMINAL_STATUSES",
@@ -150,6 +156,8 @@ __all__ = [
     "RunStatus",
     "RunTokenUsage",
     "Skill",
+    "SkillDescriptor",
+    "SkillRuntime",
     "SkillSource",
     "StepStatus",
     "SubRunFailed",

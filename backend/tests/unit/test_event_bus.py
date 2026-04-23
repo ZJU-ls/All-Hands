@@ -148,3 +148,52 @@ async def test_persist_failure_propagates() -> None:
     bus = EventBus(persist=persist)
     with pytest.raises(RuntimeError, match="db down"):
         await bus.publish("x")
+
+
+# --- E18 bug-2 regression · publish_best_effort is non-blocking ---
+
+
+@pytest.mark.asyncio
+async def test_publish_best_effort_returns_immediately_even_when_persist_is_slow() -> None:
+    """The SSE chat hot path calls publish_best_effort for run.started /
+    run.completed / conversation.turn_completed. If the persist callback takes
+    3-5 s (SQLite lock contention), the SSE stream MUST NOT wait — otherwise
+    the button stays in the streaming state well after the model finished.
+    """
+    persist_started = asyncio.Event()
+    persist_release = asyncio.Event()
+
+    async def slow_persist(_env: EventEnvelope) -> None:
+        persist_started.set()
+        await persist_release.wait()  # never release during the test
+
+    bus = EventBus(persist=slow_persist)
+
+    # Must return immediately despite the blocking persist callback.
+    start = asyncio.get_event_loop().time()
+    bus.publish_best_effort(kind="run.started", payload={"run_id": "x"})
+    elapsed = asyncio.get_event_loop().time() - start
+    assert elapsed < 0.05, f"publish_best_effort blocked for {elapsed:.3f}s — regressed"
+
+    # The persist task was actually spawned (it started).
+    await asyncio.wait_for(persist_started.wait(), timeout=0.5)
+
+    # Clean up — release the hung persist so asyncio doesn't warn.
+    persist_release.set()
+    await asyncio.sleep(0)  # let the task drain
+
+
+@pytest.mark.asyncio
+async def test_publish_best_effort_swallows_persist_exceptions() -> None:
+    """A persist failure on telemetry (bus event) must not crash the caller's
+    task tree — this path runs from a yield point in chat_service.send_message.
+    """
+
+    async def boom(_env: EventEnvelope) -> None:
+        raise RuntimeError("db locked, dropping event")
+
+    bus = EventBus(persist=boom)
+    # Should not raise synchronously or asynchronously at the caller.
+    bus.publish_best_effort(kind="run.completed", payload={"run_id": "y"})
+    # Let the background task run and log its exception.
+    await asyncio.sleep(0.01)

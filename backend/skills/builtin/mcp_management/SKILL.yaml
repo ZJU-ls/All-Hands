@@ -1,0 +1,15 @@
+id: allhands.mcp_management
+name: MCP 服务器管理
+description: 安装 / 启用 / 测试 MCP 服务器 · 浏览外部工具
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.add_mcp_server
+  - allhands.meta.update_mcp_server
+  - allhands.meta.delete_mcp_server
+  - allhands.meta.test_mcp_connection
+  - allhands.meta.list_mcp_server_tools
+  - allhands.meta.invoke_mcp_server_tool
+
+prompt_fragment_file: prompts/guidance.md

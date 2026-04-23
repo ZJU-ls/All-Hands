@@ -73,14 +73,16 @@ export function PlanCard({ props, interactions }: RenderProps) {
       data-component="PlanCard"
       data-plan-id={planId}
       data-status={status}
-      className="relative rounded-md border border-border bg-surface px-4 py-4"
+      className={`relative rounded-md border px-4 py-4 ${
+        // ADR 0013 · impeccable BAN 1 replaces the side-stripe with a
+        // full-surface tint when the card is in pending state. Approved /
+        // rejected render plain-surface so the user's eye doesn't keep
+        // being pulled back to a resolved plan.
+        status === "pending"
+          ? "border-primary/30 bg-primary-soft"
+          : "border-border bg-surface"
+      }`}
     >
-      {status === "pending" && (
-        <span
-          aria-hidden="true"
-          className="absolute left-0 top-3 bottom-3 w-[2px] rounded-r bg-primary"
-        />
-      )}
 
       <header className="flex items-center justify-between gap-3">
         <div className="min-w-0">

@@ -315,3 +315,24 @@ class ObservabilityConfigRow(Base):
     bootstrap_error: Mapped[str | None] = mapped_column(String, nullable=True)
     bootstrapped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class SkillRuntimeRow(Base):
+    """Per-conversation SkillRuntime checkpoint (ADR 0011 · 原则 7).
+
+    One row per conversation — `conversation_id` is PK to model 1:1 and to make
+    the upsert cheap. Body is a JSON blob of `SkillRuntime.model_dump()` so
+    schema evolutions stay backward-compatible (adding a field just needs a
+    Pydantic default).
+
+    We intentionally don't FK to `conversations.id` — the repo guarantees
+    `save` is only called for live conversations, and compact clears both sides
+    explicitly. Keeping the table standalone lets `DROP TABLE` / restore work
+    without cascades biting us during dev iteration.
+    """
+
+    __tablename__ = "skill_runtimes"
+
+    conversation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    body: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)

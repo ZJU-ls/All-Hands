@@ -99,7 +99,7 @@ export function CompactChip({
       data-testid="compact-chip"
       data-state={state.kind}
       title={title}
-      className={`inline-flex h-6 items-center gap-1 rounded border px-1.5 font-mono text-[11px] transition-colors duration-base disabled:opacity-40 ${borderClass}`}
+      className={`inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded border px-1.5 font-mono text-[11px] transition-colors duration-base disabled:opacity-40 ${borderClass}`}
     >
       <span aria-hidden className="font-mono">⌘</span>
       <span>{label}</span>

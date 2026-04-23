@@ -15,15 +15,20 @@
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 
-  --color-bg: #ffffff;
-  --color-surface: #fafafa;
-  --color-surface-2: #f4f4f5;
-  --color-surface-3: #ededef;
-  --color-border: #e4e4e7;
-  --color-border-strong: #d4d4d8;
-  --color-text: #18181b;
-  --color-text-muted: #71717a;
-  --color-text-subtle: #a1a1aa;
+  /* Neutrals tinted toward the primary indigo hue — per ADR 0013 §C,
+   * impeccable principles pull zinc-neutral ~0.005 chroma toward #6366f1
+   * so the ramp + the brand feel subconsciously cohesive. Hex kept (not
+   * OKLCH literals) for trivial diffing; values hand-calibrated. The tint
+   * is intentionally barely-perceptible: don't crank it up.             */
+  --color-bg: #fdfdff;              /* was #ffffff — faintest indigo shift */
+  --color-surface: #f9f9fc;         /* was #fafafa */
+  --color-surface-2: #f2f2f7;       /* was #f4f4f5 */
+  --color-surface-3: #ebebf0;
+  --color-border: #e3e3ea;
+  --color-border-strong: #d2d2dc;
+  --color-text: #17171d;            /* was #18181b — tiny hue shift toward primary */
+  --color-text-muted: #6f6f7b;
+  --color-text-subtle: #9f9fac;
 
   --color-primary: #6366f1;
   --color-primary-hover: #7c7ff3;
@@ -37,18 +42,43 @@
   --color-role-lead: #8b5cf6;
   --color-role-worker: #0d9488;
   --color-role-tool: #d97706;
+
+  /* Data-viz palette — see ADR 0012. Scoped to `components/render/Viz/**`
+   * and chart surfaces; **not** allowed in UI chrome (nav, buttons, chips).
+   * 6 hues chosen for categorical distinction at 2-6 series; readable on
+   * both bg + surface in light theme. Keep ordering stable — chart series
+   * cycle through this array, so reshuffling would rotate colors on every
+   * existing render. */
+  --color-viz-1: #6366f1; /* indigo (matches primary) */
+  --color-viz-2: #0d9488; /* teal */
+  --color-viz-3: #d97706; /* amber */
+  --color-viz-4: #dc2626; /* rose */
+  --color-viz-5: #7c3aed; /* violet */
+  --color-viz-6: #0284c7; /* sky */
+
+  /* Translucent surface tints used by Viz hover / selected states. Opacity
+   * bakes in so components don't have to compose alpha strings. */
+  --color-surface-hover: rgba(99, 102, 241, 0.06);  /* primary @ 6% */
+  --color-success-soft:  rgba(5, 150, 105, 0.1);
+  --color-warning-soft:  rgba(217, 119, 6, 0.1);
+  --color-danger-soft:   rgba(220, 38, 38, 0.1);
+  --color-primary-soft:  rgba(99, 102, 241, 0.1);
 }
 
 .dark {
-  --color-bg: #09090b;
-  --color-surface: #111113;
-  --color-surface-2: #18181b;
-  --color-surface-3: #1f1f22;
-  --color-border: #27272a;
-  --color-border-strong: #3f3f46;
-  --color-text: #fafafa;
-  --color-text-muted: #a1a1aa;
-  --color-text-subtle: #71717a;
+  /* Same ADR-0013 principle on dark: tint the neutral ramp toward
+   * --color-primary-hover (Indigo-400) so the accent doesn't feel foreign
+   * on top of the surface. Values shift a couple of hex steps — small on
+   * paper, visible as cohesion in motion. */
+  --color-bg: #08080d;              /* was #09090b */
+  --color-surface: #101016;         /* was #111113 */
+  --color-surface-2: #17171f;       /* was #18181b */
+  --color-surface-3: #1e1e26;
+  --color-border: #26262e;
+  --color-border-strong: #3e3e48;
+  --color-text: #fafaff;
+  --color-text-muted: #a1a1b0;
+  --color-text-subtle: #71717e;
 
   --color-primary: #6366f1;
   --color-primary-hover: #818cf8;
@@ -62,17 +92,57 @@
   --color-role-lead: #a78bfa;
   --color-role-worker: #2dd4bf;
   --color-role-tool: #fbbf24;
+
+  /* Data-viz palette · dark variant — same order as light, brightened so
+   * shapes stay visible against #09090B. See ADR 0012. */
+  --color-viz-1: #818cf8;
+  --color-viz-2: #2dd4bf;
+  --color-viz-3: #fbbf24;
+  --color-viz-4: #f87171;
+  --color-viz-5: #a78bfa;
+  --color-viz-6: #38bdf8;
+
+  --color-surface-hover: rgba(129, 140, 248, 0.08);
+  --color-success-soft:  rgba(16, 185, 129, 0.14);
+  --color-warning-soft:  rgba(245, 158, 11, 0.14);
+  --color-danger-soft:   rgba(239, 68, 68, 0.14);
+  --color-primary-soft:  rgba(129, 140, 248, 0.14);
 }
 
-/* Motion tokens — shared duration + easing. Use var() not literals. */
+/* Motion tokens — shared duration + easing. Use var() not literals.
+ * ADR 0013 adds the longer-tailed quart/expo curves for hero reveals
+ * and Viz entrance animations; the stock --ease-out stays the default
+ * for UI-chrome state transitions. */
 :root,
 .light,
 .dark {
   --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-fast: 120ms;
   --dur-base: 150ms;
   --dur-mid: 220ms;
   --dur-slow: 320ms;
+}
+
+/* Type scale — ADR 0013. 5-size modular scale at 1.25 ratio, rem-based
+ * so user zoom respects it. Body is 15px (0.9375rem) — raised from the
+ * former 13px floor on user feedback. Each token names the *role*, not
+ * the pixel value, so the scale can re-tune without rename churn. */
+:root,
+.light,
+.dark {
+  --text-caption: 0.75rem;     /* 12px · mono meta, kbd chips, trace ids */
+  --text-sm: 0.8125rem;        /* 13px · secondary UI, labels */
+  --text-base: 0.9375rem;      /* 15px · body, chat content, inputs     */
+  --text-lg: 1.1875rem;        /* 19px · card titles, drawer headers    */
+  --text-xl: 1.5rem;           /* 24px · page titles, hero metrics      */
+  --text-display: 2rem;        /* 32px · empty-state hero, landing      */
+
+  /* Line heights paired to roles */
+  --leading-heading: 1.2;
+  --leading-body: 1.6;
+  --leading-data: 1.45;         /* tabular / mono contexts */
 }
 
 html,
@@ -145,4 +215,148 @@ body {
 @keyframes ah-flash {
   0%   { color: var(--color-primary); }
   100% { color: inherit; }
+}
+
+/* ==========================================================================
+ * Agent markdown (ah-prose) — E20 fix.
+ * ------------------------------------------------------------------------
+ * AgentMarkdown.tsx used `prose prose-invert prose-sm` expecting Tailwind's
+ * typography plugin, but we don't ship it (no third-party libs per §3.8
+ * visual discipline). The classes were no-ops, so `marked` output rendered
+ * as raw browser defaults: zero spacing between paragraphs, zero borders
+ * on tables, H1/H2 at whatever the browser default is. Users reported
+ * "markdown looks cramped · tables broken."
+ *
+ * Replacing with a scoped rule-set that uses design tokens only. Tuned to
+ * match the chat surface density: compact but readable, tables obvious,
+ * code blocks differentiated, headings restrained (no giant H1).
+ * ======================================================================== */
+.ah-prose {
+  color: var(--color-text);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+}
+.ah-prose > * { margin: 0; }
+.ah-prose > * + * { margin-top: 0.85rem; }
+
+/* ADR 0013 type scale — headings step up by 1.25 from base. Tightened
+ * tracking on large sizes (Inter tracking looks loose > 20px). */
+.ah-prose h1,
+.ah-prose h2,
+.ah-prose h3,
+.ah-prose h4 {
+  color: var(--color-text);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: var(--leading-heading);
+}
+.ah-prose h1 { font-size: var(--text-xl);  letter-spacing: -0.02em; }
+.ah-prose h2 { font-size: var(--text-lg);  letter-spacing: -0.015em; }
+.ah-prose h3 { font-size: 1.0625rem; }
+.ah-prose h4 {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.ah-prose > h1 + *, .ah-prose > h2 + *, .ah-prose > h3 + *, .ah-prose > h4 + * {
+  margin-top: 0.5rem;
+}
+
+.ah-prose p  { font-size: var(--text-base); }
+.ah-prose ul, .ah-prose ol { padding-left: 1.35rem; font-size: var(--text-base); }
+.ah-prose li + li { margin-top: 0.3rem; }
+.ah-prose ul { list-style: disc; }
+.ah-prose ol { list-style: decimal; }
+.ah-prose li > p:first-child { margin: 0; }
+
+.ah-prose strong { font-weight: 600; color: var(--color-text); }
+.ah-prose em { font-style: italic; }
+.ah-prose hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 1rem 0;
+}
+
+.ah-prose a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+.ah-prose a:hover { color: var(--color-primary-hover); }
+
+/* Inline code — compact chip. Block code — own card with horizontal scroll. */
+.ah-prose :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+}
+.ah-prose pre {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  padding: 0.75rem 0.9rem;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow-x: auto;
+  color: var(--color-text);
+}
+.ah-prose pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Tables — the user-reported missing case. 1px borders, alt-row shading,
+ * full width so any chat markdown table looks like the `allhands.render.table`
+ * render tool's output at a glance (same visual tax as the native component,
+ * minus the interactions). */
+.ah-prose table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 0.85rem;
+}
+.ah-prose thead th {
+  text-align: left;
+  font-weight: 600;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.ah-prose tbody td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  vertical-align: top;
+}
+.ah-prose tbody tr:last-child td { border-bottom: 0; }
+.ah-prose tbody tr:nth-child(even) td { background: var(--color-surface); }
+
+.ah-prose blockquote {
+  border-left: 2px solid var(--color-border-strong);
+  padding: 0.1rem 0 0.1rem 0.75rem;
+  color: var(--color-text-muted);
+  font-style: normal;
+}
+.ah-prose blockquote p { margin: 0; }
+
+.ah-prose img {
+  max-width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
 }

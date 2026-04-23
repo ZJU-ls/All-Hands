@@ -18,10 +18,12 @@ partitioned gate pipeline.
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import TYPE_CHECKING, Any
 
 from allhands.config import get_settings
+from allhands.core.conversation import RenderPayload, ToolCall, ToolCallStatus
 from allhands.core.provider import LLMProvider
 from allhands.core.run_overrides import RunOverrides
 from allhands.core.tool import ToolScope
@@ -29,8 +31,12 @@ from allhands.execution.events import (
     AgentEvent,
     DoneEvent,
     ErrorEvent,
+    InterruptEvent,
     ReasoningEvent,
+    RenderEvent,
     TokenEvent,
+    ToolCallEndEvent,
+    ToolCallStartEvent,
 )
 from allhands.execution.skills import (
     SkillRegistry,
@@ -42,6 +48,8 @@ from allhands.execution.tools.meta.spawn_subagent import make_spawn_subagent_exe
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+    from langgraph.checkpoint.base import BaseCheckpointSaver
 
     from allhands.core import Employee
     from allhands.execution.dispatch import DispatchService
@@ -84,11 +92,18 @@ def _build_model(
     provider: LLMProvider | None = None,
     overrides: RunOverrides | None = None,
 ) -> Any:
+    # ``thinking`` must be baked at ctor time for anthropic kind (bind
+    # doesn't propagate — see llm_factory.build_llm docstring / E18). For
+    # openai kind it's applied later via extra_body in _apply_overrides.
+    thinking_for_ctor: bool | None = None
+    if provider is not None and provider.kind == "anthropic" and overrides is not None:
+        thinking_for_ctor = overrides.thinking
+
     if provider is not None:
         from allhands.execution.llm_factory import build_llm
 
-        model = build_llm(provider, model_ref)
-        return _apply_overrides(model, overrides)
+        model = build_llm(provider, model_ref, thinking=thinking_for_ctor)
+        return _apply_overrides(model, overrides, provider_kind=provider.kind)
 
     # fallback path — no provider bound (dev / test), treat as OpenAI-compat
     # and read creds from env config.
@@ -101,7 +116,53 @@ def _build_model(
         kwargs["api_key"] = settings.openai_api_key
     if settings.openai_base_url:
         kwargs["base_url"] = settings.openai_base_url
-    return _apply_overrides(ChatOpenAI(**kwargs), overrides)
+    return _apply_overrides(ChatOpenAI(**kwargs), overrides, provider_kind="openai")
+
+
+def _parse_tool_message_content(content: Any) -> Any:
+    """Decode a ToolMessage.content payload.
+
+    LangGraph's ToolNode stringifies non-str tool results to JSON before
+    stashing them on ``ToolMessage.content``. We reverse that so render
+    envelopes survive the round trip; fall back to the raw value when it
+    isn't JSON (dict / list already-parsed, or a plain string result).
+    """
+    if isinstance(content, (dict, list)):
+        return content
+    if isinstance(content, str):
+        stripped = content.strip()
+        if stripped.startswith(("{", "[")):
+            try:
+                return json.loads(stripped)
+            except (ValueError, TypeError):
+                return content
+        return content
+    return content
+
+
+def _as_render_envelope(result: Any) -> dict[str, Any] | None:
+    """Return the {component, props, interactions} envelope or None.
+
+    Render tools (ToolKind.RENDER) emit this shape. The runner forwards it
+    to the SSE layer as a RenderEvent so the frontend's component registry
+    can dispatch the payload into its React component. Detection is
+    duck-typed on the result shape — the render-tool contract is "return
+    an envelope" regardless of which tool produced it, so a BACKEND tool
+    that happens to return the same shape (e.g. create_employee) also
+    renders, which matches the current intent.
+    """
+    if not isinstance(result, dict):
+        return None
+    component = result.get("component")
+    if not isinstance(component, str) or not component:
+        return None
+    props = result.get("props", {})
+    if not isinstance(props, dict):
+        return None
+    interactions = result.get("interactions", [])
+    if not isinstance(interactions, list):
+        interactions = []
+    return {"component": component, "props": props, "interactions": interactions}
 
 
 def _split_content_blocks(content: Any) -> tuple[str, str]:
@@ -153,17 +214,61 @@ def _split_content_blocks(content: Any) -> tuple[str, str]:
     return "".join(text_parts), "".join(thinking_parts)
 
 
-def _apply_overrides(model: Any, overrides: RunOverrides | None) -> Any:
+def _bind_thinking(bind_kwargs: dict[str, Any], thinking: bool, provider_kind: str) -> None:
+    """Add the per-turn thinking toggle to bind_kwargs for OpenAI-compat adapters.
+
+    Provider-kind dispatch (verified end-to-end via curl — E18):
+
+    - ``anthropic`` kind (Anthropic Messages API + DashScope
+      ``/apps/anthropic`` compat proxy for Qwen3): the ``thinking`` field
+      is a Pydantic ctor param on ``ChatAnthropic`` read at payload-build
+      time; ``.bind(thinking=...)`` does NOT propagate. It's already baked
+      in at ``_build_model`` via ``build_llm(thinking=...)``. Nothing to
+      do here — **skip**.
+    - ``openai`` / ``aliyun`` / fallback (OpenAI-compatible wire):
+      ``extra_body={"enable_thinking": bool}`` rides along the OpenAI
+      request body as a pass-through. DashScope's OpenAI-compat endpoint
+      and Qwen3 native mode both honour it; providers that don't
+      understand it silently drop it (matches "inherit default on None"
+      semantics on :class:`RunOverrides`).
+
+    Earlier bug (E17 · 2026-04-21 first attempt): we only dispatched the
+    OpenAI-compat shape for all kinds, so ``thinking=False`` on an
+    anthropic-kind provider did **nothing** and the user still saw reasoning
+    chunks. Second attempt used ``.bind(thinking=...)`` on ChatAnthropic
+    expecting kwargs to merge into the payload — but ChatAnthropic reads
+    ``self.thinking`` directly, so bind was dropped. Confirmed by curl trace
+    showing 146 reasoning chunks with ``thinking: false``. Final fix: bake
+    into ctor in ``build_llm``; this function handles only OpenAI-compat.
+    """
+    if provider_kind == "anthropic":
+        # Already baked in at ctor (see _build_model + build_llm). If we
+        # tried to also bind it here it'd land on a RunnableBinding's
+        # kwargs but never reach ChatAnthropic._get_request_payload.
+        return
+    # openai / aliyun / unknown → OpenAI-compat body
+    bind_kwargs["extra_body"] = {"enable_thinking": thinking}
+
+
+def _apply_overrides(
+    model: Any,
+    overrides: RunOverrides | None,
+    *,
+    provider_kind: str = "openai",
+) -> Any:
     """Fold per-turn knobs onto a freshly-built chat model.
 
     LangChain chat models expose ``.bind(**kwargs)`` which returns a
     runnable with the kwargs merged into every downstream call. We use it
     instead of rebuilding the model with different constructor args because
-    some knobs (``extra_body``, ``thinking``) aren't constructor parameters
-    on every adapter — bind passes them through as call-time kwargs where
-    the adapter will forward them into its HTTP request body. Providers
-    that don't understand a key silently ignore it, which matches the
-    "inherit default on None" contract on :class:`RunOverrides`.
+    some knobs aren't constructor parameters on every adapter — bind passes
+    them through as call-time kwargs where the adapter will forward them
+    into its HTTP request body. Providers that don't understand a key
+    silently ignore it, which matches the "inherit default on None"
+    contract on :class:`RunOverrides`.
+
+    ``provider_kind`` is plumbed from ``_build_model`` so thinking can pick
+    the right wire shape per provider — see :func:`_bind_thinking`.
     """
     if overrides is None:
         return model
@@ -176,9 +281,7 @@ def _apply_overrides(model: Any, overrides: RunOverrides | None) -> Any:
     if overrides.max_tokens is not None:
         bind_kwargs["max_tokens"] = overrides.max_tokens
     if overrides.thinking is not None:
-        # DashScope / Qwen3-style reasoning toggle rides in extra_body;
-        # OpenAI-compat adapters treat extra_body as pass-through.
-        bind_kwargs["extra_body"] = {"enable_thinking": overrides.thinking}
+        _bind_thinking(bind_kwargs, overrides.thinking, provider_kind)
 
     if not bind_kwargs:
         return model
@@ -203,6 +306,7 @@ class AgentRunner:
         runtime: SkillRuntime | None = None,
         spawn_subagent_service: SpawnSubagentService | None = None,
         model_ref_override: str | None = None,
+        checkpointer: BaseCheckpointSaver[Any] | None = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
@@ -220,6 +324,13 @@ class AgentRunner:
         # one, fall back to a throwaway runtime derived from employee.tool_ids
         # so legacy callers keep working.
         self._runtime = runtime or SkillRuntime(base_tool_ids=list(employee.tool_ids))
+        # ADR 0014 · graph-internal state persistence. None = keep v0 pure-function
+        # behavior (chat history is the sole SoT via MessageRepo). When provided,
+        # LangGraph persists per-turn graph state keyed on thread_id so interrupt /
+        # tool-pending / subagent intermediate state can resume across uvicorn
+        # restarts. MessageRepo remains the user-visible ledger (ADR 0014 R2);
+        # this is **only** for graph-internal state.
+        self._checkpointer = checkpointer
 
     def _active_tool_ids(self) -> list[str]:
         """Contract § 8.2 · base + flatten(resolved_skills.values())."""
@@ -253,7 +364,19 @@ class AgentRunner:
         messages: list[dict[str, Any]],
         thread_id: str,
         overrides: RunOverrides | None = None,
+        resume: dict[str, Any] | None = None,
     ) -> AsyncIterator[AgentEvent]:
+        """Drive one turn (or a resume) of the agent.
+
+        ``resume`` is the ADR 0014 Phase 3 lever: when set, the runner
+        invokes the graph with ``Command(resume=resume["value"])`` under
+        ``thread_id`` and the checkpointer picks up from wherever the prior
+        invocation paused (a ``interrupt()`` call in a tool / node).
+        ``messages`` is ignored in that case — the graph state already has
+        its messages from the pre-pause checkpoint. ``resume`` requires a
+        ``checkpointer`` on the runner; without one the Command has nothing
+        to resume.
+        """
         from langchain_core.messages import (
             AIMessage,
             AIMessageChunk,
@@ -262,6 +385,7 @@ class AgentRunner:
         )
         from langchain_core.tools import StructuredTool
         from langgraph.prebuilt import create_react_agent
+        from langgraph.types import Command
 
         message_id = str(uuid.uuid4())
         gate = self._gate
@@ -371,45 +495,150 @@ class AgentRunner:
             if m["role"] in ("user", "assistant")
         )
 
+        from langchain_core.messages import ToolMessage
+
+        # Per-turn bookkeeping so tool_call lifecycle events stay in sync
+        # with LangGraph's node stream:
+        # - agent-node chunks may expose `tool_calls` as the LLM decides;
+        #   we emit ToolCallStartEvent the first time each id appears so
+        #   the UI can stamp a pending ToolCallCard.
+        # - tools-node chunks emit ToolMessage on completion; we close the
+        #   pair with ToolCallEndEvent and, when the result is a render
+        #   envelope, also yield a RenderEvent so the frontend's
+        #   component registry renders the Viz.* component inline.
+        seen_tool_call_ids: set[str] = set()
+        tool_call_by_id: dict[str, dict[str, Any]] = {}
         try:
-            agent = create_react_agent(model, lc_tools)
-            # `stream_mode="messages"` is the only mode that gives per-token
-            # deltas from the LLM (each chunk is an `AIMessageChunk`). The
-            # alternatives — `updates` / `values` — emit completed messages
-            # only, which means the UI would see "nothing, nothing, entire
-            # paragraph at once". Token-level streaming is the whole point
-            # of the chat surface.
+            # ADR 0014 · checkpointer is None in v0-compat mode (MessageRepo is
+            # the sole SoT). With a checkpointer, LangGraph snapshots the graph
+            # state per node transition under thread_id — enabling Phase 3/4
+            # interrupt() + resume. The runner never reads back from the
+            # checkpointer directly; that's LangGraph's responsibility when the
+            # same thread_id is re-invoked.
+            agent = create_react_agent(model, lc_tools, checkpointer=self._checkpointer)
+            # ADR 0014 · Phase 3 — multi-mode streaming.
+            # - "messages" gives per-token deltas (AIMessageChunk tuples) —
+            #   the only mode that supports token-level streaming for the
+            #   chat UX. Alternatives emit completed messages only.
+            # - "updates" surfaces ``{"__interrupt__": (Interrupt(...),)}``
+            #   when a node calls ``interrupt()``. Without subscribing to
+            #   updates, the graph pauses silently and the UI has no way to
+            #   know a human decision is needed. Plain state updates from
+            #   nodes also come through this channel — we filter those out.
             #
-            # Each chunk is `(message, metadata)`. `metadata["langgraph_node"]`
-            # tells us which graph node produced it — we only forward the
-            # `agent` node's assistant output; `tools` node output is the
-            # raw tool result, which is surfaced separately via the gate
-            # pipeline (not as chat text).
-            async for chunk in agent.astream(
-                {"messages": lc_messages},
+            # Each chunk is ``(mode, payload)``. We dispatch by mode to the
+            # existing message-parsing logic or the new interrupt-emission
+            # path.
+            #
+            # Phase 3 · resume: when the caller passes ``resume=...`` we
+            # hand ``Command(resume=resume["value"])`` to astream instead
+            # of a new messages dict. LangGraph uses the checkpointer to
+            # recover where ``interrupt()`` was paused.
+            agent_input: Any
+            if resume is not None:
+                agent_input = Command(resume=resume.get("value"))
+            else:
+                agent_input = {"messages": lc_messages}
+            async for stream_chunk in agent.astream(
+                agent_input,
                 config={"configurable": {"thread_id": thread_id}},
-                stream_mode="messages",
+                stream_mode=["messages", "updates"],
             ):
-                if not isinstance(chunk, tuple) or len(chunk) != 2:
+                if not (isinstance(stream_chunk, tuple) and len(stream_chunk) == 2):
                     continue
-                msg, meta = chunk
-                if not isinstance(meta, dict) or meta.get("langgraph_node") != "agent":
+                mode, payload = stream_chunk
+
+                if mode == "updates":
+                    # Interrupt marker is the only signal in "updates" we
+                    # care about — regular node state transitions are
+                    # redundant with the per-token stream. Each interrupt
+                    # carries an id that stays stable across the pause so
+                    # the frontend can match a later resume to the right
+                    # suspension (§ ADR 0014 Phase 3 R4).
+                    if not isinstance(payload, dict):
+                        continue
+                    interrupts = payload.get("__interrupt__")
+                    if interrupts:
+                        for itr in interrupts:
+                            itr_id = getattr(itr, "id", "") or ""
+                            raw_value = getattr(itr, "value", None)
+                            value_dict: dict[str, object]
+                            if isinstance(raw_value, dict):
+                                value_dict = dict(raw_value)
+                            else:
+                                value_dict = {"value": raw_value}
+                            yield InterruptEvent(
+                                interrupt_id=itr_id,
+                                value=value_dict,
+                            )
                     continue
-                if not isinstance(msg, AIMessage | AIMessageChunk):
+
+                # Everything below is mode == "messages".
+                if not (isinstance(payload, tuple) and len(payload) == 2):
                     continue
-                if not msg.content:
+                msg, meta = payload
+                node = meta.get("langgraph_node") if isinstance(meta, dict) else None
+
+                if node == "agent":
+                    if not isinstance(msg, AIMessage | AIMessageChunk):
+                        continue
+                    if msg.content:
+                        text_delta, thinking_delta = _split_content_blocks(msg.content)
+                        if thinking_delta:
+                            yield ReasoningEvent(
+                                message_id=message_id,
+                                delta=thinking_delta,
+                            )
+                        if text_delta:
+                            yield TokenEvent(
+                                message_id=message_id,
+                                delta=text_delta,
+                            )
+                    # LLM may stream tool_calls across several chunks; the
+                    # final chunk carries the consolidated list. Emit
+                    # ToolCallStart the first time we see each id so the
+                    # UI can paint a pending card before the tool runs.
+                    raw_tcs = getattr(msg, "tool_calls", None) or []
+                    for tc in raw_tcs:
+                        tc_id = tc.get("id") if isinstance(tc, dict) else None
+                        if not tc_id or tc_id in seen_tool_call_ids:
+                            continue
+                        seen_tool_call_ids.add(tc_id)
+                        name = tc.get("name") or ""
+                        args = tc.get("args") or {}
+                        tool_call_by_id[tc_id] = {"name": name, "args": args}
+                        yield ToolCallStartEvent(
+                            tool_call=ToolCall(
+                                id=tc_id,
+                                tool_id=name,
+                                args=args,
+                                status=ToolCallStatus.RUNNING,
+                            )
+                        )
                     continue
-                text_delta, thinking_delta = _split_content_blocks(msg.content)
-                if thinking_delta:
-                    yield ReasoningEvent(
-                        message_id=message_id,
-                        delta=thinking_delta,
+
+                if node == "tools" and isinstance(msg, ToolMessage):
+                    tc_id = getattr(msg, "tool_call_id", None) or ""
+                    result = _parse_tool_message_content(msg.content)
+                    meta_tc = tool_call_by_id.get(tc_id, {})
+                    tool_name = meta_tc.get("name") or getattr(msg, "name", "") or ""
+                    tool_args = meta_tc.get("args") or {}
+                    yield ToolCallEndEvent(
+                        tool_call=ToolCall(
+                            id=tc_id,
+                            tool_id=tool_name,
+                            args=tool_args,
+                            status=ToolCallStatus.SUCCEEDED,
+                            result=result,
+                        )
                     )
-                if text_delta:
-                    yield TokenEvent(
-                        message_id=message_id,
-                        delta=text_delta,
-                    )
+                    envelope = _as_render_envelope(result)
+                    if envelope is not None:
+                        yield RenderEvent(
+                            message_id=message_id,
+                            payload=RenderPayload(**envelope),
+                        )
+                    continue
             yield DoneEvent(message_id=message_id, reason="done")
         except Exception as exc:
             yield ErrorEvent(code="INTERNAL", message=str(exc))

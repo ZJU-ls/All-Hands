@@ -27,17 +27,37 @@ from allhands.api.protocol import (
     SendMessageRequest,
     UpdateConversationRequest,
 )
+from allhands.core import Message
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from allhands.execution.events import AgentEvent
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["chat"])
+
+
+def _to_message_response(m: Message) -> ChatMessageResponse:
+    """Serialize a domain Message into the wire shape with the render /
+    tool-call / reasoning fields that rehydrate a prior turn's visuals.
+    Shared between GET /messages and POST /compact so compaction's kept-tail
+    never diverges from history reload."""
+    return ChatMessageResponse(
+        id=m.id,
+        conversation_id=m.conversation_id,
+        role=m.role,
+        content=m.content,
+        created_at=m.created_at.isoformat(),
+        render_payloads=[rp.model_dump(mode="json") for rp in m.render_payloads],
+        tool_calls=[tc.model_dump(mode="json") for tc in m.tool_calls],
+        reasoning=m.reasoning,
+    )
 
 
 @router.post("", response_model=ConversationResponse)
@@ -169,16 +189,7 @@ async def list_messages(
         messages = await chat_svc.list_messages(conversation_id)
     except DomainError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return [
-        ChatMessageResponse(
-            id=m.id,
-            conversation_id=m.conversation_id,
-            role=m.role,
-            content=m.content,
-            created_at=m.created_at.isoformat(),
-        )
-        for m in messages
-    ]
+    return [_to_message_response(m) for m in messages]
 
 
 @router.post("/{conversation_id}/compact", response_model=CompactConversationResponse)
@@ -207,16 +218,7 @@ async def compact_conversation(
     return CompactConversationResponse(
         dropped=result.dropped,
         summary_id=result.summary_id,
-        messages=[
-            ChatMessageResponse(
-                id=m.id,
-                conversation_id=m.conversation_id,
-                role=m.role,
-                content=m.content,
-                created_at=m.created_at.isoformat(),
-            )
-            for m in result.messages
-        ],
+        messages=[_to_message_response(m) for m in result.messages],
     )
 
 
@@ -249,188 +251,182 @@ async def send_message(
 
     chat_svc = await get_chat_service(session, request=request)
 
-    async def event_stream() -> AsyncIterator[bytes]:
-        run_id = f"run_{secrets.token_hex(8)}"
-        yield agui.encode_sse(agui.run_started(conversation_id, run_id))
+    async def _open_stream() -> AsyncIterator[AgentEvent]:
+        overrides = RunOverrides(
+            thinking=body.thinking,
+            temperature=body.temperature,
+            top_p=body.top_p,
+            max_tokens=body.max_tokens,
+            system_override=body.system_override,
+        )
+        return await chat_svc.send_message(
+            conversation_id,
+            body.content,
+            overrides=overrides,
+        )
 
-        stream = None
-        current_message_id: str | None = None
-        current_reasoning_id: str | None = None
-        finished = False
+    return StreamingResponse(
+        _encode_chat_sse(conversation_id, request, _open_stream),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
-        def _close_open_message() -> bytes | None:
-            nonlocal current_message_id
-            if current_message_id is None:
-                return None
-            closing = agui.encode_sse(agui.text_message_end(current_message_id))
-            current_message_id = None
-            return closing
 
-        def _close_open_reasoning() -> bytes | None:
-            nonlocal current_reasoning_id
-            if current_reasoning_id is None:
-                return None
-            closing = agui.encode_sse(agui.reasoning_message_end(current_reasoning_id))
-            current_reasoning_id = None
-            return closing
+async def _encode_chat_sse(
+    conversation_id: str,
+    request: Request,
+    open_stream: Callable[[], Awaitable[AsyncIterator[AgentEvent]]],
+) -> AsyncIterator[bytes]:
+    """Shared AG-UI SSE encoder (ADR 0014 Phase 4b).
 
-        try:
-            overrides = RunOverrides(
-                thinking=body.thinking,
-                temperature=body.temperature,
-                top_p=body.top_p,
-                max_tokens=body.max_tokens,
-                system_override=body.system_override,
-            )
-            stream = await chat_svc.send_message(
-                conversation_id,
-                body.content,
-                overrides=overrides,
-            )
-            stream_iter = stream.__aiter__()
-            while True:
-                if await request.is_disconnected():
-                    log.info(
-                        "chat.send_message: client disconnected; cancelling agent stream",
-                        extra={"conversation_id": conversation_id},
-                    )
-                    break
-                try:
-                    event = await stream_iter.__anext__()
-                except StopAsyncIteration:
-                    break
-                if event.kind == "token":
-                    # Seeing user-visible text closes any still-open reasoning
-                    # block — thinking always precedes the final answer in
-                    # the turn, so once text starts we seal the reasoning
-                    # stream off for that message id.
-                    closing_r = _close_open_reasoning()
-                    if closing_r is not None:
-                        yield closing_r
-                    if current_message_id != event.message_id:
-                        closing = _close_open_message()
-                        if closing is not None:
-                            yield closing
-                        yield agui.encode_sse(agui.text_message_start(event.message_id))
-                        current_message_id = event.message_id
-                    yield agui.encode_sse(agui.text_message_content(event.message_id, event.delta))
-                elif event.kind == "reasoning":
-                    # Pipe thinking-content blocks through the AG-UI
-                    # REASONING_MESSAGE_CHUNK envelope so the chat client
-                    # can render them in a collapsible reasoning panel
-                    # instead of inlining them as raw text (the Python
-                    # repr leak bug). We share the same message_id so the
-                    # UI can correlate reasoning with the answer.
-                    if current_reasoning_id != event.message_id:
-                        closing_r = _close_open_reasoning()
-                        if closing_r is not None:
-                            yield closing_r
-                        current_reasoning_id = event.message_id
-                    yield agui.encode_sse(
-                        agui.reasoning_message_chunk(event.message_id, event.delta)
-                    )
-                elif event.kind == "tool_call_start":
-                    tc = event.tool_call
-                    yield agui.encode_sse(agui.tool_call_start(tc.id, tc.tool_id))
-                    if tc.args is not None:
-                        yield agui.encode_sse(
-                            agui.tool_call_args(tc.id, json.dumps(tc.args, ensure_ascii=False))
-                        )
-                elif event.kind == "tool_call_end":
-                    tc = event.tool_call
-                    yield agui.encode_sse(agui.tool_call_end(tc.id))
-                    if tc.result is not None:
-                        yield agui.encode_sse(
-                            agui.tool_call_result(
-                                tc.id,
-                                json.dumps(tc.result, ensure_ascii=False, default=str),
-                            )
-                        )
-                elif event.kind == "confirm_required":
-                    payload = event.model_dump(mode="json", exclude={"kind"})
-                    yield agui.encode_sse(agui.custom("allhands.confirm_required", payload))
-                elif event.kind == "confirm_resolved":
-                    payload = event.model_dump(mode="json", exclude={"kind"})
-                    yield agui.encode_sse(agui.custom("allhands.confirm_resolved", payload))
-                elif event.kind == "render":
-                    payload = event.model_dump(mode="json", exclude={"kind"})
-                    yield agui.encode_sse(agui.custom("allhands.render", payload))
-                elif event.kind == "nested_run_start":
-                    yield agui.encode_sse(agui.step_started(f"nested_run.{event.employee_name}"))
-                    yield agui.encode_sse(
-                        agui.custom(
-                            "allhands.nested_run",
-                            {
-                                "run_id": event.run_id,
-                                "parent_run_id": event.parent_run_id,
-                                "employee_name": event.employee_name,
-                                "phase": "start",
-                            },
-                        )
-                    )
-                elif event.kind == "nested_run_end":
-                    yield agui.encode_sse(agui.step_finished(f"nested_run.{event.run_id}"))
-                    yield agui.encode_sse(
-                        agui.custom(
-                            "allhands.nested_run",
-                            {
-                                "run_id": event.run_id,
-                                "status": event.status,
-                                "phase": "end",
-                            },
-                        )
-                    )
-                elif event.kind == "trace":
-                    yield agui.encode_sse(
-                        agui.custom(
-                            "allhands.trace",
-                            {"trace_id": event.trace_id, "url": event.url},
-                        )
-                    )
-                elif event.kind == "error":
-                    closing_r = _close_open_reasoning()
-                    if closing_r is not None:
-                        yield closing_r
+    ``open_stream`` is an async callable that returns the agent-event
+    iterator (from ``ChatService.send_message`` or ``ChatService.resume_message``).
+    Everything else — RUN_STARTED framing, per-event encoding, disconnect
+    handling, close-on-error, RUN_FINISHED/RUN_ERROR — is identical between
+    the fresh-turn and resume entry points.
+    """
+    run_id = f"run_{secrets.token_hex(8)}"
+    yield agui.encode_sse(agui.run_started(conversation_id, run_id))
+
+    stream: AsyncIterator[AgentEvent] | None = None
+    current_message_id: str | None = None
+    current_reasoning_id: str | None = None
+    finished = False
+
+    def _close_open_message() -> bytes | None:
+        nonlocal current_message_id
+        if current_message_id is None:
+            return None
+        closing = agui.encode_sse(agui.text_message_end(current_message_id))
+        current_message_id = None
+        return closing
+
+    def _close_open_reasoning() -> bytes | None:
+        nonlocal current_reasoning_id
+        if current_reasoning_id is None:
+            return None
+        closing = agui.encode_sse(agui.reasoning_message_end(current_reasoning_id))
+        current_reasoning_id = None
+        return closing
+
+    try:
+        stream = await open_stream()
+        stream_iter = stream.__aiter__()
+        while True:
+            if await request.is_disconnected():
+                log.info(
+                    "chat.send_message: client disconnected; cancelling agent stream",
+                    extra={"conversation_id": conversation_id},
+                )
+                break
+            try:
+                event = await stream_iter.__anext__()
+            except StopAsyncIteration:
+                break
+            if event.kind == "token":
+                # Seeing user-visible text closes any still-open reasoning
+                # block — thinking always precedes the final answer in
+                # the turn, so once text starts we seal the reasoning
+                # stream off for that message id.
+                closing_r = _close_open_reasoning()
+                if closing_r is not None:
+                    yield closing_r
+                if current_message_id != event.message_id:
                     closing = _close_open_message()
                     if closing is not None:
                         yield closing
-                    yield agui.encode_sse(agui.run_error(event.message, event.code))
-                    finished = True
-                elif event.kind == "done":
+                    yield agui.encode_sse(agui.text_message_start(event.message_id))
+                    current_message_id = event.message_id
+                yield agui.encode_sse(agui.text_message_content(event.message_id, event.delta))
+            elif event.kind == "reasoning":
+                # Pipe thinking-content blocks through the AG-UI
+                # REASONING_MESSAGE_CHUNK envelope so the chat client
+                # can render them in a collapsible reasoning panel
+                # instead of inlining them as raw text (the Python
+                # repr leak bug). We share the same message_id so the
+                # UI can correlate reasoning with the answer.
+                if current_reasoning_id != event.message_id:
                     closing_r = _close_open_reasoning()
                     if closing_r is not None:
                         yield closing_r
-                    closing = _close_open_message()
-                    if closing is not None:
-                        yield closing
-                    yield agui.encode_sse(agui.run_finished(conversation_id, run_id))
-                    finished = True
-        except DomainError as exc:
-            closing_r = _close_open_reasoning()
-            if closing_r is not None:
-                yield closing_r
-            closing = _close_open_message()
-            if closing is not None:
-                yield closing
-            yield agui.encode_sse(agui.run_error(str(exc), "DOMAIN_ERROR"))
-            finished = True
-        except asyncio.CancelledError:
-            log.info(
-                "chat.send_message: stream cancelled by runtime",
-                extra={"conversation_id": conversation_id},
-            )
-            raise
-        except Exception as exc:
-            closing_r = _close_open_reasoning()
-            if closing_r is not None:
-                yield closing_r
-            closing = _close_open_message()
-            if closing is not None:
-                yield closing
-            yield agui.encode_sse(agui.run_error(str(exc), "INTERNAL"))
-            finished = True
-        finally:
-            if not finished:
+                    current_reasoning_id = event.message_id
+                yield agui.encode_sse(agui.reasoning_message_chunk(event.message_id, event.delta))
+            elif event.kind == "tool_call_start":
+                tc = event.tool_call
+                yield agui.encode_sse(agui.tool_call_start(tc.id, tc.tool_id))
+                if tc.args is not None:
+                    yield agui.encode_sse(
+                        agui.tool_call_args(tc.id, json.dumps(tc.args, ensure_ascii=False))
+                    )
+            elif event.kind == "tool_call_end":
+                tc = event.tool_call
+                yield agui.encode_sse(agui.tool_call_end(tc.id))
+                if tc.result is not None:
+                    yield agui.encode_sse(
+                        agui.tool_call_result(
+                            tc.id,
+                            json.dumps(tc.result, ensure_ascii=False, default=str),
+                        )
+                    )
+            elif event.kind == "confirm_required":
+                payload = event.model_dump(mode="json", exclude={"kind"})
+                yield agui.encode_sse(agui.custom("allhands.confirm_required", payload))
+            elif event.kind == "confirm_resolved":
+                payload = event.model_dump(mode="json", exclude={"kind"})
+                yield agui.encode_sse(agui.custom("allhands.confirm_resolved", payload))
+            elif event.kind == "interrupt_required":
+                # ADR 0014 Phase 3 · LangGraph interrupt() lands here.
+                # Semantically a superset of confirm_required — value is
+                # an opaque dict the agent provided to interrupt() so
+                # the frontend can decide how to prompt (e.g. confirm
+                # yes/no, pick one of N, free-form text).
+                payload = event.model_dump(mode="json", exclude={"kind"})
+                yield agui.encode_sse(agui.custom("allhands.interrupt_required", payload))
+            elif event.kind == "render":
+                payload = event.model_dump(mode="json", exclude={"kind"})
+                yield agui.encode_sse(agui.custom("allhands.render", payload))
+            elif event.kind == "nested_run_start":
+                yield agui.encode_sse(agui.step_started(f"nested_run.{event.employee_name}"))
+                yield agui.encode_sse(
+                    agui.custom(
+                        "allhands.nested_run",
+                        {
+                            "run_id": event.run_id,
+                            "parent_run_id": event.parent_run_id,
+                            "employee_name": event.employee_name,
+                            "phase": "start",
+                        },
+                    )
+                )
+            elif event.kind == "nested_run_end":
+                yield agui.encode_sse(agui.step_finished(f"nested_run.{event.run_id}"))
+                yield agui.encode_sse(
+                    agui.custom(
+                        "allhands.nested_run",
+                        {
+                            "run_id": event.run_id,
+                            "status": event.status,
+                            "phase": "end",
+                        },
+                    )
+                )
+            elif event.kind == "trace":
+                yield agui.encode_sse(
+                    agui.custom(
+                        "allhands.trace",
+                        {"trace_id": event.trace_id, "url": event.url},
+                    )
+                )
+            elif event.kind == "error":
+                closing_r = _close_open_reasoning()
+                if closing_r is not None:
+                    yield closing_r
+                closing = _close_open_message()
+                if closing is not None:
+                    yield closing
+                yield agui.encode_sse(agui.run_error(event.message, event.code))
+                finished = True
+            elif event.kind == "done":
                 closing_r = _close_open_reasoning()
                 if closing_r is not None:
                     yield closing_r
@@ -438,21 +434,83 @@ async def send_message(
                 if closing is not None:
                     yield closing
                 yield agui.encode_sse(agui.run_finished(conversation_id, run_id))
-            # Closing the async generator propagates GeneratorExit into the
-            # agent loop, cancelling any in-flight LangGraph / LLM await.
-            if stream is not None:
-                aclose = getattr(stream, "aclose", None)
-                if aclose is not None:
-                    try:
-                        await aclose()
-                    except Exception:
-                        log.debug(
-                            "chat.send_message: aclose raised during cleanup",
-                            exc_info=True,
-                        )
+                finished = True
+    except DomainError as exc:
+        closing_r = _close_open_reasoning()
+        if closing_r is not None:
+            yield closing_r
+        closing = _close_open_message()
+        if closing is not None:
+            yield closing
+        yield agui.encode_sse(agui.run_error(str(exc), "DOMAIN_ERROR"))
+        finished = True
+    except asyncio.CancelledError:
+        log.info(
+            "chat.send_message: stream cancelled by runtime",
+            extra={"conversation_id": conversation_id},
+        )
+        raise
+    except Exception as exc:
+        closing_r = _close_open_reasoning()
+        if closing_r is not None:
+            yield closing_r
+        closing = _close_open_message()
+        if closing is not None:
+            yield closing
+        yield agui.encode_sse(agui.run_error(str(exc), "INTERNAL"))
+        finished = True
+    finally:
+        if not finished:
+            closing_r = _close_open_reasoning()
+            if closing_r is not None:
+                yield closing_r
+            closing = _close_open_message()
+            if closing is not None:
+                yield closing
+            yield agui.encode_sse(agui.run_finished(conversation_id, run_id))
+        # Closing the async generator propagates GeneratorExit into the
+        # agent loop, cancelling any in-flight LangGraph / LLM await.
+        if stream is not None:
+            aclose = getattr(stream, "aclose", None)
+            if aclose is not None:
+                try:
+                    await aclose()
+                except Exception:
+                    log.debug(
+                        "chat.send_message: aclose raised during cleanup",
+                        exc_info=True,
+                    )
+
+
+@router.post("/{conversation_id}/resume")
+async def resume_message(
+    conversation_id: str,
+    body: dict[str, object],
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    """Continue a turn paused at ``interrupt()`` (ADR 0014 · Phase 4b).
+
+    Body shape: ``{"resume_value": <opaque>}`` — the decision payload the
+    client gathered from the user (e.g. ``"approve"``, ``"reject"``, a
+    free-form string, or a structured object). Value is forwarded to
+    ``ChatService.resume_message`` which hands it to LangGraph as
+    ``Command(resume=...)``.
+
+    The response is SSE in exactly the same AG-UI v1 shape as the regular
+    /messages stream — tokens, tool calls, another interrupt if the graph
+    pauses again, and finally RUN_FINISHED. The client's chat state machine
+    can treat the resume SSE as a continuation of the prior turn.
+    """
+
+    chat_svc = await get_chat_service(session, request=request)
+    resume_value = body.get("resume_value") if isinstance(body, dict) else None
+
+    async def _open_stream() -> AsyncIterator[AgentEvent]:
+        return await chat_svc.resume_message(conversation_id, resume_value)
 
     return StreamingResponse(
-        event_stream(),
+        _encode_chat_sse(conversation_id, request, _open_stream),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

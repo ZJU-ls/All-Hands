@@ -8,7 +8,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from allhands.core import Conversation, Employee, Message
+from allhands.core import (
+    Confirmation,
+    ConfirmationStatus,
+    Conversation,
+    Employee,
+    Message,
+    RenderPayload,
+    ToolCall,
+)
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
 from allhands.execution.dispatch import DispatchService
@@ -26,7 +34,14 @@ if TYPE_CHECKING:
     from allhands.execution.gate import BaseGate
     from allhands.execution.registry import ToolRegistry
     from allhands.execution.skills import SkillRegistry
-    from allhands.persistence.repositories import ConversationRepo, EmployeeRepo, LLMProviderRepo
+    from allhands.persistence.repositories import (
+        ConfirmationRepo,
+        ConversationRepo,
+        EmployeeRepo,
+        LLMProviderRepo,
+        MCPServerRepo,
+        SkillRuntimeRepo,
+    )
 
 
 DEFAULT_COMPACT_KEEP_LAST = 20
@@ -70,6 +85,10 @@ class ChatService:
         gate: BaseGate,
         provider_repo: LLMProviderRepo | None = None,
         bus: EventBus | None = None,
+        skill_runtime_repo: SkillRuntimeRepo | None = None,
+        mcp_repo: MCPServerRepo | None = None,
+        checkpointer: Any | None = None,
+        confirmation_repo: ConfirmationRepo | None = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -77,14 +96,162 @@ class ChatService:
         self._skills = skill_registry
         self._gate = gate
         self._providers = provider_repo
+        # For the Lead capability-snapshot (L12 / E20). Optional because
+        # unit tests don't always wire an MCP repo; snapshot degrades
+        # gracefully with "mcp_servers: unknown".
+        self._mcp_repo = mcp_repo
         # Optional: lets chat turns surface in the cockpit activity feed.
         # The bus lives on the trigger_runtime singleton; we accept None so
         # CLI / test constructions (no FastAPI Request) still work.
         self._bus = bus
+        # ADR 0011 · principle 7 state-checkpointable: runtime cache is the
+        # hot path; on miss we fall through to the repo so uvicorn reload
+        # doesn't wipe activated skills. `None` keeps legacy test constructions
+        # (no DB) working — cache becomes the only store, which is the pre-v1
+        # behaviour.
+        self._skill_runtime_repo = skill_runtime_repo
         # Per-conversation runtime · persists resolve_skill mutations across
         # send_message calls (contract § 8.2 · V02 query() main loop carries
         # the live tool pool turn-to-turn).
         self._runtime_cache: dict[str, SkillRuntime] = {}
+        # ADR 0014 · LangGraph checkpointer for graph-internal state (interrupt
+        # resume / tool pending / subagent stack). Separate from MessageRepo
+        # which stays the SoT for user-visible messages (R2).
+        self._checkpointer = checkpointer
+        # ADR 0014 Phase 4c/4d · When the runner pauses at an interrupt, the
+        # tap in _persist_assistant_reply writes a PENDING Confirmation row so
+        # /confirmations/pending can see it and the frontend's dialog has a
+        # persistent handle. None in unit tests that don't exercise the gate
+        # flow; optional keeps those tests unchanged.
+        self._confirmation_repo = confirmation_repo
+
+    async def _compute_platform_snapshot(self) -> str:
+        """Fresh DB-verified snapshot of platform capabilities, injected into
+        every Lead Agent turn (E20 / L12).
+
+        Root problem: even with a "Capability-discovery protocol" block in the
+        Lead prompt (L06), the model routinely hallucinates "平台目前没配置
+        任何 LLM 提供商 / 技能 / MCP 服务器" when the DB clearly has them.
+        Prompt-level "must call list_* first" is a soft norm the LLM silently
+        skips. The reliable fix is programmatic: compute the snapshot on the
+        service side and inject it as a system prefix — the LLM can't
+        hallucinate numbers that are sitting right in its context.
+
+        Format is compact (≤ 8 lines, ≤ 600 chars) so it doesn't bloat the
+        prompt budget. We surface top-level counts + the first item of each
+        kind (enough to ground "has at least one provider / skill / ...");
+        Lead can still `list_*` for full detail if the user asks.
+
+        Best-effort: any repo miss is logged and the field is omitted. A
+        snapshot failure must not block the chat turn.
+        """
+        lines: list[str] = []
+
+        # Providers (+ which one is the default / its kind / model)
+        if self._providers is not None:
+            try:
+                provs = await self._providers.list_all()
+                if provs:
+                    default = next((p for p in provs if p.is_default), None) or provs[0]
+                    lines.append(
+                        f"- providers: {len(provs)} configured · default = "
+                        f"{default.name} (kind={default.kind}, model={default.default_model})"
+                    )
+                else:
+                    lines.append("- providers: 0 — none configured yet")
+            except Exception:
+                log.exception("snapshot · providers.list_all failed")
+
+        # Skills (descriptor list is already lazy-loaded and in memory)
+        try:
+            descriptors = self._skills.list_descriptors()
+            if descriptors:
+                names = ", ".join(d.name for d in descriptors[:4])
+                more = f" (+{len(descriptors) - 4} more)" if len(descriptors) > 4 else ""
+                lines.append(f"- skills: {len(descriptors)} installed — {names}{more}")
+            else:
+                lines.append("- skills: 0 installed")
+        except Exception:
+            log.exception("snapshot · skills.list_descriptors failed")
+
+        # MCP servers
+        if self._mcp_repo is not None:
+            try:
+                mcps = await self._mcp_repo.list_all()
+                if mcps:
+                    names = ", ".join(m.name for m in mcps[:4])
+                    more = f" (+{len(mcps) - 4} more)" if len(mcps) > 4 else ""
+                    lines.append(f"- mcp_servers: {len(mcps)} registered — {names}{more}")
+                else:
+                    lines.append("- mcp_servers: 0 registered")
+            except Exception:
+                log.exception("snapshot · mcp.list_all failed")
+
+        # Employees (exclude Lead itself — Lead knows it exists)
+        try:
+            emps = await self._employees.list_all()
+            non_lead = [e for e in emps if not e.is_lead_agent]
+            names = ", ".join(e.name for e in non_lead[:4])
+            more = f" (+{len(non_lead) - 4} more)" if len(non_lead) > 4 else ""
+            if non_lead:
+                lines.append(f"- employees (non-lead): {len(non_lead)} — {names}{more}")
+            else:
+                lines.append("- employees (non-lead): 0 — only the Lead Agent exists")
+        except Exception:
+            log.exception("snapshot · employees.list_all failed")
+
+        if not lines:
+            return ""
+        return (
+            "# Current platform snapshot (fresh · DB-verified)\n" + "\n".join(lines) + "\n\n"
+            "Use the numbers above to answer capability questions directly "
+            "— they are accurate right now. Only call list_* when you need "
+            "full detail of a specific item (e.g. the description of a skill, "
+            "the health of an MCP, the system_prompt of an employee). "
+            'Answering "0 of each" when this snapshot says otherwise is a bug.'
+        )
+
+    async def get_or_load_runtime(self, conversation_id: str, employee: Employee) -> SkillRuntime:
+        """Cache-first, repo-fallthrough, bootstrap as last resort.
+
+        Exposed for tests (and future read-only callers); ``send_message``
+        calls it inline. Returns the cached instance when present so runner
+        mutations (resolve_skill) land on the same object the next turn
+        observes.
+        """
+        runtime = self._runtime_cache.get(conversation_id)
+        if runtime is not None:
+            return runtime
+        if self._skill_runtime_repo is not None:
+            persisted = await self._skill_runtime_repo.load(conversation_id)
+            if persisted is not None:
+                self._runtime_cache[conversation_id] = persisted
+                return persisted
+        runtime = bootstrap_employee_runtime(employee, self._skills, self._tools)
+        self._runtime_cache[conversation_id] = runtime
+        return runtime
+
+    async def _flush_runtime(self, conversation_id: str) -> None:
+        """Write the live runtime back to the repo (best-effort · logs on fail).
+
+        Called from ``send_message`` after ``runner.stream()`` finishes so any
+        ``resolve_skill`` mutations made during the turn survive a restart.
+        """
+        if self._skill_runtime_repo is None:
+            return
+        runtime = self._runtime_cache.get(conversation_id)
+        if runtime is None:
+            return
+        try:
+            await self._skill_runtime_repo.save(conversation_id, runtime)
+        except Exception:
+            # Persistence failure must not block streaming the reply back to
+            # the user. Worst case: the runtime is cache-only for this process
+            # lifetime, identical to pre-v1 behaviour.
+            log.exception(
+                "Failed to flush SkillRuntime",
+                extra={"conversation_id": conversation_id},
+            )
 
     async def list_messages(self, conversation_id: str) -> list[Message]:
         conv = await self._conversations.get(conversation_id)
@@ -142,7 +309,19 @@ class ChatService:
         await self._conversations.delete_messages([m.id for m in to_drop])
         await self._conversations.append_message(summary)
 
+        # Two-sided clear: cache + repo (ADR 0011 · principle 7). Letting the
+        # persisted runtime survive a compact would resurrect skills the user
+        # no longer has history for on the next process restart — violating
+        # P05 (no hidden state surprises).
         self._runtime_cache.pop(conversation_id, None)
+        if self._skill_runtime_repo is not None:
+            try:
+                await self._skill_runtime_repo.delete(conversation_id)
+            except Exception:
+                log.exception(
+                    "Failed to delete SkillRuntime on compact",
+                    extra={"conversation_id": conversation_id},
+                )
 
         new_messages = await self._conversations.list_messages(conversation_id)
         return CompactResult(
@@ -193,26 +372,19 @@ class ChatService:
         await self._conversations.append_message(user_msg)
 
         if self._bus is not None:
-            try:
-                await self._bus.publish(
-                    kind="run.started",
-                    payload={
-                        "run_id": run_id,
-                        "employee_id": employee.id,
-                        "conversation_id": conversation_id,
-                        "depth": 0,
-                    },
-                )
-            except Exception:
-                log.exception(
-                    "Failed to publish run.started",
-                    extra={"run_id": run_id, "conversation_id": conversation_id},
-                )
+            # E18: fire-and-forget so a contended events-table write doesn't
+            # stall the SSE response before any token streams.
+            self._bus.publish_best_effort(
+                kind="run.started",
+                payload={
+                    "run_id": run_id,
+                    "employee_id": employee.id,
+                    "conversation_id": conversation_id,
+                    "depth": 0,
+                },
+            )
 
-        runtime = self._runtime_cache.get(conversation_id)
-        if runtime is None:
-            runtime = bootstrap_employee_runtime(employee, self._skills, self._tools)
-            self._runtime_cache[conversation_id] = runtime
+        runtime = await self.get_or_load_runtime(conversation_id, employee)
 
         history = await self._conversations.list_messages(conversation_id)
         lc_messages: list[dict[str, Any]] = [
@@ -221,6 +393,98 @@ class ChatService:
             if m.role in ("user", "assistant")
         ]
 
+        provider = None
+        if self._providers is not None:
+            provider = await self._providers.get_default()
+
+        # E20 / L12: Lead turns get a fresh DB-verified snapshot injected as
+        # the very first system segment (prepended via RunOverrides.system_override
+        # — runner puts override_text above the employee's base prompt). This
+        # prevents the "0 of each" hallucination that the prompt-only L06 fix
+        # couldn't stop. Non-lead employees get nothing (their work is narrow;
+        # flooding them with platform meta would add noise, not signal).
+        if employee.is_lead_agent:
+            snapshot = await self._compute_platform_snapshot()
+            if snapshot:
+                caller_override = (overrides.system_override or "").strip() if overrides else ""
+                combined = snapshot + ("\n\n---\n\n" + caller_override if caller_override else "")
+                base_overrides = overrides or RunOverrides()
+                overrides = base_overrides.model_copy(update={"system_override": combined})
+
+        runner_factory = self._build_runner_factory(provider)
+        dispatch_service = DispatchService(
+            employee_repo=self._employees,
+            runner_factory=runner_factory,
+        )
+        spawn_subagent_service = SpawnSubagentService(
+            employee_repo=self._employees,
+            runner_factory=runner_factory,
+        )
+        runner = AgentRunner(
+            employee=employee,
+            tool_registry=self._tools,
+            gate=self._gate,
+            provider=provider,
+            dispatch_service=dispatch_service,
+            skill_registry=self._skills,
+            runtime=runtime,
+            spawn_subagent_service=spawn_subagent_service,
+            model_ref_override=conv.model_ref_override,
+            checkpointer=self._checkpointer,
+        )
+        return self._persist_assistant_reply(
+            conversation_id,
+            runner.stream(
+                messages=lc_messages,
+                thread_id=conversation_id,
+                overrides=overrides,
+            ),
+            employee=employee,
+            run_id=run_id,
+            run_started_at=run_started_at,
+        )
+
+    async def resume_message(
+        self,
+        conversation_id: str,
+        resume_value: object,
+    ) -> AsyncIterator[AgentEvent]:
+        """ADR 0014 · Phase 4b — continue a turn paused at ``interrupt()``.
+
+        Preconditions: the runner on the previous turn paused via interrupt()
+        and the checkpointer captured graph state under ``thread_id=conversation_id``.
+        This method spins up a fresh AgentRunner (same contract as send_message),
+        hands it a ``Command(resume=resume_value)`` through the new ``resume``
+        kwarg on ``stream()``, and pipes the continuation through the same
+        persist-assistant-reply tap so the surviving portion of the reply
+        lands in MessageRepo.
+
+        This method is the **server-side half** of the resume flow. The HTTP
+        entry point (``POST /api/conversations/{id}/resume``) is thin plumbing
+        over this; the rest of the chat router's SSE encoding is shared.
+
+        Not yet wired to ConfirmationGate in this commit — the gate still uses
+        polling. Phase 4c (future work) migrates the gate onto interrupt() so
+        resume becomes the default path instead of a parallel track.
+        """
+        conv = await self._conversations.get(conversation_id)
+        if conv is None:
+            raise DomainError(f"Conversation {conversation_id!r} not found.")
+
+        employee = await self._employees.get(conv.employee_id)
+        if employee is None:
+            raise EmployeeNotFound(f"Employee {conv.employee_id!r} not found.")
+
+        if self._checkpointer is None:
+            raise DomainError(
+                "Resume requires a checkpointer; app was started without one "
+                "(lifespan likely failed to bring up AsyncSqliteSaver)."
+            )
+
+        run_id = f"run_{uuid.uuid4().hex[:16]}"
+        run_started_at = datetime.now(UTC)
+
+        runtime = await self.get_or_load_runtime(conversation_id, employee)
         provider = None
         if self._providers is not None:
             provider = await self._providers.get_default()
@@ -244,13 +508,14 @@ class ChatService:
             runtime=runtime,
             spawn_subagent_service=spawn_subagent_service,
             model_ref_override=conv.model_ref_override,
+            checkpointer=self._checkpointer,
         )
         return self._persist_assistant_reply(
             conversation_id,
             runner.stream(
-                messages=lc_messages,
+                messages=[],
                 thread_id=conversation_id,
-                overrides=overrides,
+                resume={"value": resume_value},
             ),
             employee=employee,
             run_id=run_id,
@@ -286,6 +551,14 @@ class ChatService:
         """
         buffer: list[str] = []
         reasoning_buffer: list[str] = []
+        # Historical-rehydrate fix: render + tool_call events fire during the
+        # live SSE but until now never landed on the persisted Message row,
+        # so a page reload showed the assistant's prose without the charts /
+        # cards the agent drew and without the inline system-tool chips. We
+        # aggregate them keyed off the per-turn message_id so each turn's row
+        # captures exactly what the live UI saw.
+        render_payloads: list[RenderPayload] = []
+        tool_calls_by_id: dict[str, ToolCall] = {}
         message_id: str | None = None
         first_seen: datetime | None = None
         persisted = False
@@ -306,6 +579,8 @@ class ChatService:
                 content=content,
                 reasoning=reasoning_text,
                 parent_run_id=run_id,
+                render_payloads=list(render_payloads),
+                tool_calls=list(tool_calls_by_id.values()),
                 created_at=first_seen or datetime.now(UTC),
             )
             try:
@@ -316,27 +591,24 @@ class ChatService:
                     extra={"conversation_id": conversation_id, "message_id": message_id},
                 )
                 return
-            # Publish a cockpit beat for the activity feed. Best-effort — bus
-            # failure must not poison the SSE stream (the user already saw the
-            # reply; cockpit telemetry is secondary signal).
+            # Publish a cockpit beat for the activity feed. Fire-and-forget
+            # (E18): awaiting this added 3-5 s between the last token and
+            # RUN_FINISHED because the bus writes on a separate DB session
+            # that contends with the request session for the SQLite write
+            # lock. The user already saw the reply; cockpit telemetry is
+            # secondary signal, safe to run in the background.
             if self._bus is not None:
-                try:
-                    await self._bus.publish(
-                        kind="conversation.turn_completed",
-                        payload={
-                            "conversation_id": conversation_id,
-                            "message_id": message_id,
-                            "employee_id": employee.id if employee else None,
-                            "employee_name": employee.name if employee else None,
-                            "summary": _summarize_turn(content, employee),
-                            "link": f"/chat/{conversation_id}",
-                        },
-                    )
-                except Exception:
-                    log.exception(
-                        "Failed to publish conversation.turn_completed",
-                        extra={"conversation_id": conversation_id},
-                    )
+                self._bus.publish_best_effort(
+                    kind="conversation.turn_completed",
+                    payload={
+                        "conversation_id": conversation_id,
+                        "message_id": message_id,
+                        "employee_id": employee.id if employee else None,
+                        "employee_name": employee.name if employee else None,
+                        "summary": _summarize_turn(content, employee),
+                        "link": f"/chat/{conversation_id}",
+                    },
+                )
 
         async def finalize_run() -> None:
             nonlocal run_finalized
@@ -347,22 +619,19 @@ class ChatService:
             if run_started_at is not None:
                 duration_s = (datetime.now(UTC) - run_started_at).total_seconds()
             failed = error_payload is not None
-            try:
-                await self._bus.publish(
-                    kind="run.failed" if failed else "run.completed",
-                    payload={
-                        "run_id": run_id,
-                        "employee_id": employee.id if employee else None,
-                        "conversation_id": conversation_id,
-                        "duration_s": duration_s,
-                        "error": error_payload.get("message") if error_payload else None,
-                    },
-                )
-            except Exception:
-                log.exception(
-                    "Failed to publish run.completed/failed",
-                    extra={"run_id": run_id, "conversation_id": conversation_id},
-                )
+            # E18: fire-and-forget. This runs in the finally of the SSE
+            # stream generator; awaiting a contended bus write would delay
+            # transport close by 3-5 s for no user-facing benefit.
+            self._bus.publish_best_effort(
+                kind="run.failed" if failed else "run.completed",
+                payload={
+                    "run_id": run_id,
+                    "employee_id": employee.id if employee else None,
+                    "conversation_id": conversation_id,
+                    "duration_s": duration_s,
+                    "error": error_payload.get("message") if error_payload else None,
+                },
+            )
 
         try:
             async for event in stream:
@@ -375,6 +644,31 @@ class ChatService:
                     reasoning_buffer.append(event.delta)
                     if message_id is None:
                         message_id = event.message_id
+                elif event.kind == "render":
+                    # Aggregate render envelopes in arrival order — this is
+                    # also the order the live UI rendered them. If the turn
+                    # emits multiple (e.g. table + callout), all land on the
+                    # same message row so reloading preserves the sequence.
+                    render_payloads.append(event.payload)
+                    if message_id is None:
+                        message_id = event.message_id
+                elif event.kind == "tool_call_end":
+                    # L14 · system-tool inline chips + external tool cards
+                    # both rehydrate from this list. Keyed by tool_call.id so
+                    # a later terminal state (e.g. confirmation-approved) can
+                    # overwrite an earlier running snapshot within the same
+                    # turn without duplicating rows.
+                    tc = event.tool_call
+                    tool_calls_by_id[tc.id] = tc
+                elif event.kind == "interrupt_required":
+                    # ADR 0014 Phase 4d · write a PENDING Confirmation row
+                    # so /confirmations/pending can see what's waiting and
+                    # /confirmations/{id}/resolve has a handle. Keyed on
+                    # LangGraph's interrupt_id which is stable across the
+                    # pause — the frontend gets that id in the CUSTOM event
+                    # and echoes it back as the confirmation_id.
+                    if self._confirmation_repo is not None:
+                        await self._write_pending_confirmation(event)
                 elif event.kind == "error":
                     error_payload = {"code": event.code, "message": event.message}
                     await flush()
@@ -384,6 +678,53 @@ class ChatService:
         finally:
             await flush()
             await finalize_run()
+            # ADR 0011 · principle 7: flush any resolve_skill mutations made
+            # during this turn so a uvicorn reload doesn't wipe them. Runs
+            # after finalize_run so the cockpit event doesn't block on a DB
+            # round-trip, and after flush() so the assistant message is
+            # durable first (if this errors, at least the reply is saved).
+            await self._flush_runtime(conversation_id)
+
+    async def _write_pending_confirmation(self, event: Any) -> None:
+        """Persist a Confirmation row on InterruptEvent (ADR 0014 Phase 4d).
+
+        Called from the ``_persist_assistant_reply`` tap exactly once per
+        pause (the runner's re-execution on resume produces no new
+        InterruptEvent — LangGraph auto-matches). Keyed on the LangGraph
+        interrupt id so /confirmations/{id}/resolve and the frontend dialog
+        agree on the handle.
+
+        Failure is swallowed on purpose — the graph has already paused and
+        the UI has already rendered the dialog from the CUSTOM event; the
+        DB row is a secondary concern for the pending-list endpoint. A
+        hard throw here would kill the SSE + lose graph state.
+        """
+        if self._confirmation_repo is None:
+            return
+        try:
+            value = event.value if isinstance(event.value, dict) else {}
+            tool_call_id = str(value.get("tool_call_id", "") or "")
+            summary = str(value.get("summary", "") or "")
+            rationale = str(value.get("rationale", "") or "")
+            diff_raw = value.get("diff")
+            diff: dict[str, object] | None = dict(diff_raw) if isinstance(diff_raw, dict) else None
+            now = datetime.now(UTC)
+            confirmation = Confirmation(
+                id=str(event.interrupt_id) or f"itr_{uuid.uuid4().hex[:16]}",
+                tool_call_id=tool_call_id,
+                rationale=rationale,
+                summary=summary,
+                diff=diff,
+                status=ConfirmationStatus.PENDING,
+                created_at=now,
+                expires_at=now + timedelta(seconds=300),
+            )
+            await self._confirmation_repo.save(confirmation)
+        except Exception:
+            log.exception(
+                "interrupt.confirmation.save.failed",
+                extra={"interrupt_id": getattr(event, "interrupt_id", None)},
+            )
 
     def _build_runner_factory(self, provider: Any) -> Any:
         """Closure used by DispatchService to spawn sub-runners.
@@ -422,6 +763,10 @@ class ChatService:
                 skill_registry=skill_registry,
                 runtime=child_runtime,
                 spawn_subagent_service=nested_spawn,
+                # Share the same checkpointer — child thread_ids are distinct
+                # (allocated by dispatch/spawn call sites) so child graph state
+                # lands in its own checkpoint family. ADR 0014 §3 Phase 1.
+                checkpointer=self._checkpointer,
             )
 
         return factory

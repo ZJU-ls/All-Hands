@@ -1,5 +1,5 @@
 /**
- * /chat/[conversationId] · B05 silent fallback
+ * /chat/[conversationId] · B05 silent fallback + E14 backend-offline state
  *
  * When the conversation id in the URL is stale (404 from backend — usually a
  * pointer left in localStorage after a db reset), the page must:
@@ -7,7 +7,9 @@
  *   2. Call localStorage.removeItem("allhands_conversation_id")
  *   3. router.replace("/chat") — landing page re-mints a fresh conversation
  *
- * A 500 (true backend error) still renders the error card.
+ * A 500 **with non-JSON body** means uvicorn is offline (Next dev's rewrite
+ * returns plain "Internal Server Error"); instead of a red banner we render a
+ * "后端未就绪 · 自动重连" state. See learnings L07 / error-patterns E14.
  */
 
 import {
@@ -123,11 +125,40 @@ describe("/chat/[conversationId] · B05 stale-id silent fallback", () => {
     expect(screen.queryByText(/连接错误/)).toBeNull();
   });
 
-  it("still surfaces the error card for non-404 backend errors", async () => {
+  it("renders the backend-offline banner (not a raw 500) when uvicorn is down (E14)", async () => {
     fetchSpy.mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.includes("/api/conversations/")) {
-        return new Response("", { status: 500, statusText: "Server Error" });
+        // Next.js dev proxy returns plain-text 500 when upstream is unreachable.
+        return new Response("Internal Server Error", {
+          status: 500,
+          headers: { "content-type": "text/plain" },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+
+    render(<ConversationPage />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("backend-offline-banner")).toBeDefined(),
+    );
+    // The old raw "getConversation failed: 500" string must NOT appear — that's
+    // the unfriendly UX this fix replaces.
+    expect(screen.queryByText(/getConversation failed: 500/)).toBeNull();
+    expect(replaceMock).not.toHaveBeenCalled();
+    // Stale id is NOT evicted — the backend might come back in a moment.
+    expect(localStorage.getItem("allhands_conversation_id")).toBe("stale-uuid");
+  });
+
+  it("surfaces the red error card for a real JSON 500 (application error)", async () => {
+    fetchSpy.mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/api/conversations/")) {
+        return new Response(JSON.stringify({ detail: "db connection lost" }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        });
       }
       throw new Error(`unexpected fetch ${url}`);
     });
@@ -137,8 +168,8 @@ describe("/chat/[conversationId] · B05 stale-id silent fallback", () => {
     await waitFor(() =>
       expect(screen.getByText(/getConversation failed: 500/)).toBeDefined(),
     );
+    expect(screen.queryByTestId("backend-offline-banner")).toBeNull();
     expect(replaceMock).not.toHaveBeenCalled();
-    // Stale id is NOT evicted on 500 — it might be a transient server issue.
     expect(localStorage.getItem("allhands_conversation_id")).toBe("stale-uuid");
   });
 });

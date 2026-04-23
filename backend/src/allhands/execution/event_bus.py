@@ -88,6 +88,51 @@ class EventBus:
             self._spawn(handler, env)
         return env
 
+    def publish_best_effort(
+        self,
+        kind: str,
+        payload: dict[str, Any] | None = None,
+        trigger_id: str | None = None,
+    ) -> None:
+        """Fire-and-forget variant for telemetry (cockpit beats, run.started /
+        .completed, conversation.turn_completed).
+
+        Used from the SSE chat critical path (E18): awaiting ``publish()``
+        there meant every turn stalled ~3-5 s while the EventBus's separate
+        DB session contended with the request session for the single SQLite
+        write lock. The user perceived it as "button stays in streaming
+        state after the model finished". For telemetry events whose loss
+        doesn't break a contract, we spawn the persist + fan-out as a
+        background task and return immediately; exceptions are logged by
+        ``_safe_persist``. Trigger-critical publishes (webhooks, anything
+        consumers treat as a record of truth) must keep using ``publish()``.
+        """
+        env = EventEnvelope(
+            id=f"evt_{uuid.uuid4().hex[:16]}",
+            kind=kind,
+            payload=payload or {},
+            published_at=datetime.now(UTC),
+            trigger_id=trigger_id,
+        )
+        task = asyncio.create_task(self._persist_and_fanout(env))
+        self._inflight.add(task)
+        task.add_done_callback(self._inflight.discard)
+
+    async def _persist_and_fanout(self, env: EventEnvelope) -> None:
+        if self._persist is not None:
+            try:
+                await self._persist(env)
+            except Exception:
+                logger.exception(
+                    "best-effort event persist failed",
+                    extra={"event_id": env.id, "kind": env.kind},
+                )
+        for pattern, handler in list(self._subs):
+            if matches_event_pattern(pattern, env):
+                self._spawn(handler, env)
+        for handler in list(self._catchall):
+            self._spawn(handler, env)
+
     def _spawn(self, handler: EventHandler, env: EventEnvelope) -> None:
         task = asyncio.create_task(self._safe_invoke(handler, env))
         self._inflight.add(task)

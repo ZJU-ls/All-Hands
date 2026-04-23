@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { ModelPicker, invalidateModelPickerCache } from "../ModelPicker";
 
@@ -120,18 +120,22 @@ describe("ModelPicker", () => {
       />,
     );
     await flush();
-    const inherit = screen.getByTestId("model-picker-inherit") as HTMLOptionElement;
-    expect(inherit.value).toBe("");
-    expect(inherit.textContent).toBe("跟随员工默认");
+    fireEvent.click(screen.getByTestId("model-picker"));
+    const inherit = screen.getByTestId("model-picker-inherit");
+    expect(inherit).toHaveAttribute("role", "option");
+    expect(inherit).toHaveTextContent("跟随员工默认");
+    // Selecting it emits the sentinel empty value.
+    fireEvent.mouseDown(inherit);
+    expect(onChange).toHaveBeenCalledWith("");
   });
 
-  it("groups models by provider in optgroups", async () => {
+  it("groups models by provider under semantic group headers", async () => {
     const onChange = vi.fn();
-    const { container } = render(<ModelPicker value="" onChange={onChange} />);
+    render(<ModelPicker value="" onChange={onChange} />);
     await flush();
-    const groups = container.querySelectorAll("optgroup");
-    expect(groups.length).toBe(2);
-    const labels = Array.from(groups).map((g) => g.getAttribute("label"));
+    fireEvent.click(screen.getByTestId("model-picker"));
+    const groups = screen.getAllByRole("group");
+    const labels = groups.map((g) => g.getAttribute("aria-label"));
     expect(labels).toContain("OpenRouter · 默认");
     expect(labels).toContain("Bailian");
   });

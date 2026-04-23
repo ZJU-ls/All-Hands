@@ -16,7 +16,7 @@
 
 按顺序:
 
-1. [`product/00-north-star.md`](product/00-north-star.md) — 产品哲学、4 条核心设计原则
+1. [`product/00-north-star.md`](product/00-north-star.md) — 产品哲学、6 条核心设计原则(v1 · 见 ADR 0011)
 2. [`product/04-architecture.md`](product/04-architecture.md) — 10 层架构 + 模块边界
 3. 本文件 — 开发纪律
 
@@ -30,6 +30,10 @@
 ---
 
 ## 3. 核心设计原则(必须遵守,违反则打回)
+
+> **6 条原则 · 排序即优先级。** 完整版在 [`product/00-north-star.md § 核心设计原则`](product/00-north-star.md#核心设计原则6-条排序即优先级--见-adr-0011) · 每条的"不变量 / 来源 / 推论 / 回归防御"四段结构在那里。本节是 **review 时的快速对照速查**。
+>
+> 本次 v1 refresh 见 [ADR 0011](product/adr/0011-principles-refresh.md)(4 条 → 6 条 · 参考 Claude Code + LangGraph 核心抽象)。
 
 ### 3.1 Tool First(2026-04-18 扩展版 · 见 L01)
 
@@ -46,21 +50,59 @@
 
 - 数据模型里**没有 `mode` 字段**。PR 里出现 `mode` 字段立即打回
 - 所有员工走同一 `AgentRunner`(封装 LangGraph `create_react_agent`)
-- 模式差异由 `tools[]` / `skill_ids[]` / `max_iterations` 决定
+- 模式差异由 `tools[]` / `skill_ids[]` / `max_iterations` / `system_prompt` / `model_ref` 决定(只有这 5 个字段)
+- "新增一种模式" = 加 Skill 或 Tool,**不许**给 Employee / Conversation 加枚举字段
 
-### 3.3 L4 对话式操作 + 护栏
+### 3.3 Pure-Function Query Loop(新 · v1)
 
-- Tool 必须声明 `scope`(READ / WRITE / IRREVERSIBLE / BOOTSTRAP)
-- WRITE 以上默认 `requires_confirmation=True`,不能绕过 `ConfirmationGate`
+- `AgentRunner.stream(messages, thread_id)` 是 state 的纯函数 —— **每一轮都重新计算** `lc_tools` + `system_prompt`,runner 自己不藏状态
+- 所有状态在 `SkillRuntime` / 消息历史 / 外部 repo 里;runner 读入、yield `AgentEvent`、**不把 LangGraph 类型泄漏**到 `services/` 以上(import-linter 守护)
+- streaming mode 必须是 `stream_mode="messages"`(per-token),不是 `updates` / `values`;`ReasoningEvent` 和 `TokenEvent` 通过 `_split_content_blocks` 分流(extended thinking)
+- 参考:Claude Code `query()` while-true 主循环(`ref-src-claude/V02 § 2.1`)· LangGraph graph-as-state-transform
+- 回归:`test_runner_per_turn_rebuild.py` · import-linter 规则
+
+### 3.4 Skill = Dynamic Capability Pack(新 · v1)
+
+- Skill 是**激活式**动态能力包:描述层(descriptor · ≤ 50 字符)永驻 system prompt;tool_ids + prompt_fragment **只在 `resolve_skill` 被调用时才注入 runtime**
+- 激活后的 `SkillRuntime` 状态**必须持久化**到 conversation(见 3.7 状态可 checkpoint 条款)· uvicorn reload 不丢
+- 弱模型的 context budget 受控:10 个 skill ≈ 500 字符 ≈ 125 token
+- 新增 Skill = `skills/builtin/<id>/SKILL.yaml` 放目录就被发现
+- 参考:Claude Code skill 体系 descriptor + lazy body-load(`ref-src-claude/V05 § 2.1-2.3`)
+- 回归:`test_skills.py::test_descriptor_cap` · `test_skill_runtime_persistence.py`(ADR 0011 新加)
+
+### 3.5 Subagent 是 Composition 基元(新 · v1)
+
+- 跨员工协作(`dispatch_employee` · `spawn_subagent`)**必须复用 `AgentRunner`**,不许写第二条 agent 代码路径
+- Subagent 有独立 `SkillRuntime` · 独立 `max_iterations` / `timeout_seconds` 预算;超时返回 `{error, partial}`,不死等
+- Subagent trace 是父 trace 的子节点(AG-UI / Observatory 展开看)
+- **不许**写"工作流引擎 / workflow DSL" —— 复杂协作只能 spawn + dispatch
+- 参考:Claude Code Task tool · LangGraph subgraph composition
+- 回归:`test_spawn_subagent.py` · `test_dispatch_trace.py`
+
+### 3.6 L4 对话式操作 + 护栏 + Interrupt
+
+- Tool 必须声明 `scope`(READ / WRITE / IRREVERSIBLE / BOOTSTRAP)· 未声明 → 注册拒绝
+- WRITE 以上默认 `requires_confirmation=True`,不能绕过 `ConfirmationGate`(gate 绑在 executor 闭包里 · LLM 看不到"不 gate"版本 · 见 `runner.py:307-344`)
 - BOOTSTRAP 必须走"候选版本 + 显式切换"流程,不能直接生效
+- 测试里跳 gate 只许用 `AutoApprovePolicy` 显式注入,不许改 gate.py
+- 参考:Claude Code permission mode · LangGraph `interrupt()` + human-in-the-loop(语义同构)
+- 回归:`test_runner.py::test_gate_wraps_write_tools` · `test_tool_scope.py`
 
-### 3.4 低耦合 / 高扩展
+### 3.7 低耦合 / 高扩展 + 状态可 Checkpoint(v1 扩展)
 
-- `core/` 禁止 import `sqlalchemy` / `fastapi` / `langgraph` / `langchain` / `openai` / `anthropic`
-- 跨层只 import 接口(ABC),不 import 具体实现
-- 新能力走"注册"而非"改核心代码"
+**三条不变量:**
 
-### 3.5 视觉纪律 · Linear Precise(`web/` 代码必读)
+1. **层间 import 契约**:`core/` 禁止 import `sqlalchemy` / `fastapi` / `langgraph` / `langchain` / `openai` / `anthropic`;跨层只 import 接口(ABC),不 import 具体实现;依赖方向严格自上而下(L10 → L1)
+2. **注册式扩展**:新能力走注册(ToolRegistry / ComponentRegistry / MCPClient / ModelGateway),不走"改核心代码"
+3. **状态可 checkpoint(v1 新)**:所有影响后续决策的 runtime 状态**必须可持久化到 L3**(进程重启可 resume)· 包括:SkillRuntime · 消息 · Confirmation 挂起态 · Artifact · **graph 内部状态**(interrupt / tool pending / subagent stack · 通过 LangGraph `AsyncSqliteSaver`)
+   - 任何"内存 dict"作为状态都是反模式 · 除非旁边有 repo 同步落地
+   - `SkillRuntime` 从 v1 起必须在 `chat_service.send_message` 结束时 flush 到 `SkillRuntimeRepo`(ADR 0011)
+   - **2026-04-23 更新:** LangGraph Checkpointer 通过 [ADR 0014](product/adr/0014-langgraph-checkpointer.md) 落地 · `AgentRunner` 接 `AsyncSqliteSaver`(separate `checkpoints.db`)· `thread_id=conversation_id` · `MessageRepo` 仍是用户可见消息的 SoT(R2),checkpointer 只管 graph 内部状态。禁止 `services/` / `api/` / `core/` direct import `langgraph.checkpoint.*`(import-linter 守 · R1)
+
+- 参考:LangGraph Checkpointer · Claude Code `--resume <session>`(基于消息表 replay)
+- 回归:`lint-imports` · `test_skill_runtime_persistence.py` · `test_checkpointer_phase1.py` · `test_dual_sot_consistency.py` · `test_interrupt_resume.py`
+
+### 3.8 视觉纪律 · Linear Precise(`web/` 代码必读)
 
 视觉契约在 [`product/03-visual-design.md`](product/03-visual-design.md),速查表在 [`design-system/MASTER.md`](design-system/MASTER.md),活样本在 [`web/app/design-lab/page.tsx`](web/app/design-lab/page.tsx)。
 

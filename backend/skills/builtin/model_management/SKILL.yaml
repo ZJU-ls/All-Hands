@@ -1,0 +1,20 @@
+id: allhands.model_management
+name: 模型管理
+description: LLM Provider + Model 的 CRUD / 设默认 / 连通性测试 / 对话测试
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.create_provider
+  - allhands.meta.update_provider
+  - allhands.meta.delete_provider
+  - allhands.meta.set_default_provider
+  - allhands.meta.test_provider_connection
+  - allhands.meta.list_provider_presets
+  - allhands.meta.create_model
+  - allhands.meta.update_model
+  - allhands.meta.delete_model
+  - allhands.meta.ping_model
+  - allhands.meta.chat_test_model
+
+prompt_fragment_file: prompts/guidance.md

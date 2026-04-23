@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import type { Message, RenderPayload, ToolCall } from "./protocol";
+import type {
+  Message,
+  MessageSegment,
+  RenderPayload,
+  ToolCall,
+} from "./protocol";
 
 export type PendingConfirmation = {
   confirmationId: string;
@@ -7,6 +12,22 @@ export type PendingConfirmation = {
   summary: string;
   rationale: string;
   diff?: Record<string, unknown> | null;
+  /**
+   * Conversation the interrupt originated from (ADR 0014 Phase 4e). The
+   * ConfirmationDialog uses this to POST /conversations/{id}/resume after
+   * calling /resolve so the paused graph continues. Optional because the
+   * legacy ``allhands.confirm_required`` path (polling gate) doesn't set it;
+   * the dialog falls back to resolve-only in that case.
+   */
+  conversationId?: string;
+  /**
+   * Source of the pause (ADR 0014 Phase 4e). ``"interrupt"`` = LangGraph
+   * interrupt(), needs a /resume call after /resolve. ``"polling"`` = the
+   * legacy gate waits on DB, no resume call needed. Kept as a string
+   * rather than boolean so future sources (e.g. plan-card) can be added
+   * without changing the shape.
+   */
+  source?: "interrupt" | "polling";
 };
 
 type StreamingMessage = {
@@ -25,8 +46,29 @@ type StreamingMessage = {
   reasoning: string;
   tool_calls: ToolCall[];
   render_payloads: RenderPayload[];
+  /**
+   * Temporal order of text / tool_call / render events as they streamed
+   * in. MessageBubble walks this to render the assistant's narrative
+   * interleaved (text A → render → text B → render) instead of three
+   * bucketed blocks. Maintained by appendToken / updateToolCall /
+   * addRenderPayload so the render order matches stream order.
+   */
+  segments: MessageSegment[];
   created_at: string;
 };
+
+function makeEmptyStreaming(messageId: string): StreamingMessage {
+  return {
+    id: messageId,
+    role: "assistant",
+    content: "",
+    reasoning: "",
+    tool_calls: [],
+    render_payloads: [],
+    segments: [],
+    created_at: new Date().toISOString(),
+  };
+}
 
 /**
  * A failed agent turn the UI needs to surface. Set by InputBar on
@@ -47,6 +89,19 @@ type ChatState = {
   messages: Message[];
   streamingMessage: StreamingMessage | null;
   pendingConfirmations: PendingConfirmation[];
+  /**
+   * ADR 0014 Phase 4e · cross-component resume handoff.
+   *
+   * The ConfirmationDialog resolves a confirmation by (a) POSTing the
+   * decision to /resolve and (b) for interrupt-sourced confirmations,
+   * asking InputBar to open a /resume SSE that continues the paused turn.
+   * Because streaming lives in InputBar's useEffect (one owner per page),
+   * the Dialog publishes its request here and InputBar picks it up.
+   *
+   * Shape: { conversationId, decision }. Cleared by InputBar once the
+   * resume SSE is opened. Null when nothing is pending.
+   */
+  pendingResumeRequest: { conversationId: string; decision: "approve" | "reject" } | null;
   isStreaming: boolean;
   streamError: StreamError | null;
 
@@ -76,6 +131,9 @@ type ChatState = {
   addRenderPayload: (messageId: string, payload: RenderPayload) => void;
   addConfirmation: (conf: PendingConfirmation) => void;
   removeConfirmation: (confirmationId: string) => void;
+  /** ADR 0014 Phase 4e · published by ConfirmationDialog, consumed by InputBar. */
+  requestResume: (req: { conversationId: string; decision: "approve" | "reject" }) => void;
+  clearResumeRequest: () => void;
   setStreamError: (err: StreamError | null) => void;
   reset: () => void;
 };
@@ -85,6 +143,7 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   streamingMessage: null,
   pendingConfirmations: [],
+  pendingResumeRequest: null,
   isStreaming: false,
   streamError: null,
 
@@ -116,25 +175,30 @@ export const useChatStore = create<ChatState>((set) => ({
       return {
         isStreaming: true,
         streamError: null,
-        streamingMessage: {
-          id: messageId,
-          role: "assistant",
-          content: "",
-          reasoning: "",
-          tool_calls: [],
-          render_payloads: [],
-          created_at: new Date().toISOString(),
-        },
+        streamingMessage: makeEmptyStreaming(messageId),
       };
     }),
 
   appendToken: (_messageId, delta) =>
     set((state) => {
       if (!state.streamingMessage) return state;
+      const segs = state.streamingMessage.segments;
+      const last = segs[segs.length - 1];
+      // Coalesce consecutive text deltas into the same text segment so the
+      // narrative renders as one markdown block between tool/render events
+      // instead of hundreds of one-token islands.
+      const nextSegs: MessageSegment[] =
+        last && last.kind === "text"
+          ? [
+              ...segs.slice(0, -1),
+              { kind: "text", content: last.content + delta },
+            ]
+          : [...segs, { kind: "text", content: delta }];
       return {
         streamingMessage: {
           ...state.streamingMessage,
           content: state.streamingMessage.content + delta,
+          segments: nextSegs,
         },
       };
     }),
@@ -144,18 +208,12 @@ export const useChatStore = create<ChatState>((set) => ({
       // Reasoning may start before the first text token, so we may need to
       // seed the streaming message ourselves. Once it exists, we accumulate.
       if (!state.streamingMessage) {
+        const seeded = makeEmptyStreaming(messageId);
+        seeded.reasoning = delta;
         return {
           isStreaming: true,
           streamError: null,
-          streamingMessage: {
-            id: messageId,
-            role: "assistant",
-            content: "",
-            reasoning: delta,
-            tool_calls: [],
-            render_payloads: [],
-            created_at: new Date().toISOString(),
-          },
+          streamingMessage: seeded,
         };
       }
       return {
@@ -179,6 +237,10 @@ export const useChatStore = create<ChatState>((set) => ({
         reasoning: state.streamingMessage.reasoning || undefined,
         tool_calls: state.streamingMessage.tool_calls,
         render_payloads: state.streamingMessage.render_payloads,
+        segments:
+          state.streamingMessage.segments.length > 0
+            ? state.streamingMessage.segments
+            : undefined,
         created_at: state.streamingMessage.created_at,
         tool_call_id: null,
         trace_ref: null,
@@ -205,18 +267,35 @@ export const useChatStore = create<ChatState>((set) => ({
             tc.id === toolCall.id ? toolCall : tc,
           )
         : [...state.streamingMessage.tool_calls, toolCall];
+      // Append a segment the first time we see this tool_call id; subsequent
+      // updates (pending → running → succeeded) just mutate the tool_call
+      // entry in place so the segment order stays anchored at the moment
+      // the call first appeared in the stream.
+      const segs = state.streamingMessage.segments;
+      const nextSegs: MessageSegment[] = existing
+        ? segs
+        : [...segs, { kind: "tool_call", tool_call_id: toolCall.id }];
       return {
-        streamingMessage: { ...state.streamingMessage, tool_calls: newCalls },
+        streamingMessage: {
+          ...state.streamingMessage,
+          tool_calls: newCalls,
+          segments: nextSegs,
+        },
       };
     }),
 
   addRenderPayload: (_messageId, payload) =>
     set((state) => {
       if (!state.streamingMessage) return state;
+      const nextIndex = state.streamingMessage.render_payloads.length;
       return {
         streamingMessage: {
           ...state.streamingMessage,
           render_payloads: [...state.streamingMessage.render_payloads, payload],
+          segments: [
+            ...state.streamingMessage.segments,
+            { kind: "render", index: nextIndex },
+          ],
         },
       };
     }),
@@ -233,6 +312,10 @@ export const useChatStore = create<ChatState>((set) => ({
       ),
     })),
 
+  requestResume: (req) => set({ pendingResumeRequest: req }),
+
+  clearResumeRequest: () => set({ pendingResumeRequest: null }),
+
   setStreamError: (err) => set({ streamError: err }),
 
   reset: () =>
@@ -240,6 +323,7 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: [],
       streamingMessage: null,
       pendingConfirmations: [],
+      pendingResumeRequest: null,
       isStreaming: false,
       streamError: null,
     }),

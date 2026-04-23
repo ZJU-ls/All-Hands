@@ -16,6 +16,8 @@ from allhands.core import Employee, ToolKind, ToolScope
 from allhands.execution.registry import ToolRegistry
 from allhands.execution.skills import SkillRegistry, expand_skills_to_tools, seed_skills
 from allhands.execution.tools import discover_builtin_tools
+from allhands.execution.tools.render.bar_chart import TOOL as BAR_CHART_TOOL
+from allhands.execution.tools.render.bar_chart import execute as bar_chart_exec
 from allhands.execution.tools.render.callout import TOOL as CALLOUT_TOOL
 from allhands.execution.tools.render.callout import execute as callout_exec
 from allhands.execution.tools.render.cards import TOOL as CARDS_TOOL
@@ -26,8 +28,14 @@ from allhands.execution.tools.render.diff import TOOL as DIFF_TOOL
 from allhands.execution.tools.render.diff import execute as diff_exec
 from allhands.execution.tools.render.kv import TOOL as KV_TOOL
 from allhands.execution.tools.render.kv import execute as kv_exec
+from allhands.execution.tools.render.line_chart import TOOL as LINE_CHART_TOOL
+from allhands.execution.tools.render.line_chart import execute as line_chart_exec
 from allhands.execution.tools.render.link_card import TOOL as LINK_CARD_TOOL
 from allhands.execution.tools.render.link_card import execute as link_card_exec
+from allhands.execution.tools.render.pie_chart import TOOL as PIE_CHART_TOOL
+from allhands.execution.tools.render.pie_chart import execute as pie_chart_exec
+from allhands.execution.tools.render.stat import TOOL as STAT_TOOL
+from allhands.execution.tools.render.stat import execute as stat_exec
 from allhands.execution.tools.render.steps import TOOL as STEPS_TOOL
 from allhands.execution.tools.render.steps import execute as steps_exec
 from allhands.execution.tools.render.table import TOOL as TABLE_TOOL
@@ -45,6 +53,10 @@ ALL_NEW_RENDER_TOOLS = [
     DIFF_TOOL,
     CALLOUT_TOOL,
     LINK_CARD_TOOL,
+    STAT_TOOL,
+    LINE_CHART_TOOL,
+    BAR_CHART_TOOL,
+    PIE_CHART_TOOL,
 ]
 
 
@@ -136,6 +148,73 @@ async def test_link_card_emits_navigate_interaction() -> None:
     assert "navigate" in actions
 
 
+async def test_stat_returns_viz_stat_payload() -> None:
+    out = await stat_exec(
+        label="Active runs",
+        value=42,
+        unit="runs",
+        delta={"value": 8, "direction": "up", "tone": "positive"},
+        spark=[1.0, 2.0, 3.0, 2.5, 4.0],
+        caption="last 24h",
+    )
+    assert out["component"] == "Viz.Stat"
+    assert out["props"]["label"] == "Active runs"
+    assert out["props"]["value"] == 42
+    assert out["props"]["unit"] == "runs"
+    assert out["props"]["delta"]["direction"] == "up"
+    assert out["props"]["spark"] == [1.0, 2.0, 3.0, 2.5, 4.0]
+
+
+async def test_stat_accepts_stringified_delta_and_trend_alias() -> None:
+    out = await stat_exec(
+        label="今日 Token 消耗",
+        value="128450",
+        unit="tokens",
+        delta='{"value": 12, "trend": "up"}',
+    )
+    assert out["component"] == "Viz.Stat"
+    assert out["props"]["delta"] == {
+        "value": 12,
+        "direction": "up",
+        "tone": "neutral",
+    }
+
+
+async def test_line_chart_passes_series_through() -> None:
+    out = await line_chart_exec(
+        x=["Mon", "Tue", "Wed"],
+        series=[
+            {"label": "p50", "values": [120, 140, 130]},
+            {"label": "p95", "values": [300, 420, 360]},
+        ],
+        y_label="ms",
+    )
+    assert out["component"] == "Viz.LineChart"
+    assert out["props"]["x"] == ["Mon", "Tue", "Wed"]
+    assert len(out["props"]["series"]) == 2
+    assert out["props"]["y_label"] == "ms"
+
+
+async def test_bar_chart_defaults_to_vertical() -> None:
+    out = await bar_chart_exec(
+        bars=[{"label": "A", "value": 3}, {"label": "B", "value": 7}],
+    )
+    assert out["component"] == "Viz.BarChart"
+    assert out["props"]["orientation"] == "vertical"
+
+
+async def test_pie_chart_defaults_to_donut() -> None:
+    out = await pie_chart_exec(
+        slices=[
+            {"label": "OpenAI", "value": 60},
+            {"label": "Anthropic", "value": 40},
+        ],
+    )
+    assert out["component"] == "Viz.PieChart"
+    assert out["props"]["variant"] == "donut"
+    assert len(out["props"]["slices"]) == 2
+
+
 def test_discover_builtin_tools_registers_all_render_tools() -> None:
     registry = ToolRegistry()
     discover_builtin_tools(registry)
@@ -147,22 +226,27 @@ def test_discover_builtin_tools_registers_all_render_tools() -> None:
 
 def test_builtin_render_skill_loads_from_manifest() -> None:
     """seed_skills() reads backend/skills/builtin/render/SKILL.yaml and
-    produces a Skill with all 10 tool_ids and a non-empty prompt_fragment.
+    produces a Skill with all viz tool_ids and a non-empty prompt_fragment.
     """
     sr = SkillRegistry()
     seed_skills(sr)
     skill = sr.get("allhands.render")
     assert skill is not None
     assert skill.name
-    assert skill.version == "1.0.0"
-    assert len(skill.tool_ids) == 10
+    assert skill.version  # version bumped when tools added; not pinned here
+    # Baseline structural tools + 4 chart/stat additions = 14 total
+    assert len(skill.tool_ids) == 14
     assert "allhands.render.table" in skill.tool_ids
+    assert "allhands.render.line_chart" in skill.tool_ids
+    assert "allhands.render.bar_chart" in skill.tool_ids
+    assert "allhands.render.pie_chart" in skill.tool_ids
+    assert "allhands.render.stat" in skill.tool_ids
     assert skill.prompt_fragment is not None
     assert "allhands.render.table" in skill.prompt_fragment  # guidance mentions tools
 
 
 def test_expand_skills_merges_render_tools_and_prompt() -> None:
-    """Employee with skill_ids=['allhands.render'] gets all 10 tools +
+    """Employee with skill_ids=['allhands.render'] gets all render tools +
     the guidance fragment composed into prompt_fragment output."""
     from datetime import UTC, datetime
 
@@ -185,9 +269,16 @@ def test_expand_skills_merges_render_tools_and_prompt() -> None:
     )
     tools, fragment = expand_skills_to_tools(emp, skill_registry, tool_registry)
     tool_ids = {t.id for t in tools}
-    # All 10 render tools present
-    assert "allhands.render.markdown_card" in tool_ids
-    assert "allhands.render.table" in tool_ids
-    assert "allhands.render.diff" in tool_ids
+    # All render tools present — baseline + new charts/stat
+    for expected in (
+        "allhands.render.markdown_card",
+        "allhands.render.table",
+        "allhands.render.diff",
+        "allhands.render.stat",
+        "allhands.render.line_chart",
+        "allhands.render.bar_chart",
+        "allhands.render.pie_chart",
+    ):
+        assert expected in tool_ids
     # Fragment came from guidance.md
     assert "allhands.render.table" in fragment

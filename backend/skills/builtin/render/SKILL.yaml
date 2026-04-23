@@ -1,7 +1,7 @@
 id: allhands.render
 name: 可视化渲染
-description: Structured display — table, kv, cards, timeline, steps, code, diff, callout, link_card.
-version: 1.0.0
+description: Structured display + charts — table, kv, cards, timeline, steps, code, diff, callout, link_card, stat, line/bar/pie charts.
+version: 1.1.0
 builtin: true
 
 tool_ids:
@@ -15,5 +15,9 @@ tool_ids:
   - allhands.render.diff
   - allhands.render.callout
   - allhands.render.link_card
+  - allhands.render.stat
+  - allhands.render.line_chart
+  - allhands.render.bar_chart
+  - allhands.render.pie_chart
 
 prompt_fragment_file: prompts/guidance.md

@@ -18,45 +18,28 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
-from pydantic import BaseModel, Field
 
-from allhands.core import Employee, Skill, Tool
+from allhands.core import Employee, Skill, SkillDescriptor, SkillRuntime, Tool
+from allhands.core.skill_runtime import DESCRIPTOR_MAX_CHARS as _DESCRIPTOR_MAX_CHARS
+
+# Re-export so existing `from allhands.execution.skills import SkillRuntime / SkillDescriptor`
+# imports keep working. ADR 0011 moved the domain models into `core/` so
+# `persistence/` can import them without breaking the layering contract.
+__all__ = [
+    "SkillDescriptor",
+    "SkillRegistry",
+    "SkillRuntime",
+    "bootstrap_employee_runtime",
+    "expand_skills_to_tools",
+    "render_skill_descriptors",
+    "seed_skills",
+]
 
 if TYPE_CHECKING:
     from allhands.execution.registry import ToolRegistry
 
 
 _BUILTIN_SKILLS_ROOT = Path(__file__).resolve().parents[3] / "skills" / "builtin"
-_DESCRIPTOR_MAX_CHARS = 50
-
-
-class SkillDescriptor(BaseModel):
-    """Lightweight skill summary stamped into the system prompt at turn 0.
-
-    Contract § 8.4: description ≤ 50 chars · 10 skills → ~500 chars ≈ 125 tokens.
-    Intentionally does NOT carry `tool_ids` or `prompt_fragment` — those load
-    only on resolve_skill activation to keep the weak-model context budget low.
-    """
-
-    id: str = Field(..., min_length=1)
-    name: str = Field(..., min_length=1)
-    description: str = Field(..., max_length=_DESCRIPTOR_MAX_CHARS)
-
-    model_config = {"frozen": True}
-
-
-class SkillRuntime(BaseModel):
-    """Per-conversation mutable skill state consumed by AgentRunner.
-
-    Contract § 8.2: AgentRunner rebuilds lc_tools and system prompt each turn
-    from `base_tool_ids + flatten(resolved_skills.values()) + descriptors + fragments`.
-    Ref: ref-src-claude/V02 § 2.1 `query()` main loop rebuild.
-    """
-
-    base_tool_ids: list[str] = Field(default_factory=list)
-    skill_descriptors: list[SkillDescriptor] = Field(default_factory=list)
-    resolved_skills: dict[str, list[str]] = Field(default_factory=dict)
-    resolved_fragments: list[str] = Field(default_factory=list)
 
 
 def _truncate(text: str) -> str:
@@ -219,19 +202,39 @@ def bootstrap_employee_runtime(
 ) -> SkillRuntime:
     """Start-of-conversation scaffolding · contract § 8.1.
 
-    Consumes only descriptors; the full skill body is materialized later by
-    `resolve_skill`. This is the entry point that *replaces*
-    `expand_skills_to_tools` at runtime (the eager function stays for dry-run).
+    Descriptors always load; fragment + tool_ids are lazy via `resolve_skill`
+    for normal employees. **Lead Agent (E22) auto-resolves every mounted
+    skill at turn 0** — the LangGraph `create_react_agent` binds the tool
+    list at agent creation, so a mid-turn `resolve_skill` wouldn't actually
+    make the newly unlocked tools callable in the same turn (we saw this
+    as "Error: create_employee is not a valid tool" right after a successful
+    resolve_skill). Lead is the one employee where skill = declarative
+    capability pack (organization, documentation, per-install toggle) and
+    mid-turn activation is not needed — so eagerly materialize at turn 0
+    and keep the react loop simple.
     """
     del tool_registry  # signature symmetry with expand_skills_to_tools
     descriptors: list[SkillDescriptor] = []
+    resolved_skills: dict[str, list[str]] = {}
+    resolved_fragments: list[str] = []
     for sid in employee.skill_ids:
         d = skill_registry.get_descriptor(sid)
-        if d is not None:
-            descriptors.append(d)
+        if d is None:
+            continue
+        descriptors.append(d)
+        if employee.is_lead_agent:
+            # Eager materialize: grab the full skill body now.
+            skill = skill_registry.get_full(sid)
+            if skill is not None:
+                resolved_skills[sid] = list(skill.tool_ids)
+                if skill.prompt_fragment:
+                    resolved_fragments.append(skill.prompt_fragment)
+
     return SkillRuntime(
         base_tool_ids=list(employee.tool_ids),
         skill_descriptors=descriptors,
+        resolved_skills=resolved_skills,
+        resolved_fragments=resolved_fragments,
     )
 
 

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
         Message,
         ObservabilityConfig,
         Skill,
+        SkillRuntime,
         Task,
         TaskStatus,
         Trigger,
@@ -178,3 +179,16 @@ class ObservabilityConfigRepo(Protocol):
 
     async def load(self) -> ObservabilityConfig: ...
     async def save(self, config: ObservabilityConfig) -> ObservabilityConfig: ...
+
+
+class SkillRuntimeRepo(Protocol):
+    """Per-conversation SkillRuntime checkpointing (ADR 0011 · 原则 7).
+
+    Used by ChatService to keep `resolved_skills` / `resolved_fragments` across
+    process restarts. The in-memory cache is the hot path; repo is read on
+    cache miss, written at turn boundaries, and deleted on compact.
+    """
+
+    async def load(self, conversation_id: str) -> SkillRuntime | None: ...
+    async def save(self, conversation_id: str, runtime: SkillRuntime) -> None: ...
+    async def delete(self, conversation_id: str) -> None: ...

@@ -8,6 +8,10 @@
  *   2. After a snapshot frame, the cockpit body renders summary data.
  *   3. An activity frame prepends an entry to the feed (no polling round-trip).
  *   4. An SSE error surfaces ErrorState with a retry action.
+ *
+ * 2026-04-22 layout refresh · HUD + DrawerRail replace the old QuickActions /
+ * BudgetSummary / HealthPanel / RecentConvList grid. These child components
+ * are mocked so this test focuses on the SSE event plumbing, not layout.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -22,6 +26,12 @@ vi.mock("@/components/shell/AppShell", () => ({
 vi.mock("@/components/ui/ConfirmDialog", () => ({
   ConfirmDialog: () => null,
 }));
+vi.mock("@/components/ui/DotGridBackdrop", () => ({
+  DotGridBackdrop: () => null,
+}));
+vi.mock("@/components/ui/Coachmark", () => ({
+  Coachmark: () => null,
+}));
 vi.mock("@/components/cockpit/ActivityFeed", () => ({
   ActivityFeed: ({ events }: { events: { id: string; summary: string }[] }) => (
     <ul data-testid="feed">
@@ -34,20 +44,14 @@ vi.mock("@/components/cockpit/ActivityFeed", () => ({
 vi.mock("@/components/cockpit/ActiveRunsList", () => ({
   ActiveRunsList: () => <div data-testid="runs" />,
 }));
-vi.mock("@/components/cockpit/RecentConvList", () => ({
-  RecentConvList: () => <div data-testid="convs" />,
-}));
-vi.mock("@/components/cockpit/HealthPanel", () => ({
-  HealthPanel: () => <div data-testid="health" />,
-}));
 vi.mock("@/components/cockpit/KpiBar", () => ({
   KpiBar: () => <div data-testid="kpi" />,
 }));
-vi.mock("@/components/cockpit/QuickActions", () => ({
-  QuickActions: () => <div data-testid="qa" />,
+vi.mock("@/components/cockpit/HUD", () => ({
+  HUD: () => <div data-testid="hud" />,
 }));
-vi.mock("@/components/cockpit/BudgetSummary", () => ({
-  BudgetSummary: () => <div data-testid="budget" />,
+vi.mock("@/components/cockpit/DrawerRail", () => ({
+  DrawerRail: () => <aside data-testid="rail" />,
 }));
 
 const { getSummaryMock } = vi.hoisted(() => ({ getSummaryMock: vi.fn() }));
@@ -183,19 +187,20 @@ describe("Cockpit · SSE consumer (I-0006)", () => {
     expect(FakeEventSource.instances).toHaveLength(1);
     expect(FakeEventSource.instances[0]!.url).toBe("/api/cockpit/stream");
 
-    // Snapshot frame arrives via the SSE stream (AG-UI v1 CUSTOM envelope).
     const snap = makeSnapshot();
     await act(async () => {
       FakeEventSource.instances[0]!.emit("CUSTOM", {
         name: "allhands.cockpit_snapshot",
         value: snap,
       });
-      // also resolve the inflight /summary fetch for cleanup
       resolveSummary(snap);
     });
 
     expect(screen.getByTestId("feed")).toBeDefined();
     expect(screen.getByText("Lead 开始调度")).toBeDefined();
+    // New layout contract — HUD + DrawerRail both mount once a snapshot lands.
+    expect(screen.getByTestId("hud")).toBeDefined();
+    expect(screen.getByTestId("rail")).toBeDefined();
   });
 
   it("prepends activity events to the feed", async () => {
@@ -252,7 +257,8 @@ describe("Cockpit · SSE consumer (I-0006)", () => {
         value: makeSnapshot(),
       });
     });
-    // Cockpit proper must not install any interval timer.
+    // Cockpit proper must not install any interval timer. (HUD's wall-clock
+    // tick lives inside the HUD component, which is mocked in this suite.)
     expect(setIntervalSpy).not.toHaveBeenCalled();
     setIntervalSpy.mockRestore();
   });

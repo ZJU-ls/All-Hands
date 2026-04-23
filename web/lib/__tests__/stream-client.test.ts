@@ -233,6 +233,40 @@ describe("openStream · AG-UI v1 semantic hooks", () => {
     ]);
   });
 
+  it("delivers allhands.interrupt_required CUSTOM with forwarded id + value (ADR 0014 Phase 3)", async () => {
+    const customs: { name: string; value: unknown }[] = [];
+    const fetchMock = installFetch(() =>
+      mockStreamingResponse([
+        'event: RUN_STARTED\ndata: {"threadId":"conv_1","runId":"run_1"}\n\n',
+        'event: CUSTOM\ndata: {"name":"allhands.interrupt_required","value":{"interrupt_id":"itr_abc","value":{"kind":"confirm_required","summary":"Delete employee 42","rationale":"scope=WRITE"}}}\n\n',
+        'event: RUN_FINISHED\ndata: {"threadId":"conv_1","runId":"run_1"}\n\n',
+      ]),
+    );
+    restore = fetchMock.restore;
+
+    const handle = openStream(
+      "/api/stream",
+      { method: "POST" },
+      { onCustom: (name, value) => customs.push({ name, value }) },
+    );
+    await handle.done;
+
+    // Backend → AG-UI encoder → transport → parser preserves both the
+    // LangGraph interrupt_id (for resume) and the payload shape the agent
+    // built for the prompt. If any of those drop, the UI can't match a
+    // user decision back to the right pause.
+    expect(customs).toHaveLength(1);
+    expect(customs[0]?.name).toBe("allhands.interrupt_required");
+    expect(customs[0]?.value).toEqual({
+      interrupt_id: "itr_abc",
+      value: {
+        kind: "confirm_required",
+        summary: "Delete employee 42",
+        rationale: "scope=WRITE",
+      },
+    });
+  });
+
   it("surfaces RUN_ERROR to onRunError (not onError)", async () => {
     const onRunError = vi.fn();
     const onError = vi.fn();

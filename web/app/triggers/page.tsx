@@ -6,6 +6,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Select";
 
 type Kind = "timer" | "event";
 
@@ -461,19 +462,21 @@ function CreateDrawer({
 
           <div>
             <label className="text-xs text-text-muted block mb-1.5">动作</label>
-            <select
+            <Select
               value={draft.action_type}
-              onChange={(e) =>
-                setDraft({ ...draft, action_type: e.target.value as ActionType })
+              onChange={(v) =>
+                setDraft({ ...draft, action_type: v as ActionType })
               }
-              data-testid="action-type"
-              className="w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text focus:outline-none focus:border-primary transition-colors duration-base"
-            >
-              <option value="notify_user">通知用户 · notify_user</option>
-              <option value="invoke_tool">调用 Tool · invoke_tool</option>
-              <option value="dispatch_employee">派发员工 · dispatch_employee</option>
-              <option value="continue_conversation">续会话 · continue_conversation</option>
-            </select>
+              options={[
+                { value: "notify_user", label: "通知用户", hint: "notify_user" },
+                { value: "invoke_tool", label: "调用 Tool", hint: "invoke_tool" },
+                { value: "dispatch_employee", label: "派发员工", hint: "dispatch_employee" },
+                { value: "continue_conversation", label: "续会话", hint: "continue_conversation" },
+              ]}
+              testId="action-type"
+              ariaLabel="触发动作"
+              className="w-full"
+            />
           </div>
 
           {draft.action_type === "notify_user" && (

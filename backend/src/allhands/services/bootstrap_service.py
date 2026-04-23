@@ -37,7 +37,7 @@ from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
 from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
 from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
 from allhands.execution.tools.meta.skill_tools import ALL_SKILL_META_TOOLS
-from allhands.services.employee_service import DEFAULT_SKILL_IDS
+from allhands.services.employee_service import DEFAULT_SKILL_IDS, LEAD_SKILL_IDS
 
 if TYPE_CHECKING:
     from allhands.persistence.repositories import (
@@ -63,14 +63,122 @@ def load_lead_prompt() -> str:
         return FALLBACK_PROMPT
 
 
-def default_lead_tool_ids() -> list[str]:
-    """The Lead Agent's baseline tool surface.
+# L16 · Render tools are **output channel**, not a capability pack. Keeping
+# them skill-gated means when the user says "画一下 / 展示 / 对比",
+# Lead has no chart tool in toolset and the LLM silently hallucinates
+# emoji-heavy markdown pretending it rendered (E20). The skill-gate was
+# designed for WRITE-tool context-bloat (pre-E22 Lead had 45 write tools
+# and picked the wrong-shaped ones); render is 100% READ-scope, same as
+# ``list_*``, and should be always-hot for the same reason.
+LEAD_ALWAYS_HOT_RENDER_TOOL_IDS: list[str] = [
+    "allhands.render.markdown_card",
+    "allhands.render.table",
+    "allhands.render.kv",
+    "allhands.render.cards",
+    "allhands.render.timeline",
+    "allhands.render.steps",
+    "allhands.render.code",
+    "allhands.render.diff",
+    "allhands.render.callout",
+    "allhands.render.link_card",
+    "allhands.render.stat",
+    "allhands.render.line_chart",
+    "allhands.render.bar_chart",
+    "allhands.render.pie_chart",
+]
 
-    Covers every agent-managed resource's CRUD + runtime actions. Exposed as
-    a function (not a module constant) so callers outside bootstrap — e.g.
-    seed_service, or a future `upgrade-lead-tools` admin op — can reuse the
-    same list without risking import cycles or stale caching.
+
+# Captures the `default_lead_tool_ids()` baseline **before** render was
+# promoted to always-hot (L16 · 2026-04-22). Used only by the on-boot
+# migration guard to detect Leads bootstrapped pre-L16 so they auto-upgrade.
+# Do NOT reuse this for anything else — new invariants belong in
+# ``default_lead_tool_ids``.
+_LEAD_BASELINE_PRE_RENDER_HOT: frozenset[str] = frozenset(
+    [
+        "allhands.meta.list_providers",
+        "allhands.meta.get_provider",
+        "allhands.meta.list_models",
+        "allhands.meta.get_model",
+        "allhands.meta.list_skills",
+        "allhands.meta.get_skill_detail",
+        "allhands.meta.list_mcp_servers",
+        "allhands.meta.get_mcp_server",
+        "allhands.meta.list_employees",
+        "allhands.meta.get_employee_detail",
+        "allhands.meta.resolve_skill",
+        "allhands.meta.dispatch_employee",
+        "allhands.meta.spawn_subagent",
+        "allhands.meta.plan_create",
+        "allhands.meta.plan_update_step",
+        "allhands.meta.plan_complete_step",
+        "allhands.meta.plan_view",
+        "allhands.meta.cockpit.get_workspace_summary",
+    ]
+)
+
+
+def default_lead_tool_ids() -> list[str]:
+    """The Lead Agent's baseline **always-hot** tool set.
+
+    Two slices:
+
+    1. **Discovery + orchestration** (17 tools · E22 refresh)
+       After E22 admin CRUD moved into skill packs, Lead only keeps the
+       tools it needs every turn:
+
+        - READ ``list_*`` / ``get_*`` on every agent-managed resource
+          (providers / models / skills / mcp / employees) — needed so Lead
+          can answer "what's configured?" without activating a skill
+        - ``resolve_skill`` — the unlock mechanism for admin skill packs
+        - ``dispatch_employee`` + ``spawn_subagent`` — core orchestration
+        - ``plan_*`` 4-tuple — working memo, lightweight
+        - ``cockpit.get_workspace_summary`` — state-of-the-world
+
+       Pre-E22 the Lead had 45 write tools hot at once and would pick the
+       wrong-shaped one; the skill-pack gate fixed that.
+
+    2. **Render** (14 tools · L16 · 2026-04-22)
+       Chart / table / kv / callout — these are how Lead communicates
+       visually to the user. Gating them behind ``resolve_skill`` meant
+       the LLM would hallucinate emoji markdown pretending to have drawn
+       something (E20). Render is READ-scope and output-channel, not a
+       CRUD pack — always-hot is the right default, same tier as
+       ``list_*``.
     """
+    # Hand-picked · NOT bundle-based (admin CRUD bundles stay skill-gated).
+    # Keep this list short and reviewable.
+    return [
+        # Discovery (L06 protocol — always fresh, always hot)
+        "allhands.meta.list_providers",
+        "allhands.meta.get_provider",
+        "allhands.meta.list_models",
+        "allhands.meta.get_model",
+        "allhands.meta.list_skills",
+        "allhands.meta.get_skill_detail",
+        "allhands.meta.list_mcp_servers",
+        "allhands.meta.get_mcp_server",
+        "allhands.meta.list_employees",
+        "allhands.meta.get_employee_detail",
+        # Orchestration
+        "allhands.meta.resolve_skill",
+        "allhands.meta.dispatch_employee",
+        "allhands.meta.spawn_subagent",
+        # Working memo (Plan · 4 small tools · cheap to always have)
+        "allhands.meta.plan_create",
+        "allhands.meta.plan_update_step",
+        "allhands.meta.plan_complete_step",
+        "allhands.meta.plan_view",
+        # State snapshot (single tool, compact output)
+        "allhands.meta.cockpit.get_workspace_summary",
+        # Output channel (L16 · render as how-the-LLM-visualises-reply,
+        # not a capability pack). See module-level constant for rationale.
+        *LEAD_ALWAYS_HOT_RENDER_TOOL_IDS,
+    ]
+
+
+# Legacy: some seed / backfill paths want the pre-E22 bundle dump to clone
+# the full write surface onto an ad-hoc employee. Kept for those callers.
+def legacy_lead_tool_ids_flat() -> list[str]:
     bundles = [
         ALL_META_TOOLS,
         ALL_PLAN_TOOLS,
@@ -106,10 +214,50 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
     """
     existing = await repo.get_lead()
     canonical_prompt = load_lead_prompt()
+    canonical_tools = set(default_lead_tool_ids())
+    canonical_skills = set(LEAD_SKILL_IDS)
+    legacy_tools = set(legacy_lead_tool_ids_flat())
     if existing is not None:
+        updates: dict[str, object] = {}
         if existing.system_prompt != canonical_prompt:
-            refreshed = existing.model_copy(update={"system_prompt": canonical_prompt})
-            return await repo.upsert(refreshed)
+            updates["system_prompt"] = canonical_prompt
+
+        # E22 auto-upgrade: if the Lead still has the pre-refactor flat bundle
+        # (was bootstrapped before the skill-pack split), migrate to the new
+        # slim core + skill packs. We detect "pre-refactor Lead" by:
+        #   (a) tool set is a subset of the legacy 45-tool bundle (no foreign
+        #       tools the user manually added)
+        #   (b) tool set contains multiple write-scope admin tools at once
+        #       (create_employee AND create_provider AND create_model) — a
+        #       signature only the old bundled bootstrap produced. This
+        #       excludes test fixtures and user-trimmed Leads that keep only
+        #       a subset of reads.
+        legacy_signature = {
+            "allhands.meta.create_employee",
+            "allhands.meta.create_provider",
+            "allhands.meta.create_model",
+        }
+        existing_tools = set(existing.tool_ids)
+        looks_like_legacy_lead = (
+            existing_tools.issubset(legacy_tools)
+            and existing_tools != canonical_tools
+            and len(legacy_signature & existing_tools) >= 2
+        )
+        if looks_like_legacy_lead or existing_tools == set(_LEAD_BASELINE_PRE_RENDER_HOT):
+            updates["tool_ids"] = list(default_lead_tool_ids())
+
+        existing_skills = set(existing.skill_ids)
+        if (
+            looks_like_legacy_lead
+            and existing_skills == set(DEFAULT_SKILL_IDS)
+            and canonical_skills != existing_skills
+        ):
+            # Same guard: only migrate skill_ids when we already decided
+            # this is a legacy-style Lead. Keeps user customizations intact.
+            updates["skill_ids"] = list(LEAD_SKILL_IDS)
+
+        if updates:
+            return await repo.upsert(existing.model_copy(update=updates))
         return existing
 
     tool_ids = default_lead_tool_ids()
@@ -121,7 +269,7 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
         system_prompt=canonical_prompt,
         model_ref="openai/gpt-4o-mini",
         tool_ids=tool_ids,
-        skill_ids=list(DEFAULT_SKILL_IDS),
+        skill_ids=list(LEAD_SKILL_IDS),
         max_iterations=20,
         is_lead_agent=True,
         status="published",

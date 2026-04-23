@@ -46,12 +46,31 @@ def resolve_model_name(provider: LLMProvider, model_ref: str) -> str:
     return provider.default_model
 
 
-def build_llm(provider: LLMProvider, model_ref: str) -> Any:
+def build_llm(
+    provider: LLMProvider,
+    model_ref: str,
+    *,
+    thinking: bool | None = None,
+) -> Any:
     """Return a LangChain BaseChatModel bound to `provider` + `model_ref`.
 
     `model_ref` may be bare (``"gpt-4o-mini"``) or a ``provider/model``
     composite — see ``resolve_model_name`` for the matching rules. This
     function just picks the right LangChain adapter by ``provider.kind``.
+
+    ``thinking`` is the per-turn reasoning toggle (E18):
+    ``langchain_anthropic.ChatAnthropic.thinking`` is a Pydantic ctor field
+    that is read once at request-payload build time — ``.bind(thinking=...)``
+    does NOT propagate (we tried; 146 reasoning chunks still streamed for
+    a ``thinking=False`` user click). The only reliable wire is to bake it
+    into the constructor. For OpenAI-compat adapters the caller keeps using
+    ``.bind(extra_body={"enable_thinking": bool})`` — that path works
+    because ``extra_body`` is a call-time pass-through.
+
+    Contract:
+      - ``thinking`` None → don't set anything, inherit provider default
+      - ``thinking`` bool + anthropic kind → baked into ctor
+      - ``thinking`` bool + openai kind → handled by caller via bind
     """
     model_name = resolve_model_name(provider, model_ref)
 
@@ -63,6 +82,14 @@ def build_llm(provider: LLMProvider, model_ref: str) -> Any:
             kwargs["api_key"] = provider.api_key
         if provider.base_url:
             kwargs["base_url"] = provider.base_url
+        if thinking is not None:
+            # budget_tokens must be ≥ 1024 when enabled (Anthropic Messages
+            # API rejects smaller). 8000 is a safe default that won't eat
+            # the full max_tokens window. DashScope's anthropic-compat
+            # proxy honours the same shape.
+            kwargs["thinking"] = (
+                {"type": "enabled", "budget_tokens": 8000} if thinking else {"type": "disabled"}
+            )
         return ChatAnthropic(**kwargs)
 
     from langchain_openai import ChatOpenAI

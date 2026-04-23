@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from allhands.core import Tool
@@ -38,6 +38,8 @@ from allhands.execution.tools.meta.stock_tools import (  # single-line register:
 )
 from allhands.execution.tools.meta.task_tools import ALL_TASK_META_TOOLS
 from allhands.execution.tools.meta.trigger_tools import ALL_TRIGGER_META_TOOLS
+from allhands.execution.tools.render.bar_chart import TOOL as BAR_CHART_TOOL
+from allhands.execution.tools.render.bar_chart import execute as bar_chart_execute
 from allhands.execution.tools.render.callout import TOOL as CALLOUT_TOOL
 from allhands.execution.tools.render.callout import execute as callout_execute
 from allhands.execution.tools.render.cards import TOOL as CARDS_TOOL
@@ -48,12 +50,18 @@ from allhands.execution.tools.render.diff import TOOL as DIFF_TOOL
 from allhands.execution.tools.render.diff import execute as diff_execute
 from allhands.execution.tools.render.kv import TOOL as KV_TOOL
 from allhands.execution.tools.render.kv import execute as kv_execute
+from allhands.execution.tools.render.line_chart import TOOL as LINE_CHART_TOOL
+from allhands.execution.tools.render.line_chart import execute as line_chart_execute
 from allhands.execution.tools.render.link_card import TOOL as LINK_CARD_TOOL
 from allhands.execution.tools.render.link_card import execute as link_card_execute
 from allhands.execution.tools.render.markdown_card import TOOL as MARKDOWN_CARD_TOOL
 from allhands.execution.tools.render.markdown_card import execute as markdown_card_execute
+from allhands.execution.tools.render.pie_chart import TOOL as PIE_CHART_TOOL
+from allhands.execution.tools.render.pie_chart import execute as pie_chart_execute
 from allhands.execution.tools.render.plan import TOOL as RENDER_PLAN_TOOL
 from allhands.execution.tools.render.plan import execute as render_plan_execute
+from allhands.execution.tools.render.stat import TOOL as STAT_TOOL
+from allhands.execution.tools.render.stat import execute as stat_execute
 from allhands.execution.tools.render.steps import TOOL as STEPS_TOOL
 from allhands.execution.tools.render.steps import execute as steps_execute
 from allhands.execution.tools.render.table import TOOL as TABLE_TOOL
@@ -78,6 +86,10 @@ _RENDER_TOOLS = (
     (CALLOUT_TOOL, callout_execute),
     (LINK_CARD_TOOL, link_card_execute),
     (RENDER_PLAN_TOOL, render_plan_execute),
+    (STAT_TOOL, stat_execute),
+    (LINE_CHART_TOOL, line_chart_execute),
+    (BAR_CHART_TOOL, bar_chart_execute),
+    (PIE_CHART_TOOL, pie_chart_execute),
 )
 
 
@@ -93,13 +105,34 @@ _META_TOOLS_WITH_EXECUTORS: tuple[tuple[Tool, ToolExecutor], ...] = (
 _META_EXECUTOR_TOOL_IDS = frozenset(t.id for t, _ in _META_TOOLS_WITH_EXECUTORS)
 
 
-def discover_builtin_tools(registry: ToolRegistry) -> None:
+def discover_builtin_tools(
+    registry: ToolRegistry,
+    session_maker: Any | None = None,
+) -> None:
+    """Register every builtin / render / meta tool on the registry.
+
+    ``session_maker`` (E21): when provided, READ-scope meta tools (list_* /
+    get_*) get real executors that open a fresh async session per invocation.
+    When omitted — the pre-E21 path — they fall back to ``_async_noop`` and
+    return ``{}``; that's the path Lead was on, and why Lead reported "0 of
+    each" even though the DB clearly had records. Keep the ``None`` branch
+    for unit tests that build registries without any DB.
+    """
+
     registry.register(FETCH_URL_TOOL, fetch_url_execute)
     registry.register(WRITE_FILE_TOOL, write_file_execute)
     for tool, executor in _RENDER_TOOLS:
         registry.register(tool, executor)
     for meta_tool, meta_executor in _META_TOOLS_WITH_EXECUTORS:
         registry.register(meta_tool, meta_executor)
+
+    read_meta_executors: dict[str, Any] = {}
+    if session_maker is not None:
+        from allhands.execution.tools.meta.executors import READ_META_EXECUTORS
+
+        for tool_id, factory in READ_META_EXECUTORS.items():
+            read_meta_executors[tool_id] = factory(session_maker)
+
     for tool in (
         RESOLVE_SKILL_TOOL,
         SPAWN_SUBAGENT_TOOL,
@@ -121,4 +154,8 @@ def discover_builtin_tools(registry: ToolRegistry) -> None:
     ):
         if tool.id in _META_EXECUTOR_TOOL_IDS:
             continue
-        registry.register(tool, _async_noop)
+        real_executor = read_meta_executors.get(tool.id)
+        if real_executor is not None:
+            registry.register(tool, real_executor)
+        else:
+            registry.register(tool, _async_noop)

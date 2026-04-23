@@ -17,9 +17,14 @@
    - **Mono 字符**:`→` `←` `↑` `↓` `·` `…` `⌘` `↵` `Esc`,mono 字体下渲染整齐
    - **自有 icon 集**(Raycast-style,`web/components/icons/**`):2px stroke · round caps · currentColor · 24×24 viewBox · 仅允许本项目内相对导入
    - **1-line SVG legacy**(`web/components/ui/icons.tsx`):logo 点阵 + 主题切换 sun/moon + 5 类旧图元(check / arrow-right / external / copy / plus-minus),保留不扩展
-2. **颜色密度 ≤ 3 种**(不含语义状态色 + 不含品牌识别色)。整页只允许 `text / muted / primary`,其他一律用 opacity 叠加或 surface 变体。
-   - **品牌识别色豁免**:provider / model 的官方品牌标(`<BrandMark />`)渲染厂商自有色彩(Anthropic 铁锈橙 / DeepSeek 蓝 / Qwen 紫 / Kimi / MiniMax / Zhipu / Bailian)。这是产品识别信息,不是装饰;和语义状态色一样不计入三色预算。**豁免仅限 BrandMark 组件**,其他地方仍禁止引入品牌色 literal。无官方彩色标的品牌(OpenAI / OpenRouter)继续走 mono + `currentColor`。
+2. **颜色密度 ≤ 3**(**UI chrome only**)。导航 / 按钮 / 芯片 / 卡片外壳只许 `text / muted / primary` 三个非语义 token,其他一律用 opacity 叠加或 surface 变体。以下三类各有**独立调色板**,不计入三色预算(详见对应 ADR):
+   - **语义状态色**:success / warning / danger + 各自 `*-soft` 透明变体(ADR 0013)
+   - **品牌识别色**:`<BrandMark />` 渲染的 provider / model 官方色(Anthropic 铁锈橙 / DeepSeek 蓝 / Qwen 紫 / Kimi / MiniMax / Zhipu / Bailian;OpenAI / OpenRouter 等无官方彩色标的继续走 mono + currentColor)
+   - **数据可视化调色板**:`web/components/render/Viz/**` 下图表 / 指标组件的 `viz-1…viz-6` 六色环(ADR 0012)
 3. **动效克制**。时长只用 token 里的 4 档;位移不超过 `2px`;禁用无限循环动画(spinner / pulse 状态点 / shimmer 骨架除外)。
+4. **禁止 AI-slop 双重否定**(ADR 0013 采纳自 [impeccable.style](https://impeccable.style) BAN 1-2):
+   - **BAN 1 · 不许在 card / list item / callout / alert 上用 `border-left > 1px` 或 `border-right > 1px` 做 colored accent stripe**。替代:完整边框 + tinted 底色(`*-soft` token)+ leading glyph / number,或什么都不加。唯一例外 —— sidebar 的 active-nav 标记(conveys state, marks exactly 1 item at a time,and is the Linear / Raycast convention;非装饰)。
+   - **BAN 2 · 不许 gradient text**(`background-clip: text` + `linear/radial/conic-gradient`)。文字用单色;要强调就改 weight / size,不靠 gradient fill。
 
 违反以上三条 = review 打回,无协商空间。
 
@@ -55,6 +60,21 @@
 --color-warning: #D97706;
 --color-danger:  #DC2626;
 
+/* 数据可视化调色板(ADR 0012 · 仅限 components/render/Viz/**)*/
+--color-viz-1: #6366F1;   /* indigo · 与 primary 同色,单 series 默认 */
+--color-viz-2: #0D9488;   /* teal */
+--color-viz-3: #D97706;   /* amber */
+--color-viz-4: #DC2626;   /* rose */
+--color-viz-5: #7C3AED;   /* violet */
+--color-viz-6: #0284C7;   /* sky */
+
+/* 半透明 surface tints — 给 render/Viz 和 tinted states 用,避免在 JSX 里拼 `/10` 字符串 */
+--color-surface-hover: rgba(99,102,241,0.06);
+--color-primary-soft:  rgba(99,102,241,0.10);
+--color-success-soft:  rgba(5,150,105,0.10);
+--color-warning-soft:  rgba(217,119,6,0.10);
+--color-danger-soft:   rgba(220,38,38,0.10);
+
 /* Dark (.dark) */
 --color-bg:            #09090B;
 --color-surface:       #111113;
@@ -73,6 +93,20 @@
 --color-success: #10B981;
 --color-warning: #F59E0B;
 --color-danger:  #EF4444;
+
+/* 数据可视化调色板 · dark variant(与 light 同序,亮度抬高以配合 #09090B 背景)*/
+--color-viz-1: #818CF8;
+--color-viz-2: #2DD4BF;
+--color-viz-3: #FBBF24;
+--color-viz-4: #F87171;
+--color-viz-5: #A78BFA;
+--color-viz-6: #38BDF8;
+
+--color-surface-hover: rgba(129,140,248,0.08);
+--color-primary-soft:  rgba(129,140,248,0.14);
+--color-success-soft:  rgba(16,185,129,0.14);
+--color-warning-soft:  rgba(245,158,11,0.14);
+--color-danger-soft:   rgba(239,68,68,0.14);
 ```
 
 **Role 色(消息气泡左边栏):**
@@ -107,20 +141,38 @@
   - Section label(SIDEBAR 分区标题,小号大写字母间距拉开)
   - 方向符 / 终端风格标签(`→`、`· /gateway/providers · 2`)
 
-### 1.3 字号阶梯
+### 1.3 字号阶梯(ADR 0013 · 2026-04-22 刷新)
 
-Inter 的 `-0.01em` tracking 在 18px+ 时更精准。
+**5 档模块化字号 · 1.25 比例 · rem-based**。Inter 的 `-0.01em` tracking 在 18px+ 时更精准。Body 从 13px 升到 **15px**(`0.9375rem`),介于 impeccable 推荐的 16px 和原先 13px 之间 —— 在密集 app UI(侧栏 + 主面板 + 抽屉 + tool card 嵌套)里 16px 行宽不够,15px 是妥协后的 readable 阈值。
 
-| 用途 | Tailwind | Size | Weight | Tracking |
+CSS tokens(定义在 [`globals.css`](../web/app/globals.css)):
+
+```css
+--text-caption:  0.75rem;     /* 12px · mono 元数据 / kbd chip / trace_id */
+--text-sm:       0.8125rem;   /* 13px · 二级 UI / card 内标签 */
+--text-base:     0.9375rem;   /* 15px · body / 对话 / input — 新基线 */
+--text-lg:       1.1875rem;   /* 19px · 卡片标题 / 抽屉头 / 副标题 */
+--text-xl:       1.5rem;      /* 24px · 页面标题 / hero metric */
+--text-display:  2rem;        /* 32px · 空态 hero / landing */
+
+--leading-heading: 1.2;
+--leading-body:    1.6;
+--leading-data:    1.45;       /* tabular / mono 场景 */
+```
+
+Tailwind utilities 同名映射:`text-caption · text-sm · text-base · text-lg · text-xl · text-display`。`text-sm` / `text-xl` 会覆盖 Tailwind 默认值 —— 故意的,让既有 JSX 自动吃到新尺寸。
+
+| 用途 | Token | Size | Weight | Tracking |
 |---|---|---|---|---|
-| H1(极少用) | `text-[26px]` | 26 | 600 | `-0.01em` |
-| H2 / 页标题 | `text-lg` (18) | 18 | 600 | `-0.005em` |
-| 卡片标题 / Label | `text-sm` (14) | 14 | 500 | default |
-| Body(对话、说明) | `text-[13px]` | 13 | 400 | default |
-| Caption / mono meta | `text-[11px]` | 11 | 500 | default |
-| 辅助小字 | `text-[10px]` | 10 | 500 | `0.05em`(uppercase 时) |
+| Hero / empty-state 主字 | `text-display` | 32 | 600 | `-0.02em` |
+| 页面标题 / H1 | `text-xl` | 24 | 600 | `-0.02em` |
+| 卡片标题 / 抽屉头 / H2 | `text-lg` | 19 | 600 | `-0.015em` |
+| Body(对话、说明、input) | `text-base` | 15 | 400 | default |
+| 二级 UI / card 内标签 | `text-sm` | 13 | 500 | default |
+| Caption / mono meta / trace | `text-caption` | 12 | 500 | default |
+| UPPERCASE section label | `text-caption` | 12 | 600 | `0.08em` |
 
-行高:标题 `leading-tight`;正文 `leading-relaxed`;mono 元数据 `leading-normal`。
+行高:标题 `--leading-heading` (1.2);正文 `--leading-body` (1.6);mono / tabular `--leading-data` (1.45)。
 
 ### 1.4 圆角
 
@@ -371,6 +423,55 @@ import { ChatIcon, UserIcon } from "@/components/icons";
 - **三点**:`ah-dot 1.2s` 逐 150ms 延迟
 - **Shimmer**:用于列表骨架,`ah-shimmer 1.4s linear infinite`
 - **Progress**:线性 4px 高条,`bg-surface-2` 底 + `bg-primary` 填充
+
+### 3.9 Popover / Dropdown 位置策略(必读)
+
+任何"触发器 + 可展开面板"(下拉、历史菜单、overlay picker)都必须遵守:
+
+1. **默认方向 = 向下**(`top-full mt-1`)。往上展(`bottom-full mb-1`)是 header-chip 级别的例外,且**不许**硬编码 —— 必须走 flip 逻辑。
+2. **垂直必须 flip**:使用 [`web/lib/popover-placement.ts`](../web/lib/popover-placement.ts) 的 `computePopoverSide(rect, estimatedHeight, window.innerHeight, preferredSide)`。规则:
+   - 优先边能装下 → 用优先边
+   - 装不下但对面空间更多 → 翻到对面
+   - 两边都挤 → 仍然守优先边(抖动比拥挤更让人恼火)
+3. **水平也必须 flip(面板宽于触发器时)**:使用同一份 `popover-placement.ts` 的 `computePopoverAlign(rect, panelWidth, window.innerWidth, preferredAlign)`。`start` = 面板左对齐触发器左缘(向右延展) · `end` = 面板右对齐触发器右缘(向左延展)。典型反例:chip-style 面板(240–320px)在 composer **左半区**按 `end` 对齐 → 面板往左延 240px → 撞 AppShell 侧栏。必须 flip。
+4. **必须 clamp maxHeight 到可用空间**:`Select` 示范做法 ——
+   ```ts
+   const avail = picked === "bottom" ? vh - rect.bottom - 8 : rect.top - 8;
+   setPanelMaxHeight(Math.max(120, Math.min(maxHeight, avail)));
+   ```
+   8px 是对齐 4/8/12 间距阶梯的视口边距。最小 120px 是"至少一屏选项"的保底。
+5. **不许硬编码方向**。以下模式看到就打回:
+   ```tsx
+   // ❌ 硬上展 · 撞头部
+   className="absolute bottom-full mb-1 ..."
+   // ❌ 硬下展 · 出视口
+   className="absolute top-full mt-1 max-h-96 ..."
+   // ❌ 硬右对齐 · 触发器偏左时撞侧栏
+   className="absolute right-0 w-60 ..."
+   // ✅ 两个轴都由 state 驱动
+   className={cn(
+     side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
+     align === "end" ? "right-0" : "left-0",
+   )}
+   ```
+6. **z-index**:面板 `z-20` 起步,命令面板 / 全局抽屉 `z-30+`。嵌在 `role="dialog"` 里的面板用比 dialog 低 10 的值(`z-40` vs `z-50`),保证点击区分层但不打架。
+7. **DOM 位置**:面板渲染在触发器同 DOM 子树(非 portal),这样外层"click-outside"判断仍把面板里的点击看成"内部",嵌套 popover 不会互相关(见 `Select` 的 `mousedown` 选项 handler 避开外层关闭的设计)。
+8. **关闭时不抖动**:`open=true` 期间不许动态切 side/align(`useLayoutEffect` 仅依赖 `[open]` / `[open, maxHeight]`,不依赖滚动),滚动视口时面板随触发器走位是可接受的,但方向不可反转。
+
+**什么时候该用 flip、什么时候不需要**
+
+- 面板宽度 > 触发器宽度 → **两轴都要 flip**(Select · ModelOverrideChip)
+- 面板宽度 ≤ 触发器宽度 + 触发器位置稳定在视口一侧 → 只需垂直 flip(ConversationSwitcher · 在 chat header 右侧)
+- 面板永远铺满一侧(drawer)→ 不是 popover,不适用
+
+**当前实现的守门:**
+- `Select.tsx`(通用原语 · 6 个下拉已迁移 · side + align 都 flip + maxHeight clamp)
+- `ModelOverrideChip.tsx`(chat header + composer chip · side + align 都 flip)
+- `ConversationSwitcher.tsx`(历史 popover · 只 side flip · 详见"什么时候不需要")
+- `web/lib/__tests__/popover-placement.test.ts`(flip 决策矩阵 11 用例:6 vertical + 5 horizontal)
+- `web/tests/popover-placement-contract.test.ts`(静态扫描:`top-full`/`bottom-full` 出现就必须有 flip 三元)
+
+**不要**用 Floating UI / Popper.js / Radix —— 这条规则的整个价值就是让我们**拥有**位置策略,不是再加一层库。
 
 ---
 
