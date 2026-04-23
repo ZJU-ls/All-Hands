@@ -98,6 +98,10 @@ async def get_conversation_repo(session: AsyncSession) -> SqlConversationRepo:
     return SqlConversationRepo(session)
 
 
+async def get_conversation_event_repo(session: AsyncSession) -> SqlConversationEventRepo:
+    return SqlConversationEventRepo(session)
+
+
 async def get_confirmation_service(session: AsyncSession) -> ConfirmationService:
     return ConfirmationService(SqlConfirmationRepo(session))
 
