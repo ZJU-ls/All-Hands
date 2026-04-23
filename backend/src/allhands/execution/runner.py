@@ -548,10 +548,17 @@ class AgentRunner:
         # at non-consecutive positions (one per turn) — providers validating
         # message order (e.g. Qwen/OpenAI-compatible) reject with
         # "Received multiple non-consecutive system messages" (see E26).
+        # Stable message ids flow in from chat_service so LangGraph's
+        # ``add_messages`` reducer can dedup by id across turns. When id is
+        # None (e.g. a caller that doesn't plumb MessageRepo ids — subagent
+        # turn-0 bootstrap, tests, dispatch), LangChain assigns a fresh UUID,
+        # which is fine since those messages are only sent once.
         lc_messages: list[Any] = [
-            HumanMessage(content=m["content"])
-            if m["role"] == "user"
-            else AIMessage(content=m["content"])
+            (
+                HumanMessage(content=m["content"], id=m.get("id"))
+                if m["role"] == "user"
+                else AIMessage(content=m["content"], id=m.get("id"))
+            )
             for m in messages
             if m["role"] in ("user", "assistant")
         ]

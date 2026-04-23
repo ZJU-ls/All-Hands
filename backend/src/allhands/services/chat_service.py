@@ -253,6 +253,32 @@ class ChatService:
                 extra={"conversation_id": conversation_id},
             )
 
+    async def _has_checkpoint_state(self, conversation_id: str) -> bool:
+        """ADR 0014 R3 gate: is there already LangGraph state under this thread?
+
+        Used by ``send_message`` to choose between **delta-send** (hot path —
+        only the new user message goes over the wire) and **bootstrap**
+        (cold path — send the full MessageRepo history so the first turn
+        seeds the graph state). Any failure from the checkpointer is
+        downgraded to "no state" so we fall back to bootstrap — correct but
+        less efficient, never worse than before the refactor.
+        """
+        if self._checkpointer is None:
+            return False
+        config = {"configurable": {"thread_id": conversation_id}}
+        try:
+            tup = await self._checkpointer.aget_tuple(config)
+        except Exception:
+            log.exception(
+                "checkpointer.aget_tuple failed — falling back to bootstrap",
+                extra={"conversation_id": conversation_id},
+            )
+            return False
+        if tup is None:
+            return False
+        msgs = tup.checkpoint.get("channel_values", {}).get("messages", [])
+        return bool(msgs)
+
     async def list_messages(self, conversation_id: str) -> list[Message]:
         conv = await self._conversations.get(conversation_id)
         if conv is None:
@@ -386,12 +412,39 @@ class ChatService:
 
         runtime = await self.get_or_load_runtime(conversation_id, employee)
 
+        # ADR 0014 R3 · dual-SoT delta-send:
+        # - **Hot turn** (checkpointer already holds graph state for this
+        #   ``thread_id``): send only the *new* user message. The LangGraph
+        #   state carries the full prior conversation, and re-sending history
+        #   would double it (the assistant side especially, because LangGraph
+        #   writes its own AIMessage ids and the reducer can't reconcile our
+        #   MessageRepo-side ids with those).
+        # - **Cold start** (no prior state — fresh conversation, legacy
+        #   conversation from before ADR 0014, or state manually cleared):
+        #   seed the graph with the full MessageRepo history so the first
+        #   turn has context. Subsequent turns automatically hit the hot
+        #   path.
+        # - Stable ids are always attached so `add_messages` can dedup if a
+        #   retry accidentally re-sends the same user content in one flight.
         history = await self._conversations.list_messages(conversation_id)
-        lc_messages: list[dict[str, Any]] = [
-            {"role": m.role, "content": m.content}
-            for m in history
-            if m.role in ("user", "assistant")
-        ]
+        user_asst_history = [m for m in history if m.role in ("user", "assistant")]
+        if await self._has_checkpoint_state(conversation_id):
+            # Hot turn: only the newest user message goes over the wire.
+            # MessageRepo always ends with the freshly appended user msg
+            # (chat_service persisted it before calling into the runner).
+            latest_user = next(
+                (m for m in reversed(user_asst_history) if m.role == "user"),
+                None,
+            )
+            lc_messages: list[dict[str, Any]] = (
+                [{"role": latest_user.role, "content": latest_user.content, "id": latest_user.id}]
+                if latest_user is not None
+                else []
+            )
+        else:
+            lc_messages = [
+                {"role": m.role, "content": m.content, "id": m.id} for m in user_asst_history
+            ]
 
         provider = None
         if self._providers is not None:
