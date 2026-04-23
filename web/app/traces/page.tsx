@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
+import { Icon } from "@/components/ui/icon";
 import {
   fetchTraces,
   type TraceSummaryDto,
@@ -193,7 +194,7 @@ function TracesPageInner() {
               />
             ) : (
               <>
-                <div className="rounded-md border border-border bg-surface overflow-hidden">
+                <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm">
                   <TraceTable
                     traces={visible}
                     selectedId={selectedId}
@@ -202,19 +203,25 @@ function TracesPageInner() {
                     onSelect={(t) => openTrace(t.trace_id)}
                   />
                 </div>
-                <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-text-muted">
+                <div className="mt-4 flex items-center justify-center gap-3 text-caption font-mono text-text-subtle">
                   {hasMore ? (
                     <button
                       type="button"
                       onClick={() => void onLoadMore()}
                       disabled={loadingMore}
-                      className="h-7 rounded-md border border-border bg-surface px-3 text-[12px] text-text transition-colors duration-base hover:border-border-strong disabled:opacity-50"
+                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm font-medium text-text shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
                     >
-                      {loadingMore ? "加载中…" : "加载更多"}
+                      <Icon
+                        name={loadingMore ? "loader" : "chevron-down"}
+                        size={12}
+                        className={loadingMore ? "animate-spin-slow" : ""}
+                      />
+                      <span>{loadingMore ? "加载中…" : "加载更多"}</span>
                     </button>
                   ) : (
-                    <span className="font-mono text-[10px] text-text-subtle">
-                      · 已到末尾
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon name="check" size={11} className="text-success" />
+                      已到末尾 · 共 {traces.length} 条
                     </span>
                   )}
                 </div>

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { LoadingState } from "@/components/state";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { NewTaskDrawer } from "@/components/tasks/NewTaskDrawer";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
 import { TraceChip } from "@/components/runs/TraceChip";
@@ -18,13 +18,23 @@ import {
 
 type FilterKey = "inbox" | "active" | "needs_user" | "done" | "failed" | "all";
 
-const FILTER_DEFS: { key: FilterKey; label: string; statuses: TaskStatus[] | null }[] = [
-  { key: "inbox", label: "收件箱", statuses: ["queued", "running", "needs_input", "needs_approval"] },
-  { key: "needs_user", label: "等你", statuses: ["needs_input", "needs_approval"] },
-  { key: "active", label: "执行中", statuses: ["running"] },
-  { key: "done", label: "已完成", statuses: ["completed"] },
-  { key: "failed", label: "失败/取消", statuses: ["failed", "cancelled"] },
-  { key: "all", label: "全部", statuses: null },
+const FILTER_DEFS: {
+  key: FilterKey;
+  label: string;
+  icon: IconName;
+  statuses: TaskStatus[] | null;
+}[] = [
+  {
+    key: "inbox",
+    label: "收件箱",
+    icon: "layout-grid",
+    statuses: ["queued", "running", "needs_input", "needs_approval"],
+  },
+  { key: "needs_user", label: "等你", icon: "user", statuses: ["needs_input", "needs_approval"] },
+  { key: "active", label: "执行中", icon: "loader", statuses: ["running"] },
+  { key: "done", label: "已完成", icon: "check-circle-2", statuses: ["completed"] },
+  { key: "failed", label: "失败/取消", icon: "alert-circle", statuses: ["failed", "cancelled"] },
+  { key: "all", label: "全部", icon: "list", statuses: null },
 ];
 
 export default function TasksPage() {
@@ -89,28 +99,41 @@ export default function TasksPage() {
         <button
           onClick={() => setDrawerOpen(true)}
           data-testid="new-task"
-          className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-fg hover:bg-primary-hover transition-colors duration-base"
+          className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-glow-sm"
         >
-          + 新任务
+          <Icon name="plus" size={14} /> 新任务
         </button>
       }
     >
       <div className="h-full overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-8 py-6 space-y-5">
+        <div className="mx-auto max-w-6xl space-y-8 p-8 animate-fade-up">
           <PageHeader
             title="任务"
             count={tasks.length || undefined}
             subtitle={
               <>
-                异步工作单元 · 发起后可以关掉页面,员工在后台跑完后你回来看结果。
-                让 Lead Agent 在对话里派,或右上 &ldquo;+ 新任务&rdquo; 手动建。
+                异步工作单元 · 发起后可以关掉页面,员工在后台跑完后你回来看结果。让 Lead Agent 在对话里派,或右上角 &ldquo;新任务&rdquo; 手动建。
               </>
             }
           />
 
+          {/* KPI strip */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <HeroStat
+              label="收件箱"
+              value={counts.inbox}
+              hint={counts.inbox > 0 ? "有待处理" : "全部清空"}
+              icon="layout-grid"
+            />
+            <Stat label="等你" value={counts.needs_user} icon="user" tone="warning" />
+            <Stat label="执行中" value={counts.active} icon="loader" tone="primary" />
+            <Stat label="已完成" value={counts.done} icon="check-circle-2" tone="success" />
+          </div>
+
+          {/* Filter pills (V2: bg-surface-2 wrapper, bg-surface shadow-soft-sm active) */}
           <nav
             aria-label="任务筛选"
-            className="flex items-center gap-1 rounded-md border border-border bg-surface p-1 w-fit"
+            className="inline-flex items-center gap-0.5 rounded-xl border border-border bg-surface-2 p-1"
           >
             {FILTER_DEFS.map((f) => {
               const active = filter === f.key;
@@ -120,18 +143,21 @@ export default function TasksPage() {
                   key={f.key}
                   data-testid={`filter-${f.key}`}
                   onClick={() => setFilter(f.key)}
-                  className={`text-xs px-3 py-1.5 rounded transition-colors duration-base ${
+                  className={
                     active
-                      ? "bg-surface-2 text-text"
-                      : "text-text-muted hover:text-text"
-                  }`}
+                      ? "inline-flex h-8 items-center gap-1.5 rounded-lg bg-surface px-3 text-sm font-semibold text-text shadow-soft-sm transition duration-fast"
+                      : "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-text-muted hover:text-text transition duration-fast"
+                  }
                 >
+                  <Icon name={f.icon} size={12} />
                   {f.label}
                   {count > 0 && (
                     <span
-                      className={`ml-1.5 font-mono text-[10px] ${
-                        active ? "text-text-muted" : "text-text-subtle"
-                      }`}
+                      className={
+                        active
+                          ? "inline-flex h-4 items-center rounded bg-primary-muted px-1.5 font-mono text-[10px] text-primary"
+                          : "inline-flex h-4 items-center rounded bg-surface px-1.5 font-mono text-[10px] text-text-subtle"
+                      }
                     >
                       {count}
                     </span>
@@ -142,24 +168,34 @@ export default function TasksPage() {
           </nav>
 
           {status === "loading" && (
-            <div data-testid="tasks-loading">
-              <LoadingState title="加载任务" />
+            <div data-testid="tasks-loading" className="flex flex-col gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-24 rounded-xl border border-border bg-gradient-to-r from-surface via-surface-2 to-surface bg-[length:200%_100%] animate-shimmer"
+                />
+              ))}
             </div>
           )}
 
           {status === "error" && (
             <div
               data-testid="tasks-error"
-              className="rounded-xl border border-danger/30 bg-danger/5 p-6"
+              className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger-soft p-4 animate-fade-up"
             >
-              <p className="text-sm text-danger mb-2">加载任务失败</p>
-              <p className="text-xs text-text-muted mb-3 font-mono">{error}</p>
-              <button
-                onClick={() => void load()}
-                className="text-xs rounded-md border border-border px-3 py-1.5 hover:bg-surface-2 text-text transition-colors duration-base"
-              >
-                重试
-              </button>
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-danger/10 text-danger">
+                <Icon name="alert-circle" size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-danger">加载任务失败</div>
+                <div className="mt-1 truncate font-mono text-caption text-danger/80">{error}</div>
+                <button
+                  onClick={() => void load()}
+                  className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-danger/30 bg-surface px-3 text-caption font-medium text-danger hover:bg-danger/10 transition duration-fast"
+                >
+                  <Icon name="refresh" size={12} /> 重试
+                </button>
+              </div>
             </div>
           )}
 
@@ -170,7 +206,7 @@ export default function TasksPage() {
           {status === "ready" && tasks.length > 0 && (
             <ul
               data-testid="tasks-list"
-              className="flex flex-col gap-2"
+              className="flex flex-col gap-3"
               aria-label="任务列表"
             >
               {tasks.map((t) => (
@@ -199,6 +235,80 @@ export default function TasksPage() {
   );
 }
 
+function HeroStat({
+  label,
+  value,
+  hint,
+  icon,
+}: {
+  label: string;
+  value: number;
+  hint: string;
+  icon: IconName;
+}) {
+  return (
+    <div
+      className="relative overflow-hidden rounded-xl p-4 text-primary-fg shadow-soft-sm"
+      style={{
+        background:
+          "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%)",
+      }}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full blur-2xl"
+        style={{ background: "var(--color-accent)", opacity: 0.4 }}
+      />
+      <div className="relative flex items-start justify-between">
+        <div>
+          <div className="text-caption font-mono uppercase tracking-wider opacity-85">
+            {label}
+          </div>
+          <div className="mt-2 text-2xl font-bold tabular-nums">{value}</div>
+          <div className="mt-1 text-caption font-mono opacity-90">{hint}</div>
+        </div>
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-white/15">
+          <Icon name={icon} size={16} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  icon: IconName;
+  tone: "primary" | "success" | "warning" | "danger";
+}) {
+  const toneClass: Record<typeof tone, string> = {
+    primary: "bg-primary-muted text-primary",
+    success: "bg-success-soft text-success",
+    warning: "bg-warning-soft text-warning",
+    danger: "bg-danger-soft text-danger",
+  };
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm transition duration-base hover:border-border-strong hover:shadow-soft hover:-translate-y-px">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-caption font-mono uppercase tracking-wider text-text-muted">
+            {label}
+          </div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-text">{value}</div>
+        </div>
+        <div className={`grid h-9 w-9 place-items-center rounded-lg ${toneClass[tone]}`}>
+          <Icon name={icon} size={16} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EmptyHint({
   filter,
   onCreate,
@@ -207,28 +317,65 @@ function EmptyHint({
   onCreate: () => void;
 }) {
   const msg: Record<FilterKey, string> = {
-    inbox: "收件箱是空的。",
-    active: "现在没有执行中的任务。",
-    needs_user: "没有任务在等你回答或审批。",
-    done: "还没有已完成的任务。",
-    failed: "没有失败或取消的任务。",
-    all: "还没有任务。",
+    inbox: "收件箱是空的",
+    active: "现在没有执行中的任务",
+    needs_user: "没有任务在等你回答或审批",
+    done: "还没有已完成的任务",
+    failed: "没有失败或取消的任务",
+    all: "还没有任务",
   };
   return (
     <div
       data-testid="tasks-empty"
-      className="rounded-xl border border-dashed border-border p-10 text-center"
+      className="relative overflow-hidden rounded-2xl border border-border bg-surface p-14 shadow-soft-sm animate-fade-up"
     >
-      <p className="text-sm text-text mb-1">{msg[filter]}</p>
-      <p className="text-xs text-text-subtle mb-4">
-        让 Lead Agent 在对话里派一个,或直接
-      </p>
-      <button
-        onClick={onCreate}
-        className="text-xs px-3 py-1.5 rounded-md border border-border text-text hover:bg-surface-2 transition-colors duration-base"
-      >
-        + 新建任务
-      </button>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-70"
+        style={{
+          background:
+            "radial-gradient(500px 300px at 20% 0%, var(--color-primary-soft) 0%, transparent 60%), radial-gradient(500px 300px at 80% 100%, var(--color-accent) 0%, transparent 65%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, var(--color-border) 1px, transparent 0)",
+          backgroundSize: "24px 24px",
+          opacity: 0.3,
+        }}
+      />
+      <div className="relative mx-auto max-w-md text-center">
+        <div
+          className="mx-auto grid h-16 w-16 animate-float place-items-center rounded-2xl text-primary-fg shadow-soft-lg"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+          }}
+        >
+          <Icon name="check-circle-2" size={28} />
+        </div>
+        <h3 className="mt-6 text-lg font-semibold tracking-tight">{msg[filter]}</h3>
+        <p className="mt-2 text-sm leading-relaxed text-text-muted">
+          让 Lead Agent 在对话里派一个,或直接手动创建。
+        </p>
+        <div className="mt-6 flex items-center justify-center gap-2">
+          <button
+            onClick={onCreate}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-glow-sm"
+          >
+            <Icon name="plus" size={14} /> 新建任务
+          </button>
+          <Link
+            href="/chat"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border-strong bg-surface px-5 text-sm font-medium text-text shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
+          >
+            <Icon name="sparkles" size={14} className="text-primary" /> 找 Lead 派
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
@@ -236,49 +383,89 @@ function EmptyHint({
 function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }) {
   const urgent = task.status === "needs_input" || task.status === "needs_approval";
   const updated = new Date(task.updated_at);
+  const running = task.status === "running";
+  const failed = task.status === "failed" || task.status === "cancelled";
   return (
     <li>
       <Link
         href={`/tasks/${task.id}`}
         data-testid={`task-${task.id}`}
-        className={`group block rounded-xl border bg-surface p-4 transition-colors duration-base ${
+        className={`group relative block overflow-hidden rounded-xl border bg-surface p-4 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft ${
           urgent
             ? "border-warning/40 hover:border-warning"
+            : failed
+            ? "border-danger/30 hover:border-danger/60"
             : "border-border hover:border-border-strong"
         }`}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+        {urgent && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-warning to-transparent"
+          />
+        )}
+        <div className="flex items-start gap-3">
+          <div
+            className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${
+              urgent
+                ? "bg-warning-soft text-warning"
+                : running
+                ? "bg-primary-muted text-primary"
+                : failed
+                ? "bg-danger-soft text-danger"
+                : "bg-surface-2 text-text-muted"
+            }`}
+          >
+            <Icon
+              name={
+                urgent
+                  ? "alert-triangle"
+                  : running
+                  ? "loader"
+                  : failed
+                  ? "alert-circle"
+                  : "check-circle-2"
+              }
+              size={16}
+              className={running ? "animate-spin-slow" : ""}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
               <TaskStatusPill status={task.status} />
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">
+              <span className="inline-flex h-5 items-center rounded bg-surface-2 px-1.5 font-mono text-[10px] text-text-muted">
                 {sourceLabel(task.source)}
               </span>
-              <span className="font-mono text-[10px] text-text-subtle">
-                {task.id}
-              </span>
+              <span className="font-mono text-[10px] text-text-subtle">{task.id}</span>
             </div>
-            <p className="text-sm font-medium text-text group-hover:text-primary transition-colors duration-base truncate">
+            <p className="mt-1.5 truncate text-sm font-medium text-text transition-colors duration-base group-hover:text-primary">
               {task.title}
             </p>
-            <p className="mt-1 text-xs text-text-muted line-clamp-2">
+            <p className="mt-1 line-clamp-2 text-caption text-text-muted">
               {urgent && task.pending_input_question
                 ? task.pending_input_question
                 : task.result_summary ?? task.goal}
             </p>
           </div>
-          <div className="shrink-0 text-right flex flex-col gap-1 items-end">
-            <div className="text-[11px] text-text-muted">指派给</div>
-            <div className="text-xs text-text truncate max-w-[10rem]">
+          <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-text-subtle">
+              指派给
+            </div>
+            <div className="max-w-[10rem] truncate text-sm font-medium text-text">
               {assigneeName}
             </div>
-            <div className="font-mono text-[10px] text-text-subtle mt-1">
+            <div className="mt-0.5 font-mono text-[10px] text-text-subtle">
               {updated.toLocaleString()}
             </div>
             {task.run_ids.length > 0 && task.run_ids[0] && (
               <TraceChip runId={task.run_ids[0]} label="trace" />
             )}
           </div>
+          <Icon
+            name="arrow-right"
+            size={14}
+            className="mt-1 shrink-0 self-center text-text-subtle opacity-0 transition-[opacity,transform] duration-fast group-hover:translate-x-0.5 group-hover:opacity-100 group-hover:text-primary"
+          />
         </div>
       </Link>
     </li>
