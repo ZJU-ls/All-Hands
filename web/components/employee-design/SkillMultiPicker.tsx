@@ -1,8 +1,13 @@
 "use client";
 
-import { SkillIcon, CheckIcon } from "@/components/icons";
+import { Icon } from "@/components/ui/icon";
 import type { SkillDto } from "@/lib/api";
 
+/**
+ * V2 (ADR 0016): chip cloud. Selected chip = bg-primary-muted text-primary with
+ * a check glyph + `N tools` mono tail; unselected = bg-surface-2 text-text-muted
+ * hover:bg-surface-3. Description is truncated under the chip label.
+ */
 export function SkillMultiPicker({
   skills,
   selected,
@@ -20,7 +25,7 @@ export function SkillMultiPicker({
     );
   }
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className="flex flex-wrap gap-2">
       {skills.map((s) => {
         const on = selected.includes(s.id);
         return (
@@ -30,29 +35,30 @@ export function SkillMultiPicker({
               data-testid={`skill-${s.id}`}
               aria-pressed={on}
               onClick={() => onToggle(s.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md border transition-colors duration-base text-left ${
-                on
-                  ? "border-primary/60 bg-primary/5"
-                  : "border-border hover:bg-surface-2"
-              }`}
+              title={s.description ?? undefined}
+              className={
+                "inline-flex max-w-[280px] items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors duration-fast " +
+                (on
+                  ? "bg-primary-muted text-primary"
+                  : "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text")
+              }
             >
-              <SkillIcon size={14} className="text-text-muted shrink-0" />
-              <div className="min-w-0 flex-1">
-                <div className="text-[12px] font-medium text-text">{s.name}</div>
-                {s.description && (
-                  <div className="text-[11px] text-text-muted truncate">{s.description}</div>
-                )}
-              </div>
-              <span className="font-mono text-[10px] text-text-subtle shrink-0">
-                {s.tool_ids.length} tools
+              <Icon
+                name={on ? "check" : "sparkles"}
+                size={13}
+                className="shrink-0"
+              />
+              <span className="truncate text-[12px] font-medium">{s.name}</span>
+              <span className="shrink-0 font-mono text-[10px] text-text-subtle">
+                {s.tool_ids.length}t
               </span>
               {on && (
                 <span
                   data-testid={`skill-${s.id}-checked`}
-                  className="shrink-0"
+                  className="sr-only"
                   aria-hidden
                 >
-                  <CheckIcon size={14} className="text-primary" />
+                  selected
                 </span>
               )}
             </button>

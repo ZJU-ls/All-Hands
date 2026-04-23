@@ -7,8 +7,7 @@ type Slice = { label: string; value: number };
 type Variant = "pie" | "donut";
 
 // Each slice uses a distinct hue from the ADR-0012 palette. 6 is the
-// schema max; the palette cycles by slice index so ordering stays stable
-// across renders of the same data.
+// schema max; palette cycles by slice index for stable ordering.
 const SLICE_COLORS = [
   "var(--color-viz-1)",
   "var(--color-viz-2)",
@@ -18,9 +17,9 @@ const SLICE_COLORS = [
   "var(--color-viz-6)",
 ];
 
-const SIZE = 140;
-const R = 60;
-const INNER_R = 34;
+const SIZE = 150;
+const R = 64;
+const INNER_R = 38;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
 
@@ -42,6 +41,12 @@ function arcPath(startAngle: number, endAngle: number, variant: Variant): string
   return `M${sx.toFixed(2)},${sy.toFixed(2)} A${R},${R} 0 ${largeArc} 1 ${ex.toFixed(2)},${ey.toFixed(2)} L${isx.toFixed(2)},${isy.toFixed(2)} A${INNER_R},${INNER_R} 0 ${largeArc} 0 ${iex.toFixed(2)},${iey.toFixed(2)} Z`;
 }
 
+/**
+ * Brand-Blue V2 (ADR 0016) · pie / donut chart.
+ *
+ * Shell: rounded-xl · bg-surface · shadow-soft-sm.
+ * Donut center shows the largest slice as a focal metric.
+ */
 export function PieChart({ props }: RenderProps) {
   const rawSlicesIn = props.slices;
   const rawSlices = useMemo<Slice[]>(() => {
@@ -57,6 +62,7 @@ export function PieChart({ props }: RenderProps) {
       }));
   }, [rawSlicesIn]);
   const variant: Variant = props.variant === "pie" ? "pie" : "donut";
+  const title = typeof props.title === "string" ? props.title : undefined;
   const caption = typeof props.caption === "string" ? props.caption : undefined;
 
   const { arcs, total } = useMemo(() => {
@@ -71,7 +77,6 @@ export function PieChart({ props }: RenderProps) {
       const start = (acc / total) * 2 * Math.PI;
       acc += v;
       const end = (acc / total) * 2 * Math.PI;
-      // Ensure a full-circle slice still renders as a closed path
       const safeEnd = end === start ? start + 1e-4 : end;
       const path =
         slices.length === 1
@@ -86,23 +91,22 @@ export function PieChart({ props }: RenderProps) {
 
   if (total === 0) {
     return (
-      <div className="rounded-lg border border-border bg-bg p-3 text-xs text-text-muted">
+      <div className="rounded-xl border border-border bg-surface p-3 text-caption text-text-muted">
         No slices
       </div>
     );
   }
 
-  // Pre-compute the "headline" — largest slice — so the donut center has
-  // a focal metric ("58% · OpenAI") instead of being empty space.
+  // Focal metric for donut center — largest slice.
   const headline = arcs
     .map(({ slice, pct }, i) => ({ slice, pct, i }))
     .sort((a, b) => b.pct - a.pct)[0];
 
   return (
-    <div
-      className="rounded-lg border border-border bg-bg p-3"
-      style={{ animation: "ah-fade-up var(--dur-mid) var(--ease-out)" }}
-    >
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm animate-fade-up">
+      {title && (
+        <div className="mb-3 text-sm font-medium text-text">{title}</div>
+      )}
       <div className="flex items-center gap-4">
         <div className="relative shrink-0">
           <svg
@@ -118,38 +122,37 @@ export function PieChart({ props }: RenderProps) {
                 key={i}
                 d={path}
                 fill={SLICE_COLORS[i % SLICE_COLORS.length]}
-                stroke="var(--color-bg)"
+                stroke="var(--color-surface)"
                 strokeWidth="1.5"
                 vectorEffect="non-scaling-stroke"
-                className="transition-[filter] duration-fast hover:[filter:brightness(1.08)]"
               />
             ))}
           </svg>
           {variant === "donut" && headline && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
               <span
-                className="font-mono text-sm font-semibold tabular-nums"
+                className="font-mono text-base font-bold tabular-nums"
                 style={{
                   color: SLICE_COLORS[headline.i % SLICE_COLORS.length],
                 }}
               >
                 {(headline.pct * 100).toFixed(0)}%
               </span>
-              <span className="text-[9px] uppercase tracking-wider text-text-subtle truncate max-w-[70px]">
+              <span className="text-caption font-mono uppercase tracking-wider text-text-subtle truncate max-w-[80px]">
                 {headline.slice.label}
               </span>
             </div>
           )}
         </div>
-        <ul className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs">
+        <ul className="flex min-w-0 flex-1 flex-col gap-1.5 text-caption">
           {arcs.map(({ slice, pct }, i) => (
             <li
               key={i}
-              className="flex items-center gap-2 min-w-0 rounded-sm px-1 py-0.5 transition-colors duration-fast hover:bg-surface-hover"
+              className="flex items-center gap-2 min-w-0 rounded-sm px-1 py-0.5 transition-colors duration-fast hover:bg-surface-2/60"
             >
               <span
                 aria-hidden
-                className="inline-block h-2 w-2 shrink-0 rounded-sm"
+                className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
                 style={{ background: SLICE_COLORS[i % SLICE_COLORS.length] }}
               />
               <span className="truncate text-text">{slice.label}</span>
@@ -161,7 +164,9 @@ export function PieChart({ props }: RenderProps) {
         </ul>
       </div>
       {caption && (
-        <div className="mt-2 text-xs text-text-muted">{caption}</div>
+        <div className="mt-3 text-caption font-mono text-text-muted">
+          {caption}
+        </div>
       )}
     </div>
   );

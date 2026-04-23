@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * RunTracePanel · container for run header + optional inline error +
+ * turn list. Stays lean — visual weight lives in the children.
+ */
+
 import { useEffect, useState } from "react";
 import {
   fetchRunDetail,

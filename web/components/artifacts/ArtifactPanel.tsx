@@ -1,6 +1,13 @@
 "use client";
 
+/**
+ * ArtifactPanel · right-side drawer listing every workspace artifact.
+ * V2-level (ADR 0016). Keeps all data-fetching + live-feed logic identical
+ * to the pre-rework version — rework is presentational only.
+ */
+
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "@/components/ui/icon";
 import {
   artifactStreamUrl,
   getArtifact,
@@ -41,9 +48,6 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
     void refresh();
   }, [refresh]);
 
-  // Live feed: /api/artifacts/stream pushes `artifact_changed` frames for
-  // create / update / delete / pin. We patch local state in-place — the REST
-  // snapshot we pulled on mount stays the source of truth for everything else.
   useEffect(() => {
     let cancelled = false;
     const source = new EventSource(artifactStreamUrl());
@@ -79,15 +83,10 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
           return next;
         });
       } catch {
-        // Fall back to a full refetch if the targeted GET fails — keeps the
-        // panel in sync even if the artifact was swapped for a new id.
         if (!cancelled) void refresh();
       }
     };
 
-    // AG-UI v1: `allhands.artifacts_ready` / `allhands.artifact_changed` /
-    // `allhands.heartbeat` all ride inside CUSTOM envelopes. Inspect
-    // `data.name` to dispatch; the legacy payload is in `data.value`.
     source.addEventListener("CUSTOM", (evt) => {
       if (cancelled) return;
       let data: { name?: string; value?: unknown };
@@ -118,46 +117,57 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
   return (
     <aside
       aria-label="制品区"
-      className="flex h-full w-[360px] shrink-0 flex-col border-l border-border bg-surface"
+      className="flex h-full w-[360px] shrink-0 flex-col border-l border-border bg-surface shadow-soft-lg"
     >
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-border px-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold tracking-tight text-text">制品区</span>
-          <span className="font-mono text-[10px] text-text-subtle">
-            {artifacts.length}
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface-2/60 px-3">
+        <span
+          aria-hidden="true"
+          className="grid h-7 w-7 place-items-center rounded-lg bg-primary-muted text-primary"
+        >
+          <Icon name="folder" size={14} strokeWidth={2} />
+        </span>
+        <span className="text-[13px] font-semibold tracking-tight text-text">
+          制品区
+        </span>
+        <span className="inline-flex h-5 items-center rounded-md bg-surface-2 px-1.5 font-mono text-[10px] text-text-muted">
+          {artifacts.length}
+        </span>
+        {streamConn === "error" && (
+          <span
+            className="inline-flex items-center gap-1 font-mono text-[10px] text-warning"
+            title="实时流中断 · 浏览器会自动重连"
+          >
+            <Icon name="alert-circle" size={10} />
+            offline
           </span>
-          {streamConn === "error" && (
-            <span
-              className="font-mono text-[10px] text-warning"
-              title="实时流中断 · 浏览器会自动重连"
-            >
-              · offline
-            </span>
-          )}
-        </div>
+        )}
         <button
+          type="button"
           onClick={onClose}
           aria-label="关闭制品区"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border font-mono text-[11px] text-text-muted transition-colors duration-base hover:text-text hover:border-border-strong"
+          className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors duration-fast ease-out hover:border-border-strong hover:text-text"
           title="关闭 · Cmd/Ctrl+J"
         >
-          ×
+          <Icon name="x" size={14} />
         </button>
-      </div>
+      </header>
+
       {selectedId ? (
         <div className="flex flex-1 flex-col overflow-hidden">
           <button
+            type="button"
             onClick={() => setSelectedId(null)}
-            className="flex h-7 shrink-0 items-center gap-1 border-b border-border px-3 text-left font-mono text-[11px] text-text-muted transition-colors duration-base hover:text-text"
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 border-b border-border px-3 text-left font-mono text-[11px] text-text-muted transition-colors duration-fast ease-out hover:bg-surface-2 hover:text-text"
           >
-            ← 返回列表
+            <Icon name="arrow-left" size={12} />
+            返回列表
           </button>
           <div className="min-h-0 flex-1 overflow-hidden">
             <ArtifactDetail artifactId={selectedId} />
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="flex-1 overflow-y-auto p-2">
           {state === "loading" ? (
             <LoadingState
               title="加载制品区"

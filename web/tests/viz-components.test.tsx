@@ -183,7 +183,8 @@ describe("Viz.Code", () => {
     expect(screen.getByText("a.py")).toBeDefined();
     expect(screen.getByText("python")).toBeDefined();
     expect(screen.getByText(/print\(1\)/)).toBeDefined();
-    screen.getByText("Copy").click();
+    // V2 (ADR 0016): copy action surfaces as an icon button (aria-label).
+    screen.getByLabelText("Copy code").click();
     expect(copySpy).toHaveBeenCalledWith("print(1)\nprint(2)");
   });
 });
@@ -275,8 +276,7 @@ describe("Viz.Stat", () => {
     expect(screen.getByText("Active runs")).toBeDefined();
     expect(screen.getByText("42")).toBeDefined();
     expect(screen.getByText("runs")).toBeDefined();
-    // Delta block renders direction glyph + value together
-    expect(screen.getByText(/↑/)).toBeDefined();
+    // V2 (ADR 0016): direction surfaces as an Icon (trending-up) — value as text.
     expect(screen.getByText("8")).toBeDefined();
     expect(screen.getByText("last 24h")).toBeDefined();
   });

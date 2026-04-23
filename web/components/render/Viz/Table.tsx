@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { RenderProps } from "@/lib/component-registry";
+import { Icon } from "@/components/ui/icon";
 
 type Column = {
   key: string;
@@ -12,6 +13,13 @@ type Column = {
 
 type Row = Record<string, unknown>;
 
+/**
+ * Brand-Blue V2 (ADR 0016) · data table.
+ *
+ * Shell: rounded-xl + border + bg-surface + shadow-soft-sm
+ * Header: bg-surface-2/60 · font-mono · uppercase · wide tracking · text-caption
+ * Rows: border-b · hover:bg-surface-2/40 · numeric columns auto-right
+ */
 export function Table({ props }: RenderProps) {
   const rawColumns = props.columns;
   const columns = useMemo<Column[]>(() => {
@@ -52,9 +60,8 @@ export function Table({ props }: RenderProps) {
     }
   }
 
-  // Auto-right-align columns that look numeric, so untagged columns stop
-  // drifting left. We sample up to the first 8 rows per column — cheap,
-  // doesn't need a pydantic-style explicit type hint from the agent.
+  // Auto-right-align numeric columns so untagged numbers stop drifting
+  // left-ragged in mixed tables. Samples first 8 rows, cheap.
   const autoAlign = useMemo(() => {
     const m = new Map<string, "left" | "right">();
     const sampleRows = rawRowsRaw?.slice(0, 8) ?? [];
@@ -79,8 +86,7 @@ export function Table({ props }: RenderProps) {
 
   return (
     <div
-      className="rounded-lg border border-border bg-bg overflow-hidden transition-colors duration-base hover:border-border-strong"
-      style={{ animation: "ah-fade-up var(--dur-mid) var(--ease-out)" }}
+      className="rounded-xl border border-border bg-surface overflow-hidden shadow-soft-sm animate-fade-up"
     >
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-separate border-spacing-0">
@@ -92,20 +98,28 @@ export function Table({ props }: RenderProps) {
                 return (
                   <th
                     key={c.key}
-                    className="sticky top-0 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider bg-surface-2 text-text-muted border-b border-border"
+                    className="sticky top-0 px-3 py-2 text-caption font-mono font-semibold uppercase tracking-[0.18em] bg-surface-2/60 text-text-muted border-b border-border"
                     style={{ width: c.width, textAlign: align }}
                   >
                     <button
-                      className={`inline-flex items-center gap-1 hover:text-text transition-colors duration-fast ${
+                      className={`inline-flex items-center gap-1 transition-colors duration-fast hover:text-text ${
                         isSorted ? "text-primary" : ""
                       }`}
                       onClick={() => toggleSort(c.key)}
                       aria-label={`Sort by ${c.label}`}
                     >
                       <span>{c.label}</span>
-                      <span className="text-[10px] font-mono">
-                        {isSorted ? (sortAsc ? "↑" : "↓") : "·"}
-                      </span>
+                      <Icon
+                        name={
+                          isSorted
+                            ? sortAsc
+                              ? "chevron-up"
+                              : "chevron-down"
+                            : "chevrons-up-down"
+                        }
+                        size={10}
+                        className={isSorted ? "" : "opacity-40"}
+                      />
                     </button>
                   </th>
                 );
@@ -116,7 +130,7 @@ export function Table({ props }: RenderProps) {
             {rows.map((row, i) => (
               <tr
                 key={i}
-                className="group transition-colors duration-fast hover:bg-surface-hover"
+                className="group transition-colors duration-fast hover:bg-surface-2/40"
               >
                 {columns.map((c) => {
                   const align = alignFor(c);
@@ -125,9 +139,11 @@ export function Table({ props }: RenderProps) {
                   return (
                     <td
                       key={c.key}
-                      className={`px-3 py-2 border-b border-border last:border-r-0 ${
-                        i % 2 === 1 ? "bg-surface/50" : ""
-                      } ${isNumeric ? "font-mono tabular-nums text-text" : "text-text"}`}
+                      className={`px-3 py-2 border-b border-border ${
+                        isNumeric
+                          ? "font-mono tabular-nums text-text"
+                          : "text-text"
+                      }`}
                       style={{ textAlign: align }}
                     >
                       {raw == null ? (
@@ -144,7 +160,7 @@ export function Table({ props }: RenderProps) {
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3 py-6 text-center text-xs text-text-muted"
+                  className="px-3 py-6 text-center text-caption text-text-muted"
                 >
                   No rows
                 </td>
@@ -154,7 +170,7 @@ export function Table({ props }: RenderProps) {
         </table>
       </div>
       {caption && (
-        <div className="px-3 py-2 text-[11px] text-text-muted border-t border-border bg-surface/40">
+        <div className="px-3 py-2 text-caption font-mono text-text-muted border-t border-border bg-surface-2/40">
           {caption}
         </div>
       )}

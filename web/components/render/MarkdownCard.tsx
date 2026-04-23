@@ -1,6 +1,15 @@
 "use client";
 
+/**
+ * MarkdownCard · render target for markdown-body tool results.
+ *
+ * V2-level (ADR 0016): `rounded-xl border border-border bg-surface
+ * shadow-soft-sm` shell · optional header with leading book-open icon tile +
+ * title + Copy action · body renders markdown through `marked` (prose).
+ */
+
 import { useEffect, useRef } from "react";
+import { Icon } from "@/components/ui/icon";
 import type { RenderProps } from "@/lib/component-registry";
 
 export function MarkdownCard({ props, interactions }: RenderProps) {
@@ -21,22 +30,32 @@ export function MarkdownCard({ props, interactions }: RenderProps) {
   }, [content]);
 
   const copyAction = interactions.find((i) => i.action === "copy_to_clipboard");
+  const hasHeader = Boolean(title) || Boolean(copyAction);
 
   return (
-    <div className="rounded-lg border border-border bg-bg overflow-hidden">
-      {(title || copyAction) && (
-        <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm">
+      {hasHeader && (
+        <div className="flex items-center gap-2 border-b border-border bg-surface-2/60 px-4 py-2.5">
           {title && (
-            <span className="text-xs font-semibold text-text-muted">{title}</span>
+            <span className="grid h-6 w-6 place-items-center rounded-md bg-primary-muted text-primary">
+              <Icon name="book-open" size={14} />
+            </span>
+          )}
+          {title && (
+            <span className="text-[13px] font-semibold tracking-tight text-text">
+              {title}
+            </span>
           )}
           {copyAction && (
             <button
-              className="text-xs text-text-muted hover:text-text transition-colors"
+              type="button"
+              className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted transition-colors duration-fast ease-out hover:border-border-strong hover:text-text"
               onClick={() => {
                 const text = (copyAction.payload?.text as string) ?? content;
                 navigator.clipboard.writeText(text).catch(console.error);
               }}
             >
+              <Icon name="copy" size={12} />
               Copy
             </button>
           )}
@@ -44,7 +63,7 @@ export function MarkdownCard({ props, interactions }: RenderProps) {
       )}
       <div
         ref={contentRef}
-        className="px-4 py-3 prose prose-invert prose-sm max-w-none"
+        className="prose prose-invert prose-sm max-w-none px-5 py-4"
       />
     </div>
   );

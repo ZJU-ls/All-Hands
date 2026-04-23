@@ -1,8 +1,18 @@
 "use client";
 
+/**
+ * TraceChip · Brand Blue Dual Theme V2 (ADR 0016)
+ *
+ * Chip variant: rounded-full primary-tinted pill with external-link glyph.
+ * Link variant: inline text button with the `↗` arrow (tests pin that glyph).
+ *
+ * Preserves public API + data-testid.
+ */
+
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import type { MouseEvent } from "react";
 import { cn } from "@/lib/cn";
+import { Icon } from "@/components/ui/icon";
 
 export const TRACE_QUERY_KEY = "trace";
 
@@ -39,7 +49,7 @@ export function TraceChip({
         data-testid="trace-chip"
         data-run-id={runId}
         className={cn(
-          "inline-flex items-center gap-1 font-mono text-[10px] text-text-muted hover:text-text transition-colors duration-base",
+          "inline-flex items-center gap-1 font-mono text-caption text-primary transition-colors duration-base hover:text-primary-hover",
           className,
         )}
       >
@@ -56,11 +66,11 @@ export function TraceChip({
       data-testid="trace-chip"
       data-run-id={runId}
       className={cn(
-        "inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-text-muted hover:text-text hover:border-border-strong transition-colors duration-base",
+        "inline-flex h-6 items-center gap-1 rounded-full border border-primary/20 bg-primary-muted/60 px-2 font-mono text-[10px] text-primary transition-colors duration-base hover:bg-primary-muted hover:-translate-y-px hover:border-primary/40",
         className,
       )}
     >
-      <span aria-hidden className="text-[9px]">▸</span>
+      <Icon name="external-link" size={10} strokeWidth={2} aria-hidden />
       {label}
     </button>
   );

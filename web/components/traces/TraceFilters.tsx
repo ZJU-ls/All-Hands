@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "@/components/ui/icon";
 import { Select, type SelectOption } from "@/components/ui/Select";
 import type { EmployeeDto } from "@/lib/api";
 
@@ -21,17 +22,17 @@ export const DEFAULT_FILTERS: TraceFilterState = {
 };
 
 const RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
-  { value: "1h", label: "1 小时" },
-  { value: "24h", label: "24 小时" },
-  { value: "7d", label: "7 天" },
-  { value: "30d", label: "30 天" },
+  { value: "1h", label: "1h" },
+  { value: "24h", label: "24h" },
+  { value: "7d", label: "7d" },
+  { value: "30d", label: "30d" },
   { value: "all", label: "全部" },
 ];
 
-const STATUS_OPTIONS: { value: TraceStatusFilter; label: string }[] = [
-  { value: "all", label: "全部状态" },
-  { value: "ok", label: "成功" },
-  { value: "failed", label: "失败" },
+const STATUS_OPTIONS: { value: TraceStatusFilter; label: string; tone: string }[] = [
+  { value: "all", label: "全部", tone: "bg-surface-2 text-text-muted" },
+  { value: "ok", label: "成功", tone: "bg-success-soft text-success" },
+  { value: "failed", label: "失败", tone: "bg-danger-soft text-danger" },
 ];
 
 export function rangeToSinceISO(range: TimeRange, now: Date = new Date()): string | undefined {
@@ -46,12 +47,15 @@ export function rangeToSinceISO(range: TimeRange, now: Date = new Date()): strin
 }
 
 const FIELD_LABEL =
-  "font-mono text-[10px] uppercase tracking-wider text-text-subtle";
-const INPUT_CLS =
-  "h-7 rounded-md border border-border bg-surface px-2 text-[12px] text-text " +
-  "transition-colors duration-base hover:border-border-strong " +
-  "focus:outline-none focus:border-border-strong";
+  "font-mono text-[10px] uppercase tracking-[0.18em] text-text-subtle";
 
+/**
+ * V2 (ADR 0016) filter bar:
+ *   - Surface card (`rounded-xl border bg-surface p-4 shadow-soft-sm`).
+ *   - Left: search input (with `search` icon) + time-range pill group +
+ *     employee `<Select>` + status chip pills.
+ *   - Right: loaded/total counter + primary refresh button.
+ */
 export function TraceFilters({
   filters,
   employees,
@@ -73,25 +77,52 @@ export function TraceFilters({
     onChange({ ...filters, ...patch });
 
   const employeeOptions: SelectOption[] = [
-    { value: "all", label: "全部" },
+    { value: "all", label: "全部员工" },
     ...employees.map((emp) => ({ value: emp.id, label: emp.name })),
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-6 py-3">
-      <div className="flex items-center gap-1.5">
-        <span className={FIELD_LABEL}>时间</span>
-        <Select
-          size="sm"
-          value={filters.range}
-          onChange={(v) => update({ range: v as TimeRange })}
-          options={RANGE_OPTIONS}
-          ariaLabel="时间范围"
-        />
-      </div>
+    <div className="mx-6 my-4 rounded-xl border border-border bg-surface p-4 shadow-soft-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        {/* search */}
+        <label className="relative flex min-w-[200px] flex-1 items-center">
+          <span className="pointer-events-none absolute left-3 text-text-subtle">
+            <Icon name="search" size={14} />
+          </span>
+          <input
+            aria-label="关键词"
+            type="search"
+            placeholder="搜索 trace_id / 员工名…"
+            value={filters.keyword}
+            onChange={(e) => update({ keyword: e.target.value })}
+            className="h-9 w-full rounded-md border border-border bg-surface-2 pl-9 pr-3 text-[12px] text-text placeholder:text-text-subtle transition-colors duration-fast hover:border-border-strong focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary"
+          />
+        </label>
 
-      <div className="flex items-center gap-1.5">
-        <span className={FIELD_LABEL}>员工</span>
+        {/* time-range pills */}
+        <div className="flex items-center gap-1 rounded-md border border-border bg-surface-2 p-0.5">
+          {RANGE_OPTIONS.map((o) => {
+            const active = filters.range === o.value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => update({ range: o.value })}
+                aria-pressed={active}
+                className={
+                  "h-7 rounded-sm px-2.5 text-[11px] font-medium transition-colors duration-fast " +
+                  (active
+                    ? "bg-surface text-primary shadow-soft-sm"
+                    : "text-text-muted hover:text-text")
+                }
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* employee select */}
         <Select
           size="sm"
           value={filters.employeeId}
@@ -99,45 +130,52 @@ export function TraceFilters({
           options={employeeOptions}
           ariaLabel="员工"
         />
-      </div>
 
-      <div className="flex items-center gap-1.5">
-        <span className={FIELD_LABEL}>状态</span>
-        <Select
-          size="sm"
-          value={filters.status}
-          onChange={(v) => update({ status: v as TraceStatusFilter })}
-          options={STATUS_OPTIONS}
-          ariaLabel="状态"
-        />
-      </div>
+        {/* status chips */}
+        <div className="flex items-center gap-1.5">
+          <span className={FIELD_LABEL}>状态</span>
+          {STATUS_OPTIONS.map((o) => {
+            const active = filters.status === o.value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => update({ status: o.value })}
+                aria-pressed={active}
+                className={
+                  "inline-flex h-7 items-center rounded-sm px-2 text-[11px] font-medium transition-colors duration-fast " +
+                  (active
+                    ? o.tone
+                    : "bg-surface-2 text-text-subtle hover:bg-surface-3 hover:text-text")
+                }
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
 
-      <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-        <span className={FIELD_LABEL}>关键词</span>
-        <input
-          aria-label="关键词"
-          type="search"
-          placeholder="trace_id / 员工名"
-          className={`${INPUT_CLS} w-48 placeholder:text-text-subtle`}
-          value={filters.keyword}
-          onChange={(e) => update({ keyword: e.target.value })}
-        />
-      </label>
-
-      <div className="ml-auto flex items-center gap-3">
-        <span className="font-mono text-[10px] tabular-nums text-text-subtle">
-          {loadedCount === totalCount
-            ? `${totalCount} 条`
-            : `${loadedCount} / ${totalCount}`}
-        </span>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={busy}
-          className={`${INPUT_CLS} px-3 disabled:opacity-50`}
-        >
-          {busy ? "刷新中…" : "刷新"}
-        </button>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="font-mono text-[10px] tabular-nums text-text-subtle">
+            {loadedCount === totalCount
+              ? `${totalCount} 条`
+              : `${loadedCount} / ${totalCount}`}
+          </span>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={busy}
+            aria-label="刷新"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[12px] font-medium text-text transition-colors duration-fast hover:border-border-strong hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Icon
+              name="refresh"
+              size={12}
+              className={busy ? "animate-spin" : undefined}
+            />
+            {busy ? "刷新中…" : "刷新"}
+          </button>
+        </div>
       </div>
     </div>
   );

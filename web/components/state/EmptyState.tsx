@@ -1,55 +1,112 @@
 "use client";
 
 /**
- * EmptyState · 空数据占位 · Linear Precise
+ * EmptyState · Brand Blue Dual Theme V2 (ADR 0016 · proposals/v2 §3.14)
  *
- * Visual contract (product/03-visual-design.md §3 · design-system/MASTER.md §2.14):
- * - 虚线边框卡片,mono 字符 `·` 做视觉起点(无 icon 库)。
- * - 颜色走 token:bg-surface · border-border (dashed) · text-text · text-text-muted。
- * - 可选 action 使用主按钮模板 · 无位移 · 仅颜色过渡。
+ * Mesh-hero backdrop (soft primary + accent radial glows) over a dotgrid,
+ * a floating gradient primary icon tile, h3 + description, optional action.
+ *
+ * Preserves public API: { title, description?, action?, children? }.
  */
 
 import type { ReactNode } from "react";
+import { Icon, type IconName } from "@/components/ui/icon";
 
 export type StateAction = {
   label: string;
   onClick: () => void;
+  /** Optional lucide icon for the primary action. */
+  icon?: IconName;
 };
 
 export function EmptyState({
   title,
   description,
   action,
+  secondaryAction,
+  icon = "sparkles",
   children,
 }: {
   title: string;
   description?: string;
   action?: StateAction;
+  secondaryAction?: StateAction;
+  icon?: IconName;
   children?: ReactNode;
 }) {
   return (
     <div
       role="status"
       data-state="empty"
-      className="rounded-md border border-dashed border-border bg-surface px-5 py-6 text-center"
+      className="relative overflow-hidden rounded-xl border border-border bg-surface px-6 py-10 text-center shadow-soft-sm"
     >
-      <div className="font-mono text-[10px] uppercase tracking-wider text-text-subtle mb-2">
-        · empty
-      </div>
-      <p className="text-[13px] text-text">{title}</p>
-      {description && (
-        <p className="mt-1 text-[11px] text-text-muted">{description}</p>
-      )}
-      {children && <div className="mt-3 text-[12px] text-text-muted">{children}</div>}
-      {action && (
-        <button
-          type="button"
-          onClick={action.onClick}
-          className="mt-3 rounded bg-primary hover:bg-primary-hover text-primary-fg text-[12px] font-medium px-3 py-1.5 transition-colors duration-base"
+      {/* mesh hero — soft radial glows */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-70"
+        style={{
+          background:
+            "radial-gradient(420px 240px at 20% 15%, var(--color-primary-muted), transparent 65%)," +
+            "radial-gradient(360px 220px at 80% 70%, color-mix(in srgb, var(--color-accent) 22%, transparent), transparent 65%)",
+        }}
+      />
+      {/* dotgrid backdrop */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-40"
+        style={{
+          backgroundImage:
+            "radial-gradient(var(--color-border) 1px, transparent 1px)",
+          backgroundSize: "18px 18px",
+          maskImage:
+            "radial-gradient(ellipse at center, rgba(0,0,0,0.55), transparent 75%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse at center, rgba(0,0,0,0.55), transparent 75%)",
+        }}
+      />
+      <div className="relative flex flex-col items-center">
+        <div
+          aria-hidden="true"
+          className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-fg shadow-soft-lg animate-float"
         >
-          {action.label}
-        </button>
-      )}
+          <Icon name={icon} size={26} strokeWidth={1.75} />
+        </div>
+        <h3 className="mt-5 text-lg font-semibold tracking-tight text-text">
+          {title}
+        </h3>
+        {description && (
+          <p className="mt-2 max-w-md text-sm text-text-muted">{description}</p>
+        )}
+        {children && (
+          <div className="mt-3 text-caption text-text-muted">{children}</div>
+        )}
+        {(action || secondaryAction) && (
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            {action && (
+              <button
+                type="button"
+                onClick={action.onClick}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg shadow-soft-sm transition-colors duration-base hover:bg-primary-hover hover:-translate-y-px"
+              >
+                {action.icon && <Icon name={action.icon} size={14} />}
+                {action.label}
+              </button>
+            )}
+            {secondaryAction && (
+              <button
+                type="button"
+                onClick={secondaryAction.onClick}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-4 py-2 text-sm text-text-muted transition-colors duration-base hover:border-border-strong hover:text-text hover:bg-surface-2"
+              >
+                {secondaryAction.icon && (
+                  <Icon name={secondaryAction.icon} size={14} />
+                )}
+                {secondaryAction.label}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

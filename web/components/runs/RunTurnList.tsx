@@ -1,16 +1,24 @@
 "use client";
 
+/**
+ * RunTurnList · Brand Blue Dual Theme V2 (ADR 0016)
+ *
+ * Compact turn rows. Every turn carries a small status/role icon tile, a
+ * mono label, and its content. Tool-call rows stay collapsible; thinking
+ * rows stay collapsible. Hover lightens to surface-2.
+ */
+
 import { useState } from "react";
 import type { TurnDto, TurnToolCallDto } from "@/lib/observatory-api";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
-import { PlusIcon, MinusIcon } from "@/components/ui/icons";
+import { Icon, type IconName } from "@/components/ui/icon";
 
 export function RunTurnList({ turns }: { turns: TurnDto[] }) {
   if (turns.length === 0) {
     return (
       <p
         data-testid="run-turns-empty"
-        className="px-4 py-6 text-center text-[11px] text-text-muted"
+        className="rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center text-caption text-text-muted"
       >
         暂无轮次 · 此运行还没有产生消息
       </p>
@@ -20,7 +28,7 @@ export function RunTurnList({ turns }: { turns: TurnDto[] }) {
   return (
     <ol
       data-testid="run-turn-list"
-      className="flex flex-col gap-2 list-none p-0 m-0"
+      className="m-0 flex list-none flex-col gap-2 p-0"
     >
       {turns.map((turn, idx) => (
         <li key={`${turn.kind}-${idx}`} data-testid={`run-turn-${turn.kind}`}>
@@ -31,15 +39,43 @@ export function RunTurnList({ turns }: { turns: TurnDto[] }) {
   );
 }
 
+function TurnIcon({
+  name,
+  tone,
+}: {
+  name: IconName;
+  tone: "user" | "worker" | "tool" | "think";
+}) {
+  const toneClass =
+    tone === "user"
+      ? "bg-surface-2 text-text"
+      : tone === "worker"
+        ? "bg-primary-muted text-primary"
+        : tone === "tool"
+          ? "bg-accent/15 text-accent"
+          : "bg-surface-2 text-text-muted";
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${toneClass}`}
+    >
+      <Icon name={name} size={12} />
+    </span>
+  );
+}
+
 function TurnRow({ turn }: { turn: TurnDto }) {
   switch (turn.kind) {
     case "user_input":
       return (
-        <div className="rounded-md border border-border bg-surface-2 px-3 py-2">
-          <p className="text-[10px] text-text-muted mb-0.5">用户</p>
-          <p className="whitespace-pre-wrap text-[12px] text-text">
-            {turn.content}
-          </p>
+        <div className="rounded-lg border border-border bg-surface-2 px-3 py-2.5">
+          <div className="mb-1 flex items-center gap-2">
+            <TurnIcon name="user" tone="user" />
+            <p className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+              user
+            </p>
+          </div>
+          <p className="whitespace-pre-wrap text-sm text-text">{turn.content}</p>
         </div>
       );
     case "thinking":
@@ -48,8 +84,13 @@ function TurnRow({ turn }: { turn: TurnDto }) {
       return <ToolCallTurn turn={turn} />;
     case "message":
       return (
-        <div className="rounded-md border border-border bg-surface px-3 py-2">
-          <p className="text-[10px] text-text-muted mb-1">回复</p>
+        <div className="rounded-lg border border-border bg-surface px-3 py-2.5">
+          <div className="mb-1 flex items-center gap-2">
+            <TurnIcon name="message-square" tone="worker" />
+            <p className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+              reply
+            </p>
+          </div>
           <AgentMarkdown
             content={turn.content}
             className="prose prose-invert prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
@@ -62,24 +103,31 @@ function TurnRow({ turn }: { turn: TurnDto }) {
 function ThinkingTurn({ content }: { content: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-md border border-border bg-surface">
+    <div className="rounded-lg border border-border bg-surface">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] text-text-muted hover:text-text transition-colors duration-base"
+        className="flex w-full items-center gap-2 px-3 py-2 text-caption text-text-muted transition-colors duration-base hover:text-text hover:bg-surface-2"
         aria-expanded={open}
         data-testid="run-turn-thinking-toggle"
       >
-        <span className="flex items-center gap-1.5">
-          <span aria-hidden className="font-mono">{open ? "▾" : "▸"}</span>
-          思考过程
+        <TurnIcon name="brain" tone="think" />
+        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+          thinking
         </span>
-        <span className="font-mono text-[10px]">{content.length}</span>
+        <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px]">
+          {content.length}
+          <Icon
+            name={open ? "chevron-down" : "chevron-right"}
+            size={11}
+            className="text-text-subtle"
+          />
+        </span>
       </button>
       {open && (
         <div
           data-testid="run-turn-thinking-body"
-          className="border-t border-border px-3 py-2 text-[11px] leading-relaxed text-text-muted"
+          className="border-t border-border px-3 py-2.5 text-caption leading-relaxed text-text-muted"
         >
           <AgentMarkdown
             content={content}
@@ -94,48 +142,77 @@ function ThinkingTurn({ content }: { content: string }) {
 function ToolCallTurn({ turn }: { turn: TurnToolCallDto }) {
   const [expanded, setExpanded] = useState(false);
   const hasResult = turn.result !== null && turn.result !== undefined;
-  const statusColor = turn.error
-    ? "text-danger"
+  const statusTone: "ok" | "err" | "wait" = turn.error
+    ? "err"
     : hasResult
-      ? "text-success"
-      : "text-text-muted";
-  const statusLabel = turn.error ? "failed" : hasResult ? "done" : "pending";
+      ? "ok"
+      : "wait";
+  const statusChip =
+    statusTone === "err"
+      ? "border-danger/30 bg-danger-soft text-danger"
+      : statusTone === "ok"
+        ? "border-success/30 bg-success-soft text-success"
+        : "border-border bg-surface-2 text-text-muted";
+  const statusIcon: IconName =
+    statusTone === "err"
+      ? "alert-circle"
+      : statusTone === "ok"
+        ? "check-circle-2"
+        : "clock";
+  const statusLabel =
+    statusTone === "err" ? "failed" : statusTone === "ok" ? "done" : "pending";
 
   return (
-    <div className="rounded-md border border-border bg-bg text-[11px] overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-border bg-surface text-caption">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-2 transition-colors duration-base"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors duration-base hover:bg-surface-2"
       >
-        <span className="font-mono text-[10px] text-text-subtle shrink-0">fn</span>
-        <span className="font-mono text-text truncate">{turn.name}</span>
-        <span className={`ml-auto font-medium ${statusColor}`}>{statusLabel}</span>
-        <span className="text-text-muted shrink-0" aria-hidden="true">
-          {expanded ? <MinusIcon size={12} /> : <PlusIcon size={12} />}
+        <TurnIcon name="terminal" tone="tool" />
+        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle shrink-0">
+          tool
         </span>
+        <span className="truncate font-mono text-sm text-text">{turn.name}</span>
+        <span
+          className={`ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 font-mono text-[10px] ${statusChip}`}
+        >
+          <Icon name={statusIcon} size={10} />
+          {statusLabel}
+        </span>
+        <Icon
+          name={expanded ? "chevron-down" : "chevron-right"}
+          size={12}
+          className="text-text-subtle shrink-0"
+        />
       </button>
       {expanded && (
-        <div className="border-t border-border px-3 py-2 space-y-2">
+        <div className="space-y-2 border-t border-border bg-surface-2/30 px-3 py-2.5">
           <div>
-            <p className="text-text-muted mb-0.5">args</p>
-            <pre className="text-text whitespace-pre-wrap break-all text-[10px]">
+            <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+              args
+            </p>
+            <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-surface p-2 text-[10px] text-text">
               {JSON.stringify(turn.args, null, 2)}
             </pre>
           </div>
           {hasResult && (
             <div>
-              <p className="text-text-muted mb-0.5">result</p>
-              <pre className="text-text whitespace-pre-wrap break-all text-[10px]">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+                result
+              </p>
+              <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-surface p-2 text-[10px] text-text">
                 {JSON.stringify(turn.result, null, 2)}
               </pre>
             </div>
           )}
           {turn.error && (
             <div>
-              <p className="text-danger mb-0.5">error</p>
-              <pre className="text-danger whitespace-pre-wrap text-[10px]">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-danger">
+                error
+              </p>
+              <pre className="whitespace-pre-wrap rounded-md border border-danger/30 bg-danger-soft p-2 text-[10px] text-danger">
                 {turn.error}
               </pre>
             </div>

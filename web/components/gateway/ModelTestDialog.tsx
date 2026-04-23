@@ -1,5 +1,29 @@
 "use client";
 
+/**
+ * ModelTestDialog · chat-like test console for one /gateway model
+ * (ADR 0016 · V2 Azure Live polish).
+ *
+ * Structure (preserved from the pre-V2 revision — only visuals change):
+ *   header — gradient icon tile · "Test · {model name}" · provider-style
+ *            mono chip · close button
+ *   advanced panel — collapsible sidebar of model params (system / temperature
+ *            / top_p / max_tokens)
+ *   transcript — V2 chat bubbles (user: primary pill · agent: surface-border
+ *            pill with DotGridAvatar) · streaming cursor · reasoning foldout
+ *   metrics — rounded-pill grid of latency / TTFT / tokens / tok·s
+ *   error  — danger-soft card with alert-circle icon
+ *   composer — shared <Composer> with focus ring + glow-on-focus via the
+ *            global input styling
+ *
+ * Testids are 100% preserved:
+ *   model-test-dialog · model-test-avatar · model-test-scroll ·
+ *   model-test-transcript · model-test-thinking · model-test-reasoning ·
+ *   model-test-cursor · model-test-metrics · model-test-error ·
+ *   model-test-composer · model-test-clear · model-test-advanced-toggle ·
+ *   model-test-jump-to-bottom
+ */
+
 import {
   useCallback,
   useEffect,
@@ -9,8 +33,8 @@ import {
 } from "react";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { Composer, ThinkingToggle } from "@/components/chat/Composer";
-import { ArrowDownIcon } from "@/components/icons";
 import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
+import { Icon } from "@/components/ui/icon";
 import { openStream, type StreamHandle } from "@/lib/stream-client";
 
 const STICK_THRESHOLD_PX = 64;
@@ -296,39 +320,86 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
     setLastRun({ streaming: false });
   }
 
+  const modelTitle = model.display_name || model.name;
+  const hasAlias = model.display_name && model.display_name !== model.name;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
       onClick={onClose}
     >
       <div
         role="dialog"
         data-testid="model-test-dialog"
-        className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-xl border border-border bg-surface shadow-xl"
+        className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-border bg-surface shadow-soft-lg overflow-hidden"
+        style={{ animation: "ah-fade-up var(--dur-slow) var(--ease-out-expo) both" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="px-5 pt-4 pb-3 border-b border-border flex items-start justify-between gap-3">
-          <div className="min-w-0 flex items-start gap-3">
-            <DotGridAvatar
-              initial={initialFromName(model.display_name || model.name)}
-              size="md"
-              testId="model-test-avatar"
-            />
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-text truncate">
-                对话测试 · {model.display_name || model.name}
+        {/* top primary hairline */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent"
+        />
+
+        <header className="px-5 pt-5 pb-4 border-b border-border flex items-start gap-3">
+          <div
+            aria-hidden="true"
+            className="shrink-0 grid h-10 w-10 place-items-center rounded-xl text-primary-fg shadow-soft-sm"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+            }}
+          >
+            <Icon name="message-square" size={18} strokeWidth={1.75} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-subtle shrink-0">
+                Test
+              </span>
+              <span aria-hidden="true" className="text-text-subtle shrink-0">
+                ·
+              </span>
+              <h3
+                className="text-[15px] font-semibold text-text tracking-tight truncate"
+                data-testid="model-test-title"
+              >
+                {modelTitle}
               </h3>
-              <p className="text-xs font-mono text-text-subtle truncate mt-0.5">
-                {model.name}
-              </p>
+            </div>
+            <div className="mt-0.5 flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-sm bg-surface-2 border border-border font-mono text-[10.5px] text-text-muted truncate">
+                <Icon name="terminal" size={10} className="shrink-0" />
+                <span className="truncate">{model.name}</span>
+              </span>
+              {hasAlias && (
+                <>
+                  <DotGridAvatar
+                    initial={initialFromName(modelTitle)}
+                    size="sm"
+                    testId="model-test-avatar"
+                  />
+                </>
+              )}
+              {!hasAlias && (
+                // Keep the avatar for visual anchoring + testid parity
+                <DotGridAvatar
+                  initial={initialFromName(modelTitle)}
+                  size="sm"
+                  testId="model-test-avatar"
+                />
+              )}
             </div>
           </div>
+
           <button
+            type="button"
             onClick={onClose}
             aria-label="关闭"
-            className="text-text-muted hover:text-text text-lg leading-none"
+            className="shrink-0 grid h-8 w-8 place-items-center rounded-md text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast"
           >
-            ×
+            <Icon name="x" size={14} />
           </button>
         </header>
 
@@ -337,115 +408,129 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
             ref={scrollRef}
             onScroll={handleScroll}
             data-testid="model-test-scroll"
-            className="flex-1 overflow-y-auto px-5 py-3"
+            className="flex-1 overflow-y-auto px-5 py-4"
           >
-          <div className="mb-3">
-            <button
-              onClick={() => setShowAdvanced((v) => !v)}
-              data-testid="model-test-advanced-toggle"
-              className="text-xs text-text-muted hover:text-text transition-colors"
-            >
-              {showAdvanced ? "▾ 高级参数" : "▸ 高级参数"}
-            </button>
-            {showAdvanced && (
-              <div className="mt-2 rounded-md border border-border bg-bg p-3 flex flex-col gap-3">
-                <div>
-                  <label className="text-xs text-text-muted block mb-1">
-                    System prompt
-                  </label>
-                  <textarea
-                    value={system}
-                    onChange={(e) => setSystem(e.target.value)}
-                    rows={2}
-                    placeholder="例：你是简洁精确的工程师助手。"
-                    className="w-full rounded-md bg-surface-2 border border-border px-2.5 py-1.5 text-xs text-text focus:outline-none focus:border-primary transition-colors"
-                  />
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                data-testid="model-test-advanced-toggle"
+                aria-expanded={showAdvanced}
+                className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] font-medium text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast"
+              >
+                <Icon name="settings" size={12} />
+                高级参数
+                <Icon
+                  name="chevron-down"
+                  size={12}
+                  className={`transition-transform duration-base ${
+                    showAdvanced ? "rotate-180" : "rotate-0"
+                  }`}
+                />
+              </button>
+              {showAdvanced && (
+                <div
+                  className="mt-2 rounded-xl border border-border bg-surface-2/50 p-4 flex flex-col gap-3 animate-fade-up"
+                  style={{ animationDuration: "var(--dur-base)" }}
+                >
+                  <div>
+                    <label className="font-mono text-[10px] uppercase tracking-wider text-text-subtle block mb-1">
+                      System prompt
+                    </label>
+                    <textarea
+                      value={system}
+                      onChange={(e) => setSystem(e.target.value)}
+                      rows={2}
+                      placeholder="例：你是简洁精确的工程师助手。"
+                      className="w-full rounded-md bg-surface border border-border px-3 py-2 text-[12.5px] text-text placeholder:text-text-subtle focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary transition-colors duration-fast"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <SliderField
+                      label="temperature"
+                      value={temperature}
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      onChange={setTemperature}
+                    />
+                    <SliderField
+                      label="top_p"
+                      value={topP}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onChange={setTopP}
+                    />
+                    <NumberField
+                      label="max_tokens"
+                      value={maxTokens}
+                      onChange={setMaxTokens}
+                      min={1}
+                      max={32000}
+                    />
+                  </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <SliderField
-                    label="temperature"
-                    value={temperature}
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    onChange={setTemperature}
-                  />
-                  <SliderField
-                    label="top_p"
-                    value={topP}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    onChange={setTopP}
-                  />
-                  <NumberField
-                    label="max_tokens"
-                    value={maxTokens}
-                    onChange={setMaxTokens}
-                    min={1}
-                    max={32000}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div
-            className="flex flex-col gap-2 mb-3"
-            data-testid="model-test-transcript"
-          >
-            {messages.length === 0 && !streamContent && !streamReasoning && (
-              <p className="text-xs text-text-subtle text-center py-4">
-                输入消息后按 ↵ 或 ⌘↵ 发送。多轮对话会保留上下文。
-              </p>
-            )}
-            {messages.map((m, i) => (
-              <MessageRow
-                key={i}
-                role={m.role}
-                content={m.content}
-                reasoning={m.reasoning}
-              />
-            ))}
-            {isLoading &&
-              phase === "thinking" &&
-              !streamContent &&
-              !streamReasoning && <ThinkingPlaceholder elapsedMs={elapsedMs} />}
-            {(streamContent || streamReasoning) && (
-              <MessageRow
-                role="assistant"
-                content={streamContent}
-                reasoning={streamReasoning}
-                streaming
-                phase={phase}
-              />
-            )}
-          </div>
-
-          {lastRun?.metrics && !lastRun.error && (
-            <MetricsRow metrics={lastRun.metrics} />
-          )}
-
-          {lastRun?.error && (
-            <div
-              data-testid="model-test-error"
-              className="mt-2 rounded-md border border-danger/30 bg-danger/5 p-3 text-xs"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-danger/20 text-danger uppercase tracking-wide">
-                  {ERROR_LABEL[lastRun.error.category]}
-                </span>
-                {lastRun.metrics?.latencyMs !== undefined && (
-                  <span className="font-mono text-text-muted">
-                    {lastRun.metrics.latencyMs} ms
-                  </span>
-                )}
-              </div>
-              <p className="font-mono text-danger break-all">
-                {lastRun.error.message}
-              </p>
+              )}
             </div>
-          )}
+
+            <div
+              className="flex flex-col gap-3"
+              data-testid="model-test-transcript"
+            >
+              {messages.length === 0 && !streamContent && !streamReasoning && (
+                <EmptyTranscript />
+              )}
+              {messages.map((m, i) => (
+                <MessageRow
+                  key={i}
+                  role={m.role}
+                  content={m.content}
+                  reasoning={m.reasoning}
+                />
+              ))}
+              {isLoading &&
+                phase === "thinking" &&
+                !streamContent &&
+                !streamReasoning && <ThinkingPlaceholder elapsedMs={elapsedMs} />}
+              {(streamContent || streamReasoning) && (
+                <MessageRow
+                  role="assistant"
+                  content={streamContent}
+                  reasoning={streamReasoning}
+                  streaming
+                  phase={phase}
+                />
+              )}
+            </div>
+
+            {lastRun?.metrics && !lastRun.error && (
+              <MetricsRow metrics={lastRun.metrics} />
+            )}
+
+            {lastRun?.error && (
+              <div
+                data-testid="model-test-error"
+                className="mt-3 rounded-xl border border-danger/25 bg-danger-soft p-3.5 text-[12px]"
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-danger/15 text-danger shrink-0">
+                    <Icon name="alert-circle" size={12} strokeWidth={2} />
+                  </span>
+                  <span className="inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold bg-danger/15 text-danger uppercase tracking-wide">
+                    {ERROR_LABEL[lastRun.error.category]}
+                  </span>
+                  {lastRun.metrics?.latencyMs !== undefined && (
+                    <span className="font-mono text-[11px] text-text-muted tabular-nums">
+                      {lastRun.metrics.latencyMs} ms
+                    </span>
+                  )}
+                </div>
+                <p className="font-mono text-[11.5px] text-danger break-all leading-relaxed">
+                  {lastRun.error.message}
+                </p>
+              </div>
+            )}
           </div>
           {!stickToBottom &&
             (messages.length > 0 || streamContent || streamReasoning) && (
@@ -457,15 +542,15 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 }}
                 data-testid="model-test-jump-to-bottom"
                 aria-label="回到最新"
-                className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] text-text-muted transition-colors duration-fast hover:text-text hover:border-border-strong"
+                className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 h-7 text-[11px] font-medium text-text-muted shadow-soft-sm hover:text-primary hover:border-primary/40 transition-colors duration-fast"
               >
-                <ArrowDownIcon size={12} />
+                <Icon name="arrow-down" size={12} />
                 回到最新
               </button>
             )}
         </div>
 
-        <footer className="px-5 pb-4 pt-2 border-t border-border flex flex-col gap-2">
+        <footer className="px-5 pb-4 pt-3 border-t border-border bg-surface flex flex-col gap-2">
           <Composer
             value={prompt}
             onChange={setPrompt}
@@ -487,20 +572,74 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                   onClick={resetConversation}
                   disabled={isLoading || (messages.length === 0 && !lastRun)}
                   data-testid="model-test-clear"
-                  className="inline-flex h-6 items-center rounded border border-border px-2 text-[11px] text-text-muted hover:text-text hover:border-border-strong disabled:opacity-40 transition-colors duration-fast"
+                  className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[11px] font-medium text-text-muted hover:text-text hover:border-border-strong disabled:opacity-40 transition-colors duration-fast"
                 >
-                  清空会话
+                  <Icon name="refresh" size={11} />
+                  清空
                 </button>
               </>
             }
             controlsTrailing={
-              <>
-                ↵ 发送 · ⇧↵ 换行
-                {messages.length > 0 ? ` · ${messages.length} 轮` : ""}
-              </>
+              <span className="inline-flex items-center gap-1 font-mono text-text-subtle">
+                <span className="px-1 py-0.5 rounded-sm bg-surface-2 border border-border text-[10px] text-text-muted">
+                  ↵
+                </span>
+                发送
+                <span aria-hidden="true" className="mx-1">
+                  ·
+                </span>
+                <span className="px-1 py-0.5 rounded-sm bg-surface-2 border border-border text-[10px] text-text-muted">
+                  ⇧↵
+                </span>
+                换行
+                {messages.length > 0 && (
+                  <>
+                    <span aria-hidden="true" className="mx-1">
+                      ·
+                    </span>
+                    <span className="tabular-nums">{messages.length} 轮</span>
+                  </>
+                )}
+              </span>
             }
           />
         </footer>
+      </div>
+    </div>
+  );
+}
+
+function EmptyTranscript() {
+  return (
+    <div className="relative rounded-xl border border-dashed border-border bg-surface-2/30 px-6 py-8 text-center overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 opacity-30 pointer-events-none"
+        style={{
+          backgroundImage:
+            "radial-gradient(var(--color-border) 1px, transparent 1px)",
+          backgroundSize: "16px 16px",
+        }}
+      />
+      <div className="relative">
+        <div
+          aria-hidden="true"
+          className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-primary/10 text-primary mb-2"
+        >
+          <Icon name="sparkles" size={16} />
+        </div>
+        <p className="text-[12.5px] text-text">开始一段测试对话</p>
+        <p className="mt-0.5 text-[11px] text-text-muted">
+          输入消息后按{" "}
+          <span className="inline-flex items-center px-1 py-0.5 rounded-sm bg-surface border border-border font-mono text-[10px] text-text">
+            ↵
+          </span>{" "}
+          或{" "}
+          <span className="inline-flex items-center px-1 py-0.5 rounded-sm bg-surface border border-border font-mono text-[10px] text-text">
+            ⌘↵
+          </span>{" "}
+          发送 · 多轮对话会保留上下文
+        </p>
       </div>
     </div>
   );
@@ -512,24 +651,35 @@ function ThinkingPlaceholder({ elapsedMs }: { elapsedMs: number }) {
       data-testid="model-test-thinking"
       data-role="assistant"
       data-streaming="true"
-      className="rounded-md px-3 py-2 text-sm bg-bg border border-border text-text mr-auto max-w-[85%]"
+      className="flex items-start gap-2.5 mr-auto max-w-[85%]"
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-text-subtle block mb-0.5">
-        ASSISTANT · 思考中
-      </span>
-      <span className="inline-flex items-center gap-2 text-text-subtle">
-        <span
-          aria-hidden="true"
-          className="inline-block w-1.5 h-1.5 rounded-full bg-primary"
-          style={{ animation: "ah-pulse 1.6s ease-in-out infinite" }}
-        />
-        <span className="italic">正在处理请求</span>
-        {elapsedMs >= 1000 && (
-          <span className="ml-1 font-mono not-italic text-[10px] tabular-nums">
-            {(elapsedMs / 1000).toFixed(1)}s
-          </span>
-        )}
-      </span>
+      <div
+        aria-hidden="true"
+        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-primary-fg shadow-soft-sm"
+        style={{
+          background:
+            "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+        }}
+      >
+        <Icon name="sparkles" size={12} strokeWidth={2} />
+      </div>
+      <div className="flex-1 rounded-2xl rounded-tl-md border border-border bg-surface px-3.5 py-2.5 shadow-soft-sm">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle block mb-1">
+          ASSISTANT · 思考中
+        </span>
+        <span className="inline-flex items-center gap-2 text-[12.5px] text-text-muted">
+          <span
+            aria-hidden="true"
+            className="inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse-ring"
+          />
+          <span className="italic">正在处理请求</span>
+          {elapsedMs >= 1000 && (
+            <span className="ml-1 font-mono not-italic text-[10.5px] tabular-nums text-text">
+              {(elapsedMs / 1000).toFixed(1)}s
+            </span>
+          )}
+        </span>
+      </div>
     </div>
   );
 }
@@ -559,84 +709,101 @@ function MessageRow({
 
   const hasReasoning = Boolean(reasoning && reasoning.length > 0);
 
+  if (isUser) {
+    return (
+      <div
+        data-role={role}
+        data-streaming={streaming ? "true" : undefined}
+        className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-primary text-primary-fg px-4 py-2.5 text-[13px] leading-[1.55] whitespace-pre-wrap shadow-soft-sm"
+      >
+        {content}
+      </div>
+    );
+  }
+
   return (
     <div
       data-role={role}
       data-streaming={streaming ? "true" : undefined}
-      className={`rounded-md px-3 py-2 text-sm ${isUser ? "whitespace-pre-wrap" : ""} ${
-        isUser
-          ? "bg-surface-2 text-text ml-auto max-w-[85%]"
-          : "bg-bg border border-border text-text mr-auto max-w-[85%]"
-      }`}
+      className="flex items-start gap-2.5 mr-auto max-w-[85%]"
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-text-subtle block mb-0.5">
-        {isUser
-          ? "USER"
-          : streaming
+      <div
+        aria-hidden="true"
+        className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-primary-fg shadow-soft-sm"
+        style={{
+          background:
+            "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+        }}
+      >
+        <Icon name="sparkles" size={12} strokeWidth={2} />
+      </div>
+      <div className="flex-1 min-w-0 rounded-2xl rounded-tl-md border border-border bg-surface px-3.5 py-2.5 text-[13px] leading-[1.6] text-text shadow-soft-sm">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle block mb-1">
+          {streaming
             ? phase === "thinking"
               ? "ASSISTANT · 思考中"
               : "ASSISTANT · 流式"
             : "ASSISTANT"}
-      </span>
-      {hasReasoning && !isUser && (
-        <div
-          data-testid="model-test-reasoning"
-          className="mb-2 rounded border border-border/60 bg-surface-2/60"
-        >
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-medium text-text-muted hover:text-text transition-colors"
+        </span>
+        {hasReasoning && (
+          <div
+            data-testid="model-test-reasoning"
+            className="mb-2 rounded-lg border border-border bg-surface-2/60"
           >
-            <span className="flex items-center gap-1.5">
-              <span
-                className={`inline-block w-1.5 h-1.5 rounded-full ${
-                  streaming && phase === "thinking"
-                    ? "bg-primary"
-                    : "bg-text-subtle"
-                }`}
-                style={
-                  streaming && phase === "thinking"
-                    ? { animation: "ah-pulse 1.6s ease-in-out infinite" }
-                    : undefined
-                }
-              />
-              思考过程 · {reasoning!.length} 字
-            </span>
-            <span className="font-mono">{expanded ? "▾" : "▸"}</span>
-          </button>
-          {expanded && (
-            <div className="px-2 pb-2 pt-1 text-xs text-text-muted border-t border-border/60 max-h-48 overflow-y-auto">
-              <AgentMarkdown
-                content={reasoning!}
-                className="prose prose-invert prose-sm max-w-none text-text-muted [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-              />
-            </div>
-          )}
-        </div>
-      )}
-      {content || (streaming && phase === "thinking" && !hasReasoning) ? (
-        <>
-          {content ? (
-            isUser ? (
-              content
-            ) : (
-              <AgentMarkdown content={content} />
-            )
-          ) : (
-            <span className="text-text-subtle italic">等待回复…</span>
-          )}
-          {streaming && (
-            <span
-              data-testid="model-test-cursor"
-              aria-hidden="true"
-              className="ml-0.5 inline-block align-baseline font-mono text-text"
-              style={{ animation: "ah-caret 1s step-end infinite" }}
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 text-[10.5px] font-medium text-text-muted hover:text-text transition-colors duration-fast"
             >
-              ▍
-            </span>
-          )}
-        </>
-      ) : null}
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className={`inline-block w-1.5 h-1.5 rounded-full ${
+                    streaming && phase === "thinking"
+                      ? "bg-primary animate-pulse-ring"
+                      : "bg-text-subtle"
+                  }`}
+                />
+                思考过程 · {reasoning!.length} 字
+              </span>
+              <Icon
+                name="chevron-down"
+                size={11}
+                className={`transition-transform duration-base ${
+                  expanded ? "rotate-180" : "rotate-0"
+                }`}
+              />
+            </button>
+            {expanded && (
+              <div className="px-2.5 pb-2 pt-1.5 text-[12px] text-text-muted border-t border-border max-h-48 overflow-y-auto">
+                <AgentMarkdown
+                  content={reasoning!}
+                  className="prose prose-invert prose-sm max-w-none text-text-muted [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                />
+              </div>
+            )}
+          </div>
+        )}
+        {content || (streaming && phase === "thinking" && !hasReasoning) ? (
+          <>
+            {content ? (
+              <AgentMarkdown content={content} />
+            ) : (
+              <span className="text-text-subtle italic">等待回复…</span>
+            )}
+            {streaming && (
+              <span
+                data-testid="model-test-cursor"
+                aria-hidden="true"
+                className="ml-0.5 inline-block align-baseline font-mono text-primary"
+                style={{ animation: "ah-caret 1s step-end infinite" }}
+              >
+                ▍
+              </span>
+            )}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -647,30 +814,38 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
   return (
     <div
       data-testid="model-test-metrics"
-      className="mt-2 rounded-md border border-border bg-bg p-2 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-[11px] font-mono"
+      className="mt-3 rounded-xl border border-border bg-surface-2/50 p-3 grid grid-cols-2 sm:grid-cols-4 gap-2"
     >
-      <Metric
+      <MetricChip
+        icon="clock"
         label="latency"
-        value={metrics.latencyMs !== undefined ? `${metrics.latencyMs} ms` : "—"}
+        value={
+          metrics.latencyMs !== undefined ? `${metrics.latencyMs}ms` : "—"
+        }
       />
-      <Metric
+      <MetricChip
+        icon="zap"
         label={showReasoningMetric ? "ttft·thinking" : "ttft"}
         value={
           showReasoningMetric
-            ? `${metrics.reasoningFirstMs} ms`
+            ? `${metrics.reasoningFirstMs}ms`
             : metrics.ttftMs !== undefined
-              ? `${metrics.ttftMs} ms`
+              ? `${metrics.ttftMs}ms`
               : "—"
         }
       />
       {showReasoningMetric ? (
-        <Metric
+        <MetricChip
+          icon="zap"
           label="ttft·answer"
-          value={metrics.ttftMs !== undefined ? `${metrics.ttftMs} ms` : "—"}
+          value={
+            metrics.ttftMs !== undefined ? `${metrics.ttftMs}ms` : "—"
+          }
         />
       ) : (
-        <Metric
-          label="tok in/out/total"
+        <MetricChip
+          icon="database"
+          label="tok i/o/t"
           value={
             metrics.inputTokens !== undefined
               ? `${metrics.inputTokens}/${metrics.outputTokens ?? 0}/${
@@ -680,7 +855,8 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
           }
         />
       )}
-      <Metric
+      <MetricChip
+        icon="activity"
         label="tok/s"
         value={
           metrics.tokensPerSecond !== undefined
@@ -689,8 +865,9 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
         }
       />
       {showReasoningMetric && (
-        <Metric
-          label="tok in/out/total"
+        <MetricChip
+          icon="database"
+          label="tok i/o/t"
           value={
             metrics.inputTokens !== undefined
               ? `${metrics.inputTokens}/${metrics.outputTokens ?? 0}/${
@@ -704,11 +881,31 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function MetricChip({
+  icon,
+  label,
+  value,
+}: {
+  icon: Parameters<typeof Icon>[0]["name"];
+  label: string;
+  value: string;
+}) {
   return (
-    <div className="flex justify-between gap-2">
-      <span className="text-text-subtle">{label}</span>
-      <span className="text-text text-right">{value}</span>
+    <div className="flex items-center gap-2 rounded-lg bg-surface border border-border px-2.5 py-1.5">
+      <span
+        aria-hidden="true"
+        className="grid h-5 w-5 place-items-center rounded bg-primary/10 text-primary shrink-0"
+      >
+        <Icon name={icon} size={11} strokeWidth={2} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="font-mono text-[9px] uppercase tracking-wider text-text-subtle leading-none">
+          {label}
+        </div>
+        <div className="mt-0.5 font-mono text-[11.5px] text-text tabular-nums truncate">
+          {value}
+        </div>
+      </div>
     </div>
   );
 }
@@ -730,9 +927,13 @@ function SliderField({
 }) {
   return (
     <div>
-      <div className="flex justify-between text-[10px] text-text-muted mb-0.5">
-        <span>{label}</span>
-        <span className="font-mono text-text">{value.toFixed(2)}</span>
+      <div className="flex justify-between items-baseline mb-1">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+          {label}
+        </span>
+        <span className="font-mono text-[11px] text-text tabular-nums">
+          {value.toFixed(2)}
+        </span>
       </div>
       <input
         type="range"
@@ -741,7 +942,7 @@ function SliderField({
         max={max}
         step={step}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full"
+        className="w-full accent-primary"
       />
     </div>
   );
@@ -762,7 +963,9 @@ function NumberField({
 }) {
   return (
     <div>
-      <label className="text-[10px] text-text-muted block mb-0.5">{label}</label>
+      <label className="font-mono text-[10px] uppercase tracking-wider text-text-subtle block mb-1">
+        {label}
+      </label>
       <input
         type="number"
         value={value}
@@ -772,7 +975,7 @@ function NumberField({
           const v = Number(e.target.value);
           if (Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v)));
         }}
-        className="w-full rounded-md bg-surface-2 border border-border px-2 py-1 text-xs font-mono text-text focus:outline-none focus:border-primary transition-colors"
+        className="w-full rounded-md bg-surface border border-border px-2 h-7 font-mono text-[11.5px] text-text focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary transition-colors duration-fast"
       />
     </div>
   );

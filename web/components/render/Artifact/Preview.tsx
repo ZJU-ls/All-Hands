@@ -1,12 +1,22 @@
 "use client";
 
+/**
+ * Artifact.Preview · render target that inlines an artifact in chat.
+ *
+ * V2-level (ADR 0016): `rounded-xl border bg-surface shadow-soft-sm` card
+ * with a gradient icon tile keyed by kind, a title + kind/version chip
+ * header, and a per-kind body renderer.
+ */
+
 import { useEffect, useState } from "react";
+import { Icon, type IconName } from "@/components/ui/icon";
 import type { RenderProps } from "@/lib/component-registry";
 import {
   getArtifact,
   getArtifactTextContent,
   isBinaryKind,
   type ArtifactDto,
+  type ArtifactKind,
 } from "@/lib/artifacts-api";
 import { MarkdownView } from "@/components/artifacts/kinds/MarkdownView";
 import { CodeView } from "@/components/artifacts/kinds/CodeView";
@@ -16,6 +26,44 @@ import { DataView } from "@/components/artifacts/kinds/DataView";
 import { MermaidView } from "@/components/artifacts/kinds/MermaidView";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+const KIND_ICON: Record<string, IconName> = {
+  markdown: "book-open",
+  code: "code",
+  html: "code",
+  image: "eye",
+  data: "database",
+  mermaid: "activity",
+  drawio: "activity",
+  pptx: "file",
+  video: "play-circle",
+};
+
+function kindIcon(kind: string): IconName {
+  return KIND_ICON[kind] ?? "file";
+}
+
+function StatusShell({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: "muted" | "danger" | "loading";
+}) {
+  const ring =
+    tone === "danger"
+      ? "border-danger/40 bg-danger-soft text-danger"
+      : tone === "loading"
+        ? "border-dashed border-border bg-surface-2 text-text-muted"
+        : "border-dashed border-border bg-surface text-text-muted";
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-[12px] shadow-soft-sm ${ring}`}
+    >
+      {children}
+    </div>
+  );
+}
 
 export function ArtifactPreview({ props }: RenderProps) {
   const artifactId = (props.artifact_id as string | undefined) ?? "";
@@ -48,26 +96,30 @@ export function ArtifactPreview({ props }: RenderProps) {
 
   if (!artifactId) {
     return (
-      <div className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-text-muted">
+      <StatusShell tone="muted">
+        <Icon name="alert-circle" size={14} />
         Artifact.Preview 缺少 artifact_id
-      </div>
+      </StatusShell>
     );
   }
   if (error) {
     return (
-      <div className="rounded-lg border border-border px-3 py-2 text-xs text-danger">
+      <StatusShell tone="danger">
+        <Icon name="alert-triangle" size={14} />
         制品加载失败:{error}
-      </div>
+      </StatusShell>
     );
   }
   if (!meta) {
     return (
-      <div className="rounded-lg border border-border px-3 py-2 text-xs text-text-muted">
+      <StatusShell tone="loading">
+        <Icon name="loader" size={14} className="animate-spin-slow" />
         读取制品…
-      </div>
+      </StatusShell>
     );
   }
 
+  const icon = kindIcon(meta.kind as ArtifactKind);
   let body: React.ReactNode = null;
   if (meta.kind === "image") {
     body = <ImageView src={`${BASE}/api/artifacts/${meta.id}/content`} alt={meta.name} />;
@@ -92,7 +144,7 @@ export function ArtifactPreview({ props }: RenderProps) {
         break;
       default:
         body = (
-          <div className="px-4 py-3 text-xs text-text-muted">
+          <div className="px-5 py-4 text-[12px] text-text-muted">
             kind {meta.kind} 暂不支持预览
           </div>
         );
@@ -100,15 +152,29 @@ export function ArtifactPreview({ props }: RenderProps) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-bg overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-4 py-2">
-        <div className="min-w-0">
-          <div className="truncate text-xs font-semibold text-text">{meta.name}</div>
-          <div className="truncate font-mono text-[10px] text-text-subtle">
-            {meta.kind} · v{meta.version}
+    <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm">
+      <div className="flex items-center gap-3 border-b border-border bg-surface-2/60 px-4 py-3">
+        <span
+          aria-hidden="true"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-primary-fg shadow-soft-sm"
+          style={{
+            backgroundImage:
+              "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%)",
+          }}
+        >
+          <Icon name={icon} size={16} strokeWidth={2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-semibold tracking-tight text-text">
+            {meta.name}
+          </div>
+          <div className="mt-0.5 truncate font-mono text-[10px] text-text-subtle">
+            v{meta.version}
           </div>
         </div>
-        <span className="font-mono text-[10px] text-text-muted">制品</span>
+        <span className="inline-flex h-6 shrink-0 items-center rounded-md bg-primary-muted px-2 font-mono text-[10px] uppercase tracking-wider text-primary">
+          {meta.kind}
+        </span>
       </div>
       {body}
     </div>

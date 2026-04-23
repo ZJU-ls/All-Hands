@@ -1,25 +1,22 @@
 "use client";
 
 /**
- * EmployeeCard · render-tool target for create_employee (I-0008).
+ * EmployeeCard · render target for `create_employee` (I-0008).
  *
- * Consumes the payload shape defined in backend allhands/api/protocol.py
- * `EmployeeCardProps` and mirrored in web/lib/protocol.ts. When Lead Agent
- * invokes `create_employee` the tool result is wrapped as
- * `{component: "EmployeeCard", props}` so the new employee renders inline
- * in chat — no navigation required (N1 Tool-First redemption, W2).
+ * V2-level (ADR 0016 · Brand-Blue Dual Theme)
+ * - Gradient avatar tile (primary → primary-hover, 135°) with initial.
+ * - Role + "Lead" chips · status dot · description · meta row.
+ * - `rounded-xl border border-border bg-surface shadow-soft-sm` shell, lifts
+ *   one pixel on hover via `hover:shadow-soft hover:-translate-y-px`.
+ * - Active employees keep the 2px left `bg-primary` accent bar — the test
+ *   suite asserts the class exists / is absent by status.
  *
- * Visual contract (product/03-visual-design.md · design-system/MASTER.md):
- * - Linear Precise: bg-surface / border-border · color density ≤ 3 + semantic
- * - No icon library. The "avatar" is a 28-px square dot-grid tile with the
- *   first letter rendered in mono (no real headshot / image).
- * - Active employees carry a 2-px left accent bar (bg-primary); draft / paused
- *   fall back to neutral tokens.
- * - Status label + meta line use mono characters (`· → ⌘`) per CLAUDE.md §3.5.
+ * Props + `data-*` contract preserved so existing tests + the render
+ * registry keep working (see `web/tests/employee-card.test.tsx`).
  */
 
-import { DotGridAvatar } from "@/components/ui/DotGridAvatar";
-import type { RenderProps } from "@/lib/component-registry";
+import { Icon } from "@/components/ui/icon";
+import type { RenderInteraction, RenderProps } from "@/lib/component-registry";
 
 type Status = "draft" | "active" | "paused";
 
@@ -38,6 +35,7 @@ type EmployeeCardPayload = {
   tool_count?: number;
   model?: ModelRef;
   status?: Status;
+  is_lead?: boolean;
 };
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -47,9 +45,9 @@ const STATUS_LABEL: Record<Status, string> = {
 };
 
 const STATUS_DOT_CLASS: Record<Status, string> = {
-  draft: "text-text-subtle",
-  active: "text-primary",
-  paused: "text-warn",
+  draft: "bg-text-subtle",
+  active: "bg-success",
+  paused: "bg-warning",
 };
 
 function firstLetter(name: string, fallback?: string): string {
@@ -58,61 +56,91 @@ function firstLetter(name: string, fallback?: string): string {
   return trimmed ? trimmed.charAt(0).toUpperCase() : "·";
 }
 
-export function EmployeeCard({ props }: RenderProps) {
+function chatInteraction(
+  interactions: readonly RenderInteraction[] | undefined,
+): RenderInteraction | undefined {
+  if (!interactions) return undefined;
+  return (
+    interactions.find((i) => i.action === "open_chat") ??
+    interactions.find((i) => i.action === "send_message") ??
+    interactions[0]
+  );
+}
+
+export function EmployeeCard({ props, interactions }: RenderProps) {
   const p = props as Partial<EmployeeCardPayload>;
   const name = typeof p.name === "string" && p.name ? p.name : "(未命名员工)";
   const role = typeof p.role === "string" ? p.role : "";
   const preview =
     typeof p.system_prompt_preview === "string" ? p.system_prompt_preview : "";
   const status: Status = (p.status as Status) ?? "draft";
+  const isLead = Boolean(p.is_lead);
   const model = p.model && typeof p.model === "object" ? (p.model as ModelRef) : undefined;
   const skillCount = typeof p.skill_count === "number" ? p.skill_count : undefined;
   const toolCount = typeof p.tool_count === "number" ? p.tool_count : undefined;
   const initial = firstLetter(name, p.avatar_initial);
+  const cta = chatInteraction(interactions);
 
   return (
     <article
       data-component="EmployeeCard"
       data-status={status}
-      className="relative rounded-md border border-border bg-surface pl-4 pr-4 py-4"
+      className="group relative overflow-hidden rounded-xl border border-border bg-surface p-5 shadow-soft-sm transition-[transform,box-shadow,border-color] duration-base ease-out hover:-translate-y-px hover:border-border-strong hover:shadow-soft"
     >
       {status === "active" && (
         <span
           aria-hidden="true"
-          className="absolute left-0 top-3 bottom-3 w-[2px] rounded-r bg-primary"
+          className="pointer-events-none absolute left-0 top-4 bottom-4 w-[2px] rounded-r bg-primary"
         />
       )}
 
-      <header className="flex items-start gap-3">
-        <DotGridAvatar initial={initial} />
-        <div className="flex-1 min-w-0">
+      <header className="flex items-start gap-4">
+        <div
+          aria-hidden="true"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-[15px] font-semibold tracking-tight text-primary-fg shadow-soft-sm"
+          style={{
+            backgroundImage:
+              "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%)",
+          }}
+        >
+          {initial}
+        </div>
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-[13px] font-semibold tracking-tight text-text truncate">
+            <h3 className="truncate text-[14px] font-semibold tracking-tight text-text">
               {name}
             </h3>
+            {isLead && (
+              <span className="inline-flex h-5 items-center rounded-md bg-primary-muted px-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                lead
+              </span>
+            )}
             <span
               aria-label={`status:${status}`}
-              className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle"
+              className="ml-auto inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-text-subtle"
             >
-              <span aria-hidden="true" className={STATUS_DOT_CLASS[status]}>
-                ·
-              </span>
+              <span
+                aria-hidden="true"
+                className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLASS[status]}`}
+              />
               {STATUS_LABEL[status]}
             </span>
           </div>
           {role && (
-            <p className="mt-0.5 text-[11px] text-text-muted truncate">{role}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex h-5 items-center rounded-md border border-border bg-surface-2 px-1.5 text-[11px] text-text-muted">
+                {role}
+              </span>
+            </div>
           )}
         </div>
       </header>
 
       {preview && (
-        <p className="mt-3 text-[12px] leading-5 text-text-muted line-clamp-3">
-          {preview}
-        </p>
+        <p className="mt-4 line-clamp-3 text-sm leading-6 text-text-muted">{preview}</p>
       )}
 
-      <dl className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[10px] text-text-subtle">
+      <dl className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[10px] text-text-subtle">
         {typeof skillCount === "number" && (
           <MetaItem label="skills" value={String(skillCount)} />
         )}
@@ -121,6 +149,20 @@ export function EmployeeCard({ props }: RenderProps) {
         )}
         {model && <MetaItem label="model" value={`${model.provider}/${model.name}`} />}
       </dl>
+
+      {cta && (
+        <footer className="mt-5 flex items-center gap-2">
+          <button
+            type="button"
+            data-interaction-label={cta.label}
+            data-interaction-action={cta.action}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-[12px] font-semibold text-primary-fg shadow-soft-sm transition-[background-color,box-shadow] duration-fast ease-out hover:bg-primary-hover hover:shadow-soft"
+          >
+            <Icon name="message-square" size={14} strokeWidth={2} />
+            {cta.label || "Chat"}
+          </button>
+        </footer>
+      )}
     </article>
   );
 }
@@ -133,4 +175,3 @@ function MetaItem({ label, value }: { label: string; value: string }) {
     </span>
   );
 }
-

@@ -9,28 +9,26 @@ type Card = {
   accent?: "default" | "primary" | "success" | "warn" | "error";
 };
 
-const ACCENT_BORDER: Record<NonNullable<Card["accent"]>, string> = {
-  default: "border-border",
-  primary: "border-primary",
-  success: "border-success",
-  warn: "border-warning",
-  error: "border-danger",
-};
-
-// Thin top-edge accent (§11 hairline primitive). Gradient fades to
-// transparent so the card still reads calmly from across the viewport.
+// Colored top-edge hairline per accent. ADR 0016 D3 unbans this primitive.
 const ACCENT_BAR: Record<NonNullable<Card["accent"]>, string> = {
   default: "",
   primary:
-    "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-primary before:to-transparent before:opacity-70",
+    "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-primary before:to-transparent before:opacity-80",
   success:
-    "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-success before:to-transparent before:opacity-70",
+    "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-success before:to-transparent before:opacity-80",
   warn:
-    "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-warning before:to-transparent before:opacity-70",
+    "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-warning before:to-transparent before:opacity-80",
   error:
-    "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-danger before:to-transparent before:opacity-70",
+    "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-danger before:to-transparent before:opacity-80",
 };
 
+/**
+ * Brand-Blue V2 (ADR 0016) · grid of card items.
+ *
+ * Each card: rounded-xl · bg-surface · shadow-soft-sm · hover:-translate-y-px
+ * + hover:shadow-soft. Accent tone adds a top hairline (no border swap —
+ * card stays calm at rest).
+ */
 export function Cards({ props }: RenderProps) {
   const cards: Card[] = Array.isArray(props.cards)
     ? (props.cards as Card[]).filter((c): c is Card => !!c && typeof c.title === "string")
@@ -48,7 +46,7 @@ export function Cards({ props }: RenderProps) {
 
   if (cards.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-bg p-3 text-xs text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface p-3 text-caption text-text-muted">
         No cards
       </div>
     );
@@ -61,19 +59,19 @@ export function Cards({ props }: RenderProps) {
         return (
           <div
             key={i}
-            className={`relative overflow-hidden rounded-lg border bg-bg p-4 transition-colors duration-base hover:border-border-strong ${ACCENT_BORDER[accent] ?? ACCENT_BORDER.default} ${ACCENT_BAR[accent] ?? ""}`}
+            className={`relative overflow-hidden rounded-xl border border-border bg-surface p-4 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft ${ACCENT_BAR[accent] ?? ""}`}
             style={{
-              animation: `ah-fade-up var(--dur-mid) var(--ease-out) ${i * 40}ms both`,
+              animation: `ah-fade-up var(--dur-mid) var(--ease-out-expo) ${i * 40}ms both`,
             }}
           >
             <div className="text-sm font-semibold text-text mb-1 break-words">
               {card.title}
             </div>
-            <div className="text-xs text-text-muted leading-relaxed break-words">
+            <div className="text-caption text-text-muted leading-relaxed break-words">
               {typeof card.description === "string" ? card.description : ""}
             </div>
             {card.footer && (
-              <div className="text-[10px] text-text-subtle font-mono uppercase tracking-wider mt-3 pt-3 border-t border-border break-words">
+              <div className="text-caption text-text-subtle font-mono uppercase tracking-wider mt-3 pt-3 border-t border-border break-words">
                 {card.footer}
               </div>
             )}

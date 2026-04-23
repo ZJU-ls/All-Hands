@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * ArtifactVersionSwitcher · inline pill-tab picker for artifact versions.
+ * V2-level (ADR 0016): pill tabs on a surface track, active tab gets
+ * `bg-surface shadow-soft-sm text-primary`; inactive is `text-text-muted`.
+ */
+
 import type { ArtifactVersionDto } from "@/lib/artifacts-api";
 
 export function ArtifactVersionSwitcher({
@@ -16,20 +22,21 @@ export function ArtifactVersionSwitcher({
     <div
       role="tablist"
       aria-label="版本切换"
-      className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-2"
+      className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-surface-2 p-0.5"
     >
       {versions.map((v) => {
         const active = v.version === current;
         return (
           <button
             key={v.version}
+            type="button"
             role="tab"
             aria-selected={active}
             onClick={() => onSelect(v.version)}
-            className={`inline-flex h-6 items-center rounded border px-2 font-mono text-[10px] transition-colors duration-base ${
+            className={`inline-flex h-6 items-center rounded-md px-2 font-mono text-[11px] font-medium transition-[background-color,color,box-shadow] duration-fast ease-out ${
               active
-                ? "border-border-strong bg-surface-2 text-text"
-                : "border-border text-text-muted hover:text-text hover:border-border-strong"
+                ? "bg-surface text-primary shadow-soft-sm"
+                : "text-text-muted hover:text-text"
             }`}
           >
             v{v.version}

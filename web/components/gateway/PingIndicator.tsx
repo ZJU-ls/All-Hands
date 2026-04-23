@@ -1,14 +1,19 @@
 "use client";
 
 /**
- * PingIndicator · /gateway model 行的连通性状态机(I-0019)
+ * PingIndicator · /gateway model row connectivity state (ADR 0016 · V2 polish).
  *
- * 四态 · token 色 · 无 icon 库:
- *   idle     → 7px 灰静点(bg-border)
- *   running  → 7px spinner + "测试中" 提示
- *   ok       → 7px success 脉动点 + "✓ {latency}ms" mono
- *   fail     → 7px danger 静点 + "✗ {error_category}" mono · hover=完整 error
+ * A compact `h-6 px-2 rounded-full text-caption font-mono` pill with four
+ * states. Uses the design-system token palette (no raw tailwind colors) and
+ * a Lucide icon glyph through the `<Icon>` wrapper.
+ *
+ *   idle     → surface-2 pill · subtle dot
+ *   running  → primary-soft pill · `animate-pulse-ring` dot · "测试中"
+ *   ok       → success-soft pill · check-circle-2 · "{latency}ms"
+ *   fail     → danger-soft pill · alert-circle · "{category}" · hover=full err
  */
+
+import { Icon } from "@/components/ui/icon";
 
 export type PingState =
   | { status: "idle" }
@@ -27,18 +32,22 @@ const CATEGORY_LABEL: Record<string, string> = {
   unknown: "失败",
 };
 
+const BASE_PILL =
+  "inline-flex items-center gap-1.5 h-6 px-2 rounded-full border text-[11px] font-mono tabular-nums";
+
 export function PingIndicator({ state }: { state: PingState }) {
   if (state.status === "idle") {
     return (
       <span
         data-ping-state="idle"
-        className="inline-flex items-center"
         aria-label="未测试"
+        className={`${BASE_PILL} border-border bg-surface-2 text-text-subtle`}
       >
         <span
           aria-hidden="true"
-          className="inline-block w-[7px] h-[7px] rounded-full bg-border"
+          className="inline-block w-[6px] h-[6px] rounded-full bg-text-subtle/60"
         />
+        <span>待测</span>
       </span>
     );
   }
@@ -47,20 +56,15 @@ export function PingIndicator({ state }: { state: PingState }) {
     return (
       <span
         data-ping-state="running"
-        className="inline-flex items-center gap-1.5 text-text-muted"
         role="status"
         aria-live="polite"
+        className={`${BASE_PILL} border-primary/25 bg-primary/10 text-primary`}
       >
         <span
           aria-hidden="true"
-          className="inline-block w-[7px] h-[7px] rounded-full border-[1.5px]"
-          style={{
-            borderColor: "color-mix(in srgb, currentColor 25%, transparent)",
-            borderTopColor: "currentColor",
-            animation: "ah-spin 700ms linear infinite",
-          }}
+          className="inline-block w-[6px] h-[6px] rounded-full bg-primary animate-pulse-ring"
         />
-        <span className="font-mono text-[11px]">测试中</span>
+        <span>测试中</span>
       </span>
     );
   }
@@ -69,16 +73,11 @@ export function PingIndicator({ state }: { state: PingState }) {
     return (
       <span
         data-ping-state="ok"
-        className="inline-flex items-center gap-1.5 text-success"
+        aria-label={`连通 · ${state.latencyMs}ms`}
+        className={`${BASE_PILL} border-success/25 bg-success-soft text-success`}
       >
-        <span
-          aria-hidden="true"
-          className="inline-block w-[7px] h-[7px] rounded-full bg-success"
-          style={{ animation: "ah-pulse 1.6s ease-in-out infinite" }}
-        />
-        <span className="font-mono text-[11px]">
-          ✓ {state.latencyMs}ms
-        </span>
+        <Icon name="check-circle-2" size={11} strokeWidth={2} />
+        <span>{state.latencyMs}ms</span>
       </span>
     );
   }
@@ -87,16 +86,12 @@ export function PingIndicator({ state }: { state: PingState }) {
   return (
     <span
       data-ping-state="fail"
-      className="inline-flex items-center gap-1.5 text-danger"
       title={state.error}
+      aria-label={`失败 · ${label} · ${state.error}`}
+      className={`${BASE_PILL} border-danger/30 bg-danger-soft text-danger`}
     >
-      <span
-        aria-hidden="true"
-        className="inline-block w-[7px] h-[7px] rounded-full bg-danger"
-      />
-      <span className="font-mono text-[11px]">
-        ✗ {label}
-      </span>
+      <Icon name="alert-circle" size={11} strokeWidth={2} />
+      <span>{label}</span>
     </span>
   );
 }

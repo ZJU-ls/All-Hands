@@ -9,7 +9,7 @@ type Step = {
 };
 
 const DOT_COLOR: Record<Step["status"], string> = {
-  pending: "bg-text-subtle",
+  pending: "bg-surface-3",
   in_progress: "bg-primary",
   done: "bg-success",
   failed: "bg-danger",
@@ -17,12 +17,13 @@ const DOT_COLOR: Record<Step["status"], string> = {
 
 const DOT_RING: Record<Step["status"], string> = {
   pending: "",
-  in_progress: "ring-4 ring-primary-soft",
-  done: "ring-2 ring-success-soft",
-  failed: "ring-2 ring-danger-soft",
+  // pulse-ring animates primary-muted outward for active step — ADR 0016 D3
+  in_progress: "animate-pulse-ring",
+  done: "",
+  failed: "",
 };
 
-const NUM_BG: Record<Step["status"], string> = {
+const NUM_COLOR: Record<Step["status"], string> = {
   pending: "text-text-subtle",
   in_progress: "text-primary",
   done: "text-success",
@@ -38,9 +39,9 @@ const TITLE_COLOR: Record<Step["status"], string> = {
 
 const CONNECTOR_COLOR: Record<Step["status"], string> = {
   pending: "bg-border",
-  in_progress: "bg-primary/60",
-  done: "bg-success/60",
-  failed: "bg-danger/60",
+  in_progress: "bg-primary/40",
+  done: "bg-success/40",
+  failed: "bg-danger/40",
 };
 
 function normStepStatus(raw: unknown): Step["status"] {
@@ -50,6 +51,13 @@ function normStepStatus(raw: unknown): Step["status"] {
   return "pending";
 }
 
+/**
+ * Brand-Blue V2 (ADR 0016) · vertical pipeline.
+ *
+ * Shell: rounded-xl · shadow-soft-sm. Connector line bg-border. Step dots:
+ * primary (current · animate-pulse-ring) · success (done) · danger (failed)
+ * · surface-3 (upcoming).
+ */
 export function Steps({ props }: RenderProps) {
   const stepsRaw = Array.isArray(props.steps) ? (props.steps as unknown[]) : [];
   const steps: Step[] = stepsRaw
@@ -62,24 +70,21 @@ export function Steps({ props }: RenderProps) {
 
   if (steps.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-bg px-4 py-3 text-xs text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-3 text-caption text-text-muted">
         No steps
       </div>
     );
   }
 
   return (
-    <ol
-      className="rounded-lg border border-border bg-bg px-4 py-3"
-      style={{ animation: "ah-fade-up var(--dur-mid) var(--ease-out)" }}
-    >
+    <ol className="rounded-xl border border-border bg-surface px-4 py-3 shadow-soft-sm animate-fade-up">
       {steps.map((step, i) => {
         const isLast = i === steps.length - 1;
         return (
           <li key={i} className="flex gap-3">
             <div className="flex flex-col items-center pt-1">
               <span
-                className={`h-2.5 w-2.5 rounded-full flex-shrink-0 transition-colors duration-base ${DOT_COLOR[step.status]} ${DOT_RING[step.status]}`}
+                className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${DOT_COLOR[step.status]} ${DOT_RING[step.status]}`}
                 aria-label={step.status}
               />
               {!isLast && (
@@ -92,7 +97,7 @@ export function Steps({ props }: RenderProps) {
             <div className="flex-1 pb-4 last:pb-0 min-w-0">
               <div className="flex items-baseline gap-2">
                 <span
-                  className={`text-[10px] font-mono font-semibold tabular-nums uppercase tracking-wider ${NUM_BG[step.status]}`}
+                  className={`text-caption font-mono font-semibold tabular-nums uppercase tracking-wider ${NUM_COLOR[step.status]}`}
                 >
                   {String(i + 1).padStart(2, "0")}
                 </span>
@@ -101,7 +106,7 @@ export function Steps({ props }: RenderProps) {
                 </span>
               </div>
               {step.description && (
-                <p className="text-xs text-text-muted mt-1 leading-relaxed break-words">
+                <p className="text-caption text-text-muted mt-1 leading-relaxed break-words">
                   {step.description}
                 </p>
               )}

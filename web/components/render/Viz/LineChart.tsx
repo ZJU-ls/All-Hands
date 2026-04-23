@@ -3,9 +3,8 @@
 import { useMemo } from "react";
 import type { RenderProps } from "@/lib/component-registry";
 
-// Multi-series charts use the ADR-0012 data-viz palette so each series is
-// visually distinct by hue (the old one-hue-with-opacity approach read as
-// grey soup for 3+ series). Palette stable-ordered; series cycle by index.
+// Multi-series charts use the ADR-0012 viz palette so each series reads
+// distinct by hue. Series cycle by index for stability across re-renders.
 const SERIES_COLORS = [
   "var(--color-viz-1)",
   "var(--color-viz-2)",
@@ -14,11 +13,11 @@ const SERIES_COLORS = [
 ];
 
 const VB_W = 480;
-const VB_H = 160;
-const PAD_L = 32;
-const PAD_R = 8;
-const PAD_T = 10;
-const PAD_B = 24;
+const VB_H = 180;
+const PAD_L = 34;
+const PAD_R = 10;
+const PAD_T = 12;
+const PAD_B = 26;
 const PLOT_W = VB_W - PAD_L - PAD_R;
 const PLOT_H = VB_H - PAD_T - PAD_B;
 
@@ -61,6 +60,13 @@ function normalizeSeriesItem(item: Record<string, unknown>): NormalizedSeries {
   };
 }
 
+/**
+ * Brand-Blue V2 (ADR 0016) · line chart.
+ *
+ * Shell: rounded-xl · bg-surface · shadow-soft-sm.
+ * Grid lines use var(--color-border) at subtle opacity. Palette via
+ * viz-1…viz-6 tokens — theme pack controls the hues.
+ */
 export function LineChart({ props }: RenderProps) {
   const rawX = Array.isArray(props.x) ? (props.x as (string | number)[]) : undefined;
   const rawSeries = Array.isArray(props.series)
@@ -68,6 +74,7 @@ export function LineChart({ props }: RenderProps) {
         .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
         .map(normalizeSeriesItem)
     : undefined;
+  const title = typeof props.title === "string" ? props.title : undefined;
   const y_label = typeof props.y_label === "string" ? props.y_label : undefined;
   const caption = typeof props.caption === "string" ? props.caption : undefined;
 
@@ -118,8 +125,7 @@ export function LineChart({ props }: RenderProps) {
           )
           .join(" "),
       );
-      // Subtle area fill ONLY when 1-2 series, to add depth without turning
-      // a 4-series chart into a Jackson Pollock.
+      // Subtle area fill only for 1-2 series — depth without clutter.
       if (series.length <= 2) {
         const first = points[0]!;
         const last = points[points.length - 1]!;
@@ -133,9 +139,7 @@ export function LineChart({ props }: RenderProps) {
           `${linePart} L${last.px.toFixed(2)},${yBaseline.toFixed(2)} L${first.px.toFixed(2)},${yBaseline.toFixed(2)} Z`,
         );
       }
-      // Dots only on the final data point so the chart has a clear "last
-      // reading" anchor without cluttering. For short series (≤ 8), dot
-      // every point.
+      // All dots for short series, tail-only otherwise.
       if (points.length <= 8) {
         for (const { px, py } of points) {
           dots.push({ cx: px, cy: py, seriesIdx: sIdx });
@@ -151,7 +155,6 @@ export function LineChart({ props }: RenderProps) {
       return yMin + ((yMax - yMin) * i) / tickCount;
     });
 
-    // Thin out x-axis labels for crowded domains
     const stride = Math.max(1, Math.ceil(count / 6));
     const xLabels = x.map((v, i) =>
       i === 0 || i === count - 1 || i % stride === 0 ? String(v) : "",
@@ -162,14 +165,17 @@ export function LineChart({ props }: RenderProps) {
 
   if (paths.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-bg p-3 text-xs text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface p-3 text-caption text-text-muted">
         No series
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-border bg-bg p-3" style={{ animation: "ah-fade-up var(--dur-mid) var(--ease-out)" }}>
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm animate-fade-up">
+      {title && (
+        <div className="mb-2 text-sm font-medium text-text">{title}</div>
+      )}
       <svg
         viewBox={`0 0 ${VB_W} ${VB_H}`}
         className="w-full h-auto"
@@ -186,8 +192,8 @@ export function LineChart({ props }: RenderProps) {
                 y1={py}
                 x2={VB_W - PAD_R}
                 y2={py}
-                stroke="currentColor"
-                strokeOpacity="0.12"
+                stroke="var(--color-border)"
+                strokeOpacity="0.6"
                 strokeWidth="1"
                 vectorEffect="non-scaling-stroke"
               />
@@ -196,7 +202,7 @@ export function LineChart({ props }: RenderProps) {
                 y={py + 3}
                 fontSize="9"
                 textAnchor="end"
-                className="fill-text-muted"
+                className="fill-text-muted font-mono"
               >
                 {t.toFixed(Math.abs(t) < 10 ? 1 : 0)}
               </text>
@@ -213,22 +219,22 @@ export function LineChart({ props }: RenderProps) {
             <text
               key={i}
               x={px}
-              y={VB_H - 6}
+              y={VB_H - 8}
               fontSize="9"
               textAnchor="middle"
-              className="fill-text-muted"
+              className="fill-text-muted font-mono"
             >
               {label}
             </text>
           );
         })}
-        {/* area fills (≤ 2 series only — adds depth without clutter) */}
+        {/* area fills (≤ 2 series — depth without clutter) */}
         {areas.map((d, i) => (
           <path
             key={`a-${i}`}
             d={d}
             fill={SERIES_COLORS[i % SERIES_COLORS.length]}
-            fillOpacity="0.08"
+            fillOpacity="0.1"
             stroke="none"
           />
         ))}
@@ -238,14 +244,14 @@ export function LineChart({ props }: RenderProps) {
             key={`l-${i}`}
             d={d}
             stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-            strokeWidth="1.75"
+            strokeWidth="2"
             fill="none"
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
         ))}
-        {/* endpoint / data dots (halo + core) */}
+        {/* data dots (halo + core) */}
         {dots.map((d, i) => (
           <g key={`d-${i}`}>
             <circle
@@ -253,7 +259,7 @@ export function LineChart({ props }: RenderProps) {
               cy={d.cy}
               r="4"
               fill={SERIES_COLORS[d.seriesIdx % SERIES_COLORS.length]}
-              fillOpacity="0.18"
+              fillOpacity="0.2"
             />
             <circle
               cx={d.cx}
@@ -265,7 +271,7 @@ export function LineChart({ props }: RenderProps) {
         ))}
       </svg>
       {series.length > 1 && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-caption font-mono text-text-muted">
           {series.map((s, i) => (
             <span key={s.label} className="inline-flex items-center gap-1.5">
               <span
@@ -279,7 +285,9 @@ export function LineChart({ props }: RenderProps) {
         </div>
       )}
       {caption && (
-        <div className="mt-2 text-xs text-text-muted">{caption}</div>
+        <div className="mt-2 text-caption font-mono text-text-muted">
+          {caption}
+        </div>
       )}
     </div>
   );

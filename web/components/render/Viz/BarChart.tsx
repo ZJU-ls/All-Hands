@@ -5,11 +5,9 @@ import type { RenderProps } from "@/lib/component-registry";
 type Bar = { label: string; value: number };
 type Orientation = "vertical" | "horizontal";
 
-// Some LLMs (and fuzzy tool-use training) return numeric values as strings
-// ("12" instead of 12). Backend Pydantic uses `list[dict[str, Any]]` so the
-// Any escape hatch passes the raw string through unchanged. Without this
-// coercion every bar collapsed to height 0 (maxVal=0 → pct=0 → invisible),
-// which was the "same height / only colored lines" bug the user reported.
+// LLMs (and fuzzy tool-use) sometimes return numeric values as strings
+// ("12" instead of 12). Backend uses Any so the raw string passes through.
+// Without coercion maxVal=0 → every bar height 0 → invisible bars.
 function toNumber(v: unknown): number {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -19,8 +17,8 @@ function toNumber(v: unknown): number {
   return 0;
 }
 
-// Bars cycle the ADR-0012 data-viz palette by index, so categorical
-// comparisons read distinct at a glance instead of a solid block of primary.
+// Bars cycle the ADR-0012 viz palette by index — categorical comparisons
+// read distinct at a glance instead of a single-hue block.
 const BAR_COLORS = [
   "var(--color-viz-1)",
   "var(--color-viz-2)",
@@ -30,6 +28,12 @@ const BAR_COLORS = [
   "var(--color-viz-6)",
 ];
 
+/**
+ * Brand-Blue V2 (ADR 0016) · bar chart.
+ *
+ * Shell: rounded-xl · bg-surface · shadow-soft-sm.
+ * Values right-mono-tabular · labels mono caption muted.
+ */
 export function BarChart({ props }: RenderProps) {
   const bars: Bar[] = Array.isArray(props.bars)
     ? (props.bars as unknown[])
@@ -41,13 +45,14 @@ export function BarChart({ props }: RenderProps) {
     : [];
   const orientation: Orientation =
     props.orientation === "horizontal" ? "horizontal" : "vertical";
+  const title = typeof props.title === "string" ? props.title : undefined;
   const value_label =
     typeof props.value_label === "string" ? props.value_label : undefined;
   const caption = typeof props.caption === "string" ? props.caption : undefined;
 
   if (bars.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-bg p-3 text-xs text-text-muted">
+      <div className="rounded-xl border border-dashed border-border bg-surface p-3 text-caption text-text-muted">
         No bars
       </div>
     );
@@ -56,13 +61,26 @@ export function BarChart({ props }: RenderProps) {
   const maxVal = Math.max(...bars.map((b) => b.value), 0);
   const safeMax = maxVal === 0 ? 1 : maxVal;
 
-  const cardClass =
-    "rounded-lg border border-border bg-bg p-3 transition-colors duration-base hover:border-border-strong";
-  const cardStyle = { animation: "ah-fade-up var(--dur-mid) var(--ease-out)" };
+  const shell =
+    "rounded-xl border border-border bg-surface p-4 shadow-soft-sm animate-fade-up";
+
+  const TitleBlock = title ? (
+    <div className="mb-3 text-sm font-medium text-text">{title}</div>
+  ) : null;
+
+  const FooterBlock =
+    value_label || caption ? (
+      <div className="mt-3 text-caption font-mono text-text-muted">
+        {value_label}
+        {value_label && caption ? " · " : ""}
+        {caption}
+      </div>
+    ) : null;
 
   if (orientation === "horizontal") {
     return (
-      <div className={cardClass} style={cardStyle}>
+      <div className={shell}>
+        {TitleBlock}
         <div className="flex flex-col gap-2">
           {bars.map((b, i) => {
             const pct = Math.max(0, (b.value / safeMax) * 100);
@@ -70,24 +88,20 @@ export function BarChart({ props }: RenderProps) {
             return (
               <div
                 key={i}
-                className="group grid grid-cols-[minmax(64px,20%)_1fr_auto] items-center gap-2"
+                className="group grid grid-cols-[minmax(72px,22%)_1fr_auto] items-center gap-2"
               >
-                <div className="truncate text-xs text-text-muted group-hover:text-text transition-colors duration-fast">
+                <div className="truncate text-caption font-mono text-text-muted">
                   {b.label}
                 </div>
                 <div className="relative h-3 rounded-sm bg-surface-2">
                   <div
-                    className="absolute inset-y-0 left-0 rounded-sm shadow-[inset_0_-1px_0_rgba(0,0,0,0.08)] transition-[width,filter] duration-mid"
-                    style={{
-                      width: `${pct}%`,
-                      background: color,
-                      filter: "saturate(0.95)",
-                    }}
+                    className="absolute inset-y-0 left-0 rounded-sm transition-[width] duration-mid"
+                    style={{ width: `${pct}%`, background: color }}
                     aria-hidden
                   />
                 </div>
                 <div
-                  className="w-12 text-right font-mono text-xs tabular-nums"
+                  className="w-14 text-right font-mono text-caption tabular-nums"
                   style={{ color }}
                 >
                   {b.value}
@@ -96,21 +110,15 @@ export function BarChart({ props }: RenderProps) {
             );
           })}
         </div>
-        {(value_label || caption) && (
-          <div className="mt-2 text-xs text-text-muted">
-            {value_label}
-            {value_label && caption ? " · " : ""}
-            {caption}
-          </div>
-        )}
+        {FooterBlock}
       </div>
     );
   }
 
-  // Vertical — constrained-height bars with value labels on top
   return (
-    <div className={cardClass} style={cardStyle}>
-      <div className="flex h-40 items-end gap-2">
+    <div className={shell}>
+      {TitleBlock}
+      <div className="flex h-44 items-end gap-2">
         {bars.map((b, i) => {
           const pct = Math.max(0, (b.value / safeMax) * 100);
           const color = BAR_COLORS[i % BAR_COLORS.length];
@@ -120,34 +128,28 @@ export function BarChart({ props }: RenderProps) {
               className="group flex flex-1 flex-col items-center justify-end gap-1 min-w-0"
             >
               <div
-                className="font-mono text-[10px] tabular-nums text-text-muted group-hover:text-text transition-colors duration-fast"
-                style={{ color: `color-mix(in srgb, ${color} 80%, transparent)` }}
+                className="font-mono text-caption tabular-nums"
+                style={{ color }}
               >
                 {b.value}
               </div>
               <div
-                className="w-full rounded-t-sm shadow-[inset_0_-1px_0_rgba(0,0,0,0.08)] transition-[height,filter] duration-mid group-hover:[filter:saturate(1.1)]"
+                className="w-full rounded-t-sm transition-[height] duration-mid"
                 style={{
                   height: `${pct}%`,
                   minHeight: b.value > 0 ? 2 : 0,
-                  background: `linear-gradient(to top, ${color} 0%, color-mix(in srgb, ${color} 80%, transparent) 100%)`,
+                  background: `linear-gradient(to top, ${color} 0%, color-mix(in srgb, ${color} 70%, transparent) 100%)`,
                 }}
                 aria-hidden
               />
-              <div className="w-full truncate text-center text-[10px] text-text-muted">
+              <div className="w-full truncate text-center text-caption font-mono text-text-muted">
                 {b.label}
               </div>
             </div>
           );
         })}
       </div>
-      {(value_label || caption) && (
-        <div className="mt-2 text-xs text-text-muted">
-          {value_label}
-          {value_label && caption ? " · " : ""}
-          {caption}
-        </div>
-      )}
+      {FooterBlock}
     </div>
   );
 }

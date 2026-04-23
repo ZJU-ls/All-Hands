@@ -1,37 +1,37 @@
 "use client";
 
 import type { RenderProps } from "@/lib/component-registry";
+import { Icon, type IconName } from "@/components/ui/icon";
 
 type Kind = "info" | "warn" | "success" | "error";
 
-const BAR_COLOR: Record<Kind, string> = {
-  info: "bg-primary",
-  warn: "bg-warning",
-  success: "bg-success",
-  error: "bg-danger",
-};
-
-const TITLE_COLOR: Record<Kind, string> = {
-  info: "text-primary",
-  warn: "text-warning",
-  success: "text-success",
-  error: "text-danger",
-};
-
-// Semi-transparent tint per kind (ADR-0012 *-soft tokens) + matching border
-// so the callout reads as a distinct semantic block, not a generic card.
-const BG_CLASS: Record<Kind, string> = {
-  info: "bg-primary-soft border-primary/20",
-  warn: "bg-warning-soft border-warning/30",
-  success: "bg-success-soft border-success/30",
-  error: "bg-danger-soft border-danger/30",
-};
-
-const GLYPH: Record<Kind, string> = {
-  info: "i",
-  warn: "!",
-  success: "✓",
-  error: "✕",
+// Tone classes — tinted background + tone border + tone text. Signals kind
+// at a glance without a left bar.
+const TONE: Record<Kind, { bg: string; title: string; tile: string; icon: IconName }> = {
+  info: {
+    bg: "bg-primary-soft border-primary/30",
+    title: "text-primary",
+    tile: "bg-primary/15 text-primary",
+    icon: "info",
+  },
+  warn: {
+    bg: "bg-warning-soft border-warning/30",
+    title: "text-warning",
+    tile: "bg-warning/15 text-warning",
+    icon: "alert-triangle",
+  },
+  success: {
+    bg: "bg-success-soft border-success/30",
+    title: "text-success",
+    tile: "bg-success/15 text-success",
+    icon: "check-circle-2",
+  },
+  error: {
+    bg: "bg-danger-soft border-danger/30",
+    title: "text-danger",
+    tile: "bg-danger/15 text-danger",
+    icon: "alert-circle",
+  },
 };
 
 const KINDS: readonly Kind[] = ["info", "warn", "success", "error"] as const;
@@ -40,42 +40,43 @@ function normKind(raw: unknown): Kind {
   if (typeof raw === "string" && (KINDS as readonly string[]).includes(raw)) {
     return raw as Kind;
   }
-  // Common synonyms the model might emit
   if (raw === "warning") return "warn";
   if (raw === "ok" || raw === "done") return "success";
   if (raw === "danger" || raw === "err") return "error";
   return "info";
 }
 
+/**
+ * Brand-Blue V2 (ADR 0016) · tone-tinted callout.
+ *
+ * rounded-xl + tinted tone background + tone border. Leading icon tile on
+ * the left carries the kind; colored title carries it again. No left bar.
+ */
 export function Callout({ props }: RenderProps) {
   const kind = normKind(props.kind);
   const title = typeof props.title === "string" ? props.title : undefined;
   const content = typeof props.content === "string" ? props.content : "";
+  const tone = TONE[kind];
 
-  // ADR 0013: impeccable BAN 1 forbids accent stripes on callouts. Structure
-  // is now: tinted background (signals kind via `*-soft` token) + leading
-  // glyph circle (signals kind via tone-colored disc) + colored title.
-  // No left bar — the tinted bg + glyph carry the semantic load.
   return (
     <div
-      className={`relative flex gap-3 rounded-lg border px-4 py-3.5 ${BG_CLASS[kind]}`}
-      style={{ animation: "ah-fade-up var(--dur-mid) var(--ease-out-quart)" }}
+      className={`relative flex gap-3 rounded-xl border px-4 py-3.5 animate-fade-up ${tone.bg}`}
     >
       <span
         aria-hidden
-        className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold ${BAR_COLOR[kind]} text-primary-fg`}
+        className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${tone.tile}`}
       >
-        {GLYPH[kind]}
+        <Icon name={tone.icon} size={16} />
       </span>
       <div className="min-w-0 flex-1">
         {title && (
           <div
-            className={`text-caption font-semibold ${TITLE_COLOR[kind]} mb-1 uppercase tracking-wider break-words`}
+            className={`text-caption font-mono font-semibold uppercase tracking-wider mb-1 break-words ${tone.title}`}
           >
             {title}
           </div>
         )}
-        <div className="text-base text-text leading-[1.55] whitespace-pre-wrap break-words">
+        <div className="text-sm text-text leading-[1.55] whitespace-pre-wrap break-words">
           {content}
         </div>
       </div>

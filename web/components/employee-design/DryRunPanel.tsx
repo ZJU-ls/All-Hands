@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Icon } from "@/components/ui/icon";
 import {
   previewEmployeeComposition,
   type EmployeePreset,
@@ -13,7 +14,12 @@ import {
  * ``preview_employee_composition`` 是等价入口,Lead Agent 在对话里算同一份。
  *
  * §3.2 红线:面板只展示三列,不暴露 ``preset`` / ``mode`` 字样。
+ *
+ * V2 (ADR 0016):surface card with rounded-xl + shadow-soft-sm · header status
+ * chip · soft-status error block · mono `<ul>` chip cloud for id lists.
  */
+
+type Status = "idle" | "loading" | "ready" | "error";
 
 export function DryRunPanel({
   preset,
@@ -28,10 +34,10 @@ export function DryRunPanel({
 }) {
   const [preview, setPreview] = useState<EmployeePreviewResult | null>(null);
   const [err, setErr] = useState<string>("");
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<Status>("idle");
 
   async function run() {
-    setLoading(true);
+    setStatus("loading");
     setErr("");
     try {
       const res = await previewEmployeeComposition({
@@ -41,82 +47,136 @@ export function DryRunPanel({
         custom_max_iterations: customMaxIterations,
       });
       setPreview(res);
+      setStatus("ready");
     } catch (e) {
       setErr(String(e));
-    } finally {
-      setLoading(false);
+      setStatus("error");
     }
   }
 
   return (
-    <div className="rounded-md border border-border bg-surface-2/40 p-4 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[12px] font-semibold text-text">Dry run 预览</h3>
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-muted text-primary">
+            <Icon name="zap" size={14} />
+          </span>
+          <h3 className="text-[13px] font-semibold text-text">Dry run 预览</h3>
+          <StatusChip status={status} />
+        </div>
         <button
           type="button"
           data-testid="dryrun-button"
           onClick={() => void run()}
-          disabled={loading}
-          className="rounded-md border border-border px-3 py-1 text-[11px] text-text hover:bg-surface-2 disabled:opacity-40 transition-colors duration-base"
+          disabled={status === "loading"}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm transition-colors duration-fast hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? "computing…" : "预览合成"}
+          {status === "loading" ? (
+            <>
+              <span className="inline-block h-3 w-3 rounded-full border-2 border-primary-fg/30 border-t-primary-fg animate-spin" />
+              computing…
+            </>
+          ) : (
+            <>
+              <Icon name="play" size={12} />
+              预览合成
+            </>
+          )}
         </button>
       </div>
-      {err && (
-        <p
-          className="text-[11px] text-danger font-mono"
-          data-testid="dryrun-error"
+
+      {status === "error" && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2"
         >
-          {err}
-        </p>
+          <Icon
+            name="alert-circle"
+            size={14}
+            className="mt-0.5 shrink-0 text-danger"
+          />
+          <p
+            className="font-mono text-[11px] text-danger break-all"
+            data-testid="dryrun-error"
+          >
+            {err}
+          </p>
+        </div>
       )}
-      {preview === null && !err ? (
-        <p className="text-[11px] text-text-muted">
+
+      {preview === null && status !== "error" && (
+        <p className="text-[12px] text-text-muted">
           点「预览合成」看最终落库的三列(tool_ids / skill_ids /
           max_iterations),不会真的建员工。
         </p>
-      ) : preview ? (
+      )}
+
+      {preview && status !== "error" && (
         <div data-testid="dryrun-panel" className="flex flex-col gap-3">
           <Row label={`tool_ids · ${preview.tool_ids.length}`}>
-            {preview.tool_ids.length === 0 ? (
-              <span className="text-[11px] text-text-subtle">(空)</span>
-            ) : (
-              <ul className="flex flex-wrap gap-1">
-                {preview.tool_ids.map((t) => (
-                  <li
-                    key={t}
-                    className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-border text-text-muted"
-                  >
-                    {t}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <IdChips ids={preview.tool_ids} />
           </Row>
           <Row label={`skill_ids · ${preview.skill_ids.length}`}>
-            {preview.skill_ids.length === 0 ? (
-              <span className="text-[11px] text-text-subtle">(空)</span>
-            ) : (
-              <ul className="flex flex-wrap gap-1">
-                {preview.skill_ids.map((s) => (
-                  <li
-                    key={s}
-                    className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-border text-text-muted"
-                  >
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <IdChips ids={preview.skill_ids} />
           </Row>
           <Row label="max_iterations">
-            <span className="font-mono text-[12px] text-text">
+            <span className="font-mono text-[13px] font-medium text-text">
               {preview.max_iterations}
             </span>
           </Row>
         </div>
-      ) : null}
+      )}
     </div>
+  );
+}
+
+function StatusChip({ status }: { status: Status }) {
+  if (status === "loading") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-sm bg-primary-muted px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-primary">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+        running
+      </span>
+    );
+  }
+  if (status === "ready") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-sm bg-success-soft px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-success">
+        <Icon name="check" size={10} />
+        ok
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-danger">
+        <Icon name="alert-circle" size={10} />
+        error
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-sm border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-text-subtle">
+      idle
+    </span>
+  );
+}
+
+function IdChips({ ids }: { ids: string[] }) {
+  if (ids.length === 0) {
+    return <span className="text-[11px] text-text-subtle">(空)</span>;
+  }
+  return (
+    <ul className="flex flex-wrap gap-1">
+      {ids.map((id) => (
+        <li
+          key={id}
+          className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-text-muted"
+        >
+          {id}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -129,7 +189,9 @@ function Row({
 }) {
   return (
     <div>
-      <div className="text-[11px] text-text-muted mb-1">{label}</div>
+      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-text-subtle">
+        {label}
+      </div>
       {children}
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { Select, type SelectGroup, type SelectOption } from "@/components/ui/Select";
 import {
   buildModelRef,
@@ -15,16 +16,13 @@ import {
  * ModelPicker · shared dropdown for selecting a model by ref
  * (`<provider.name>/<model.name>` — i.e. the same shape EmployeeDto.model_ref uses).
  *
- * Responsibilities:
- *   - Fetch /api/providers + /api/models once on mount (cached at module scope
- *     so repeated instances don't spam the gateway).
- *   - If `value` is empty, auto-select the platform default (is_default provider's
- *     default_model) and bubble that choice up via onChange — this is how Track δ
- *     satisfies #5b (no free-text input; default is the platform default).
- *   - Group options by provider in optgroups so the dropdown is scannable even
- *     when many models are registered.
- *   - Visually compose with BrandMark beside the trigger so the chosen model is
- *     recognisable at a glance.
+ * V2 (ADR 0016) upgrade:
+ *   - The trigger is a pill showing `<BrandMark />` + model name + chevron
+ *     (the chevron is supplied by the underlying `<Select>`).
+ *   - Grouping / selected-row styling (bg-primary-muted · 2px left bar) is
+ *     handled by `<Select>` itself — we just pass grouped options through.
+ *   - Context-window is surfaced as a mono hint on each row instead of a
+ *     price chip (no price in ModelDto today — see ADR 0016 · Phase 3).
  */
 
 // Module-level cache so the same tab hitting /employees/design + /chat doesn't
@@ -54,31 +52,27 @@ export function invalidateModelPickerCache(): void {
 type Props = {
   value: string;
   onChange: (next: string) => void;
-  /**
-   * When true + value is empty, auto-emit the platform default on mount.
-   * Defaults to true — callers who want a "no default" state (e.g. an optional
-   * override) can set it to false.
-   */
   autoPickDefault?: boolean;
   disabled?: boolean;
   testId?: string;
-  /** Optional "leave empty to inherit" entry (used by per-conversation override). */
   inheritLabel?: string;
-  // Passthrough to the underlying Select so call sites can make the picker
-  // *be* the trigger (chip, inline button) without wrapping it in another
-  // popover. Added after L11 — two-level menus (chip → popover → picker →
-  // listbox) violate "一屏决策".
   size?: "sm" | "md";
   triggerClassName?: string;
   renderTrigger?: (selected: SelectOption | null) => React.ReactNode;
   popoverAlign?: "left" | "right";
-  /** Wrapper-level class. Defaults to `w-full` for the vertical form layout
-   * (DesignForm). Chip call-sites inside a flex row (ModelOverrideChip) pass
-   * `shrink-0` so the picker stays at content width instead of grabbing all
-   * horizontal space and collapsing its neighbours (ThinkingToggle /
-   * CompactChip) to one CJK-character-per-row min-content. */
   className?: string;
 };
+
+/** Look up a provider by the "<provider.name>/<model.name>" ref. */
+function findProviderByRef(
+  providers: ProviderDto[],
+  ref: string,
+): ProviderDto | null {
+  const slash = ref.indexOf("/");
+  if (slash <= 0) return null;
+  const providerName = ref.slice(0, slash);
+  return providers.find((p) => p.name === providerName) ?? null;
+}
 
 export function ModelPicker({
   value,
@@ -94,7 +88,9 @@ export function ModelPicker({
   className = "w-full",
 }: Props) {
   const [state, setState] = useState<
-    { status: "loading" } | { status: "ready"; providers: ProviderDto[]; models: ModelDto[] } | { status: "error"; message: string }
+    | { status: "loading" }
+    | { status: "ready"; providers: ProviderDto[]; models: ModelDto[] }
+    | { status: "error"; message: string }
   >({ status: "loading" });
 
   useEffect(() => {
@@ -127,14 +123,16 @@ export function ModelPicker({
       const g = byProvider.get(m.provider_id);
       if (g && m.enabled) g.models.push(m);
     }
-    return Array.from(byProvider.values()).filter((g) => g.provider.enabled && g.models.length > 0);
+    return Array.from(byProvider.values()).filter(
+      (g) => g.provider.enabled && g.models.length > 0,
+    );
   }, [state]);
 
   if (state.status === "loading") {
     return (
       <div
         data-testid={testId ?? "model-picker-loading"}
-        className="text-[12px] font-mono text-text-subtle py-2"
+        className="py-2 font-mono text-[12px] text-text-subtle"
       >
         加载模型列表…
       </div>
@@ -145,7 +143,7 @@ export function ModelPicker({
     return (
       <div
         data-testid={testId ? `${testId}-error` : "model-picker-error"}
-        className="text-[12px] font-mono text-danger py-2"
+        className="py-2 font-mono text-[12px] text-danger"
       >
         加载模型失败 · {state.message}
       </div>
@@ -183,6 +181,34 @@ export function ModelPicker({
     });
   }
 
+  // Default V2 trigger: BrandMark of the selected model's provider + model
+  // label. Consumers can still override via `renderTrigger` (ModelOverrideChip
+  // uses that to inline the chip into a toolbar).
+  const defaultRenderTrigger = (selected: SelectOption | null): React.ReactNode => {
+    if (!selected) {
+      return <span className="text-text-subtle">选择模型…</span>;
+    }
+    const provider = findProviderByRef(state.providers, selected.value);
+    return (
+      <span className="inline-flex min-w-0 items-center gap-2">
+        {provider && (
+          <BrandMark
+            kind={provider.kind}
+            name={provider.name}
+            size="sm"
+            className="shrink-0"
+          />
+        )}
+        <span className="truncate font-medium text-text">{selected.label}</span>
+        {selected.hint && (
+          <span className="font-mono text-[10px] text-text-subtle">
+            {selected.hint}
+          </span>
+        )}
+      </span>
+    );
+  };
+
   return (
     <Select
       value={value}
@@ -192,10 +218,10 @@ export function ModelPicker({
       testId={testId ?? "model-picker"}
       ariaLabel="选择模型"
       className={className}
-      triggerClassName={triggerClassName ?? "font-mono"}
+      triggerClassName={triggerClassName}
       placeholder="选择模型…"
       size={size}
-      renderTrigger={renderTrigger}
+      renderTrigger={renderTrigger ?? defaultRenderTrigger}
       popoverAlign={popoverAlign}
     />
   );

@@ -1,20 +1,31 @@
+import { Icon, type IconName } from "@/components/ui/icon";
 import type { TaskStatus } from "@/lib/tasks-api";
 import { statusLabel, statusTone } from "@/lib/tasks-api";
 
-const DOT_TONE: Record<ReturnType<typeof statusTone>, string> = {
-  neutral: "bg-border-strong",
-  info: "bg-primary",
-  warn: "bg-warning",
-  success: "bg-success",
-  danger: "bg-danger",
+type Tone = ReturnType<typeof statusTone>;
+
+/**
+ * V2 (ADR 0016) soft-pill status pill with a matching glyph per status. Tone
+ * mapping delegates to `statusTone`, so new statuses only need a row here to
+ * pick up a new icon / pill colour.
+ */
+
+const PILL_TONE: Record<Tone, string> = {
+  neutral: "bg-surface-2 text-text-muted",
+  info: "bg-primary-muted text-primary",
+  warn: "bg-warning-soft text-warning",
+  success: "bg-success-soft text-success",
+  danger: "bg-danger-soft text-danger",
 };
 
-const LABEL_TONE: Record<ReturnType<typeof statusTone>, string> = {
-  neutral: "text-text-muted",
-  info: "text-primary",
-  warn: "text-warning",
-  success: "text-success",
-  danger: "text-danger",
+const STATUS_ICON: Record<TaskStatus, IconName> = {
+  queued: "clock",
+  running: "loader",
+  needs_input: "message-square",
+  needs_approval: "shield-check",
+  completed: "check-circle-2",
+  failed: "alert-circle",
+  cancelled: "x",
 };
 
 export function TaskStatusPill({
@@ -25,19 +36,26 @@ export function TaskStatusPill({
   compact?: boolean;
 }) {
   const tone = statusTone(status);
+  const icon = STATUS_ICON[status];
   const isRunning = status === "running";
+  const size = compact ? 10 : 11;
+
   return (
     <span
-      className={`inline-flex items-center gap-1.5 ${compact ? "text-[11px]" : "text-xs"}`}
+      className={
+        "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 font-medium " +
+        (compact ? "text-[10px]" : "text-[11px]") +
+        " " +
+        PILL_TONE[tone]
+      }
       aria-label={`status: ${status}`}
     >
-      <span
-        className={`inline-block h-1.5 w-1.5 rounded-full ${DOT_TONE[tone]}`}
-        style={
-          isRunning ? { animation: "ah-pulse 1.4s var(--ease-out) infinite" } : undefined
-        }
+      <Icon
+        name={icon}
+        size={size}
+        className={isRunning ? "animate-spin" : undefined}
       />
-      <span className={LABEL_TONE[tone]}>{statusLabel(status)}</span>
+      <span>{statusLabel(status)}</span>
     </span>
   );
 }

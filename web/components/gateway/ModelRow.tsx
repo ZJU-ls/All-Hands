@@ -1,6 +1,16 @@
 "use client";
 
+/**
+ * ModelRow · one model inside a ProviderSection (ADR 0016 · V2 polish).
+ *
+ * Compact row: mono API name + optional display name · context-window badge ·
+ * inline ping pill · icon-only actions (ping / chat / delete) with a trailing
+ * arrow-right that slides in on hover. `hover:bg-surface-2/40` softens the
+ * row without shouting.
+ */
+
 import { BrandMark } from "@/components/brand/BrandMark";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { PingIndicator, type PingState } from "./PingIndicator";
 
 export type GatewayModel = {
@@ -26,38 +36,50 @@ export function ModelRow({
   onDelete: () => void;
 }) {
   const running = pingState.status === "running";
+  const title = model.display_name || model.name;
+  const showAlias = model.display_name && model.display_name !== model.name;
+
   return (
     <div
       data-testid={`gateway-model-${model.name}`}
-      className="group flex items-center gap-3 py-1.5 pl-4 pr-3 border-l border-border ml-6 hover:bg-surface-2 transition-colors duration-base"
+      className="group relative flex items-center gap-3 py-2 pl-4 pr-3 ml-6 border-l border-border hover:bg-surface-2/40 transition-colors duration-fast"
     >
       <BrandMark
-        name={model.display_name || model.name}
+        name={title}
         size="sm"
-        fallbackName={model.display_name || model.name}
+        fallbackName={title}
         testId={`gateway-model-avatar-${model.name}`}
       />
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-sm text-text truncate">
-          {model.display_name || model.name}
+
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <span
+          className={`text-[13px] font-medium text-text truncate ${
+            showAlias ? "" : "font-mono text-[12.5px]"
+          }`}
+        >
+          {title}
         </span>
-        {model.display_name && model.display_name !== model.name && (
+        {showAlias && (
           <span className="font-mono text-[11px] text-text-subtle truncate">
             {model.name}
           </span>
         )}
+
+        {model.context_window > 0 && (
+          <span
+            className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border font-mono text-[10px] text-text-muted tabular-nums"
+            title={`上下文窗口 · ${model.context_window.toLocaleString()} tokens`}
+          >
+            {formatCtx(model.context_window)}
+          </span>
+        )}
+
         {!model.enabled && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">
+          <span className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border text-[10px] text-text-muted">
             已禁用
           </span>
         )}
       </div>
-
-      {model.context_window > 0 && (
-        <span className="font-mono text-[10px] text-text-muted shrink-0">
-          ctx={model.context_window.toLocaleString()}
-        </span>
-      )}
 
       <span
         data-testid={`gateway-ping-result-${model.id}`}
@@ -66,32 +88,74 @@ export function ModelRow({
         <PingIndicator state={pingState} />
       </span>
 
-      <div className="ml-auto flex items-center gap-1 shrink-0">
-        <button
-          type="button"
-          onClick={onPing}
+      <div className="shrink-0 flex items-center gap-0.5">
+        <RowIconButton
+          icon="activity"
+          label="ping"
+          testId={`gateway-ping-${model.id}`}
           disabled={running}
-          data-testid={`gateway-ping-${model.id}`}
-          className="rounded border border-border hover:border-border-strong hover:bg-surface-2 disabled:opacity-40 text-text-muted hover:text-text text-[11px] px-2 py-1 transition-colors duration-base"
-        >
-          ping
-        </button>
-        <button
-          type="button"
+          onClick={onPing}
+        />
+        <RowIconButton
+          icon="message-square"
+          label="对话测试"
+          testId={`gateway-chat-test-${model.id}`}
           onClick={onChatTest}
-          data-testid={`gateway-chat-test-${model.id}`}
-          className="rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text text-[11px] px-2 py-1 transition-colors duration-base"
-        >
-          对话
-        </button>
-        <button
-          type="button"
+        />
+        <RowIconButton
+          icon="trash-2"
+          label="删除"
           onClick={onDelete}
-          className="rounded border border-border text-danger hover:bg-danger/10 hover:border-danger/50 text-[11px] px-2 py-1 transition-colors duration-base"
-        >
-          删除
-        </button>
+          tone="danger"
+        />
       </div>
+
+      <Icon
+        name="arrow-right"
+        size={12}
+        aria-hidden="true"
+        className="shrink-0 text-text-subtle opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition duration-base"
+      />
     </div>
   );
+}
+
+function RowIconButton({
+  icon,
+  label,
+  onClick,
+  disabled,
+  testId,
+  tone = "default",
+}: {
+  icon: IconName;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  testId?: string;
+  tone?: "default" | "danger";
+}) {
+  const toneCls =
+    tone === "danger"
+      ? "text-text-subtle hover:text-danger hover:bg-danger-soft"
+      : "text-text-subtle hover:text-primary hover:bg-primary/10";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      data-testid={testId}
+      className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-fast disabled:opacity-40 disabled:pointer-events-none ${toneCls}`}
+    >
+      <Icon name={icon} size={13} />
+    </button>
+  );
+}
+
+function formatCtx(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (n >= 1000) return `${Math.round(n / 1000)}K`;
+  return String(n);
 }

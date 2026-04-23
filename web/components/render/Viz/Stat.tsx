@@ -2,6 +2,7 @@
 
 import type { RenderProps } from "@/lib/component-registry";
 import { Sparkline } from "@/components/ui/Sparkline";
+import { Icon, type IconName } from "@/components/ui/icon";
 
 type Direction = "up" | "down" | "flat";
 type Tone = "positive" | "negative" | "neutral";
@@ -43,21 +44,29 @@ function normalizeDelta(raw: unknown): Delta | undefined {
   return { value, direction, tone };
 }
 
-const DIRECTION_GLYPH: Record<Direction, string> = {
-  up: "↑",
-  down: "↓",
-  flat: "→",
+const DIRECTION_ICON: Record<Direction, IconName> = {
+  up: "trending-up",
+  down: "trending-down",
+  flat: "arrow-right",
 };
 
-// Delta is surfaced as a semantic pill — tone picks both text + tinted
-// background from the soft tokens (ADR-0012 companions). Text-only was too
-// quiet against a bold headline number.
+// Delta pill: tone-tinted rounded-full with trend icon. Tone picks both
+// fg + tinted bg via soft tokens so the pill reads at a glance.
 const TONE_PILL: Record<Tone, string> = {
   positive: "text-success bg-success-soft",
   negative: "text-danger bg-danger-soft",
   neutral: "text-text-muted bg-surface-2",
 };
 
+/**
+ * Brand-Blue V2 (ADR 0016) · KPI stat.
+ *
+ * Shell: rounded-xl · bg-surface · shadow-soft-sm
+ * Label: mono caption · uppercase · wide tracking · muted
+ * Value: text-2xl font-bold tabular-nums
+ * Delta: tone-pill with trend icon
+ * Accent hairline on top ties stat to its tone.
+ */
 export function Stat({ props }: RenderProps) {
   const label = typeof props.label === "string" ? props.label : "";
   const value =
@@ -72,11 +81,7 @@ export function Stat({ props }: RenderProps) {
   const caption = typeof props.caption === "string" ? props.caption : undefined;
 
   const tone: Tone = delta?.tone ?? "neutral";
-  const direction: Direction = delta
-    ? delta.direction === "up" || delta.direction === "down" || delta.direction === "flat"
-      ? delta.direction
-      : "flat"
-    : "flat";
+  const direction: Direction = delta?.direction ?? "flat";
   const normSpark = (() => {
     if (spark.length < 2) return null;
     const min = Math.min(...spark);
@@ -85,10 +90,6 @@ export function Stat({ props }: RenderProps) {
     return spark.map((v) => (v - min) / range);
   })();
 
-  // Accent hairline at the top of the card — ties the Stat to its delta
-  // tone without flooding the whole card with color (see spec §11 hairline
-  // accent primitive). Neutral tone uses primary so the card still has a
-  // visual anchor.
   const accentColor =
     tone === "positive"
       ? "var(--color-success)"
@@ -97,33 +98,30 @@ export function Stat({ props }: RenderProps) {
         : "var(--color-primary)";
 
   return (
-    <div
-      className="relative overflow-hidden rounded-lg border border-border bg-bg px-4 py-3 transition-colors duration-base hover:border-border-strong"
-      style={{ animation: "ah-fade-up var(--dur-mid) var(--ease-out)" }}
-    >
+    <div className="relative overflow-hidden rounded-xl border border-border bg-surface px-4 py-3 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft animate-fade-up">
       <span
         aria-hidden
         className="absolute inset-x-0 top-0 h-[2px]"
         style={{
           background: `linear-gradient(to right, ${accentColor}, transparent)`,
-          opacity: 0.5,
+          opacity: 0.7,
         }}
       />
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+      <div className="text-caption font-mono uppercase tracking-wider text-text-muted">
         {label}
       </div>
       <div className="mt-1 flex items-baseline gap-2">
-        <span className="font-mono text-2xl font-semibold tabular-nums text-text">
+        <span className="text-2xl font-bold tabular-nums text-text">
           {value == null ? "—" : String(value)}
         </span>
         {unit && (
-          <span className="text-xs text-text-muted">{unit}</span>
+          <span className="text-caption text-text-muted">{unit}</span>
         )}
         {delta && (
           <span
-            className={`ml-auto inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${TONE_PILL[tone]}`}
+            className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-medium tabular-nums ${TONE_PILL[tone]}`}
           >
-            <span aria-hidden>{DIRECTION_GLYPH[direction]}</span>
+            <Icon name={DIRECTION_ICON[direction]} size={12} />
             {String(delta.value)}
           </span>
         )}
@@ -134,7 +132,7 @@ export function Stat({ props }: RenderProps) {
         </div>
       )}
       {caption && (
-        <div className="mt-2 text-[11px] text-text-muted">{caption}</div>
+        <div className="mt-2 text-caption text-text-muted">{caption}</div>
       )}
     </div>
   );

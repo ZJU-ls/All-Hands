@@ -1,6 +1,20 @@
 "use client";
 
+/**
+ * ProviderSection · per-provider accordion inside /gateway (ADR 0016 · V2).
+ *
+ * Header — BrandMark tile · provider name · kind / default / disabled chips ·
+ * model count · right-side action cluster (bulk ping · set-default · edit ·
+ * delete) · rotating chevron.
+ * Body   — base_url + nested ModelRows + "+ 注册模型" outline button.
+ *
+ * The enclosing <section> on `/gateway` already wraps providers in a
+ * `rounded-xl bg-surface shadow-soft-sm` container; each ProviderSection is
+ * one divider-separated block inside it (no double rounding).
+ */
+
 import { BrandMark } from "@/components/brand/BrandMark";
+import { Icon } from "@/components/ui/icon";
 import { ModelRow, type GatewayModel } from "./ModelRow";
 import type { PingState } from "./PingIndicator";
 
@@ -54,31 +68,28 @@ export function ProviderSection({
   onChatTestModel: (m: GatewayModel) => void;
   onDeleteModel: (m: GatewayModel) => void;
 }) {
-  const bulkLabel = bulkPingInProgress
-    ? `连通性测试 (${bulkPingInProgress.done}/${bulkPingInProgress.total})`
+  const bulkRunning = bulkPingInProgress !== null;
+  const bulkLabel = bulkRunning
+    ? `测试中 ${bulkPingInProgress.done}/${bulkPingInProgress.total}`
     : "连通性测试";
 
   return (
     <section
       data-testid={`gateway-provider-${provider.name}`}
-      className="border-b border-border"
+      className="border-b border-border last:border-b-0"
     >
-      <header className="flex items-center gap-2 px-3 py-2 hover:bg-surface-2 transition-colors duration-base">
+      <header
+        className={`flex items-center gap-3 px-4 py-3 transition-colors duration-fast ${
+          open ? "bg-surface-2/50" : "hover:bg-surface-2/40"
+        }`}
+      >
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={open}
           aria-label={open ? "折叠" : "展开"}
           data-testid={`gateway-provider-toggle-${provider.name}`}
-          className="font-mono text-text-muted hover:text-text w-4 text-center text-[12px] shrink-0"
-        >
-          {open ? "▾" : "▸"}
-        </button>
-
-        <button
-          type="button"
-          onClick={onToggle}
-          className="flex items-center gap-2.5 min-w-0 text-left"
+          className="flex items-center gap-3 min-w-0 flex-1 text-left"
         >
           <BrandMark
             kind={provider.kind}
@@ -87,91 +98,132 @@ export function ProviderSection({
             fallbackName={provider.name}
             testId={`gateway-provider-avatar-${provider.name}`}
           />
-          <span
-            data-testid={`gateway-provider-kind-${provider.name}`}
-            className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-2 text-text-muted border border-border shrink-0"
-          >
-            {KIND_BADGE[provider.kind]}
-          </span>
-          <span className="text-sm font-medium text-text truncate">
-            {provider.name}
-          </span>
-          <span
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[14px] font-semibold text-text truncate">
+                {provider.name}
+              </span>
+              <span
+                data-testid={`gateway-provider-kind-${provider.name}`}
+                className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border font-mono text-[9px] tracking-wider text-text-muted"
+              >
+                {KIND_BADGE[provider.kind]}
+              </span>
+              {provider.is_default && (
+                <span className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm bg-primary/10 border border-primary/25 text-primary text-[10px] font-semibold">
+                  <Icon name="star" size={10} strokeWidth={2} />
+                  默认
+                </span>
+              )}
+              {!provider.enabled && (
+                <span className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border text-[10px] text-text-muted">
+                  已禁用
+                </span>
+              )}
+              <span
+                aria-hidden="true"
+                className={`shrink-0 w-[7px] h-[7px] rounded-full ${
+                  provider.enabled ? "bg-success" : "bg-border-strong"
+                }`}
+              />
+            </div>
+            <div className="mt-0.5 flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center gap-1 text-[11px] text-text-muted tabular-nums">
+                <Icon
+                  name="brain"
+                  size={11}
+                  className="text-text-subtle"
+                />
+                {models.length} 模型
+              </span>
+              <span aria-hidden="true" className="text-text-subtle">
+                ·
+              </span>
+              <span className="font-mono text-[11px] text-text-subtle truncate">
+                default={provider.default_model}
+              </span>
+            </div>
+          </div>
+
+          <Icon
+            name="chevron-down"
+            size={14}
             aria-hidden="true"
-            className={`w-[7px] h-[7px] rounded-full shrink-0 ${
-              provider.enabled ? "bg-success" : "bg-border"
+            className={`shrink-0 text-text-muted transition-transform duration-base ${
+              open ? "rotate-180" : "rotate-0"
             }`}
           />
-          {provider.is_default && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary shrink-0">
-              默认
-            </span>
-          )}
-          {!provider.enabled && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted shrink-0">
-              已禁用
-            </span>
-          )}
-          <span className="text-[11px] text-text-muted truncate">
-            {models.length} models · default={provider.default_model}
-          </span>
         </button>
 
-        <div className="ml-auto flex items-center gap-1 shrink-0">
+        <div className="shrink-0 flex items-center gap-1.5 border-l border-border pl-3">
           <button
             type="button"
             onClick={onBulkPing}
-            disabled={bulkPingInProgress !== null || models.length === 0}
+            disabled={bulkRunning || models.length === 0}
             data-testid={`gateway-bulk-ping-${provider.name}`}
-            className="rounded border border-border hover:border-border-strong hover:bg-surface-2 disabled:opacity-40 text-text-muted hover:text-text text-[11px] px-2 py-1 transition-colors duration-base"
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-surface border border-border text-[11px] font-medium text-text-muted hover:border-primary/40 hover:text-primary disabled:opacity-40 disabled:hover:border-border disabled:hover:text-text-muted transition-colors duration-fast"
           >
-            {bulkLabel}
+            <Icon
+              name={bulkRunning ? "loader" : "activity"}
+              size={11}
+              className={bulkRunning ? "animate-spin-slow" : ""}
+            />
+            <span className="tabular-nums">{bulkLabel}</span>
           </button>
           {!provider.is_default && (
             <button
               type="button"
               onClick={onSetDefault}
-              className="rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text text-[11px] px-2 py-1 transition-colors duration-base"
+              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-surface border border-border text-[11px] font-medium text-text-muted hover:border-primary/40 hover:text-primary transition-colors duration-fast"
             >
+              <Icon name="star" size={11} />
               设为默认
             </button>
           )}
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text text-[11px] px-2 py-1 transition-colors duration-base"
-          >
-            编辑
-          </button>
-          <button
-            type="button"
+          <IconOnlyButton icon="edit" label="编辑" onClick={onEdit} />
+          <IconOnlyButton
+            icon="trash-2"
+            label="删除"
             onClick={onDelete}
-            className="rounded border border-border text-danger hover:bg-danger/10 hover:border-danger/50 text-[11px] px-2 py-1 transition-colors duration-base"
-          >
-            删除
-          </button>
+            tone="danger"
+          />
         </div>
       </header>
 
       {open && (
-        <div className="pb-3 pt-1">
-          <div className="px-3 pb-1.5">
-            <p className="font-mono text-[11px] text-text-subtle truncate">
-              {provider.base_url}
+        <div
+          className="pb-3 pt-1 animate-fade-up"
+          style={{ animationDuration: "var(--dur-base)" }}
+        >
+          <div className="px-4 pb-2">
+            <p className="inline-flex items-center gap-1.5 font-mono text-[11px] text-text-subtle truncate max-w-full">
+              <Icon name="link" size={11} className="shrink-0" />
+              <span className="truncate">{provider.base_url}</span>
             </p>
           </div>
 
           {models.length === 0 ? (
-            <div className="ml-6 mr-3 border-l border-border pl-4 py-3">
-              <p className="text-[12px] text-text-muted">
-                此供应商下尚未注册任何模型
-              </p>
+            <div className="ml-6 mr-4 rounded-lg border border-dashed border-border bg-surface-2/30 px-4 py-4 flex items-center gap-3">
+              <div
+                aria-hidden="true"
+                className="grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-primary"
+              >
+                <Icon name="brain" size={14} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12.5px] text-text">尚未注册模型</p>
+                <p className="text-[11px] text-text-muted">
+                  给 {provider.name} 加第一个模型来启用
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={onAddModel}
-                className="mt-1.5 rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text text-[11px] px-2 py-1 transition-colors duration-base"
+                className="shrink-0 inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-primary text-primary-fg text-[11px] font-semibold shadow-soft-sm hover:bg-primary-hover hover:-translate-y-px transition duration-base"
               >
-                + 注册第一个模型
+                <Icon name="plus" size={11} />
+                注册模型
               </button>
             </div>
           ) : (
@@ -186,13 +238,14 @@ export function ProviderSection({
                   onDelete={() => onDeleteModel(m)}
                 />
               ))}
-              <div className="ml-6 border-l border-border pl-4 pt-1">
+              <div className="ml-6 border-l border-border pl-4 pt-2 pr-3">
                 <button
                   type="button"
                   onClick={onAddModel}
-                  className="rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text text-[11px] px-2 py-1 transition-colors duration-base"
+                  className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-dashed border-border bg-transparent hover:bg-surface-2/50 hover:border-primary/40 hover:text-primary text-[11px] font-medium text-text-muted transition-colors duration-fast"
                 >
-                  + 注册模型
+                  <Icon name="plus" size={11} />
+                  注册模型
                 </button>
               </div>
             </div>
@@ -200,5 +253,33 @@ export function ProviderSection({
         </div>
       )}
     </section>
+  );
+}
+
+function IconOnlyButton({
+  icon,
+  label,
+  onClick,
+  tone = "default",
+}: {
+  icon: Parameters<typeof Icon>[0]["name"];
+  label: string;
+  onClick: () => void;
+  tone?: "default" | "danger";
+}) {
+  const toneCls =
+    tone === "danger"
+      ? "text-text-subtle hover:text-danger hover:bg-danger-soft hover:border-danger/30"
+      : "text-text-subtle hover:text-primary hover:bg-primary/10 hover:border-primary/30";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`grid h-7 w-7 place-items-center rounded-md bg-surface border border-border transition-colors duration-fast ${toneCls}`}
+    >
+      <Icon name={icon} size={12} />
+    </button>
   );
 }
