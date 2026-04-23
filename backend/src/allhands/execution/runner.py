@@ -413,7 +413,6 @@ class AgentRunner:
             AIMessage,
             AIMessageChunk,
             HumanMessage,
-            SystemMessage,
         )
         from langchain_core.tools import StructuredTool
         from langgraph.prebuilt import create_react_agent
@@ -541,16 +540,21 @@ class AgentRunner:
             system_parts.append(base_prompt)
         system_prompt = "\n\n".join(system_parts).strip()
 
-        lc_messages: list[Any] = []
-        if system_prompt:
-            lc_messages.append(SystemMessage(content=system_prompt))
-        lc_messages.extend(
+        # The system prompt goes through `create_react_agent(prompt=...)` below
+        # so LangGraph prepends it at model-call time rather than storing it as
+        # a message in graph state. With `checkpointer=` enabled (ADR 0014
+        # default-on) and `add_messages` as the reducer, putting `SystemMessage`
+        # in the input `messages` channel caused it to accumulate across turns
+        # at non-consecutive positions (one per turn) — providers validating
+        # message order (e.g. Qwen/OpenAI-compatible) reject with
+        # "Received multiple non-consecutive system messages" (see E26).
+        lc_messages: list[Any] = [
             HumanMessage(content=m["content"])
             if m["role"] == "user"
             else AIMessage(content=m["content"])
             for m in messages
             if m["role"] in ("user", "assistant")
-        )
+        ]
 
         from langchain_core.messages import ToolMessage
 
@@ -572,7 +576,19 @@ class AgentRunner:
             # interrupt() + resume. The runner never reads back from the
             # checkpointer directly; that's LangGraph's responsibility when the
             # same thread_id is re-invoked.
-            agent = create_react_agent(model, lc_tools, checkpointer=self._checkpointer)
+            # `prompt=` is the LangGraph-idiomatic way to inject the system
+            # message: it's prepended at model-call time and never persisted
+            # into the message channel, so the checkpointer can't accumulate
+            # duplicates across turns (E26). `_compose_system_prompt()` is
+            # evaluated fresh every `runner.stream()` call (principle 3.3
+            # Pure-Function Query Loop), so skill activations that happened
+            # on earlier turns are reflected in later turns' prompts.
+            agent = create_react_agent(
+                model,
+                lc_tools,
+                checkpointer=self._checkpointer,
+                prompt=system_prompt or None,
+            )
             # ADR 0014 · Phase 3 — multi-mode streaming.
             # - "messages" gives per-token deltas (AIMessageChunk tuples) —
             #   the only mode that supports token-level streaming for the
