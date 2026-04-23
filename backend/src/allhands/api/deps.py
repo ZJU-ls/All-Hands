@@ -26,6 +26,7 @@ from allhands.persistence.db import get_sessionmaker
 from allhands.persistence.sql_repos import (
     SqlArtifactRepo,
     SqlConfirmationRepo,
+    SqlConversationEventRepo,
     SqlConversationRepo,
     SqlEmployeeRepo,
     SqlEventRepo,
@@ -153,6 +154,10 @@ async def get_chat_service(
         mcp_repo=SqlMCPServerRepo(session),
         checkpointer=checkpointer,
         confirmation_repo=SqlConfirmationRepo(session),
+        # ADR 0017 · wire the event log so ChatService writes USER /
+        # ASSISTANT / TURN_ABORTED events and build_llm_context reads
+        # from it. Unset → fall back to pre-ADR-0017 MessageRepo path.
+        event_repo=SqlConversationEventRepo(session),
     )
 
 
