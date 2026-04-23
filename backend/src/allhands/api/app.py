@@ -114,6 +114,28 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         logger.exception("legacy_migration.failed")
 
+    # ADR 0017 · P2.A — crash-recovery scan. Any TURN_STARTED without a
+    # matching TURN_COMPLETED / TURN_ABORTED is orphaned (process killed
+    # mid-turn, OOM, etc). Close each with reason=crash_recovery so the
+    # next build_llm_context can synthesize a coherent assistant message
+    # rather than leaving the LLM with two back-to-back user turns.
+    try:
+        from allhands.persistence.sql_repos import (
+            SqlConversationEventRepo,
+            SqlConversationRepo,
+        )
+        from allhands.services.turn_lock import scan_and_close_orphan_turns
+
+        maker = get_sessionmaker()
+        async with maker() as session, session.begin():
+            closed = await scan_and_close_orphan_turns(
+                event_repo=SqlConversationEventRepo(session),
+                conversation_repo=SqlConversationRepo(session),
+            )
+        logger.info("turn_lock.orphan_scan.done closed=%d", closed)
+    except Exception:
+        logger.exception("turn_lock.orphan_scan.failed")
+
     # ADR 0014 · checkpointer is default-on after Phase 4. The context-manager
     # lifetime is owned here so setup() + conn.close() happen in the right
     # order even if the lifespan body throws. Factory lives in

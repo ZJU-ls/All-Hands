@@ -27,6 +27,7 @@ from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
 from allhands.execution.tools.meta.spawn_subagent import SpawnSubagentService
 from allhands.services.context_builder import build_llm_context
+from allhands.services.turn_lock import TurnLockManager
 
 log = logging.getLogger(__name__)
 
@@ -135,6 +136,11 @@ class ChatService:
         # cache. None keeps pre-ADR-0017 tests compiling — when unset the
         # service falls back to MessageRepo-driven context (old path).
         self._event_repo = event_repo
+        # ADR 0017 · P2.A — per-conversation turn lock + supersede handling.
+        # Shared across all send_message calls so two concurrent users on
+        # the same conversation serialize through one lock and the late
+        # writer writes TURN_ABORTED for whatever was in flight.
+        self._turn_lock = TurnLockManager()
 
     async def _compute_platform_snapshot(self) -> str:
         """Fresh DB-verified snapshot of platform capabilities, injected into
@@ -412,18 +418,44 @@ class ChatService:
         # The Message row stays as a projection cache for the frontend
         # /messages API; the event log is the authoritative source we read
         # from in build_llm_context below.
+        #
+        # Plan §1 (P2.A) · Turn lifecycle:
+        # - If a turn is already in flight on this conversation, supersede
+        #   it by writing TURN_ABORTED(user_superseded) and cancelling the
+        #   prior task. The synthetic assistant message emitted by
+        #   build_llm_context then tells the model it was interrupted.
+        # - Write TURN_STARTED so orphan-scan at restart can detect crashes.
+        active_turn = None
         if self._event_repo is not None:
-            await self._event_repo.append(
-                ConversationEvent(
-                    id=user_msg.id,  # same id so projection ↔ event align
-                    conversation_id=conversation_id,
-                    parent_id=None,
-                    sequence=await self._event_repo.next_sequence(conversation_id),
-                    kind=EventKind.USER,
-                    content_json={"content": user_content, "run_id": run_id},
-                    created_at=run_started_at,
+            async with self._turn_lock.conversation_lock(conversation_id):
+                await self._turn_lock.supersede_if_active(self._event_repo, conversation_id)
+                await self._event_repo.append(
+                    ConversationEvent(
+                        id=user_msg.id,  # same id so projection ↔ event align
+                        conversation_id=conversation_id,
+                        parent_id=None,
+                        sequence=await self._event_repo.next_sequence(conversation_id),
+                        kind=EventKind.USER,
+                        content_json={"content": user_content, "run_id": run_id},
+                        created_at=run_started_at,
+                    )
                 )
-            )
+                active_turn = self._turn_lock.start_turn(conversation_id, run_id=run_id)
+                await self._event_repo.append(
+                    ConversationEvent(
+                        id=str(uuid.uuid4()),
+                        conversation_id=conversation_id,
+                        parent_id=None,
+                        sequence=await self._event_repo.next_sequence(conversation_id),
+                        kind=EventKind.TURN_STARTED,
+                        content_json={
+                            "turn_id": active_turn.turn_id,
+                            "run_id": run_id,
+                        },
+                        turn_id=active_turn.turn_id,
+                        created_at=datetime.now(UTC),
+                    )
+                )
 
         if self._bus is not None:
             # E18: fire-and-forget so a contended events-table write doesn't
@@ -517,6 +549,7 @@ class ChatService:
             employee=employee,
             run_id=run_id,
             run_started_at=run_started_at,
+            active_turn=active_turn,
         )
 
     async def resume_message(
@@ -605,6 +638,7 @@ class ChatService:
         employee: Employee | None = None,
         run_id: str | None = None,
         run_started_at: datetime | None = None,
+        active_turn: Any = None,
     ) -> AsyncIterator[AgentEvent]:
         """Tap the runner stream, persist the assistant's reply to the DB.
 
@@ -746,6 +780,11 @@ class ChatService:
                     message_id = event.message_id
                     if first_seen is None:
                         first_seen = datetime.now(UTC)
+                    # Track partial content on the active turn so a
+                    # supersede / abort event carries what the model
+                    # had already produced (debug / audit value).
+                    if active_turn is not None:
+                        active_turn.partial_content.append(event.delta)
                 elif event.kind == "reasoning":
                     reasoning_buffer.append(event.delta)
                     if message_id is None:
@@ -810,6 +849,32 @@ class ChatService:
                 yield event
         finally:
             await flush()
+            # P2.A · close the active turn in the event log. Complete path
+            # if we have a flushed assistant reply and no error_payload;
+            # abort path (stream_error) if there was an error or the stream
+            # ended without producing any content (client disconnect case).
+            if active_turn is not None and self._event_repo is not None:
+                try:
+                    if error_payload is not None:
+                        # TURN_ABORTED already written by the error branch
+                        # above; skip the duplicate here.
+                        self._turn_lock.clear(conversation_id)
+                    elif persisted:
+                        await self._turn_lock.complete_turn(
+                            self._event_repo, conversation_id, active_turn
+                        )
+                    else:
+                        await self._turn_lock.abort_turn(
+                            self._event_repo,
+                            conversation_id,
+                            active_turn,
+                            reason=TurnAbortReason.CLIENT_DISCONNECT,
+                        )
+                except Exception:
+                    log.exception(
+                        "turn_lock.close.failed",
+                        extra={"conversation_id": conversation_id},
+                    )
             await finalize_run()
             # ADR 0011 · principle 7: flush any resolve_skill mutations made
             # during this turn so a uvicorn reload doesn't wipe them. Runs
