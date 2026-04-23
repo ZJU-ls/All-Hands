@@ -181,10 +181,12 @@
 - 任何"内存字典"作为状态都是反模式,除非旁边有一份 repo 版本同步落地。
 - `SkillRuntime` 重启不丢(从 v1 起 · 见 [ADR 0011 §3](adr/0011-principles-refresh.md))。
 - 未来要完整 LangGraph Checkpointer · 单独 ADR · 本条只要求"状态可持久化",不强制 framework。
+- **消息恢复路径 · ADR 0014 R3**(2026-04-23):用户可见历史由 MessageRepo 承载 · LLM 短期记忆由 checkpointer 承载 · 每轮只送 delta(新 user 输入) · 冷启自动 bootstrap · compaction 整理账本时不影响 LLM 上下文。详见 [ADR 0014 R3](adr/0014-langgraph-checkpointer.md#r3--dual-sot-消息恢复路径--delta-send-契约)。
 
 **回归防御:**
 - `backend/pyproject.toml` · `.importlinter` 配置 · 跑 `uv run lint-imports`
 - `backend/tests/integration/test_skill_runtime_persistence.py` · cache miss → repo load · 进程边界模拟
+- `backend/tests/integration/test_dual_sot_delta_consistency.py` · compaction 下 LLM 上下文不掉(ADR 0014 R3)
 
 ---
 
