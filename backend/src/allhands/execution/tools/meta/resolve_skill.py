@@ -12,10 +12,12 @@ AgentRunner's `SkillRuntime`. No DB write, no external side effect.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 from allhands.core import Tool, ToolKind, ToolScope
 from allhands.execution.skills import SkillRegistry, SkillRuntime
+from allhands.execution.skills_body import read_skill_body
 
 RESOLVE_SKILL_TOOL = Tool(
     id="allhands.meta.resolve_skill",
@@ -92,6 +94,13 @@ def make_resolve_skill_executor(
         runtime.resolved_skills[skill_id] = list(skill.tool_ids)
         if skill.prompt_fragment:
             runtime.resolved_fragments.append(skill.prompt_fragment)
+        # ADR 0015 Phase 2: lazy-load SKILL.md body from the skill's install
+        # dir. `path` is set for YAML-backed builtins (Phase 1) and installed
+        # skills; legacy eager seeds have path=None and skip this step.
+        if skill.path:
+            body = read_skill_body(Path(skill.path))
+            if body:
+                runtime.resolved_fragments.append(body)
         return {
             "already_loaded": False,
             "tool_ids": list(skill.tool_ids),
