@@ -18,6 +18,7 @@ from allhands.core import (
     Message,
     RenderPayload,
     ToolCall,
+    ToolCallStatus,
     TurnAbortReason,
 )
 from allhands.core.errors import DomainError, EmployeeNotFound
@@ -829,6 +830,48 @@ class ChatService:
                     # turn without duplicating rows.
                     tc = event.tool_call
                     tool_calls_by_id[tc.id] = tc
+                    # ADR 0017 · P2.C — fine-grained tool events. Write a
+                    # TOOL_CALL_EXECUTED (or _FAILED) event so
+                    # build_llm_context can pair it with the assistant's
+                    # tool_use block on the next turn. The assistant event
+                    # itself still carries the tool_use in content_blocks.
+                    if self._event_repo is not None and active_turn is not None:
+                        try:
+                            failed = tc.status == ToolCallStatus.FAILED
+                            kind_to_write = (
+                                EventKind.TOOL_CALL_FAILED
+                                if failed
+                                else EventKind.TOOL_CALL_EXECUTED
+                            )
+                            result_body: dict[str, object] = {
+                                "tool_use_id": tc.id,
+                                "tool_call_id": tc.id,
+                                "tool_id": tc.tool_id,
+                            }
+                            if failed:
+                                result_body["error"] = tc.error or "tool failed"
+                            else:
+                                result_body["content"] = tc.result
+                            await self._event_repo.append(
+                                ConversationEvent(
+                                    id=str(uuid.uuid4()),
+                                    conversation_id=conversation_id,
+                                    parent_id=None,
+                                    sequence=await self._event_repo.next_sequence(conversation_id),
+                                    kind=kind_to_write,
+                                    content_json=result_body,
+                                    turn_id=active_turn.turn_id,
+                                    created_at=datetime.now(UTC),
+                                )
+                            )
+                        except Exception:
+                            log.exception(
+                                "tool_call_event.append.failed",
+                                extra={
+                                    "conversation_id": conversation_id,
+                                    "tool_call_id": tc.id,
+                                },
+                            )
                 elif event.kind == "interrupt_required":
                     # ADR 0014 Phase 4d · write a PENDING Confirmation row
                     # so /confirmations/pending can see what's waiting and
