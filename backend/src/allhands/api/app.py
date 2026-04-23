@@ -41,13 +41,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Own the TriggerRuntime for the process lifetime.
+    """Own the TriggerRuntime + optional LangGraph checkpointer for the process lifetime.
 
     Kept compact so test clients that want to bypass scheduler (TestClient
     with dependency_overrides) can skip the runtime: they just never touch
     `app.state.trigger_runtime` and the routers that need it return 503.
+    Same for `app.state.checkpointer` — None is the default (ADR 0014 Phase 1).
     """
     from allhands.api.deps import get_tool_registry
+    from allhands.config import get_settings
     from allhands.execution.triggers.runtime import TriggerRuntime
     from allhands.persistence.db import get_sessionmaker
 
@@ -64,6 +66,29 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.exception("trigger.runtime.start.failed")
         app.state.trigger_runtime = None
 
+    # ADR 0014 · Phase 1 feature-flagged checkpointer. The context-manager
+    # form (`async with AsyncSqliteSaver.from_conn_string(...)`) guarantees
+    # setup() + conn.close() happen in the right order even if the lifespan
+    # body throws. On flag off, app.state.checkpointer stays None and the
+    # runner silently falls back to pure-function mode.
+    settings = get_settings()
+    checkpointer_cm = None
+    if settings.enable_checkpointer:
+        try:
+            settings.ensure_data_dir()
+            from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+            checkpointer_cm = AsyncSqliteSaver.from_conn_string(settings.checkpoint_db_path)
+            checkpointer = await checkpointer_cm.__aenter__()
+            app.state.checkpointer = checkpointer
+            logger.info("checkpointer.ready path=%s", settings.checkpoint_db_path)
+        except Exception:
+            logger.exception("checkpointer.start.failed")
+            app.state.checkpointer = None
+            checkpointer_cm = None
+    else:
+        app.state.checkpointer = None
+
     try:
         yield
     finally:
@@ -72,6 +97,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await runtime.shutdown()
             except Exception:
                 logger.exception("trigger.runtime.shutdown.failed")
+        if checkpointer_cm is not None:
+            try:
+                await checkpointer_cm.__aexit__(None, None, None)
+            except Exception:
+                logger.exception("checkpointer.shutdown.failed")
 
 
 def create_app() -> FastAPI:

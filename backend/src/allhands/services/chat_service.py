@@ -78,6 +78,7 @@ class ChatService:
         bus: EventBus | None = None,
         skill_runtime_repo: SkillRuntimeRepo | None = None,
         mcp_repo: MCPServerRepo | None = None,
+        checkpointer: Any | None = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -103,6 +104,11 @@ class ChatService:
         # send_message calls (contract § 8.2 · V02 query() main loop carries
         # the live tool pool turn-to-turn).
         self._runtime_cache: dict[str, SkillRuntime] = {}
+        # ADR 0014 · LangGraph checkpointer for graph-internal state (interrupt
+        # resume / tool pending / subagent stack). Separate from MessageRepo
+        # which stays the SoT for user-visible messages (R2). None in v0-compat
+        # mode; populated once ALLHANDS_ENABLE_CHECKPOINTER is flipped on.
+        self._checkpointer = checkpointer
 
     async def _compute_platform_snapshot(self) -> str:
         """Fresh DB-verified snapshot of platform capabilities, injected into
@@ -409,6 +415,7 @@ class ChatService:
             runtime=runtime,
             spawn_subagent_service=spawn_subagent_service,
             model_ref_override=conv.model_ref_override,
+            checkpointer=self._checkpointer,
         )
         return self._persist_assistant_reply(
             conversation_id,
@@ -613,6 +620,10 @@ class ChatService:
                 skill_registry=skill_registry,
                 runtime=child_runtime,
                 spawn_subagent_service=nested_spawn,
+                # Share the same checkpointer — child thread_ids are distinct
+                # (allocated by dispatch/spawn call sites) so child graph state
+                # lands in its own checkpoint family. ADR 0014 §3 Phase 1.
+                checkpointer=self._checkpointer,
             )
 
         return factory

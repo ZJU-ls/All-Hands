@@ -48,6 +48,8 @@ from allhands.execution.tools.meta.spawn_subagent import make_spawn_subagent_exe
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from langgraph.checkpoint.base import BaseCheckpointSaver
+
     from allhands.core import Employee
     from allhands.execution.dispatch import DispatchService
     from allhands.execution.gate import BaseGate
@@ -303,6 +305,7 @@ class AgentRunner:
         runtime: SkillRuntime | None = None,
         spawn_subagent_service: SpawnSubagentService | None = None,
         model_ref_override: str | None = None,
+        checkpointer: BaseCheckpointSaver[Any] | None = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
@@ -320,6 +323,13 @@ class AgentRunner:
         # one, fall back to a throwaway runtime derived from employee.tool_ids
         # so legacy callers keep working.
         self._runtime = runtime or SkillRuntime(base_tool_ids=list(employee.tool_ids))
+        # ADR 0014 · graph-internal state persistence. None = keep v0 pure-function
+        # behavior (chat history is the sole SoT via MessageRepo). When provided,
+        # LangGraph persists per-turn graph state keyed on thread_id so interrupt /
+        # tool-pending / subagent intermediate state can resume across uvicorn
+        # restarts. MessageRepo remains the user-visible ledger (ADR 0014 R2);
+        # this is **only** for graph-internal state.
+        self._checkpointer = checkpointer
 
     def _active_tool_ids(self) -> list[str]:
         """Contract § 8.2 · base + flatten(resolved_skills.values())."""
@@ -485,7 +495,13 @@ class AgentRunner:
         seen_tool_call_ids: set[str] = set()
         tool_call_by_id: dict[str, dict[str, Any]] = {}
         try:
-            agent = create_react_agent(model, lc_tools)
+            # ADR 0014 · checkpointer is None in v0-compat mode (MessageRepo is
+            # the sole SoT). With a checkpointer, LangGraph snapshots the graph
+            # state per node transition under thread_id — lets Phase 3/4 wire
+            # interrupt() + resume. The runner never reads back from the
+            # checkpointer directly; that's LangGraph's responsibility when the
+            # same thread_id is re-invoked.
+            agent = create_react_agent(model, lc_tools, checkpointer=self._checkpointer)
             # `stream_mode="messages"` is the only mode that gives per-token
             # deltas from the LLM (each chunk is an `AIMessageChunk`). The
             # alternatives — `updates` / `values` — emit completed messages

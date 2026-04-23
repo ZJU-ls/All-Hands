@@ -114,9 +114,14 @@ async def get_chat_service(
     # cockpit activity feed. When there's no Request (CLI / tests), skip — the
     # service still works, just without the cockpit beat.
     bus = None
+    checkpointer = None
     if request is not None:
         runtime = getattr(request.app.state, "trigger_runtime", None)
         bus = getattr(runtime, "bus", None) if runtime is not None else None
+        # ADR 0014 · process-singleton checkpointer lives on app.state. None
+        # when the flag is off (default) or startup failed — runner falls
+        # back to pure-function behaviour.
+        checkpointer = getattr(request.app.state, "checkpointer", None)
     return ChatService(
         employee_repo=SqlEmployeeRepo(session),
         conversation_repo=SqlConversationRepo(session),
@@ -127,6 +132,7 @@ async def get_chat_service(
         bus=bus,
         skill_runtime_repo=SqlSkillRuntimeRepo(session),
         mcp_repo=SqlMCPServerRepo(session),
+        checkpointer=checkpointer,
     )
 
 
