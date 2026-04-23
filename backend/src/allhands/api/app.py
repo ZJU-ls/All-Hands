@@ -86,6 +86,34 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         logger.exception("installed_skills.load.failed")
 
+    # ADR 0017 · one-time replay of legacy conversations into the event
+    # log. A conversation that existed before this refactor has messages
+    # rows but no events; without this replay, build_llm_context returns
+    # empty messages and the LLM forgets earlier context. Idempotent —
+    # re-runs skip conversations that already have events.
+    try:
+        from allhands.persistence.sql_repos import (
+            SqlConversationEventRepo,
+            SqlConversationRepo,
+        )
+        from allhands.services.legacy_event_migration import (
+            replay_all_legacy_conversations,
+        )
+
+        maker = get_sessionmaker()
+        async with maker() as session, session.begin():
+            convs, events = await replay_all_legacy_conversations(
+                conversation_repo=SqlConversationRepo(session),
+                event_repo=SqlConversationEventRepo(session),
+            )
+        logger.info(
+            "legacy_migration.done conversations=%d events=%d",
+            convs,
+            events,
+        )
+    except Exception:
+        logger.exception("legacy_migration.failed")
+
     # ADR 0014 · checkpointer is default-on after Phase 4. The context-manager
     # lifetime is owned here so setup() + conn.close() happen in the right
     # order even if the lifespan body throws. Factory lives in
