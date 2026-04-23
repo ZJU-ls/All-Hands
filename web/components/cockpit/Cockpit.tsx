@@ -9,14 +9,14 @@
  *   - NEVER host resource definitions (employees / skills / MCP / triggers
  *     CRUD lives on its own dedicated page; the cockpit only links out).
  *
- * Layout: HUD strip → KPI console → 2-column main (activity | runs) with
- * a 44px right-edge DrawerRail hosting secondary observation panels
- * (Health · Budget · Convs). Runtime ops (急停 / resume / refresh) are
- * always visible on the HUD's right cluster.
+ * Layout (V2 Azure Live · ADR 0016): HUD greeting card → 4×2 KPI grid →
+ * 2-column main (activity feed | active runs) with a 44px right-edge
+ * DrawerRail hosting secondary observation panels (Health · Budget ·
+ * Convs). Runtime ops live on the HUD's right cluster.
  *
- * Visual language: Linear Precise + allowed decorative primitives only
- * (Sparkline · DotGridBackdrop · Hairline accent · status dots · mono
- * typography). No glow, no scale, no drop-shadow, no third-party icons.
+ * Visual language is Brand Blue Dual Theme: rounded-xl cards,
+ * `shadow-soft-sm` elevation with `hover:-translate-y-px` lift, tokenised
+ * colors only, icons via `<Icon>`.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -220,11 +220,21 @@ export function Cockpit() {
   return (
     <AppShell title="驾驶舱">
       <div className="relative h-full flex overflow-hidden">
-        {/* Decorative dot-grid anchor, fixed, ≤ 25% opacity per §3.8 allowed */}
-        <DotGridBackdrop opacity={0.22} fade={false} />
+        {/* Soft primary wash + dot grid to echo V2's Azure Live hero. The
+         *  gradient is pure CSS variables so theme pack swap re-colours it. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(1100px 540px at 12% -10%, var(--color-primary-muted), transparent 60%), radial-gradient(900px 500px at 92% 4%, var(--color-primary-soft), transparent 60%)",
+            opacity: 0.9,
+          }}
+        />
+        <DotGridBackdrop opacity={0.18} fade={false} />
 
         <div className="relative flex-1 min-w-0 overflow-y-auto">
-          <div className="p-6 space-y-4 min-h-full flex flex-col">
+          <div className="p-6 space-y-5 min-h-full flex flex-col">
             {actionError && (
               <ErrorState
                 title="操作失败"
@@ -261,8 +271,8 @@ export function Cockpit() {
                 />
                 <KpiBar summary={summary} />
                 {isWorkspaceEmpty(summary) ? (
-                  <div className="relative flex-1 flex items-center justify-center rounded-md border border-border bg-surface px-6 py-12 overflow-hidden min-h-[50vh]">
-                    <DotGridBackdrop opacity={0.3} />
+                  <div className="relative flex-1 flex items-center justify-center rounded-xl border border-border bg-surface px-6 py-12 overflow-hidden min-h-[50vh] shadow-soft-sm">
+                    <DotGridBackdrop opacity={0.22} />
                     <div className="relative mx-auto max-w-md">
                       <EmptyState
                         title="系统待命 · 零活动"
@@ -275,15 +285,11 @@ export function Cockpit() {
                     <Coachmark
                       id="cockpit-activity"
                       title="飞行记录 · 实时"
-                      description="tool 调用、run 状态变化按时间倒序排。序号 001 是最近一条,点事件跳到对应 trace。右侧 rail 的健康 / 消耗 / 对话抽屉提供次级观测。"
+                      description="tool 调用、run 状态变化按时间倒序排。点事件跳到对应 trace。右侧 rail 的健康 / 消耗 / 对话抽屉提供次级观测。"
                     />
                     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 flex-1 min-h-[55vh]">
-                      <div className="rounded border border-border bg-surface flex flex-col min-h-[40vh]">
-                        <ActivityFeed events={summary.recent_events} />
-                      </div>
-                      <div className="rounded border border-border bg-surface flex flex-col min-h-[40vh]">
-                        <ActiveRunsList runs={summary.active_runs} />
-                      </div>
+                      <ActivityFeed events={summary.recent_events} />
+                      <ActiveRunsList runs={summary.active_runs} />
                     </div>
                   </>
                 )}

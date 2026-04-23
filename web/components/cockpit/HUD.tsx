@@ -1,26 +1,33 @@
 "use client";
 
 /**
- * HUD · Cockpit top status strip ("mission-control" ticker).
+ * HUD · Cockpit "mission-control" greeting + ticker.
  *
- * Always-on 32px strip that pins the runtime state (live/paused connection,
- * wall-clock, event rate, pending-user badges) above the console. Critical
- * runtime ops (global pause / resume / refresh) live at the right end so
- * the user can act without scrolling. This is the "observe + control" half
- * of the cockpit — definition-class flows (new employee / new skill / new
- * trigger) are deliberately absent per product direction.
+ * V2 Azure Live restyle (ADR 0016): the HUD is now the landing's welcoming
+ * hero — left cluster is a time-based greeting + autopilot/status chip, the
+ * middle carries wall-clock + event rate micro-viz, right carries runtime
+ * ops (pause / resume / refresh). Card uses `rounded-xl shadow-soft-sm`;
+ * action buttons are pill-shaped with soft shadows.
  *
- * Visual language is within §3.8 hard discipline: no glow, no scale, no
- * third-party icon; only mono text + status dots (`ah-dot` keyframe) and
- * a micro Sparkline of event arrival rate.
+ * Behaviour / props / data flow are unchanged — this is a visual rework.
+ * All icons go through `<Icon>` (ADR 0016 §D1).
  */
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Icon } from "@/components/ui/icon";
 import { Sparkline } from "@/components/ui/Sparkline";
 import type { ActivityEventDto, WorkspaceSummaryDto } from "@/lib/cockpit-api";
 
 type Connection = "connecting" | "open" | "error";
+
+function greeting(now: Date): string {
+  const h = now.getHours();
+  if (h < 5) return "Late night";
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 function WallClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -31,7 +38,7 @@ function WallClock() {
   }, []);
   if (!now) {
     return (
-      <span className="font-mono text-[11px] tabular-nums text-text-subtle">
+      <span className="font-mono text-caption tabular-nums text-text-subtle">
         --:--:--
       </span>
     );
@@ -41,7 +48,7 @@ function WallClock() {
   const ss = String(now.getSeconds()).padStart(2, "0");
   return (
     <span
-      className="font-mono text-[11px] tabular-nums text-text-muted"
+      className="font-mono text-caption tabular-nums text-text-muted"
       aria-label="workspace time"
     >
       {hh}:{mm}:<span className="text-text">{ss}</span>
@@ -49,7 +56,20 @@ function WallClock() {
   );
 }
 
-function StatusDot({
+function Greeting() {
+  // Compute on the client so SSR doesn't lock a stale greeting.
+  const [label, setLabel] = useState<string | null>(null);
+  useEffect(() => {
+    setLabel(greeting(new Date()));
+  }, []);
+  return (
+    <span className="text-sm font-semibold text-text tracking-tight">
+      {label ?? "Welcome"}
+    </span>
+  );
+}
+
+function StatusChip({
   kind,
   label,
 }: {
@@ -64,17 +84,19 @@ function StatusDot({
         : kind === "reconnecting"
           ? "bg-warning"
           : "bg-danger";
-  const textColor =
+  const chipBg =
     kind === "live"
-      ? "text-success"
+      ? "bg-success-soft text-success"
       : kind === "paused"
-        ? "text-warning"
+        ? "bg-warning-soft text-warning"
         : kind === "reconnecting"
-          ? "text-warning"
-          : "text-danger";
+          ? "bg-warning-soft text-warning"
+          : "bg-danger-soft text-danger";
   const pulse = kind === "live" || kind === "reconnecting";
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span
+      className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full font-mono text-[10px] font-semibold uppercase tracking-wider ${chipBg}`}
+    >
       <span
         aria-hidden="true"
         className={`h-1.5 w-1.5 rounded-full ${dotColor}`}
@@ -84,11 +106,7 @@ function StatusDot({
             : undefined
         }
       />
-      <span
-        className={`font-mono text-[10px] font-semibold uppercase tracking-wider ${textColor}`}
-      >
-        {label}
-      </span>
+      {label}
     </span>
   );
 }
@@ -133,9 +151,6 @@ export function HUD({
   onResume: () => void;
   onRefresh: () => void;
 }) {
-  // Recompute buckets on every render — cheap (≤50 events × constant work).
-  // Re-renders happen on snapshot/activity updates, not on the 1s ticker
-  // (ticker only touches WallClock's internal state).
   const rate = eventRateBuckets(summary.recent_events);
 
   const [statusKind, statusLabel]: [
@@ -151,32 +166,44 @@ export function HUD({
 
   return (
     <div
-      className="relative flex items-center justify-between gap-4 h-8 px-3 rounded border border-border bg-surface overflow-hidden"
+      className="relative flex items-center justify-between gap-4 min-h-12 px-4 py-2 rounded-xl border border-border bg-surface shadow-soft-sm overflow-hidden animate-fade-up"
       data-testid="cockpit-hud"
     >
-      {/* Left cluster: status · wall-clock */}
+      {/* Left cluster: greeting · status chip */}
       <div className="flex items-center gap-3 min-w-0">
-        <StatusDot kind={statusKind} label={statusLabel} />
-        <span
+        <div className="relative h-8 w-8 shrink-0 rounded-lg overflow-hidden shadow-soft-sm grid place-items-center text-primary-fg"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%)",
+          }}
           aria-hidden="true"
-          className="h-3 w-px bg-border"
-        />
-        <WallClock />
-        {summary.paused && summary.paused_reason && (
-          <span className="font-mono text-[10px] text-text-subtle truncate max-w-[280px]">
-            · {summary.paused_reason}
-          </span>
-        )}
+        >
+          <Icon name="sparkles" size={16} strokeWidth={2} />
+        </div>
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-2">
+            <Greeting />
+            <StatusChip kind={statusKind} label={statusLabel} />
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <WallClock />
+            {summary.paused && summary.paused_reason && (
+              <span className="font-mono text-[10px] text-text-subtle truncate max-w-[280px]">
+                · {summary.paused_reason}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Middle cluster: event rate · badges */}
-      <div className="flex items-center gap-4 min-w-0">
-        <div className="hidden sm:flex items-center gap-2">
+      <div className="hidden md:flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-surface-2 border border-border">
           <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
             EV/5M
           </span>
           <span
-            className="font-mono text-[11px] tabular-nums text-text"
+            className="font-mono text-caption tabular-nums text-text font-semibold"
             data-testid="hud-event-total"
           >
             {rate.total}
@@ -185,7 +212,7 @@ export function HUD({
             <Sparkline
               values={rate.values}
               height={16}
-              strokeWidth={1.25}
+              strokeWidth={1.5}
               showEndpoint={rate.total > 0}
               ariaLabel={`${rate.total} events in last 5 minutes`}
             />
@@ -194,14 +221,11 @@ export function HUD({
         {summary.tasks_needs_user > 0 && (
           <Link
             href="/tasks?filter=needs_user"
-            className="group inline-flex items-center gap-1.5 h-6 px-2 rounded border border-warning/40 bg-warning/5 hover:bg-warning/10 transition-colors duration-base"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-warning-soft text-warning border border-warning/30 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
             aria-label={`${summary.tasks_needs_user} 个任务等你处理`}
           >
-            <span
-              aria-hidden="true"
-              className="h-1.5 w-1.5 rounded-full bg-warning"
-            />
-            <span className="font-mono text-[10px] text-warning tabular-nums">
+            <Icon name="alert-circle" size={14} />
+            <span className="font-mono text-[10px] tabular-nums font-semibold">
               {summary.tasks_needs_user} 等你处理
             </span>
           </Link>
@@ -209,14 +233,11 @@ export function HUD({
         {summary.confirmations_pending > 0 && (
           <Link
             href="/confirmations"
-            className="group inline-flex items-center gap-1.5 h-6 px-2 rounded border border-warning/40 bg-warning/5 hover:bg-warning/10 transition-colors duration-base"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-warning-soft text-warning border border-warning/30 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
             aria-label={`${summary.confirmations_pending} 个待确认 tool call`}
           >
-            <span
-              aria-hidden="true"
-              className="h-1.5 w-1.5 rounded-full bg-warning"
-            />
-            <span className="font-mono text-[10px] text-warning tabular-nums">
+            <Icon name="shield-check" size={14} />
+            <span className="font-mono text-[10px] tabular-nums font-semibold">
               {summary.confirmations_pending} 待确认
             </span>
           </Link>
@@ -228,15 +249,13 @@ export function HUD({
         <button
           type="button"
           onClick={onRefresh}
-          className="inline-flex items-center gap-1 h-6 px-2 rounded border border-border text-text-muted hover:text-text hover:border-border-strong hover:bg-surface-2 transition-colors duration-base"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-text-muted shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft hover:text-text hover:border-border-strong"
           title="立即刷新快照"
           aria-label="刷新"
           data-testid="hud-refresh"
         >
-          <span aria-hidden="true" className="font-mono text-[11px] leading-none">
-            ↻
-          </span>
-          <span className="hidden md:inline font-mono text-[10px] uppercase tracking-wider">
+          <Icon name="refresh" size={14} />
+          <span className="hidden lg:inline font-mono text-[10px] uppercase tracking-wider font-semibold">
             REFRESH
           </span>
         </button>
@@ -244,12 +263,10 @@ export function HUD({
           <button
             type="button"
             onClick={onResume}
-            className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded border border-warning/40 bg-warning/5 hover:bg-warning/10 text-warning transition-colors duration-base"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-warning-soft text-warning border border-warning/40 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
             data-testid="hud-resume"
           >
-            <span aria-hidden="true" className="font-mono text-[11px] leading-none">
-              ▶
-            </span>
+            <Icon name="play" size={14} />
             <span className="font-mono text-[10px] font-semibold uppercase tracking-wider">
               恢复运行
             </span>
@@ -258,13 +275,11 @@ export function HUD({
           <button
             type="button"
             onClick={onPauseRequest}
-            className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded border border-danger/40 bg-danger/5 hover:bg-danger/10 text-danger transition-colors duration-base"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-danger-soft text-danger border border-danger/40 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
             data-testid="hud-pause"
             aria-label="急停所有 run"
           >
-            <span aria-hidden="true" className="font-mono text-[11px] leading-none">
-              ■
-            </span>
+            <Icon name="pause" size={14} />
             <span className="font-mono text-[10px] font-semibold uppercase tracking-wider">
               急停
             </span>

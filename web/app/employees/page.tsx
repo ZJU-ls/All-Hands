@@ -4,27 +4,43 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/shell/AppShell";
-import { EmptyState, LoadingState } from "@/components/state";
+import { LoadingState } from "@/components/state";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Icon } from "@/components/ui/icon";
 import { createConversation, listEmployees, type EmployeeDto } from "@/lib/api";
 import { deriveProfile, BADGE_LABEL } from "@/lib/employee-profile";
-import { BrandMark } from "@/components/brand/BrandMark";
 
 /**
- * Employees · card grid view (Track δ).
+ * Employees · card grid view (ADR 0016 · V2 Azure Live polish).
  *
- * Rationale: the previous single-column <ul> made the roster feel like a log
- * file at any screen width beyond a phone. A card grid is the convention for
- * browsing a "who's in the team" roster (ChatGPT GPTs page, Linear workspace
- * members, etc.), and it surfaces the three things a user actually wants when
- * scanning: who the employee is (name + lead badge), what model they run on,
- * and how many capabilities they own (tools / skills).
+ * Rationale: users land here to scan "who's on my team" and jump into a
+ * conversation. Rich cards (gradient avatar · status chip · model/skill chips
+ * · stats row · sliding arrow) make the roster feel alive while preserving
+ * Linear-descended density. The empty state gets a mesh-hero welcome block —
+ * first impressions for a zero-employee workspace matter.
+ *
+ * Data / state / navigation contract is unchanged from the previous revision:
+ * - `listEmployees({ status: "published" })` on mount.
+ * - `createConversation(employeeId)` + router.push on click.
+ * - `busyId` locks all cards while a conversation is being opened.
  */
 
 function modelDisplay(modelRef: string): string {
   if (!modelRef) return "默认模型";
   const idx = modelRef.indexOf("/");
   return idx >= 0 ? modelRef.slice(idx + 1) : modelRef;
+}
+
+function avatarInitials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "·";
+  // Pick up to two "word starts" — works for ASCII ("Sales Analyst" → SA) and
+  // gracefully degrades to first two characters for CJK names.
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+  }
+  return trimmed.slice(0, 2).toUpperCase();
 }
 
 export default function EmployeesPage() {
@@ -37,8 +53,6 @@ export default function EmployeesPage() {
     let cancelled = false;
     async function load() {
       try {
-        // Roster surface shows only published employees; drafts live in
-        // /employees/design until the user explicitly publishes.
         const list = await listEmployees({ status: "published" });
         if (!cancelled) setEmployees(list);
       } catch (e) {
@@ -71,14 +85,15 @@ export default function EmployeesPage() {
         <Link
           href="/employees/design"
           data-testid="goto-employee-design"
-          className="rounded-md border border-border px-3 py-1 text-[12px] text-text hover:bg-surface-2 transition-colors duration-base"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
         >
+          <Icon name="wand-2" size={14} />
           设计员工
         </Link>
       }
     >
       <div className="h-full overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-6 space-y-5">
+        <div className="max-w-6xl mx-auto p-6 space-y-5 animate-fade-up">
           <PageHeader
             title="员工"
             count={employees?.length}
@@ -87,24 +102,20 @@ export default function EmployeesPage() {
           {error && (
             <div
               data-testid="employees-error"
-              className="mb-4 rounded border border-border bg-surface-2 px-3 py-2 text-[12px] text-danger"
+              className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-[12px] text-danger"
             >
-              {error}
+              <Icon name="alert-circle" size={14} className="mt-0.5 shrink-0" />
+              <span className="min-w-0 break-words">{error}</span>
             </div>
           )}
           {employees === null ? (
-            <LoadingState title="加载员工" />
+            <EmployeesSkeleton />
           ) : employees.length === 0 ? (
-            <div data-testid="employees-empty">
-              <EmptyState
-                title="还没有员工"
-                description="与 Lead Agent 对话,用 create_employee 工具即可创建"
-              />
-            </div>
+            <EmptyEmployees />
           ) : (
             <div
               data-testid="employees-grid"
-              className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
             >
               {employees.map((e) => (
                 <EmployeeCard
@@ -134,13 +145,25 @@ function EmployeeCard({
   busy: boolean;
   anyBusy: boolean;
 }) {
-  const badges = deriveProfile(employee);
+  const badges = deriveProfile(employee).filter((b) => b !== "react");
   const isLead = employee.is_lead_agent;
+
+  const cardClass = isLead
+    ? "group relative flex flex-col gap-3 rounded-xl bg-gradient-to-br from-primary/10 via-surface to-surface border border-primary/40 shadow-soft-lg p-5 hover:-translate-y-px transition duration-base min-w-0"
+    : "group relative flex flex-col gap-3 rounded-xl bg-surface border border-border shadow-soft-sm hover:shadow-soft hover:-translate-y-px hover:border-border-strong transition duration-base p-5 min-w-0";
+
   return (
-    <div
-      data-testid={`employee-card-${employee.name}`}
-      className="group flex flex-col gap-3 rounded border border-border bg-surface-2 p-4 hover:border-border-strong transition-colors duration-base min-w-0"
-    >
+    <div data-testid={`employee-card-${employee.name}`} className={cardClass}>
+      {isLead && (
+        <span
+          className="absolute top-4 right-4 inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-primary text-primary-fg text-caption font-medium shadow-soft-sm"
+          data-testid="badge-lead"
+        >
+          <Icon name="sparkles" size={10} />
+          Lead
+        </span>
+      )}
+
       <button
         type="button"
         onClick={() => onStartChat(employee.id)}
@@ -149,63 +172,59 @@ function EmployeeCard({
         data-testid={`employee-card-start-${employee.name}`}
         className="flex items-start gap-3 text-left disabled:opacity-60"
       >
-        <BrandMark
-          name={employee.model_ref}
-          fallbackName={employee.name}
-          size="md"
-          className="text-text-muted"
-        />
+        <div
+          className="grid h-10 w-10 place-items-center rounded-full text-sm font-semibold text-primary-fg shadow-soft-sm shrink-0"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+          }}
+          aria-hidden="true"
+        >
+          {avatarInitials(employee.name)}
+        </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[13px] font-medium text-text truncate">
+          <div className="flex items-center gap-1.5 min-w-0 pr-16">
+            <span className="text-[14px] font-semibold text-text truncate tracking-tight">
               {employee.name}
             </span>
-            {isLead && (
-              <span
-                className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-text-muted shrink-0"
-                data-testid="badge-lead"
-              >
-                lead
-              </span>
-            )}
           </div>
-          <p className="font-mono text-[10px] text-text-subtle truncate mt-0.5">
+          <p className="font-mono text-[11px] text-text-subtle truncate mt-0.5">
             {modelDisplay(employee.model_ref) || "跟随默认"}
           </p>
         </div>
       </button>
 
       {employee.description ? (
-        <p className="text-[12px] text-text-muted leading-snug line-clamp-2 min-h-[30px]">
+        <p className="text-[12px] text-text-muted leading-snug line-clamp-2 min-h-[32px]">
           {employee.description}
         </p>
       ) : (
-        <p className="text-[12px] text-text-subtle italic leading-snug min-h-[30px]">
+        <p className="text-[12px] text-text-subtle italic leading-snug min-h-[32px]">
           暂无描述
         </p>
       )}
 
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {badges
-          .filter((b) => b !== "react")
-          .map((b) => (
+      {badges.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {badges.map((b) => (
             <span
               key={b}
-              className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-text-muted"
+              className="inline-flex items-center h-5 px-2 rounded-full bg-surface-2 text-text-muted text-caption font-medium border border-border"
             >
               {BADGE_LABEL[b]}
             </span>
           ))}
-      </div>
+        </div>
+      )}
 
-      <div className="flex items-center gap-3 pt-1 mt-auto border-t border-border">
-        <Stat label="tools" value={employee.tool_ids.length} />
-        <Stat label="skills" value={employee.skill_ids.length} />
+      <div className="flex items-center gap-4 pt-3 mt-auto border-t border-border">
+        <Stat icon="zap" label="tools" value={employee.tool_ids.length} />
+        <Stat icon="wand-2" label="skills" value={employee.skill_ids.length} />
         <div className="ml-auto flex items-center gap-2">
           <Link
             href={`/employees/${employee.id}`}
             data-testid={`employee-card-detail-${employee.name}`}
-            className="font-mono text-[10px] text-text-subtle hover:text-text transition-colors duration-base"
+            className="inline-flex items-center h-7 px-2 rounded-md text-[11px] font-medium text-text-muted hover:text-text hover:bg-surface-2 transition duration-base"
           >
             详情
           </Link>
@@ -214,9 +233,23 @@ function EmployeeCard({
             onClick={() => onStartChat(employee.id)}
             disabled={anyBusy}
             data-testid={`employee-card-chat-${employee.name}`}
-            className="inline-flex h-6 items-center gap-1 rounded border border-border bg-bg px-2 font-mono text-[10px] text-text group-hover:border-border-strong disabled:opacity-60 transition-colors duration-base"
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-primary px-2.5 text-[11px] font-semibold text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-60 transition duration-base"
           >
-            {busy ? "打开中…" : "对话 →"}
+            {busy ? (
+              <>
+                <Icon name="loader" size={12} className="animate-spin-slow" />
+                打开中
+              </>
+            ) : (
+              <>
+                对话
+                <Icon
+                  name="arrow-right"
+                  size={12}
+                  className="group-hover:translate-x-0.5 transition duration-base"
+                />
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -224,11 +257,140 @@ function EmployeeCard({
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  icon,
+  label,
+  value,
+}: {
+  icon: "zap" | "wand-2";
+  label: string;
+  value: number;
+}) {
   return (
-    <span className="flex items-baseline gap-1">
-      <span className="font-mono text-[13px] text-text">{value}</span>
-      <span className="font-mono text-[10px] text-text-subtle">{label}</span>
+    <span className="inline-flex items-center gap-1.5 text-text-muted">
+      <Icon name={icon} size={12} className="text-text-subtle" />
+      <span className="text-[13px] font-semibold text-text tabular-nums">
+        {value}
+      </span>
+      <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+        {label}
+      </span>
     </span>
+  );
+}
+
+function EmployeesSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+    >
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div
+          key={i}
+          className="rounded-xl bg-surface border border-border shadow-soft-sm p-5 space-y-3"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-surface-3 animate-shimmer bg-[linear-gradient(90deg,var(--color-surface-2)_0%,var(--color-surface-3)_50%,var(--color-surface-2)_100%)] bg-[length:200%_100%]" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-32 rounded bg-surface-3 animate-shimmer bg-[linear-gradient(90deg,var(--color-surface-2)_0%,var(--color-surface-3)_50%,var(--color-surface-2)_100%)] bg-[length:200%_100%]" />
+              <div className="h-2.5 w-20 rounded bg-surface-2" />
+            </div>
+          </div>
+          <div className="h-2.5 w-full rounded bg-surface-2" />
+          <div className="h-2.5 w-4/5 rounded bg-surface-2" />
+          <div className="pt-3 border-t border-border flex gap-3">
+            <div className="h-4 w-12 rounded bg-surface-2" />
+            <div className="h-4 w-12 rounded bg-surface-2" />
+            <div className="ml-auto h-6 w-16 rounded bg-surface-2" />
+          </div>
+        </div>
+      ))}
+      <span className="sr-only">
+        <LoadingState title="加载员工" />
+      </span>
+    </div>
+  );
+}
+
+function EmptyEmployees() {
+  return (
+    <div
+      data-testid="employees-empty"
+      className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-sm"
+    >
+      {/* Mesh hero backdrop — soft primary / accent radial glows */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 opacity-70 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(600px 300px at 15% 20%, var(--color-primary-muted), transparent 60%), radial-gradient(500px 400px at 85% 60%, color-mix(in srgb, var(--color-accent, var(--color-primary)) 18%, transparent), transparent 60%)",
+        }}
+      />
+      {/* Dotgrid backdrop over the mesh */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 opacity-40 pointer-events-none"
+        style={{
+          backgroundImage:
+            "radial-gradient(var(--color-border) 1px, transparent 1px)",
+          backgroundSize: "20px 20px",
+        }}
+      />
+
+      <div className="relative px-6 py-16 grid place-items-center text-center">
+        <div
+          className="grid h-20 w-20 place-items-center rounded-2xl text-primary-fg shadow-soft-lg animate-float"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
+          }}
+          aria-hidden="true"
+        >
+          <Icon name="users" size={36} strokeWidth={1.5} />
+        </div>
+
+        <h3 className="mt-6 text-display font-bold tracking-tight text-text">
+          Hire your first digital employee
+        </h3>
+        <p className="mt-2 max-w-md text-[13px] leading-relaxed text-text-muted">
+          和 Lead Agent 对话一句 <span className="font-mono text-text">create_employee</span>
+          ,给 Ta 一组 skill 和工具 —— 新员工立刻上岗。
+        </p>
+
+        <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
+          <Link
+            href="/chat"
+            data-testid="employees-empty-cta-hire"
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary text-primary-fg text-[13px] font-semibold shadow-soft hover:bg-primary-hover hover:-translate-y-px transition duration-base"
+          >
+            <Icon name="sparkles" size={14} />
+            Hire employee
+          </Link>
+          <Link
+            href="/employees/design"
+            data-testid="employees-empty-cta-design"
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-surface border border-border text-[13px] font-semibold text-text hover:border-primary hover:text-primary hover:-translate-y-px transition duration-base"
+          >
+            <Icon name="wand-2" size={14} />
+            打开设计器
+          </Link>
+        </div>
+
+        <div className="mt-8 flex items-center justify-center gap-2 text-[11px] text-text-subtle flex-wrap">
+          <span className="font-mono uppercase tracking-wider">Popular starts</span>
+          <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-surface-2 border border-border text-text-muted font-medium">
+            Sales Analyst
+          </span>
+          <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-surface-2 border border-border text-text-muted font-medium">
+            Content Maker
+          </span>
+          <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-surface-2 border border-border text-text-muted font-medium">
+            Research Buddy
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
