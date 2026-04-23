@@ -5,6 +5,20 @@ import type { RenderProps } from "@/lib/component-registry";
 type Bar = { label: string; value: number };
 type Orientation = "vertical" | "horizontal";
 
+// Some LLMs (and fuzzy tool-use training) return numeric values as strings
+// ("12" instead of 12). Backend Pydantic uses `list[dict[str, Any]]` so the
+// Any escape hatch passes the raw string through unchanged. Without this
+// coercion every bar collapsed to height 0 (maxVal=0 → pct=0 → invisible),
+// which was the "same height / only colored lines" bug the user reported.
+function toNumber(v: unknown): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
 // Bars cycle the ADR-0012 data-viz palette by index, so categorical
 // comparisons read distinct at a glance instead of a solid block of primary.
 const BAR_COLORS = [
@@ -22,8 +36,7 @@ export function BarChart({ props }: RenderProps) {
         .filter((b): b is Record<string, unknown> => !!b && typeof b === "object")
         .map((b) => ({
           label: typeof b.label === "string" ? b.label : "",
-          value:
-            typeof b.value === "number" && Number.isFinite(b.value) ? b.value : 0,
+          value: toNumber(b.value),
         }))
     : [];
   const orientation: Orientation =

@@ -63,6 +63,36 @@ RESOLVE_SKILL_TOOL_ID = "allhands.meta.resolve_skill"
 SPAWN_SUBAGENT_TOOL_ID = "allhands.meta.spawn_subagent"
 
 
+def _coerce_stringified_json(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Recover nested object/array args that the LLM serialized as JSON strings.
+
+    Some providers (and some models on fuzzy tool-use training) flatten nested
+    object / array arguments to a single JSON-encoded string instead of sending
+    a structured value. Pydantic v2 in lax mode does NOT auto-parse `str → dict`
+    or `str → list`, so the tool call blows up with `ToolInvocationError` at
+    `_parse_input`. This walker rescues any `str` value that parses to a `dict`
+    or `list`, leaves everything else untouched.
+
+    Real-world trigger: `render_stat` called with `delta='{"value": 2, ...}'`
+    instead of `delta={"value": 2, ...}`; `render_bar_chart` with `bars='[...]'`.
+    Regression: `test_runner_coerce_stringified_json.py`.
+    """
+    out: dict[str, Any] = {}
+    for k, v in kwargs.items():
+        if isinstance(v, str):
+            stripped = v.strip()
+            if stripped.startswith(("{", "[")):
+                try:
+                    parsed = json.loads(stripped)
+                except (ValueError, TypeError):
+                    parsed = None
+                if isinstance(parsed, (dict, list)):
+                    out[k] = parsed
+                    continue
+        out[k] = v
+    return out
+
+
 def _make_dispatch_executor(dispatch_service: DispatchService) -> Any:
     """Build the StructuredTool coroutine for dispatch_employee.
 
@@ -387,6 +417,17 @@ class AgentRunner:
         from langgraph.prebuilt import create_react_agent
         from langgraph.types import Command
 
+        class _CoercingStructuredTool(StructuredTool):
+            """Override `_parse_input` so we coerce stringified-JSON nested
+            args back to structured values before Pydantic validates. See
+            `_coerce_stringified_json` for the failure mode this rescues.
+            """
+
+            def _parse_input(self, tool_input: Any, tool_call_id: str | None) -> Any:
+                if isinstance(tool_input, dict):
+                    tool_input = _coerce_stringified_json(tool_input)
+                return super()._parse_input(tool_input, tool_call_id)
+
         message_id = str(uuid.uuid4())
         gate = self._gate
 
@@ -404,7 +445,7 @@ class AgentRunner:
                     skill_registry=self._skill_registry,
                 )
                 lc_tools.append(
-                    StructuredTool.from_function(
+                    _CoercingStructuredTool.from_function(
                         coroutine=executor,
                         name=tool.name,
                         description=tool.description,
@@ -414,7 +455,7 @@ class AgentRunner:
 
             if tool_id == DISPATCH_TOOL_ID and self._dispatch_service is not None:
                 lc_tools.append(
-                    StructuredTool.from_function(
+                    _CoercingStructuredTool.from_function(
                         coroutine=_make_dispatch_executor(self._dispatch_service),
                         name=tool.name,
                         description=tool.description,
@@ -453,14 +494,14 @@ class AgentRunner:
 
                     return _gated
 
-                lc_tool = StructuredTool.from_function(
+                lc_tool = _CoercingStructuredTool.from_function(
                     coroutine=_make_gated(_tool, _executor),
                     name=tool.name,
                     description=tool.description,
                 )
             else:
                 _executor2 = executor
-                lc_tool = StructuredTool.from_function(
+                lc_tool = _CoercingStructuredTool.from_function(
                     coroutine=_executor2,
                     name=tool.name,
                     description=tool.description,
