@@ -20,28 +20,22 @@ export const metadata: Metadata = {
   description: "One for All — open-source digital employee organization platform",
 };
 
-const themeInitScript = `
-(function() {
-  try {
-    var t = localStorage.getItem('allhands_theme');
-    if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    document.documentElement.classList.add(t);
-  } catch (e) {
-    document.documentElement.classList.add('dark');
-  }
-})();
-`;
-
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
+    // `data-theme-pack` is the extensibility axis — see ADR 0016 §D7.
+    // The `.light` / `.dark` class is managed by next-themes via ThemeProvider.
+    // `suppressHydrationWarning` is required for next-themes (it mutates
+    // <html> before React hydrates).
+    <html
+      lang="en"
+      data-theme-pack="brand-blue"
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
+    >
       <body className="h-screen overflow-hidden" suppressHydrationWarning>
         <ThemeProvider>{children}</ThemeProvider>
       </body>

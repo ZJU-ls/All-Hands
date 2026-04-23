@@ -1,0 +1,6 @@
+/* brand-blue theme pack · entry point. Imports light + dark.
+ * Paired selectors in each file also work when no data-theme-pack attribute
+ * is set (brand-blue is the default pack for v1). */
+
+@import "./light.css";
+@import "./dark.css";

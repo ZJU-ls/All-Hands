@@ -1,0 +1,75 @@
+/* ==========================================================================
+ * Theme Pack · brand-blue · dark mode
+ * Derived from design-system/proposals/v1-cobalt-precision.html
+ *
+ * Scope:  :root[data-theme-pack="brand-blue"].dark
+ * Values are the source of truth. Do not write hex inline in JSX.
+ * ======================================================================== */
+
+:root[data-theme-pack="brand-blue"].dark,
+:root.dark:not([data-theme-pack]) {
+  /* Surfaces — ink stack from V1. Deep blue-black canvas. */
+  --color-bg:            #0A0D14;
+  --color-surface:       #11151F;
+  --color-surface-2:     #1A1F2E;
+  --color-surface-3:     #242A3C;
+  --color-surface-4:     #3A425A;
+
+  --color-border:        rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+
+  --color-text:          #E2E6F1;
+  --color-text-muted:    #8690AE;
+  --color-text-subtle:   #5A6483;
+
+  /* Primary — electric cobalt. Pops against #0A0D14 without shouting. */
+  --color-primary:        #2E5BFF;
+  --color-primary-hover:  #4A74FF;
+  --color-primary-fg:     #FFFFFF;
+  --color-primary-muted:  rgba(46, 91, 255, 0.12);
+  --color-primary-glow:   #6E8BFF;
+
+  /* Accent — cobalt glow, used for gradients + mesh blurs. */
+  --color-accent:         #6E8BFF;
+
+  /* Semantics — brightened for dark canvas readability. */
+  --color-success:        #2EBD85;
+  --color-warning:        #F5A524;
+  --color-danger:         #F04438;
+
+  --color-success-soft:   rgba(46, 189, 133, 0.14);
+  --color-warning-soft:   rgba(245, 165, 36, 0.14);
+  --color-danger-soft:    rgba(240, 68, 56, 0.14);
+  --color-primary-soft:   rgba(46, 91, 255, 0.14);
+  --color-surface-hover:  rgba(110, 139, 255, 0.08);
+
+  /* Roles */
+  --color-role-user:      #4A74FF;
+  --color-role-lead:      #A78BFA;
+  --color-role-worker:    #2DD4BF;
+  --color-role-tool:      #FBBF24;
+
+  /* Data-viz — ADR 0012 · dark variant · same order, brightened. */
+  --color-viz-1: #4A74FF; /* cobalt */
+  --color-viz-2: #2DD4BF; /* teal */
+  --color-viz-3: #FBBF24; /* amber */
+  --color-viz-4: #F87171; /* rose */
+  --color-viz-5: #A78BFA; /* violet */
+  --color-viz-6: #38BDF8; /* sky */
+
+  /* Shadows — "glow" family lives here. Primary glow for focus/CTA, and
+   * an inset top hairline for card depth in dark. */
+  --shadow-glow-sm:        0 0 12px -2px rgba(110, 139, 255, 0.35);
+  --shadow-glow:           0 0 28px -4px rgba(110, 139, 255, 0.45);
+  --shadow-glow-lg:        0 12px 48px -12px rgba(46, 91, 255, 0.55);
+
+  /* "soft" shadows kept for API parity — used for elevation where a glow
+   * would be too much (modals, dropdowns). Colored dark + subtle. */
+  --shadow-soft-sm:        0 1px 2px rgba(0, 0, 0, 0.40), 0 1px 3px rgba(0, 0, 0, 0.30);
+  --shadow-soft:           0 4px 12px -2px rgba(0, 0, 0, 0.50), 0 2px 4px rgba(0, 0, 0, 0.40);
+  --shadow-soft-lg:        0 24px 64px -24px rgba(0, 0, 0, 0.65), 0 8px 24px -8px rgba(0, 0, 0, 0.40);
+  --shadow-pop:            0 2px 0 rgba(46, 91, 255, 0.90);
+
+  /* Inset hairline — 1px top highlight for card depth in dark canvas. */
+  --shadow-inset-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}

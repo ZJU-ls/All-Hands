@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>V1 · Cobalt Precision · allhands design proposals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
+      colors: {
+        ink: {
+          950: '#07090F',
+          900: '#0A0D14',
+          800: '#11151F',
+          700: '#1A1F2E',
+          600: '#242A3C',
+          500: '#3A425A',
+          400: '#5A6483',
+          300: '#8690AE',
+          200: '#B6BDD1',
+          100: '#E2E6F1',
+          50: '#F4F6FB',
+          0: '#FFFFFF',
+        },
+        cobalt: {
+          50: '#EEF2FF',
+          100: '#DCE4FF',
+          200: '#B8C9FF',
+          300: '#8EA5FF',
+          400: '#6082FF',
+          500: '#2E5BFF',
+          600: '#2048E6',
+          700: '#1637B8',
+          800: '#0F2890',
+          glow: '#6E8BFF',
+        },
+        ok: '#2EBD85',
+        warn: '#F5A524',
+        bad: '#F04438',
+      },
+      boxShadow: {
+        'glow-sm': '0 0 12px -2px rgba(110,139,255,.35)',
+        'glow': '0 0 28px -4px rgba(110,139,255,.45)',
+        'glow-lg': '0 12px 48px -12px rgba(46,91,255,.55)',
+        'hairline': 'inset 0 1px 0 rgba(255,255,255,.04)',
+      },
+      animation: {
+        'fade-up': 'fadeUp .4s cubic-bezier(.16,1,.3,1)',
+        'pulse-ring': 'pulseRing 2.2s ease-in-out infinite',
+      },
+      keyframes: {
+        fadeUp: { '0%': { opacity: 0, transform: 'translateY(6px)' }, '100%': { opacity: 1, transform: 'none' } },
+        pulseRing: { '0%,100%': { opacity: .55 }, '50%': { opacity: 1 } },
+      },
+    },
+  },
+};
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body {
+    background:
+      radial-gradient(1000px 500px at 18% -10%, rgba(46,91,255,.14), transparent 70%),
+      radial-gradient(800px 500px at 100% 10%, rgba(110,139,255,.08), transparent 60%),
+      #0A0D14;
+    font-feature-settings: 'cv11','ss01','ss03';
+    letter-spacing: -0.011em;
+  }
+  .hairline { box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(0,0,0,.4); }
+  .dotgrid {
+    background-image: radial-gradient(rgba(134,144,174,.25) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  .divider-grad {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(46,91,255,.35) 30%, rgba(110,139,255,.45) 50%, rgba(46,91,255,.35) 70%, transparent);
+  }
+  .gradient-text {
+    background: linear-gradient(135deg, #fff 0%, #B8C9FF 60%, #6E8BFF 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .ring-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(46,91,255,.35), 0 0 0 1px #2E5BFF; }
+  .kbd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-bottom-color: rgba(255,255,255,.18);
+    border-radius: 4px;
+    background: rgba(255,255,255,.04);
+    color: #B6BDD1;
+  }
+  .scrollbar-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #242A3C; border-radius: 4px; }
+  /* lucide size default */
+  [data-lucide] { width: 16px; height: 16px; stroke-width: 1.75; }
+</style>
+</head>
+<body class="min-h-screen font-sans text-ink-100 antialiased">
+
+<!-- ===== TOP NAV ===== -->
+<header class="sticky top-0 z-40 backdrop-blur-xl bg-ink-900/70 border-b border-white/5">
+  <div class="max-w-[1400px] mx-auto px-8 h-14 flex items-center gap-8">
+    <div class="flex items-center gap-2.5">
+      <div class="relative w-7 h-7 rounded-md bg-gradient-to-br from-cobalt-500 to-cobalt-700 grid place-items-center shadow-glow-sm">
+        <span class="text-[11px] font-bold text-white tracking-tighter">ah</span>
+      </div>
+      <span class="font-semibold text-[14px] tracking-tight">allhands</span>
+      <span class="text-[10px] uppercase tracking-widest text-ink-400 font-mono">v1 · cobalt</span>
+    </div>
+    <nav class="flex items-center gap-1 text-[13px] text-ink-300">
+      <a class="px-3 py-1.5 rounded-md text-white bg-white/5 hairline">Employees</a>
+      <a class="px-3 py-1.5 rounded-md hover:text-white hover:bg-white/5">Skills</a>
+      <a class="px-3 py-1.5 rounded-md hover:text-white hover:bg-white/5">Gateway</a>
+      <a class="px-3 py-1.5 rounded-md hover:text-white hover:bg-white/5">Traces</a>
+      <a class="px-3 py-1.5 rounded-md hover:text-white hover:bg-white/5">Market</a>
+    </nav>
+    <div class="flex-1 max-w-md">
+      <div class="flex items-center gap-2 h-8 px-3 rounded-md border border-white/5 bg-ink-800/60 text-ink-400 text-[13px]">
+        <i data-lucide="search"></i>
+        <span>Search employees, skills, traces…</span>
+        <span class="ml-auto kbd">⌘K</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="w-8 h-8 rounded-md hover:bg-white/5 grid place-items-center text-ink-300"><i data-lucide="bell"></i></button>
+      <button class="w-8 h-8 rounded-md hover:bg-white/5 grid place-items-center text-ink-300"><i data-lucide="settings"></i></button>
+      <div class="w-7 h-7 rounded-full bg-gradient-to-br from-cobalt-400 to-cobalt-700 grid place-items-center text-[11px] font-semibold">LS</div>
+    </div>
+  </div>
+</header>
+
+<!-- ===== HERO ===== -->
+<section class="relative overflow-hidden">
+  <div class="dotgrid absolute inset-0 opacity-40"></div>
+  <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-cobalt-500/20 blur-[120px] rounded-full"></div>
+  <div class="relative max-w-[1400px] mx-auto px-8 py-24">
+    <div class="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-cobalt-300 font-mono mb-6 animate-fade-up">
+      <span class="w-1.5 h-1.5 rounded-full bg-cobalt-glow animate-pulse-ring"></span>
+      Design proposal · V1 · Cobalt Precision
+    </div>
+    <h1 class="text-[72px] leading-[1.05] font-semibold tracking-[-0.04em] gradient-text max-w-4xl animate-fade-up">
+      Your digital workforce,<br/>designed with precision.
+    </h1>
+    <p class="mt-6 text-[17px] text-ink-300 max-w-2xl leading-relaxed animate-fade-up">
+      Cobalt Precision is an electric, engineer-first visual language.
+      Deep canvas, luminous accents, and disciplined typography — built for agents, traces, and the people who operate them.
+    </p>
+    <div class="mt-10 flex items-center gap-3 animate-fade-up">
+      <button class="h-11 px-5 rounded-lg bg-cobalt-500 hover:bg-cobalt-600 text-white text-[14px] font-medium shadow-glow inline-flex items-center gap-2 transition">
+        <i data-lucide="sparkles"></i> Hire your first employee
+        <span class="kbd !bg-white/15 !border-white/20 !text-white">⌘ ↵</span>
+      </button>
+      <button class="h-11 px-5 rounded-lg bg-white/5 hover:bg-white/10 hairline text-[14px] font-medium inline-flex items-center gap-2 transition">
+        <i data-lucide="play-circle"></i> Watch the 2-min tour
+      </button>
+      <div class="ml-4 pl-4 border-l border-white/10 flex items-center gap-2 text-[12px] text-ink-400 font-mono">
+        <span class="w-2 h-2 rounded-full bg-ok"></span>
+        37 employees · 214 runs today · 99.1% success
+      </div>
+    </div>
+
+    <!-- hero preview strip -->
+    <div class="mt-16 relative rounded-2xl border border-white/10 bg-ink-900/80 backdrop-blur overflow-hidden shadow-glow-lg">
+      <div class="h-9 px-4 flex items-center gap-2 border-b border-white/5 bg-ink-800/60">
+        <span class="w-2.5 h-2.5 rounded-full bg-bad/80"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-warn/80"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-ok/80"></span>
+        <span class="ml-3 text-[11px] font-mono text-ink-400">allhands.app / dashboard</span>
+      </div>
+      <div class="grid grid-cols-12">
+        <!-- mini sidebar -->
+        <aside class="col-span-2 border-r border-white/5 p-4 space-y-1">
+          <div class="text-[10px] uppercase tracking-wider text-ink-400 font-mono mb-2">Workspace</div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded-md bg-cobalt-500/10 text-cobalt-200 text-[12px] relative">
+            <div class="absolute left-0 top-1 bottom-1 w-[2px] bg-cobalt-500 rounded-full"></div>
+            <i data-lucide="users"></i> Employees
+          </div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded-md text-ink-300 text-[12px]"><i data-lucide="wand-2"></i> Skills</div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded-md text-ink-300 text-[12px]"><i data-lucide="plug"></i> Gateway</div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded-md text-ink-300 text-[12px]"><i data-lucide="activity"></i> Traces</div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded-md text-ink-300 text-[12px]"><i data-lucide="store"></i> Market</div>
+        </aside>
+        <!-- main -->
+        <div class="col-span-10 p-6">
+          <div class="flex items-center gap-3 mb-5">
+            <h3 class="text-[15px] font-semibold">Good afternoon, Liu</h3>
+            <span class="px-2 h-5 text-[10px] rounded-sm bg-cobalt-500/15 text-cobalt-200 font-mono inline-flex items-center">AUTOPILOT · ON</span>
+          </div>
+          <div class="grid grid-cols-4 gap-3">
+            <div class="p-4 rounded-lg bg-ink-800 border border-white/5 hairline">
+              <div class="text-[11px] text-ink-400 uppercase tracking-wider font-mono">Active</div>
+              <div class="mt-2 text-2xl font-semibold">37</div>
+              <div class="mt-1 text-[11px] text-ok font-mono">↑ 12%</div>
+            </div>
+            <div class="p-4 rounded-lg bg-ink-800 border border-white/5 hairline">
+              <div class="text-[11px] text-ink-400 uppercase tracking-wider font-mono">Runs · 24h</div>
+              <div class="mt-2 text-2xl font-semibold">214</div>
+              <div class="mt-1 text-[11px] text-ok font-mono">↑ 8%</div>
+            </div>
+            <div class="p-4 rounded-lg bg-ink-800 border border-white/5 hairline">
+              <div class="text-[11px] text-ink-400 uppercase tracking-wider font-mono">Success</div>
+              <div class="mt-2 text-2xl font-semibold">99.1%</div>
+              <div class="mt-1 text-[11px] text-ink-400 font-mono">stable</div>
+            </div>
+            <div class="p-4 rounded-lg bg-ink-800 border border-white/5 hairline">
+              <div class="text-[11px] text-ink-400 uppercase tracking-wider font-mono">Cost · mo</div>
+              <div class="mt-2 text-2xl font-semibold">$412</div>
+              <div class="mt-1 text-[11px] text-bad font-mono">↑ 3%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SECTION HELPER ===== -->
+<div class="max-w-[1400px] mx-auto px-8 space-y-20 pb-32">
+
+<!-- Section template wrapper used throughout -->
+<!-- BUTTONS -->
+<section id="buttons" class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.2em] font-mono text-cobalt-300">01 · Atoms</div>
+      <h2 class="mt-1 text-[28px] font-semibold tracking-tight">Buttons</h2>
+    </div>
+    <div class="text-[12px] text-ink-400 font-mono">primary · ghost · outline · danger × sm · md · lg</div>
+  </div>
+  <div class="divider-grad mb-8"></div>
+  <div class="grid grid-cols-4 gap-6">
+    <!-- primary -->
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-4">
+      <div class="text-[11px] text-ink-400 font-mono uppercase tracking-wider">Primary</div>
+      <button class="h-7 px-3 rounded-md bg-cobalt-500 hover:bg-cobalt-600 text-white text-[12px] font-medium inline-flex items-center gap-1.5 shadow-glow-sm">Save</button>
+      <button class="h-9 px-4 rounded-md bg-cobalt-500 hover:bg-cobalt-600 text-white text-[13px] font-medium inline-flex items-center gap-2 shadow-glow-sm"><i data-lucide="send"></i> Dispatch</button>
+      <button class="h-11 px-5 rounded-lg bg-cobalt-500 hover:bg-cobalt-600 text-white text-[14px] font-medium inline-flex items-center gap-2 shadow-glow"><i data-lucide="sparkles"></i> Run agent <span class="kbd !bg-white/15 !border-white/20 !text-white">⌘↵</span></button>
+    </div>
+    <!-- outline -->
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-4">
+      <div class="text-[11px] text-ink-400 font-mono uppercase tracking-wider">Outline</div>
+      <button class="h-7 px-3 rounded-md border border-white/10 hover:border-white/25 text-[12px]">Cancel</button>
+      <button class="h-9 px-4 rounded-md border border-white/10 hover:border-white/25 text-[13px] inline-flex items-center gap-2"><i data-lucide="arrow-right"></i> Continue</button>
+      <button class="h-11 px-5 rounded-lg border border-cobalt-500/40 hover:border-cobalt-400 text-cobalt-200 text-[14px] inline-flex items-center gap-2"><i data-lucide="plus"></i> Add skill</button>
+    </div>
+    <!-- ghost -->
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-4">
+      <div class="text-[11px] text-ink-400 font-mono uppercase tracking-wider">Ghost</div>
+      <button class="h-7 px-3 rounded-md hover:bg-white/5 text-ink-300 text-[12px]">Dismiss</button>
+      <button class="h-9 px-4 rounded-md hover:bg-white/5 text-ink-200 text-[13px] inline-flex items-center gap-2"><i data-lucide="filter"></i> Filter</button>
+      <button class="h-11 px-5 rounded-lg hover:bg-white/5 text-ink-100 text-[14px] inline-flex items-center gap-2"><i data-lucide="share-2"></i> Share link</button>
+    </div>
+    <!-- danger + loading + disabled -->
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-4">
+      <div class="text-[11px] text-ink-400 font-mono uppercase tracking-wider">Danger · State</div>
+      <button class="h-9 px-4 rounded-md bg-bad/10 text-bad border border-bad/30 hover:bg-bad/20 text-[13px] inline-flex items-center gap-2"><i data-lucide="trash-2"></i> Delete</button>
+      <button class="h-9 px-4 rounded-md bg-cobalt-500 text-white text-[13px] inline-flex items-center gap-2 opacity-80">
+        <span class="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+        Running…
+      </button>
+      <button disabled class="h-9 px-4 rounded-md bg-white/5 text-ink-400 text-[13px] cursor-not-allowed">Disabled</button>
+    </div>
+  </div>
+  <!-- icon button group -->
+  <div class="mt-6 flex items-center gap-2">
+    <div class="flex items-center rounded-md border border-white/5 overflow-hidden bg-ink-900/50">
+      <button class="w-8 h-8 grid place-items-center text-ink-300 hover:bg-white/5"><i data-lucide="align-left"></i></button>
+      <button class="w-8 h-8 grid place-items-center text-white bg-white/5"><i data-lucide="align-center"></i></button>
+      <button class="w-8 h-8 grid place-items-center text-ink-300 hover:bg-white/5"><i data-lucide="align-right"></i></button>
+    </div>
+    <div class="flex items-center rounded-md border border-cobalt-500/30 overflow-hidden bg-cobalt-500/10">
+      <button class="h-8 px-3 text-[12px] text-white bg-cobalt-500">Day</button>
+      <button class="h-8 px-3 text-[12px] text-cobalt-200 hover:bg-cobalt-500/20">Week</button>
+      <button class="h-8 px-3 text-[12px] text-cobalt-200 hover:bg-cobalt-500/20">Month</button>
+    </div>
+  </div>
+</section>
+
+<!-- FORMS -->
+<section id="forms" class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.2em] font-mono text-cobalt-300">02 · Forms</div>
+      <h2 class="mt-1 text-[28px] font-semibold tracking-tight">Inputs & Controls</h2>
+    </div>
+  </div>
+  <div class="divider-grad mb-8"></div>
+  <div class="grid grid-cols-3 gap-6">
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-4">
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider text-ink-400 font-mono mb-2">Name</label>
+        <input class="w-full h-9 px-3 rounded-md bg-ink-800 border border-white/5 text-[13px] placeholder:text-ink-500 ring-focus" placeholder="Sales Analyst Bot" />
+      </div>
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider text-ink-400 font-mono mb-2">Email <span class="text-bad">·</span></label>
+        <input class="w-full h-9 px-3 rounded-md bg-ink-800 border border-bad/50 text-[13px] ring-focus" value="invalid@" />
+        <div class="mt-1.5 text-[11px] text-bad flex items-center gap-1"><i data-lucide="alert-circle"></i> Enter a valid email</div>
+      </div>
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider text-ink-400 font-mono mb-2">Model</label>
+        <div class="relative">
+          <select class="w-full h-9 px-3 pr-8 rounded-md bg-ink-800 border border-white/5 text-[13px] appearance-none ring-focus">
+            <option>Claude Opus 4.7</option>
+            <option>Claude Sonnet 4.6</option>
+            <option>GPT-5</option>
+          </select>
+          <i data-lucide="chevron-down" class="absolute right-3 top-2.5 text-ink-400 pointer-events-none"></i>
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-4">
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider text-ink-400 font-mono mb-2">System prompt</label>
+        <textarea rows="5" class="w-full p-3 rounded-md bg-ink-800 border border-white/5 text-[13px] font-mono leading-relaxed ring-focus">You are a precise, terse analyst. Cite sources. Never hallucinate.</textarea>
+      </div>
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider text-ink-400 font-mono mb-2">Skill tags</label>
+        <div class="flex flex-wrap gap-1.5 p-2 rounded-md bg-ink-800 border border-white/5 min-h-9">
+          <span class="inline-flex items-center gap-1 h-6 px-2 rounded bg-cobalt-500/15 text-cobalt-200 text-[11px] font-mono">sql <i data-lucide="x" class="!w-3 !h-3 cursor-pointer"></i></span>
+          <span class="inline-flex items-center gap-1 h-6 px-2 rounded bg-cobalt-500/15 text-cobalt-200 text-[11px] font-mono">forecast <i data-lucide="x" class="!w-3 !h-3 cursor-pointer"></i></span>
+          <span class="inline-flex items-center gap-1 h-6 px-2 rounded bg-cobalt-500/15 text-cobalt-200 text-[11px] font-mono">churn-analysis <i data-lucide="x" class="!w-3 !h-3 cursor-pointer"></i></span>
+          <input class="flex-1 min-w-[80px] bg-transparent text-[13px] outline-none placeholder:text-ink-500" placeholder="Add…" />
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-5">
+      <div class="text-[11px] uppercase tracking-wider text-ink-400 font-mono">Toggles</div>
+      <!-- toggle -->
+      <div class="space-y-3">
+        <label class="flex items-center justify-between">
+          <span class="text-[13px]">Enable autopilot</span>
+          <span class="relative w-9 h-5 rounded-full bg-cobalt-500 shadow-glow-sm">
+            <span class="absolute right-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow"></span>
+          </span>
+        </label>
+        <label class="flex items-center justify-between">
+          <span class="text-[13px] text-ink-300">Persist artifacts</span>
+          <span class="relative w-9 h-5 rounded-full bg-white/10">
+            <span class="absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-ink-200"></span>
+          </span>
+        </label>
+      </div>
+      <div class="text-[11px] uppercase tracking-wider text-ink-400 font-mono pt-2">Checkbox / Radio</div>
+      <div class="space-y-2">
+        <label class="flex items-center gap-2 text-[13px]"><span class="w-4 h-4 rounded-sm bg-cobalt-500 grid place-items-center shadow-glow-sm"><i data-lucide="check" class="!w-3 !h-3 text-white"></i></span> Require confirmation for WRITE</label>
+        <label class="flex items-center gap-2 text-[13px] text-ink-300"><span class="w-4 h-4 rounded-sm border border-white/15"></span> Auto-approve READ tools</label>
+        <label class="flex items-center gap-2 text-[13px] mt-3"><span class="w-4 h-4 rounded-full border-[5px] border-cobalt-500 bg-ink-900"></span> Opus 4.7 <span class="text-ink-400 text-[11px]">(strong)</span></label>
+        <label class="flex items-center gap-2 text-[13px] text-ink-300"><span class="w-4 h-4 rounded-full border border-white/15"></span> Haiku 4.5 <span class="text-ink-400 text-[11px]">(fast)</span></label>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CARDS -->
+<section id="cards" class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.2em] font-mono text-cobalt-300">03 · Surfaces</div>
+      <h2 class="mt-1 text-[28px] font-semibold tracking-tight">Cards</h2>
+    </div>
+  </div>
+  <div class="divider-grad mb-8"></div>
+
+  <!-- stat strip -->
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="p-5 rounded-xl bg-ink-900/70 border border-white/5 hairline relative overflow-hidden">
+      <div class="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-cobalt-500 to-transparent"></div>
+      <div class="text-[11px] text-ink-400 uppercase tracking-wider font-mono">Runs · 7d</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-3xl font-semibold tracking-tight">1,284</span>
+        <span class="text-[11px] text-ok font-mono">↑ 12.4%</span>
+      </div>
+      <svg viewBox="0 0 120 32" class="mt-2 w-full h-8 text-cobalt-400">
+        <polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,24 12,22 24,18 36,20 48,14 60,16 72,10 84,12 96,6 108,8 120,4"/>
+      </svg>
+    </div>
+    <div class="p-5 rounded-xl bg-ink-900/70 border border-white/5 hairline">
+      <div class="text-[11px] text-ink-400 uppercase tracking-wider font-mono">Avg latency</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-3xl font-semibold tracking-tight">1.8<span class="text-base text-ink-400 font-mono">s</span></span>
+        <span class="text-[11px] text-ok font-mono">-120ms</span>
+      </div>
+      <svg viewBox="0 0 120 32" class="mt-2 w-full h-8 text-ok">
+        <polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,10 12,12 24,8 36,14 48,10 60,8 72,12 84,8 96,10 108,6 120,8"/>
+      </svg>
+    </div>
+    <div class="p-5 rounded-xl bg-ink-900/70 border border-white/5 hairline">
+      <div class="text-[11px] text-ink-400 uppercase tracking-wider font-mono">Tokens · mo</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-3xl font-semibold tracking-tight">18.4<span class="text-base text-ink-400 font-mono">M</span></span>
+        <span class="text-[11px] text-warn font-mono">↑ 28%</span>
+      </div>
+      <svg viewBox="0 0 120 32" class="mt-2 w-full h-8 text-warn">
+        <polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,28 12,24 24,22 36,18 48,20 60,14 72,16 84,10 96,12 108,6 120,4"/>
+      </svg>
+    </div>
+    <div class="p-5 rounded-xl bg-ink-900/70 border border-white/5 hairline">
+      <div class="text-[11px] text-ink-400 uppercase tracking-wider font-mono">Cost · mo</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-3xl font-semibold tracking-tight">$412</span>
+        <span class="text-[11px] text-bad font-mono">↑ 3%</span>
+      </div>
+      <div class="mt-3 h-1.5 rounded-full bg-white/5 overflow-hidden">
+        <div class="h-full w-[62%] bg-gradient-to-r from-cobalt-500 to-cobalt-glow"></div>
+      </div>
+      <div class="mt-1 text-[10px] text-ink-400 font-mono">$412 / $650 budget</div>
+    </div>
+  </div>
+
+  <!-- 3 feature cards -->
+  <div class="grid grid-cols-3 gap-6">
+    <div class="group p-6 rounded-xl border border-white/5 hover:border-cobalt-500/40 bg-ink-900/50 transition cursor-pointer relative">
+      <div class="w-10 h-10 rounded-lg bg-cobalt-500/10 border border-cobalt-500/20 grid place-items-center mb-4 text-cobalt-300 group-hover:shadow-glow-sm transition">
+        <i data-lucide="users"></i>
+      </div>
+      <h3 class="text-[15px] font-semibold tracking-tight">Employees</h3>
+      <p class="mt-1.5 text-[13px] text-ink-300 leading-relaxed">Configure agents as first-class hires. Each with model, skills, tools, and a system prompt.</p>
+      <div class="mt-5 flex items-center justify-between text-[12px] text-ink-400">
+        <span class="font-mono">37 active</span>
+        <span class="inline-flex items-center gap-1 text-cobalt-300 group-hover:translate-x-0.5 transition">Open <i data-lucide="arrow-right"></i></span>
+      </div>
+    </div>
+    <div class="p-6 rounded-xl border border-cobalt-500/40 bg-gradient-to-br from-cobalt-500/10 to-transparent relative overflow-hidden">
+      <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cobalt-glow to-transparent"></div>
+      <span class="absolute top-4 right-4 px-2 h-5 inline-flex items-center text-[10px] rounded-sm bg-cobalt-500 text-white font-mono uppercase tracking-wider">Recommended</span>
+      <div class="w-10 h-10 rounded-lg bg-cobalt-500 grid place-items-center mb-4 text-white shadow-glow">
+        <i data-lucide="wand-2"></i>
+      </div>
+      <h3 class="text-[15px] font-semibold tracking-tight">Skills · Dynamic packs</h3>
+      <p class="mt-1.5 text-[13px] text-ink-200 leading-relaxed">Progressive-loading capability packs. Descriptor always resident; body injected on activate.</p>
+      <div class="mt-5 flex items-center justify-between text-[12px]">
+        <span class="font-mono text-cobalt-200">124 packs · 3 tiers</span>
+        <span class="inline-flex items-center gap-1 text-white">Open <i data-lucide="arrow-right"></i></span>
+      </div>
+    </div>
+    <div class="p-6 rounded-xl border border-white/5 hover:border-cobalt-500/40 bg-ink-900/50 transition cursor-pointer">
+      <div class="w-10 h-10 rounded-lg bg-ink-700 border border-white/5 grid place-items-center mb-4 text-ink-200">
+        <i data-lucide="plug"></i>
+      </div>
+      <h3 class="text-[15px] font-semibold tracking-tight">Gateway</h3>
+      <p class="mt-1.5 text-[13px] text-ink-300 leading-relaxed">Unify Anthropic, OpenAI, Google, DashScope. Route by policy. Observe every call.</p>
+      <div class="mt-5 flex items-center justify-between text-[12px] text-ink-400">
+        <span class="font-mono">5 providers · 23 models</span>
+        <span class="inline-flex items-center gap-1 text-cobalt-300">Open <i data-lucide="arrow-right"></i></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TABLE -->
+<section id="table" class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.2em] font-mono text-cobalt-300">04 · Data</div>
+      <h2 class="mt-1 text-[28px] font-semibold tracking-tight">Table</h2>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 h-8 px-3 rounded-md border border-white/5 bg-ink-900/50 text-ink-300 text-[12px]">
+        <i data-lucide="search"></i><input class="bg-transparent outline-none w-40" placeholder="Filter runs…" />
+      </div>
+      <button class="h-8 px-3 rounded-md border border-white/5 hover:border-white/20 text-[12px] inline-flex items-center gap-1.5"><i data-lucide="filter"></i> Filter</button>
+      <button class="h-8 px-3 rounded-md bg-cobalt-500 text-white text-[12px] inline-flex items-center gap-1.5 shadow-glow-sm"><i data-lucide="download"></i> Export</button>
+    </div>
+  </div>
+  <div class="divider-grad mb-6"></div>
+  <div class="rounded-xl border border-white/5 bg-ink-900/50 overflow-hidden">
+    <table class="w-full text-[13px]">
+      <thead>
+        <tr class="text-[11px] text-ink-400 font-mono uppercase tracking-wider">
+          <th class="text-left px-4 py-3 font-normal"><label class="flex items-center gap-2"><span class="w-4 h-4 rounded-sm border border-white/15"></span></label></th>
+          <th class="text-left px-4 py-3 font-normal">Run</th>
+          <th class="text-left px-4 py-3 font-normal">Employee</th>
+          <th class="text-left px-4 py-3 font-normal">Status</th>
+          <th class="text-left px-4 py-3 font-normal">Duration</th>
+          <th class="text-left px-4 py-3 font-normal">Tokens</th>
+          <th class="text-left px-4 py-3 font-normal">Started</th>
+          <th class="w-8"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-white/5">
+        <tr class="hover:bg-white/[0.02]">
+          <td class="px-4 py-3"><span class="w-4 h-4 rounded-sm bg-cobalt-500 grid place-items-center"><i data-lucide="check" class="!w-3 !h-3 text-white"></i></span></td>
+          <td class="px-4 py-3 font-mono text-[12px] text-cobalt-200">run_01HXZ…a3f</td>
+          <td class="px-4 py-3 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-gradient-to-br from-cobalt-400 to-cobalt-700 grid place-items-center text-[10px] font-semibold">SA</span> Sales Analyst</td>
+          <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-[11px] text-ok"><span class="w-1.5 h-1.5 rounded-full bg-ok"></span> Success</span></td>
+          <td class="px-4 py-3 font-mono text-ink-300">1.4s</td>
+          <td class="px-4 py-3 font-mono text-ink-300">2,481</td>
+          <td class="px-4 py-3 text-ink-400">2 min ago</td>
+          <td class="px-2"><button class="w-6 h-6 rounded grid place-items-center text-ink-400 hover:bg-white/5"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+        <tr class="hover:bg-white/[0.02]">
+          <td class="px-4 py-3"><span class="w-4 h-4 rounded-sm border border-white/15"></span></td>
+          <td class="px-4 py-3 font-mono text-[12px] text-cobalt-200">run_01HXZ…b7c</td>
+          <td class="px-4 py-3 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-gradient-to-br from-warn/70 to-warn/30 grid place-items-center text-[10px] font-semibold">CM</span> Content Maker</td>
+          <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-[11px] text-cobalt-200"><span class="w-1.5 h-1.5 rounded-full bg-cobalt-400 animate-pulse-ring"></span> Running</span></td>
+          <td class="px-4 py-3 font-mono text-ink-300">0:32…</td>
+          <td class="px-4 py-3 font-mono text-ink-300">1,094</td>
+          <td class="px-4 py-3 text-ink-400">now</td>
+          <td class="px-2"><button class="w-6 h-6 rounded grid place-items-center text-ink-400 hover:bg-white/5"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+        <tr class="hover:bg-white/[0.02]">
+          <td class="px-4 py-3"><span class="w-4 h-4 rounded-sm border border-white/15"></span></td>
+          <td class="px-4 py-3 font-mono text-[12px] text-cobalt-200">run_01HXZ…d2e</td>
+          <td class="px-4 py-3 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-gradient-to-br from-bad/70 to-bad/30 grid place-items-center text-[10px] font-semibold">BF</span> Bug Fixer</td>
+          <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-[11px] text-bad"><span class="w-1.5 h-1.5 rounded-full bg-bad"></span> Failed</span></td>
+          <td class="px-4 py-3 font-mono text-ink-300">12.1s</td>
+          <td class="px-4 py-3 font-mono text-ink-300">4,320</td>
+          <td class="px-4 py-3 text-ink-400">14 min ago</td>
+          <td class="px-2"><button class="w-6 h-6 rounded grid place-items-center text-ink-400 hover:bg-white/5"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+        <tr class="hover:bg-white/[0.02]">
+          <td class="px-4 py-3"><span class="w-4 h-4 rounded-sm border border-white/15"></span></td>
+          <td class="px-4 py-3 font-mono text-[12px] text-cobalt-200">run_01HXZ…k9p</td>
+          <td class="px-4 py-3 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-gradient-to-br from-ok/70 to-ok/30 grid place-items-center text-[10px] font-semibold">OP</span> Ops Overseer</td>
+          <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-[11px] text-warn"><span class="w-1.5 h-1.5 rounded-full bg-warn"></span> Awaiting approval</span></td>
+          <td class="px-4 py-3 font-mono text-ink-300">3.7s</td>
+          <td class="px-4 py-3 font-mono text-ink-300">912</td>
+          <td class="px-4 py-3 text-ink-400">1 h ago</td>
+          <td class="px-2"><button class="w-6 h-6 rounded grid place-items-center text-ink-400 hover:bg-white/5"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="flex items-center justify-between px-4 py-3 border-t border-white/5 text-[11px] text-ink-400 font-mono">
+      <span>4 of 214 runs</span>
+      <div class="flex items-center gap-1">
+        <button class="w-7 h-7 rounded border border-white/5 grid place-items-center hover:bg-white/5"><i data-lucide="chevron-left"></i></button>
+        <span class="px-2 py-1 rounded bg-white/5 text-white">1</span>
+        <span class="px-2 py-1 hover:bg-white/5 rounded cursor-pointer">2</span>
+        <span class="px-2 py-1 hover:bg-white/5 rounded cursor-pointer">3</span>
+        <button class="w-7 h-7 rounded border border-white/5 grid place-items-center hover:bg-white/5"><i data-lucide="chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TABS + BADGES -->
+<section id="tabs" class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.2em] font-mono text-cobalt-300">05 · Navigation</div>
+      <h2 class="mt-1 text-[28px] font-semibold tracking-tight">Tabs · Badges · Status</h2>
+    </div>
+  </div>
+  <div class="divider-grad mb-8"></div>
+
+  <div class="grid grid-cols-2 gap-6">
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50">
+      <!-- underline tabs -->
+      <div class="flex items-center gap-5 border-b border-white/5">
+        <button class="relative pb-3 text-[13px] text-white font-medium">
+          Overview
+          <span class="absolute left-0 right-0 bottom-0 h-[2px] bg-cobalt-500 rounded-full shadow-glow-sm"></span>
+        </button>
+        <button class="pb-3 text-[13px] text-ink-400 hover:text-ink-200">Activity <span class="ml-1 text-[10px] font-mono text-ink-500">12</span></button>
+        <button class="pb-3 text-[13px] text-ink-400 hover:text-ink-200">Artifacts</button>
+        <button class="pb-3 text-[13px] text-ink-400 hover:text-ink-200">Settings</button>
+      </div>
+      <div class="mt-4 text-[13px] text-ink-300 leading-relaxed">
+        Underline tabs · 2px primary bar with subtle glow. Inactive items use muted token · `text-ink-400`.
+      </div>
+
+      <!-- pill tabs -->
+      <div class="mt-8 inline-flex p-1 rounded-lg bg-ink-800 border border-white/5">
+        <button class="h-7 px-3 rounded-md text-[12px] text-white bg-cobalt-500 shadow-glow-sm font-medium">All · 124</button>
+        <button class="h-7 px-3 rounded-md text-[12px] text-ink-300 hover:text-white">Builtin · 37</button>
+        <button class="h-7 px-3 rounded-md text-[12px] text-ink-300 hover:text-white">Custom · 87</button>
+      </div>
+    </div>
+
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-5">
+      <div class="text-[11px] uppercase tracking-wider text-ink-400 font-mono">Badges</div>
+      <div class="flex flex-wrap gap-2">
+        <span class="px-2 h-5 text-[10px] rounded-sm bg-cobalt-500 text-white font-mono uppercase tracking-wider inline-flex items-center">NEW</span>
+        <span class="px-2 h-5 text-[10px] rounded-sm bg-cobalt-500/15 text-cobalt-200 font-mono uppercase tracking-wider inline-flex items-center">Beta</span>
+        <span class="px-2 h-5 text-[10px] rounded-sm bg-white/5 text-ink-200 font-mono uppercase tracking-wider inline-flex items-center">Stable</span>
+        <span class="px-2 h-5 text-[10px] rounded-sm bg-ok/15 text-ok font-mono uppercase tracking-wider inline-flex items-center">Active</span>
+        <span class="px-2 h-5 text-[10px] rounded-sm bg-warn/15 text-warn font-mono uppercase tracking-wider inline-flex items-center">Pending</span>
+        <span class="px-2 h-5 text-[10px] rounded-sm bg-bad/15 text-bad font-mono uppercase tracking-wider inline-flex items-center">Error</span>
+      </div>
+      <div class="text-[11px] uppercase tracking-wider text-ink-400 font-mono">Status pills</div>
+      <div class="space-y-2">
+        <div class="inline-flex items-center gap-2 h-7 px-3 rounded-full bg-white/5 border border-white/5">
+          <span class="relative w-2 h-2"><span class="absolute inset-0 rounded-full bg-ok animate-pulse-ring"></span></span>
+          <span class="text-[12px]">All systems operational</span>
+        </div><br/>
+        <div class="inline-flex items-center gap-2 h-7 px-3 rounded-full bg-cobalt-500/10 border border-cobalt-500/30 text-cobalt-200">
+          <i data-lucide="zap" class="!w-3 !h-3"></i>
+          <span class="text-[12px] font-mono">3 runs · 1.2M tok/s</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODAL + TOAST -->
+<section id="overlays" class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.2em] font-mono text-cobalt-300">06 · Overlays</div>
+      <h2 class="mt-1 text-[28px] font-semibold tracking-tight">Modal · Toast · Tooltip</h2>
+    </div>
+  </div>
+  <div class="divider-grad mb-8"></div>
+  <div class="grid grid-cols-3 gap-6">
+    <!-- modal inline showcase -->
+    <div class="col-span-2 relative p-8 rounded-xl border border-white/5 bg-ink-950/70 min-h-[360px] dotgrid overflow-hidden">
+      <div class="absolute inset-0 bg-gradient-to-br from-cobalt-500/5 to-transparent"></div>
+      <div class="relative mx-auto max-w-md rounded-xl border border-white/10 bg-ink-900/90 backdrop-blur-xl shadow-glow-lg">
+        <div class="p-6 border-b border-white/5 flex items-start gap-3">
+          <div class="w-10 h-10 rounded-lg bg-warn/10 border border-warn/30 grid place-items-center text-warn"><i data-lucide="alert-triangle"></i></div>
+          <div class="flex-1">
+            <h3 class="text-[15px] font-semibold">Delete "Sales Analyst Bot"?</h3>
+            <p class="mt-1 text-[13px] text-ink-300 leading-relaxed">This will remove the employee, its skills, and all associated traces. This action cannot be undone.</p>
+          </div>
+          <button class="w-7 h-7 rounded-md hover:bg-white/5 grid place-items-center text-ink-400"><i data-lucide="x"></i></button>
+        </div>
+        <div class="p-6 space-y-3">
+          <label class="block text-[11px] uppercase tracking-wider text-ink-400 font-mono">Type the name to confirm</label>
+          <input class="w-full h-9 px-3 rounded-md bg-ink-800 border border-white/5 text-[13px] font-mono ring-focus" placeholder="Sales Analyst Bot" />
+        </div>
+        <div class="p-4 border-t border-white/5 bg-ink-950/40 flex items-center justify-end gap-2">
+          <button class="h-9 px-4 rounded-md hover:bg-white/5 text-[13px]">Cancel <span class="kbd ml-1">Esc</span></button>
+          <button class="h-9 px-4 rounded-md bg-bad/90 hover:bg-bad text-white text-[13px] inline-flex items-center gap-2"><i data-lucide="trash-2"></i> Delete permanently</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- toasts stacked -->
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-3">
+      <div class="text-[11px] uppercase tracking-wider text-ink-400 font-mono">Toast / Notification</div>
+      <div class="rounded-md border border-ok/30 bg-ok/10 p-3 flex items-start gap-3">
+        <i data-lucide="check-circle-2" class="text-ok mt-0.5"></i>
+        <div class="flex-1">
+          <div class="text-[13px] font-medium">Employee saved</div>
+          <div class="text-[11px] text-ink-300 mt-0.5">Sales Analyst · updated 3 skills</div>
+        </div>
+        <i data-lucide="x" class="text-ink-400 cursor-pointer"></i>
+      </div>
+      <div class="rounded-md border border-cobalt-500/30 bg-cobalt-500/10 p-3 flex items-start gap-3">
+        <i data-lucide="info" class="text-cobalt-300 mt-0.5"></i>
+        <div class="flex-1">
+          <div class="text-[13px] font-medium">New skill available</div>
+          <div class="text-[11px] text-ink-300 mt-0.5">`allhands.forecast_v2` in marketplace</div>
+        </div>
+      </div>
+      <div class="rounded-md border border-warn/30 bg-warn/10 p-3 flex items-start gap-3">
+        <i data-lucide="alert-triangle" class="text-warn mt-0.5"></i>
+        <div class="flex-1">
+          <div class="text-[13px] font-medium">Approval needed</div>
+          <div class="text-[11px] text-ink-300 mt-0.5">Bug Fixer → delete_file(app.py)</div>
+          <div class="mt-2 flex gap-2">
+            <button class="h-7 px-3 text-[12px] rounded bg-warn/20 text-warn">Review</button>
+          </div>
+        </div>
+      </div>
+      <!-- tooltip sample -->
+      <div class="pt-3 border-t border-white/5 text-[11px] uppercase tracking-wider text-ink-400 font-mono">Tooltip</div>
+      <div class="relative inline-block">
+        <button class="h-8 px-3 rounded-md border border-white/10 text-[12px] inline-flex items-center gap-1.5">Hover me <i data-lucide="info"></i></button>
+        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap px-2.5 py-1.5 rounded-md bg-ink-700 border border-white/10 text-[11px] text-ink-100 shadow-glow-sm">
+          Opens the run inspector · <span class="kbd !py-0 !px-1">I</span>
+          <div class="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-ink-700 border-b border-r border-white/10 rotate-45 -mt-1"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMAND PALETTE + CHAT -->
+<section id="composite" class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.2em] font-mono text-cobalt-300">07 · Composite</div>
+      <h2 class="mt-1 text-[28px] font-semibold tracking-tight">Command palette · Chat · Code</h2>
+    </div>
+  </div>
+  <div class="divider-grad mb-8"></div>
+
+  <div class="grid grid-cols-3 gap-6">
+    <!-- command palette -->
+    <div class="rounded-xl border border-white/10 bg-ink-900/95 backdrop-blur-xl shadow-glow-lg overflow-hidden">
+      <div class="flex items-center gap-2 px-4 h-12 border-b border-white/5">
+        <i data-lucide="search" class="text-cobalt-300"></i>
+        <input class="flex-1 bg-transparent text-[14px] outline-none placeholder:text-ink-500" value="create emp" />
+        <span class="kbd">Esc</span>
+      </div>
+      <div class="py-2">
+        <div class="px-4 py-1 text-[10px] uppercase tracking-wider text-ink-400 font-mono">Suggestions</div>
+        <div class="px-2">
+          <div class="flex items-center gap-3 px-3 py-2 rounded-md bg-cobalt-500/10 text-white">
+            <i data-lucide="user-plus" class="text-cobalt-300"></i>
+            <span class="text-[13px]">Create <b>employee</b></span>
+            <span class="ml-auto text-[11px] text-ink-400 font-mono">↵</span>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 rounded-md text-ink-200">
+            <i data-lucide="wand-2" class="text-ink-400"></i>
+            <span class="text-[13px]">Create <b>skill</b> from SKILL.md</span>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 rounded-md text-ink-200">
+            <i data-lucide="plug" class="text-ink-400"></i>
+            <span class="text-[13px]">Add <b>MCP server</b></span>
+          </div>
+        </div>
+        <div class="px-4 py-1 text-[10px] uppercase tracking-wider text-ink-400 font-mono mt-2">Recent</div>
+        <div class="px-2">
+          <div class="flex items-center gap-3 px-3 py-2 rounded-md text-ink-300 text-[13px]"><i data-lucide="clock" class="text-ink-400"></i> run_01HXZ…a3f <span class="ml-auto text-[10px] font-mono text-ink-500">2m</span></div>
+          <div class="flex items-center gap-3 px-3 py-2 rounded-md text-ink-300 text-[13px]"><i data-lucide="clock" class="text-ink-400"></i> Bug Fixer · error <span class="ml-auto text-[10px] font-mono text-ink-500">14m</span></div>
+        </div>
+      </div>
+      <div class="px-4 h-9 border-t border-white/5 bg-ink-950/50 flex items-center gap-3 text-[10px] font-mono text-ink-400">
+        <span class="flex items-center gap-1"><span class="kbd">↑↓</span> navigate</span>
+        <span class="flex items-center gap-1"><span class="kbd">↵</span> select</span>
+        <span class="flex items-center gap-1 ml-auto"><span class="kbd">⌘K</span> toggle</span>
+      </div>
+    </div>
+
+    <!-- chat bubbles -->
+    <div class="col-span-2 rounded-xl border border-white/5 bg-ink-900/50 overflow-hidden flex flex-col">
+      <div class="h-11 px-4 border-b border-white/5 flex items-center gap-2 bg-ink-800/40">
+        <span class="w-6 h-6 rounded-full bg-gradient-to-br from-cobalt-400 to-cobalt-700 grid place-items-center text-[10px] font-semibold">SA</span>
+        <span class="text-[13px] font-medium">Sales Analyst</span>
+        <span class="inline-flex items-center gap-1.5 ml-2 text-[11px] text-ok"><span class="w-1.5 h-1.5 rounded-full bg-ok"></span> Ready</span>
+        <div class="ml-auto flex items-center gap-1.5 text-[11px] text-ink-400 font-mono">Opus 4.7 · Checkpoint 12</div>
+      </div>
+      <div class="flex-1 p-5 space-y-4 overflow-y-auto scrollbar-thin" style="max-height:420px">
+        <!-- user -->
+        <div class="flex items-start gap-3 justify-end">
+          <div class="max-w-md p-3 rounded-xl rounded-tr-sm bg-cobalt-500 text-white text-[13px] shadow-glow-sm">
+            What were last quarter's top-3 churn drivers? Compare to Q3.
+          </div>
+          <div class="w-7 h-7 rounded-full bg-ink-700 grid place-items-center text-[11px] font-semibold">You</div>
+        </div>
+        <!-- agent reasoning -->
+        <div class="flex items-start gap-3">
+          <div class="w-7 h-7 rounded-full bg-gradient-to-br from-cobalt-400 to-cobalt-700 grid place-items-center text-[10px] font-semibold">SA</div>
+          <div class="max-w-md space-y-2">
+            <div class="px-3 py-2 rounded-md border border-cobalt-500/20 bg-cobalt-500/5 text-[11px] text-cobalt-200 font-mono flex items-center gap-2">
+              <i data-lucide="brain" class="!w-3 !h-3"></i> reasoning · 312 tokens
+              <i data-lucide="chevron-down" class="!w-3 !h-3 ml-auto"></i>
+            </div>
+            <div class="px-3 py-2 rounded-md border border-white/5 bg-ink-800/60 text-[11px] font-mono text-ink-200 flex items-center gap-2">
+              <i data-lucide="database" class="!w-3 !h-3 text-cobalt-300"></i>
+              <span>tool: <b class="text-cobalt-200">run_sql</b>(churn_analysis_q3_q4)</span>
+              <span class="ml-auto text-ok">✓ 842ms</span>
+            </div>
+            <div class="p-3 rounded-xl rounded-tl-sm bg-ink-800 border border-white/5 text-[13px] leading-relaxed">
+              Top-3 Q4 churn drivers vs Q3:
+              <ol class="mt-2 space-y-1 text-ink-200">
+                <li>1. <b>Pricing confusion</b> — up 34% QoQ</li>
+                <li>2. <b>Onboarding drop-off</b> — up 18%</li>
+                <li>3. <b>Feature discoverability</b> — up 11%</li>
+              </ol>
+              <div class="mt-3 pt-3 border-t border-white/5 text-[11px] text-ink-400 font-mono">sources: billing_events · support_tickets · 42 rows scanned</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- input -->
+      <div class="p-3 border-t border-white/5 bg-ink-950/40">
+        <div class="flex items-center gap-2 h-11 px-3 rounded-lg border border-white/10 bg-ink-800 focus-within:border-cobalt-500/60 focus-within:shadow-glow-sm transition">
+          <i data-lucide="plus" class="text-ink-400"></i>
+          <input class="flex-1 bg-transparent text-[13px] outline-none placeholder:text-ink-500" placeholder="Ask anything · Shift+↵ for newline" />
+          <span class="kbd">⌘↵</span>
+          <button class="w-7 h-7 rounded-md bg-cobalt-500 grid place-items-center text-white shadow-glow-sm"><i data-lucide="arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- code block -->
+  <div class="mt-6 rounded-xl border border-white/5 bg-ink-950/80 overflow-hidden">
+    <div class="flex items-center gap-2 px-4 h-10 border-b border-white/5 bg-ink-900/60">
+      <i data-lucide="file-code-2" class="text-cobalt-300"></i>
+      <span class="text-[12px] font-mono text-ink-300">employees/sales_analyst.yaml</span>
+      <div class="ml-auto flex items-center gap-2 text-[11px] font-mono text-ink-400">
+        <button class="h-6 px-2 rounded hover:bg-white/5 inline-flex items-center gap-1"><i data-lucide="copy" class="!w-3 !h-3"></i> copy</button>
+        <span>yaml · 24 lines</span>
+      </div>
+    </div>
+    <pre class="p-5 text-[12px] font-mono leading-6 overflow-x-auto scrollbar-thin"><span class="text-ink-400"># allhands employee definition</span>
+<span class="text-cobalt-300">id</span><span class="text-ink-400">:</span> <span class="text-ok">sales_analyst</span>
+<span class="text-cobalt-300">name</span><span class="text-ink-400">:</span> <span class="text-ok">"Sales Analyst"</span>
+<span class="text-cobalt-300">model_ref</span><span class="text-ink-400">:</span> <span class="text-ok">anthropic/claude-opus-4-7</span>
+<span class="text-cobalt-300">skill_ids</span><span class="text-ink-400">:</span>
+  <span class="text-ink-400">-</span> <span class="text-ok">allhands.builtin.run_sql</span>
+  <span class="text-ink-400">-</span> <span class="text-ok">allhands.builtin.forecast_v2</span>
+<span class="text-cobalt-300">max_iterations</span><span class="text-ink-400">:</span> <span class="text-warn">12</span>
+<span class="text-cobalt-300">system_prompt</span><span class="text-ink-400">: |</span>
+  <span class="text-ink-200">You are a precise, terse analyst.</span>
+  <span class="text-ink-200">Cite sources. Never hallucinate.</span></pre>
+  </div>
+</section>
+
+<!-- SIDEBAR + EMPTY STATE -->
+<section id="layouts" class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.2em] font-mono text-cobalt-300">08 · Layouts</div>
+      <h2 class="mt-1 text-[28px] font-semibold tracking-tight">Sidebar · Empty state</h2>
+    </div>
+  </div>
+  <div class="divider-grad mb-8"></div>
+  <div class="grid grid-cols-3 gap-6">
+    <!-- full sidebar -->
+    <div class="rounded-xl border border-white/5 bg-ink-900/50 p-4 space-y-4">
+      <div class="flex items-center gap-2 px-2">
+        <div class="w-7 h-7 rounded-md bg-gradient-to-br from-cobalt-500 to-cobalt-700 grid place-items-center text-[11px] font-bold">ah</div>
+        <div>
+          <div class="text-[12px] font-semibold">Acme Inc.</div>
+          <div class="text-[10px] text-ink-400 font-mono">workspace</div>
+        </div>
+        <i data-lucide="chevrons-up-down" class="ml-auto text-ink-400"></i>
+      </div>
+      <div class="space-y-0.5">
+        <div class="text-[10px] uppercase tracking-wider text-ink-400 font-mono px-2 mt-4 mb-2">Workspace</div>
+        <div class="group relative flex items-center gap-2 px-2 py-1.5 rounded-md bg-cobalt-500/10 text-white">
+          <span class="absolute left-0 top-1 bottom-1 w-[2px] bg-cobalt-500 rounded-full"></span>
+          <i data-lucide="users" class="text-cobalt-300"></i><span class="text-[13px]">Employees</span>
+          <span class="ml-auto text-[10px] font-mono text-ink-400">37</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-ink-200">
+          <i data-lucide="wand-2" class="text-ink-400"></i><span class="text-[13px]">Skills</span>
+          <span class="ml-auto text-[10px] font-mono text-ink-500">124</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-ink-200">
+          <i data-lucide="plug" class="text-ink-400"></i><span class="text-[13px]">Gateway</span>
+          <span class="ml-auto px-1.5 h-4 text-[9px] rounded bg-cobalt-500 text-white font-mono">5</span>
+        </div>
+        <div class="text-[10px] uppercase tracking-wider text-ink-400 font-mono px-2 mt-4 mb-2">Observe</div>
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-ink-200">
+          <i data-lucide="activity" class="text-ink-400"></i><span class="text-[13px]">Traces</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 text-ink-200">
+          <i data-lucide="shield-check" class="text-ink-400"></i><span class="text-[13px]">Approvals</span>
+          <span class="ml-auto w-1.5 h-1.5 rounded-full bg-warn"></span>
+        </div>
+      </div>
+      <div class="pt-4 border-t border-white/5">
+        <div class="p-3 rounded-lg bg-gradient-to-br from-cobalt-500/15 to-transparent border border-cobalt-500/25">
+          <div class="text-[11px] text-cobalt-200 font-mono uppercase tracking-wider">Usage</div>
+          <div class="mt-2 h-1.5 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full w-[62%] bg-gradient-to-r from-cobalt-500 to-cobalt-glow"></div>
+          </div>
+          <div class="mt-1.5 text-[10px] text-ink-300 font-mono">18.4M / 30M tokens</div>
+          <button class="mt-3 w-full h-7 rounded-md bg-cobalt-500 hover:bg-cobalt-600 text-white text-[12px] font-medium">Upgrade</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- empty state -->
+    <div class="col-span-2 rounded-xl border border-white/5 bg-ink-900/50 p-12 grid place-items-center dotgrid relative overflow-hidden">
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[160px] bg-cobalt-500/15 blur-[80px] rounded-full"></div>
+      <div class="relative text-center max-w-sm">
+        <div class="mx-auto w-14 h-14 rounded-xl bg-cobalt-500/10 border border-cobalt-500/25 grid place-items-center text-cobalt-300 shadow-glow-sm">
+          <i data-lucide="users" class="!w-6 !h-6"></i>
+        </div>
+        <h3 class="mt-5 text-[18px] font-semibold tracking-tight">No employees yet</h3>
+        <p class="mt-2 text-[13px] text-ink-300 leading-relaxed">Hire your first digital employee. Give them skills, tools, and a job — they'll start working immediately.</p>
+        <div class="mt-6 flex items-center justify-center gap-2">
+          <button class="h-10 px-4 rounded-lg bg-cobalt-500 hover:bg-cobalt-600 text-white text-[13px] font-medium inline-flex items-center gap-2 shadow-glow"><i data-lucide="sparkles"></i> Hire employee</button>
+          <button class="h-10 px-4 rounded-lg hover:bg-white/5 text-[13px] text-ink-200 inline-flex items-center gap-2"><i data-lucide="book-open"></i> Read the docs</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AVATAR + MISC -->
+<section id="misc" class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.2em] font-mono text-cobalt-300">09 · Misc</div>
+      <h2 class="mt-1 text-[28px] font-semibold tracking-tight">Avatar · Progress · Color tokens</h2>
+    </div>
+  </div>
+  <div class="divider-grad mb-8"></div>
+  <div class="grid grid-cols-3 gap-6">
+    <!-- avatars -->
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-4">
+      <div class="text-[11px] uppercase tracking-wider text-ink-400 font-mono">Avatar</div>
+      <div class="flex items-center gap-3">
+        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-cobalt-400 to-cobalt-700 grid place-items-center text-[9px] font-bold">SA</div>
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-ok/70 to-ok/30 grid place-items-center text-[11px] font-semibold">LS</div>
+        <div class="relative w-10 h-10 rounded-full bg-gradient-to-br from-warn/70 to-warn/30 grid place-items-center text-[12px] font-semibold">WK<span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-ok border-2 border-ink-900"></span></div>
+        <div class="relative w-12 h-12 rounded-full bg-gradient-to-br from-cobalt-400 to-cobalt-700 grid place-items-center text-[14px] font-semibold">AI</div>
+      </div>
+      <div class="flex -space-x-2">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-cobalt-400 to-cobalt-700 border-2 border-ink-900 grid place-items-center text-[10px] font-semibold">SA</div>
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-ok/70 to-ok/30 border-2 border-ink-900 grid place-items-center text-[10px] font-semibold">CM</div>
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-warn/70 to-warn/30 border-2 border-ink-900 grid place-items-center text-[10px] font-semibold">BF</div>
+        <div class="w-8 h-8 rounded-full bg-ink-700 border-2 border-ink-900 grid place-items-center text-[10px] text-ink-300 font-mono">+5</div>
+      </div>
+    </div>
+    <!-- progress -->
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-4">
+      <div class="text-[11px] uppercase tracking-wider text-ink-400 font-mono">Progress</div>
+      <div>
+        <div class="flex items-center justify-between text-[11px] text-ink-300 font-mono mb-1"><span>Indexing skills…</span><span>62%</span></div>
+        <div class="h-1.5 rounded-full bg-white/5 overflow-hidden">
+          <div class="h-full w-[62%] bg-gradient-to-r from-cobalt-500 to-cobalt-glow relative">
+            <div class="absolute inset-0 bg-white/30 animate-pulse-ring"></div>
+          </div>
+        </div>
+      </div>
+      <!-- ring -->
+      <div class="flex items-center gap-4">
+        <svg width="64" height="64" viewBox="0 0 64 64" class="-rotate-90">
+          <circle cx="32" cy="32" r="26" stroke="rgba(255,255,255,0.08)" stroke-width="5" fill="none"/>
+          <circle cx="32" cy="32" r="26" stroke="#2E5BFF" stroke-width="5" fill="none" stroke-linecap="round"
+            stroke-dasharray="163.36" stroke-dashoffset="48"/>
+        </svg>
+        <div>
+          <div class="text-[22px] font-semibold tracking-tight">71%</div>
+          <div class="text-[11px] text-ink-400 font-mono">step 3 of 4</div>
+        </div>
+      </div>
+    </div>
+    <!-- color token palette -->
+    <div class="p-6 rounded-xl border border-white/5 bg-ink-900/50 space-y-3">
+      <div class="text-[11px] uppercase tracking-wider text-ink-400 font-mono">Color tokens</div>
+      <div class="grid grid-cols-5 gap-2">
+        <div class="aspect-square rounded-md bg-cobalt-50"></div>
+        <div class="aspect-square rounded-md bg-cobalt-200"></div>
+        <div class="aspect-square rounded-md bg-cobalt-400"></div>
+        <div class="aspect-square rounded-md bg-cobalt-500 shadow-glow-sm"></div>
+        <div class="aspect-square rounded-md bg-cobalt-700"></div>
+      </div>
+      <div class="grid grid-cols-5 gap-2">
+        <div class="aspect-square rounded-md bg-ink-50"></div>
+        <div class="aspect-square rounded-md bg-ink-200"></div>
+        <div class="aspect-square rounded-md bg-ink-500"></div>
+        <div class="aspect-square rounded-md bg-ink-800 border border-white/10"></div>
+        <div class="aspect-square rounded-md bg-ink-950 border border-white/10"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 pt-1">
+        <div class="h-6 rounded-md bg-ok/20 border border-ok/40 text-ok text-[10px] font-mono grid place-items-center">ok</div>
+        <div class="h-6 rounded-md bg-warn/20 border border-warn/40 text-warn text-[10px] font-mono grid place-items-center">warn</div>
+        <div class="h-6 rounded-md bg-bad/20 border border-bad/40 text-bad text-[10px] font-mono grid place-items-center">bad</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<!-- FOOTER -->
+<footer class="mt-16 border-t border-white/5 bg-ink-950/60">
+  <div class="max-w-[1400px] mx-auto px-8 py-10 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-7 h-7 rounded-md bg-gradient-to-br from-cobalt-500 to-cobalt-700 grid place-items-center text-[11px] font-bold">ah</div>
+      <div class="text-[12px] text-ink-400">
+        <span class="text-ink-200 font-medium">allhands</span> · V1 Cobalt Precision · design proposal · <span class="font-mono">2026-04-23</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-[11px] font-mono text-ink-400">
+      <a class="hover:text-ink-200">v2 azure-live →</a>
+      <a class="hover:text-ink-200">v3 neon-cyber →</a>
+      <a class="hover:text-ink-200">index</a>
+    </div>
+  </div>
+</footer>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

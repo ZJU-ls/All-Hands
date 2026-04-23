@@ -12,7 +12,12 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+// Post-ADR 0016: design-lab split into two routes —
+//   /design-lab         · tokens + atom contract demo
+//   /design-lab/render  · live render-tool gallery
+// Coverage is satisfied when the combined source mentions each registered name.
 const DESIGN_LAB = resolve(__dirname, "../app/design-lab/page.tsx");
+const RENDER_GALLERY = resolve(__dirname, "../app/design-lab/render/page.tsx");
 
 // Source of truth: component-registry.ts registers these. Keep in lockstep.
 // For Viz.Table / Viz.KV etc we import the bare member name (Table / KV)
@@ -40,16 +45,17 @@ const REGISTERED = [
 ];
 
 describe("I-0012 · design-lab render library coverage", () => {
-  const src = readFileSync(DESIGN_LAB, "utf8");
+  const src =
+    readFileSync(DESIGN_LAB, "utf8") + "\n" + readFileSync(RENDER_GALLERY, "utf8");
 
   for (const { key, aliases } of REGISTERED) {
     it(`hosts a live sample for ${key}`, () => {
       const hit = aliases.some((a) => src.includes(a));
       expect(
         hit,
-        `design-lab/page.tsx must mention ${key} (tried: ${aliases.join(
+        `design-lab must mention ${key} (tried: ${aliases.join(
           ", ",
-        )}). See I-0012.`,
+        )}). Add a sample in /design-lab/render/page.tsx. See I-0012.`,
       ).toBe(true);
     });
   }

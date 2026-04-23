@@ -1,0 +1,74 @@
+/* ==========================================================================
+ * Theme Pack · brand-blue · light mode
+ * Derived from design-system/proposals/v2-azure-live.html
+ *
+ * Scope:  :root[data-theme-pack="brand-blue"].light
+ * Values are the source of truth. Do not write hex inline in JSX.
+ * ======================================================================== */
+
+:root[data-theme-pack="brand-blue"].light,
+:root.light:not([data-theme-pack]) {
+  /* Surfaces — paper stack from V2. White-forward but not stark. */
+  --color-bg:            #F6F8FC;
+  --color-surface:       #FFFFFF;
+  --color-surface-2:     #EDF1F8;
+  --color-surface-3:     #DFE6F0;
+  --color-surface-4:     #B9C4D4;
+
+  --color-border:        #DFE6F0;
+  --color-border-strong: #B9C4D4;
+
+  --color-text:          #141A26;
+  --color-text-muted:    #5C667A;
+  --color-text-subtle:   #8B96AB;
+
+  /* Primary — royal azure. Saturated but print-friendly on white. */
+  --color-primary:        #0A5BFF;
+  --color-primary-hover:  #0848D1;
+  --color-primary-fg:     #FFFFFF;
+  --color-primary-muted:  rgba(10, 91, 255, 0.10);
+  --color-primary-glow:   rgba(10, 91, 255, 0.22); /* unused in light · kept for parity */
+
+  /* Accent — sky highlight for gradients / subtle emphasis. */
+  --color-accent:         #4EA8FF;
+
+  /* Semantics — carefully picked for AA contrast on #F6F8FC + #FFFFFF. */
+  --color-success:        #0FA57A;
+  --color-warning:        #D97706;
+  --color-danger:         #DC2626;
+
+  --color-success-soft:   rgba(15, 165, 122, 0.10);
+  --color-warning-soft:   rgba(217, 119, 6, 0.10);
+  --color-danger-soft:    rgba(220, 38, 38, 0.10);
+  --color-primary-soft:   rgba(10, 91, 255, 0.10);
+  --color-surface-hover:  rgba(10, 91, 255, 0.05);
+
+  /* Roles (chat/trace speaker tags). Same hue as primary for "user",
+   * differentiated neighbours for the three agent kinds. */
+  --color-role-user:      #0A5BFF;
+  --color-role-lead:      #6366F1;
+  --color-role-worker:    #0FA57A;
+  --color-role-tool:      #D97706;
+
+  /* Data-viz — ADR 0012 · light variant calibrated against #FFFFFF card. */
+  --color-viz-1: #0A5BFF; /* azure (matches primary) */
+  --color-viz-2: #0FA57A; /* emerald */
+  --color-viz-3: #D97706; /* amber */
+  --color-viz-4: #DC2626; /* rose */
+  --color-viz-5: #6366F1; /* indigo */
+  --color-viz-6: #0EA5E9; /* sky */
+
+  /* Shadows — "soft" family, subtle blue-tinted like V2. */
+  --shadow-soft-sm:        0 1px 2px rgba(10, 43, 120, 0.04), 0 1px 3px rgba(10, 43, 120, 0.06);
+  --shadow-soft:           0 4px 12px -2px rgba(10, 43, 120, 0.06), 0 2px 4px rgba(10, 43, 120, 0.04);
+  --shadow-soft-lg:        0 24px 64px -24px rgba(10, 91, 255, 0.18), 0 8px 24px -8px rgba(10, 43, 120, 0.08);
+  --shadow-pop:            0 2px 0 rgba(10, 91, 255, 0.90);
+
+  /* Glows — present on light too, for CTAs / focus rings. Kept subtle. */
+  --shadow-glow-sm:        0 0 0 3px rgba(10, 91, 255, 0.15);
+  --shadow-glow:           0 0 0 4px rgba(10, 91, 255, 0.20);
+  --shadow-glow-lg:        0 12px 48px -12px rgba(10, 91, 255, 0.35);
+
+  /* Inset hairline — 1px top highlight on cards for depth in light. */
+  --shadow-inset-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.80);
+}

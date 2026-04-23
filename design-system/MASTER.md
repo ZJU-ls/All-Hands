@@ -1,437 +1,422 @@
 # allhands · Design System MASTER (Tactical Reference)
 
-> **快速速查 · 给 Claude 代码会话用。规范细节看 [product/03-visual-design.md](../product/03-visual-design.md)。**
+> 给 Claude 代码会话用的速查表。规范细节看 [../product/03-visual-design.md](../product/03-visual-design.md)。
+> 契约变更流程:先改 03-visual-design.md → 再改 globals.css / tailwind.config.ts / themes/ → 再同步本文件。
+> 本文件与 03-visual-design.md 冲突时以后者为准。
 >
-> 原则优先级:`product/03-visual-design.md` > 本文件 > 现有代码。
-> 本文件与 `03-visual-design.md` 冲突时,以后者为准并立即更新本文件。
+> **当前视觉契约:Brand Blue Dual Theme**(见 [../product/adr/0016-brand-blue-dual-theme.md](../product/adr/0016-brand-blue-dual-theme.md))· 旧 Linear Precise 作废。
 
 ---
 
 ## 0. 每次开发前的自检
 
-写任何 `web/` 组件之前,必须回答 yes:
+写任何 `web/` 组件前,逐条过:
 
-- [ ] 我没打算装**第三方** icon 库(Lucide / Heroicons / Phosphor / Tabler / Font Awesome) — 自有 icon 集 `@/components/icons` 允许,见 §3
-- [ ] 我没在 JSX 里写十六进制或 Tailwind 原色类(`bg-blue-500`、`text-zinc-400`)
-- [ ] 我用的颜色都来自 `bg-*`、`text-*`、`border-*`、`primary`、`success`、`warning`、`danger` token
-- [ ] 要显示 provider / model 品牌,用 `<BrandMark />`(§3.5 豁免,走厂商彩色 SVG),不要自己拼 `<img>`
-- [ ] 我没加 `box-shadow` 做交互反馈(hover 只改边框)
-- [ ] 我的过渡时长来自 `--dur-*` 或 Tailwind `duration-150 / 220 / 320`
-- [ ] 激活 / 选中状态用 **2px 左色条**,不用背景色高亮
-- [ ] emoji 出现的地方,我确认过是"用户内容"而不是"UI 装饰"
+- [ ] **颜色走 token**:`bg-bg` / `bg-surface` / `text-text-muted` / `bg-primary` 等。JSX 不写十六进制,也不写 `bg-blue-500` / `text-zinc-400`。
+- [ ] **双主题都跑过**:组件在 `data-theme="light"` 与 `data-theme="dark"` 下都保留原本语义(激活 / 层级 / 状态)。
+- [ ] **Icon 走 `<Icon name="..." />`**:不直接 `import 'lucide-react'`,特殊符号走 `web/components/icons/`。
+- [ ] **激活 / 选中用规定语言**:见 §4.1,sidebar / tabs / CTA 各有固定方言。
+- [ ] **圆角走 token**:`rounded` / `rounded-md` / `rounded-lg` / `rounded-xl`,不写 `rounded-[13px]`。
+- [ ] **Focus ring 走 `ring-primary/20` + `border-primary`**:所有 focusable 元素必须键盘可见。
+- [ ] **动效时长走 `--dur-*`**:subtle hover 位移 ≤ 2px,不写 `duration-[450ms]`。
+- [ ] **不装 JS 动画库**:没有 Framer Motion / GSAP,CSS + Tailwind keyframes 足够。
+- [ ] **Provider / model logo 走 `<BrandMark />`**:不自己拼 `<img>`。
+- [ ] **键盘可达 + AA 对比度**:tab 顺序合理,灰字在 bg-surface 上 ≥ 4.5:1。
 
 ---
 
-## 1. Token 速查(Tailwind 类)
+## 1. Token 速查
 
-### 颜色
+### 1.1 颜色 token → Tailwind 类
 
-| 想要 | 用这个类 | 避免 |
-|---|---|---|
-| 页面背景 | `bg-bg` | `bg-white`、`bg-zinc-950` |
-| 卡片 / 侧栏 | `bg-surface` | `bg-neutral-900` |
-| 输入底 / hover | `bg-surface-2` | `bg-zinc-800` |
-| 骨架 / 微差 | `bg-surface-3` | — |
-| 正文 | `text-text` | `text-white`、`text-black` |
-| 次要 | `text-text-muted` | `text-zinc-400` |
-| 提示 | `text-text-subtle` | `text-zinc-500` |
-| 边框 | `border-border` | `border-zinc-800` |
-| 强边框 (hover) | `border-border-strong` | — |
-| 主操作 | `bg-primary text-primary-fg` | `bg-blue-500`、`bg-indigo-500` |
-| hover | `hover:bg-primary-hover` | — |
-| 成功 | `text-success` / `bg-success/10` | `text-green-500` |
-| 警告 | `text-warning` / `bg-warning/10` | — |
-| 危险 | `text-danger` / `bg-danger/10` | `text-red-500` |
+| 想要 | Tailwind 类 | light 值 | dark 值 |
+|---|---|---|---|
+| 页面底 | `bg-bg` | `#F6F8FC` | `#0A0D14` |
+| 卡片 / 侧栏 | `bg-surface` | `#FFFFFF` | `#11151F` |
+| 输入底 / hover | `bg-surface-2` | `#EDF1F8` | `#1A1F2E` |
+| 微差 | `bg-surface-3` | `#DFE6F0` | `#242A3C` |
+| 更深微差 | `bg-surface-4` | `#B9C4D4` | `#3A425A` |
+| 正文 | `text-text` | `#141A26` | `#E2E6F1` |
+| 次要 | `text-text-muted` | `#5C667A` | `#8690AE` |
+| 提示 | `text-text-subtle` | `#8B96AB` | `#5A6483` |
+| 边框 | `border-border` | `#DFE6F0` | `rgba(255,255,255,.06)` |
+| 强边框 | `border-border-strong` | `#B9C4D4` | `rgba(255,255,255,.12)` |
+| 主操作 | `bg-primary text-primary-fg` | `#0A5BFF` / `#FFFFFF` | `#2E5BFF` / `#FFFFFF` |
+| primary hover | `hover:bg-primary-hover` | `#0848D1` | `#2048E6` |
+| primary 软底 | `bg-primary/10` | — | — |
+| primary 发光 | `shadow-glow-sm` / `shadow-glow` | — | `#6E8BFF` 外发光 |
+| 副强调 | `bg-accent` / `text-accent` | `#4EA8FF` | `#6E8BFF` |
+| 成功 | `text-success` / `bg-success-soft` | `#0FA57A` / `#E3F7EE` | `#2EBD85` / `rgba(46,189,133,.12)` |
+| 警告 | `text-warning` / `bg-warning-soft` | `#D97706` / `#FEF3C7` | `#F5A524` / `rgba(245,165,36,.12)` |
+| 危险 | `text-danger` / `bg-danger-soft` | `#DC2626` / `#FEE2E2` | `#F04438` / `rgba(240,68,56,.14)` |
 
-### 字体
+### 1.2 字体
 
-| 场景 | 类 |
+| | class |
 |---|---|
-| 默认 UI | 继承 `font-sans`(Inter) |
-| URL / id / trace / JSON / kbd / 方向符 | `font-mono`(JetBrains Mono) |
+| UI / 正文 | `font-sans`(Inter variable) |
+| URL / id / trace / JSON / kbd | `font-mono`(JetBrains Mono) |
 
-### 字号
+### 1.3 字号阶梯
 
-| 场景 | 类 |
+| 场景 | class |
 |---|---|
-| H1 | `text-[26px] font-semibold tracking-tight` |
-| H2 / 页标题 | `text-lg font-semibold tracking-tight` |
-| 卡片标题 / Label | `text-sm font-medium` |
-| Body | `text-[13px]` |
-| Caption / meta | `text-[11px]` |
-| 小字 / Section Label | `text-[10px] uppercase tracking-wider` |
+| Hero 大标题 (landing / empty) | `text-[72px] md:text-[84px] font-semibold tracking-tight leading-[.95]` |
+| H1 页标题 | `text-[28px] md:text-[32px] font-semibold tracking-tight` |
+| H2 / section 标题 | `text-[18px] md:text-[22px] font-semibold tracking-tight` |
+| Label / 卡片标题 | `text-[13px] font-medium` |
+| Body | `text-[13px] md:text-[14px]` |
+| Caption / meta | `text-[11px] text-text-muted` |
+| Micro / section label | `text-[10px] uppercase tracking-[0.08em] text-text-subtle` |
 
-### 圆角
+### 1.4 圆角
 
-| 类 | 尺寸 | 用途 |
+| class | 尺寸 | 用途 |
 |---|---|---|
-| `rounded-sm` | 4px | badge, kbd chip |
-| `rounded` | 6px | button, input |
-| `rounded-md` | 8px | card |
-| `rounded-lg` | 12px | 消息气泡 |
+| `rounded-sm` | 4px | chip / kbd |
+| `rounded` | 6px | button 默认 |
+| `rounded-md` | 8px | input / small card |
+| `rounded-lg` | 12px | card / message |
 | `rounded-xl` | 16px | modal |
+| `rounded-2xl` | 20-24px | hero / featured card |
 
-### 过渡
+### 1.5 间距
 
-| 类 | 用于 |
+Tailwind 默认单位。常用 `gap-2|3|4|5|6|8|12` = `8|12|16|20|24|32|48 px`。
+
+### 1.6 阴影
+
+| class | 用途 |
 |---|---|
-| `transition-colors duration-150` | 默认(按钮、边框、输入聚焦) |
-| `transition-colors duration-[180ms]` | 卡片 hover |
-| `transition-opacity duration-150` | opacity 变化 |
-| 禁止 | `transition-transform`(除 arrow ≤ 2px 位移) |
+| `shadow-soft-sm` | 小卡片 hover(light) |
+| `shadow-soft` | card resting / modal(light) |
+| `shadow-soft-lg` | elevated modal / popover(light) |
+| `shadow-pop` | dropdown / command palette(light) |
+| `shadow-glow-sm` | primary 按钮 hover(dark) |
+| `shadow-glow` | 激活卡片 / CTA(dark) |
+| `shadow-glow-lg` | hero orb / floating(dark) |
+| `shadow-hairline` | 1px 分隔线替代(dark) |
 
----
+阴影在主题间自动切换(token 级别),组件不需要写 `dark:shadow-*`。
 
-## 2. 组件模板(直接复制)
+### 1.7 过渡
 
-### 2.1 主按钮
-
-```tsx
-<button className="rounded bg-primary hover:bg-primary-hover disabled:opacity-40 text-primary-fg text-[12px] font-medium px-3 py-1.5 transition-colors duration-150">
-  新建供应商
-</button>
-```
-
-主要 CTA(稍大):`px-4 py-2 text-sm`。
-
-### 2.2 次按钮
-
-```tsx
-<button className="rounded border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text text-[12px] px-3 py-1.5 transition-colors duration-150">
-  取消
-</button>
-```
-
-### 2.3 Ghost 按钮(列表行内操作)
-
-```tsx
-<button className="rounded border border-border hover:bg-surface-2 text-text-muted hover:text-text text-xs px-2 py-1 transition-colors duration-150">
-  测试
-</button>
-```
-
-### 2.4 危险按钮
-
-```tsx
-<button className="rounded border border-border text-danger hover:bg-danger/10 hover:border-danger/50 text-xs px-2 py-1 transition-colors duration-150">
-  删除
-</button>
-```
-
-### 2.5 输入框
-
-```tsx
-<input className="w-full rounded-md bg-bg border border-border focus:border-primary outline-none px-3 py-2 text-sm text-text placeholder-text-subtle transition-colors duration-150" />
-```
-
-URL / key 字段加 `font-mono`。
-
-### 2.6 卡片(hover 态)
-
-```tsx
-<div className="rounded-md border border-border hover:border-border-strong bg-surface px-4 py-3 transition-colors duration-[180ms]">
-  ...
-</div>
-```
-
-### 2.7 激活色条(侧栏 / 选中卡片)
-
-```tsx
-<div className="relative h-7 px-3 flex items-center text-[12px] text-text cursor-pointer">
-  <span
-    className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-primary"
-    style={{ animation: "ah-bar-in 180ms var(--ease-out) both" }}
-  />
-  对话
-</div>
-```
-
-### 2.8 Section Label(侧栏分区)
-
-```tsx
-<div className="px-3 mt-3 mb-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-text-subtle">
-  工作区
-</div>
-```
-
-### 2.9 Badge
-
-```tsx
-{/* primary */}
-<span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">默认</span>
-{/* neutral */}
-<span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">已禁用</span>
-{/* success */}
-<span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-success/10 text-success">connected</span>
-{/* danger */}
-<span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-danger/10 text-danger">IRREVERSIBLE</span>
-{/* mono */}
-<span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text">gpt-4o-mini</span>
-```
-
-### 2.10 Kbd Chip
-
-```tsx
-<span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-border bg-surface-2 text-text-muted">⌘K</span>
-```
-
-### 2.11 Status Dot(脉动)
-
-```tsx
-<span
-  className="inline-block w-[7px] h-[7px] rounded-full mr-1.5 bg-success"
-  style={{ animation: "ah-pulse 1.6s ease-in-out infinite" }}
-/>
-```
-
-### 2.12 Spinner
-
-```tsx
-<span
-  className="inline-block w-3.5 h-3.5 rounded-full border-[1.5px]"
-  style={{
-    borderColor: "color-mix(in srgb, currentColor 25%, transparent)",
-    borderTopColor: "currentColor",
-    animation: "ah-spin 700ms linear infinite",
-  }}
-/>
-```
-
-### 2.13 Shimmer(骨架)
-
-```tsx
-<div
-  className="rounded-full h-2"
-  style={{
-    width: 180,
-    background: "linear-gradient(90deg, var(--color-surface-2) 0%, var(--color-surface-3) 50%, var(--color-surface-2) 100%)",
-    backgroundSize: "200% 100%",
-    animation: "ah-shimmer 1.4s linear infinite",
-  }}
-/>
-```
-
-### 2.14 Empty State
-
-```tsx
-<div className="rounded-md border border-dashed border-border bg-surface p-5 text-center">
-  <p className="text-[12px] text-text">尚未配置任何供应商</p>
-  <p className="text-[11px] text-text-muted mt-1">添加 OpenAI / DeepSeek / Ollama 等兼容端点即可开始</p>
-</div>
-```
-
-### 2.15 Sparkline(micro-viz · §10.1)
-
-```tsx
-<svg viewBox="0 0 100 32" className="w-full h-8 text-primary" aria-hidden="true">
-  <polyline
-    points={pts.map((y, x) => `${(x / (pts.length - 1)) * 100},${32 - Math.max(0, Math.min(1, y)) * 32}`).join(" ")}
-    stroke="currentColor"
-    strokeWidth="1.5"
-    fill="none"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  />
-</svg>
-```
-
-### 2.16 Dotgrid Backdrop(§10.2)
-
-```tsx
-<div
-  aria-hidden="true"
-  className="pointer-events-none absolute inset-0 opacity-40"
-  style={{
-    backgroundImage: "radial-gradient(var(--color-border) 1px, transparent 1px)",
-    backgroundSize: "16px 16px",
-  }}
-/>
-```
-
-### 2.17 Hairline Accent(§10.3)
-
-```tsx
-{/* 顶部 1px */}
-<div
-  aria-hidden="true"
-  className="absolute inset-x-0 top-0 h-px opacity-20"
-  style={{ background: "linear-gradient(to right, var(--color-primary), transparent)" }}
-/>
-```
-
-### 2.18 PageHeader(标题 · 计数 · 元数据 · 操作)
-
-```tsx
-<header className="flex items-end justify-between gap-4 px-8 pt-6 pb-4 border-b border-border">
-  <div className="min-w-0">
-    <div className="flex items-center gap-2">
-      <h2 className="text-lg font-semibold tracking-tight text-text">{title}</h2>
-      {count !== undefined && (
-        <span className="font-mono text-[11px] text-text-subtle">· {count}</span>
-      )}
-    </div>
-    {subtitle && <p className="text-[12px] text-text-muted mt-0.5">{subtitle}</p>}
-  </div>
-  {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
-</header>
-```
-
-### 2.19 Modal
-
-```tsx
-<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-  <div
-    className="w-full max-w-md rounded-xl border border-border bg-surface p-5"
-    style={{ animation: "ah-fade-up 220ms var(--ease-out) both" }}
-  >
-    <h2 className="text-sm font-semibold text-text mb-2">标题</h2>
-    <p className="text-[12px] text-text-muted mb-4">内容</p>
-    <div className="flex gap-2 justify-end">
-      {/* secondary 在左 */}
-      <button className="...">取消</button>
-      {/* primary / danger 在右 */}
-      <button className="...">确认</button>
-    </div>
-  </div>
-</div>
-```
-
----
-
-## 3. Icon 体系(禁止第三方 icon 库 · 自有集允许)
-
-### 3.1 三类来源
-
-| 类别 | 路径 | 用途 |
-|---|---|---|
-| **功能性几何元素** | 组件内 inline | logo / 激活色条 / 状态点 / Kbd chip / 光标 |
-| **自有 icon 集(Raycast-style)** | [`web/components/icons/`](../web/components/icons/) | nav / composer / viz / 资源类型 |
-| **Legacy 1-line SVG(5 类 · 不扩展)** | [`web/components/ui/icons.tsx`](../web/components/ui/icons.tsx) | check / arrow-right / external / copy / plus-minus |
-
-### 3.2 自有 icon 集(22 个 · ADR 0009)
-
-**规格**:viewBox `0 0 24 24` · stroke-width 2 · round caps · fill none · `stroke="currentColor"` · default `size=20`。
-
-**导入**:
-```tsx
-import { ChatIcon, UserIcon, SendIcon } from "@/components/icons";
-<ChatIcon size={20} className="text-text-muted" />
-```
-
-**当前集合**:`ChatIcon` · `UserIcon` · `SkillIcon` · `ModelIcon` · `PluginIcon` · `ProviderIcon` · `TriggerIcon` · `TaskIcon` · `CockpitIcon` · `ObservatoryIcon` · `ChannelIcon` · `MarketIcon` · `StockIcon` · `SettingsIcon` · `SearchIcon` · `SendIcon` · `StopIcon` · `AttachIcon` · `ThinkIcon` · `ExternalIcon` · `CopyIcon` · `CheckIcon`
-
-**新增流程**:写 `.tsx` → `index.ts` export → 加到 [`/design-lab` Icon Gallery](../web/app/design-lab/page.tsx) → 光学一致性自检(和相邻 icon 在 `size=20` 下要看起来一样大)。不需要 ADR,但光学不过 review 直接打回。
-
-### 3.3 非 icon 图形速查
-
-| 场景 | 用法 |
+| class | 用途 |
 |---|---|
-| 应用 logo | `LogoDotgrid`(3×3 点阵,primary 五点 X 形) |
-| 侧栏激活 | 2px primary 左色条 |
-| 快捷键提示 | Kbd Chip,mono 字符 |
-| 状态指示 | 7px 脉动色点 |
-| 方向 / 流向 | mono 字符 `→ ← ↑ ↓ ·` |
-| 键入光标 | 7×12px 矩形 `ah-caret 1s step-end infinite` |
+| `transition-colors duration-150` | 默认 · 颜色 / 边框变化(`--dur-fast`) |
+| `transition-all duration-[220ms]` | 按钮 / 输入聚焦(`--dur-base`) |
+| `duration-[320ms] ease-[cubic-bezier(.16,1,.3,1)]` | modal / 入场动效(`--dur-slow` + `--ease-out-soft`) |
+| `animate-float` | 6s 上下 6px 装饰 orb(`--dur-float`) |
 
 ---
 
-## 4. 主题切换
+## 2. Icon 速查
 
-读 `localStorage.allhands_theme` = `"light"` | `"dark"`;`layout.tsx` 内置 FOUC 保护。
-
-切换按钮 **不用 emoji** `☀/☾`,用:
-- **方案 A**:1-line SVG sun / moon(对称,1.5px stroke)
-- **方案 B**:mono 字符 `LT` / `DK`(terminal 风格)
-
-禁止使用 `dark:bg-zinc-900` 这类并行定义 —— 一律走 CSS var。
-
----
-
-## 5. Keyframes(已挂在 globals.css)
-
-```
-ah-spin      spinner
-ah-pulse     status dot
-ah-shimmer   skeleton
-ah-bar-in    activation bar(scaleY 0→1)
-ah-caret     typing cursor(blink)
-ah-dot       三点省略(1.2s, 按 150ms 错开延迟)
-ah-fade-up   modal / message 入场(4px translateY + opacity)
-```
-
----
-
-## 6. 违规示例(review 会打回)
+### 2.1 业务 icon
 
 ```tsx
-// ❌ icon 库
-import { ChevronRight, Sun, Moon } from "lucide-react";
+import { Icon } from '@/components/ui/icon'
 
-// ❌ 硬编码颜色
-<div className="bg-zinc-950 text-white">
-
-// ❌ 并行深色定义
-<div className="bg-white dark:bg-black">
-
-// ❌ 位移 hover
-<button className="hover:scale-105">
-
-// ❌ 阴影做层级
-<div className="shadow-md hover:shadow-lg">
-
-// ❌ emoji 当 UI
-<button>☀ Light</button>
-
-// ❌ 过度动画
-<div className="animate-bounce">
+<Icon name="users" size={16} className="text-text-muted" />
+<Icon name="send" size={18} />
 ```
 
-合规写法:
+底层用 Lucide,不直接 `import { Users } from 'lucide-react'`。
+
+### 2.2 常用 name(Lucide 名)
+
+`users` · `wand-2` · `plug` · `activity` · `settings` · `search` · `bell` · `plus` · `trash-2` · `check` · `x` · `arrow-right` · `arrow-up` · `chevron-down` · `chevron-left` · `chevron-right` · `more-horizontal` · `sparkles` · `zap` · `brain` · `database` · `file-code-2` · `shield-check` · `copy` · `share-2` · `download` · `filter` · `info` · `alert-triangle` · `alert-circle` · `check-circle-2` · `play-circle` · `book-open` · `send` · `user-plus` · `clock` · `calendar` · `star` · `eye` · `lock` · `unlock` · `refresh-cw`
+
+### 2.3 特殊符号
+
+`web/components/icons/` 下自有 · 仅 app logo / brand marks / 装饰字符。不为业务动作新增。
+
+### 2.4 Provider / model logo
 
 ```tsx
-// ✅ 颜色
-<div className="bg-bg text-text">
-<div className="bg-surface border border-border">
+<BrandMark provider="anthropic" size={20} />
+<BrandMark provider="openai" />
+<BrandMark provider="bailian" />
+```
 
-// ✅ hover 用边框
-<div className="border border-border hover:border-border-strong transition-colors duration-[180ms]">
+---
 
-// ✅ 激活用色条 + 不用背景
-<div className="relative">
-  <span className="absolute left-0 w-[2px] bg-primary ..." />
+## 3. 组件速查
+
+### Button
+
+```tsx
+// primary · md(sm h-8 px-3 text-[12px] · md h-10 px-4 text-[13px] · lg h-12 px-6 text-[14px])
+<button className="h-10 px-4 rounded-lg bg-primary hover:bg-primary-hover text-primary-fg text-[13px] font-medium inline-flex items-center gap-2 shadow-soft-sm dark:shadow-glow-sm transition-all duration-[220ms]">发布</button>
+```
+变体:`secondary` = `bg-surface border border-border hover:border-border-strong hover:bg-surface-2 text-text`;`ghost` = `hover:bg-surface-2 text-text-muted hover:text-text`;`danger` = `bg-danger-soft text-danger hover:bg-danger hover:text-white`。
+
+### Input
+
+```tsx
+<input className="w-full h-10 px-3 rounded-md bg-surface border border-border placeholder:text-text-subtle text-text text-[13px] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary transition-colors duration-150" />
+```
+URL / key / id 字段加 `font-mono`。
+
+### Select
+
+```tsx
+<button className="h-10 px-3 rounded-md bg-surface border border-border hover:border-border-strong text-[13px] text-text flex items-center justify-between gap-2"><span>{value}</span><Icon name="chevron-down" size={14} className="text-text-muted" /></button>
+```
+Listbox:`bg-surface shadow-pop border border-border rounded-lg p-1` · option hover `bg-surface-2` · selected `bg-primary/10 text-primary`。
+
+### Badge(solid / soft / outline × 6 色)
+
+```tsx
+// soft · solid · outline · 色位换 primary|success|warning|danger|accent|surface-3
+<span className="text-[11px] font-medium px-2 py-0.5 rounded-sm bg-primary/10 text-primary">default</span>
+<span className="text-[11px] font-medium px-2 py-0.5 rounded-sm bg-primary text-primary-fg">live</span>
+<span className="text-[11px] font-medium px-2 py-0.5 rounded-sm border border-border text-text-muted">draft</span>
+```
+
+### Card
+
+```tsx
+// default / hover / featured(top 1px primary hairline)/ glass
+<div className="rounded-lg bg-surface border border-border p-5 shadow-soft-sm" />
+<div className="rounded-lg bg-surface border border-border p-5 hover:-translate-y-px hover:shadow-soft dark:hover:shadow-glow-sm transition-all duration-[220ms]" />
+<div className="relative rounded-lg bg-surface border border-border p-5 overflow-hidden"><div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/80 via-primary to-accent" />...</div>
+<div className="rounded-2xl bg-surface/60 backdrop-blur-lg border border-white/5 shadow-glow p-6" />
+```
+
+### Nav Item
+
+```tsx
+// active · resting
+<a className="relative flex items-center gap-2 h-9 px-3 rounded-md bg-primary/10 text-primary text-[13px] font-medium"><span className="absolute left-0 top-1 bottom-1 w-[2px] rounded-r bg-primary" /><Icon name="users" size={16} />员工</a>
+<a className="flex items-center gap-2 h-9 px-3 rounded-md text-text-muted hover:text-text hover:bg-surface-2 text-[13px]" />
+```
+
+### Tabs
+
+```tsx
+// underline · pill
+<button className="relative px-3 h-10 text-[13px] text-text-muted data-[active]:text-text">概览<span className="absolute inset-x-3 bottom-0 h-[2px] bg-primary opacity-0 data-[active]:opacity-100 dark:shadow-glow-sm" /></button>
+<button className="px-3 h-8 rounded-md text-[12px] text-text-muted data-[active]:bg-surface data-[active]:text-primary data-[active]:shadow-soft-sm">日</button>
+```
+
+### Modal
+
+```tsx
+<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+  <div className="w-full max-w-lg rounded-xl bg-surface border border-border shadow-soft-lg dark:shadow-glow p-6 animate-[ah-fade-up_320ms_cubic-bezier(.16,1,.3,1)_both]">...</div>
 </div>
+```
 
-// ✅ icon 用字符 + 轻量 SVG
-<span className="font-mono">→</span>
-<SunIcon className="w-4 h-4" />  {/* 本地 1-line SVG 组件 */}
+### Toast
+
+```tsx
+<div className="flex items-center gap-2 px-4 h-11 rounded-lg bg-success-soft text-success border border-success/20 shadow-soft"><Icon name="check-circle-2" size={16} />已发布</div>
+```
+色位换:`info` = primary-soft · `warn` = warning-soft · `error` = danger-soft。
+
+### Tooltip
+
+```tsx
+<div className="px-2 py-1 rounded bg-text text-bg text-[11px] font-medium shadow-pop">⌘K 打开命令面板</div>
+```
+dark 下 token 自动反色。
+
+### Avatar
+
+```tsx
+<div className="w-8 h-8 rounded-full bg-primary/15 text-primary text-[12px] font-semibold flex items-center justify-center ring-1 ring-border">AL</div>
+// group: <div className="flex -space-x-2">{avatars}</div>
+// status dot: <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success ring-2 ring-surface" />
+```
+
+### Progress
+
+```tsx
+// bar
+<div className="h-1.5 rounded-full bg-surface-3 overflow-hidden"><div className="h-full bg-primary dark:shadow-glow-sm" style={{ width:'62%' }} /></div>
+// ring: svg 28px, stroke=currentColor, track text-surface-3, active text-primary, strokeDasharray="75 100", strokeLinecap="round"
+```
+
+### Empty State
+
+```tsx
+<div className="relative rounded-xl border border-dashed border-border bg-surface p-10 text-center overflow-hidden">
+  <div aria-hidden className="absolute inset-0 opacity-40" style={{ backgroundImage:'radial-gradient(var(--color-border) 1px, transparent 1px)', backgroundSize:'16px 16px' }} />
+  <div className="relative"><div className="mx-auto w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-3"><Icon name="sparkles" size={22} /></div><p className="text-[14px] text-text">还没有员工</p><p className="text-[12px] text-text-muted mt-1">跟 Lead Agent 说一声,它会帮你建第一个。</p></div>
+</div>
+```
+
+### Chat Bubble
+
+```tsx
+// user · agent · reasoning · tool-call
+<div className="ml-auto max-w-[75%] rounded-2xl rounded-tr-md bg-primary text-primary-fg px-4 py-2.5 text-[13px] shadow-soft-sm dark:shadow-glow-sm" />
+<div className="max-w-[75%] rounded-2xl rounded-tl-md bg-surface border border-border text-text px-4 py-2.5 text-[13px]" />
+<div className="max-w-[75%] rounded-lg bg-surface-2 text-text-muted italic px-3 py-2 text-[12px] border-l-2 border-accent" />
+<div className="max-w-[75%] rounded-lg bg-surface border border-border font-mono text-[12px] p-3"><div className="text-accent">fetch_url(...)</div><div className="text-text-muted">→ 200 OK · 1.2 KB</div></div>
+```
+
+### Table + Pagination
+
+```tsx
+<table className="w-full text-[13px]">
+  <thead className="text-[11px] uppercase tracking-wider text-text-subtle"><tr className="border-b border-border"><th className="text-left font-medium py-2 px-3">名称</th></tr></thead>
+  <tbody><tr className="border-b border-border hover:bg-surface-2 transition-colors duration-150" /></tbody>
+</table>
+// pagination: button `h-8 w-8 rounded-md hover:bg-surface-2` · 当前页用 `text-[12px] text-text-muted px-2`
+```
+
+### Command Palette
+
+```tsx
+<div className="w-full max-w-xl rounded-xl bg-surface border border-border shadow-pop p-2">
+  <div className="flex items-center gap-2 px-3 h-11 border-b border-border"><Icon name="search" size={16} className="text-text-muted" /><input className="flex-1 bg-transparent outline-none text-[14px]" placeholder="搜索指令 · ⌘K" /></div>
+  <ul className="py-2 max-h-80 overflow-auto"><li className="flex items-center gap-2 px-3 h-9 rounded-md aria-selected:bg-primary/10 aria-selected:text-primary text-[13px]" /></ul>
+</div>
+```
+
+### Code Block
+
+```tsx
+<pre className="rounded-lg bg-surface-2 border border-border p-4 text-[12px] font-mono text-text overflow-x-auto"><code>...</code></pre>
+```
+inline:`<code className="px-1 py-0.5 rounded bg-surface-2 font-mono text-[12px] text-accent">`。
+
+---
+
+## 4. 常见模式
+
+### 4.1 激活状态方言表(ADR 0016 D2)
+
+| 组件 | 激活语言 |
+|---|---|
+| 侧边栏菜单 | `bg-primary/10` + 2px 左 primary 色条 + `text-primary` |
+| pill tabs | `bg-surface` + `shadow-soft-sm` + `text-primary`(light);dark 下 `bg-surface shadow-glow-sm` |
+| underline tabs | 下 2px `bg-primary` bar · dark 加 `shadow-glow-sm` |
+| 主要 CTA | `bg-primary text-primary-fg` + `shadow-soft`(light) / `shadow-glow-sm`(dark) |
+| 次要 active | `bg-surface-2` · 无色条 |
+| 列表项 selected | `bg-primary/10 text-primary` · 带 check icon |
+
+### 4.2 Hover elevate
+
+```tsx
+// light
+className="hover:-translate-y-px hover:shadow-soft transition-all duration-[220ms]"
+// dark 补充
+className="dark:hover:border-primary/40 dark:hover:shadow-glow-sm"
+```
+
+### 4.3 Focus ring
+
+```tsx
+className="focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary dark:focus-visible:shadow-glow-sm"
+```
+
+### 4.4 Loading
+
+```tsx
+// spinner
+<span className="inline-block w-4 h-4 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+// skeleton
+<div className="h-4 rounded bg-surface-3 animate-pulse" />
+```
+
+### 4.5 Empty backdrop(mesh-hero + dotgrid)
+
+```tsx
+<section className="relative overflow-hidden rounded-2xl p-12">
+  <div aria-hidden className="absolute inset-0 opacity-60" style={{ background:'radial-gradient(60% 50% at 50% 0%, var(--color-primary-glow) 0%, transparent 70%)' }} />
+  <div aria-hidden className="absolute inset-0 opacity-30" style={{ backgroundImage:'radial-gradient(var(--color-border) 1px, transparent 1px)', backgroundSize:'20px 20px' }} />
+  <div className="relative" />
+</section>
 ```
 
 ---
 
-## 6.5 Voice & Tone 速查(详见 03-visual-design.md §9.1)
+## 5. Theme 切换速查
 
-| 规则 | 做 | 不做 |
-|---|---|---|
-| emoji / `!` | 事实陈述,句号结尾 | `搞定!` / `太棒了 🎉` |
-| 代词 | `我` / `你` | `咱们` / `我们` |
-| 按钮 | 动宾(`发布` / `删除员工` / `测试发送`) | `确定` / `OK` / `提交` |
-| 空状态 | `还没有 X · [动作建议]` | `暂无数据` |
-| 错误 | 指向修复(`可以试试改成 X`) | 指向失败(`调用失败!`) |
-| Lead 欢迎语 | 首轮空对话给 3 条示例 prompt | 留空 / 单句寒暄 |
+```tsx
+'use client'
+import { useTheme } from 'next-themes'
 
-检查钩子:
+const { resolvedTheme, setTheme } = useTheme()
+setTheme('light')   // or 'dark' | 'system'
+```
 
-- `web/tests/voice-tone.test.ts` — 静态扫 emoji / `!` / `咱们` / `我们`
-- `backend/tests/unit/test_lead_welcome.py` — 断言 Lead prompt 含 Welcome + 3 条示例
+HTML 属性(由 `ThemeProvider` 注入):
 
-Voice & Tone 变更要同步三处:[`product/03-visual-design.md §9.1`](../product/03-visual-design.md#91-voice--tone文案纪律--i-0013) · [`backend/src/allhands/execution/prompts/lead_agent.md`](../backend/src/allhands/execution/prompts/lead_agent.md) Style 节 · 本节速查表。
+```html
+<html data-theme-pack="brand-blue" data-theme="dark">
+```
+
+新 theme pack:
+
+1. 新建 `web/styles/themes/<pack>/{light,dark,index}.css`,导出 `tokens.css` 里所有变量
+2. 在 `app/providers.tsx` 的 `ThemeProvider` `value={{ pack: '<pack>', ... }}` 注册
+3. 跑 e2e 视觉回归两主题基线
+
+禁止并行写 `dark:bg-zinc-900` —— token 自动响应 `data-theme`,组件零感知。
 
 ---
 
-## 7. 参考
+## 6. 文件结构
 
-- 视觉契约(规范):[`product/03-visual-design.md`](../product/03-visual-design.md)
-- 设计 lab(活样本 & 回归基准):[`web/app/design-lab/page.tsx`](../web/app/design-lab/page.tsx)
-- Token 实现:[`web/app/globals.css`](../web/app/globals.css)、[`web/tailwind.config.ts`](../web/tailwind.config.ts)
-- Icon 组件:[`web/components/icons/` 自有集](../web/components/icons/) + [`web/components/ui/icons.tsx` legacy](../web/components/ui/icons.tsx)
-- ADR 0009 · 自有 Icon 系统决策:[`product/adr/0009-custom-icon-system.md`](../product/adr/0009-custom-icon-system.md)
+```
+web/
+├── styles/themes/
+│   ├── tokens.css              ← 变量接口(无值)· 组件唯一依赖
+│   └── brand-blue/{light,dark,index}.css   ← :root[data-theme-pack][data-theme] 下赋值
+├── app/
+│   ├── globals.css             ← 只 @import themes + reset
+│   ├── providers.tsx           ← ThemeProvider(next-themes)
+│   └── design-lab/page.tsx     ← 活样本 + 回归基准
+├── tailwind.config.ts          ← colors 全部指向 var(--color-*)
+├── components/ui/              ← icon.tsx · brand-mark.tsx · button · input · ...
+└── components/icons/           ← 自有特殊符号(logo / brand marks)
+```
+
+---
+
+## 7. 常见错误(Do / Don't)
+
+| 写法 | 正 / 误 | 说明 |
+|---|---|---|
+| `bg-[#0A5BFF]` | 误 | 硬编码 · 用 `bg-primary` |
+| `bg-primary` | 正 | token · 双主题自动响应 |
+| `import { Users } from 'lucide-react'` | 误 | 绕过 Icon 包装 · `<Icon name="users" />` |
+| `<Icon name="users" />` | 正 | 统一入口 |
+| `hover:scale-105` | 误 | 禁止 scale > 1.05 · 用 `hover:-translate-y-px hover:shadow-soft` |
+| `hover:-translate-y-px hover:shadow-soft` | 正 | 规范 hover 语言 |
+| `dark:bg-zinc-900` | 误 | 并行主题定义 · 用 token |
+| `bg-surface` | 正 | token 自动切换 |
+| `border-l-4 border-primary` 做装饰条 | 有条件允许 | 旧 BAN 1 已废除 · 优先 `bg-primary/10` + 2px 色条组合(sidebar active 仍用 2px) |
+| `bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent` | 允许 | 旧 BAN 2 已废除 · 仅用于 hero h1,正文保持单色 |
+| `import { motion } from 'framer-motion'` | 误 | 动画库禁用 · CSS keyframes + Tailwind 足够 |
+| `animate-bounce` | 误 | 干扰阅读 · 用 `animate-[ah-fade-up_...]` |
+| `<button>☀ Light</button>` | 误 | emoji 当 UI · 用 `<Icon name="sun" />` |
+| `rounded-[13px]` | 误 | 非 token 圆角 · 选 `rounded-lg`(12) 或 `rounded-xl`(16) |
+
+---
+
+## 8. 变更流程
+
+1. **改 token 值**:
+   `web/styles/themes/brand-blue/<light|dark>.css` → `product/03-visual-design.md §1` → 本文件 §1 表格
+2. **加 theme pack**:
+   见 03-visual-design.md §5 · 复制 `brand-blue/` 到 `<new-pack>/`,替换全部值,在 `ThemeProvider` 注册
+3. **改组件契约(prop / 变体 / 新组件)**:
+   03-visual-design.md §3 规范 → `components/ui/<name>.tsx` 实现 → `design-lab` 加样本 → 本文件 §3 增条目
+4. **加 Lucide 之外的 icon**(特殊符号):
+   写 `web/components/icons/<name>.tsx` → export → design-lab Icon Gallery 光学一致性自检
+5. **废弃视觉契约 / 换主线 pack**:
+   必须走 ADR(参考 0016)· 先 PR 文档,再 code
+
+---
+
+参考:
+
+- ADR 0016:[../product/adr/0016-brand-blue-dual-theme.md](../product/adr/0016-brand-blue-dual-theme.md)
+- V1 Cobalt Precision(dark 基准):[./proposals/v1-cobalt-precision.html](./proposals/v1-cobalt-precision.html)
+- V2 Azure Live(light 基准):[./proposals/v2-azure-live.html](./proposals/v2-azure-live.html)
+- 视觉规范:[../product/03-visual-design.md](../product/03-visual-design.md)

@@ -36,9 +36,14 @@ function rel(p: string) {
 describe("E01 · FOUC 主题切换水合不一致", () => {
   const layout = readFileSync(path.join(APP, "layout.tsx"), "utf8");
 
-  it("layout.tsx 保留 inline themeInitScript + suppressHydrationWarning", () => {
-    expect(layout).toMatch(/themeInitScript/);
-    expect(layout).toMatch(/dangerouslySetInnerHTML/);
+  // Post-ADR 0016: FOUC prevention moved from a hand-rolled inline script to
+  // next-themes (wrapped in ThemeProvider). The contract is: <html> carries
+  // data-theme-pack + suppressHydrationWarning, <body> suppresses too, and
+  // ThemeProvider sits at the root. next-themes injects its own inline
+  // init script at build time, so we no longer hand-roll one.
+  it("layout.tsx uses next-themes ThemeProvider + suppressHydrationWarning", () => {
+    expect(layout).toMatch(/ThemeProvider/);
+    expect(layout).toMatch(/data-theme-pack/);
     expect(layout).toMatch(/<html[^>]*suppressHydrationWarning/);
     expect(layout).toMatch(/<body[^>]*suppressHydrationWarning/);
   });
@@ -130,7 +135,11 @@ describe("E10 · 禁止硬编码十六进制 / Tailwind 原色类 / dark: 前缀
   });
 });
 
-describe("E11 · 禁止 icon 包 & UI emoji", () => {
+describe("E11 · icon 包只能经 Icon wrapper · 禁止 UI emoji", () => {
+  // Post-ADR 0016: lucide-react is the sanctioned icon source but must be
+  // funnelled through `<Icon>` (components/ui/icon.tsx). Feature code that
+  // imports lucide-react directly bypasses the swap-out layer and breaks the
+  // "change one file to change all icons" contract.
   const ICON_IMPORTS = [
     /from\s+["']lucide-react["']/,
     /from\s+["']@heroicons\//,
@@ -138,17 +147,22 @@ describe("E11 · 禁止 icon 包 & UI emoji", () => {
     /from\s+["']@tabler\/icons/,
   ];
 
-  // 豁免:design-lab 展示所有风格样本允许 mono 字符;error/not-found 纯文本。
-  const allow = (file: string) => file.startsWith("app/design-lab/") || file === "components/ui/icons.tsx";
+  // Only the wrapper itself is allowed to import lucide-react. Legacy
+  // components/ui/icons.tsx hosts brand glyphs (LogoDotgrid). design-lab is
+  // the design sandbox and may use mono chars; error/not-found are plain text.
+  const allow = (file: string) =>
+    file.startsWith("app/design-lab/") ||
+    file === "components/ui/icons.tsx" ||
+    file === "components/ui/icon.tsx";
 
-  // 只扫最明显的 UI 装饰 emoji,避免误伤文案里的表情
+  // UI-decorative emoji only; don't flag emoji in user-content strings.
   const UI_EMOJI = /[☀☾⚙🔧📊💬👥🔌✨🏢🧠🛡📈🗂ℹ]/u;
 
   it.each(allSources.map((p) => [rel(p)]))(`%s 不 import icon 包、不含 UI emoji`, (file) => {
     if (allow(file)) return;
     const src = readFileSync(path.join(REPO, file), "utf8");
     for (const pat of ICON_IMPORTS) {
-      expect(src, `E11 违规(icon 包):${file}`).not.toMatch(pat);
+      expect(src, `E11 违规(icon 包):${file} · lucide-react must go through <Icon>`).not.toMatch(pat);
     }
     expect(src, `E11 违规(UI emoji):${file}`).not.toMatch(UI_EMOJI);
   });

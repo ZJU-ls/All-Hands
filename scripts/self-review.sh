@@ -39,7 +39,7 @@ run_section() {
 # 1. Visual discipline · CLAUDE.md §3.5 three rules
 # ------------------------------------------------------------------------------
 if run_section "visual"; then
-  section "visual discipline (CLAUDE.md §3.5)"
+  section "visual discipline (CLAUDE.md §3.8 · ADR 0016)"
 
   # Only scan web/ source; exclude tests, configs, and the existing design-contract
   # test file that deliberately contains these strings as fixtures.
@@ -49,13 +49,16 @@ if run_section "visual"; then
       -not -path '*/node_modules/*' -not -path '*/.next/*' 2>/dev/null
   }
 
-  # §3.5.1 no icon libraries
-  icon_hits=$(web_src | xargs grep -l -E "from ['\"](lucide-react|@heroicons|phosphor-react|@phosphor-icons|@tabler/icons)" 2>/dev/null || true)
+  # §3.8 / ADR 0016 D1 — lucide-react is the sanctioned icon source but must
+  # be funneled through <Icon> (components/ui/icon.tsx). Feature code that
+  # imports a third-party icon package directly bypasses the swap-out layer.
+  icon_hits=$(web_src | xargs grep -l -E "from ['\"](lucide-react|@heroicons|phosphor-react|@phosphor-icons|@tabler/icons)" 2>/dev/null \
+    | grep -v 'components/ui/icon\.tsx$' || true)
   if [ -n "$icon_hits" ]; then
-    fail "icon-library import detected (§3.5.1 forbidden):"
+    fail "icon-library import detected outside <Icon> wrapper (ADR 0016 §D1 · use @/components/ui/icon):"
     printf "  %s\n" $icon_hits
   else
-    pass "no icon-library imports"
+    pass "no icon-library imports outside wrapper"
   fi
 
   # §3.5.2 no raw tailwind color classes (bg-<color>-<num>, text-<color>-<num>, border-<color>-<num>)
@@ -76,13 +79,15 @@ if run_section "visual"; then
     pass "no parallel dark: classes"
   fi
 
-  # §3.5.3 no hover-scale or hover-shadow
-  motion_hits=$(web_src | xargs grep -n -E "\bhover:(scale|shadow)-" 2>/dev/null || true)
+  # §3.8 / ADR 0016 D3 — hover:shadow (glow / soft) is now permitted for
+  # primary-fill CTAs and dark-mode card lift. Only `hover:scale-*` stays
+  # banned — use `hover:-translate-y-px` instead.
+  motion_hits=$(web_src | xargs grep -n -E "\bhover:scale-[0-9]" 2>/dev/null || true)
   if [ -n "$motion_hits" ]; then
-    fail "hover:scale / hover:shadow detected (§3.5.3 forbidden · use border brightness):"
+    fail "hover:scale detected (ADR 0016 §D3 forbidden · use hover:-translate-y-px):"
     printf "  %s\n" "$motion_hits" | head -20
   else
-    pass "no hover:scale / hover:shadow"
+    pass "no hover:scale"
   fi
 
   # §3.5.3 no animation libraries

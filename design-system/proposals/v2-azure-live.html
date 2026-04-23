@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>V2 · Azure Live · allhands design proposals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
+      colors: {
+        azure: {
+          50:  '#EFF4FF',
+          100: '#DCE6FF',
+          200: '#B8CDFF',
+          300: '#88AAFF',
+          400: '#4D82FF',
+          500: '#0A5BFF',
+          600: '#0848D1',
+          700: '#0939A3',
+          800: '#0A2B78',
+          sky: '#4EA8FF',
+          cyan: '#63D3FF',
+          lemon: '#FFE066',
+          coral: '#FF8073',
+        },
+        paper: {
+          50: '#FFFFFF',
+          100: '#F6F8FC',
+          200: '#EDF1F8',
+          300: '#DFE6F0',
+          400: '#B9C4D4',
+          500: '#8B96AB',
+          600: '#5C667A',
+          700: '#2B3342',
+          800: '#141A26',
+          900: '#0A0E18',
+        },
+        ok: '#0FA57A',
+        warn: '#D97706',
+        bad: '#DC2626',
+      },
+      boxShadow: {
+        'soft-sm': '0 1px 2px rgba(10,43,120,0.04), 0 1px 3px rgba(10,43,120,0.06)',
+        'soft': '0 4px 12px -2px rgba(10,43,120,0.06), 0 2px 4px rgba(10,43,120,0.04)',
+        'soft-lg': '0 24px 64px -24px rgba(10,91,255,0.18), 0 8px 24px -8px rgba(10,43,120,0.08)',
+        'pop': '0 2px 0 rgba(10,91,255,0.9)',
+        'glow': '0 0 0 4px rgba(10,91,255,0.15)',
+      },
+      animation: {
+        'fade-up': 'fadeUp .5s cubic-bezier(.16,1,.3,1)',
+        'float': 'float 6s ease-in-out infinite',
+        'shimmer': 'shimmer 2.4s linear infinite',
+      },
+      keyframes: {
+        fadeUp: { '0%': { opacity: 0, transform: 'translateY(8px)' }, '100%': { opacity: 1, transform: 'none' } },
+        float: { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-6px)' } },
+        shimmer: { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+      },
+    },
+  },
+};
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 20% -10%, rgba(10,91,255,.09), transparent 60%),
+      radial-gradient(900px 500px at 90% 5%, rgba(78,168,255,.10), transparent 60%),
+      #F6F8FC;
+    font-feature-settings: 'cv11','ss01','ss03';
+    letter-spacing: -0.011em;
+    color: #141A26;
+  }
+  .gradient-text {
+    background: linear-gradient(120deg, #0A5BFF 0%, #4D82FF 40%, #63D3FF 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .mesh-hero {
+    background:
+      radial-gradient(600px 300px at 15% 20%, rgba(10,91,255,.18), transparent 60%),
+      radial-gradient(500px 400px at 85% 60%, rgba(99,211,255,.20), transparent 60%),
+      radial-gradient(400px 300px at 50% 100%, rgba(255,224,102,.14), transparent 60%),
+      linear-gradient(180deg, #EFF4FF 0%, #FFFFFF 100%);
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(185,196,212,.25) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(185,196,212,.25) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  .kbd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+    border: 1px solid #DFE6F0;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: #FFFFFF;
+    color: #5C667A;
+  }
+  .ring-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(10,91,255,.18), inset 0 0 0 1px #0A5BFF; }
+  .btn-pop { transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
+  .btn-pop:hover { transform: translateY(-1px); }
+  .btn-pop:active { transform: translateY(0); }
+  [data-lucide] { width: 16px; height: 16px; stroke-width: 2; }
+  .scrollbar-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #DFE6F0; border-radius: 4px; }
+</style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+<!-- ===== TOP NAV ===== -->
+<header class="sticky top-0 z-40 backdrop-blur-xl bg-white/75 border-b border-paper-200">
+  <div class="max-w-[1400px] mx-auto px-8 h-16 flex items-center gap-8">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-azure-500 to-azure-700 grid place-items-center shadow-soft text-white text-[11px] font-bold tracking-tighter">ah</div>
+      <span class="font-bold text-[15px] tracking-tight">allhands</span>
+      <span class="px-1.5 h-4 rounded text-[9px] bg-azure-50 text-azure-700 font-mono uppercase tracking-wider inline-flex items-center">v2</span>
+    </div>
+    <nav class="flex items-center gap-1 text-[14px]">
+      <a class="px-3 py-1.5 rounded-lg text-paper-800 bg-paper-100 font-medium">Employees</a>
+      <a class="px-3 py-1.5 rounded-lg text-paper-600 hover:bg-paper-100">Skills</a>
+      <a class="px-3 py-1.5 rounded-lg text-paper-600 hover:bg-paper-100">Gateway</a>
+      <a class="px-3 py-1.5 rounded-lg text-paper-600 hover:bg-paper-100">Traces</a>
+      <a class="px-3 py-1.5 rounded-lg text-paper-600 hover:bg-paper-100">Market <span class="ml-1 px-1.5 h-4 rounded text-[9px] bg-azure-coral/20 text-azure-coral font-mono inline-flex items-center">NEW</span></a>
+    </nav>
+    <div class="flex-1 max-w-md">
+      <div class="flex items-center gap-2 h-9 px-3 rounded-xl border border-paper-200 bg-white hover:border-azure-300 transition cursor-pointer">
+        <i data-lucide="search" class="text-paper-500"></i>
+        <span class="text-[13px] text-paper-500">Search anything…</span>
+        <span class="ml-auto kbd">⌘K</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="h-9 px-3 rounded-lg bg-paper-100 hover:bg-paper-200 text-[13px] font-medium inline-flex items-center gap-1.5"><i data-lucide="zap" class="text-azure-500"></i> Upgrade</button>
+      <button class="w-9 h-9 rounded-lg hover:bg-paper-100 grid place-items-center text-paper-600"><i data-lucide="bell"></i></button>
+      <div class="w-8 h-8 rounded-full bg-gradient-to-br from-azure-400 to-azure-600 text-white grid place-items-center text-[11px] font-semibold">LS</div>
+    </div>
+  </div>
+</header>
+
+<!-- ===== HERO ===== -->
+<section class="relative overflow-hidden">
+  <div class="mesh-hero absolute inset-0"></div>
+  <div class="grid-bg absolute inset-0 opacity-30 [mask-image:radial-gradient(ellipse_at_top,rgba(0,0,0,0.4),transparent_70%)]"></div>
+  <div class="relative max-w-[1400px] mx-auto px-8 py-28">
+    <div class="inline-flex items-center gap-2 h-7 px-3 rounded-full bg-white border border-paper-200 shadow-soft-sm mb-8 animate-fade-up">
+      <span class="relative w-2 h-2"><span class="absolute inset-0 rounded-full bg-azure-500 animate-ping opacity-50"></span><span class="absolute inset-0 rounded-full bg-azure-500"></span></span>
+      <span class="text-[11px] font-mono uppercase tracking-wider text-paper-700">Design proposal V2 · Azure Live</span>
+    </div>
+    <h1 class="text-[84px] leading-[0.95] font-bold tracking-[-0.045em] max-w-5xl animate-fade-up">
+      Hire your first <span class="gradient-text">digital employee</span><br/>in under 60 seconds.
+    </h1>
+    <p class="mt-8 text-[19px] text-paper-600 max-w-2xl leading-relaxed animate-fade-up">
+      Azure Live is bright, playful, and human. For operators and founders who want their workforce to feel like a product — not an ops console.
+    </p>
+    <div class="mt-10 flex items-center gap-3 animate-fade-up">
+      <button class="btn-pop h-12 px-6 rounded-xl bg-azure-500 hover:bg-azure-600 text-white text-[15px] font-semibold inline-flex items-center gap-2 shadow-soft-lg">
+        <i data-lucide="sparkles"></i> Get started — it's free
+        <i data-lucide="arrow-right"></i>
+      </button>
+      <button class="btn-pop h-12 px-6 rounded-xl bg-white border border-paper-200 hover:border-azure-300 text-[15px] font-semibold inline-flex items-center gap-2 shadow-soft-sm">
+        <i data-lucide="play-circle" class="text-azure-500"></i> Watch 2-min demo
+      </button>
+    </div>
+
+    <!-- social proof -->
+    <div class="mt-12 flex items-center gap-6 text-[12px] text-paper-500 animate-fade-up">
+      <div class="flex items-center gap-2">
+        <div class="flex -space-x-2">
+          <div class="w-7 h-7 rounded-full bg-gradient-to-br from-azure-400 to-azure-600 border-2 border-white grid place-items-center text-[10px] font-semibold text-white">SA</div>
+          <div class="w-7 h-7 rounded-full bg-gradient-to-br from-azure-coral to-azure-lemon border-2 border-white grid place-items-center text-[10px] font-semibold text-white">CM</div>
+          <div class="w-7 h-7 rounded-full bg-gradient-to-br from-ok to-azure-cyan border-2 border-white grid place-items-center text-[10px] font-semibold text-white">BF</div>
+          <div class="w-7 h-7 rounded-full bg-white border-2 border-white shadow-soft-sm grid place-items-center text-[9px] text-paper-700 font-mono">+2k</div>
+        </div>
+        <span><span class="text-paper-800 font-semibold">2,481</span> teams hiring on allhands</span>
+      </div>
+      <span class="text-paper-300">·</span>
+      <div class="flex items-center gap-1.5"><span class="text-azure-lemon">★★★★★</span> <span><span class="text-paper-800 font-semibold">4.9</span> on ProductHunt</span></div>
+    </div>
+
+    <!-- floating product preview -->
+    <div class="mt-20 relative">
+      <div class="absolute -top-6 left-12 w-40 h-40 rounded-full bg-azure-cyan/30 blur-3xl animate-float"></div>
+      <div class="absolute -bottom-6 right-12 w-48 h-48 rounded-full bg-azure-lemon/30 blur-3xl animate-float" style="animation-delay:2s"></div>
+      <div class="relative rounded-2xl bg-white border border-paper-200 shadow-soft-lg overflow-hidden">
+        <div class="h-10 px-4 flex items-center gap-2 border-b border-paper-200 bg-paper-100/50">
+          <span class="w-3 h-3 rounded-full bg-bad/70"></span>
+          <span class="w-3 h-3 rounded-full bg-warn/70"></span>
+          <span class="w-3 h-3 rounded-full bg-ok/70"></span>
+          <span class="ml-3 text-[11px] font-mono text-paper-500">allhands.app / dashboard</span>
+        </div>
+        <div class="grid grid-cols-12">
+          <aside class="col-span-3 border-r border-paper-200 p-5 space-y-1 bg-paper-50/60">
+            <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-azure-500 text-white text-[13px] font-medium shadow-soft-sm">
+              <i data-lucide="users"></i> Employees
+              <span class="ml-auto text-[10px] font-mono bg-white/20 px-1.5 h-4 rounded inline-flex items-center">37</span>
+            </div>
+            <div class="flex items-center gap-2 px-3 py-2 rounded-lg text-paper-600 text-[13px]"><i data-lucide="wand-2"></i> Skills</div>
+            <div class="flex items-center gap-2 px-3 py-2 rounded-lg text-paper-600 text-[13px]"><i data-lucide="plug"></i> Gateway</div>
+            <div class="flex items-center gap-2 px-3 py-2 rounded-lg text-paper-600 text-[13px]"><i data-lucide="activity"></i> Traces</div>
+          </aside>
+          <div class="col-span-9 p-6">
+            <div class="flex items-center justify-between mb-5">
+              <h3 class="text-[18px] font-bold tracking-tight">👋 Good afternoon, Liu</h3>
+              <div class="flex items-center gap-2">
+                <span class="h-6 px-2.5 inline-flex items-center gap-1.5 text-[11px] rounded-full bg-ok/10 text-ok font-medium"><span class="w-1.5 h-1.5 rounded-full bg-ok"></span> Autopilot on</span>
+              </div>
+            </div>
+            <div class="grid grid-cols-4 gap-3">
+              <div class="p-4 rounded-xl bg-gradient-to-br from-azure-500 to-azure-700 text-white relative overflow-hidden">
+                <div class="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-azure-cyan/30 blur-2xl"></div>
+                <div class="text-[11px] opacity-75 font-mono uppercase tracking-wider">Active</div>
+                <div class="mt-2 text-3xl font-bold">37</div>
+                <div class="mt-1 text-[11px] opacity-90 font-mono">↑ 12% this week</div>
+              </div>
+              <div class="p-4 rounded-xl bg-paper-50 border border-paper-200">
+                <div class="text-[11px] text-paper-500 uppercase tracking-wider font-mono">Runs · 24h</div>
+                <div class="mt-2 text-3xl font-bold">214</div>
+                <div class="mt-1 text-[11px] text-ok font-mono">↑ 8%</div>
+              </div>
+              <div class="p-4 rounded-xl bg-paper-50 border border-paper-200">
+                <div class="text-[11px] text-paper-500 uppercase tracking-wider font-mono">Success</div>
+                <div class="mt-2 text-3xl font-bold">99.1%</div>
+                <div class="mt-1 text-[11px] text-paper-500 font-mono">stable</div>
+              </div>
+              <div class="p-4 rounded-xl bg-paper-50 border border-paper-200">
+                <div class="text-[11px] text-paper-500 uppercase tracking-wider font-mono">Cost · mo</div>
+                <div class="mt-2 text-3xl font-bold">$412</div>
+                <div class="mt-1 text-[11px] text-bad font-mono">↑ 3%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="max-w-[1400px] mx-auto px-8 space-y-24 py-16">
+
+<!-- BUTTONS -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[11px] uppercase tracking-[0.18em] font-mono text-azure-500">01 · Atoms</div>
+      <h2 class="mt-1 text-[32px] font-bold tracking-tight">Buttons</h2>
+    </div>
+    <div class="text-[12px] text-paper-500 font-mono">primary · secondary · outline · ghost · danger × sm md lg</div>
+  </div>
+  <div class="h-px bg-gradient-to-r from-transparent via-paper-300 to-transparent mb-8"></div>
+  <div class="grid grid-cols-4 gap-6">
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-4">
+      <div class="text-[11px] text-paper-500 font-mono uppercase tracking-wider">Primary</div>
+      <button class="btn-pop h-8 px-3 rounded-lg bg-azure-500 hover:bg-azure-600 text-white text-[12px] font-medium inline-flex items-center gap-1.5 shadow-soft-sm">Save</button>
+      <button class="btn-pop h-10 px-4 rounded-lg bg-azure-500 hover:bg-azure-600 text-white text-[13px] font-medium inline-flex items-center gap-2 shadow-soft"><i data-lucide="send"></i> Dispatch</button>
+      <button class="btn-pop h-12 px-5 rounded-xl bg-azure-500 hover:bg-azure-600 text-white text-[14px] font-semibold inline-flex items-center gap-2 shadow-soft-lg"><i data-lucide="sparkles"></i> Run agent <span class="kbd !bg-white/20 !border-white/20 !text-white">⌘↵</span></button>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-4">
+      <div class="text-[11px] text-paper-500 font-mono uppercase tracking-wider">Secondary</div>
+      <button class="btn-pop h-8 px-3 rounded-lg bg-paper-100 hover:bg-paper-200 text-paper-800 text-[12px] font-medium">Cancel</button>
+      <button class="btn-pop h-10 px-4 rounded-lg bg-paper-100 hover:bg-paper-200 text-paper-800 text-[13px] font-medium inline-flex items-center gap-2"><i data-lucide="download"></i> Export</button>
+      <button class="btn-pop h-12 px-5 rounded-xl bg-azure-50 hover:bg-azure-100 text-azure-700 text-[14px] font-semibold inline-flex items-center gap-2"><i data-lucide="plus"></i> Add skill</button>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-4">
+      <div class="text-[11px] text-paper-500 font-mono uppercase tracking-wider">Outline · Ghost</div>
+      <button class="btn-pop h-8 px-3 rounded-lg border border-paper-300 hover:border-azure-400 text-paper-700 text-[12px] font-medium">Discard</button>
+      <button class="btn-pop h-10 px-4 rounded-lg border border-paper-300 hover:border-azure-400 hover:text-azure-600 text-[13px] font-medium inline-flex items-center gap-2"><i data-lucide="filter"></i> Filter</button>
+      <button class="btn-pop h-10 px-4 rounded-lg hover:bg-paper-100 text-paper-700 text-[13px] font-medium inline-flex items-center gap-2"><i data-lucide="share-2"></i> Share</button>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-4">
+      <div class="text-[11px] text-paper-500 font-mono uppercase tracking-wider">Danger · States</div>
+      <button class="btn-pop h-10 px-4 rounded-lg bg-bad/10 hover:bg-bad/15 text-bad border border-bad/20 text-[13px] font-medium inline-flex items-center gap-2"><i data-lucide="trash-2"></i> Delete</button>
+      <button class="h-10 px-4 rounded-lg bg-azure-500 text-white text-[13px] inline-flex items-center gap-2 opacity-80">
+        <span class="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+        Running…
+      </button>
+      <button disabled class="h-10 px-4 rounded-lg bg-paper-100 text-paper-400 text-[13px] cursor-not-allowed">Disabled</button>
+    </div>
+  </div>
+  <!-- button groups -->
+  <div class="mt-6 flex items-center gap-3">
+    <div class="inline-flex p-1 rounded-xl bg-paper-100 border border-paper-200">
+      <button class="h-8 px-3 rounded-lg bg-white text-paper-800 text-[12px] font-semibold shadow-soft-sm">Day</button>
+      <button class="h-8 px-3 rounded-lg text-paper-600 text-[12px] font-medium">Week</button>
+      <button class="h-8 px-3 rounded-lg text-paper-600 text-[12px] font-medium">Month</button>
+    </div>
+    <div class="inline-flex rounded-xl border border-paper-200 bg-white overflow-hidden">
+      <button class="w-9 h-9 grid place-items-center text-paper-600 hover:bg-paper-100"><i data-lucide="align-left"></i></button>
+      <button class="w-9 h-9 grid place-items-center text-azure-600 bg-azure-50"><i data-lucide="align-center"></i></button>
+      <button class="w-9 h-9 grid place-items-center text-paper-600 hover:bg-paper-100"><i data-lucide="align-right"></i></button>
+    </div>
+    <button class="btn-pop h-10 px-4 rounded-xl bg-gradient-to-r from-azure-500 to-azure-sky text-white text-[13px] font-semibold inline-flex items-center gap-2 shadow-soft-lg">
+      <i data-lucide="zap"></i> Gradient CTA
+    </button>
+  </div>
+</section>
+
+<!-- FORMS -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[11px] uppercase tracking-[0.18em] font-mono text-azure-500">02 · Forms</div>
+      <h2 class="mt-1 text-[32px] font-bold tracking-tight">Inputs & Controls</h2>
+    </div>
+  </div>
+  <div class="h-px bg-gradient-to-r from-transparent via-paper-300 to-transparent mb-8"></div>
+  <div class="grid grid-cols-3 gap-6">
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-5">
+      <div>
+        <label class="block text-[12px] font-semibold text-paper-700 mb-2">Employee name</label>
+        <input class="w-full h-11 px-4 rounded-xl bg-white border border-paper-300 text-[14px] placeholder:text-paper-400 ring-focus" placeholder="e.g. Sales Analyst Bot" />
+        <div class="mt-1.5 text-[11px] text-paper-500">Appears in chat · mentions · traces</div>
+      </div>
+      <div>
+        <label class="block text-[12px] font-semibold text-paper-700 mb-2">Email <span class="text-bad">*</span></label>
+        <div class="relative">
+          <input class="w-full h-11 px-4 pr-9 rounded-xl bg-white border-2 border-bad/50 text-[14px] ring-focus" value="invalid@" />
+          <i data-lucide="alert-circle" class="absolute right-3 top-3.5 text-bad"></i>
+        </div>
+        <div class="mt-1.5 text-[11px] text-bad flex items-center gap-1">Please enter a valid email</div>
+      </div>
+      <div>
+        <label class="block text-[12px] font-semibold text-paper-700 mb-2">Model</label>
+        <div class="relative">
+          <select class="w-full h-11 px-4 pr-9 rounded-xl bg-white border border-paper-300 text-[14px] appearance-none ring-focus cursor-pointer">
+            <option>🔵 Claude Opus 4.7 — most capable</option>
+            <option>⚡ Claude Sonnet 4.6 — balanced</option>
+            <option>🚀 GPT-5 — flagship</option>
+          </select>
+          <i data-lucide="chevron-down" class="absolute right-3 top-3.5 text-paper-400 pointer-events-none"></i>
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-5">
+      <div>
+        <label class="block text-[12px] font-semibold text-paper-700 mb-2">System prompt</label>
+        <textarea rows="5" class="w-full p-3 rounded-xl bg-paper-50 border border-paper-200 text-[13px] font-mono leading-relaxed ring-focus">You are a precise, terse analyst.
+Cite sources. Never hallucinate.
+Prefer bullets over paragraphs.</textarea>
+        <div class="mt-1.5 text-[11px] text-paper-500 flex items-center justify-between"><span>Markdown supported</span><span class="font-mono">84 / 2000</span></div>
+      </div>
+      <div>
+        <label class="block text-[12px] font-semibold text-paper-700 mb-2">Skill tags</label>
+        <div class="flex flex-wrap gap-1.5 p-2 rounded-xl bg-white border border-paper-200 min-h-11">
+          <span class="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg bg-azure-50 text-azure-700 text-[12px] font-medium">📊 sql <i data-lucide="x" class="!w-3 !h-3 cursor-pointer opacity-60 hover:opacity-100"></i></span>
+          <span class="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg bg-azure-lemon/20 text-paper-800 text-[12px] font-medium">🔮 forecast <i data-lucide="x" class="!w-3 !h-3 cursor-pointer opacity-60 hover:opacity-100"></i></span>
+          <span class="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg bg-azure-coral/20 text-paper-800 text-[12px] font-medium">💔 churn <i data-lucide="x" class="!w-3 !h-3 cursor-pointer opacity-60 hover:opacity-100"></i></span>
+          <input class="flex-1 min-w-[80px] bg-transparent text-[13px] outline-none placeholder:text-paper-400 px-1" placeholder="Add tag…" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-[12px] font-semibold text-paper-700 mb-2">Search with icon</label>
+        <div class="relative">
+          <i data-lucide="search" class="absolute left-3 top-3.5 text-paper-400"></i>
+          <input class="w-full h-11 pl-10 pr-4 rounded-xl bg-white border border-paper-300 text-[14px] placeholder:text-paper-400 ring-focus" placeholder="Search skills…" />
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-5">
+      <div class="text-[12px] font-semibold text-paper-700">Toggles</div>
+      <label class="flex items-center justify-between cursor-pointer">
+        <div>
+          <div class="text-[13px] font-medium">Enable autopilot</div>
+          <div class="text-[11px] text-paper-500">Runs workflows without prompting</div>
+        </div>
+        <span class="relative w-11 h-6 rounded-full bg-azure-500 shadow-inner transition">
+          <span class="absolute right-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow"></span>
+        </span>
+      </label>
+      <label class="flex items-center justify-between cursor-pointer">
+        <div>
+          <div class="text-[13px] font-medium text-paper-700">Persist artifacts</div>
+          <div class="text-[11px] text-paper-500">Keep generated files</div>
+        </div>
+        <span class="relative w-11 h-6 rounded-full bg-paper-300">
+          <span class="absolute left-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow"></span>
+        </span>
+      </label>
+      <div class="text-[12px] font-semibold text-paper-700 pt-2">Checkbox</div>
+      <div class="space-y-2.5">
+        <label class="flex items-start gap-2.5 cursor-pointer">
+          <span class="w-5 h-5 rounded-md bg-azure-500 grid place-items-center shadow-soft-sm mt-px"><i data-lucide="check" class="!w-3.5 !h-3.5 text-white"></i></span>
+          <div class="flex-1"><div class="text-[13px] font-medium">Require confirmation</div><div class="text-[11px] text-paper-500">For WRITE / IRREVERSIBLE tools</div></div>
+        </label>
+        <label class="flex items-start gap-2.5 cursor-pointer">
+          <span class="w-5 h-5 rounded-md border-2 border-paper-300 mt-px"></span>
+          <div class="flex-1"><div class="text-[13px] font-medium text-paper-700">Auto-approve READ tools</div></div>
+        </label>
+      </div>
+      <div class="text-[12px] font-semibold text-paper-700 pt-2">Radio (plan)</div>
+      <div class="space-y-2">
+        <label class="flex items-center gap-2 p-3 rounded-xl border-2 border-azure-500 bg-azure-50 cursor-pointer">
+          <span class="w-4 h-4 rounded-full border-[5px] border-azure-500 bg-white"></span>
+          <span class="text-[13px] font-semibold">Pro · $29/mo</span>
+          <span class="ml-auto px-1.5 h-5 inline-flex items-center text-[10px] rounded bg-azure-500 text-white font-mono uppercase tracking-wider">Popular</span>
+        </label>
+        <label class="flex items-center gap-2 p-3 rounded-xl border border-paper-200 cursor-pointer">
+          <span class="w-4 h-4 rounded-full border-2 border-paper-300"></span>
+          <span class="text-[13px] font-medium text-paper-700">Free — 100 runs/mo</span>
+        </label>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CARDS -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[11px] uppercase tracking-[0.18em] font-mono text-azure-500">03 · Surfaces</div>
+      <h2 class="mt-1 text-[32px] font-bold tracking-tight">Cards · KPI · Stats</h2>
+    </div>
+  </div>
+  <div class="h-px bg-gradient-to-r from-transparent via-paper-300 to-transparent mb-8"></div>
+
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="p-6 rounded-2xl bg-gradient-to-br from-azure-500 to-azure-700 text-white shadow-soft-lg relative overflow-hidden">
+      <div class="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-azure-cyan/40 blur-3xl"></div>
+      <div class="relative">
+        <div class="text-[11px] opacity-80 uppercase tracking-wider font-mono">Runs · 7d</div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span class="text-4xl font-bold tracking-tight">1,284</span>
+          <span class="text-[11px] opacity-90 font-mono">↑ 12.4%</span>
+        </div>
+        <svg viewBox="0 0 120 32" class="mt-3 w-full h-8 text-white/80">
+          <polyline fill="none" stroke="currentColor" stroke-width="2" points="0,24 12,22 24,18 36,20 48,14 60,16 72,10 84,12 96,6 108,8 120,4"/>
+        </svg>
+      </div>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm">
+      <div class="text-[11px] text-paper-500 uppercase tracking-wider font-mono">Avg latency</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-4xl font-bold tracking-tight">1.8<span class="text-lg text-paper-400 font-medium">s</span></span>
+        <span class="text-[11px] text-ok font-mono">-120ms</span>
+      </div>
+      <svg viewBox="0 0 120 32" class="mt-3 w-full h-8 text-ok">
+        <polyline fill="none" stroke="currentColor" stroke-width="2" points="0,10 12,12 24,8 36,14 48,10 60,8 72,12 84,8 96,10 108,6 120,8"/>
+      </svg>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm">
+      <div class="text-[11px] text-paper-500 uppercase tracking-wider font-mono">Tokens · mo</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-4xl font-bold tracking-tight">18.4<span class="text-lg text-paper-400 font-medium">M</span></span>
+        <span class="text-[11px] text-warn font-mono">↑ 28%</span>
+      </div>
+      <svg viewBox="0 0 120 32" class="mt-3 w-full h-8 text-warn">
+        <polyline fill="none" stroke="currentColor" stroke-width="2" points="0,28 12,24 24,22 36,18 48,20 60,14 72,16 84,10 96,12 108,6 120,4"/>
+      </svg>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm">
+      <div class="text-[11px] text-paper-500 uppercase tracking-wider font-mono">Budget</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-4xl font-bold tracking-tight">$412</span>
+        <span class="text-[11px] text-paper-500 font-mono">of $650</span>
+      </div>
+      <div class="mt-4 h-2 rounded-full bg-paper-200 overflow-hidden">
+        <div class="h-full w-[62%] bg-gradient-to-r from-azure-500 to-azure-sky rounded-full"></div>
+      </div>
+      <div class="mt-2 text-[11px] text-paper-500 font-mono">16 days remaining</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-3 gap-6">
+    <div class="group p-6 rounded-2xl bg-white border border-paper-200 hover:border-azure-400 shadow-soft-sm hover:shadow-soft-lg transition cursor-pointer">
+      <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-azure-500 to-azure-sky text-white grid place-items-center mb-4 shadow-soft"><i data-lucide="users" class="!w-6 !h-6"></i></div>
+      <h3 class="text-[18px] font-bold tracking-tight">Employees</h3>
+      <p class="mt-2 text-[14px] text-paper-600 leading-relaxed">Hire digital employees, each with their own model, skills, and personality.</p>
+      <div class="mt-5 flex items-center justify-between text-[13px]">
+        <span class="font-mono text-paper-500">37 active</span>
+        <span class="inline-flex items-center gap-1 text-azure-600 font-semibold group-hover:translate-x-0.5 transition">Open <i data-lucide="arrow-right"></i></span>
+      </div>
+    </div>
+    <div class="p-6 rounded-2xl bg-gradient-to-br from-azure-50 via-white to-azure-lemon/30 border-2 border-azure-500 shadow-soft-lg relative overflow-hidden">
+      <span class="absolute top-4 right-4 px-2.5 h-6 inline-flex items-center text-[10px] rounded-full bg-azure-500 text-white font-mono uppercase tracking-wider shadow-soft-sm">✨ Recommended</span>
+      <div class="w-12 h-12 rounded-xl bg-azure-500 text-white grid place-items-center mb-4 shadow-soft"><i data-lucide="wand-2" class="!w-6 !h-6"></i></div>
+      <h3 class="text-[18px] font-bold tracking-tight">Skills · Capability packs</h3>
+      <p class="mt-2 text-[14px] text-paper-700 leading-relaxed">Progressive-loading capabilities. Activate on demand, keep your context tight.</p>
+      <div class="mt-5 flex items-center justify-between text-[13px]">
+        <span class="font-mono text-azure-700 font-semibold">124 packs · 3 tiers</span>
+        <span class="inline-flex items-center gap-1 text-azure-600 font-semibold">Open <i data-lucide="arrow-right"></i></span>
+      </div>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 hover:border-azure-400 shadow-soft-sm hover:shadow-soft-lg transition cursor-pointer group">
+      <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-azure-coral to-azure-lemon text-white grid place-items-center mb-4 shadow-soft"><i data-lucide="plug" class="!w-6 !h-6"></i></div>
+      <h3 class="text-[18px] font-bold tracking-tight">Gateway</h3>
+      <p class="mt-2 text-[14px] text-paper-600 leading-relaxed">One API for Anthropic, OpenAI, Google, DashScope. Route by policy.</p>
+      <div class="mt-5 flex items-center justify-between text-[13px]">
+        <span class="font-mono text-paper-500">5 providers · 23 models</span>
+        <span class="inline-flex items-center gap-1 text-azure-600 font-semibold group-hover:translate-x-0.5 transition">Open <i data-lucide="arrow-right"></i></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TABLE -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[11px] uppercase tracking-[0.18em] font-mono text-azure-500">04 · Data</div>
+      <h2 class="mt-1 text-[32px] font-bold tracking-tight">Table · Pagination</h2>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 h-9 px-3 rounded-xl border border-paper-200 bg-white text-paper-500 text-[13px]">
+        <i data-lucide="search"></i><input class="bg-transparent outline-none w-48" placeholder="Filter runs…" />
+      </div>
+      <button class="h-9 px-3 rounded-xl border border-paper-200 hover:border-azure-400 text-[13px] font-medium inline-flex items-center gap-1.5 bg-white"><i data-lucide="filter"></i> Filter</button>
+      <button class="btn-pop h-9 px-3 rounded-xl bg-azure-500 text-white text-[13px] font-medium inline-flex items-center gap-1.5 shadow-soft-sm"><i data-lucide="download"></i> Export</button>
+    </div>
+  </div>
+  <div class="h-px bg-gradient-to-r from-transparent via-paper-300 to-transparent mb-6"></div>
+  <div class="rounded-2xl bg-white border border-paper-200 shadow-soft-sm overflow-hidden">
+    <table class="w-full text-[13px]">
+      <thead class="bg-paper-50/60">
+        <tr class="text-[11px] text-paper-500 font-mono uppercase tracking-wider">
+          <th class="text-left px-5 py-3 font-normal"><span class="w-4 h-4 rounded border border-paper-300 inline-block"></span></th>
+          <th class="text-left px-5 py-3 font-normal">Run</th>
+          <th class="text-left px-5 py-3 font-normal">Employee</th>
+          <th class="text-left px-5 py-3 font-normal">Status</th>
+          <th class="text-left px-5 py-3 font-normal">Duration</th>
+          <th class="text-left px-5 py-3 font-normal">Tokens</th>
+          <th class="text-left px-5 py-3 font-normal">Started</th>
+          <th class="w-8"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-paper-200">
+        <tr class="hover:bg-paper-50/60">
+          <td class="px-5 py-3.5"><span class="w-4 h-4 rounded bg-azure-500 inline-grid place-items-center"><i data-lucide="check" class="!w-3 !h-3 text-white"></i></span></td>
+          <td class="px-5 py-3.5 font-mono text-[12px] text-azure-600">run_01HXZ…a3f</td>
+          <td class="px-5 py-3.5"><div class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-azure-400 to-azure-600 text-white grid place-items-center text-[10px] font-semibold">SA</span><span class="font-medium">Sales Analyst</span></div></td>
+          <td class="px-5 py-3.5"><span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-ok/10 text-ok text-[11px] font-medium"><span class="w-1.5 h-1.5 rounded-full bg-ok"></span> Success</span></td>
+          <td class="px-5 py-3.5 font-mono text-paper-700">1.4s</td>
+          <td class="px-5 py-3.5 font-mono text-paper-700">2,481</td>
+          <td class="px-5 py-3.5 text-paper-500">2 min ago</td>
+          <td class="px-3"><button class="w-7 h-7 rounded-lg hover:bg-paper-100 grid place-items-center text-paper-500"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+        <tr class="hover:bg-paper-50/60">
+          <td class="px-5 py-3.5"><span class="w-4 h-4 rounded border border-paper-300 inline-block"></span></td>
+          <td class="px-5 py-3.5 font-mono text-[12px] text-azure-600">run_01HXZ…b7c</td>
+          <td class="px-5 py-3.5"><div class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-azure-coral to-azure-lemon text-white grid place-items-center text-[10px] font-semibold">CM</span><span class="font-medium">Content Maker</span></div></td>
+          <td class="px-5 py-3.5"><span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-azure-50 text-azure-700 text-[11px] font-medium"><span class="relative w-1.5 h-1.5"><span class="absolute inset-0 rounded-full bg-azure-500 animate-ping opacity-60"></span><span class="absolute inset-0 rounded-full bg-azure-500"></span></span> Running</span></td>
+          <td class="px-5 py-3.5 font-mono text-paper-700">0:32…</td>
+          <td class="px-5 py-3.5 font-mono text-paper-700">1,094</td>
+          <td class="px-5 py-3.5 text-paper-500">now</td>
+          <td class="px-3"><button class="w-7 h-7 rounded-lg hover:bg-paper-100 grid place-items-center text-paper-500"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+        <tr class="hover:bg-paper-50/60">
+          <td class="px-5 py-3.5"><span class="w-4 h-4 rounded border border-paper-300 inline-block"></span></td>
+          <td class="px-5 py-3.5 font-mono text-[12px] text-azure-600">run_01HXZ…d2e</td>
+          <td class="px-5 py-3.5"><div class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-bad to-azure-coral text-white grid place-items-center text-[10px] font-semibold">BF</span><span class="font-medium">Bug Fixer</span></div></td>
+          <td class="px-5 py-3.5"><span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-bad/10 text-bad text-[11px] font-medium"><span class="w-1.5 h-1.5 rounded-full bg-bad"></span> Failed</span></td>
+          <td class="px-5 py-3.5 font-mono text-paper-700">12.1s</td>
+          <td class="px-5 py-3.5 font-mono text-paper-700">4,320</td>
+          <td class="px-5 py-3.5 text-paper-500">14 min ago</td>
+          <td class="px-3"><button class="w-7 h-7 rounded-lg hover:bg-paper-100 grid place-items-center text-paper-500"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+        <tr class="hover:bg-paper-50/60">
+          <td class="px-5 py-3.5"><span class="w-4 h-4 rounded border border-paper-300 inline-block"></span></td>
+          <td class="px-5 py-3.5 font-mono text-[12px] text-azure-600">run_01HXZ…k9p</td>
+          <td class="px-5 py-3.5"><div class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-ok to-azure-cyan text-white grid place-items-center text-[10px] font-semibold">OP</span><span class="font-medium">Ops Overseer</span></div></td>
+          <td class="px-5 py-3.5"><span class="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-warn/10 text-warn text-[11px] font-medium"><span class="w-1.5 h-1.5 rounded-full bg-warn"></span> Awaiting approval</span></td>
+          <td class="px-5 py-3.5 font-mono text-paper-700">3.7s</td>
+          <td class="px-5 py-3.5 font-mono text-paper-700">912</td>
+          <td class="px-5 py-3.5 text-paper-500">1 h ago</td>
+          <td class="px-3"><button class="w-7 h-7 rounded-lg hover:bg-paper-100 grid place-items-center text-paper-500"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="flex items-center justify-between px-5 py-3 border-t border-paper-200 text-[12px] text-paper-500 bg-paper-50/40">
+      <span class="font-mono">Showing 4 of 214 runs</span>
+      <div class="flex items-center gap-1">
+        <button class="w-8 h-8 rounded-lg border border-paper-200 grid place-items-center hover:bg-white"><i data-lucide="chevron-left"></i></button>
+        <span class="w-8 h-8 grid place-items-center rounded-lg bg-azure-500 text-white text-[12px] font-semibold">1</span>
+        <span class="w-8 h-8 grid place-items-center hover:bg-paper-100 rounded-lg cursor-pointer">2</span>
+        <span class="w-8 h-8 grid place-items-center hover:bg-paper-100 rounded-lg cursor-pointer">3</span>
+        <button class="w-8 h-8 rounded-lg border border-paper-200 grid place-items-center hover:bg-white"><i data-lucide="chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TABS + BADGES -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[11px] uppercase tracking-[0.18em] font-mono text-azure-500">05 · Navigation</div>
+      <h2 class="mt-1 text-[32px] font-bold tracking-tight">Tabs · Badges · Status</h2>
+    </div>
+  </div>
+  <div class="h-px bg-gradient-to-r from-transparent via-paper-300 to-transparent mb-8"></div>
+  <div class="grid grid-cols-2 gap-6">
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm">
+      <div class="flex items-center gap-6 border-b-2 border-paper-200">
+        <button class="relative pb-3 -mb-[2px] text-[14px] font-semibold">
+          Overview
+          <span class="absolute left-0 right-0 bottom-0 h-[3px] bg-azure-500 rounded-full"></span>
+        </button>
+        <button class="pb-3 text-[14px] text-paper-500 font-medium hover:text-paper-800">Activity <span class="ml-1 px-1.5 h-4 text-[10px] rounded bg-paper-100 font-mono inline-flex items-center">12</span></button>
+        <button class="pb-3 text-[14px] text-paper-500 font-medium hover:text-paper-800">Artifacts</button>
+        <button class="pb-3 text-[14px] text-paper-500 font-medium hover:text-paper-800">Settings</button>
+      </div>
+      <div class="mt-5">
+        <div class="text-[13px] text-paper-600 leading-relaxed">Underline tabs with a 3px primary bar. Inactive tabs use muted text · `text-paper-500`.</div>
+      </div>
+      <div class="mt-6 inline-flex p-1 rounded-xl bg-paper-100 border border-paper-200">
+        <button class="h-8 px-3 rounded-lg text-[12px] font-semibold text-paper-800 bg-white shadow-soft-sm">All · 124</button>
+        <button class="h-8 px-3 rounded-lg text-[12px] font-medium text-paper-500 hover:text-paper-800">Builtin · 37</button>
+        <button class="h-8 px-3 rounded-lg text-[12px] font-medium text-paper-500 hover:text-paper-800">Custom · 87</button>
+      </div>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-5">
+      <div class="text-[12px] font-semibold text-paper-700">Badges</div>
+      <div class="flex flex-wrap gap-2">
+        <span class="h-6 px-2 inline-flex items-center text-[11px] rounded-md bg-azure-500 text-white font-semibold">NEW</span>
+        <span class="h-6 px-2 inline-flex items-center text-[11px] rounded-md bg-azure-50 text-azure-700 font-medium">Beta</span>
+        <span class="h-6 px-2 inline-flex items-center text-[11px] rounded-md bg-paper-100 text-paper-700 font-medium">Stable</span>
+        <span class="h-6 px-2 inline-flex items-center text-[11px] rounded-md bg-ok/10 text-ok font-medium"><span class="w-1.5 h-1.5 rounded-full bg-ok mr-1.5"></span> Active</span>
+        <span class="h-6 px-2 inline-flex items-center text-[11px] rounded-md bg-warn/10 text-warn font-medium">Pending</span>
+        <span class="h-6 px-2 inline-flex items-center text-[11px] rounded-md bg-bad/10 text-bad font-medium">Error</span>
+        <span class="h-6 px-2 inline-flex items-center text-[11px] rounded-md bg-azure-lemon/30 text-paper-800 font-medium">⭐ Pro</span>
+        <span class="h-6 px-2 inline-flex items-center text-[11px] rounded-md bg-gradient-to-r from-azure-500 to-azure-cyan text-white font-semibold">✨ AI</span>
+      </div>
+      <div class="text-[12px] font-semibold text-paper-700 pt-2">Status chips</div>
+      <div class="flex flex-wrap gap-2">
+        <span class="inline-flex items-center gap-2 h-8 px-3 rounded-full bg-white border border-paper-200 shadow-soft-sm">
+          <span class="relative w-2 h-2"><span class="absolute inset-0 rounded-full bg-ok animate-ping opacity-40"></span><span class="absolute inset-0 rounded-full bg-ok"></span></span>
+          <span class="text-[12px] font-medium">All systems operational</span>
+        </span>
+        <span class="inline-flex items-center gap-2 h-8 px-3 rounded-full bg-azure-500 text-white shadow-soft">
+          <i data-lucide="zap" class="!w-3.5 !h-3.5"></i>
+          <span class="text-[12px] font-mono font-semibold">3 runs · 1.2M tok/s</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODAL + TOAST -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[11px] uppercase tracking-[0.18em] font-mono text-azure-500">06 · Overlays</div>
+      <h2 class="mt-1 text-[32px] font-bold tracking-tight">Modal · Toasts · Tooltip</h2>
+    </div>
+  </div>
+  <div class="h-px bg-gradient-to-r from-transparent via-paper-300 to-transparent mb-8"></div>
+  <div class="grid grid-cols-3 gap-6">
+    <div class="col-span-2 relative p-8 rounded-2xl bg-paper-100 min-h-[380px] overflow-hidden grid-bg">
+      <div class="relative mx-auto max-w-md rounded-2xl bg-white border border-paper-200 shadow-soft-lg">
+        <div class="p-6 flex items-start gap-3">
+          <div class="w-12 h-12 rounded-xl bg-warn/10 grid place-items-center text-warn shrink-0"><i data-lucide="alert-triangle" class="!w-6 !h-6"></i></div>
+          <div class="flex-1">
+            <h3 class="text-[17px] font-bold">Delete "Sales Analyst Bot"?</h3>
+            <p class="mt-1.5 text-[13px] text-paper-600 leading-relaxed">This removes the employee, its skills, and all associated traces. This action <b>cannot</b> be undone.</p>
+          </div>
+          <button class="w-8 h-8 rounded-lg hover:bg-paper-100 grid place-items-center text-paper-500"><i data-lucide="x"></i></button>
+        </div>
+        <div class="px-6 pb-6 space-y-2">
+          <label class="block text-[11px] font-semibold text-paper-700 uppercase tracking-wider">Type the name to confirm</label>
+          <input class="w-full h-11 px-4 rounded-xl bg-paper-50 border border-paper-300 text-[14px] font-mono ring-focus" placeholder="Sales Analyst Bot" />
+        </div>
+        <div class="p-4 border-t border-paper-200 bg-paper-50/40 rounded-b-2xl flex items-center justify-end gap-2">
+          <button class="btn-pop h-10 px-4 rounded-xl hover:bg-paper-100 text-[13px] font-medium text-paper-700">Cancel <span class="kbd ml-1">Esc</span></button>
+          <button class="btn-pop h-10 px-4 rounded-xl bg-bad hover:bg-bad/90 text-white text-[13px] font-semibold inline-flex items-center gap-2 shadow-soft"><i data-lucide="trash-2"></i> Delete permanently</button>
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-3">
+      <div class="text-[12px] font-semibold text-paper-700">Toasts</div>
+      <div class="rounded-xl bg-white border border-paper-200 shadow-soft p-3 flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-ok/10 grid place-items-center text-ok shrink-0"><i data-lucide="check"></i></div>
+        <div class="flex-1">
+          <div class="text-[13px] font-semibold">Employee saved ✨</div>
+          <div class="text-[12px] text-paper-600 mt-0.5">Sales Analyst · updated 3 skills</div>
+        </div>
+        <i data-lucide="x" class="text-paper-400 cursor-pointer"></i>
+      </div>
+      <div class="rounded-xl bg-azure-50 border border-azure-200 shadow-soft p-3 flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-azure-500 text-white grid place-items-center shrink-0"><i data-lucide="sparkles"></i></div>
+        <div class="flex-1">
+          <div class="text-[13px] font-semibold">New skill in marketplace</div>
+          <div class="text-[12px] text-paper-600 mt-0.5">`allhands.forecast_v2` — try it now</div>
+        </div>
+      </div>
+      <div class="rounded-xl bg-warn/5 border border-warn/20 shadow-soft p-3 flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-warn/10 grid place-items-center text-warn shrink-0"><i data-lucide="alert-triangle"></i></div>
+        <div class="flex-1">
+          <div class="text-[13px] font-semibold">Approval needed</div>
+          <div class="text-[12px] text-paper-600 mt-0.5">Bug Fixer → delete_file(app.py)</div>
+          <div class="mt-2 flex gap-2">
+            <button class="h-7 px-3 text-[12px] rounded-lg bg-warn text-white font-medium">Review</button>
+            <button class="h-7 px-3 text-[12px] rounded-lg hover:bg-paper-100 font-medium">Dismiss</button>
+          </div>
+        </div>
+      </div>
+      <div class="pt-3 mt-2 border-t border-paper-200 text-[12px] font-semibold text-paper-700">Tooltip</div>
+      <div class="relative inline-block mt-3">
+        <button class="h-9 px-3 rounded-lg border border-paper-200 text-[12px] font-medium inline-flex items-center gap-1.5 bg-white">Hover me <i data-lucide="info"></i></button>
+        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap px-3 py-2 rounded-lg bg-paper-800 text-white text-[11px] font-medium shadow-soft-lg">
+          Opens the run inspector · <span class="kbd !bg-white/10 !text-white !border-white/20">I</span>
+          <div class="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-paper-800 rotate-45 -mt-1"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMAND PALETTE + CHAT + CODE -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[11px] uppercase tracking-[0.18em] font-mono text-azure-500">07 · Composite</div>
+      <h2 class="mt-1 text-[32px] font-bold tracking-tight">Command · Chat · Code</h2>
+    </div>
+  </div>
+  <div class="h-px bg-gradient-to-r from-transparent via-paper-300 to-transparent mb-8"></div>
+
+  <div class="grid grid-cols-3 gap-6">
+    <div class="rounded-2xl bg-white border border-paper-200 shadow-soft-lg overflow-hidden">
+      <div class="flex items-center gap-2 px-4 h-13 py-3 border-b border-paper-200 bg-paper-50/40">
+        <i data-lucide="search" class="text-azure-500"></i>
+        <input class="flex-1 bg-transparent text-[14px] outline-none placeholder:text-paper-400" value="create emp" />
+        <span class="kbd">Esc</span>
+      </div>
+      <div class="py-2">
+        <div class="px-4 py-1.5 text-[10px] uppercase tracking-wider text-paper-500 font-mono font-semibold">Suggestions</div>
+        <div class="px-2">
+          <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-azure-50 text-azure-700">
+            <div class="w-7 h-7 rounded-lg bg-azure-500 text-white grid place-items-center"><i data-lucide="user-plus"></i></div>
+            <span class="text-[13px]">Create <b>employee</b></span>
+            <span class="ml-auto text-[11px] font-mono">↵</span>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-paper-100">
+            <div class="w-7 h-7 rounded-lg bg-paper-100 grid place-items-center text-paper-500"><i data-lucide="wand-2"></i></div>
+            <span class="text-[13px]">Create <b>skill</b> from SKILL.md</span>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-paper-100">
+            <div class="w-7 h-7 rounded-lg bg-paper-100 grid place-items-center text-paper-500"><i data-lucide="plug"></i></div>
+            <span class="text-[13px]">Add <b>MCP server</b></span>
+          </div>
+        </div>
+        <div class="px-4 py-1.5 text-[10px] uppercase tracking-wider text-paper-500 font-mono font-semibold mt-2">Recent</div>
+        <div class="px-2">
+          <div class="flex items-center gap-3 px-3 py-2 rounded-xl text-paper-600 text-[13px]"><i data-lucide="clock" class="text-paper-400"></i> run_01HXZ…a3f <span class="ml-auto text-[10px] font-mono text-paper-400">2m</span></div>
+          <div class="flex items-center gap-3 px-3 py-2 rounded-xl text-paper-600 text-[13px]"><i data-lucide="clock" class="text-paper-400"></i> Bug Fixer · error <span class="ml-auto text-[10px] font-mono text-paper-400">14m</span></div>
+        </div>
+      </div>
+      <div class="px-4 h-10 border-t border-paper-200 bg-paper-50/40 flex items-center gap-3 text-[10px] font-mono text-paper-500">
+        <span class="flex items-center gap-1"><span class="kbd">↑↓</span> navigate</span>
+        <span class="flex items-center gap-1"><span class="kbd">↵</span> select</span>
+        <span class="flex items-center gap-1 ml-auto"><span class="kbd">⌘K</span> toggle</span>
+      </div>
+    </div>
+
+    <div class="col-span-2 rounded-2xl bg-white border border-paper-200 shadow-soft overflow-hidden flex flex-col">
+      <div class="h-12 px-4 border-b border-paper-200 flex items-center gap-2 bg-paper-50/30">
+        <div class="w-7 h-7 rounded-full bg-gradient-to-br from-azure-400 to-azure-600 text-white grid place-items-center text-[10px] font-bold">SA</div>
+        <span class="text-[14px] font-semibold">Sales Analyst</span>
+        <span class="inline-flex items-center gap-1.5 ml-2 text-[11px] text-ok font-medium"><span class="w-1.5 h-1.5 rounded-full bg-ok"></span> Ready</span>
+        <div class="ml-auto flex items-center gap-1.5 text-[11px] text-paper-500 font-mono">Opus 4.7 · Checkpoint 12</div>
+      </div>
+      <div class="flex-1 p-5 space-y-4 overflow-y-auto scrollbar-thin bg-paper-50/30" style="max-height:440px">
+        <div class="flex items-start gap-3 justify-end">
+          <div class="max-w-md p-3 px-4 rounded-2xl rounded-tr-md bg-azure-500 text-white text-[14px] shadow-soft">
+            What were last quarter's top-3 churn drivers? Compare to Q3.
+          </div>
+          <div class="w-8 h-8 rounded-full bg-paper-800 text-white grid place-items-center text-[11px] font-bold">You</div>
+        </div>
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-azure-400 to-azure-600 text-white grid place-items-center text-[10px] font-bold">SA</div>
+          <div class="max-w-md space-y-2">
+            <div class="px-3 py-2 rounded-xl bg-azure-50 border border-azure-200 text-[11px] text-azure-700 font-mono flex items-center gap-2">
+              <i data-lucide="brain" class="!w-3.5 !h-3.5"></i> reasoning · 312 tokens
+              <i data-lucide="chevron-down" class="!w-3 !h-3 ml-auto"></i>
+            </div>
+            <div class="px-3 py-2 rounded-xl bg-white border border-paper-200 text-[11px] font-mono text-paper-700 flex items-center gap-2 shadow-soft-sm">
+              <i data-lucide="database" class="!w-3.5 !h-3.5 text-azure-500"></i>
+              <span>tool: <b class="text-azure-600">run_sql</b>(churn_q3_q4)</span>
+              <span class="ml-auto text-ok font-semibold">✓ 842ms</span>
+            </div>
+            <div class="p-4 rounded-2xl rounded-tl-md bg-white border border-paper-200 text-[14px] leading-relaxed shadow-soft-sm">
+              Top-3 Q4 churn drivers vs Q3:
+              <ol class="mt-2.5 space-y-1.5">
+                <li>1. <b>Pricing confusion</b> — up 34% QoQ</li>
+                <li>2. <b>Onboarding drop-off</b> — up 18%</li>
+                <li>3. <b>Feature discoverability</b> — up 11%</li>
+              </ol>
+              <div class="mt-3 pt-3 border-t border-paper-200 text-[11px] text-paper-500 font-mono">sources: billing_events · support_tickets · 42 rows scanned</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="p-3 border-t border-paper-200 bg-white">
+        <div class="flex items-center gap-2 h-12 px-3 rounded-xl border border-paper-300 bg-white focus-within:border-azure-500 focus-within:shadow-glow transition">
+          <button class="w-8 h-8 rounded-lg hover:bg-paper-100 grid place-items-center text-paper-500"><i data-lucide="plus"></i></button>
+          <input class="flex-1 bg-transparent text-[14px] outline-none placeholder:text-paper-400" placeholder="Ask anything ✨" />
+          <span class="kbd">⌘↵</span>
+          <button class="btn-pop w-8 h-8 rounded-lg bg-azure-500 text-white grid place-items-center shadow-soft-sm"><i data-lucide="arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-6 rounded-2xl bg-paper-800 shadow-soft-lg overflow-hidden">
+    <div class="flex items-center gap-2 px-4 h-11 border-b border-paper-700 bg-paper-900/40">
+      <i data-lucide="file-code-2" class="text-azure-sky"></i>
+      <span class="text-[13px] font-mono text-paper-300">employees/sales_analyst.yaml</span>
+      <div class="ml-auto flex items-center gap-3 text-[11px] font-mono text-paper-400">
+        <button class="h-6 px-2 rounded hover:bg-white/10 text-paper-200 inline-flex items-center gap-1"><i data-lucide="copy" class="!w-3 !h-3"></i> copy</button>
+        <span>yaml · 24 lines</span>
+      </div>
+    </div>
+    <pre class="p-6 text-[13px] font-mono leading-7 overflow-x-auto scrollbar-thin text-paper-200"><span class="text-paper-500"># allhands employee definition</span>
+<span class="text-azure-sky">id</span>: <span class="text-azure-lemon">sales_analyst</span>
+<span class="text-azure-sky">name</span>: <span class="text-azure-lemon">"Sales Analyst"</span>
+<span class="text-azure-sky">model_ref</span>: <span class="text-azure-lemon">anthropic/claude-opus-4-7</span>
+<span class="text-azure-sky">skill_ids</span>:
+  - <span class="text-azure-lemon">allhands.builtin.run_sql</span>
+  - <span class="text-azure-lemon">allhands.builtin.forecast_v2</span>
+<span class="text-azure-sky">max_iterations</span>: <span class="text-azure-coral">12</span>
+<span class="text-azure-sky">system_prompt</span>: |
+  <span class="text-paper-300">You are a precise, terse analyst.</span>
+  <span class="text-paper-300">Cite sources. Never hallucinate.</span></pre>
+  </div>
+</section>
+
+<!-- SIDEBAR + EMPTY STATE + MISC -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[11px] uppercase tracking-[0.18em] font-mono text-azure-500">08 · Layouts</div>
+      <h2 class="mt-1 text-[32px] font-bold tracking-tight">Sidebar · Empty · Misc</h2>
+    </div>
+  </div>
+  <div class="h-px bg-gradient-to-r from-transparent via-paper-300 to-transparent mb-8"></div>
+  <div class="grid grid-cols-3 gap-6">
+    <div class="rounded-2xl bg-white border border-paper-200 shadow-soft-sm p-4 space-y-4">
+      <div class="flex items-center gap-2 px-2">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-azure-500 to-azure-700 grid place-items-center text-white text-[12px] font-bold">ah</div>
+        <div>
+          <div class="text-[13px] font-bold">Acme Inc.</div>
+          <div class="text-[11px] text-paper-500">Pro workspace</div>
+        </div>
+        <i data-lucide="chevrons-up-down" class="ml-auto text-paper-400"></i>
+      </div>
+      <div class="space-y-0.5">
+        <div class="text-[10px] uppercase tracking-wider text-paper-500 font-mono font-semibold px-2 mt-4 mb-2">Workspace</div>
+        <div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-azure-500 text-white shadow-soft-sm">
+          <i data-lucide="users"></i><span class="text-[13px] font-medium">Employees</span>
+          <span class="ml-auto text-[10px] font-mono bg-white/20 px-1.5 h-4 rounded inline-flex items-center">37</span>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-paper-100 text-paper-700">
+          <i data-lucide="wand-2" class="text-paper-500"></i><span class="text-[13px] font-medium">Skills</span>
+          <span class="ml-auto text-[10px] font-mono text-paper-400">124</span>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-paper-100 text-paper-700">
+          <i data-lucide="plug" class="text-paper-500"></i><span class="text-[13px] font-medium">Gateway</span>
+          <span class="ml-auto px-1.5 h-4 text-[9px] rounded bg-azure-coral text-white font-mono inline-flex items-center">5</span>
+        </div>
+        <div class="text-[10px] uppercase tracking-wider text-paper-500 font-mono font-semibold px-2 mt-4 mb-2">Observe</div>
+        <div class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-paper-100 text-paper-700">
+          <i data-lucide="activity" class="text-paper-500"></i><span class="text-[13px] font-medium">Traces</span>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-paper-100 text-paper-700">
+          <i data-lucide="shield-check" class="text-paper-500"></i><span class="text-[13px] font-medium">Approvals</span>
+          <span class="ml-auto w-2 h-2 rounded-full bg-warn animate-pulse"></span>
+        </div>
+      </div>
+      <div class="pt-4 border-t border-paper-200">
+        <div class="p-4 rounded-2xl bg-gradient-to-br from-azure-50 to-azure-lemon/20 border border-azure-200">
+          <div class="flex items-center gap-2 text-[12px] font-bold text-azure-700">
+            <i data-lucide="zap"></i> Usage · 62%
+          </div>
+          <div class="mt-2 h-2 rounded-full bg-white/70 overflow-hidden">
+            <div class="h-full w-[62%] bg-gradient-to-r from-azure-500 to-azure-sky rounded-full"></div>
+          </div>
+          <div class="mt-2 text-[11px] text-paper-600 font-mono">18.4M / 30M tokens</div>
+          <button class="btn-pop mt-3 w-full h-9 rounded-xl bg-azure-500 hover:bg-azure-600 text-white text-[13px] font-semibold shadow-soft">Upgrade plan</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-span-2 rounded-2xl bg-white border border-paper-200 shadow-soft-sm p-14 grid place-items-center relative overflow-hidden">
+      <div class="absolute inset-0 mesh-hero opacity-60"></div>
+      <div class="relative text-center max-w-md">
+        <div class="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-azure-500 to-azure-sky text-white grid place-items-center shadow-soft-lg animate-float">
+          <i data-lucide="users" class="!w-9 !h-9"></i>
+        </div>
+        <h3 class="mt-6 text-[24px] font-bold tracking-tight">No employees yet</h3>
+        <p class="mt-2 text-[14px] text-paper-600 leading-relaxed">Hire your first digital employee. Give them skills, tools, and a job — they'll start working immediately. 🚀</p>
+        <div class="mt-6 flex items-center justify-center gap-2">
+          <button class="btn-pop h-11 px-5 rounded-xl bg-azure-500 hover:bg-azure-600 text-white text-[14px] font-semibold inline-flex items-center gap-2 shadow-soft-lg"><i data-lucide="sparkles"></i> Hire employee</button>
+          <button class="btn-pop h-11 px-5 rounded-xl bg-white border border-paper-200 hover:border-azure-400 text-[14px] font-semibold inline-flex items-center gap-2"><i data-lucide="book-open"></i> Read docs</button>
+        </div>
+        <div class="mt-8 flex items-center justify-center gap-4 text-[12px] text-paper-500">
+          <span>Popular starts:</span>
+          <button class="px-3 h-7 rounded-full bg-white border border-paper-200 hover:border-azure-400 text-[12px] font-medium">📊 Sales Analyst</button>
+          <button class="px-3 h-7 rounded-full bg-white border border-paper-200 hover:border-azure-400 text-[12px] font-medium">✍️ Content Maker</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Avatar + Progress + tokens -->
+  <div class="grid grid-cols-3 gap-6 mt-6">
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-4">
+      <div class="text-[12px] font-semibold text-paper-700">Avatars</div>
+      <div class="flex items-center gap-3">
+        <div class="w-7 h-7 rounded-full bg-gradient-to-br from-azure-400 to-azure-600 text-white grid place-items-center text-[10px] font-bold">SA</div>
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-azure-coral to-azure-lemon text-white grid place-items-center text-[12px] font-bold">LS</div>
+        <div class="relative w-11 h-11 rounded-full bg-gradient-to-br from-ok to-azure-cyan text-white grid place-items-center text-[13px] font-bold">WK<span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-ok border-2 border-white"></span></div>
+        <div class="w-14 h-14 rounded-full bg-gradient-to-br from-azure-500 to-azure-700 text-white grid place-items-center text-[16px] font-bold">AI</div>
+      </div>
+      <div class="flex -space-x-2">
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-azure-400 to-azure-600 border-2 border-white text-white grid place-items-center text-[11px] font-bold">SA</div>
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-azure-coral to-azure-lemon border-2 border-white text-white grid place-items-center text-[11px] font-bold">CM</div>
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-ok to-azure-cyan border-2 border-white text-white grid place-items-center text-[11px] font-bold">BF</div>
+        <div class="w-9 h-9 rounded-full bg-paper-100 border-2 border-white grid place-items-center text-[11px] font-semibold text-paper-600">+5</div>
+      </div>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-5">
+      <div class="text-[12px] font-semibold text-paper-700">Progress</div>
+      <div>
+        <div class="flex items-center justify-between text-[11px] text-paper-600 font-mono mb-1.5"><span>Indexing skills…</span><span class="font-semibold">62%</span></div>
+        <div class="h-2.5 rounded-full bg-paper-200 overflow-hidden">
+          <div class="h-full w-[62%] bg-gradient-to-r from-azure-500 to-azure-sky rounded-full"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <svg width="72" height="72" viewBox="0 0 72 72" class="-rotate-90">
+          <circle cx="36" cy="36" r="30" stroke="#EDF1F8" stroke-width="6" fill="none"/>
+          <circle cx="36" cy="36" r="30" stroke="#0A5BFF" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="55"/>
+        </svg>
+        <div>
+          <div class="text-[26px] font-bold tracking-tight">71%</div>
+          <div class="text-[12px] text-paper-500 font-mono">step 3 of 4</div>
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-2xl bg-white border border-paper-200 shadow-soft-sm space-y-3">
+      <div class="text-[12px] font-semibold text-paper-700">Color tokens</div>
+      <div class="grid grid-cols-5 gap-2">
+        <div class="aspect-square rounded-lg bg-azure-50"></div>
+        <div class="aspect-square rounded-lg bg-azure-200"></div>
+        <div class="aspect-square rounded-lg bg-azure-400"></div>
+        <div class="aspect-square rounded-lg bg-azure-500 shadow-soft"></div>
+        <div class="aspect-square rounded-lg bg-azure-700"></div>
+      </div>
+      <div class="grid grid-cols-5 gap-2">
+        <div class="aspect-square rounded-lg bg-paper-100"></div>
+        <div class="aspect-square rounded-lg bg-paper-200"></div>
+        <div class="aspect-square rounded-lg bg-paper-400"></div>
+        <div class="aspect-square rounded-lg bg-paper-700"></div>
+        <div class="aspect-square rounded-lg bg-paper-900"></div>
+      </div>
+      <div class="grid grid-cols-4 gap-2 pt-1">
+        <div class="h-7 rounded-lg bg-azure-cyan/30 text-paper-800 text-[10px] font-semibold grid place-items-center">cyan</div>
+        <div class="h-7 rounded-lg bg-azure-lemon/40 text-paper-800 text-[10px] font-semibold grid place-items-center">lemon</div>
+        <div class="h-7 rounded-lg bg-azure-coral/30 text-paper-800 text-[10px] font-semibold grid place-items-center">coral</div>
+        <div class="h-7 rounded-lg bg-ok/20 text-ok text-[10px] font-semibold grid place-items-center">ok</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer class="mt-16 border-t border-paper-200 bg-white">
+  <div class="max-w-[1400px] mx-auto px-8 py-10 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-azure-500 to-azure-700 text-white grid place-items-center text-[11px] font-bold">ah</div>
+      <div class="text-[13px] text-paper-600">
+        <span class="text-paper-900 font-bold">allhands</span> · V2 Azure Live · design proposal · <span class="font-mono">2026-04-23</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-[12px] font-medium text-paper-500">
+      <a class="hover:text-azure-600">← v1 cobalt-precision</a>
+      <a class="hover:text-azure-600">v3 neon-cyber →</a>
+      <a class="hover:text-azure-600">index</a>
+    </div>
+  </div>
+</footer>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

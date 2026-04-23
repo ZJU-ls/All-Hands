@@ -83,3 +83,4 @@ Thumbs.db
 
 # TypeScript build info
 /web/tsconfig.tsbuildinfo
+.claude/

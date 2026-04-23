@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>V3 · Neon Cyber · allhands design proposals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
+      colors: {
+        void: {
+          950: '#030509',
+          900: '#07090F',
+          800: '#0B0F18',
+          700: '#11172255',
+          600: '#1A2232',
+          500: '#24304A',
+          400: '#3D4D70',
+          300: '#5E6F94',
+          200: '#8FA0C3',
+          100: '#C5D0E6',
+          50:  '#E9EEFA',
+        },
+        neon: {
+          50:  '#E6F6FF',
+          100: '#B3E1FF',
+          200: '#80CCFF',
+          300: '#4DB8FF',
+          400: '#1AA3FF',
+          500: '#00A3FF',
+          600: '#0082CC',
+          700: '#006199',
+          glow: '#66CCFF',
+          hot: '#00E5FF',
+          magenta: '#FF00D4',
+          lime: '#7CFFB2',
+        },
+      },
+      boxShadow: {
+        'neon-sm': '0 0 8px rgba(0,163,255,.45), 0 0 16px rgba(0,163,255,.22)',
+        'neon': '0 0 16px rgba(0,163,255,.55), 0 0 32px rgba(0,163,255,.25), 0 0 64px rgba(0,163,255,.1)',
+        'neon-lg': '0 0 24px rgba(0,163,255,.6), 0 0 64px rgba(0,163,255,.35), 0 0 128px rgba(0,163,255,.2)',
+        'magenta': '0 0 16px rgba(255,0,212,.5), 0 0 48px rgba(255,0,212,.2)',
+        'glass': 'inset 0 1px 0 rgba(255,255,255,.06), 0 1px 0 rgba(0,0,0,.6)',
+      },
+      animation: {
+        'fade-up': 'fadeUp .6s cubic-bezier(.16,1,.3,1)',
+        'scan': 'scan 3s linear infinite',
+        'pulse-dot': 'pulseDot 1.8s ease-in-out infinite',
+        'flicker': 'flicker 4s ease-in-out infinite',
+      },
+      keyframes: {
+        fadeUp: { '0%': { opacity: 0, transform: 'translateY(8px)' }, '100%': { opacity: 1, transform: 'none' } },
+        scan: { '0%': { transform: 'translateY(-100%)' }, '100%': { transform: 'translateY(1000%)' } },
+        pulseDot: { '0%,100%': { boxShadow: '0 0 0 0 rgba(0,163,255,.7)' }, '50%': { boxShadow: '0 0 0 6px rgba(0,163,255,0)' } },
+        flicker: { '0%,95%,100%': { opacity: 1 }, '97%': { opacity: 0.86 }, '98%': { opacity: 1 } },
+      },
+    },
+  },
+};
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body {
+    background: #07090F;
+    color: #C5D0E6;
+    font-feature-settings: 'cv11','ss01','ss03','zero';
+    letter-spacing: -0.011em;
+    position: relative;
+    overflow-x: hidden;
+  }
+  /* global grid */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(61,77,112,.09) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(61,77,112,.09) 1px, transparent 1px);
+    background-size: 56px 56px;
+    background-position: -1px -1px;
+    pointer-events: none;
+    z-index: 0;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.4) 70%, transparent 100%);
+  }
+  /* noise */
+  body::after {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='2'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .04 0'/></filter><rect width='200' height='200' filter='url(%23n)' /></svg>");
+    opacity: .35; mix-blend-mode: overlay;
+  }
+  .glass {
+    background: rgba(11,15,24,.55);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(125,155,205,.12);
+  }
+  .glass:hover { border-color: rgba(0,163,255,.35); }
+  .neon-text {
+    color: #66CCFF;
+    text-shadow: 0 0 8px rgba(0,163,255,.7), 0 0 24px rgba(0,163,255,.35);
+  }
+  .gradient-text {
+    background: linear-gradient(120deg, #66CCFF 0%, #00A3FF 40%, #FF00D4 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .gradient-border {
+    position: relative;
+    background: linear-gradient(180deg, rgba(11,15,24,.9), rgba(11,15,24,.7)) padding-box,
+                linear-gradient(135deg, rgba(0,163,255,.6), rgba(255,0,212,.35), rgba(0,163,255,.1)) border-box;
+    border: 1px solid transparent;
+  }
+  .gradient-border-soft {
+    background: rgba(11,15,24,.55) padding-box,
+                linear-gradient(135deg, rgba(0,163,255,.35), rgba(0,163,255,.06)) border-box;
+    border: 1px solid transparent;
+  }
+  .scanline {
+    position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  }
+  .scanline::before {
+    content: ''; position: absolute; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(0,163,255,.5), transparent);
+    animation: scan 3s linear infinite;
+  }
+  .kbd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+    border: 1px solid rgba(125,155,205,.2);
+    border-bottom-color: rgba(125,155,205,.35);
+    border-radius: 4px;
+    background: rgba(11,15,24,.8);
+    color: #8FA0C3;
+  }
+  .ring-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0,163,255,.25), 0 0 0 1px #00A3FF; }
+  .glow-line {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #00A3FF 30%, #66CCFF 50%, #00A3FF 70%, transparent);
+    box-shadow: 0 0 8px rgba(0,163,255,.6);
+  }
+  /* custom ticker */
+  .dash { background-image: linear-gradient(90deg, rgba(0,163,255,.35) 50%, transparent 50%); background-size: 8px 1px; height: 1px; background-repeat: repeat-x; }
+  [data-lucide] { width: 16px; height: 16px; stroke-width: 1.5; }
+  .scrollbar-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #1A2232; border-radius: 4px; }
+</style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+<div class="relative z-10">
+
+<!-- ===== TOP NAV ===== -->
+<header class="sticky top-0 z-40 glass">
+  <div class="max-w-[1400px] mx-auto px-8 h-14 flex items-center gap-8">
+    <div class="flex items-center gap-2.5">
+      <div class="relative w-7 h-7 rounded-md gradient-border grid place-items-center">
+        <span class="text-[11px] font-bold text-neon-glow tracking-tighter neon-text">ah</span>
+      </div>
+      <span class="font-semibold text-[14px] tracking-tight text-void-50">allhands</span>
+      <span class="text-[10px] uppercase tracking-[0.2em] text-neon-400 font-mono">v3 · neon</span>
+    </div>
+    <nav class="flex items-center gap-1 text-[13px]">
+      <a class="px-3 py-1.5 rounded-md text-neon-300 border border-neon-500/30 bg-neon-500/5 font-mono uppercase tracking-wider text-[11px]">Employees</a>
+      <a class="px-3 py-1.5 rounded-md text-void-200 hover:text-neon-300 hover:bg-neon-500/5 font-mono uppercase tracking-wider text-[11px]">Skills</a>
+      <a class="px-3 py-1.5 rounded-md text-void-200 hover:text-neon-300 hover:bg-neon-500/5 font-mono uppercase tracking-wider text-[11px]">Gateway</a>
+      <a class="px-3 py-1.5 rounded-md text-void-200 hover:text-neon-300 hover:bg-neon-500/5 font-mono uppercase tracking-wider text-[11px]">Traces</a>
+      <a class="px-3 py-1.5 rounded-md text-void-200 hover:text-neon-300 hover:bg-neon-500/5 font-mono uppercase tracking-wider text-[11px]">Market</a>
+    </nav>
+    <div class="flex-1 max-w-md">
+      <div class="flex items-center gap-2 h-8 px-3 rounded-md border border-void-500/40 bg-void-900/60 text-void-300 text-[12px] font-mono">
+        <i data-lucide="search"></i>
+        <span>&gt; query_system_</span>
+        <span class="w-[1px] h-3 bg-neon-500 animate-flicker"></span>
+        <span class="ml-auto kbd">⌘K</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 h-8 px-3 rounded-md border border-neon-500/20 bg-neon-500/5 text-neon-300 text-[11px] font-mono">
+        <span class="relative w-1.5 h-1.5"><span class="absolute inset-0 rounded-full bg-neon-500 animate-pulse-dot"></span></span>
+        ONLINE · 99.1%
+      </div>
+      <button class="w-8 h-8 rounded-md hover:bg-neon-500/10 grid place-items-center text-void-200"><i data-lucide="bell"></i></button>
+      <div class="w-7 h-7 rounded-full border border-neon-500/40 bg-void-800 grid place-items-center text-[11px] font-semibold text-neon-300 shadow-neon-sm">LS</div>
+    </div>
+  </div>
+</header>
+
+<!-- ===== HERO ===== -->
+<section class="relative overflow-hidden">
+  <!-- orbs -->
+  <div class="absolute -top-40 left-1/3 w-[600px] h-[600px] bg-neon-500/25 blur-[140px] rounded-full"></div>
+  <div class="absolute top-20 right-0 w-[400px] h-[400px] bg-neon-magenta/15 blur-[120px] rounded-full"></div>
+  <!-- corner brackets -->
+  <div class="absolute top-8 left-8 w-6 h-6 border-t-2 border-l-2 border-neon-500 shadow-neon-sm"></div>
+  <div class="absolute top-8 right-8 w-6 h-6 border-t-2 border-r-2 border-neon-500 shadow-neon-sm"></div>
+  <div class="absolute bottom-8 left-8 w-6 h-6 border-b-2 border-l-2 border-neon-500 shadow-neon-sm"></div>
+  <div class="absolute bottom-8 right-8 w-6 h-6 border-b-2 border-r-2 border-neon-500 shadow-neon-sm"></div>
+
+  <div class="relative max-w-[1400px] mx-auto px-8 py-28">
+    <div class="flex items-center gap-3 text-[10px] uppercase tracking-[0.3em] text-neon-400 font-mono mb-8 animate-fade-up">
+      <span class="dash w-16"></span>
+      <span>Protocol v3 · Neon Cyber</span>
+      <span class="dash flex-1 max-w-48"></span>
+    </div>
+    <h1 class="text-[88px] leading-[0.95] font-semibold tracking-[-0.045em] animate-fade-up">
+      <span class="text-void-50">The runtime</span><br/>
+      <span class="gradient-text">for digital workforce.</span>
+    </h1>
+    <p class="mt-8 text-[17px] text-void-200 max-w-2xl leading-relaxed animate-fade-up font-mono">
+      <span class="text-neon-400">&gt;</span> Neon Cyber · cold canvas, saturated signal, glass surfaces.<br/>
+      <span class="text-neon-400">&gt;</span> Made for AI engineers, infrastructure operators, and agentic workflows.
+    </p>
+    <div class="mt-10 flex items-center gap-3 animate-fade-up">
+      <button class="relative h-12 px-6 rounded-lg bg-neon-500 text-void-950 text-[13px] font-bold uppercase tracking-wider inline-flex items-center gap-2 shadow-neon hover:shadow-neon-lg transition">
+        <i data-lucide="zap"></i> Deploy agent
+        <span class="kbd !bg-void-950/30 !border-void-950/50 !text-void-950">⌘↵</span>
+      </button>
+      <button class="h-12 px-6 rounded-lg border border-neon-500/30 bg-neon-500/5 hover:bg-neon-500/10 text-neon-300 text-[13px] font-bold uppercase tracking-wider inline-flex items-center gap-2">
+        <i data-lucide="terminal"></i> Open console
+      </button>
+      <div class="ml-4 pl-4 border-l border-void-500/40 flex items-center gap-3 text-[11px] text-void-300 font-mono">
+        <div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-neon-lime shadow-[0_0_8px_rgba(124,255,178,.8)]"></span> 37 agents</div>
+        <div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-neon-500 shadow-neon-sm animate-pulse-dot"></span> 214 runs/24h</div>
+      </div>
+    </div>
+
+    <!-- hero preview strip -->
+    <div class="mt-16 relative rounded-xl gradient-border overflow-hidden shadow-neon-lg">
+      <div class="scanline"></div>
+      <div class="h-10 px-4 flex items-center gap-2 border-b border-neon-500/20 bg-void-900/80 relative z-10">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-neon-magenta shadow-magenta"></span>
+          <span class="w-2 h-2 rounded-full bg-neon-lime"></span>
+          <span class="w-2 h-2 rounded-full bg-neon-500 shadow-neon-sm"></span>
+        </div>
+        <span class="ml-3 text-[11px] font-mono text-void-300">[ SYSTEM ] allhands.terminal / runtime v3.0.0</span>
+        <span class="ml-auto text-[11px] font-mono text-neon-400">UPTIME 14d 03h · BUS 3.2 Gbps</span>
+      </div>
+      <div class="grid grid-cols-12 relative z-10">
+        <aside class="col-span-2 border-r border-neon-500/20 p-4 space-y-1">
+          <div class="text-[9px] uppercase tracking-[0.25em] text-void-400 font-mono mb-3">// WORKSPACE</div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded border border-neon-500/30 bg-neon-500/10 text-neon-200 text-[12px] font-mono">
+            <i data-lucide="users" class="text-neon-400"></i> employees
+          </div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded text-void-300 text-[12px] font-mono"><i data-lucide="wand-2"></i> skills</div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded text-void-300 text-[12px] font-mono"><i data-lucide="plug"></i> gateway</div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded text-void-300 text-[12px] font-mono"><i data-lucide="activity"></i> traces</div>
+        </aside>
+        <div class="col-span-10 p-6">
+          <div class="flex items-center gap-3 mb-5">
+            <h3 class="text-[13px] font-mono uppercase tracking-[0.2em] text-neon-glow neon-text">// dashboard</h3>
+            <span class="h-5 px-2 text-[10px] rounded border border-neon-lime/40 bg-neon-lime/10 text-neon-lime font-mono uppercase inline-flex items-center">AUTOPILOT · ON</span>
+          </div>
+          <div class="grid grid-cols-4 gap-3">
+            <div class="p-4 rounded-md gradient-border-soft relative">
+              <div class="text-[10px] text-void-300 uppercase tracking-[0.2em] font-mono">&gt; agents</div>
+              <div class="mt-2 text-2xl font-semibold text-neon-glow neon-text font-mono">037</div>
+              <div class="mt-1 text-[10px] text-neon-lime font-mono">+12% ↑</div>
+            </div>
+            <div class="p-4 rounded-md gradient-border-soft">
+              <div class="text-[10px] text-void-300 uppercase tracking-[0.2em] font-mono">&gt; runs/24h</div>
+              <div class="mt-2 text-2xl font-semibold text-neon-glow neon-text font-mono">214</div>
+              <div class="mt-1 text-[10px] text-neon-lime font-mono">+8% ↑</div>
+            </div>
+            <div class="p-4 rounded-md gradient-border-soft">
+              <div class="text-[10px] text-void-300 uppercase tracking-[0.2em] font-mono">&gt; success</div>
+              <div class="mt-2 text-2xl font-semibold text-neon-glow neon-text font-mono">99.1%</div>
+              <div class="mt-1 text-[10px] text-void-400 font-mono">stable</div>
+            </div>
+            <div class="p-4 rounded-md gradient-border-soft">
+              <div class="text-[10px] text-void-300 uppercase tracking-[0.2em] font-mono">&gt; cost/mo</div>
+              <div class="mt-2 text-2xl font-semibold text-neon-glow neon-text font-mono">$412</div>
+              <div class="mt-1 text-[10px] text-neon-magenta font-mono">+3% ↑</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="max-w-[1400px] mx-auto px-8 space-y-20 pb-32 relative z-10">
+
+<!-- BUTTONS -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.3em] font-mono text-neon-400">&lt;01/&gt; atoms</div>
+      <h2 class="mt-2 text-[30px] font-semibold tracking-tight text-void-50">Buttons</h2>
+    </div>
+    <div class="text-[11px] text-void-300 font-mono">primary · secondary · ghost · danger × sm md lg</div>
+  </div>
+  <div class="glow-line mb-8"></div>
+  <div class="grid grid-cols-4 gap-5">
+    <div class="p-6 rounded-lg gradient-border-soft space-y-4">
+      <div class="text-[10px] text-neon-400 font-mono uppercase tracking-[0.25em]">// primary</div>
+      <button class="h-7 px-3 rounded bg-neon-500 text-void-950 text-[11px] font-bold uppercase tracking-wider shadow-neon-sm">Save</button>
+      <button class="h-9 px-4 rounded bg-neon-500 text-void-950 text-[12px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow-neon-sm"><i data-lucide="send"></i> Dispatch</button>
+      <button class="h-11 px-5 rounded-lg bg-neon-500 text-void-950 text-[13px] font-bold uppercase tracking-wider inline-flex items-center gap-2 shadow-neon hover:shadow-neon-lg transition"><i data-lucide="zap"></i> Run agent <span class="kbd !bg-void-950/30 !border-void-950/50 !text-void-950">⌘↵</span></button>
+    </div>
+    <div class="p-6 rounded-lg gradient-border-soft space-y-4">
+      <div class="text-[10px] text-neon-400 font-mono uppercase tracking-[0.25em]">// outline</div>
+      <button class="h-7 px-3 rounded border border-neon-500/40 bg-neon-500/5 text-neon-300 text-[11px] font-mono uppercase tracking-wider hover:bg-neon-500/10">Cancel</button>
+      <button class="h-9 px-4 rounded border border-neon-500/40 bg-neon-500/5 text-neon-300 text-[12px] font-mono uppercase tracking-wider inline-flex items-center gap-1.5 hover:bg-neon-500/10"><i data-lucide="arrow-right"></i> Continue</button>
+      <button class="h-11 px-5 rounded-lg border border-neon-500/40 bg-neon-500/5 text-neon-300 text-[13px] font-mono uppercase tracking-wider inline-flex items-center gap-2 hover:shadow-neon-sm transition"><i data-lucide="plus"></i> Add skill</button>
+    </div>
+    <div class="p-6 rounded-lg gradient-border-soft space-y-4">
+      <div class="text-[10px] text-neon-400 font-mono uppercase tracking-[0.25em]">// ghost</div>
+      <button class="h-7 px-3 rounded hover:bg-neon-500/10 text-void-200 text-[11px] font-mono uppercase tracking-wider">Dismiss</button>
+      <button class="h-9 px-4 rounded hover:bg-neon-500/10 text-void-100 text-[12px] font-mono uppercase tracking-wider inline-flex items-center gap-1.5"><i data-lucide="filter"></i> Filter</button>
+      <button class="h-11 px-5 rounded hover:bg-neon-500/10 text-void-50 text-[13px] font-mono uppercase tracking-wider inline-flex items-center gap-2"><i data-lucide="share-2"></i> Share link</button>
+    </div>
+    <div class="p-6 rounded-lg gradient-border-soft space-y-4">
+      <div class="text-[10px] text-neon-400 font-mono uppercase tracking-[0.25em]">// danger · state</div>
+      <button class="h-9 px-4 rounded border border-neon-magenta/40 bg-neon-magenta/10 text-neon-magenta text-[12px] font-mono uppercase tracking-wider inline-flex items-center gap-1.5 hover:shadow-magenta"><i data-lucide="trash-2"></i> Purge</button>
+      <button class="h-9 px-4 rounded bg-neon-500 text-void-950 text-[12px] font-bold uppercase tracking-wider inline-flex items-center gap-2 opacity-80">
+        <span class="w-3 h-3 rounded-full border-2 border-void-950/30 border-t-void-950 animate-spin"></span> Running
+      </button>
+      <button disabled class="h-9 px-4 rounded bg-void-700 border border-void-500/30 text-void-400 text-[12px] font-mono uppercase tracking-wider cursor-not-allowed">Disabled</button>
+    </div>
+  </div>
+  <div class="mt-6 flex items-center gap-3">
+    <div class="flex items-center rounded-md border border-neon-500/20 overflow-hidden bg-void-800/60">
+      <button class="w-9 h-9 grid place-items-center text-void-300 hover:bg-neon-500/10"><i data-lucide="align-left"></i></button>
+      <button class="w-9 h-9 grid place-items-center text-neon-300 bg-neon-500/20 shadow-neon-sm"><i data-lucide="align-center"></i></button>
+      <button class="w-9 h-9 grid place-items-center text-void-300 hover:bg-neon-500/10"><i data-lucide="align-right"></i></button>
+    </div>
+    <div class="flex items-center rounded-md border border-neon-500/30 overflow-hidden">
+      <button class="h-9 px-4 text-[11px] text-void-950 bg-neon-500 font-mono uppercase tracking-wider">Day</button>
+      <button class="h-9 px-4 text-[11px] text-neon-300 hover:bg-neon-500/10 font-mono uppercase tracking-wider">Week</button>
+      <button class="h-9 px-4 text-[11px] text-neon-300 hover:bg-neon-500/10 font-mono uppercase tracking-wider">Month</button>
+    </div>
+  </div>
+</section>
+
+<!-- FORMS -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.3em] font-mono text-neon-400">&lt;02/&gt; forms</div>
+      <h2 class="mt-2 text-[30px] font-semibold tracking-tight text-void-50">Inputs & Controls</h2>
+    </div>
+  </div>
+  <div class="glow-line mb-8"></div>
+  <div class="grid grid-cols-3 gap-5">
+    <div class="p-6 rounded-lg gradient-border-soft space-y-5">
+      <div>
+        <label class="block text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono mb-2">agent.name</label>
+        <input class="w-full h-10 px-3 rounded-md bg-void-900/80 border border-neon-500/20 text-[13px] text-void-50 placeholder:text-void-400 font-mono ring-focus focus:border-neon-500" placeholder="sales_analyst_bot" />
+      </div>
+      <div>
+        <label class="block text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono mb-2">agent.email <span class="text-neon-magenta">!</span></label>
+        <div class="relative">
+          <input class="w-full h-10 px-3 rounded-md bg-void-900/80 border border-neon-magenta/60 text-[13px] text-void-50 font-mono ring-focus" value="invalid@" />
+        </div>
+        <div class="mt-1.5 text-[10px] text-neon-magenta flex items-center gap-1 font-mono uppercase tracking-wider"><i data-lucide="alert-circle" class="!w-3 !h-3"></i> invalid_email</div>
+      </div>
+      <div>
+        <label class="block text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono mb-2">agent.model</label>
+        <div class="relative">
+          <select class="w-full h-10 px-3 pr-9 rounded-md bg-void-900/80 border border-neon-500/20 text-[13px] text-void-50 appearance-none ring-focus font-mono">
+            <option>claude-opus-4-7</option>
+            <option>claude-sonnet-4-6</option>
+            <option>gpt-5</option>
+          </select>
+          <i data-lucide="chevron-down" class="absolute right-3 top-3 text-neon-400 pointer-events-none"></i>
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-lg gradient-border-soft space-y-5">
+      <div>
+        <label class="block text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono mb-2">system.prompt</label>
+        <div class="relative">
+          <textarea rows="5" class="w-full p-3 rounded-md bg-void-900/80 border border-neon-500/20 text-[12px] text-void-100 font-mono leading-relaxed ring-focus">You are a precise, terse analyst.
+Cite sources. Never hallucinate.
+&gt; mode: terminal</textarea>
+          <div class="absolute bottom-2 right-2 text-[9px] font-mono text-void-400 uppercase tracking-wider">84 / 2000</div>
+        </div>
+      </div>
+      <div>
+        <label class="block text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono mb-2">skill.tags[]</label>
+        <div class="flex flex-wrap gap-1.5 p-2 rounded-md bg-void-900/80 border border-neon-500/20 min-h-10">
+          <span class="inline-flex items-center gap-1 h-6 px-2 rounded border border-neon-500/40 bg-neon-500/10 text-neon-300 text-[10px] font-mono uppercase tracking-wider">sql <i data-lucide="x" class="!w-3 !h-3 cursor-pointer"></i></span>
+          <span class="inline-flex items-center gap-1 h-6 px-2 rounded border border-neon-500/40 bg-neon-500/10 text-neon-300 text-[10px] font-mono uppercase tracking-wider">forecast <i data-lucide="x" class="!w-3 !h-3 cursor-pointer"></i></span>
+          <span class="inline-flex items-center gap-1 h-6 px-2 rounded border border-neon-magenta/40 bg-neon-magenta/10 text-neon-magenta text-[10px] font-mono uppercase tracking-wider">churn_v2 <i data-lucide="x" class="!w-3 !h-3 cursor-pointer"></i></span>
+          <input class="flex-1 min-w-[80px] bg-transparent text-[12px] outline-none placeholder:text-void-500 font-mono" placeholder="add_tag…" />
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-lg gradient-border-soft space-y-5">
+      <div class="text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono">toggles</div>
+      <label class="flex items-center justify-between">
+        <span class="text-[12px] text-void-100 font-mono">autopilot.enabled</span>
+        <span class="relative w-11 h-5 rounded-full bg-neon-500 shadow-neon-sm">
+          <span class="absolute right-0.5 top-0.5 w-4 h-4 rounded-full bg-void-950"></span>
+        </span>
+      </label>
+      <label class="flex items-center justify-between">
+        <span class="text-[12px] text-void-300 font-mono">persist.artifacts</span>
+        <span class="relative w-11 h-5 rounded-full bg-void-600 border border-void-500">
+          <span class="absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-void-300"></span>
+        </span>
+      </label>
+      <div class="text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono pt-2">checkbox</div>
+      <div class="space-y-2">
+        <label class="flex items-center gap-2.5 text-[12px] text-void-100 font-mono">
+          <span class="w-4 h-4 rounded-sm bg-neon-500 grid place-items-center shadow-neon-sm"><i data-lucide="check" class="!w-3 !h-3 text-void-950"></i></span>
+          require_confirmation
+        </label>
+        <label class="flex items-center gap-2.5 text-[12px] text-void-300 font-mono">
+          <span class="w-4 h-4 rounded-sm border border-void-500"></span>
+          auto_approve_read
+        </label>
+      </div>
+      <div class="text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono pt-2">radio</div>
+      <div class="space-y-2">
+        <label class="flex items-center gap-2.5 text-[12px] text-void-100 font-mono">
+          <span class="w-4 h-4 rounded-full border-[5px] border-neon-500 bg-void-950 shadow-neon-sm"></span> opus-4.7 <span class="text-void-400 text-[10px]">// strong</span>
+        </label>
+        <label class="flex items-center gap-2.5 text-[12px] text-void-300 font-mono">
+          <span class="w-4 h-4 rounded-full border border-void-500"></span> haiku-4.5 <span class="text-void-400 text-[10px]">// fast</span>
+        </label>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS + CARDS -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.3em] font-mono text-neon-400">&lt;03/&gt; surfaces</div>
+      <h2 class="mt-2 text-[30px] font-semibold tracking-tight text-void-50">Cards · Metrics · HUD</h2>
+    </div>
+  </div>
+  <div class="glow-line mb-8"></div>
+
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="p-5 rounded-lg gradient-border-soft relative overflow-hidden">
+      <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-500 to-transparent shadow-neon-sm"></div>
+      <div class="text-[10px] text-void-300 uppercase tracking-[0.25em] font-mono">// runs_7d</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-3xl font-semibold tracking-tight text-neon-glow neon-text font-mono">1284</span>
+        <span class="text-[10px] text-neon-lime font-mono">▲ 12.4%</span>
+      </div>
+      <svg viewBox="0 0 120 32" class="mt-3 w-full h-8 text-neon-500">
+        <defs><linearGradient id="g1" x2="0" y2="1"><stop stop-color="#00A3FF" stop-opacity=".4"/><stop offset="1" stop-color="#00A3FF" stop-opacity="0"/></linearGradient></defs>
+        <polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,24 12,22 24,18 36,20 48,14 60,16 72,10 84,12 96,6 108,8 120,4" filter="drop-shadow(0 0 3px rgba(0,163,255,.7))"/>
+        <polygon fill="url(#g1)" points="0,24 12,22 24,18 36,20 48,14 60,16 72,10 84,12 96,6 108,8 120,4 120,32 0,32"/>
+      </svg>
+    </div>
+    <div class="p-5 rounded-lg gradient-border-soft">
+      <div class="text-[10px] text-void-300 uppercase tracking-[0.25em] font-mono">// avg_latency</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-3xl font-semibold tracking-tight text-neon-glow neon-text font-mono">1.8<span class="text-sm text-void-400">s</span></span>
+        <span class="text-[10px] text-neon-lime font-mono">▼ 120ms</span>
+      </div>
+      <svg viewBox="0 0 120 32" class="mt-3 w-full h-8 text-neon-lime">
+        <polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,10 12,12 24,8 36,14 48,10 60,8 72,12 84,8 96,10 108,6 120,8" filter="drop-shadow(0 0 3px rgba(124,255,178,.7))"/>
+      </svg>
+    </div>
+    <div class="p-5 rounded-lg gradient-border-soft">
+      <div class="text-[10px] text-void-300 uppercase tracking-[0.25em] font-mono">// tokens_mo</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-3xl font-semibold tracking-tight text-neon-glow neon-text font-mono">18.4<span class="text-sm text-void-400">M</span></span>
+        <span class="text-[10px] text-neon-magenta font-mono">▲ 28%</span>
+      </div>
+      <svg viewBox="0 0 120 32" class="mt-3 w-full h-8 text-neon-magenta">
+        <polyline fill="none" stroke="currentColor" stroke-width="1.5" points="0,28 12,24 24,22 36,18 48,20 60,14 72,16 84,10 96,12 108,6 120,4" filter="drop-shadow(0 0 3px rgba(255,0,212,.6))"/>
+      </svg>
+    </div>
+    <div class="p-5 rounded-lg gradient-border-soft">
+      <div class="text-[10px] text-void-300 uppercase tracking-[0.25em] font-mono">// budget</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <span class="text-3xl font-semibold tracking-tight text-neon-glow neon-text font-mono">$412</span>
+        <span class="text-[10px] text-void-300 font-mono">/ $650</span>
+      </div>
+      <div class="mt-3 h-1.5 rounded-full bg-void-700 overflow-hidden border border-neon-500/20">
+        <div class="h-full w-[62%] bg-gradient-to-r from-neon-500 to-neon-magenta shadow-neon-sm"></div>
+      </div>
+      <div class="mt-1.5 text-[9px] text-void-400 font-mono uppercase tracking-wider">62% ALLOCATED</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-3 gap-5">
+    <div class="group p-6 rounded-lg gradient-border-soft hover:border-neon-500/60 transition cursor-pointer relative overflow-hidden">
+      <div class="w-10 h-10 rounded-md border border-neon-500/40 bg-neon-500/10 grid place-items-center mb-4 text-neon-400 group-hover:shadow-neon-sm transition">
+        <i data-lucide="users"></i>
+      </div>
+      <div class="text-[10px] font-mono text-neon-400 uppercase tracking-[0.25em]">// module_01</div>
+      <h3 class="mt-1 text-[16px] font-semibold tracking-tight text-void-50">Employees</h3>
+      <p class="mt-2 text-[12px] text-void-200 leading-relaxed font-mono">Configure agents as first-class hires. Model + skills + tools + system prompt.</p>
+      <div class="mt-5 flex items-center justify-between text-[11px] font-mono">
+        <span class="text-neon-lime">&gt; 37 active</span>
+        <span class="inline-flex items-center gap-1 text-neon-300 group-hover:translate-x-0.5 transition">open <i data-lucide="arrow-right"></i></span>
+      </div>
+    </div>
+    <div class="p-6 rounded-lg gradient-border shadow-neon relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-32 h-32 bg-neon-500/20 blur-3xl"></div>
+      <span class="absolute top-4 right-4 px-2 h-5 inline-flex items-center text-[9px] rounded border border-neon-500/60 bg-neon-500 text-void-950 font-mono uppercase tracking-[0.2em] font-bold">★ core</span>
+      <div class="w-10 h-10 rounded-md bg-neon-500 grid place-items-center mb-4 text-void-950 shadow-neon">
+        <i data-lucide="wand-2"></i>
+      </div>
+      <div class="text-[10px] font-mono text-neon-glow uppercase tracking-[0.25em]">// module_02</div>
+      <h3 class="mt-1 text-[16px] font-semibold tracking-tight text-void-50">Skills · Capability Packs</h3>
+      <p class="mt-2 text-[12px] text-void-100 leading-relaxed font-mono">Progressive load. Descriptor resident · body on activate · resources on demand.</p>
+      <div class="mt-5 flex items-center justify-between text-[11px] font-mono">
+        <span class="text-neon-300">&gt; 124 packs · 3 tiers</span>
+        <span class="inline-flex items-center gap-1 text-neon-glow">open <i data-lucide="arrow-right"></i></span>
+      </div>
+    </div>
+    <div class="group p-6 rounded-lg gradient-border-soft hover:border-neon-500/60 transition cursor-pointer">
+      <div class="w-10 h-10 rounded-md border border-neon-magenta/40 bg-neon-magenta/10 grid place-items-center mb-4 text-neon-magenta group-hover:shadow-magenta transition">
+        <i data-lucide="plug"></i>
+      </div>
+      <div class="text-[10px] font-mono text-neon-magenta uppercase tracking-[0.25em]">// module_03</div>
+      <h3 class="mt-1 text-[16px] font-semibold tracking-tight text-void-50">Gateway</h3>
+      <p class="mt-2 text-[12px] text-void-200 leading-relaxed font-mono">Unified router: Anthropic / OpenAI / Google / DashScope. Policy-based routing.</p>
+      <div class="mt-5 flex items-center justify-between text-[11px] font-mono">
+        <span class="text-neon-300">&gt; 5 providers · 23 models</span>
+        <span class="inline-flex items-center gap-1 text-neon-300 group-hover:translate-x-0.5 transition">open <i data-lucide="arrow-right"></i></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TABLE -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.3em] font-mono text-neon-400">&lt;04/&gt; data</div>
+      <h2 class="mt-2 text-[30px] font-semibold tracking-tight text-void-50">Table · Logs</h2>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 h-8 px-3 rounded border border-neon-500/20 bg-void-900/60 text-void-300 text-[11px] font-mono">
+        <i data-lucide="search" class="text-neon-400"></i><input class="bg-transparent outline-none w-40" placeholder="filter_runs…" />
+      </div>
+      <button class="h-8 px-3 rounded border border-neon-500/30 bg-neon-500/5 text-neon-300 text-[11px] font-mono uppercase tracking-wider inline-flex items-center gap-1.5 hover:shadow-neon-sm"><i data-lucide="filter"></i> filter</button>
+      <button class="h-8 px-3 rounded bg-neon-500 text-void-950 text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow-neon-sm"><i data-lucide="download"></i> export</button>
+    </div>
+  </div>
+  <div class="glow-line mb-6"></div>
+  <div class="rounded-lg gradient-border-soft overflow-hidden">
+    <table class="w-full text-[12px] font-mono">
+      <thead>
+        <tr class="text-[10px] text-neon-400 font-mono uppercase tracking-[0.2em] border-b border-neon-500/20">
+          <th class="text-left px-4 py-3 font-normal"><span class="w-4 h-4 rounded-sm border border-void-500 inline-block"></span></th>
+          <th class="text-left px-4 py-3 font-normal">// run.id</th>
+          <th class="text-left px-4 py-3 font-normal">// agent</th>
+          <th class="text-left px-4 py-3 font-normal">// status</th>
+          <th class="text-left px-4 py-3 font-normal">// duration</th>
+          <th class="text-left px-4 py-3 font-normal">// tokens</th>
+          <th class="text-left px-4 py-3 font-normal">// started</th>
+          <th class="w-8"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-neon-500/10">
+        <tr class="hover:bg-neon-500/5">
+          <td class="px-4 py-3"><span class="w-4 h-4 rounded-sm bg-neon-500 inline-grid place-items-center shadow-neon-sm"><i data-lucide="check" class="!w-3 !h-3 text-void-950"></i></span></td>
+          <td class="px-4 py-3 text-neon-300">run_01HXZ…a3f</td>
+          <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="w-6 h-6 rounded border border-neon-500/40 bg-neon-500/10 grid place-items-center text-[9px] text-neon-300 shadow-neon-sm">SA</span><span class="text-void-100">sales_analyst</span></div></td>
+          <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-[10px] text-neon-lime uppercase tracking-wider"><span class="w-1.5 h-1.5 rounded-full bg-neon-lime shadow-[0_0_6px_rgba(124,255,178,.8)]"></span> success</span></td>
+          <td class="px-4 py-3 text-void-100">1.4s</td>
+          <td class="px-4 py-3 text-void-100">2,481</td>
+          <td class="px-4 py-3 text-void-400">2m ago</td>
+          <td class="px-2"><button class="w-6 h-6 rounded grid place-items-center text-void-300 hover:bg-neon-500/10"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+        <tr class="hover:bg-neon-500/5">
+          <td class="px-4 py-3"><span class="w-4 h-4 rounded-sm border border-void-500 inline-block"></span></td>
+          <td class="px-4 py-3 text-neon-300">run_01HXZ…b7c</td>
+          <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="w-6 h-6 rounded border border-neon-500/40 bg-neon-500/10 grid place-items-center text-[9px] text-neon-300">CM</span><span class="text-void-100">content_maker</span></div></td>
+          <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-[10px] text-neon-300 uppercase tracking-wider"><span class="w-1.5 h-1.5 rounded-full bg-neon-500 shadow-neon-sm animate-pulse-dot"></span> running</span></td>
+          <td class="px-4 py-3 text-void-100">0:32…</td>
+          <td class="px-4 py-3 text-void-100">1,094</td>
+          <td class="px-4 py-3 text-void-400">now</td>
+          <td class="px-2"><button class="w-6 h-6 rounded grid place-items-center text-void-300 hover:bg-neon-500/10"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+        <tr class="hover:bg-neon-500/5">
+          <td class="px-4 py-3"><span class="w-4 h-4 rounded-sm border border-void-500 inline-block"></span></td>
+          <td class="px-4 py-3 text-neon-300">run_01HXZ…d2e</td>
+          <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="w-6 h-6 rounded border border-neon-magenta/40 bg-neon-magenta/10 grid place-items-center text-[9px] text-neon-magenta">BF</span><span class="text-void-100">bug_fixer</span></div></td>
+          <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-[10px] text-neon-magenta uppercase tracking-wider"><span class="w-1.5 h-1.5 rounded-full bg-neon-magenta shadow-magenta"></span> failed</span></td>
+          <td class="px-4 py-3 text-void-100">12.1s</td>
+          <td class="px-4 py-3 text-void-100">4,320</td>
+          <td class="px-4 py-3 text-void-400">14m ago</td>
+          <td class="px-2"><button class="w-6 h-6 rounded grid place-items-center text-void-300 hover:bg-neon-500/10"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+        <tr class="hover:bg-neon-500/5">
+          <td class="px-4 py-3"><span class="w-4 h-4 rounded-sm border border-void-500 inline-block"></span></td>
+          <td class="px-4 py-3 text-neon-300">run_01HXZ…k9p</td>
+          <td class="px-4 py-3"><div class="flex items-center gap-2"><span class="w-6 h-6 rounded border border-neon-500/40 bg-neon-500/10 grid place-items-center text-[9px] text-neon-300">OP</span><span class="text-void-100">ops_overseer</span></div></td>
+          <td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-[10px] text-neon-hot uppercase tracking-wider" style="color:#FFD700"><span class="w-1.5 h-1.5 rounded-full" style="background:#FFD700; box-shadow:0 0 6px rgba(255,215,0,.8)"></span> awaiting_approval</span></td>
+          <td class="px-4 py-3 text-void-100">3.7s</td>
+          <td class="px-4 py-3 text-void-100">912</td>
+          <td class="px-4 py-3 text-void-400">1h ago</td>
+          <td class="px-2"><button class="w-6 h-6 rounded grid place-items-center text-void-300 hover:bg-neon-500/10"><i data-lucide="more-horizontal"></i></button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="flex items-center justify-between px-4 py-3 border-t border-neon-500/20 text-[10px] text-void-400 font-mono uppercase tracking-wider">
+      <span>&gt; showing 4 of 214 rows</span>
+      <div class="flex items-center gap-1">
+        <button class="w-7 h-7 rounded border border-void-500/40 grid place-items-center hover:bg-neon-500/10"><i data-lucide="chevron-left"></i></button>
+        <span class="w-7 h-7 grid place-items-center rounded bg-neon-500 text-void-950 shadow-neon-sm font-bold">1</span>
+        <span class="w-7 h-7 grid place-items-center hover:bg-neon-500/10 rounded cursor-pointer text-void-100">2</span>
+        <span class="w-7 h-7 grid place-items-center hover:bg-neon-500/10 rounded cursor-pointer text-void-100">3</span>
+        <button class="w-7 h-7 rounded border border-void-500/40 grid place-items-center hover:bg-neon-500/10"><i data-lucide="chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TABS + BADGES -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.3em] font-mono text-neon-400">&lt;05/&gt; nav</div>
+      <h2 class="mt-2 text-[30px] font-semibold tracking-tight text-void-50">Tabs · Badges · Status</h2>
+    </div>
+  </div>
+  <div class="glow-line mb-8"></div>
+  <div class="grid grid-cols-2 gap-5">
+    <div class="p-6 rounded-lg gradient-border-soft">
+      <div class="flex items-center gap-5 border-b border-neon-500/15">
+        <button class="relative pb-3 text-[12px] text-neon-300 font-mono uppercase tracking-[0.2em] font-semibold">
+          overview
+          <span class="absolute left-0 right-0 bottom-0 h-[2px] bg-neon-500 shadow-neon-sm"></span>
+        </button>
+        <button class="pb-3 text-[12px] text-void-300 hover:text-void-100 font-mono uppercase tracking-[0.2em]">activity <span class="ml-1 text-[9px] text-void-400">(12)</span></button>
+        <button class="pb-3 text-[12px] text-void-300 hover:text-void-100 font-mono uppercase tracking-[0.2em]">artifacts</button>
+        <button class="pb-3 text-[12px] text-void-300 hover:text-void-100 font-mono uppercase tracking-[0.2em]">settings</button>
+      </div>
+      <div class="mt-4 text-[12px] text-void-200 leading-relaxed font-mono">
+        <span class="text-neon-400">&gt;</span> underline tabs · 2px neon accent with shadow glow<br/>
+        <span class="text-neon-400">&gt;</span> inactive items use void-300 text
+      </div>
+      <div class="mt-8 inline-flex p-1 rounded-md border border-neon-500/20 bg-void-900/60">
+        <button class="h-7 px-3 rounded text-[11px] text-void-950 bg-neon-500 shadow-neon-sm font-mono uppercase tracking-wider font-bold">all · 124</button>
+        <button class="h-7 px-3 rounded text-[11px] text-void-300 hover:text-void-100 font-mono uppercase tracking-wider">builtin · 37</button>
+        <button class="h-7 px-3 rounded text-[11px] text-void-300 hover:text-void-100 font-mono uppercase tracking-wider">custom · 87</button>
+      </div>
+    </div>
+    <div class="p-6 rounded-lg gradient-border-soft space-y-5">
+      <div class="text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono">// badges</div>
+      <div class="flex flex-wrap gap-2">
+        <span class="px-2 h-5 text-[9px] rounded border border-neon-500 bg-neon-500 text-void-950 font-mono uppercase tracking-[0.2em] font-bold inline-flex items-center">NEW</span>
+        <span class="px-2 h-5 text-[9px] rounded border border-neon-500/40 bg-neon-500/10 text-neon-300 font-mono uppercase tracking-[0.2em] inline-flex items-center">BETA</span>
+        <span class="px-2 h-5 text-[9px] rounded border border-void-500 bg-void-800 text-void-200 font-mono uppercase tracking-[0.2em] inline-flex items-center">STABLE</span>
+        <span class="px-2 h-5 text-[9px] rounded border border-neon-lime/40 bg-neon-lime/10 text-neon-lime font-mono uppercase tracking-[0.2em] inline-flex items-center">ACTIVE</span>
+        <span class="px-2 h-5 text-[9px] rounded border border-neon-magenta/40 bg-neon-magenta/10 text-neon-magenta font-mono uppercase tracking-[0.2em] inline-flex items-center">ERROR</span>
+        <span class="px-2 h-5 text-[9px] rounded border font-mono uppercase tracking-[0.2em] inline-flex items-center" style="border-color:rgba(255,215,0,.4); background:rgba(255,215,0,.1); color:#FFD700">PENDING</span>
+      </div>
+      <div class="text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono pt-2">// status_pills</div>
+      <div class="space-y-2">
+        <div class="inline-flex items-center gap-2 h-7 px-3 rounded border border-neon-lime/40 bg-neon-lime/5">
+          <span class="relative w-2 h-2"><span class="absolute inset-0 rounded-full bg-neon-lime animate-pulse-dot" style="box-shadow:0 0 0 0 rgba(124,255,178,.7)"></span></span>
+          <span class="text-[11px] font-mono text-neon-lime uppercase tracking-wider">all_systems_operational</span>
+        </div><br/>
+        <div class="inline-flex items-center gap-2 h-7 px-3 rounded border border-neon-500/40 bg-neon-500/5">
+          <i data-lucide="zap" class="!w-3 !h-3 text-neon-300"></i>
+          <span class="text-[11px] font-mono text-neon-300">3 runs · 1.2M tok/s</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODAL + TOAST -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.3em] font-mono text-neon-400">&lt;06/&gt; overlays</div>
+      <h2 class="mt-2 text-[30px] font-semibold tracking-tight text-void-50">Modal · Toast · Tooltip</h2>
+    </div>
+  </div>
+  <div class="glow-line mb-8"></div>
+  <div class="grid grid-cols-3 gap-5">
+    <div class="col-span-2 relative p-8 rounded-lg border border-neon-500/10 bg-void-950/80 min-h-[380px] overflow-hidden">
+      <div class="absolute inset-0" style="background-image: linear-gradient(rgba(61,77,112,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(61,77,112,.12) 1px, transparent 1px); background-size: 32px 32px;"></div>
+      <div class="absolute -top-20 left-1/4 w-[300px] h-[300px] bg-neon-magenta/10 blur-[100px] rounded-full"></div>
+      <div class="relative mx-auto max-w-md rounded-lg gradient-border shadow-neon-lg">
+        <div class="scanline rounded-lg"></div>
+        <div class="p-6 border-b border-neon-500/15 flex items-start gap-3 relative z-10">
+          <div class="w-10 h-10 rounded-md border border-neon-magenta/40 bg-neon-magenta/10 grid place-items-center text-neon-magenta shadow-magenta shrink-0"><i data-lucide="alert-triangle"></i></div>
+          <div class="flex-1">
+            <h3 class="text-[13px] font-mono uppercase tracking-[0.2em] text-void-50 font-semibold">// confirm_destructive_action</h3>
+            <p class="mt-2 text-[12px] text-void-200 font-mono leading-relaxed">target: <span class="text-neon-magenta">sales_analyst_bot</span>. removes agent + skills + traces. <span class="text-neon-magenta">[irreversible]</span></p>
+          </div>
+          <button class="w-7 h-7 rounded hover:bg-neon-500/10 grid place-items-center text-void-300"><i data-lucide="x"></i></button>
+        </div>
+        <div class="p-6 space-y-2 relative z-10">
+          <label class="block text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono">&gt; type_name_to_confirm</label>
+          <input class="w-full h-10 px-3 rounded-md bg-void-900/80 border border-neon-500/20 text-[13px] font-mono text-void-50 ring-focus" placeholder="sales_analyst_bot" />
+        </div>
+        <div class="p-4 border-t border-neon-500/15 bg-void-950/60 flex items-center justify-end gap-2 relative z-10">
+          <button class="h-9 px-4 rounded hover:bg-neon-500/10 text-void-200 text-[11px] font-mono uppercase tracking-wider">Cancel <span class="kbd ml-1">Esc</span></button>
+          <button class="h-9 px-4 rounded border border-neon-magenta/60 bg-neon-magenta/10 hover:bg-neon-magenta/20 text-neon-magenta text-[11px] font-mono uppercase tracking-wider font-bold inline-flex items-center gap-2 shadow-magenta"><i data-lucide="trash-2"></i> Purge permanently</button>
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-lg gradient-border-soft space-y-3">
+      <div class="text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono">// toasts</div>
+      <div class="rounded border border-neon-lime/30 bg-neon-lime/5 p-3 flex items-start gap-3">
+        <div class="w-8 h-8 rounded border border-neon-lime/40 bg-neon-lime/10 grid place-items-center text-neon-lime shrink-0"><i data-lucide="check"></i></div>
+        <div class="flex-1">
+          <div class="text-[12px] font-mono text-neon-lime uppercase tracking-wider">&gt; saved</div>
+          <div class="text-[11px] text-void-200 mt-0.5 font-mono">sales_analyst · 3 skills updated</div>
+        </div>
+        <i data-lucide="x" class="text-void-400 cursor-pointer"></i>
+      </div>
+      <div class="rounded border border-neon-500/30 bg-neon-500/5 p-3 flex items-start gap-3">
+        <div class="w-8 h-8 rounded border border-neon-500/40 bg-neon-500/10 grid place-items-center text-neon-300 shrink-0 shadow-neon-sm"><i data-lucide="zap"></i></div>
+        <div class="flex-1">
+          <div class="text-[12px] font-mono text-neon-300 uppercase tracking-wider">&gt; new_skill_available</div>
+          <div class="text-[11px] text-void-200 mt-0.5 font-mono">allhands.forecast_v2 · marketplace</div>
+        </div>
+      </div>
+      <div class="rounded border border-neon-magenta/30 bg-neon-magenta/5 p-3 flex items-start gap-3">
+        <div class="w-8 h-8 rounded border border-neon-magenta/40 bg-neon-magenta/10 grid place-items-center text-neon-magenta shrink-0 shadow-magenta"><i data-lucide="alert-triangle"></i></div>
+        <div class="flex-1">
+          <div class="text-[12px] font-mono text-neon-magenta uppercase tracking-wider">&gt; approval_required</div>
+          <div class="text-[11px] text-void-200 mt-0.5 font-mono">bug_fixer → delete_file(app.py)</div>
+          <div class="mt-2 flex gap-2">
+            <button class="h-6 px-2 text-[10px] rounded border border-neon-magenta/60 bg-neon-magenta/20 text-neon-magenta font-mono uppercase tracking-wider">review</button>
+          </div>
+        </div>
+      </div>
+      <div class="pt-3 border-t border-neon-500/15 text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono">// tooltip</div>
+      <div class="relative inline-block mt-3">
+        <button class="h-8 px-3 rounded border border-neon-500/20 text-void-200 text-[11px] font-mono uppercase tracking-wider inline-flex items-center gap-1.5">Hover <i data-lucide="info"></i></button>
+        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap px-3 py-1.5 rounded border border-neon-500/40 bg-void-950 text-[10px] text-neon-300 shadow-neon-sm font-mono uppercase tracking-wider">
+          opens_run_inspector · <span class="kbd">I</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMAND + CHAT + CODE -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.3em] font-mono text-neon-400">&lt;07/&gt; composite</div>
+      <h2 class="mt-2 text-[30px] font-semibold tracking-tight text-void-50">Command · Chat · Code</h2>
+    </div>
+  </div>
+  <div class="glow-line mb-8"></div>
+
+  <div class="grid grid-cols-3 gap-5">
+    <div class="rounded-lg gradient-border shadow-neon overflow-hidden">
+      <div class="flex items-center gap-2 px-4 h-12 border-b border-neon-500/20 relative">
+        <span class="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-neon-500 to-transparent shadow-neon-sm"></span>
+        <span class="text-neon-glow neon-text font-mono text-[13px]">&gt;</span>
+        <input class="flex-1 bg-transparent text-[13px] outline-none placeholder:text-void-400 font-mono text-void-50" value="create emp" />
+        <span class="w-[1px] h-4 bg-neon-500 animate-flicker"></span>
+        <span class="kbd ml-2">ESC</span>
+      </div>
+      <div class="py-2">
+        <div class="px-4 py-1 text-[9px] uppercase tracking-[0.25em] text-neon-400 font-mono">// suggestions</div>
+        <div class="px-2">
+          <div class="flex items-center gap-3 px-3 py-2 rounded border border-neon-500/30 bg-neon-500/10 text-neon-200 shadow-neon-sm">
+            <i data-lucide="user-plus" class="text-neon-400"></i>
+            <span class="text-[12px] font-mono">create <span class="text-void-50 font-semibold">employee</span></span>
+            <span class="ml-auto text-[10px] text-neon-400 font-mono">↵</span>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 rounded text-void-200 font-mono text-[12px]">
+            <i data-lucide="wand-2" class="text-void-400"></i>
+            create <span class="text-void-50">skill</span> <span class="text-void-400">from SKILL.md</span>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 rounded text-void-200 font-mono text-[12px]">
+            <i data-lucide="plug" class="text-void-400"></i>
+            add <span class="text-void-50">mcp_server</span>
+          </div>
+        </div>
+        <div class="px-4 py-1 text-[9px] uppercase tracking-[0.25em] text-neon-400 font-mono mt-2">// recent</div>
+        <div class="px-2">
+          <div class="flex items-center gap-3 px-3 py-2 rounded text-void-300 text-[12px] font-mono"><i data-lucide="clock" class="text-void-400"></i> run_01HXZ…a3f <span class="ml-auto text-[10px] text-void-500">2m</span></div>
+          <div class="flex items-center gap-3 px-3 py-2 rounded text-void-300 text-[12px] font-mono"><i data-lucide="clock" class="text-void-400"></i> bug_fixer.error <span class="ml-auto text-[10px] text-void-500">14m</span></div>
+        </div>
+      </div>
+      <div class="px-4 h-9 border-t border-neon-500/20 bg-void-950/60 flex items-center gap-3 text-[9px] font-mono text-void-400 uppercase tracking-wider">
+        <span class="flex items-center gap-1"><span class="kbd">↑↓</span> nav</span>
+        <span class="flex items-center gap-1"><span class="kbd">↵</span> exec</span>
+        <span class="flex items-center gap-1 ml-auto"><span class="kbd">⌘K</span> toggle</span>
+      </div>
+    </div>
+
+    <div class="col-span-2 rounded-lg gradient-border-soft overflow-hidden flex flex-col">
+      <div class="h-11 px-4 border-b border-neon-500/20 flex items-center gap-2 bg-void-900/60">
+        <span class="w-6 h-6 rounded border border-neon-500/40 bg-neon-500/10 grid place-items-center text-[9px] text-neon-300 shadow-neon-sm">SA</span>
+        <span class="text-[13px] font-mono text-void-50">sales_analyst</span>
+        <span class="inline-flex items-center gap-1.5 ml-2 text-[10px] text-neon-lime font-mono uppercase tracking-wider"><span class="w-1.5 h-1.5 rounded-full bg-neon-lime shadow-[0_0_6px_rgba(124,255,178,.8)]"></span> ready</span>
+        <div class="ml-auto flex items-center gap-1.5 text-[10px] text-void-400 font-mono uppercase tracking-wider">opus-4.7 · ckpt-12</div>
+      </div>
+      <div class="flex-1 p-5 space-y-4 overflow-y-auto scrollbar-thin" style="max-height:440px">
+        <div class="flex items-start gap-3 justify-end">
+          <div class="max-w-md p-3 rounded-md bg-neon-500/15 border border-neon-500/40 text-void-50 text-[13px] shadow-neon-sm font-mono">
+            &gt; what were last quarter's top-3 churn drivers? compare to q3.
+          </div>
+          <div class="w-7 h-7 rounded border border-void-500 bg-void-800 grid place-items-center text-[10px] font-mono text-void-200">YOU</div>
+        </div>
+        <div class="flex items-start gap-3">
+          <div class="w-7 h-7 rounded border border-neon-500/40 bg-neon-500/10 grid place-items-center text-[9px] text-neon-300 shadow-neon-sm">SA</div>
+          <div class="max-w-md space-y-2">
+            <div class="px-3 py-2 rounded border border-neon-500/20 bg-neon-500/5 text-[10px] text-neon-400 font-mono uppercase tracking-[0.2em] flex items-center gap-2">
+              <i data-lucide="brain" class="!w-3 !h-3"></i> reasoning · 312 tokens
+              <i data-lucide="chevron-down" class="!w-3 !h-3 ml-auto"></i>
+            </div>
+            <div class="px-3 py-2 rounded border border-neon-lime/25 bg-neon-lime/5 text-[10px] font-mono text-void-100 flex items-center gap-2">
+              <i data-lucide="database" class="!w-3 !h-3 text-neon-lime"></i>
+              <span>tool: <span class="text-neon-lime">run_sql</span>(churn_q3_q4)</span>
+              <span class="ml-auto text-neon-lime">✓ 842ms</span>
+            </div>
+            <div class="p-3 rounded-md gradient-border-soft text-[13px] leading-relaxed font-mono">
+              <div class="text-neon-400 text-[10px] uppercase tracking-[0.2em] mb-2">// q4_churn_drivers</div>
+              <ol class="space-y-1.5 text-void-100">
+                <li><span class="text-neon-400">01.</span> <span class="text-void-50">pricing_confusion</span> <span class="text-neon-magenta">▲ 34%</span></li>
+                <li><span class="text-neon-400">02.</span> <span class="text-void-50">onboarding_dropoff</span> <span class="text-neon-magenta">▲ 18%</span></li>
+                <li><span class="text-neon-400">03.</span> <span class="text-void-50">feature_discovery</span> <span class="text-neon-magenta">▲ 11%</span></li>
+              </ol>
+              <div class="mt-3 pt-3 border-t border-neon-500/15 text-[10px] text-void-400 uppercase tracking-wider">&gt; sources: billing_events · support_tickets · 42_rows</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="p-3 border-t border-neon-500/20 bg-void-950/60">
+        <div class="flex items-center gap-2 h-11 px-3 rounded-md border border-neon-500/20 bg-void-900/80 focus-within:border-neon-500 focus-within:shadow-neon-sm transition">
+          <span class="text-neon-glow neon-text font-mono">&gt;</span>
+          <input class="flex-1 bg-transparent text-[13px] outline-none placeholder:text-void-400 font-mono text-void-50" placeholder="ask anything · shift+↵ newline" />
+          <span class="kbd">⌘↵</span>
+          <button class="w-7 h-7 rounded bg-neon-500 text-void-950 grid place-items-center shadow-neon-sm"><i data-lucide="arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-5 rounded-lg gradient-border-soft overflow-hidden">
+    <div class="flex items-center gap-2 px-4 h-10 border-b border-neon-500/20 bg-void-950/80">
+      <i data-lucide="file-code-2" class="text-neon-400"></i>
+      <span class="text-[12px] font-mono text-void-200">employees/sales_analyst.yaml</span>
+      <div class="ml-auto flex items-center gap-3 text-[10px] font-mono text-void-400 uppercase tracking-wider">
+        <button class="h-6 px-2 rounded hover:bg-neon-500/10 inline-flex items-center gap-1 text-void-200"><i data-lucide="copy" class="!w-3 !h-3"></i> copy</button>
+        <span>yaml · 24 lines</span>
+      </div>
+    </div>
+    <pre class="p-5 text-[12px] font-mono leading-6 overflow-x-auto scrollbar-thin text-void-100"><span class="text-void-400"># allhands employee definition</span>
+<span class="text-neon-300">id</span><span class="text-void-400">:</span> <span class="text-neon-lime">sales_analyst</span>
+<span class="text-neon-300">name</span><span class="text-void-400">:</span> <span class="text-neon-lime">"Sales Analyst"</span>
+<span class="text-neon-300">model_ref</span><span class="text-void-400">:</span> <span class="text-neon-lime">anthropic/claude-opus-4-7</span>
+<span class="text-neon-300">skill_ids</span><span class="text-void-400">:</span>
+  <span class="text-void-400">-</span> <span class="text-neon-lime">allhands.builtin.run_sql</span>
+  <span class="text-void-400">-</span> <span class="text-neon-lime">allhands.builtin.forecast_v2</span>
+<span class="text-neon-300">max_iterations</span><span class="text-void-400">:</span> <span class="text-neon-magenta">12</span>
+<span class="text-neon-300">system_prompt</span><span class="text-void-400">: |</span>
+  <span class="text-void-100">You are a precise, terse analyst.</span>
+  <span class="text-void-100">Cite sources. Never hallucinate.</span></pre>
+  </div>
+</section>
+
+<!-- SIDEBAR + EMPTY + MISC -->
+<section class="animate-fade-up">
+  <div class="flex items-baseline justify-between mb-6">
+    <div>
+      <div class="text-[10px] uppercase tracking-[0.3em] font-mono text-neon-400">&lt;08/&gt; layouts</div>
+      <h2 class="mt-2 text-[30px] font-semibold tracking-tight text-void-50">Sidebar · Empty · Misc</h2>
+    </div>
+  </div>
+  <div class="glow-line mb-8"></div>
+  <div class="grid grid-cols-3 gap-5">
+    <div class="rounded-lg gradient-border-soft p-4 space-y-4">
+      <div class="flex items-center gap-2 px-2 py-1">
+        <div class="w-8 h-8 rounded border border-neon-500/40 bg-neon-500/10 grid place-items-center text-[11px] text-neon-300 font-bold shadow-neon-sm">ah</div>
+        <div>
+          <div class="text-[12px] font-semibold text-void-50 font-mono">acme_inc</div>
+          <div class="text-[9px] text-neon-400 font-mono uppercase tracking-[0.2em]">// workspace</div>
+        </div>
+        <i data-lucide="chevrons-up-down" class="ml-auto text-void-400"></i>
+      </div>
+      <div class="space-y-0.5">
+        <div class="text-[9px] uppercase tracking-[0.25em] text-neon-400 font-mono px-2 mt-3 mb-1">// workspace</div>
+        <div class="flex items-center gap-2 px-2 py-2 rounded border border-neon-500/30 bg-neon-500/10 text-neon-200">
+          <i data-lucide="users" class="text-neon-400"></i>
+          <span class="text-[12px] font-mono">employees</span>
+          <span class="ml-auto text-[10px] font-mono text-neon-400">37</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-2 rounded hover:bg-neon-500/5 text-void-200">
+          <i data-lucide="wand-2" class="text-void-400"></i>
+          <span class="text-[12px] font-mono">skills</span>
+          <span class="ml-auto text-[10px] font-mono text-void-500">124</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-2 rounded hover:bg-neon-500/5 text-void-200">
+          <i data-lucide="plug" class="text-void-400"></i>
+          <span class="text-[12px] font-mono">gateway</span>
+          <span class="ml-auto px-1.5 h-4 text-[8px] rounded bg-neon-500 text-void-950 font-mono uppercase tracking-wider font-bold inline-flex items-center">5</span>
+        </div>
+        <div class="text-[9px] uppercase tracking-[0.25em] text-neon-400 font-mono px-2 mt-3 mb-1">// observe</div>
+        <div class="flex items-center gap-2 px-2 py-2 rounded hover:bg-neon-500/5 text-void-200">
+          <i data-lucide="activity" class="text-void-400"></i>
+          <span class="text-[12px] font-mono">traces</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-2 rounded hover:bg-neon-500/5 text-void-200">
+          <i data-lucide="shield-check" class="text-void-400"></i>
+          <span class="text-[12px] font-mono">approvals</span>
+          <span class="ml-auto w-1.5 h-1.5 rounded-full bg-neon-magenta shadow-magenta animate-pulse-dot"></span>
+        </div>
+      </div>
+      <div class="pt-4 border-t border-neon-500/15">
+        <div class="p-3 rounded-md gradient-border-soft">
+          <div class="text-[9px] uppercase tracking-[0.25em] text-neon-400 font-mono">// usage</div>
+          <div class="mt-2 h-1.5 rounded-full bg-void-700 overflow-hidden border border-neon-500/20">
+            <div class="h-full w-[62%] bg-gradient-to-r from-neon-500 to-neon-magenta shadow-neon-sm"></div>
+          </div>
+          <div class="mt-1.5 text-[10px] text-void-200 font-mono">18.4M / 30M tokens</div>
+          <button class="mt-3 w-full h-8 rounded bg-neon-500 text-void-950 text-[11px] font-bold uppercase tracking-wider shadow-neon-sm">upgrade</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-span-2 rounded-lg gradient-border-soft p-12 grid place-items-center relative overflow-hidden">
+      <div class="absolute inset-0" style="background-image: linear-gradient(rgba(61,77,112,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(61,77,112,.12) 1px, transparent 1px); background-size: 32px 32px;"></div>
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-neon-500/20 blur-[100px] rounded-full"></div>
+      <div class="relative text-center max-w-sm">
+        <div class="mx-auto w-16 h-16 rounded-lg border border-neon-500/40 bg-neon-500/10 grid place-items-center text-neon-glow shadow-neon">
+          <i data-lucide="users" class="!w-7 !h-7"></i>
+        </div>
+        <div class="mt-5 text-[10px] uppercase tracking-[0.3em] text-neon-400 font-mono">// no_records</div>
+        <h3 class="mt-2 text-[20px] font-semibold tracking-tight text-void-50">Workforce is empty</h3>
+        <p class="mt-2 text-[12px] text-void-200 leading-relaxed font-mono">&gt; deploy your first digital employee<br/>&gt; they start working immediately</p>
+        <div class="mt-6 flex items-center justify-center gap-2">
+          <button class="h-10 px-4 rounded bg-neon-500 text-void-950 text-[12px] font-bold uppercase tracking-wider inline-flex items-center gap-2 shadow-neon"><i data-lucide="zap"></i> deploy_agent</button>
+          <button class="h-10 px-4 rounded border border-neon-500/30 bg-neon-500/5 hover:bg-neon-500/10 text-neon-300 text-[12px] font-mono uppercase tracking-wider inline-flex items-center gap-2"><i data-lucide="book-open"></i> docs</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- avatar + progress + tokens -->
+  <div class="grid grid-cols-3 gap-5 mt-5">
+    <div class="p-6 rounded-lg gradient-border-soft space-y-4">
+      <div class="text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono">// avatars</div>
+      <div class="flex items-center gap-3">
+        <div class="w-6 h-6 rounded border border-neon-500/40 bg-neon-500/10 grid place-items-center text-[8px] text-neon-300 font-bold shadow-neon-sm">SA</div>
+        <div class="w-8 h-8 rounded border border-neon-lime/40 bg-neon-lime/10 grid place-items-center text-[10px] text-neon-lime font-bold">LS</div>
+        <div class="relative w-10 h-10 rounded border border-neon-magenta/40 bg-neon-magenta/10 grid place-items-center text-[11px] text-neon-magenta font-bold shadow-magenta">WK<span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-neon-lime border-2 border-void-900 shadow-[0_0_6px_rgba(124,255,178,.8)]"></span></div>
+        <div class="w-12 h-12 rounded gradient-border grid place-items-center text-[13px] text-neon-300 font-bold shadow-neon">AI</div>
+      </div>
+      <div class="flex -space-x-2">
+        <div class="w-8 h-8 rounded border border-neon-500/40 bg-void-900 grid place-items-center text-[9px] text-neon-300 font-bold">SA</div>
+        <div class="w-8 h-8 rounded border border-neon-lime/40 bg-void-900 grid place-items-center text-[9px] text-neon-lime font-bold">CM</div>
+        <div class="w-8 h-8 rounded border border-neon-magenta/40 bg-void-900 grid place-items-center text-[9px] text-neon-magenta font-bold">BF</div>
+        <div class="w-8 h-8 rounded border border-void-500 bg-void-900 grid place-items-center text-[9px] text-void-300 font-mono">+5</div>
+      </div>
+    </div>
+    <div class="p-6 rounded-lg gradient-border-soft space-y-5">
+      <div class="text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono">// progress</div>
+      <div>
+        <div class="flex items-center justify-between text-[10px] text-void-200 font-mono uppercase tracking-wider mb-1.5"><span>indexing_skills</span><span class="text-neon-300">62%</span></div>
+        <div class="h-1.5 rounded-full bg-void-700 overflow-hidden border border-neon-500/20">
+          <div class="h-full w-[62%] bg-gradient-to-r from-neon-500 to-neon-glow shadow-neon-sm"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <svg width="72" height="72" viewBox="0 0 72 72" class="-rotate-90">
+          <circle cx="36" cy="36" r="30" stroke="rgba(26,34,50,.8)" stroke-width="5" fill="none"/>
+          <circle cx="36" cy="36" r="30" stroke="#00A3FF" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="55" filter="drop-shadow(0 0 4px rgba(0,163,255,.8))"/>
+        </svg>
+        <div>
+          <div class="text-[22px] font-semibold tracking-tight text-neon-glow neon-text font-mono">71%</div>
+          <div class="text-[10px] text-void-400 font-mono uppercase tracking-wider">step_3_of_4</div>
+        </div>
+      </div>
+    </div>
+    <div class="p-6 rounded-lg gradient-border-soft space-y-3">
+      <div class="text-[10px] uppercase tracking-[0.25em] text-neon-400 font-mono">// color_tokens</div>
+      <div class="grid grid-cols-5 gap-2">
+        <div class="aspect-square rounded border border-neon-500/20 bg-neon-50"></div>
+        <div class="aspect-square rounded border border-neon-500/20 bg-neon-200"></div>
+        <div class="aspect-square rounded border border-neon-500/20 bg-neon-400"></div>
+        <div class="aspect-square rounded bg-neon-500 shadow-neon-sm"></div>
+        <div class="aspect-square rounded border border-neon-500/20 bg-neon-700"></div>
+      </div>
+      <div class="grid grid-cols-5 gap-2">
+        <div class="aspect-square rounded border border-void-500/40 bg-void-50"></div>
+        <div class="aspect-square rounded border border-void-500/40 bg-void-200"></div>
+        <div class="aspect-square rounded border border-void-500/40 bg-void-500"></div>
+        <div class="aspect-square rounded border border-void-500/40 bg-void-800"></div>
+        <div class="aspect-square rounded border border-void-500/40 bg-void-950"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 pt-1">
+        <div class="h-6 rounded border border-neon-lime/40 bg-neon-lime/10 text-neon-lime text-[9px] font-mono uppercase tracking-wider grid place-items-center">lime</div>
+        <div class="h-6 rounded border border-neon-magenta/40 bg-neon-magenta/10 text-neon-magenta text-[9px] font-mono uppercase tracking-wider grid place-items-center">magenta</div>
+        <div class="h-6 rounded border border-neon-500/40 bg-neon-500/10 text-neon-300 text-[9px] font-mono uppercase tracking-wider grid place-items-center">neon</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer class="mt-16 border-t border-neon-500/15 bg-void-950/60 relative z-10">
+  <div class="max-w-[1400px] mx-auto px-8 py-10 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-7 h-7 rounded border border-neon-500/40 bg-neon-500/10 grid place-items-center text-[11px] text-neon-300 font-bold shadow-neon-sm">ah</div>
+      <div class="text-[11px] text-void-300 font-mono uppercase tracking-wider">
+        <span class="text-void-50 font-semibold">allhands</span> // v3_neon_cyber // design_proposal // <span class="text-neon-400">2026-04-23</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-[10px] font-mono text-void-300 uppercase tracking-wider">
+      <a class="hover:text-neon-300">← v1_cobalt</a>
+      <a class="hover:text-neon-300">← v2_azure</a>
+      <a class="hover:text-neon-300">/index</a>
+    </div>
+  </div>
+</footer>
+
+</div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

@@ -1,148 +1,32 @@
+/* ==========================================================================
+ * allhands · Design Tokens · Brand Blue Dual Theme
+ * ------------------------------------------------------------------------
+ * Canonical source: product/03-visual-design.md  (see ADR 0016)
+ * Editing token values without updating that spec is a contract violation.
+ *
+ * All color/shadow tokens live in theme packs:
+ *   web/styles/themes/tokens.css          (interface + motion + type)
+ *   web/styles/themes/brand-blue/*.css    (values · light + dark)
+ *
+ * Never write hex inline in JSX. Never write `dark:` variants — theme
+ * switching is driven by `.light` / `.dark` class on <html> (+ the
+ * `data-theme-pack` attribute for future pack extensions).
+ *
+ * @import rules must come first per CSS spec (Turbopack enforces).
+ * ======================================================================== */
+
+@import "../styles/themes/tokens.css";
+@import "../styles/themes/brand-blue/index.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ==========================================================================
- * allhands · Design Tokens · "Linear Precise"
- * ------------------------------------------------------------------------
- * Canonical source: product/03-visual-design.md
- * Editing these values without updating that spec is a contract violation.
- * Neutral ramp = Zinc. Brand = Indigo #6366F1. Never write hex inline.
- * ======================================================================== */
-
 :root,
-.light {
+.light,
+.dark {
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
-
-  /* Neutrals tinted toward the primary indigo hue — per ADR 0013 §C,
-   * impeccable principles pull zinc-neutral ~0.005 chroma toward #6366f1
-   * so the ramp + the brand feel subconsciously cohesive. Hex kept (not
-   * OKLCH literals) for trivial diffing; values hand-calibrated. The tint
-   * is intentionally barely-perceptible: don't crank it up.             */
-  --color-bg: #fdfdff;              /* was #ffffff — faintest indigo shift */
-  --color-surface: #f9f9fc;         /* was #fafafa */
-  --color-surface-2: #f2f2f7;       /* was #f4f4f5 */
-  --color-surface-3: #ebebf0;
-  --color-border: #e3e3ea;
-  --color-border-strong: #d2d2dc;
-  --color-text: #17171d;            /* was #18181b — tiny hue shift toward primary */
-  --color-text-muted: #6f6f7b;
-  --color-text-subtle: #9f9fac;
-
-  --color-primary: #6366f1;
-  --color-primary-hover: #7c7ff3;
-  --color-primary-fg: #ffffff;
-
-  --color-success: #059669;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
-
-  --color-role-user: #6366f1;
-  --color-role-lead: #8b5cf6;
-  --color-role-worker: #0d9488;
-  --color-role-tool: #d97706;
-
-  /* Data-viz palette — see ADR 0012. Scoped to `components/render/Viz/**`
-   * and chart surfaces; **not** allowed in UI chrome (nav, buttons, chips).
-   * 6 hues chosen for categorical distinction at 2-6 series; readable on
-   * both bg + surface in light theme. Keep ordering stable — chart series
-   * cycle through this array, so reshuffling would rotate colors on every
-   * existing render. */
-  --color-viz-1: #6366f1; /* indigo (matches primary) */
-  --color-viz-2: #0d9488; /* teal */
-  --color-viz-3: #d97706; /* amber */
-  --color-viz-4: #dc2626; /* rose */
-  --color-viz-5: #7c3aed; /* violet */
-  --color-viz-6: #0284c7; /* sky */
-
-  /* Translucent surface tints used by Viz hover / selected states. Opacity
-   * bakes in so components don't have to compose alpha strings. */
-  --color-surface-hover: rgba(99, 102, 241, 0.06);  /* primary @ 6% */
-  --color-success-soft:  rgba(5, 150, 105, 0.1);
-  --color-warning-soft:  rgba(217, 119, 6, 0.1);
-  --color-danger-soft:   rgba(220, 38, 38, 0.1);
-  --color-primary-soft:  rgba(99, 102, 241, 0.1);
-}
-
-.dark {
-  /* Same ADR-0013 principle on dark: tint the neutral ramp toward
-   * --color-primary-hover (Indigo-400) so the accent doesn't feel foreign
-   * on top of the surface. Values shift a couple of hex steps — small on
-   * paper, visible as cohesion in motion. */
-  --color-bg: #08080d;              /* was #09090b */
-  --color-surface: #101016;         /* was #111113 */
-  --color-surface-2: #17171f;       /* was #18181b */
-  --color-surface-3: #1e1e26;
-  --color-border: #26262e;
-  --color-border-strong: #3e3e48;
-  --color-text: #fafaff;
-  --color-text-muted: #a1a1b0;
-  --color-text-subtle: #71717e;
-
-  --color-primary: #6366f1;
-  --color-primary-hover: #818cf8;
-  --color-primary-fg: #ffffff;
-
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-
-  --color-role-user: #818cf8;
-  --color-role-lead: #a78bfa;
-  --color-role-worker: #2dd4bf;
-  --color-role-tool: #fbbf24;
-
-  /* Data-viz palette · dark variant — same order as light, brightened so
-   * shapes stay visible against #09090B. See ADR 0012. */
-  --color-viz-1: #818cf8;
-  --color-viz-2: #2dd4bf;
-  --color-viz-3: #fbbf24;
-  --color-viz-4: #f87171;
-  --color-viz-5: #a78bfa;
-  --color-viz-6: #38bdf8;
-
-  --color-surface-hover: rgba(129, 140, 248, 0.08);
-  --color-success-soft:  rgba(16, 185, 129, 0.14);
-  --color-warning-soft:  rgba(245, 158, 11, 0.14);
-  --color-danger-soft:   rgba(239, 68, 68, 0.14);
-  --color-primary-soft:  rgba(129, 140, 248, 0.14);
-}
-
-/* Motion tokens — shared duration + easing. Use var() not literals.
- * ADR 0013 adds the longer-tailed quart/expo curves for hero reveals
- * and Viz entrance animations; the stock --ease-out stays the default
- * for UI-chrome state transitions. */
-:root,
-.light,
-.dark {
-  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --dur-fast: 120ms;
-  --dur-base: 150ms;
-  --dur-mid: 220ms;
-  --dur-slow: 320ms;
-}
-
-/* Type scale — ADR 0013. 5-size modular scale at 1.25 ratio, rem-based
- * so user zoom respects it. Body is 15px (0.9375rem) — raised from the
- * former 13px floor on user feedback. Each token names the *role*, not
- * the pixel value, so the scale can re-tune without rename churn. */
-:root,
-.light,
-.dark {
-  --text-caption: 0.75rem;     /* 12px · mono meta, kbd chips, trace ids */
-  --text-sm: 0.8125rem;        /* 13px · secondary UI, labels */
-  --text-base: 0.9375rem;      /* 15px · body, chat content, inputs     */
-  --text-lg: 1.1875rem;        /* 19px · card titles, drawer headers    */
-  --text-xl: 1.5rem;           /* 24px · page titles, hero metrics      */
-  --text-display: 2rem;        /* 32px · empty-state hero, landing      */
-
-  /* Line heights paired to roles */
-  --leading-heading: 1.2;
-  --leading-body: 1.6;
-  --leading-data: 1.45;         /* tabular / mono contexts */
 }
 
 html,
@@ -151,8 +35,12 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  letter-spacing: -0.011em;
 }
 
+/* All borders inherit the token by default; override at the component
+ * level with `border-border-strong` etc. when stronger emphasis is needed. */
 * {
   border-color: var(--color-border);
 }
@@ -171,6 +59,16 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-border-strong);
+}
+
+/* Focus ring — single source of truth. Any element that takes keyboard
+ * focus should get `ring-focus` (utility below) instead of re-inventing.
+ * Primary-tinted outer ring + 1px primary inner border. */
+.ring-focus:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px var(--color-primary-muted),
+    0 0 0 1px var(--color-primary);
 }
 
 /* ==========================================================================
@@ -205,31 +103,32 @@ body {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-/* One-shot celebratory sheen for "test passed" / "task complete" moments.
- * Single pass, no loop — honours §0.3 no-infinite-animation rule. */
 @keyframes ah-sheen {
   from { background-position: -150% 0; opacity: 0.6; }
   to   { background-position:  150% 0; opacity: 0;   }
 }
-/* One-shot value-change highlight. Color only, honours §10.5 — no tween libs. */
 @keyframes ah-flash {
   0%   { color: var(--color-primary); }
   100% { color: inherit; }
 }
 
+/* Brand-blue additions · per ADR 0016 D3. CSS-only animation. */
+@keyframes ah-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes ah-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 var(--color-primary-muted); }
+  80%  { box-shadow: 0 0 0 8px rgba(0, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+
 /* ==========================================================================
- * Agent markdown (ah-prose) — E20 fix.
+ * Agent markdown (ah-prose)
  * ------------------------------------------------------------------------
- * AgentMarkdown.tsx used `prose prose-invert prose-sm` expecting Tailwind's
- * typography plugin, but we don't ship it (no third-party libs per §3.8
- * visual discipline). The classes were no-ops, so `marked` output rendered
- * as raw browser defaults: zero spacing between paragraphs, zero borders
- * on tables, H1/H2 at whatever the browser default is. Users reported
- * "markdown looks cramped · tables broken."
- *
- * Replacing with a scoped rule-set that uses design tokens only. Tuned to
- * match the chat surface density: compact but readable, tables obvious,
- * code blocks differentiated, headings restrained (no giant H1).
+ * Scoped rule-set for rendered chat markdown. Uses design tokens only.
+ * Matches the chat surface density: compact but readable, tables obvious,
+ * code blocks differentiated, headings restrained.
  * ======================================================================== */
 .ah-prose {
   color: var(--color-text);
@@ -239,8 +138,6 @@ body {
 .ah-prose > * { margin: 0; }
 .ah-prose > * + * { margin-top: 0.85rem; }
 
-/* ADR 0013 type scale — headings step up by 1.25 from base. Tightened
- * tracking on large sizes (Inter tracking looks loose > 20px). */
 .ah-prose h1,
 .ah-prose h2,
 .ah-prose h3,
@@ -287,7 +184,6 @@ body {
 }
 .ah-prose a:hover { color: var(--color-primary-hover); }
 
-/* Inline code — compact chip. Block code — own card with horizontal scroll. */
 .ah-prose :not(pre) > code {
   font-family: var(--font-mono);
   font-size: 0.85em;
@@ -316,10 +212,6 @@ body {
   color: inherit;
 }
 
-/* Tables — the user-reported missing case. 1px borders, alt-row shading,
- * full width so any chat markdown table looks like the `allhands.render.table`
- * render tool's output at a glance (same visual tax as the native component,
- * minus the interactions). */
 .ah-prose table {
   width: 100%;
   border-collapse: separate;

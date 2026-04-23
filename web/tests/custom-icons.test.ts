@@ -92,19 +92,25 @@ describe("C04 · AppShell 主侧栏每项必须带 Icon(B1 扁平 nav 验收)", 
     "utf8",
   );
 
-  it("AppShell 从 @/components/icons 导入 icon", () => {
-    expect(shell).toMatch(/from\s*["']@\/components\/icons["']/);
+  // Post-ADR 0016: business icons route through the <Icon> wrapper. The
+  // legacy custom-icon grid stays for brand glyphs (LogoDotgrid).
+  it("AppShell 从 @/components/ui/icon 导入 <Icon> wrapper", () => {
+    expect(shell).toMatch(/from\s*["']@\/components\/ui\/icon["']/);
+    expect(shell).toMatch(/\bIcon\b/);
   });
 
-  it("MENU 数据结构声明 Icon 字段", () => {
-    expect(shell).toMatch(/Icon:\s*\w+Icon/);
+  it("MENU 数据结构声明 icon 字段(kebab-case IconName)", () => {
+    // The new contract uses `icon: "users"` (string) rather than the old
+    // `Icon: UserIcon` (component reference), so swapping the underlying
+    // library never touches AppShell.
+    expect(shell).toMatch(/icon:\s*["'][a-z][a-z0-9-]*["']/);
   });
 
-  it("SidebarItem 组件把 Icon 渲染出来", () => {
+  it("SidebarItem 组件把 <Icon> 渲染出来", () => {
     expect(shell).toMatch(/<Icon\b/);
   });
 
-  it("AppShell 不再使用已禁 icon 包", () => {
+  it("AppShell 不 import lucide-react 直接(必须经 wrapper)", () => {
     expect(shell).not.toMatch(/from\s+["']lucide-react["']/);
     expect(shell).not.toMatch(/from\s+["']@heroicons/);
     expect(shell).not.toMatch(/from\s+["']@phosphor-icons/);
@@ -135,7 +141,9 @@ describe("C06 · design-lab 必须渲染 Icon Gallery", () => {
     expect(designLab).toMatch(/data-testid=["']icon-gallery["']/);
   });
 
-  it("从 @/components/icons 导入", () => {
-    expect(designLab).toMatch(/from\s*["']@\/components\/icons["']/);
+  // Post-ADR 0016: design-lab imports the <Icon> wrapper so the gallery is
+  // keyed by the same registry the rest of the app consumes.
+  it("从 @/components/ui/icon 导入 <Icon>", () => {
+    expect(designLab).toMatch(/from\s*["']@\/components\/ui\/icon["']/);
   });
 });

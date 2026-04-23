@@ -1,0 +1,108 @@
+/* ==========================================================================
+ * allhands · Theme Token Interface
+ * ------------------------------------------------------------------------
+ * This file documents the *contract* every theme pack must satisfy.
+ * It declares no values — individual pack files (e.g. brand-blue/light.css)
+ * provide them.
+ *
+ * See: product/adr/0016-brand-blue-dual-theme.md · product/03-visual-design.md
+ *
+ * Adding a new theme pack:
+ *   1. Create web/styles/themes/<pack>/light.css + dark.css + index.css
+ *   2. Ensure every variable below is set in *both* light.css and dark.css
+ *   3. Register the pack in components/theme/ThemeProvider.tsx
+ *   4. Document in product/03-visual-design.md §5
+ *
+ * Selector convention:
+ *   :root[data-theme-pack="<pack>"].light  → light mode tokens
+ *   :root[data-theme-pack="<pack>"].dark   → dark mode tokens
+ *   (Tailwind darkMode: 'class' picks up `.light` / `.dark` automatically.)
+ * ======================================================================== */
+
+/* Reference list — every pack MUST define all of these in both modes.
+ *
+ * Surfaces / text / border:
+ *   --color-bg               page background
+ *   --color-surface          card / sidebar / primary surface
+ *   --color-surface-2        input base · hover surface
+ *   --color-surface-3        subtle delta · skeleton
+ *   --color-surface-4        deeper delta · nested surface
+ *   --color-border           default border
+ *   --color-border-strong    hover/emphasis border
+ *   --color-text             primary text
+ *   --color-text-muted       secondary text
+ *   --color-text-subtle      tertiary / placeholder
+ *
+ * Primary + accent:
+ *   --color-primary          main brand color (CTA · active)
+ *   --color-primary-hover    hover state
+ *   --color-primary-fg       text color on primary surface
+ *   --color-primary-muted    primary @ ~10% alpha (soft background)
+ *   --color-primary-glow     primary glow tint (dark-mode shadow use)
+ *   --color-accent           secondary emphasis (gradients · highlights)
+ *
+ * Semantics:
+ *   --color-success / --color-success-soft
+ *   --color-warning / --color-warning-soft
+ *   --color-danger  / --color-danger-soft
+ *   --color-primary-soft     primary @ 10% (matches -muted, kept for legacy)
+ *   --color-surface-hover    subtle hover tint over surface
+ *
+ * Role colors (chat/trace speaker):
+ *   --color-role-user
+ *   --color-role-lead
+ *   --color-role-worker
+ *   --color-role-tool
+ *
+ * Data-viz (ADR 0012 · stable ordering):
+ *   --color-viz-1 … --color-viz-6
+ *
+ * Shadows — light-biased "soft" + dark-biased "glow" — packs MUST define all:
+ *   --shadow-soft-sm
+ *   --shadow-soft
+ *   --shadow-soft-lg
+ *   --shadow-pop            2px offset · colored border pop
+ *   --shadow-glow-sm
+ *   --shadow-glow
+ *   --shadow-glow-lg
+ *   --shadow-inset-hairline inset 1px top highlight
+ *
+ * Motion (shared across packs — defined once globally below):
+ *   --dur-fast / --dur-base / --dur-mid / --dur-slow / --dur-float
+ *   --ease-out / --ease-out-quart / --ease-out-expo / --ease-out-soft
+ *
+ * Type scale (shared — defined once globally below):
+ *   --text-caption · --text-sm · --text-base · --text-lg · --text-xl · --text-display
+ *   --leading-heading · --leading-body · --leading-data
+ */
+
+/* Motion tokens — shared across all theme packs.
+ * Only tweak here if you're adding a duration, never a one-off value. */
+:root {
+  --dur-fast:  120ms;
+  --dur-base:  150ms;
+  --dur-mid:   220ms;
+  --dur-slow:  320ms;
+  --dur-float: 6000ms;
+
+  --ease-out:      cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-soft:  cubic-bezier(0.16, 1, 0.3, 1); /* alias — brand-blue default */
+}
+
+/* Type scale — shared across all theme packs.
+ * Per ADR 0013: 5-size modular at 1.25 ratio. Role-named, not px-named,
+ * so the scale can re-tune without rename churn. */
+:root {
+  --text-caption: 0.75rem;     /* 12px · mono meta, kbd chips, trace ids */
+  --text-sm:      0.8125rem;   /* 13px · secondary UI, labels           */
+  --text-base:    0.9375rem;   /* 15px · body, chat content, inputs     */
+  --text-lg:      1.1875rem;   /* 19px · card titles, drawer headers    */
+  --text-xl:      1.5rem;      /* 24px · page titles, hero metrics      */
+  --text-display: 2rem;        /* 32px · empty-state hero               */
+
+  --leading-heading: 1.2;
+  --leading-body:    1.6;
+  --leading-data:    1.45;
+}

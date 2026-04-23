@@ -1,691 +1,750 @@
-# 03 · Visual Design System — "Linear Precise"
+# 03 · Visual Design · Brand Blue Dual Theme
 
-> **视觉方向:简洁科技风 · 精度优先**
-> 参考:Linear、Vercel Dashboard、Cursor、Raycast。
-> 反面:Dify(彩虹 UI、信息密度混乱)、Notion AI(过度装饰)。
+> **视觉方向:Arc / Raycast 活力蓝 · 双主题(light + dark)· theme pack 架构**
 >
-> **此文档是视觉契约。** 所有 `web/` 下的新增代码必须遵守;
-> 违反打回。Token 值变更必须先改本文件,再改 `globals.css`。
+> **此文档是 v1 视觉契约。** 所有 `web/` 下的新增代码必须遵守;违反打回。权威决策来源:[ADR 0016 · Brand-Blue Dual Theme](./adr/0016-brand-blue-dual-theme.md)。Token 值或契约变更必须先改本文件,再同步 `web/styles/themes/` 与 `design-system/MASTER.md`。
+
+## 作废与替代
+
+本版本**整体替代** 2026-03 的 "Linear Precise" 规范。以下旧条款**全部废止**,PR 中再出现一律打回:
+
+- 旧 §0 "三条最高纪律"(禁第三方 icon 库 · 颜色密度 ≤ 3 · 动效 2px 位移上限)
+- 旧 §0.4 "BAN 1"(禁 colored `border-left` accent)与 "BAN 2"(禁 gradient text)—— ADR 0013 相关条款作废
+- 旧 §2 "第三方 icon 禁令" —— ADR 0009 从"唯一 icon 来源"降级为"特殊符号来源"
+- 旧 §3.4 "Card hover 只变边框亮度 · 禁位移" —— 改为允许 `-translate-y-px` / `shadow-soft` 交互反馈
+- 旧 §5 "`.light` / `.dark` class 硬切" —— 改为 `data-theme-pack` + `data-theme` 双维度
+
+**保留**(未受影响):
+
+- ADR 0012 viz palette(`viz-1…viz-6`)· 独立于主题
+- ADR 0013 字号阶梯的表(`text-caption…text-display`)· 仅作废其中的 BAN 1 / BAN 2
+- §9.1 Voice & Tone · I-0013 文案纪律
+- §7 Component Registry 机制
 
 ---
 
-## 0. 三条最高纪律
+## § 0 · 五条设计原则(取代旧"三条最高纪律")
 
-1. **不用第三方 icon 库 / icon 字体**(Lucide、Heroicons、Phosphor、Tabler、Font Awesome 等都禁用)。图形信息只能来自:
-   - **排版 + 中性灰阶**(最优:文字本身就是信息)
-   - **功能性几何元素**:激活色条、点阵 logo、状态点、键盘 chip、方括号
-   - **Mono 字符**:`→` `←` `↑` `↓` `·` `…` `⌘` `↵` `Esc`,mono 字体下渲染整齐
-   - **自有 icon 集**(Raycast-style,`web/components/icons/**`):2px stroke · round caps · currentColor · 24×24 viewBox · 仅允许本项目内相对导入
-   - **1-line SVG legacy**(`web/components/ui/icons.tsx`):logo 点阵 + 主题切换 sun/moon + 5 类旧图元(check / arrow-right / external / copy / plus-minus),保留不扩展
-2. **颜色密度 ≤ 3**(**UI chrome only**)。导航 / 按钮 / 芯片 / 卡片外壳只许 `text / muted / primary` 三个非语义 token,其他一律用 opacity 叠加或 surface 变体。以下三类各有**独立调色板**,不计入三色预算(详见对应 ADR):
-   - **语义状态色**:success / warning / danger + 各自 `*-soft` 透明变体(ADR 0013)
-   - **品牌识别色**:`<BrandMark />` 渲染的 provider / model 官方色(Anthropic 铁锈橙 / DeepSeek 蓝 / Qwen 紫 / Kimi / MiniMax / Zhipu / Bailian;OpenAI / OpenRouter 等无官方彩色标的继续走 mono + currentColor)
-   - **数据可视化调色板**:`web/components/render/Viz/**` 下图表 / 指标组件的 `viz-1…viz-6` 六色环(ADR 0012)
-3. **动效克制**。时长只用 token 里的 4 档;位移不超过 `2px`;禁用无限循环动画(spinner / pulse 状态点 / shimmer 骨架除外)。
-4. **禁止 AI-slop 双重否定**(ADR 0013 采纳自 [impeccable.style](https://impeccable.style) BAN 1-2):
-   - **BAN 1 · 不许在 card / list item / callout / alert 上用 `border-left > 1px` 或 `border-right > 1px` 做 colored accent stripe**。替代:完整边框 + tinted 底色(`*-soft` token)+ leading glyph / number,或什么都不加。唯一例外 —— sidebar 的 active-nav 标记(conveys state, marks exactly 1 item at a time,and is the Linear / Raycast convention;非装饰)。
-   - **BAN 2 · 不许 gradient text**(`background-clip: text` + `linear/radial/conic-gradient`)。文字用单色;要强调就改 weight / size,不靠 gradient fill。
+本契约不再以禁令为主,而以**设计指引**为主。5 条原则排序即优先级,冲突时高位覆盖低位。
 
-违反以上三条 = review 打回,无协商空间。
+### P1 · 跨主题一致性
 
-**允许的装饰原语(composition primitives)** · 详见 [§11 Composition Primitives](#11-composition-primitives装饰原语):sparkline(micro-viz)· dotgrid backdrop · hairline accent · `ah-fade-up` 入场 · 数值 ≤ 2px 过渡。这些**都走既有 token**,不松绑上面三条硬纪律,只是把既有语汇列明,避免每次都重新争。
+dark 与 light 必须传递**同一份信息语义** —— 激活 / 层级 / 状态区分方式一致,**只是色值变**。
+- 侧边栏激活在 dark 是 `bg-primary/10` + 左 2px 色条 → light 也必须是 `bg-primary-muted` + 左 2px 色条
+- 主要 CTA 在 dark 用 `shadow-glow-sm` 强调 → light 对应用 `shadow-soft` / `shadow-soft-lg`,**不能**一个有发光另一个什么都没有
+- e2e 视觉回归在两个主题各跑一遍
+
+### P2 · Token 优先
+
+一切颜色 / 字号 / 圆角 / 阴影 / 动效走 token,**不写具体值**。
+- JSX 里**禁止**十六进制、`bg-blue-500`、`text-zinc-400` 等 Tailwind 原色类
+- Tailwind 的 `colors`、`boxShadow`、`borderRadius`、`transitionDuration` 全部指向 CSS 变量
+- 唯一例外:`design-system/proposals/*.html` 原型 —— 那是探索样板,不是生产代码
+
+### P3 · 扩展性设计
+
+组件**只消费 token**,不依赖具体 pack。任何加第二套主题(`forest-green` / `mono-cipher` / …)都应**零改组件**,只改 `web/styles/themes/<pack>/*.css`。
+- 新 token 必须写进 `tokens.css`(接口定义,无值)
+- 每个 pack 必须导出完整 token 集 · 缺项启动 assert 报错
+- 语义色(success / warning / danger)色相不变 —— 避免"绿变红"翻转
+
+### P4 · 品牌可感
+
+v1 MVP 阶段允许并鼓励建立产品识别:
+- **允许** gradient `background-clip: text` 做 hero / display 标题
+- **允许** `colored border-left` / `border-top` 做 accent(取代旧 BAN 1)
+- **允许** `shadow-glow-sm` / `shadow-glow`(暗主题 primary 发光)与 `shadow-soft-lg`(亮主题抬升)
+- **允许** 大字号 hero(72–84px display)· 点阵 logo · BrandMark provider 原色
+
+### P5 · 动效克制
+
+松绑但不放任:
+- **允许**:`hover:-translate-y-px` · `animate-float`(6s 装饰 orb)· `animate-ping` / `pulse-ring` · `animate-shimmer` · 一次性 `ah-fade-up` 入场 · `background-clip: text` 静态 gradient
+- **禁止**:Framer Motion / GSAP / react-spring / CountUp.js 等 JS 动画库(CSS + Tailwind keyframes 足够)
+- **禁止**:`scale > 1.05` 大幅缩放 · 超过 500ms 的交互过渡(shimmer / float 无限动画除外)
+- **禁止**:干扰阅读的持续闪烁(cyber `flicker` 留给未来 theme pack)
 
 ---
 
-## 1. 设计 Tokens(canonical source)
+## § 1 · Design Tokens(canonical source)
 
-实现在 [`web/app/globals.css`](../web/app/globals.css),Tailwind 映射在 [`web/tailwind.config.ts`](../web/tailwind.config.ts)。**本节为事实来源**,代码必须跟随本文件。
+实现层次:
 
-### 1.1 颜色
-
-品牌主色选 **Indigo #6366F1**(非 blue/violet):冷静、精度感、和 zinc 中性灰阶配合最好,深浅模式共用一套主色。
-
-```css
-/* Light (:root, .light) */
---color-bg:            #FFFFFF;
---color-surface:       #FAFAFA;
---color-surface-2:     #F4F4F5;
---color-surface-3:     #EDEDEF;   /* shimmer / 微差层 */
---color-border:        #E4E4E7;
---color-border-strong: #D4D4D8;
---color-text:          #18181B;
---color-text-muted:    #71717A;
---color-text-subtle:   #A1A1AA;
-
---color-primary:       #6366F1;   /* Indigo-500 */
---color-primary-hover: #7C7FF3;
---color-primary-fg:    #FFFFFF;
-
---color-success: #059669;
---color-warning: #D97706;
---color-danger:  #DC2626;
-
-/* 数据可视化调色板(ADR 0012 · 仅限 components/render/Viz/**)*/
---color-viz-1: #6366F1;   /* indigo · 与 primary 同色,单 series 默认 */
---color-viz-2: #0D9488;   /* teal */
---color-viz-3: #D97706;   /* amber */
---color-viz-4: #DC2626;   /* rose */
---color-viz-5: #7C3AED;   /* violet */
---color-viz-6: #0284C7;   /* sky */
-
-/* 半透明 surface tints — 给 render/Viz 和 tinted states 用,避免在 JSX 里拼 `/10` 字符串 */
---color-surface-hover: rgba(99,102,241,0.06);
---color-primary-soft:  rgba(99,102,241,0.10);
---color-success-soft:  rgba(5,150,105,0.10);
---color-warning-soft:  rgba(217,119,6,0.10);
---color-danger-soft:   rgba(220,38,38,0.10);
-
-/* Dark (.dark) */
---color-bg:            #09090B;
---color-surface:       #111113;
---color-surface-2:     #18181B;
---color-surface-3:     #1F1F22;
---color-border:        #27272A;
---color-border-strong: #3F3F46;
---color-text:          #FAFAFA;
---color-text-muted:    #A1A1AA;
---color-text-subtle:   #71717A;
-
---color-primary:       #6366F1;
---color-primary-hover: #818CF8;   /* Indigo-400,暗色更亮 */
---color-primary-fg:    #FFFFFF;
-
---color-success: #10B981;
---color-warning: #F59E0B;
---color-danger:  #EF4444;
-
-/* 数据可视化调色板 · dark variant(与 light 同序,亮度抬高以配合 #09090B 背景)*/
---color-viz-1: #818CF8;
---color-viz-2: #2DD4BF;
---color-viz-3: #FBBF24;
---color-viz-4: #F87171;
---color-viz-5: #A78BFA;
---color-viz-6: #38BDF8;
-
---color-surface-hover: rgba(129,140,248,0.08);
---color-primary-soft:  rgba(129,140,248,0.14);
---color-success-soft:  rgba(16,185,129,0.14);
---color-warning-soft:  rgba(245,158,11,0.14);
---color-danger-soft:   rgba(239,68,68,0.14);
+```
+web/styles/themes/
+├── tokens.css                 ← 变量接口(无值)· 组件只依赖这层
+├── brand-blue/
+│   ├── light.css              ← :root[data-theme-pack="brand-blue"][data-theme="light"]
+│   ├── dark.css               ← :root[data-theme-pack="brand-blue"][data-theme="dark"]
+│   └── index.css              ← @import light + dark
+└── _next-pack/                ← 未来扩展
 ```
 
-**Role 色(消息气泡左边栏):**
+Tailwind 映射在 `web/tailwind.config.ts`:所有 `colors` / `boxShadow` / `transitionDuration` 指向 `var(--…)`,darkMode 配置为 `['class', '[data-theme="dark"]']`。
 
-| 角色 | Light | Dark | 语义 |
-|---|---|---|---|
-| `role-user` | `#6366F1` | `#818CF8` | 用户 |
-| `role-lead` | `#8B5CF6` | `#A78BFA` | Lead Agent(唯一紫色) |
-| `role-worker` | `#0D9488` | `#2DD4BF` | 员工 |
-| `role-tool` | `#D97706` | `#FBBF24` | Tool 调用 |
+### 1.1 颜色 token 接口(语义用途)
 
-**使用规约:**
-- 文本默认 `text`,次要 `text-muted`,提示 `text-subtle`
-- 禁止在 JSX 里写十六进制、`bg-blue-500`、`text-zinc-400` 等 Tailwind 原色类;一律走 token(`text-text-muted`、`bg-surface-2`)
-- Primary 只用于:**激活指示、焦点环、主 CTA、点阵 logo**;其他一律灰阶
+下列 token 名是**全 pack 共享接口** · 任何新 pack 必须完整实现。
 
-### 1.2 字体
+**结构层**
+
+| Token | 用途 |
+|---|---|
+| `--color-bg` | 页面最底层背景 · body · app shell 外壳 |
+| `--color-surface` | 第一层容器 · card · topbar · sidebar |
+| `--color-surface-2` | 第二层容器 · hover 态 · nested card · composer tint |
+| `--color-surface-3` | 第三层 · shimmer / skeleton / 微差分组 |
+| `--color-surface-4` | 第四层 · **新增** · tab well · inset section · 更深 nested |
+| `--color-border` | 默认边框 · divider · card 外框 |
+| `--color-border-strong` | 强调边框 · hover 态 input · 分区边线 |
+
+**文本层**
+
+| Token | 用途 |
+|---|---|
+| `--color-text` | 主要文本 · 标题 · body · 表单值 |
+| `--color-text-muted` | 次要文本 · 说明 · 未选中 nav |
+| `--color-text-subtle` | 提示 · placeholder · caption · metadata |
+
+**主色 + 强调**
+
+| Token | 用途 |
+|---|---|
+| `--color-primary` | 品牌主色 · 主 CTA bg · 激活色条 · 焦点环 |
+| `--color-primary-hover` | primary hover 态(亮/暗取向不同) |
+| `--color-primary-fg` | primary 背景上的前景文字(一般 `#FFFFFF`) |
+| `--color-primary-muted` | `primary/10` 常用透明叠加预设 · 激活 bg tint |
+| `--color-primary-glow` | **仅 dark** · highlight / shadow-glow 用 |
+| `--color-primary-soft` | `primary/15` 更强 tint · badge 背景 · hairline accent |
+| `--color-accent` | 副强调色(azure-sky / cyan) · 图表辅色 · 装饰 orb |
+
+**语义状态**
+
+| Token | 用途 | 对应 `*-soft` |
+|---|---|---|
+| `--color-success` | 正向状态 · 运行正常 · 测试通过 | `--color-success-soft` |
+| `--color-warning` | 警告 · 额度接近上限 · deprecated | `--color-warning-soft` |
+| `--color-danger` | 错误 · 失败 · 不可逆动作 | `--color-danger-soft` |
+
+`*-soft` 统一为对应主色的 10–15% 不透明叠加,用于 badge / callout / toast 背景。
+
+### 1.2 · 1.3 Brand-Blue 具体值(light + dark)
+
+选择器 `:root[data-theme-pack="brand-blue"][data-theme="<light|dark>"]`。light 取 V2 Azure Live 的 paper 系,dark 取 V1 Cobalt Precision 的 ink 系。
+
+| Token | Light | Dark |
+|---|---|---|
+| `--color-bg` | `#F6F8FC` | `#0A0D14` |
+| `--color-surface` | `#FFFFFF` | `#11151F` |
+| `--color-surface-2` | `#EDF1F8` | `#1A1F2E` |
+| `--color-surface-3` | `#DFE6F0` | `#242A3C` |
+| `--color-surface-4` | `#CED7E4` | `#3A425A` |
+| `--color-border` | `#DFE6F0` | `rgba(255,255,255,0.06)` |
+| `--color-border-strong` | `#B9C4D4` | `rgba(255,255,255,0.12)` |
+| `--color-text` | `#141A26` | `#E2E6F1` |
+| `--color-text-muted` | `#5C667A` | `#B6BDD1` |
+| `--color-text-subtle` | `#8B96AB` | `#8690AE` |
+| `--color-primary` | `#0A5BFF` | `#2E5BFF` |
+| `--color-primary-hover` | `#0848D1` | `#6082FF` |
+| `--color-primary-fg` | `#FFFFFF` | `#FFFFFF` |
+| `--color-primary-muted` | `rgba(10,91,255,0.10)` | `rgba(46,91,255,0.14)` |
+| `--color-primary-soft` | `rgba(10,91,255,0.15)` | `rgba(110,139,255,0.20)` |
+| `--color-primary-glow` | `rgba(10,91,255,0.00)` * | `#6E8BFF` |
+| `--color-accent` | `#4EA8FF` | `#63D3FF` |
+| `--color-success` | `#0FA57A` | `#2EBD85` |
+| `--color-warning` | `#D97706` | `#F5A524` |
+| `--color-danger` | `#DC2626` | `#F04438` |
+| `--color-success-soft` | `rgba(15,165,122,0.12)` | `rgba(46,189,133,0.16)` |
+| `--color-warning-soft` | `rgba(217,119,6,0.12)` | `rgba(245,165,36,0.16)` |
+| `--color-danger-soft` | `rgba(220,38,38,0.12)` | `rgba(240,68,56,0.16)` |
+
+\* light 无发光,保留 token 接口存在以满足 P3 "每个 pack 必须实现所有变量" 契约。
+
+### 1.4 字体
 
 ```css
---font-sans: var(--font-inter), system-ui, sans-serif;
---font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+--font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+--font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+--font-feature-settings: 'cv11', 'ss01', 'ss03';
+--letter-spacing-base: -0.011em;
 ```
 
-**加载**:[`web/app/layout.tsx`](../web/app/layout.tsx) 用 `next/font/google` 挂载 CSS 变量。
+**加载**:`web/app/layout.tsx` 用 `next/font/google` 挂载;CDN 备源在 `proposals/*.html` 里用 `fonts.googleapis.com`。
 
-**使用规约:**
-- 普通 UI 文本 → `font-sans`(Inter)
-- 以下场景**必须** `font-mono`(JetBrains Mono):
-  - URL / endpoint / `trace_id` / id
-  - 代码块、JSON、tool call args/result
-  - 键盘提示(⌘K、↵)
-  - Section label(SIDEBAR 分区标题,小号大写字母间距拉开)
-  - 方向符 / 终端风格标签(`→`、`· /gateway/providers · 2`)
+**使用规约**:
+- 普通 UI 文本 → `font-sans`(Inter 的 `cv11 ss01 ss03` 特性提升数字与字母辨识)
+- 以下场景**必须** `font-mono`:URL / endpoint / id / trace_id · 代码 / JSON / tool args · kbd chip · uppercase section label · 方向符(`→ ← ⌘ ↵`)
 
-### 1.3 字号阶梯(ADR 0013 · 2026-04-22 刷新)
-
-**5 档模块化字号 · 1.25 比例 · rem-based**。Inter 的 `-0.01em` tracking 在 18px+ 时更精准。Body 从 13px 升到 **15px**(`0.9375rem`),介于 impeccable 推荐的 16px 和原先 13px 之间 —— 在密集 app UI(侧栏 + 主面板 + 抽屉 + tool card 嵌套)里 16px 行宽不够,15px 是妥协后的 readable 阈值。
-
-CSS tokens(定义在 [`globals.css`](../web/app/globals.css)):
-
-```css
---text-caption:  0.75rem;     /* 12px · mono 元数据 / kbd chip / trace_id */
---text-sm:       0.8125rem;   /* 13px · 二级 UI / card 内标签 */
---text-base:     0.9375rem;   /* 15px · body / 对话 / input — 新基线 */
---text-lg:       1.1875rem;   /* 19px · 卡片标题 / 抽屉头 / 副标题 */
---text-xl:       1.5rem;      /* 24px · 页面标题 / hero metric */
---text-display:  2rem;        /* 32px · 空态 hero / landing */
-
---leading-heading: 1.2;
---leading-body:    1.6;
---leading-data:    1.45;       /* tabular / mono 场景 */
-```
-
-Tailwind utilities 同名映射:`text-caption · text-sm · text-base · text-lg · text-xl · text-display`。`text-sm` / `text-xl` 会覆盖 Tailwind 默认值 —— 故意的,让既有 JSX 自动吃到新尺寸。
+### 1.5 字号阶梯(保留自 ADR 0013)
 
 | 用途 | Token | Size | Weight | Tracking |
 |---|---|---|---|---|
-| Hero / empty-state 主字 | `text-display` | 32 | 600 | `-0.02em` |
+| Hero / landing display | `text-hero` | 72–84px | 600–800 | `-0.04em` |
+| 页面 display | `text-display` | 32 | 600 | `-0.02em` |
 | 页面标题 / H1 | `text-xl` | 24 | 600 | `-0.02em` |
 | 卡片标题 / 抽屉头 / H2 | `text-lg` | 19 | 600 | `-0.015em` |
-| Body(对话、说明、input) | `text-base` | 15 | 400 | default |
-| 二级 UI / card 内标签 | `text-sm` | 13 | 500 | default |
-| Caption / mono meta / trace | `text-caption` | 12 | 500 | default |
+| Body · 对话 · input | `text-base` | 15 | 400 | default |
+| 二级 UI · 表单 label | `text-sm` | 13 | 500 | default |
+| Caption · mono meta · trace_id | `text-caption` | 12 | 500 | default |
 | UPPERCASE section label | `text-caption` | 12 | 600 | `0.08em` |
 
-行高:标题 `--leading-heading` (1.2);正文 `--leading-body` (1.6);mono / tabular `--leading-data` (1.45)。
-
-### 1.4 圆角
-
-```
---radius-sm:  4px   /* badge, kbd chip, status dot container */
---radius:     6px   /* button, input, small card(default) */
---radius-md:  8px   /* card, modal内卡片 */
---radius-lg:  12px  /* 对话气泡 */
---radius-xl:  16px  /* modal, drawer, 大容器 */
-```
-
-对应 Tailwind:`rounded` = 6px,`rounded-md` = 8px(见 [tailwind.config.ts](../web/tailwind.config.ts))。
-
-### 1.5 间距
-
-基于 4px 网格。Tailwind 默认即可。常用节奏:
-- 图标内边距:`px-2 py-1`(28px 高)
-- 按钮:`px-3 py-1.5`(32px 高)/ `px-4 py-2`(36px 高,主要 CTA)
-- 卡片内边距:`px-4 py-3`(紧凑)/ `px-5 py-4`(标准)
-- 段落间隔:`space-y-2` 列表 / `space-y-4` 章节 / `space-y-6` 大块
-
-### 1.6 阴影
-
-Linear Precise **不靠阴影制造层级**,主要靠边框和 surface 色。只在 modal / dropdown 使用:
+`text-hero` 为新增:仅限 landing / empty-state 大字,正常页面不用。
 
 ```css
---shadow-sm: 0 1px 2px rgba(0,0,0,0.05);   /* light, modal */
---shadow:    0 4px 12px rgba(0,0,0,0.08);  /* light, dropdown */
---shadow-dark-sm: 0 1px 2px rgba(0,0,0,0.4);
---shadow-dark:    0 4px 12px rgba(0,0,0,0.5);
+--leading-heading: 1.2;
+--leading-body:    1.6;
+--leading-data:    1.45;
 ```
 
-### 1.7 动效
+### 1.6 圆角
+
+| Token | 值 | 用途 |
+|---|---|---|
+| `--radius-sm` | 4px | kbd chip · badge · status dot 外壳 |
+| `--radius` | 6px | 默认 button · 小徽章 |
+| `--radius-md` | 8px | input · 默认 card |
+| `--radius-lg` | 12px | 对话气泡 · toast · pill nav item |
+| `--radius-xl` | 16px | modal · drawer · 大容器 |
+| `--radius-2xl` | 20–24px | hero preview · landing 级卡片 · avatar group wrapper |
+
+### 1.7 间距
+
+基于 4px 网格 · 常用阶梯:`4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 · 96`。Tailwind 默认的 `p-1 / p-2 / p-3 / p-4 / p-6 / p-8 / p-12 / p-16 / p-24` 对齐。
+
+常见节奏:
+- 按钮:`h-8 px-3`(32px 高 · 小号)/ `h-9 px-4`(36 · 默认)/ `h-11 px-5`(44 · 主要 CTA)/ `h-12 px-6`(48 · hero CTA)
+- 卡片内边距:`px-4 py-3` 紧凑 / `px-5 py-4` 标准 / `px-6 py-5` 宽松
+- 段落间隔:`space-y-2` 列表 · `space-y-4` 章节 · `space-y-6` 大块 · `space-y-8` 页面级
+
+### 1.8 阴影
+
+light pack 靠 `shadow-soft-*` 建立层级;dark pack 靠 `shadow-glow-*` 建立强调。**组件只写语义名**,具体值由 pack 注入。每个 pack 必须实现全部 8 个 token(另一方可为 `none` 或等效值)以保证组件一份代码跨 pack 生效。
+
+| Token | Light 值 | Dark 值 |
+|---|---|---|
+| `--shadow-soft-sm` | `0 1px 2px rgba(10,43,120,.04), 0 1px 3px rgba(10,43,120,.06)` | `none` |
+| `--shadow-soft` | `0 4px 12px -2px rgba(10,43,120,.06), 0 2px 4px rgba(10,43,120,.04)` | `none` |
+| `--shadow-soft-lg` | `0 24px 64px -24px rgba(10,91,255,.18), 0 8px 24px -8px rgba(10,43,120,.08)` | `none` |
+| `--shadow-pop` | `0 2px 0 rgba(10,91,255,.9)` | `0 2px 0 rgba(46,91,255,.9)` |
+| `--shadow-glow-sm` | `none` | `0 0 12px -2px rgba(110,139,255,.35)` |
+| `--shadow-glow` | `none` | `0 0 28px -4px rgba(110,139,255,.45)` |
+| `--shadow-glow-lg` | `none` | `0 12px 48px -12px rgba(46,91,255,.55)` |
+| `--shadow-hairline` | `inset 0 1px 0 rgba(255,255,255,.6)` | `inset 0 1px 0 rgba(255,255,255,.04)` |
+
+### 1.9 动效 token
 
 ```css
---ease-out: cubic-bezier(0.4, 0, 0.2, 1);
---dur-fast: 120ms;   /* kbd chip, 小徽章 */
---dur-base: 150ms;   /* 按钮、边框色切换(默认)*/
---dur-mid:  220ms;   /* 卡片 hover、modal 入场 */
---dur-slow: 320ms;   /* progress 填充、页签切换 */
+--dur-fast:   150ms;   /* kbd chip · badge · 颜色切换 */
+--dur-base:   220ms;   /* 按钮 · card hover · modal 入场 */
+--dur-slow:   320ms;   /* tab 切换 · progress 填充 */
+--dur-float:  6000ms;  /* 仅 animate-float 装饰 orb */
+
+--ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+--ease-out:      cubic-bezier(0.4, 0, 0.2, 1);
 ```
 
-**规约:**
-- 颜色类过渡用 `transition-colors` + `duration-150`(Tailwind 对齐 `--dur-base`)
-- 位移最大 `2px`(如箭头 `translateX`);**禁止** scale/rotate 常规使用
-- 入场动画只用 `fade-up`(translateY 4→0 + opacity 0→1,220ms)
-- 允许的无限动画:Spinner 旋转、三点脉动、Shimmer 骨架、Status Dot 脉动、Caret 闪烁;**其他一律禁止**
+### 1.10 Keyframes 白名单
 
-Keyframes 已在 [`globals.css`](../web/app/globals.css) 提供:`ah-spin`、`ah-pulse`、`ah-shimmer`、`ah-bar-in`、`ah-caret`、`ah-dot`、`ah-fade-up`。
+| 名称 | 用途 | 循环 |
+|---|---|---|
+| `ah-fade-up` | 入场 · translateY 6→0 + opacity 0→1 · 220ms | 一次性 |
+| `float` | 装饰 orb · translateY 0→-6→0 · 6s | 无限 |
+| `pulse-ring` / `animate-ping` | 状态点脉动 · 2.2s | 无限 |
+| `shimmer` | skeleton 骨架 · background-position -200% → 200% · 2.4s linear | 无限 |
+| `ah-bar-in` | 激活色条 scaleY 0→1 · 180ms | 一次性 |
+| `scan` | 保留 · 暂不用 | — |
+| `flicker` | 保留 · cyber theme pack 用 | — |
+
+新增 keyframe 必须先改本文件再改 `web/styles/` —— 不在白名单里的 animation 在 code review 打回。
 
 ---
 
-## 2. Icon 体系(强约束)
+## § 2 · Icon 体系(取代旧"图形只能来自几何")
 
-**禁第三方 icon 库**,自有图形来源按优先级:
+### 2.1 Lucide 作为主来源
 
-### 2.1 激活色条(主导航激活状态)
+业务所有 icon 统一从 Lucide 出。**禁止**在业务组件里直接 `import { X } from 'lucide-react'` —— 必须经 `<Icon>` 封装。
 
-左侧 2px 色条 + primary 色,入场 `ah-bar-in 180ms`:
+### 2.2 `<Icon>` API 契约
 
-```tsx
-{active && (
-  <span
-    className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-primary"
-    style={{ animation: "ah-bar-in 180ms var(--ease-out) both", transformOrigin: "center" }}
-  />
-)}
-```
-
-### 2.2 点阵 Logo(应用标识)
-
-3×3 栅格,五点 X 形或对角呈 primary 色,其余透明:
+实现:`web/components/ui/icon.tsx`。
 
 ```tsx
-function LogoDotgrid() {
-  return (
-    <div className="grid grid-cols-3 gap-[2px] w-[14px] h-[14px]">
-      {Array.from({ length: 9 }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-[1px]"
-          style={{ background: [0,2,4,6,8].includes(i) ? "var(--color-primary)" : "transparent" }}
-        />
-      ))}
-    </div>
-  );
-}
+import { Icon } from "@/components/ui/icon";
+
+<Icon name="users" size={16} />
+<Icon name="sparkles" size={20} strokeWidth={1.75} className="text-primary" />
 ```
 
-### 2.3 状态点(语义状态)
+Props:
 
-`7px` 圆点,running/queued 时 `ah-pulse` 脉动:
+| Prop | 默认 | 说明 |
+|---|---|---|
+| `name` | — | Lucide icon name(kebab-case) |
+| `size` | `16` | 默认 16px;nav / 表单常 16;hero / feature 20–24 |
+| `strokeWidth` | 按 pack | dark pack 默认 `1.75`(V1 精密感)· light pack 默认 `2`(V2 明快感) |
+| `className` | — | 颜色靠 `text-*` 类驱动 · 内部统一 `stroke="currentColor"` |
 
-```tsx
-<span
-  className="inline-block w-[7px] h-[7px] rounded-full mr-1.5"
-  style={{
-    background: "var(--color-success)",
-    animation: "ah-pulse 1.6s ease-in-out infinite"
-  }}
-/>
-```
+日后整体切换底层库(Phosphor / Tabler)只改 `<Icon>` 内部实现,不动调用点。静态契约扫描(`web/tests/icon-import-contract.test.ts`)守门:任何业务文件 `import { .* } from 'lucide-react'` 直接打回,仅 `components/ui/icon.tsx` 白名单。
 
-### 2.4 键盘 Chip(快捷键提示)
+### 2.3 自有 icon 集(降级)
 
-Mono 字 + 细边框 + surface-2 背景,`text-[10px]`:
+`web/components/icons/` **保留**,但范围收窄到"特殊符号":
+- app logo(点阵 / ah 字样)
+- provider / model brand marks(配合 BrandMark)
+- 装饰字符(箭头 · hairline · decorative glyph)
 
-```tsx
-<span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-border bg-surface-2 text-text-muted">
-  ⌘K
-</span>
-```
+旧 `web/components/ui/icons.tsx` 的 5 个 legacy 图元(`check` / `arrow-right` / `external` / `copy` / `plus-minus`)迁移到 Lucide (`check` / `arrow-right` / `external-link` / `copy` / `plus` + `minus`),文件删除。
 
-### 2.5 Mono 方向符(内联提示)
+### 2.4 BrandMark 组件
 
-```
-list → detail    ·    prev ← next    ·    ↑ up    ↓ down
-```
+Provider / model 官方色 logo 保留独立调色(Anthropic 铁锈橙 / DeepSeek 蓝 / Qwen 紫 / Kimi / MiniMax / Zhipu / Bailian)—— **这是 ADR 0009 中唯一保留的条款**。渲染走 `<BrandMark provider="anthropic" size={16} />`,不走 `<Icon>`。
 
-### 2.6 1-line SVG legacy(仅 5 类,不再扩展)
+### 2.5 激活色条(2px primary bar)
 
-历史产物,`1.5px stroke` + `round linecap/linejoin`。**仅允许这 5 个场景**,继续在 [`web/components/ui/icons.tsx`](../web/components/ui/icons.tsx):
-- **check**:操作成功反馈(表单、测试通过)
-- **arrow-right**:导航、跳转、"更多" 指示
-- **external**:外部链接(LangFuse、文档)
-- **copy**:复制按钮
-- **minus / plus**:展开收起
+组件级激活信号。位置因组件而异(参见 §3)。样式:`absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-primary` + `animation: ah-bar-in 180ms var(--ease-out-soft) both`(transformOrigin top)。
 
-新需求一律走 §2.7 自有 icon 集,不再往 1-line SVG legacy 里加。
+### 2.6 状态点
 
-### 2.7 自有 Icon 集(Raycast-style · ADR 0009)
+`relative inline-block w-1.5 h-1.5` 容器,内嵌两层 `absolute inset-0 rounded-full`:底层 `bg-<tone> animate-ping opacity-50`,顶层 `bg-<tone>`(纯色)。色:`success` / `warning` / `danger` / `primary` / `text-subtle`(idle)。脉动版用于 running / queued,静态版(去 ping 层)用于 done / idle。
 
-统一规格 · 承担 nav / composer / viz / 资源类型 的图形识别:
+### 2.7 键盘 Chip
 
-- **路径**:[`web/components/icons/`](../web/components/icons/),每个 icon 一个 `.tsx` 文件,从 `./Base` import `IconBase`
-- **viewBox**:`0 0 24 24`
-- **stroke-width**:`2`(默认;props `strokeWidth` 可覆盖)
-- **stroke-linecap / linejoin**:`round`
-- **fill**:`none`(纯描边 · 不允许 duotone / 填充)
-- **color**:只能 `stroke="currentColor"`,颜色由父 `text-*` 类决定;**禁止**在 icon 内写 hex / `stroke-blue-500`
-- **default size**:`20px`(props `size` 可覆盖,常用 16 / 20 / 24 / 32)
-- **命名**:PascalCase + `Icon` 后缀(`ChatIcon` / `UserIcon` / ...),`index.ts` 聚合导出
-- **props contract**:`{ size?: number; strokeWidth?: number } & SVGProps`(见 `IconBase`)
+`font-mono text-[10px] px-1.5 py-0.5 rounded-sm border border-border bg-surface text-text-muted [border-bottom-width:2px]`。
 
-**当前集合(22 个)**:
-`ChatIcon` · `UserIcon` · `SkillIcon` · `ModelIcon` · `PluginIcon` · `ProviderIcon` · `TriggerIcon` · `TaskIcon` · `CockpitIcon` · `ObservatoryIcon` · `ChannelIcon` · `MarketIcon` · `StockIcon` · `SettingsIcon` · `SearchIcon` · `SendIcon` · `StopIcon` · `AttachIcon` · `ThinkIcon` · `ExternalIcon` · `CopyIcon` · `CheckIcon`
+light 表现 = 白底 + paper-300 边 + paper-600 字;dark = `bg-white/5` + `border-white/10` + `text-text-muted`。`border-bottom: 2px` 给实体按压感(跨主题一致)。
 
-**新增 icon 流程**(不需 ADR,但需过光学自检):
-1. 写 `web/components/icons/<Name>Icon.tsx`
-2. `index.ts` 加一行 export
-3. 在 [`/design-lab` Icon Gallery](../web/app/design-lab/page.tsx) 把它加入 `ICONS` 数组
-4. 视觉自检:和相邻 icon 在 `size=20` 下光学一样大 + 描边粗细一致;不过就重画
+### 2.8 Mono 方向符
 
-**使用示例**:
-```tsx
-import { ChatIcon, UserIcon } from "@/components/icons";
-
-<ChatIcon size={20} className="text-text-muted" />
-<UserIcon size={16} className="text-primary" />
-```
-
-### 2.8 禁止清单
-
-- ❌ emoji(`☀` `☾` `🔧` `📊` `⚙` `💬`)
-- ❌ 任何第三方 icon 库(Lucide、Heroicons、Phosphor、Tabler、Font Awesome 等)
-- ❌ icon 字体
-- ❌ 彩色 icon / 多色 icon / duotone / 填充形
-- ❌ icon 作为按钮的唯一内容且无 `aria-label`
-- ❌ icon 内写 hex / Tailwind 原色类(必须走 `currentColor`)
+`→ ← ↑ ↓ · ⌘ ↵ Esc ⇧ ⌥` 继续使用,mono 字体下渲染整齐。用于:inline 提示(`list → detail`)· breadcrumb 分隔 · 快捷键组合。
 
 ---
 
-## 3. 组件契约
+## § 3 · 组件契约
+
+每个组件给"视觉描述 + Tailwind 类样板"两段。类样板里只用 token 类(`bg-primary` / `text-text-muted`),**不写**具体色值或 Tailwind 原色。
 
 ### 3.1 Button
 
-五种变体,每种固定 4 状态。实现见 [`web/components/ui/button.tsx`](../web/components/ui/button.tsx)(如不存在,新建时遵守本节):
+五种变体 + 三档尺寸。
 
-| Variant | Default | Hover | Loading | Disabled |
-|---|---|---|---|---|
-| `primary` | `bg-primary text-primary-fg` | `bg-primary-hover` | `bg-primary` + spinner(primary-fg) | `opacity-40` |
-| `secondary` | `bg-surface border-border text-text` | `bg-surface-2 border-border-strong` | spinner(muted) | `opacity-50` |
-| `ghost` | `text-text-muted` | `bg-surface-2 text-text` | spinner(muted) | `opacity-50` |
-| `danger` | `text-danger border-border` | `bg-danger/10 border-danger/50` | spinner(danger) | `opacity-40` |
-| `glyph` | `bg-surface border-border text-muted` | `bg-surface-2 border-strong text-text` | spinner | `opacity-50` |
+| Variant | 样本 |
+|---|---|
+| `primary` | `bg-primary text-primary-fg hover:bg-primary-hover shadow-soft dark:shadow-glow-sm` + `hover:-translate-y-px active:translate-y-0 transition` |
+| `secondary` | `bg-surface text-text border border-border hover:border-border-strong hover:bg-surface-2` |
+| `outline` | `bg-transparent text-text border border-border hover:border-primary hover:text-primary` |
+| `ghost` | `text-text-muted hover:text-text hover:bg-surface-2` |
+| `danger` | `bg-danger text-white hover:bg-danger/90 shadow-soft` |
 
-- `transition-colors duration-150`
-- 尺寸:默认 `px-3 py-1.5 text-[12px]`;主要 CTA `px-4 py-2 text-sm`
-- 不使用 `box-shadow` 作为交互反馈
+尺寸:
+
+- `sm` → `h-8 px-3 text-sm rounded-md`
+- `md`(默认)→ `h-9 px-4 text-sm rounded-lg`
+- `lg`(CTA)→ `h-11 px-5 text-base rounded-xl`
+- `hero`(landing only)→ `h-12 px-6 text-[15px] font-semibold rounded-xl shadow-soft-lg`
+
+Loading 态:替换内容为 Lucide `loader-2` + `animate-spin`,保留宽度;disabled → `opacity-50 cursor-not-allowed pointer-events-none`。
 
 ### 3.2 Input
 
-```tsx
-<input
-  className="w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text
-             placeholder-text-subtle transition-colors duration-150
-             focus:outline-none focus:border-primary"
-/>
-```
+基类:`w-full h-9 px-3 rounded-md bg-surface border border-border text-sm text-text placeholder-text-subtle transition-colors focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_var(--color-primary-muted)]`。
 
-- 焦点状态只改 `border-color`,**不加 ring**、**不加 shadow**
-- 错误态 `border-danger` + 下方 `text-[10px] text-danger` 错误提示
-- URL / key 等技术字段必须 `font-mono`
+- Textarea:同色 · 按行高 · `leading-[var(--leading-body)]`
+- Number input:`font-mono tabular-nums`
+- Leading icon:`pl-9` + 左侧绝对定位 `<Icon>` · `text-text-subtle`
+- Error:`border-danger` + focus 用 `danger-soft` ring + 下方 `text-caption text-danger`
+- Suffix:`absolute right-2 text-text-subtle`
 
-### 3.3 Badge
+### 3.3 Select
 
-```tsx
-<span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">
-  默认
-</span>
-```
+触发器同 Input 外观 + 右 `<Icon name="chevron-down" size={14} />`。面板 `bg-surface border-border shadow-soft dark:shadow-glow-sm rounded-lg`,展开策略走 `web/lib/popover-placement.ts`(垂直 + 水平 flip · `maxHeight` clamp 视口 · 见 §3.21)。Error `border-danger` · Disabled `opacity-50 pointer-events-none`。
 
-色调:`primary`、`neutral(surface-2/muted)`、`success`、`warning`、`danger`、`mono(surface-2 + mono font,用于 model name/id)`。背景一律用 `/15` 或 `/10` 透明度叠加。
+### 3.4 Badge
 
-### 3.4 Card
+三种填充 × 六种语义色(`primary` / `success` / `warning` / `danger` / `accent` / `neutral`)。
 
-```tsx
-<div className="rounded-md border border-border bg-surface p-4 transition-colors duration-[180ms] hover:border-border-strong">
-```
+- `solid` → `h-5 px-2 rounded-sm text-caption font-medium bg-<tone> text-<tone>-fg`
+- `soft` → `h-5 px-2 rounded-sm text-caption font-medium bg-<tone>-soft text-<tone>`
+- `outline` → `h-5 px-2 rounded-sm text-caption font-mono uppercase border border-border text-text-muted`
 
-- Hover **只变边框亮度**,禁止位移 / 阴影 / 放大
-- 选中态 = 左侧 2px `bg-primary` 色条(同激活色条规则)
+### 3.5 Card
 
-### 3.5 Nav Item(侧边栏菜单项)
+默认:`rounded-xl bg-surface border border-border shadow-soft-sm dark:shadow-hairline transition-all duration-[var(--dur-base)] hover:border-border-strong hover:shadow-soft hover:-translate-y-px`。
 
-- 高度 `h-7` / 字号 `text-[12px]`
-- 未激活 `text-text-muted`,hover `text-text + bg-surface-2`
-- 激活 = `text-text` + 左侧 2px primary 色条
+变体:
+- `featured` → 左侧 1px `linear-gradient(to bottom, var(--color-primary), transparent)` hairline accent(≤ 25% 透明度)
+- `glass`(仅 dark · topbar)→ `bg-surface/70 backdrop-blur-xl border-white/5`
+- 选中态 → `ring-1 ring-primary` 或左 2px 激活色条(§2.5)
 
-### 3.6 Section Label(侧边栏分区标题)
+### 3.6 Nav Item(侧边栏菜单)
 
-```tsx
-<div className="px-3 mt-3 mb-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-text-subtle">
-  工作区
-</div>
-```
+`relative flex items-center gap-2 h-8 px-3 rounded-md text-sm transition-colors`。
 
-### 3.7 Modal / Dialog
+- Active:`bg-primary-muted text-primary` + 左 2px primary 色条(§2.5)
+- Inactive:`text-text-muted hover:text-text hover:bg-surface-2`
+- 折叠态(48px sidebar)只渲染 `<Icon>` + tooltip
 
-- 背景遮罩 `bg-black/60`
-- 容器 `rounded-xl border border-border bg-surface shadow-lg`(暗色用 `shadow-dark`)
-- 入场 `ah-fade-up 220ms`
-- Footer 按钮靠右,取消在左(secondary),确认在右(primary 或 danger)
+### 3.7 Section Label(侧边栏分区标题)
 
-### 3.8 Loading 态
+`px-3 mt-3 mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-text-subtle`。
 
-- **Spinner**:圆环旋转 700ms,`border-[1.5px]` + `border-t-current`
-- **三点**:`ah-dot 1.2s` 逐 150ms 延迟
-- **Shimmer**:用于列表骨架,`ah-shimmer 1.4s linear infinite`
-- **Progress**:线性 4px 高条,`bg-surface-2` 底 + `bg-primary` 填充
+### 3.8 Modal / Dialog
 
-### 3.9 Popover / Dropdown 位置策略(必读)
+- 遮罩:`fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center`
+- 容器:`w-full max-w-lg rounded-2xl bg-surface border border-border shadow-soft-lg dark:shadow-glow animate-[ah-fade-up_220ms_var(--ease-out-soft)]`
+- Header `px-6 py-4 border-b border-border` — `<Icon>` + `text-lg font-semibold`
+- Body `px-6 py-5 text-sm text-text-muted leading-[var(--leading-body)]`
+- Footer `px-6 py-4 border-t border-border flex justify-end gap-2` — Cancel(secondary · 默认 focus)+ Confirm(primary / danger)
+- Danger 动作必须 `variant="danger"` + 明确动词文案(`删除员工` 而非 `确定`)
 
-任何"触发器 + 可展开面板"(下拉、历史菜单、overlay picker)都必须遵守:
+### 3.9 Toast
 
-1. **默认方向 = 向下**(`top-full mt-1`)。往上展(`bottom-full mb-1`)是 header-chip 级别的例外,且**不许**硬编码 —— 必须走 flip 逻辑。
-2. **垂直必须 flip**:使用 [`web/lib/popover-placement.ts`](../web/lib/popover-placement.ts) 的 `computePopoverSide(rect, estimatedHeight, window.innerHeight, preferredSide)`。规则:
-   - 优先边能装下 → 用优先边
-   - 装不下但对面空间更多 → 翻到对面
-   - 两边都挤 → 仍然守优先边(抖动比拥挤更让人恼火)
-3. **水平也必须 flip(面板宽于触发器时)**:使用同一份 `popover-placement.ts` 的 `computePopoverAlign(rect, panelWidth, window.innerWidth, preferredAlign)`。`start` = 面板左对齐触发器左缘(向右延展) · `end` = 面板右对齐触发器右缘(向左延展)。典型反例:chip-style 面板(240–320px)在 composer **左半区**按 `end` 对齐 → 面板往左延 240px → 撞 AppShell 侧栏。必须 flip。
-4. **必须 clamp maxHeight 到可用空间**:`Select` 示范做法 ——
-   ```ts
-   const avail = picked === "bottom" ? vh - rect.bottom - 8 : rect.top - 8;
-   setPanelMaxHeight(Math.max(120, Math.min(maxHeight, avail)));
-   ```
-   8px 是对齐 4/8/12 间距阶梯的视口边距。最小 120px 是"至少一屏选项"的保底。
-5. **不许硬编码方向**。以下模式看到就打回:
-   ```tsx
-   // ❌ 硬上展 · 撞头部
-   className="absolute bottom-full mb-1 ..."
-   // ❌ 硬下展 · 出视口
-   className="absolute top-full mt-1 max-h-96 ..."
-   // ❌ 硬右对齐 · 触发器偏左时撞侧栏
-   className="absolute right-0 w-60 ..."
-   // ✅ 两个轴都由 state 驱动
-   className={cn(
-     side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
-     align === "end" ? "right-0" : "left-0",
-   )}
-   ```
-6. **z-index**:面板 `z-20` 起步,命令面板 / 全局抽屉 `z-30+`。嵌在 `role="dialog"` 里的面板用比 dialog 低 10 的值(`z-40` vs `z-50`),保证点击区分层但不打架。
-7. **DOM 位置**:面板渲染在触发器同 DOM 子树(非 portal),这样外层"click-outside"判断仍把面板里的点击看成"内部",嵌套 popover 不会互相关(见 `Select` 的 `mousedown` 选项 handler 避开外层关闭的设计)。
-8. **关闭时不抖动**:`open=true` 期间不许动态切 side/align(`useLayoutEffect` 仅依赖 `[open]` / `[open, maxHeight]`,不依赖滚动),滚动视口时面板随触发器走位是可接受的,但方向不可反转。
+四种语义色,右上滑入,`ah-fade-up` 入场,驻留 4–6s(hover 暂停)。
 
-**什么时候该用 flip、什么时候不需要**
+基类:`flex items-start gap-3 p-4 rounded-xl border bg-surface shadow-soft dark:shadow-glow-sm border-<tone>/30`。内部:`<Icon>` `text-<tone>` + title(`text-sm font-medium`)+ body(`text-caption text-text-muted`)+ 可选 action(`<Button variant="ghost" size="sm">`)。
 
-- 面板宽度 > 触发器宽度 → **两轴都要 flip**(Select · ModelOverrideChip)
-- 面板宽度 ≤ 触发器宽度 + 触发器位置稳定在视口一侧 → 只需垂直 flip(ConversationSwitcher · 在 chat header 右侧)
-- 面板永远铺满一侧(drawer)→ 不是 popover,不适用
+### 3.10 Tabs
 
-**当前实现的守门:**
-- `Select.tsx`(通用原语 · 6 个下拉已迁移 · side + align 都 flip + maxHeight clamp)
-- `ModelOverrideChip.tsx`(chat header + composer chip · side + align 都 flip)
-- `ConversationSwitcher.tsx`(历史 popover · 只 side flip · 详见"什么时候不需要")
-- `web/lib/__tests__/popover-placement.test.ts`(flip 决策矩阵 11 用例:6 vertical + 5 horizontal)
-- `web/tests/popover-placement-contract.test.ts`(静态扫描:`top-full`/`bottom-full` 出现就必须有 flip 三元)
+**Underline**(数据页主用):`flex gap-6 border-b border-border` · 每个 `relative h-10 text-sm`;active `text-text` + 底部 `absolute -bottom-px left-0 right-0 h-0.5 bg-primary`;inactive `text-text-muted hover:text-text`。
 
-**不要**用 Floating UI / Popper.js / Radix —— 这条规则的整个价值就是让我们**拥有**位置策略,不是再加一层库。
+**Pill**(settings / secondary nav):容器 `inline-flex p-1 rounded-lg bg-surface-2 gap-1`;每项 `h-8 px-3 rounded-md text-sm`;active `bg-surface text-text shadow-soft-sm`;inactive `text-text-muted`。
 
----
+### 3.11 Tooltip
 
-## 4. 布局
+触发延迟 300ms · 消失 100ms。`default` → `bg-surface border border-border shadow-soft text-sm text-text`。`dark-inverted`(light pack 需高对比时)→ `bg-text text-bg`。Placement `top` 默认 · 空间不足 flip `bottom`(走 `popover-placement.ts`)。
 
-### 4.1 AppShell 顶层骨架
+### 3.12 Avatar
 
-```
-┌──────────────────────────────────────────────────┐
-│ Top bar  56px  ·  title + actions + ThemeToggle  │
-├──────────┬───────────────────────────────────────┤
-│ Sidebar  │                                       │
-│  240px   │  主内容区(max-w-3xl | max-w-5xl)    │
-│          │                                       │
-│  两级菜单│  卡片流 / 对话流                      │
-│          │                                       │
-└──────────┴───────────────────────────────────────┘
-```
+`grid place-items-center rounded-full font-semibold bg-gradient-to-br from-primary to-primary-hover text-primary-fg`。尺寸:`sm w-6 h-6 text-[10px]` / `md w-8 h-8 text-[11px]` / `lg w-10 h-10 text-caption`。
 
-- 侧栏 240px 固定(折叠 48px,v1 做)
-- Top bar 高度 `44px`(`h-11`) - 比 v0 的 56px 更紧,跟 Linear 同
-- 内容区默认 `max-w-3xl mx-auto px-8 py-8`;对话、表格用 `max-w-5xl`
+- Fallback:2 字母 initials uppercase
+- Group stack:`flex -space-x-2` · 每个 `border-2 border-surface`
+- Status dot:右下 `absolute w-2 h-2 rounded-full border-2 border-surface bg-success`(或 `bg-text-subtle` idle)
 
-### 4.2 侧边栏结构
+### 3.13 Progress
 
-两级:**分区(Section Label)** + **菜单项(Nav Item)**。分区之间 `mt-3`,菜单项之间无间隙。
+- **Bar**:外 `h-1 w-full rounded-full bg-surface-2 overflow-hidden`,内 `h-full bg-primary transition-all duration-[var(--dur-slow)]` + `width: pct%`
+- **Ring**:`<svg viewBox="0 0 32 32" className="w-8 h-8 -rotate-90">`,底圈 `stroke="var(--color-surface-2)" strokeWidth="2"`,前圈 `stroke="var(--color-primary)"` + `strokeDasharray` 按 pct 计算 · `strokeLinecap="round"`
 
-- 顶部 44px logo 行:`LogoDotgrid` + `allhands` 品牌字(`text-[13px] font-semibold tracking-tight`)
-- 底部固定 user chip(v1)
+### 3.14 Skeleton
 
-### 4.3 移动(< 768px,v1)
+`h-4 w-48 rounded-md bg-gradient-to-r from-surface-2 via-surface-3 to-surface-2 bg-[length:200%_100%] animate-shimmer`。2.4s linear 无限,节奏统一。
 
-- 侧栏变 drawer,左上汉堡
-- 输入框固底,消息区满屏
-- v0 先 desktop-first,不做 mobile 适配
+### 3.15 Loading Spinner
+
+`<Icon name="loader-2" size={16} className="animate-spin text-primary" />` · 不做 custom SVG。
+
+### 3.16 Empty State
+
+居中布局:顶部装饰容器 `relative w-20 h-20`(内嵌 `bg-primary/20 blur-2xl animate-float` orb + 方形卡片 `bg-surface border border-border rounded-2xl` 含 `<Icon size={28} className="text-primary">`)· `text-lg font-semibold` 标题 · `text-sm text-text-muted` 副文 · CTA `variant="primary" size="lg"`。**必须**给下一步动作(见 §9)。
+
+### 3.17 Code Block
+
+外框 `rounded-lg border border-border bg-surface-2 overflow-hidden` · header `h-8 px-3 border-b border-border flex justify-between` 显示语言(`font-mono text-caption text-text-subtle`)+ copy 按钮(`<Icon name="copy" size={12}>`)· body `p-4 font-mono text-[13px] leading-[var(--leading-data)] text-text overflow-x-auto`。
+
+Syntax highlighting 用 `shiki`(构建时)或 `prism-react-renderer`;**禁** CDN highlighter。
+
+### 3.18 Command Palette(⌘K)
+
+容器 `fixed top-[15vh] left-1/2 -translate-x-1/2 w-full max-w-xl rounded-2xl bg-surface border border-border shadow-soft-lg dark:shadow-glow`。
+
+- Header `h-12 px-4 border-b border-border` — `<Icon name="search">` + input + `kbd Esc`
+- Body `max-h-[60vh] overflow-y-auto p-2` — section label + items(`h-9 px-3 rounded-md hover:bg-surface-2 text-sm`,尾 `kbd ↵`)
+- Footer `h-10 px-4 border-t border-border text-caption text-text-subtle font-mono` — `↑↓ navigate · ↵ select`
+
+### 3.19 Chat Bubble
+
+容器 `flex gap-3 py-4`(user 反向 `flex-row-reverse`)· `<Avatar role>` + 气泡 `relative max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-[var(--leading-body)]`。
+
+- `user` → `bg-primary text-primary-fg`
+- `assistant` → `bg-surface border border-border text-text`
+- `reasoning`(extended thinking)→ `bg-surface-2 border border-border/50 text-text-muted italic` · 可折叠
+- `tool` → `bg-surface-2 border-l-2 border-warning font-mono text-caption`
+- `answer` → 与 assistant 同,可选 `ah-sheen` 一次性高光
+
+Role 色详见 §6。
+
+### 3.20 Table
+
+- `<table>` → `w-full border-collapse text-sm`
+- `<thead>` → `text-text-subtle text-caption font-mono uppercase tracking-wider`
+- `<th>` → `text-left px-4 h-9 border-b border-border font-medium`
+- `<tr>` → `border-b border-border hover:bg-surface-2 transition-colors`
+- `<td>` → `px-4 h-11 text-text`
+
+Pagination:`flex items-center gap-2 text-caption text-text-muted` · 数字 mono · prev/next 用 `<Icon name="chevron-left/right">` ghost button。
+
+### 3.21 Popover 位置策略(保留自旧规范)
+
+任何"触发器 + 展开面板"必须:
+
+1. **垂直 + 水平 flip**(面板宽于触发器时)· 走 `web/lib/popover-placement.ts` 的 `computePopoverSide` / `computePopoverAlign`
+2. **clamp maxHeight** 到可用空间(最小 120px · 边距 8px)
+3. **不硬编码方向**:`className={cn(side === "bottom" ? "top-full mt-1" : "bottom-full mb-1", align === "end" ? "right-0" : "left-0")}`
+4. **z-index**:面板 `z-20` · 命令面板 `z-30+` · dialog 内嵌面板低 10
+5. 渲染在触发器子树(非 portal),避免嵌套 popover click-outside 相互关
+6. `open=true` 期间不改 side/align(避免抖动)
+7. **不**引 Floating UI / Popper.js / Radix
+
+守门:`web/lib/__tests__/popover-placement.test.ts`(flip 决策 11 用例)· `web/tests/popover-placement-contract.test.ts`(静态扫描 `top-full` / `bottom-full` 必须有 flip 三元)。
 
 ---
 
-## 5. 深色 / 浅色切换
+## § 4 · 布局
 
-- FOUC 保护:`layout.tsx` inline script 在 React 水合前读 `localStorage.allhands_theme`,添加 `.light` / `.dark` class
-- 切换组件 [`web/components/theme/ThemeToggle.tsx`](../web/components/theme/ThemeToggle.tsx):不用 emoji,用 **1-line SVG**(sun: 圆 + 8 条射线 / moon: crescent)或 **mono 字符** `LT / DK` 作为切换指示
-- 主题 = 单一 class,CSS vars 自然切换;**不允许** 组件内部写 `dark:bg-zinc-900` 这种并行定义,一律走 token
+### 4.1 AppShell
+
+```
+┌────────────────────────────────────────────────────┐
+│ Topbar  56–64px  ·  logo + nav + ⌘K + avatar       │
+├──────────┬─────────────────────────────────────────┤
+│ Sidebar  │                                         │
+│  240px   │  Main area · max-w-[1400px] mx-auto     │
+│ (48 折叠)│  px-8 py-8                              │
+│          │                                         │
+└──────────┴─────────────────────────────────────────┘
+```
+
+- Topbar 高 56px(dark `h-14`)/ 64px(light `h-16` · 更放松)· sticky top-0 · `backdrop-blur-xl bg-surface/70`
+- Sidebar 240px 固定(折叠 48px)· 底部 user chip + 用量摘要卡
+- Main max-width 1400px;对话类页面可用 `max-w-5xl` 居中
+
+### 4.2 Sidebar 结构
+
+- Logo 行(44px):点阵 / `ah` 渐变方块 + `allhands` 品牌字 + 版本 chip
+- Workspace switcher(组织 / workspace 切换 · pill 下拉)
+- 分区(Section Label · §3.7)+ 菜单项(Nav Item · §3.6)
+- 底部:usage card(本月 $X / 剩余 Y runs · 用 Progress bar)+ settings chip
+
+### 4.3 Topbar
+
+- Logo(点击 → home)
+- Primary nav(Employees · Skills · Gateway · Traces · Market)· pill tabs(§3.10)
+- Search / ⌘K 触发 chip(`h-9 px-3 rounded-xl` · placeholder "Search anything…")
+- Upgrade CTA(可选)· notifications bell · avatar
+
+### 4.4 Responsive(v1 基础)
+
+- `<768px`:sidebar 变 drawer 左滑 · topbar 左侧汉堡
+- 主面板 full-width · 对话输入框固底
+- v0 仍 desktop-first · 生产投放前做 QA pass
 
 ---
 
-## 6. 消息气泡 Role 着色
+## § 5 · Theme System(新)
 
-左侧 2px 色条 + 对应 `role-*` token;气泡本体 `bg-surface`。role 信息还必须通过 `aria-label` 提供。
+### 5.1 双维度切换
 
 ```
-user    #6366F1 (indigo)
-lead    #8B5CF6 (violet) — 唯一性,整个项目只有 Lead 用紫色
-worker  #0D9488 (teal)
-tool    #D97706 (amber)
+<html data-theme-pack="brand-blue" data-theme="dark" lang="zh-CN" class="dark">
 ```
+
+两个属性相互独立:
+- `data-theme-pack`:色彩身份(`brand-blue` · 未来 `forest-green` 等)
+- `data-theme`:明暗(`light` / `dark` · `system` 在 client 解析成前两者)
+
+Tailwind `darkMode: ['class', '[data-theme="dark"]']` · 两种方式都触发 `dark:` 前缀。
+
+### 5.2 `next-themes` 集成
+
+```tsx
+// app/providers.tsx
+<ThemeProvider
+  attribute="data-theme"
+  defaultTheme="system"
+  enableSystem
+  themes={["light", "dark"]}
+>
+  <ThemePackProvider defaultPack="brand-blue">{children}</ThemePackProvider>
+</ThemeProvider>
+```
+
+- `next-themes` 管 light / dark / system 档
+- 自写 `ThemePackProvider` 挂 `data-theme-pack` 到 `<html>`
+- `useTheme()` 暴露给组件 · settings 页暴露给用户切换
+
+### 5.3 Theme Pack 契约
+
+新建一个 pack:
+
+1. `web/styles/themes/<pack>/light.css` · `dark.css` · `index.css`(各选择器下写完整 token 集)
+2. `web/styles/themes/index.css` 加 `@import './<pack>/index.css';`
+3. `lib/theme-packs.ts` 注册:`{ id, label, light, dark }`
+4. `ThemePackProvider` 的 `packs` 列表加上
+5. 更新本文件 §1 旁注"可用 pack" · 更新 `design-system/MASTER.md`
+
+**启动时 assert**:每个 pack 必须实现 `tokens.css` 的**所有**变量名,缺任何一项启动抛错(在 dev 下弹 toast · prod build 失败)。
+
+### 5.4 SSR 友好 · 防闪烁
+
+`next-themes` 默认在 `<head>` 注入一段 inline script,React hydrate 前就设置 `data-theme`,杜绝 FOUC。不再用旧方案的手写 `localStorage.allhands_theme` 脚本。
+
+### 5.5 用户切换入口
+
+- Topbar 右上角 ThemeToggle(`<Icon name="sun" />` / `<Icon name="moon" />` / `<Icon name="monitor" />` 三态)· 点击循环
+- Settings → Appearance 页给完整下拉(light / dark / system · 未来加 pack 选择)
 
 ---
 
-## 7. Component Registry(前端 Render Tool 扩展点)
+## § 6 · 消息 Role 着色
 
-保持 v0 机制:`web/lib/component-registry.ts` 映射。新组件必须:
+role 信息除颜色外**必须**同步 `aria-label="user message"` 等。
+
+| Role | Light (`--color-…`) | Dark (`--color-…`) | 语义 |
+|---|---|---|---|
+| `role-user` | `#0A5BFF`(= primary) | `#6082FF` | 用户发言 |
+| `role-lead` | `#7C3AED`(violet-600) | `#A78BFA` | Lead Agent(唯一紫色 · 不换) |
+| `role-worker` | `#0FA57A`(= success) | `#2EBD85` | 员工 / subagent |
+| `role-tool` | `#D97706`(= warning) | `#F5A524` | Tool 调用 |
+| `role-reasoning` | `#5C667A`(= text-muted) | `#8690AE` | Extended thinking |
+
+色条位置:用户气泡靠右(bubble 填 primary);其他靠左(bubble bg-surface + 左 2px role 色条)。
+
+---
+
+## § 7 · Component Registry(前端 render tool 扩展点)
+
+保持 v0 机制:`web/lib/component-registry.ts` 映射组件名 → React 组件。新组件必须:
+
 - 遵守本文件 token / 组件契约
-- 不引入新的 icon 库
+- 不直接 import lucide-react(走 `<Icon>`)
 - 文件独立在 `web/components/render/`
+- 同步更新 `backend/src/allhands/api/protocol.py` + `web/lib/protocol.ts` 的 props 类型
 
 新增流程:
+
 1. 后端 render tool 返回 `{ component: "MyThing", props: {...} }`
-2. 实现 `web/components/render/MyThing.tsx`
+2. 实现 `web/components/render/MyThing.tsx`(只消费 token · `<Icon>`)
 3. `component-registry.ts` 加一行
+4. Schema 一致性测试:`backend/tests/integration/test_render_protocol.py`
 
 ---
 
-## 8. 可访问性
+## § 8 · 可访问性
 
-- 交互元素必须 keyboard focus 可见。方案:在 `button` / `a` / `input` 的 focus-visible 态加 **1px primary 外描边**(不用 `ring`),这样在不加阴影的原则下仍然提供清晰焦点
-- Confirmation 弹窗默认 focus "Reject"(避免误确认)
-- role 颜色必须同时有 `aria-label`
-- 对比度:`text` 对 `bg` ≥ 13:1;`text-muted` 对 `bg` ≥ 4.5:1(WCAG AA)
-
----
-
-## 9. 不做(v0)
-
-- ❌ 主题自定义 / 用户调色板
-- ❌ 拖拽工作流编辑器
-- ❌ 复杂图表驾驶舱
-- ❌ 全屏命令面板(Raycast 式,v2)
-- ❌ 任何动画库(Framer Motion、GSAP);CSS keyframes 足够
-- ❌ 任何**第三方** icon 包(自有集 `web/components/icons/**` 允许,见 §2.7 + ADR 0009)
+- 全部颜色对比度 **≥ WCAG AA** · dark/light **都要过**
+  - `text` on `bg` ≥ 7:1(AAA)· 验证两个 pack
+  - `text-muted` on `bg` ≥ 4.5:1(AA)
+  - `text` on `primary`(按钮)≥ 4.5:1
+- 键盘可达:所有交互元素 `focus-visible` 态显示 **3px primary ring**(`shadow-[0_0_0_3px_var(--color-primary-muted)]`),不靠 `outline: none` 然后没替代
+- role 颜色**必须**有对应 `aria-label`(颜色盲友好)
+- Confirmation 弹窗默认 focus "Reject" / "Cancel"(避免误确认)
+- Motion:尊重 `prefers-reduced-motion: reduce` · `animate-float` / `shimmer` 在 reduce 下停止
 
 ---
 
-## 9.1 Voice & Tone(文案纪律 · I-0013)
+## § 9 · Voice & Tone(文案纪律 · I-0013 · 保留自旧版)
 
-视觉是骨架,文案是骨架的气息。allhands 的 UI 文案和 Lead Agent 的回应必须听起来像同一个产品 —— 冷静、以事实为准、指向下一步,而不是讨好或演绎。
+视觉是骨架,文案是气息。allhands 的 UI 文案和 Lead Agent 的回应必须像同一个产品 —— 冷静、以事实为准、指向下一步,不讨好、不演绎。
 
-**硬规则(违反打回,无协商):**
+**硬规则**:
 
-1. **禁 emoji**(UI 文本、Agent 回应、日志皆禁)。图形语义只能来自 §2 的 icon 体系。
-2. **禁感叹号 `!`**(包括"太好了!""搞定!""失败!")。句号结尾即可。
-3. **代词**用 `我` / `你`,**禁止** `咱们` / `我们` —— 它稀释责任主体,让"谁在做、谁拿结果"模糊掉。
-4. **按钮文案用动宾短语**(动词开头)。`发布` / `删除` / `测试发送` / `切换默认` / `保存草稿`。**禁止** `确定` / `OK` / `提交`(无语义)。Danger 按钮写清后果:`删除员工` 而不是 `删除`。
-5. **空状态 ≠ "暂无数据"**,必须给出"下一步可以做什么"。范式:`还没有 X · [动作建议]`。
-6. **错误文案指向修复**,不指向失败本身。写 `可以试试改成 X` / `填入 base_url 后重试`,不写 `调用失败!` / `Error: 500`。
-7. **Lead Agent 欢迎语**(首轮空对话)必须给出 **3 条具体可点的示例 prompt**,不许只留空气。模板见 [`backend/src/allhands/execution/prompts/lead_agent.md` §Welcome message](../backend/src/allhands/execution/prompts/lead_agent.md)。
+1. **禁 emoji**(UI 文本 · Agent 回应 · 日志)。图形语义只走 §2 icon 体系。
+2. **禁感叹号 `!`**(`太好了!` / `搞定!` / `失败!`)· 句号即可。
+3. 代词用 `我` / `你`;**禁** `咱们` / `我们`(稀释责任主体)。
+4. 按钮文案**动宾短语**:`发布` / `删除` / `测试发送` / `切换默认`;**禁** `确定` / `OK` / `提交`。Danger 按钮明写后果:`删除员工` 不是 `删除`。
+5. 空状态**必须**给下一步动作。范式:`还没有 X · [动作建议]`。
+6. 错误文案**指向修复**,不指向失败:`base_url 格式不对,试试 https://api.example.com/v1` 而不是 `调用失败! 请检查!`。
+7. Lead Agent **欢迎语**首轮空对话必须给 3 条具体可点示例 prompt。模板见 `backend/src/allhands/execution/prompts/lead_agent.md`。
 
-**语气梯度(按语境选一档,不跨档混用):**
+**语气梯度**:
 
-| 场景 | 语气 | 示例 | 反例 |
-|---|---|---|---|
-| 数据密集(cockpit / traces) | 事实,无修饰 | `12 runs running · 3 queued · $0.42 今日` | `运行中啦~ 看起来一切正常!` |
-| 表单 / 设置 | 平实,指向生效范围 | `保存后立刻对所有新对话生效,已在跑的 run 不受影响` | `点击保存让我们搞定它!` |
-| 空状态 / 引导 | 主动给下一步 | `还没有员工 · "帮我建一个每天写日报的员工"` | `暂无数据` |
-| 错误 | 指向修复 | `base_url 格式不对,试试 https://api.example.com/v1` | `调用失败! 请检查!` |
+| 场景 | 语气 | 示例 |
+|---|---|---|
+| 数据密集(cockpit / traces) | 事实无修饰 | `12 runs running · 3 queued · $0.42 今日` |
+| 表单 · 设置 | 平实 · 指生效范围 | `保存后立刻对所有新对话生效,已在跑的 run 不受影响` |
+| 空状态 · 引导 | 给下一步 | `还没有员工 · "帮我建一个每天写日报的员工"` |
+| 错误 | 指修复 | `base_url 格式不对,试试 https://api.example.com/v1` |
 
-**Lead Agent 专属:**
-
-- 选员工要说 `选 X,因为 Y`,不要只说 `我来安排`。
-- 并行派发要预告:`我并行派 A/B,完成后合并回你`。
-- 模糊需求问 **一个** 关键问题,不要一次甩五个。
-- `list_*` 没确认前,禁止造名字或工具。
-
-**检查钩子:**
-
-- `web/tests/voice-tone.test.ts` — 扫 `web/app/**` + `product/**` 里的 emoji / `!` / `咱们` / `我们` 泄漏。
-- `backend/tests/unit/test_lead_welcome.py` — 断言 Lead prompt 含 "Welcome message" 节 + `欢迎` + 至少 3 条 `- "..."` 示例。
-
-Token / 组件契约变更要同步改 §1 ~ §3;**Voice & Tone 变更要同步改 `backend/src/allhands/execution/prompts/lead_agent.md` 的 Style 节和 `design-system/MASTER.md` 的 Voice 速查表**。
+**检查钩子**:`web/tests/voice-tone.test.ts` 扫 emoji / `!` / `咱们` / `我们` 泄漏;`backend/tests/unit/test_lead_welcome.py` 断 Lead prompt 含 3 条 `- "..."` 示例。
 
 ---
 
-## 10. Composition Primitives(装饰原语)
+## § 10 · Composition Primitives(允许的装饰原语)
 
-> 本节是 §0.3 的延展 —— 把"允许的装饰原语"写清楚,让 Linear Precise 在"**信息密度 + 视觉呼吸**"两端都能展开,而不只是"什么都不准加"。每条都有强约束,违规仍然打回。
+延展 §P4 品牌可感 · 每条都是既有语汇列明,组件不受新禁。
 
 ### 10.1 Sparkline / Micro-viz
 
-纯 SVG,用于 KPI 趋势、活动密度、延迟分布。
+纯 SVG · 用于 KPI 趋势 · 活动密度 · 延迟分布。
 
-- **描边**:`stroke="currentColor"` 或 `stroke="var(--color-primary)"`,`stroke-width="1.5"`,`fill="none"`
-- **尺寸**:高度 ≤ 32px,宽度自适应容器
-- **端点强调**:最末点可额外渲染 `r=2` 圆(`fill="currentColor"`),无阴影无光晕
-- **禁止**:渐变填充、多色描边、库(chart.js / recharts / d3 / visx 等)
-
-```tsx
-<svg viewBox="0 0 100 32" className="w-full h-8 text-primary">
-  <polyline
-    points={points.map((y, x) => `${(x / (points.length - 1)) * 100},${32 - y * 32}`).join(" ")}
-    stroke="currentColor"
-    strokeWidth="1.5"
-    fill="none"
-  />
-</svg>
-```
+- 描边 `stroke="currentColor"` 或 `stroke="var(--color-primary)"` · `stroke-width="1.5"` · `fill="none"`
+- 高度 ≤ 32px · 宽度自适应
+- 末点可额外 `<circle r="2" fill="currentColor" />` 强调
+- **禁**:渐变填充 · 多色描边 · chart 库(`recharts` / `d3` / `visx`)
 
 ### 10.2 Dotgrid Backdrop
 
-hero 区、空状态卡片、首次使用屏做视觉锚,不抢信息焦点。
-
-- **实现**:CSS `radial-gradient` + `var(--color-border)` 圆点,间距 ≥ 16px,**整体不透明度 ≤ 40%**
-- **不混用**:同一容器内不叠加 dotgrid 与 gradient accent(选其一)
-- **不动**:dotgrid 本身静态,不做 pan / rotate 动画(会打破 §0.3 "无限动画白名单")
-
-```css
-background-image: radial-gradient(
-  var(--color-border) 1px,
-  transparent 1px
-);
-background-size: 16px 16px;
-opacity: 0.4;
-```
+hero / 空态视觉锚 · 不抢焦点。实现:`background-image: radial-gradient(var(--color-border) 1px, transparent 1px); background-size: 18px 18px; opacity: .3`(dark 常用 18px;light 可 32px)。不做 pan / rotate 动画。
 
 ### 10.3 Hairline Accent(1px 高光条)
 
-标记"推荐/默认/最新"项,**不替代** §2.1 的 2px 激活色条(激活是交互状态,hairline 是装饰强调)。
+标记"推荐 / featured" · **不**替代 §2.5 激活色条(激活是状态,hairline 是装饰)。实现:`height: 1px; background: linear-gradient(to right, var(--color-primary), transparent); opacity: .4`。
 
-- **位置**:卡片顶部或左侧 1px 高
-- **色**:`linear-gradient(to right|bottom, var(--color-primary), transparent)`,不透明度 ≤ 25%
-- **禁止**:同一卡片同时出现"激活色条 + hairline"(视觉混淆)
+### 10.4 Mesh Gradient Hero · Gradient Text(取代旧 BAN 2)
 
-### 10.4 入场动效
+landing / empty state / marketing 页允许多层 `radial-gradient` 叠 `linear-gradient` 做柔光背景(见 `proposals/v2-azure-live.html` `.mesh-hero`)。`gradient-text` 用 `background-clip: text` + `linear-gradient`,**仅限**hero / display 级,正文和按钮不用。
 
-`ah-fade-up`(4px translateY + opacity 0→1,220ms)用于:
+### 10.5 Glow Orb
 
-- 路由切换时 main 内容入场
-- 列表初次渲染
-- Modal / Drawer 入场
+装饰光球:`absolute w-40 h-40 rounded-full bg-primary/20 blur-3xl animate-float`。`animate-float` 6s · translateY ±6px · 不重叠文字 · 同 viewport ≤ 3 个 · z-index ≤ 0。
 
-`scaleY(0→1)` **仅限** §2.1 激活色条 (`ah-bar-in`)。`hover:scale-*` / `active:scale-*` 一律禁。
+### 10.6 入场动效
 
-### 10.5 数值变动过渡
+`ah-fade-up`(6px translateY + opacity 0→1 · 220ms · `ease-out-soft`)用于路由切换 / 列表初渲染 / modal / toast 入场。`ah-bar-in` 仅限激活色条。`hover:-translate-y-px` 仅限 button / card / nav(位移上限 1px)。
 
-KPI 数字 / 计数从一个值变到另一个值时:
+### 10.7 数值变动过渡
 
-- **方式 A**:直接替换文本 + `transition: color 150ms var(--ease-out)`,色从 `var(--color-primary)` 回落到 `var(--color-text)`(闪烁提示新值)
-- **方式 B**:数字容器做一次 `translateY(2px → 0)` 入场(不超过 2px)
-
-**禁止**:Framer Motion / react-spring / CountUp.js 等任何 tween 库。allhands 的"数字跳动"只做"颜色高亮 150ms",不做 0→N 滚动动画(噪声大 · 不 Linear)。
-
-### 10.6 KeyFrames 白名单(追加)
-
-现有 whitelist:`ah-spin` / `ah-pulse` / `ah-shimmer` / `ah-bar-in` / `ah-caret` / `ah-dot` / `ah-fade-up`。本节允许新增:
-
-- `ah-sheen` — 一次性高光扫过(用于"测试通过 / 任务完成"庆祝瞬间,不循环)。实现:background-position 或 translateX 单向动画 600ms,完成即停。
-
-除上述白名单外,新增 keyframe 必须先改本文件再改 `globals.css`。
+KPI 数字变化用 `transition: color var(--dur-fast)` 高亮回落(primary → text)或 `translateY(2px → 0)` 入场。**禁** Framer Motion / react-spring / CountUp.js —— 不做 0→N 滚动计数(噪声大)。
 
 ---
 
-## 11. 变更流程
+## § 11 · 变更流程
 
-1. 修改本文件 token / 契约
-2. 同步修改 [`web/app/globals.css`](../web/app/globals.css)、[`web/tailwind.config.ts`](../web/tailwind.config.ts)
-3. 同步修改 [`design-system/MASTER.md`](../design-system/MASTER.md)(tactical 速查表)
-4. 必要时:ADR(色系 / 字体 / 基础组件契约变更)
-5. 现有页面按新 token 回归检查,尤其是 [`/design-lab`](../web/app/design-lab/page.tsx) 的深度展示部分
+### 11.1 Token 改值(brand-blue pack 内部调整)
+
+1. 改 `web/styles/themes/brand-blue/light.css` · `dark.css`
+2. 更新本文件 §1.2 / §1.3 对应表格
+3. 更新 `design-system/MASTER.md` 的 token 速查
+4. `pnpm test` 跑 contrast / voice-tone 契约
+5. `pnpm test:e2e` 重拍 light / dark 基线
+
+### 11.2 新 Theme Pack
+
+1. 新建 `web/styles/themes/<pack>/` 目录 · 完整实现 `tokens.css` 所有变量
+2. `web/lib/theme-packs.ts` 注册 `{ id, label, meta }`
+3. `ThemePackProvider` 的 `packs` 列表加
+4. 本文件 §5 "当前可用 pack" 一栏加引用(brand-blue · <new>)
+5. 单独 ADR(新 pack 视觉身份说明 · 不必重走本文件)
+6. e2e 基线 per pack per theme 一共 2n 张
+
+### 11.3 组件契约变更
+
+1. **先改本文件 §3** 对应组件
+2. 再改 `web/components/ui/<Comp>.tsx` 实现
+3. 再改 `design-system/MASTER.md` 速查
+4. 若 API 变(props 增删)· 更新所有调用点
+5. 回归测试 · e2e 基线
+
+### 11.4 新 keyframe / 新原语
+
+1. 本文件 §1.10 / §10 加条目 · 明写使用场景与约束
+2. `web/styles/keyframes.css` 实现
+3. `tailwind.config.ts` `extend.animation` / `extend.keyframes` 映射
+4. 至少在 `/design-lab` 页面给一个示范
+
+### 11.5 Voice & Tone 变更
+
+同步改:本文件 §9 · `backend/src/allhands/execution/prompts/lead_agent.md` Style 节 · `design-system/MASTER.md` Voice 速查表。
+
+---
+
+**契约优先级(冲突时高位覆盖低位)**:
+
+1. 本文件(`product/03-visual-design.md`)
+2. [ADR 0016](./adr/0016-brand-blue-dual-theme.md)
+3. `design-system/MASTER.md`(战术速查)
+4. `web/app/design-lab/page.tsx`(活样本)
+5. 具体组件实现
+
+发现冲突 → 立刻停 · 问 maintainer · 必要时开 ADR。

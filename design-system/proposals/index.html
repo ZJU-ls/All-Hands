@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>allhands · brand-blue design proposals · index</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    fontFamily: { sans: ['Inter'], mono: ['JetBrains Mono'] },
+  }},
+};
+</script>
+<style>
+  body {
+    background:
+      radial-gradient(1200px 500px at 30% 0%, rgba(46,91,255,.08), transparent 60%),
+      radial-gradient(900px 400px at 80% 10%, rgba(10,91,255,.06), transparent 60%),
+      #0A0D14;
+    color: #E2E6F1;
+    font-feature-settings: 'cv11','ss01';
+    letter-spacing: -0.011em;
+  }
+  .card:hover { border-color: rgba(110,139,255,.5); transform: translateY(-2px); }
+  .card { transition: transform .22s ease, border-color .22s ease; }
+  .swatch { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:middle; }
+</style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+
+<div class="max-w-[1200px] mx-auto px-8 py-20">
+  <div class="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] text-[#6E8BFF] font-mono mb-6">
+    <span class="w-1.5 h-1.5 rounded-full bg-[#2E5BFF]"></span>
+    allhands · design proposals · 2026-04-23
+  </div>
+  <h1 class="text-[72px] leading-[1.05] font-bold tracking-[-0.04em] max-w-4xl">
+    Brand-blue <span style="background:linear-gradient(120deg,#2E5BFF,#6E8BFF,#63D3FF);-webkit-background-clip:text;background-clip:text;color:transparent;">frontend</span><br/>
+    re-imagined, three ways.
+  </h1>
+  <p class="mt-6 text-[17px] text-[#B6BDD1] max-w-2xl leading-relaxed">
+    Three full-component demos exploring an Arc / Raycast-flavored "活力蓝" direction. Each is a single self-contained HTML file — open it in a browser and you'll see every major UI surface (nav, hero, cards, forms, table, chat, command palette, modal, code block, empty state, and more).
+  </p>
+  <div class="mt-4 text-[12px] text-[#8690AE] font-mono">
+    open any file directly · tailwind + lucide via CDN · no build step
+  </div>
+
+  <div class="mt-14 grid grid-cols-3 gap-5">
+    <!-- V1 -->
+    <a href="./v1-cobalt-precision.html" class="card block rounded-2xl border border-white/10 bg-[#0F1320] p-6 overflow-hidden relative">
+      <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#2E5BFF] to-transparent opacity-60"></div>
+      <div class="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] font-mono text-[#6E8BFF]">
+        <span class="swatch" style="background:#2E5BFF"></span> v1 · cobalt precision
+      </div>
+      <h3 class="mt-4 text-[22px] font-bold tracking-tight">Cobalt Precision</h3>
+      <p class="mt-2 text-[13px] text-[#B6BDD1] leading-relaxed">Engineer-first. Electric cobalt accents on a deep canvas, hairline borders, subtle glow — Linear-lab × Vercel territory.</p>
+      <div class="mt-5 flex items-center gap-1.5">
+        <span class="swatch" style="background:#0A0D14;border:1px solid #242A3C"></span>
+        <span class="swatch" style="background:#1A1F2E"></span>
+        <span class="swatch" style="background:#2E5BFF"></span>
+        <span class="swatch" style="background:#6E8BFF"></span>
+        <span class="swatch" style="background:#B8C9FF"></span>
+      </div>
+      <div class="mt-6 pt-5 border-t border-white/5 flex items-center justify-between text-[11px] font-mono">
+        <span class="text-[#8690AE]">mode · dark mixed · hero light</span>
+        <span class="text-[#6E8BFF]">open →</span>
+      </div>
+    </a>
+
+    <!-- V2 -->
+    <a href="./v2-azure-live.html" class="card block rounded-2xl border border-white/10 bg-[#FFFFFF] p-6 overflow-hidden relative text-[#141A26]">
+      <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#0A5BFF] to-transparent opacity-80"></div>
+      <div class="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] font-mono text-[#0A5BFF]">
+        <span class="swatch" style="background:#0A5BFF"></span> v2 · azure live
+      </div>
+      <h3 class="mt-4 text-[22px] font-bold tracking-tight">Azure Live</h3>
+      <p class="mt-2 text-[13px] text-[#5C667A] leading-relaxed">Bright, playful, human. Royal azure on a light paper canvas, large rounded corners, gradient mesh heroes — Raycast × Arc territory.</p>
+      <div class="mt-5 flex items-center gap-1.5">
+        <span class="swatch" style="background:#F6F8FC;border:1px solid #DFE6F0"></span>
+        <span class="swatch" style="background:#DCE6FF"></span>
+        <span class="swatch" style="background:#0A5BFF"></span>
+        <span class="swatch" style="background:#4EA8FF"></span>
+        <span class="swatch" style="background:#FFE066"></span>
+      </div>
+      <div class="mt-6 pt-5 border-t border-[#EDF1F8] flex items-center justify-between text-[11px] font-mono">
+        <span class="text-[#8B96AB]">mode · light primary · dark code</span>
+        <span class="text-[#0A5BFF]">open →</span>
+      </div>
+    </a>
+
+    <!-- V3 -->
+    <a href="./v3-neon-cyber.html" class="card block rounded-2xl border border-[#00A3FF]/30 bg-[#07090F] p-6 overflow-hidden relative" style="box-shadow:0 0 24px -4px rgba(0,163,255,.25)">
+      <div class="absolute top-0 left-0 right-0 h-px" style="background:linear-gradient(90deg,transparent,#00A3FF 40%,#66CCFF 50%,#00A3FF 60%,transparent);box-shadow:0 0 8px rgba(0,163,255,.6)"></div>
+      <div class="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] font-mono" style="color:#66CCFF">
+        <span class="swatch" style="background:#00A3FF;box-shadow:0 0 6px rgba(0,163,255,.8)"></span> v3 · neon cyber
+      </div>
+      <h3 class="mt-4 text-[22px] font-bold tracking-tight" style="color:#E9EEFA">Neon Cyber</h3>
+      <p class="mt-2 text-[13px] leading-relaxed" style="color:#8FA0C3">Saturated sci-fi. Pure dark canvas, neon blue glow, glass surfaces, grid backdrop, mono-dense — Framer × Linear-lab × Supabase territory.</p>
+      <div class="mt-5 flex items-center gap-1.5">
+        <span class="swatch" style="background:#07090F;border:1px solid #1A2232"></span>
+        <span class="swatch" style="background:#11172F"></span>
+        <span class="swatch" style="background:#00A3FF;box-shadow:0 0 6px rgba(0,163,255,.7)"></span>
+        <span class="swatch" style="background:#FF00D4;box-shadow:0 0 6px rgba(255,0,212,.5)"></span>
+        <span class="swatch" style="background:#7CFFB2"></span>
+      </div>
+      <div class="mt-6 pt-5 border-t border-[#1A2232] flex items-center justify-between text-[11px] font-mono uppercase tracking-wider" style="color:#8FA0C3">
+        <span>mode · pure dark · neon glow</span>
+        <span style="color:#66CCFF">open →</span>
+      </div>
+    </a>
+  </div>
+
+  <!-- comparison matrix -->
+  <section class="mt-20">
+    <div class="text-[10px] uppercase tracking-[0.25em] text-[#6E8BFF] font-mono mb-3">compare</div>
+    <h2 class="text-[28px] font-bold tracking-tight">At a glance</h2>
+    <div class="mt-6 rounded-2xl border border-white/10 overflow-hidden">
+      <table class="w-full text-[13px]">
+        <thead class="bg-[#0F1320]">
+          <tr class="text-[10px] text-[#8690AE] font-mono uppercase tracking-wider">
+            <th class="text-left px-5 py-3 font-normal">dimension</th>
+            <th class="text-left px-5 py-3 font-normal">v1 cobalt precision</th>
+            <th class="text-left px-5 py-3 font-normal">v2 azure live</th>
+            <th class="text-left px-5 py-3 font-normal">v3 neon cyber</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/5 bg-[#0A0D14]/70">
+          <tr><td class="px-5 py-3 text-[#8690AE]">primary hue</td><td class="px-5 py-3 font-mono">#2E5BFF cobalt</td><td class="px-5 py-3 font-mono">#0A5BFF azure</td><td class="px-5 py-3 font-mono">#00A3FF neon</td></tr>
+          <tr><td class="px-5 py-3 text-[#8690AE]">canvas</td><td class="px-5 py-3">dark + mixed hero</td><td class="px-5 py-3">light · paper</td><td class="px-5 py-3">pure dark · grid</td></tr>
+          <tr><td class="px-5 py-3 text-[#8690AE]">mood</td><td class="px-5 py-3">engineer · precise · subtle</td><td class="px-5 py-3">human · playful · warm</td><td class="px-5 py-3">cyber · saturated · operational</td></tr>
+          <tr><td class="px-5 py-3 text-[#8690AE]">typography</td><td class="px-5 py-3">Inter tight · 26px h1</td><td class="px-5 py-3">Inter bold · up to 84px</td><td class="px-5 py-3">Mono-heavy · 88px + uppercase</td></tr>
+          <tr><td class="px-5 py-3 text-[#8690AE]">corner radius</td><td class="px-5 py-3 font-mono">4–12px (mostly 8–10)</td><td class="px-5 py-3 font-mono">10–24px (big)</td><td class="px-5 py-3 font-mono">4–10px (sharp)</td></tr>
+          <tr><td class="px-5 py-3 text-[#8690AE]">motion</td><td class="px-5 py-3">fade-up · pulse ring</td><td class="px-5 py-3">fade-up · float · pop-hover</td><td class="px-5 py-3">flicker · scan · pulse-dot</td></tr>
+          <tr><td class="px-5 py-3 text-[#8690AE]">best fit</td><td class="px-5 py-3">ops / traces / dev dashboards</td><td class="px-5 py-3">marketing / onboarding / product</td><td class="px-5 py-3">observability / AI ops / terminal</td></tr>
+          <tr><td class="px-5 py-3 text-[#8690AE]">risk</td><td class="px-5 py-3">may feel similar to current</td><td class="px-5 py-3">farthest from existing Linear Precise</td><td class="px-5 py-3">strong visual, niche audience</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="mt-16">
+    <div class="text-[10px] uppercase tracking-[0.25em] text-[#6E8BFF] font-mono mb-3">next</div>
+    <h2 class="text-[28px] font-bold tracking-tight">After you review</h2>
+    <p class="mt-4 text-[14px] text-[#B6BDD1] max-w-2xl leading-relaxed">
+      Pick one (or a mix — e.g. "V1 as the workbench theme, V2 as marketing") and tell me. I'll then turn it into the actual skill — a proper <code class="px-1.5 py-0.5 rounded bg-white/5 font-mono text-[12px] text-[#6E8BFF]">design-system/allhands-brand-blue/SKILL.md</code> pack with color tokens, typography rules, component contracts, and `references/` detailing every element — replacing the current Linear Precise contract and taking over §3.8 in CLAUDE.md.
+    </p>
+    <div class="mt-6 flex gap-2">
+      <div class="h-9 px-3 rounded-md border border-white/10 bg-white/5 text-[12px] inline-flex items-center gap-2 font-mono">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#2E5BFF]"></span> open design-system/proposals/v1-cobalt-precision.html
+      </div>
+    </div>
+  </section>
+
+  <footer class="mt-20 pt-8 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-[#8690AE]">
+    <span>allhands · design proposals · 2026-04-23</span>
+    <span>3 variants · single-file html · <span class="text-[#6E8BFF]">tailwind + lucide via cdn</span></span>
+  </footer>
+</div>
+
+</body>
+</html>

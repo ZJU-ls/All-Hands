@@ -65,13 +65,16 @@ describe("P08 · 动效时长必须走 token,禁止原生 duration-<数字>", ()
  * P08 · 动效反例 —— 禁止 transition-all / 禁止 transition-shadow、scale/shadow 的
  * 交互反馈(视觉契约 03-visual-design 也禁过,这里再加一道交互层面的闸)。
  */
-describe("P08 · 禁止 transition-all 与 scale/shadow 交互反馈", () => {
+describe("P08 · 禁止 transition-all 与 scale 交互反馈", () => {
+  // Post-ADR 0016 §D3: `hover:shadow-*` (glow / soft) is explicitly permitted
+  // for primary-fill CTAs and dark-mode card lift. Only `scale` and the
+  // catch-all `transition-all` remain banned — scale has no theme-aware
+  // counterpart and transition-all still masks which property changes.
   const allow = (file: string) => file.startsWith("app/design-lab/");
 
   const BAD = [
     { pat: /\btransition-all\b/, reason: "transition-all 覆盖面太大,写 transition-colors/-opacity/-transform" },
-    { pat: /\bhover:scale-\d/, reason: "hover 不允许 scale,见 03-visual-design §动效" },
-    { pat: /\bhover:shadow-/, reason: "hover 不允许 shadow,见 03-visual-design §动效" },
+    { pat: /\bhover:scale-\d/, reason: "hover 不允许 scale,用 hover:-translate-y-px 代替(见 ADR 0016 §D3)" },
   ];
 
   it.each(allSources.map((p) => [rel(p)]))(

@@ -105,31 +105,34 @@
 - 参考:LangGraph Checkpointer · Claude Code `--resume <session>`(基于消息表 replay)
 - 回归:`lint-imports` · `test_skill_runtime_persistence.py` · `test_checkpointer_phase1.py` · `test_dual_sot_consistency.py` · `test_interrupt_resume.py`
 
-### 3.8 视觉纪律 · Linear Precise(`web/` 代码必读)
+### 3.8 视觉纪律 · Brand Blue Dual Theme(`web/` 代码必读)
 
-视觉契约在 [`product/03-visual-design.md`](product/03-visual-design.md),速查表在 [`design-system/MASTER.md`](design-system/MASTER.md),活样本在 [`web/app/design-lab/page.tsx`](web/app/design-lab/page.tsx)。
+> **2026-04-23 更新:** 旧 "Linear Precise" 契约已通过 [ADR 0016](product/adr/0016-brand-blue-dual-theme.md) 全面替换为 **Brand Blue Dual Theme** · 双主题(light / dark)· theme pack 可扩展架构。原 "三条最高纪律"(禁 Lucide / 颜色密度 ≤ 3 / 动效 2px 上限)· BAN 1(colored border-accent)· BAN 2(gradient text)**全部作废**。
 
-**三条最高纪律:**
+视觉契约在 [`product/03-visual-design.md`](product/03-visual-design.md),速查表在 [`design-system/MASTER.md`](design-system/MASTER.md),活样本在 [`web/app/design-lab/page.tsx`](web/app/design-lab/page.tsx),原型在 [`design-system/proposals/`](design-system/proposals/)(V1 Cobalt Precision 暗 · V2 Azure Live 浅)。
 
-1. **禁止第三方 icon 库**(Lucide / Heroicons / Phosphor / Tabler / Font Awesome 等)。图形信息只能来自:排版 · 激活色条 · 点阵 logo · 状态点 · Kbd chip · Mono 字符(`→ ← ⌘ ↵`)· **自有 icon 集 `web/components/icons/**`**(Raycast-style · 2px stroke · round caps · currentColor · 见 ADR 0009)· 5 类 legacy 1-line SVG(`web/components/ui/icons.tsx`:check / arrow-right / external / copy / plus-minus,不再扩展)
-2. **颜色密度 ≤ 3** (不含语义状态色)。一律用 token(`bg-bg` `text-text-muted` `bg-primary`...),**禁止** 在 JSX 写十六进制或 `bg-blue-500`、`text-zinc-400` 等 Tailwind 原色类,**禁止** `dark:bg-zinc-900` 并行定义
-3. **动效克制**。位移不超过 2px,hover 只改边框亮度;时长走 `--dur-*`;禁止 `scale` / `box-shadow` 做交互反馈;禁止动画库(Framer Motion / GSAP)
+**五条设计原则:**
 
-**违反以上三条任意一条 → review 直接打回,无协商。**
+1. **跨主题一致性** — light 和 dark 必须传递同一份信息语义(激活 / 层级 / 状态区分方式一致,只换色值)。e2e 视觉回归两个主题各跑一次
+2. **Token 优先** — 一切颜色 / 字号 / 圆角 / 阴影 / 动效走 token · 禁止 JSX 里写十六进制或 `bg-blue-500` / `text-zinc-400` 这类 Tailwind 原色类;**禁止** `dark:bg-*` 并行定义(theme 切换走 `data-theme` + CSS 变量自动完成)
+3. **扩展性设计** — 组件只消费 token 接口(`bg-primary` / `text-text-muted` 等),不依赖具体 theme pack。新 theme pack = 新建 `web/styles/themes/<pack>/{light,dark}.css`,组件零改动
+4. **品牌可感** — 允许 gradient text(hero h1)· colored accent / hairline(卡片顶条)· shadow-glow(暗主题 primary 发光)· mesh gradient hero 建立产品识别
+5. **动效克制** — 允许 `hover:-translate-y-px` · `animate-float`(装饰 orb)· `pulse-ring`(状态点)· `shadow-glow` 反馈;**禁止** Framer Motion / GSAP 等 JS 动画库(CSS + Tailwind keyframes 足够);禁止持续闪烁干扰阅读
 
-**允许的装饰原语(composition primitives · 不松绑硬纪律,把既有语汇列明):**
+**Icon 体系:**
 
-- **Sparkline / micro-viz** — 纯 SVG,描边 `currentColor` 或 `var(--color-primary)`,无填充渐变,高度 ≤ 32px。用于 KPI 趋势、活动密度。
-- **Dotgrid backdrop** — CSS `radial-gradient` + `var(--color-border)` 圆点,间距 ≥ 16px,整体不透明度 ≤ 40%。用于 hero / 空状态视觉锚。
-- **Hairline accent(1px)** — 卡片顶部或左侧 1px 高度的 `linear-gradient(var(--color-primary), transparent)` 条,不透明度 ≤ 25%。用于标记推荐/默认项;**不替代** 激活色条(激活仍走 2px primary)。
-- **入场动效** — `ah-fade-up`(4px translateY)用于路由切换、列表初渲染、modal 入场。`scaleY 0→1` 仅限激活色条(`ah-bar-in`),其他 scale 全禁。
-- **数值变动** — KPI 数字更新只用 `transition: color 150ms` 或 ≤ 2px `translateY`,禁止第三方 tween 库。
+- 业务 icon 统一经 `<Icon name="..." />` 包装(`web/components/ui/icon.tsx` · 底层 lucide-react)· **禁止**直接 `import { X } from 'lucide-react'`
+- 特殊符号(app logo · provider brand marks · 装饰字符):走 `web/components/icons/` 自有集 · `<BrandMark />`(ADR 0009 降级条款)
 
-**对三条硬纪律的澄清:**
-- #3 中"禁止 scale 做交互反馈"= 禁止 `hover:scale-*` / `active:scale-*`;一次性入场的 `scaleY 0→1`(激活色条)不属于反馈,允许。
-- #2 颜色密度不计 `primary/10` / `primary/20` / `border/40` 这类透明度叠加 —— 仍走 token,不计新色号。
+**主题切换:**
 
-新增任何 `web/` 组件前,先过一遍 [`design-system/MASTER.md` §0 自检清单](design-system/MASTER.md#0-每次开发前的自检)。Token 或组件契约变更需同步修改:`product/03-visual-design.md`(规范)→ `globals.css` + `tailwind.config.ts`(实现)→ `design-system/MASTER.md`(速查)。
+- 实装 `next-themes` · `<html data-theme-pack="brand-blue" data-theme="light|dark|system">`
+- 默认 `data-theme-pack="brand-blue"`;加第二个 pack 时在 `ThemeProvider` 注册即可
+- 切换入口:topbar 右上角 + settings 页
+
+新增任何 `web/` 组件前,先过一遍 [`design-system/MASTER.md` §0 自检清单](design-system/MASTER.md#0-每次开发前的自检清单)。Token / 组件契约变更同步路径:`product/03-visual-design.md`(规范)→ `web/styles/themes/brand-blue/*.css`(实现)→ `tailwind.config.ts`(映射)→ `design-system/MASTER.md`(速查)。
+
+**违反原则 1-3 → review 打回。** 原则 4-5 允许在 code review 讨论具体边界。
 
 ---
 
