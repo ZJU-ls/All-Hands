@@ -154,6 +154,7 @@ def _load_builtin_skill_manifest(skill_dir: Path) -> tuple[SkillDescriptor, Call
             tool_ids=[str(t) for t in data.get("tool_ids", [])],
             prompt_fragment=prompt_fragment,
             version=str(data.get("version", "1.0.0")),
+            path=str(skill_dir),
         )
 
     return descriptor, _loader
