@@ -43,3 +43,21 @@ forbidden_modules =
     fastapi
     langgraph
     langchain
+
+[importlinter:contract:langgraph-only-in-execution]
+# ADR 0014 R1 + ADR 0011 principle 3 · LangGraph types must stay behind the
+# allhands.execution boundary. Only the runner + checkpointer factory in
+# execution/ may directly touch langgraph.*; api/services/core reach it via
+# AgentEvent types or Any-typed ports (ChatService.checkpointer: Any | None).
+# `allow_indirect_imports` = True keeps the services → execution → langgraph
+# transitive path legal (the whole point of layering), while flagging any
+# direct ``from langgraph import ...`` added to a service / api / core file.
+name = langgraph direct imports only in allhands.execution (ADR 0014 R1)
+type = forbidden
+source_modules =
+    allhands.services
+    allhands.api
+    allhands.core
+forbidden_modules =
+    langgraph
+allow_indirect_imports = True
