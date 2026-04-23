@@ -94,13 +94,13 @@
 
 1. **层间 import 契约**:`core/` 禁止 import `sqlalchemy` / `fastapi` / `langgraph` / `langchain` / `openai` / `anthropic`;跨层只 import 接口(ABC),不 import 具体实现;依赖方向严格自上而下(L10 → L1)
 2. **注册式扩展**:新能力走注册(ToolRegistry / ComponentRegistry / MCPClient / ModelGateway),不走"改核心代码"
-3. **状态可 checkpoint(v1 新)**:所有影响后续决策的 runtime 状态**必须可持久化到 L3**(进程重启可 resume)· 包括:SkillRuntime · 消息 · Confirmation 挂起态 · Artifact
+3. **状态可 checkpoint(v1 新)**:所有影响后续决策的 runtime 状态**必须可持久化到 L3**(进程重启可 resume)· 包括:SkillRuntime · 消息 · Confirmation 挂起态 · Artifact · **graph 内部状态**(interrupt / tool pending / subagent stack · 通过 LangGraph `AsyncSqliteSaver`)
    - 任何"内存 dict"作为状态都是反模式 · 除非旁边有 repo 同步落地
    - `SkillRuntime` 从 v1 起必须在 `chat_service.send_message` 结束时 flush 到 `SkillRuntimeRepo`(ADR 0011)
-   - 完整 LangGraph Checkpointer 是 v2 的故事 · 本条只要求"可持久化",不强制 framework
+   - **2026-04-23 更新:** LangGraph Checkpointer 通过 [ADR 0014](product/adr/0014-langgraph-checkpointer.md) 落地 · `AgentRunner` 接 `AsyncSqliteSaver`(separate `checkpoints.db`)· `thread_id=conversation_id` · `MessageRepo` 仍是用户可见消息的 SoT(R2),checkpointer 只管 graph 内部状态。禁止 `services/` / `api/` / `core/` direct import `langgraph.checkpoint.*`(import-linter 守 · R1)
 
 - 参考:LangGraph Checkpointer · Claude Code `--resume <session>`(基于消息表 replay)
-- 回归:`lint-imports` · `test_skill_runtime_persistence.py`
+- 回归:`lint-imports` · `test_skill_runtime_persistence.py` · `test_checkpointer_phase1.py` · `test_dual_sot_consistency.py` · `test_interrupt_resume.py`
 
 ### 3.8 视觉纪律 · Linear Precise(`web/` 代码必读)
 

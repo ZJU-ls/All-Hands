@@ -36,14 +36,6 @@ class Settings(BaseSettings):
         default="./data/checkpoints.db",
         description="Path for LangGraph AsyncSqliteSaver. Separate from app DB on purpose.",
     )
-    enable_checkpointer: bool = Field(
-        default=False,
-        description=(
-            "ADR 0014 Phase 1 feature gate. Off = v0 pure-function behaviour "
-            "(MessageRepo is sole SoT). On = wire AsyncSqliteSaver so interrupt "
-            "/ tool pending / subagent state can resume across uvicorn restarts."
-        ),
-    )
 
     langfuse_host: str | None = Field(default=None)
     langfuse_public_key: str | None = Field(default=None)

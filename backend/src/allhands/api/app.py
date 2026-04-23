@@ -66,30 +66,28 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.exception("trigger.runtime.start.failed")
         app.state.trigger_runtime = None
 
-    # ADR 0014 · Phase 1 feature-flagged checkpointer. The context-manager
+    # ADR 0014 · checkpointer is default-on after Phase 4. The context-manager
     # lifetime is owned here so setup() + conn.close() happen in the right
-    # order even if the lifespan body throws. On flag off, app.state.checkpointer
-    # stays None and the runner silently falls back to pure-function mode.
-    # Factory lives in execution/checkpointer.py so this FastAPI module
-    # doesn't hold a direct dependency on langgraph.checkpoint.* (ADR 0014 R1 /
-    # import-linter "checkpointer-only-in-execution").
+    # order even if the lifespan body throws. Factory lives in
+    # execution/checkpointer.py so this FastAPI module doesn't hold a direct
+    # dependency on langgraph.checkpoint.* (ADR 0014 R1 / import-linter
+    # "checkpointer-only-in-execution"). If startup fails (e.g. disk full),
+    # app.state.checkpointer stays None and the runner falls back to the
+    # v0 pure-function path — no chat breakage, just no resume.
     settings = get_settings()
     checkpointer_cm = None
-    if settings.enable_checkpointer:
-        try:
-            settings.ensure_data_dir()
-            from allhands.execution.checkpointer import make_async_sqlite_checkpointer
+    try:
+        settings.ensure_data_dir()
+        from allhands.execution.checkpointer import make_async_sqlite_checkpointer
 
-            checkpointer_cm = make_async_sqlite_checkpointer(settings.checkpoint_db_path)
-            checkpointer = await checkpointer_cm.__aenter__()
-            app.state.checkpointer = checkpointer
-            logger.info("checkpointer.ready path=%s", settings.checkpoint_db_path)
-        except Exception:
-            logger.exception("checkpointer.start.failed")
-            app.state.checkpointer = None
-            checkpointer_cm = None
-    else:
+        checkpointer_cm = make_async_sqlite_checkpointer(settings.checkpoint_db_path)
+        checkpointer = await checkpointer_cm.__aenter__()
+        app.state.checkpointer = checkpointer
+        logger.info("checkpointer.ready path=%s", settings.checkpoint_db_path)
+    except Exception:
+        logger.exception("checkpointer.start.failed")
         app.state.checkpointer = None
+        checkpointer_cm = None
 
     try:
         yield

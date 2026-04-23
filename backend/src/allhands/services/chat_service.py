@@ -429,6 +429,84 @@ class ChatService:
             run_started_at=run_started_at,
         )
 
+    async def resume_message(
+        self,
+        conversation_id: str,
+        resume_value: object,
+    ) -> AsyncIterator[AgentEvent]:
+        """ADR 0014 · Phase 4b — continue a turn paused at ``interrupt()``.
+
+        Preconditions: the runner on the previous turn paused via interrupt()
+        and the checkpointer captured graph state under ``thread_id=conversation_id``.
+        This method spins up a fresh AgentRunner (same contract as send_message),
+        hands it a ``Command(resume=resume_value)`` through the new ``resume``
+        kwarg on ``stream()``, and pipes the continuation through the same
+        persist-assistant-reply tap so the surviving portion of the reply
+        lands in MessageRepo.
+
+        This method is the **server-side half** of the resume flow. The HTTP
+        entry point (``POST /api/conversations/{id}/resume``) is thin plumbing
+        over this; the rest of the chat router's SSE encoding is shared.
+
+        Not yet wired to ConfirmationGate in this commit — the gate still uses
+        polling. Phase 4c (future work) migrates the gate onto interrupt() so
+        resume becomes the default path instead of a parallel track.
+        """
+        conv = await self._conversations.get(conversation_id)
+        if conv is None:
+            raise DomainError(f"Conversation {conversation_id!r} not found.")
+
+        employee = await self._employees.get(conv.employee_id)
+        if employee is None:
+            raise EmployeeNotFound(f"Employee {conv.employee_id!r} not found.")
+
+        if self._checkpointer is None:
+            raise DomainError(
+                "Resume requires a checkpointer; app was started without one "
+                "(lifespan likely failed to bring up AsyncSqliteSaver)."
+            )
+
+        run_id = f"run_{uuid.uuid4().hex[:16]}"
+        run_started_at = datetime.now(UTC)
+
+        runtime = await self.get_or_load_runtime(conversation_id, employee)
+        provider = None
+        if self._providers is not None:
+            provider = await self._providers.get_default()
+
+        runner_factory = self._build_runner_factory(provider)
+        dispatch_service = DispatchService(
+            employee_repo=self._employees,
+            runner_factory=runner_factory,
+        )
+        spawn_subagent_service = SpawnSubagentService(
+            employee_repo=self._employees,
+            runner_factory=runner_factory,
+        )
+        runner = AgentRunner(
+            employee=employee,
+            tool_registry=self._tools,
+            gate=self._gate,
+            provider=provider,
+            dispatch_service=dispatch_service,
+            skill_registry=self._skills,
+            runtime=runtime,
+            spawn_subagent_service=spawn_subagent_service,
+            model_ref_override=conv.model_ref_override,
+            checkpointer=self._checkpointer,
+        )
+        return self._persist_assistant_reply(
+            conversation_id,
+            runner.stream(
+                messages=[],
+                thread_id=conversation_id,
+                resume={"value": resume_value},
+            ),
+            employee=employee,
+            run_id=run_id,
+            run_started_at=run_started_at,
+        )
+
     async def _persist_assistant_reply(
         self,
         conversation_id: str,

@@ -98,7 +98,7 @@
 
 - 原则数量从 4 → 6,认知负担增加(但每条有一句话不变量,扫一眼就知道)
 - `SkillRuntime` 从进程内存变成 DB 状态,多了一张表和一条 migration 要维护
-- 后续若引入完整 LangGraph Checkpointer,本条 ADR 要 supersede 掉(不是升级,是替换),但那是 v2 的故事
+- ~~后续若引入完整 LangGraph Checkpointer,本条 ADR 要 supersede 掉(不是升级,是替换),但那是 v2 的故事~~ **2026-04-23 更新:** 完整 LangGraph Checkpointer 已通过 [ADR 0014](0014-langgraph-checkpointer.md) 落地(Phase 1-3 完成 · Phase 4a-4b 完成 · Phase 4c-4e 作为后续 plan)。本 ADR 原则 7 的"可持久化、可 resume"条款现在有 framework 级支持:`MessageRepo` 仍是用户可见的消息账本 SoT,`AsyncSqliteSaver` 持久化 graph 内部状态(interrupt / tool pending / subagent stack)。两者通过 ADR 0014 R2 契约分工,不冲突。
 
 ### 中性
 
