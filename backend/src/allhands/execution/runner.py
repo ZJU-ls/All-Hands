@@ -31,6 +31,7 @@ from allhands.execution.events import (
     AgentEvent,
     DoneEvent,
     ErrorEvent,
+    InterruptEvent,
     ReasoningEvent,
     RenderEvent,
     TokenEvent,
@@ -363,7 +364,19 @@ class AgentRunner:
         messages: list[dict[str, Any]],
         thread_id: str,
         overrides: RunOverrides | None = None,
+        resume: dict[str, Any] | None = None,
     ) -> AsyncIterator[AgentEvent]:
+        """Drive one turn (or a resume) of the agent.
+
+        ``resume`` is the ADR 0014 Phase 3 lever: when set, the runner
+        invokes the graph with ``Command(resume=resume["value"])`` under
+        ``thread_id`` and the checkpointer picks up from wherever the prior
+        invocation paused (a ``interrupt()`` call in a tool / node).
+        ``messages`` is ignored in that case — the graph state already has
+        its messages from the pre-pause checkpoint. ``resume`` requires a
+        ``checkpointer`` on the runner; without one the Command has nothing
+        to resume.
+        """
         from langchain_core.messages import (
             AIMessage,
             AIMessageChunk,
@@ -372,6 +385,7 @@ class AgentRunner:
         )
         from langchain_core.tools import StructuredTool
         from langgraph.prebuilt import create_react_agent
+        from langgraph.types import Command
 
         message_id = str(uuid.uuid4())
         gate = self._gate
@@ -497,34 +511,72 @@ class AgentRunner:
         try:
             # ADR 0014 · checkpointer is None in v0-compat mode (MessageRepo is
             # the sole SoT). With a checkpointer, LangGraph snapshots the graph
-            # state per node transition under thread_id — lets Phase 3/4 wire
+            # state per node transition under thread_id — enabling Phase 3/4
             # interrupt() + resume. The runner never reads back from the
             # checkpointer directly; that's LangGraph's responsibility when the
             # same thread_id is re-invoked.
             agent = create_react_agent(model, lc_tools, checkpointer=self._checkpointer)
-            # `stream_mode="messages"` is the only mode that gives per-token
-            # deltas from the LLM (each chunk is an `AIMessageChunk`). The
-            # alternatives — `updates` / `values` — emit completed messages
-            # only, which means the UI would see "nothing, nothing, entire
-            # paragraph at once". Token-level streaming is the whole point
-            # of the chat surface.
+            # ADR 0014 · Phase 3 — multi-mode streaming.
+            # - "messages" gives per-token deltas (AIMessageChunk tuples) —
+            #   the only mode that supports token-level streaming for the
+            #   chat UX. Alternatives emit completed messages only.
+            # - "updates" surfaces ``{"__interrupt__": (Interrupt(...),)}``
+            #   when a node calls ``interrupt()``. Without subscribing to
+            #   updates, the graph pauses silently and the UI has no way to
+            #   know a human decision is needed. Plain state updates from
+            #   nodes also come through this channel — we filter those out.
             #
-            # Each chunk is `(message, metadata)`. `metadata["langgraph_node"]`
-            # tells us which graph node produced it. Previously we filtered
-            # to only `agent` chunks, which silently dropped every tool
-            # result — including Render Tools' `{component, props}`
-            # envelopes — so the frontend's Viz.* components never
-            # received data. Now we forward:
-            #   - agent:  tokens + reasoning + tool_call_start
-            #   - tools:  tool_call_end (+ RenderEvent when applicable)
-            async for chunk in agent.astream(
-                {"messages": lc_messages},
+            # Each chunk is ``(mode, payload)``. We dispatch by mode to the
+            # existing message-parsing logic or the new interrupt-emission
+            # path.
+            #
+            # Phase 3 · resume: when the caller passes ``resume=...`` we
+            # hand ``Command(resume=resume["value"])`` to astream instead
+            # of a new messages dict. LangGraph uses the checkpointer to
+            # recover where ``interrupt()`` was paused.
+            agent_input: Any
+            if resume is not None:
+                agent_input = Command(resume=resume.get("value"))
+            else:
+                agent_input = {"messages": lc_messages}
+            async for stream_chunk in agent.astream(
+                agent_input,
                 config={"configurable": {"thread_id": thread_id}},
-                stream_mode="messages",
+                stream_mode=["messages", "updates"],
             ):
-                if not isinstance(chunk, tuple) or len(chunk) != 2:
+                if not (isinstance(stream_chunk, tuple) and len(stream_chunk) == 2):
                     continue
-                msg, meta = chunk
+                mode, payload = stream_chunk
+
+                if mode == "updates":
+                    # Interrupt marker is the only signal in "updates" we
+                    # care about — regular node state transitions are
+                    # redundant with the per-token stream. Each interrupt
+                    # carries an id that stays stable across the pause so
+                    # the frontend can match a later resume to the right
+                    # suspension (§ ADR 0014 Phase 3 R4).
+                    if not isinstance(payload, dict):
+                        continue
+                    interrupts = payload.get("__interrupt__")
+                    if interrupts:
+                        for itr in interrupts:
+                            itr_id = getattr(itr, "id", "") or ""
+                            raw_value = getattr(itr, "value", None)
+                            value_dict: dict[str, object]
+                            if isinstance(raw_value, dict):
+                                value_dict = dict(raw_value)
+                            else:
+                                value_dict = {"value": raw_value}
+                            yield InterruptEvent(
+                                interrupt_id=itr_id,
+                                value=value_dict,
+                            )
+                    continue
+
+                # Everything below is mode == "messages".
+                if not (isinstance(payload, tuple) and len(payload) == 2):
+                    continue
+                msg, meta = payload
                 node = meta.get("langgraph_node") if isinstance(meta, dict) else None
 
                 if node == "agent":

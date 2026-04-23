@@ -352,6 +352,14 @@ async def send_message(
                 elif event.kind == "confirm_resolved":
                     payload = event.model_dump(mode="json", exclude={"kind"})
                     yield agui.encode_sse(agui.custom("allhands.confirm_resolved", payload))
+                elif event.kind == "interrupt_required":
+                    # ADR 0014 Phase 3 · LangGraph interrupt() lands here.
+                    # Semantically a superset of confirm_required — value is
+                    # an opaque dict the agent provided to interrupt() so
+                    # the frontend can decide how to prompt (e.g. confirm
+                    # yes/no, pick one of N, free-form text).
+                    payload = event.model_dump(mode="json", exclude={"kind"})
+                    yield agui.encode_sse(agui.custom("allhands.interrupt_required", payload))
                 elif event.kind == "render":
                     payload = event.model_dump(mode="json", exclude={"kind"})
                     yield agui.encode_sse(agui.custom("allhands.render", payload))

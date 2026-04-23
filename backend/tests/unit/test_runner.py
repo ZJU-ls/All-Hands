@@ -129,10 +129,11 @@ async def test_runner_emits_render_event_when_tool_returns_envelope() -> None:
 
     We mock the graph at the stream boundary rather than drive a real
     `create_react_agent`, because GenericFakeChatModel has no `bind_tools`
-    implementation — the agent wrapper crashes on construction. The shape
-    we yield here is exactly what LangGraph's `stream_mode="messages"`
-    produces: (AIMessageChunk, meta) from the agent node and
-    (ToolMessage, meta) from the tools node.
+    implementation — the agent wrapper crashes on construction. Since
+    ADR 0014 Phase 3 the runner subscribes to ``stream_mode=["messages",
+    "updates"]``, so each chunk is ``(mode, payload)`` — we yield the
+    ``"messages"`` variant here where ``payload`` is the original
+    ``(AIMessageChunk | ToolMessage, meta)`` pair.
     """
     from langchain_core.messages import AIMessageChunk, ToolMessage
 
@@ -140,24 +141,30 @@ async def test_runner_emits_render_event_when_tool_returns_envelope() -> None:
         async def astream(self, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
             # Agent node streams tokens + final tool_calls.
             yield (
-                AIMessageChunk(content="Looking up rows…"),
-                {"langgraph_node": "agent"},
+                "messages",
+                (
+                    AIMessageChunk(content="Looking up rows…"),
+                    {"langgraph_node": "agent"},
+                ),
             )
             yield (
-                AIMessageChunk(
-                    content="",
-                    tool_calls=[
-                        {
-                            "id": "call_render_1",
-                            "name": "render_table",
-                            "args": {
-                                "columns": [{"key": "n", "label": "N"}],
-                                "rows": [{"n": "alpha"}, {"n": "beta"}],
-                            },
-                        }
-                    ],
+                "messages",
+                (
+                    AIMessageChunk(
+                        content="",
+                        tool_calls=[
+                            {
+                                "id": "call_render_1",
+                                "name": "render_table",
+                                "args": {
+                                    "columns": [{"key": "n", "label": "N"}],
+                                    "rows": [{"n": "alpha"}, {"n": "beta"}],
+                                },
+                            }
+                        ],
+                    ),
+                    {"langgraph_node": "agent"},
                 ),
-                {"langgraph_node": "agent"},
             )
             # Tools node returns the render envelope as JSON-encoded content
             # (matches what LangGraph's ToolNode does for dict results).
@@ -172,17 +179,23 @@ async def test_runner_emits_render_event_when_tool_returns_envelope() -> None:
                 "interactions": [],
             }
             yield (
-                ToolMessage(
-                    content=_json.dumps(envelope),
-                    tool_call_id="call_render_1",
-                    name="render_table",
+                "messages",
+                (
+                    ToolMessage(
+                        content=_json.dumps(envelope),
+                        tool_call_id="call_render_1",
+                        name="render_table",
+                    ),
+                    {"langgraph_node": "tools"},
                 ),
-                {"langgraph_node": "tools"},
             )
             # Final assistant turn.
             yield (
-                AIMessageChunk(content="Here is the table."),
-                {"langgraph_node": "agent"},
+                "messages",
+                (
+                    AIMessageChunk(content="Here is the table."),
+                    {"langgraph_node": "agent"},
+                ),
             )
 
     model = GenericFakeChatModel(messages=iter([AIMessage(content="unused")]))

@@ -56,6 +56,26 @@ class ConfirmResolvedEvent(BaseModel):
     status: str
 
 
+class InterruptEvent(BaseModel):
+    """Graph paused at a LangGraph ``interrupt()`` call (ADR 0014 · Phase 3).
+
+    Semantically equivalent to ``ConfirmRequiredEvent`` but generalised — any
+    node/tool can emit an ``interrupt(value)`` and the resume payload isn't
+    constrained to "approve" / "reject". Phase 4 will migrate ConfirmationGate
+    onto this primitive so there's exactly one pause mechanism;
+    ConfirmRequiredEvent stays for backward compatibility during the rollout.
+
+    ``interrupt_id`` is LangGraph's own id (stable across the pause), used by
+    the frontend to match a later resume decision to the right suspension.
+    ``value`` is whatever the node passed to ``interrupt()`` — shape is agent-
+    defined, the runner just forwards it.
+    """
+
+    kind: Literal["interrupt_required"] = "interrupt_required"
+    interrupt_id: str
+    value: dict[str, object]
+
+
 class RenderEvent(BaseModel):
     kind: Literal["render"] = "render"
     message_id: str
@@ -100,6 +120,7 @@ AgentEvent = (
     | ToolCallEndEvent
     | ConfirmRequiredEvent
     | ConfirmResolvedEvent
+    | InterruptEvent
     | RenderEvent
     | NestedRunStartEvent
     | NestedRunEndEvent
