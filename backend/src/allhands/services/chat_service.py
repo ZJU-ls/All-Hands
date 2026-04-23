@@ -26,6 +26,7 @@ from allhands.execution.dispatch import DispatchService
 from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
 from allhands.execution.tools.meta.spawn_subagent import SpawnSubagentService
+from allhands.services.auto_compact import AutoCompactManager, CompactionConfig
 from allhands.services.context_builder import build_llm_context
 from allhands.services.turn_lock import TurnLockManager
 
@@ -141,6 +142,11 @@ class ChatService:
         # the same conversation serialize through one lock and the late
         # writer writes TURN_ABORTED for whatever was in flight.
         self._turn_lock = TurnLockManager()
+        # ADR 0017 · P2.B — auto-compaction manager. Per-process state
+        # holds the circuit breaker counters; call maybe_compact before
+        # build_llm_context so long conversations stay within the model's
+        # context window.
+        self._auto_compact = AutoCompactManager(config=CompactionConfig())
 
     async def _compute_platform_snapshot(self) -> str:
         """Fresh DB-verified snapshot of platform capabilities, injected into
@@ -483,7 +489,29 @@ class ChatService:
         # Fallback (``event_repo is None``, legacy tests): read the
         # MessageRepo directly. This path is removed when P1.E completes
         # the migration.
+        provider = None
+        if self._providers is not None:
+            provider = await self._providers.get_default()
+
         if self._event_repo is not None:
+            # P2.B · auto-compact before projecting the context. If the
+            # event log has crossed the trigger threshold, the manager
+            # calls the summarizer (a small LLM turn), writes a SUMMARY
+            # event, and marks the oldest events compacted. Original
+            # events are never deleted — projection / audit / branch all
+            # still work.
+            try:
+                await self._auto_compact.maybe_compact(
+                    conversation_id,
+                    self._event_repo,
+                    self._build_summarizer(provider, employee),
+                )
+            except Exception:
+                log.exception(
+                    "auto_compact.failed",
+                    extra={"conversation_id": conversation_id},
+                )
+
             _, lc_messages = await build_llm_context(
                 conversation_id,
                 employee,
@@ -499,10 +527,6 @@ class ChatService:
                 for m in history
                 if m.role in ("user", "assistant")
             ]
-
-        provider = None
-        if self._providers is not None:
-            provider = await self._providers.get_default()
 
         # E20 / L12: Lead turns get a fresh DB-verified snapshot injected as
         # the very first system segment (prepended via RunOverrides.system_override
@@ -923,6 +947,51 @@ class ChatService:
                 "interrupt.confirmation.save.failed",
                 extra={"interrupt_id": getattr(event, "interrupt_id", None)},
             )
+
+    def _build_summarizer(self, provider: Any, employee: Employee) -> Any:
+        """Build a callable that takes a list of {role, content} dicts and
+        returns a compressed summary string. Used by auto-compact (P2.B).
+
+        Uses the same LLM the conversation is already using — keeps
+        provider / API key / base_url plumbing consistent. The call is a
+        short one-shot: system prompt instructs brevity, payload is the
+        events being compacted.
+        """
+        from allhands.execution.runner import _build_model
+
+        async def _summarize(messages: list[dict[str, Any]]) -> str:
+            model = _build_model(employee.model_ref, provider)
+            from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+            system = SystemMessage(
+                content=(
+                    "You compress conversation histories. Summarize the "
+                    "following exchange in 3-6 sentences, preserving any "
+                    "decisions made, open questions, and key facts. Output "
+                    "only the summary text — no preamble, no markdown."
+                )
+            )
+            lc_msgs: list[Any] = [system]
+            for m in messages:
+                role = m.get("role")
+                content = m.get("content", "")
+                if role == "user":
+                    lc_msgs.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    lc_msgs.append(AIMessage(content=content))
+            # .ainvoke returns a BaseMessage; its .content is the text we want.
+            response = await model.ainvoke(lc_msgs)
+            content = getattr(response, "content", "")
+            if isinstance(content, list):
+                # Some providers return structured blocks — flatten text ones.
+                content = " ".join(
+                    b.get("text", "")
+                    for b in content
+                    if isinstance(b, dict) and b.get("type") == "text"
+                )
+            return str(content or "").strip()
+
+        return _summarize
 
     def _build_runner_factory(self, provider: Any) -> Any:
         """Closure used by DispatchService to spawn sub-runners.
