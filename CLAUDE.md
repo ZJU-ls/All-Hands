@@ -16,9 +16,10 @@
 
 按顺序:
 
-1. [`product/00-north-star.md`](product/00-north-star.md) — 产品哲学、6 条核心设计原则(v1 · 见 ADR 0011)
-2. [`product/04-architecture.md`](product/04-architecture.md) — 10 层架构 + 模块边界
-3. 本文件 — 开发纪律
+1. [`product/00-north-star.md`](product/00-north-star.md) — 产品哲学、8 条核心设计原则(原则 1-7 见 ADR 0011 · 原则 8 · 参考系统 见 ADR 0017)
+2. [`ref-src-claude/INDEX.md`](ref-src-claude/INDEX.md) — **Claude Code 实现参考(首要架构参考 · 见原则 8 / ADR 0017)**
+3. [`product/04-architecture.md`](product/04-architecture.md) — 10 层架构 + 模块边界
+4. 本文件 — 开发纪律
 
 其他文档按需:`01-prd.md`、`02-user-stories.md`、`05-roadmap.md`、`adr/`。
 
@@ -31,9 +32,11 @@
 
 ## 3. 核心设计原则(必须遵守,违反则打回)
 
-> **6 条原则 · 排序即优先级。** 完整版在 [`product/00-north-star.md § 核心设计原则`](product/00-north-star.md#核心设计原则6-条排序即优先级--见-adr-0011) · 每条的"不变量 / 来源 / 推论 / 回归防御"四段结构在那里。本节是 **review 时的快速对照速查**。
+> **8 条原则 · 排序即优先级。** 完整版在 [`product/00-north-star.md § 核心设计原则`](product/00-north-star.md#核心设计原则8-条排序即优先级--原则-1-7-见-adr-0011--原则-8-见-adr-0017) · 每条的"不变量 / 来源 / 推论 / 回归防御"四段结构在那里。本节是 **review 时的快速对照速查**。
 >
 > 本次 v1 refresh 见 [ADR 0011](product/adr/0011-principles-refresh.md)(4 条 → 6 条 · 参考 Claude Code + LangGraph 核心抽象)。
+>
+> **2026-04-24 新增原则 8 · 参考系统**(见 [ADR 0017](product/adr/0017-event-sourced-claude-code-pattern.md)):Claude Code(`ref-src-claude/`)是首要架构参考 · LangGraph 仅作局部工具编排引擎 · 不作消息历史 / resume / subagent / 压缩的 SoT。事件日志 + 纯投影替代 dual-SoT + delta-send。
 
 ### 3.1 Tool First(2026-04-18 扩展版 · 见 L01)
 
