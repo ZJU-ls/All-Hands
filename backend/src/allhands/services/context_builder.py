@@ -330,6 +330,14 @@ async def build_llm_context(
 
     messages = _merge_consecutive_user_messages(messages)
 
+    # P3.D · fill any orphaned tool_use blocks with a placeholder
+    # tool_result so Anthropic / OpenAI don't 400 with 'orphan tool_use'.
+    # Happens when the process crashed between an assistant's tool_use
+    # emission and the tool executor's result write.
+    from allhands.services.chain_repair import fill_orphan_tool_results
+
+    messages = fill_orphan_tool_results(messages)
+
     system_prompt = _compose_system_prompt(
         employee=employee,
         runtime=runtime,
