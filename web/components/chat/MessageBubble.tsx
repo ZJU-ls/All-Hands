@@ -6,6 +6,7 @@ import { RenderSlot } from "./RenderSlot";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { TraceChip } from "@/components/runs/TraceChip";
 import { classifyToolId } from "@/lib/tool-kind";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * Dispatch a tool call to the right renderer based on its tool_id prefix.
@@ -49,46 +50,71 @@ function isRenderToolCall(tc: ToolCall): boolean {
   return false;
 }
 
+/**
+ * MessageBubble · V2 Brand Blue dual-theme (ADR 0016).
+ *
+ * User bubbles are solid primary — the user's message feels like an action.
+ * Agent bubbles are surface cards with a gradient avatar tile, reasoning
+ * folded into a tinted block, and tool-call rows spaced as siblings of the
+ * answer prose. Both bubbles share a max-prose width so dense replies stay
+ * readable on wide viewports.
+ */
 export function MessageBubble({ message, isStreaming }: Props) {
   const isUser = message.role === "user";
   const showCursor = Boolean(isStreaming) && !isUser;
   const hasReasoning = !isUser && !!message.reasoning && message.reasoning.length > 0;
   const hasSegments = !isUser && Array.isArray(message.segments) && message.segments.length > 0;
 
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="ml-auto max-w-[75%] rounded-2xl rounded-tr-md bg-primary px-4 py-3 text-[14px] leading-[1.55] text-primary-fg shadow-soft-sm">
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[78ch] rounded-xl px-5 py-3 text-base leading-[1.6] ${
-          isUser
-            ? "bg-surface-2 text-text border border-border/60"
-            : "bg-surface text-text shadow-[0_0_0_1px_var(--color-border)]"
-        }`}
-      >
-        {hasReasoning && (
-          <ReasoningBlock
-            text={message.reasoning ?? ""}
-            isStreaming={Boolean(isStreaming) && !message.content}
-          />
-        )}
-        {hasSegments ? (
-          <SegmentedBody
-            message={message}
-            showCursor={showCursor}
-          />
-        ) : (
-          <LegacyBody
-            message={message}
-            isUser={isUser}
-            showCursor={showCursor}
-          />
-        )}
-        {!isUser && message.parent_run_id && (
-          <div className="mt-1.5 flex justify-end">
-            <TraceChip runId={message.parent_run_id} variant="link" />
-          </div>
-        )}
+    <div className="flex justify-start gap-3">
+      <AgentAvatar />
+      <div className="min-w-0 flex-1">
+        <div className="max-w-prose rounded-2xl rounded-tl-md border border-border bg-surface px-4 py-3 text-[14px] leading-[1.6] text-text shadow-soft-sm">
+          {hasReasoning && (
+            <ReasoningBlock
+              text={message.reasoning ?? ""}
+              isStreaming={Boolean(isStreaming) && !message.content}
+            />
+          )}
+          {hasSegments ? (
+            <SegmentedBody message={message} showCursor={showCursor} />
+          ) : (
+            <LegacyAgentBody message={message} showCursor={showCursor} />
+          )}
+          {message.parent_run_id && (
+            <div className="mt-2 flex justify-end">
+              <TraceChip runId={message.parent_run_id} variant="link" />
+            </div>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+/** 32×32 gradient avatar tile. 135° primary → accent matches V2 §3.19. */
+function AgentAvatar() {
+  return (
+    <span
+      aria-hidden="true"
+      className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold text-primary-fg shadow-soft-sm"
+      style={{
+        backgroundImage:
+          "linear-gradient(135deg, var(--color-primary), var(--color-accent))",
+      }}
+    >
+      <Icon name="sparkles" size={14} strokeWidth={2.25} />
+    </span>
   );
 }
 
@@ -125,7 +151,7 @@ function SegmentedBody({
   const last = segments[lastIdx];
   const cursorAlreadyAttached = last?.kind === "text";
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5">
       {nodes}
       {showCursor && !cursorAlreadyAttached && (
         <div>
@@ -171,42 +197,36 @@ function renderSegment({
 }
 
 /**
- * Legacy rendering path for user messages and historical assistant messages
- * loaded from the DB (which don't carry `segments`). Keeps the original
- * bucketed layout so existing history doesn't regress.
+ * Legacy rendering path for historical assistant messages loaded from the DB
+ * (which don't carry `segments`). Keeps the original bucketed layout so
+ * existing history doesn't regress.
  */
-function LegacyBody({
+function LegacyAgentBody({
   message,
-  isUser,
   showCursor,
 }: {
   message: Message;
-  isUser: boolean;
   showCursor: boolean;
 }) {
   return (
     <>
-      {(message.content || showCursor) &&
-        (isUser ? (
-          <p className="whitespace-pre-wrap">
-            {message.content}
-            {showCursor && <StreamingCursor />}
-          </p>
-        ) : (
-          <div>
-            {message.content && <AgentMarkdown content={message.content} />}
-            {showCursor && <StreamingCursor />}
-          </div>
-        ))}
+      {(message.content || showCursor) && (
+        <div>
+          {message.content && <AgentMarkdown content={message.content} />}
+          {showCursor && <StreamingCursor />}
+        </div>
+      )}
       {message.tool_calls.length > 0 && (
-        <div className="mt-2 flex flex-col gap-1">
-          {message.tool_calls.filter((tc) => !isRenderToolCall(tc)).map((tc) => (
-            <ToolCallNode key={tc.id} toolCall={tc} />
-          ))}
+        <div className="mt-2.5 flex flex-col gap-1.5">
+          {message.tool_calls
+            .filter((tc) => !isRenderToolCall(tc))
+            .map((tc) => (
+              <ToolCallNode key={tc.id} toolCall={tc} />
+            ))}
         </div>
       )}
       {message.render_payloads.length > 0 && (
-        <div className="mt-2 flex flex-col gap-2">
+        <div className="mt-2.5 flex flex-col gap-2">
           {message.render_payloads.map((rp, i) => (
             <RenderSlot key={i} payload={rp} />
           ))}
@@ -232,6 +252,9 @@ function LegacyBody({
  *     stop auto-managing for the rest of the turn. Their choice wins.
  *   - Historical (post-finalize) reasoning expands to full height on demand;
  *     the fixed-window constraint only helps during live streaming.
+ *
+ * V2 polish: primary-tinted container with a brain icon + token count,
+ * mono-typed meta. Matches the "reasoning row" language in V2 §3.19.
  */
 function ReasoningBlock({ text, isStreaming }: { text: string; isStreaming: boolean }) {
   const [open, setOpen] = useState(isStreaming);
@@ -270,7 +293,7 @@ function ReasoningBlock({ text, isStreaming }: { text: string; isStreaming: bool
   return (
     <div
       data-testid="reasoning-block"
-      className="mb-2 rounded-md border border-border bg-surface-2"
+      className="mb-2.5 rounded-lg border border-primary/20 bg-primary-muted"
     >
       <button
         type="button"
@@ -278,27 +301,30 @@ function ReasoningBlock({ text, isStreaming }: { text: string; isStreaming: bool
           userTouched.current = true;
           setOpen((v) => !v);
         }}
-        className="flex w-full items-center justify-between gap-2 px-2.5 py-1 text-[11px] text-text-muted hover:text-text"
+        className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-[11px] text-primary transition-colors duration-fast hover:text-primary-hover"
         aria-expanded={open}
         data-testid="reasoning-toggle"
       >
-        <span className="flex items-center gap-1.5">
-          <span aria-hidden className="font-mono">{open ? "▾" : "▸"}</span>
-          思考过程{isStreaming ? "…" : ""}
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="brain" size={12} />
+          <span className="font-medium">思考过程{isStreaming ? "…" : ""}</span>
         </span>
-        <span className="font-mono text-[10px]">{text.length}</span>
+        <span className="inline-flex items-center gap-1 font-mono text-[10px] text-primary/80">
+          {text.length} tokens
+          <Icon name={open ? "chevron-up" : "chevron-down"} size={10} />
+        </span>
       </button>
       {open && (
         <div
           ref={bodyRef}
           data-testid="reasoning-body"
-          className={`border-t border-border px-2.5 py-1.5 text-[11px] leading-relaxed text-text-muted ${
+          className={`border-t border-primary/15 px-3 py-2 text-[12px] leading-relaxed text-text-muted ${
             isStreaming ? "max-h-60 overflow-y-auto" : ""
           }`}
         >
           <AgentMarkdown
             content={text}
-            className="prose prose-invert prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:text-[10px] [&_code]:text-[10px]"
+            className="prose prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:text-[11px] [&_code]:text-[11px]"
           />
         </div>
       )}
@@ -311,7 +337,7 @@ function StreamingCursor() {
     <span
       data-testid="streaming-cursor"
       aria-hidden="true"
-      className="ml-0.5 inline-block align-baseline font-mono text-text"
+      className="ml-0.5 inline-block align-baseline font-mono text-primary"
       style={{ animation: "ah-caret 1s step-end infinite" }}
     >
       ▍

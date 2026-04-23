@@ -3,6 +3,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import type { RenderPayload, RenderInteraction } from "@/lib/protocol";
 import { resolveComponent } from "@/lib/component-registry";
+import { Icon } from "@/components/ui/icon";
 
 type Props = { payload: RenderPayload };
 
@@ -23,9 +24,10 @@ export function RenderSlot({ payload }: Props) {
   if (!Component) {
     return (
       <div
-        className="rounded border border-dashed border-border px-3 py-2 text-xs text-text-muted"
+        className="inline-flex items-center gap-2 rounded-md border border-dashed border-border bg-surface-2 px-3 py-2 font-mono text-[11px] text-text-muted"
         data-testid="render-slot-unknown"
       >
+        <Icon name="alert-circle" size={12} className="text-text-subtle" />
         Unknown component: {component || "(empty)"}
       </div>
     );
@@ -69,14 +71,17 @@ class RenderErrorBoundary extends Component<
     if (error) {
       return (
         <div
-          className="rounded border border-dashed border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger"
+          className="flex items-start gap-2.5 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-[12px] text-danger"
           data-testid="render-slot-crash"
           data-component={this.props.componentName}
         >
-          <div className="font-mono text-[10px] uppercase tracking-wide">
-            render failed · {this.props.componentName}
+          <Icon name="alert-triangle" size={14} className="mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="font-mono text-[10px] uppercase tracking-wide">
+              render failed · {this.props.componentName}
+            </div>
+            <div className="mt-0.5 break-all text-text-muted">{error.message}</div>
           </div>
-          <div className="mt-1 text-text-muted">{error.message}</div>
         </div>
       );
     }

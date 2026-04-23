@@ -12,6 +12,7 @@ import {
   computePopoverSide,
   type PopoverSide,
 } from "@/lib/popover-placement";
+import { Icon } from "@/components/ui/icon";
 
 // Max-h-96 (384px) is the hard panel cap; use that as the flip threshold.
 const HISTORY_POPOVER_MAX = 384;
@@ -27,7 +28,7 @@ const LOADING_LABEL = "加载中…";
 
 /**
  * Top-right header actions for the chat workspace:
- *   - "＋ 新建" spins up a fresh conversation for the current employee and
+ *   - "新建" spins up a fresh conversation for the current employee and
  *     routes to it. The most common failure mode we're avoiding is "the
  *     last conversation is too long / confused the agent, let me start
  *     clean" — previously that meant nuking localStorage + reload.
@@ -37,8 +38,8 @@ const LOADING_LABEL = "加载中…";
  *     page; this switcher is the in-context shortcut for "jump between my
  *     chats with this agent" without leaving the workspace.
  *
- * Visual: matches the adjacent "制品 ⌘J" button — mono prefix char + text,
- * border-only hover, token colors, no animation libraries (§3.5).
+ * Visual (Brand Blue V2): secondary-style chips — surface + border, icon-led,
+ * primary-tinted active rows with a trailing arrow on hover.
  */
 export function ConversationSwitcher({ employeeId, currentConversationId }: Props) {
   const router = useRouter();
@@ -128,7 +129,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
 
   const disabled = !employeeId;
   const baseBtn =
-    "inline-flex h-7 items-center gap-1 rounded-md border px-2 font-mono text-[11px] transition-colors duration-base border-border text-text-muted hover:text-text hover:border-border-strong disabled:opacity-50 disabled:cursor-not-allowed";
+    "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] font-medium text-text-muted transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-surface";
 
   return (
     <div ref={popRef} className="relative flex items-center gap-2">
@@ -141,7 +142,11 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
         data-testid="chat-new-conversation"
         className={baseBtn}
       >
-        <span aria-hidden className="text-text-subtle">＋</span>
+        {busy ? (
+          <Icon name="loader" size={12} className="animate-spin text-text-subtle" />
+        ) : (
+          <Icon name="plus" size={12} className="text-text-subtle" />
+        )}
         新建
       </button>
       <button
@@ -156,8 +161,13 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
         data-testid="chat-history-trigger"
         className={baseBtn}
       >
+        <Icon name="clock" size={12} className="text-text-subtle" />
         历史
-        <span aria-hidden className="text-text-subtle">{open ? "▴" : "▾"}</span>
+        <Icon
+          name={open ? "chevron-up" : "chevron-down"}
+          size={12}
+          className="text-text-subtle"
+        />
       </button>
       {open && (
         <div
@@ -165,30 +175,33 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
           data-testid="chat-history-popover"
           data-side={side}
           className={cn(
-            "absolute right-0 z-20 w-80 max-h-96 overflow-y-auto rounded-md border border-border bg-surface shadow-sm",
-            side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
+            "absolute right-0 z-20 w-80 max-h-96 overflow-y-auto rounded-xl border border-border bg-surface shadow-pop p-1.5",
+            side === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5",
           )}
         >
           {loadError && (
-            <div className="px-3 py-2 text-[11px] text-danger">
-              读取历史失败：{loadError}
+            <div className="flex items-start gap-2 rounded-md bg-danger-soft px-3 py-2 text-[11px] text-danger">
+              <Icon name="alert-circle" size={12} className="mt-0.5 shrink-0" />
+              <span className="min-w-0 break-words">读取历史失败：{loadError}</span>
             </div>
           )}
           {!loadError && items === null && (
-            // Inline one-liner instead of <LoadingState /> — the popover
-            // already provides its own border + padding; a second bordered
-            // card inside a 320px shell would look doubly framed.
-            <div className="px-3 py-2 text-[11px] text-text-muted">
+            // Inline one-liner — the popover already provides its own border +
+            // padding; a second bordered card inside a 320px shell would look
+            // doubly framed.
+            <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-text-muted">
+              <Icon name="loader" size={12} className="animate-spin" />
               {LOADING_LABEL}
             </div>
           )}
           {!loadError && items !== null && items.length === 0 && (
-            <div className="px-3 py-2 text-[11px] text-text-muted">
+            <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-text-muted">
+              <Icon name="message-square" size={12} className="text-text-subtle" />
               还没有其他会话
             </div>
           )}
           {!loadError && items !== null && items.length > 0 && (
-            <ul className="flex flex-col">
+            <ul className="flex flex-col gap-0.5">
               {items.map((c) => {
                 const isCurrent = c.id === currentConversationId;
                 const label = c.title ?? `未命名 · ${c.id.slice(0, 8)}`;
@@ -203,14 +216,39 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
                       }}
                       data-testid="chat-history-item"
                       aria-current={isCurrent ? "true" : undefined}
-                      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[12px] transition-colors duration-base hover:bg-surface-2 ${
-                        isCurrent ? "bg-surface-2 text-text" : "text-text-muted hover:text-text"
-                      }`}
+                      className={cn(
+                        "group relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[12px] transition-colors duration-fast",
+                        isCurrent
+                          ? "bg-primary-muted text-primary"
+                          : "text-text-muted hover:bg-surface-2 hover:text-text",
+                      )}
                     >
-                      <span className="truncate">{label}</span>
+                      {isCurrent && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-primary"
+                        />
+                      )}
+                      <Icon
+                        name="message-square"
+                        size={12}
+                        className={
+                          isCurrent
+                            ? "shrink-0 text-primary"
+                            : "shrink-0 text-text-subtle"
+                        }
+                      />
+                      <span className="min-w-0 flex-1 truncate">{label}</span>
                       <span className="shrink-0 font-mono text-[10px] text-text-subtle">
                         {formatRelative(c.created_at)}
                       </span>
+                      {!isCurrent && (
+                        <Icon
+                          name="chevron-right"
+                          size={12}
+                          className="shrink-0 text-text-subtle opacity-0 transition-opacity duration-fast group-hover:opacity-100"
+                        />
+                      )}
                     </button>
                   </li>
                 );

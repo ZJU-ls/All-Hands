@@ -8,11 +8,12 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { ArrowUpIcon } from "@/components/icons";
+import { Icon } from "@/components/ui/icon";
 import { isImeComposing } from "@/lib/ime";
+import { cn } from "@/lib/cn";
 
 /**
- * Composer — unified AI-native chat input (I-0015 spec).
+ * Composer — unified AI-native chat input (I-0015 spec · Brand Blue V2 polish).
  *
  * Layout (matches ChatGPT / Claude.ai / DeepSeek / Kimi convention):
  *
@@ -20,11 +21,11 @@ import { isImeComposing } from "@/lib/ime";
  *   │  textarea ...                         [send]   │  send pinned right;
  *   │                                                │  streaming → same
  *   │  [think] [model] [attach]                      │  button becomes stop
- *   └────────────────────────────────────────────────┘  (via `isStreaming`)
+ *   └────────────────────────────────────────────────┘
  *
  * One button does both "send" and "stop". Click while `isStreaming` calls
- * `onAbort`; click otherwise calls `onSend`. No scale/shadow transitions;
- * we only swap the inner glyph (arrow → filled-square geometric primitive).
+ * `onAbort`; click otherwise calls `onSend`. The send button is the primary
+ * CTA — solid primary fill + focus glow — so users' eyes always find it.
  *
  * Controls (thinking toggle, model picker, attach) are injected via the
  * `controls` slot so each consumer decides what the current surface needs.
@@ -111,9 +112,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     <div
       data-testid={testId ?? "composer"}
       data-streaming={isStreaming ? "true" : undefined}
-      className="rounded-md border border-border bg-bg focus-within:border-primary transition-colors duration-fast"
+      className={cn(
+        "rounded-xl border border-border bg-surface transition-colors duration-base",
+        "focus-within:border-primary focus-within:shadow-glow-sm",
+      )}
     >
-      <div className="flex items-start gap-2 px-3 pt-2">
+      <div className="flex items-start gap-2 px-3 pt-2.5">
         <textarea
           ref={textareaRef}
           value={value}
@@ -129,7 +133,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           placeholder={placeholder}
           disabled={textareaDisabled}
           data-testid="composer-textarea"
-          className="flex-1 resize-none bg-transparent text-base leading-[1.55] text-text placeholder-text-subtle outline-none disabled:opacity-60"
+          className="flex-1 resize-none bg-transparent text-[14px] leading-[1.55] text-text placeholder-text-subtle outline-none disabled:opacity-60"
         />
         <SendOrStopButton
           isStreaming={isStreaming}
@@ -137,10 +141,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           onClick={handleClick}
         />
       </div>
-      <div className="flex items-center gap-2 px-3 pb-2 pt-1">
+      <div className="flex items-center gap-2 px-3 pb-2.5 pt-1.5">
         <div
           data-testid="composer-controls"
-          className="flex min-h-[24px] flex-1 items-center gap-2 text-[11px] text-text-muted"
+          className="flex min-h-[28px] flex-1 items-center gap-2 text-[11px] text-text-muted"
         >
           {controls}
         </div>
@@ -163,7 +167,8 @@ function SendOrStopButton({
   canSend: boolean;
   onClick: () => void;
 }) {
-  // One button, two glyphs. No scale/shadow transitions — only color + inner glyph swap.
+  // One button, two glyphs. Solid primary fill when armed, surface-2 when
+  // idle; stop variant keeps the primary so the user can abort easily.
   const disabled = !isStreaming && !canSend;
   const label = isStreaming ? "停止" : "发送";
 
@@ -175,7 +180,13 @@ function SendOrStopButton({
       aria-label={label}
       data-testid={isStreaming ? "composer-stop" : "composer-send"}
       data-state={isStreaming ? "streaming" : canSend ? "ready" : "idle"}
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center self-end rounded bg-primary text-primary-fg transition-colors duration-fast hover:bg-primary-hover disabled:bg-surface-2 disabled:text-text-subtle"
+      className={cn(
+        "inline-flex h-8 w-8 shrink-0 items-center justify-center self-end rounded-lg",
+        "transition-colors duration-fast",
+        disabled
+          ? "bg-surface-2 text-text-subtle"
+          : "bg-primary text-primary-fg shadow-soft-sm hover:bg-primary-hover",
+      )}
     >
       {isStreaming ? (
         <span
@@ -184,7 +195,7 @@ function SendOrStopButton({
           data-testid="composer-stop-glyph"
         />
       ) : (
-        <ArrowUpIcon size={14} />
+        <Icon name="arrow-up" size={14} strokeWidth={2} />
       )}
     </button>
   );
@@ -214,17 +225,17 @@ export function ThinkingToggle({
       onClick={() => onChange(!enabled)}
       data-testid="composer-thinking-toggle"
       data-state={enabled ? "on" : "off"}
-      className={`inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded border px-2 text-[11px] transition-colors duration-fast disabled:opacity-40 ${
+      className={cn(
+        "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11px] transition-colors duration-fast disabled:opacity-50",
         enabled
-          ? "border-primary/60 bg-primary/10 text-primary"
-          : "border-border bg-transparent text-text-muted hover:text-text hover:border-border-strong"
-      }`}
+          ? "border-primary/40 bg-primary-muted text-primary"
+          : "border-border bg-surface text-text-muted hover:text-text hover:border-border-strong hover:bg-surface-2",
+      )}
     >
-      <span
-        aria-hidden="true"
-        className={`inline-block h-1.5 w-1.5 rounded-full ${
-          enabled ? "bg-primary" : "bg-text-subtle"
-        }`}
+      <Icon
+        name="brain"
+        size={12}
+        className={enabled ? "text-primary" : "text-text-subtle"}
       />
       {label}
     </button>

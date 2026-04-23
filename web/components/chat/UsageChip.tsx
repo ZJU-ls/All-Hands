@@ -11,6 +11,8 @@ import {
 } from "@/lib/api";
 import { useChatStore } from "@/lib/store";
 import type { Message } from "@/lib/protocol";
+import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/cn";
 
 /**
  * UsageChip · context accounting for the chat composer (Track ε).
@@ -141,12 +143,19 @@ export function UsageChip({ conversationId, employeeModelRef, disabled }: Props)
   const tier: "ok" | "warn" | "danger" =
     ratio >= DANGER_THRESHOLD ? "danger" : ratio >= WARN_THRESHOLD ? "warn" : "ok";
 
-  const tierClass =
+  const tierTextClass =
     tier === "danger"
       ? "text-danger"
       : tier === "warn"
         ? "text-warning"
         : "text-text-muted";
+
+  const tierIconBg =
+    tier === "danger"
+      ? "bg-danger-soft text-danger"
+      : tier === "warn"
+        ? "bg-warning-soft text-warning"
+        : "bg-surface-2 text-text-subtle";
 
   const handleCompact = useCallback(async () => {
     if (busy) return;
@@ -166,12 +175,21 @@ export function UsageChip({ conversationId, employeeModelRef, disabled }: Props)
 
   return (
     <div
-      className="flex shrink-0 items-center gap-2 whitespace-nowrap font-mono text-[10px]"
+      className="inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-2 font-mono text-[10px] tabular-nums"
       data-testid="usage-chip"
       data-tier={tier}
       title={err ?? `${usedTokens} / ${window} tokens (估算)`}
     >
-      <span className={tierClass}>
+      <span
+        aria-hidden="true"
+        className={cn(
+          "grid h-4 w-4 shrink-0 place-items-center rounded-sm",
+          tierIconBg,
+        )}
+      >
+        <Icon name="activity" size={10} />
+      </span>
+      <span className={tierTextClass}>
         {formatK(usedTokens)}/{formatK(window)}
       </span>
       {showCompact && (
@@ -180,8 +198,13 @@ export function UsageChip({ conversationId, employeeModelRef, disabled }: Props)
           onClick={handleCompact}
           disabled={busy || disabled}
           data-testid="usage-chip-compact"
-          className="rounded border border-border px-1.5 py-0.5 text-text-muted hover:text-text hover:border-border-strong transition-colors duration-base disabled:opacity-40"
+          className="ml-0.5 inline-flex h-5 items-center gap-1 rounded border border-border bg-surface-2 px-1.5 text-[10px] text-text-muted hover:text-text hover:border-border-strong hover:bg-surface-3 transition-colors duration-fast disabled:opacity-50"
         >
+          {busy ? (
+            <Icon name="loader" size={10} className="animate-spin" />
+          ) : (
+            <Icon name="sparkles" size={10} />
+          )}
           {busy ? "整理中…" : "整理"}
         </button>
       )}

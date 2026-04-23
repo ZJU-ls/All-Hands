@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { PlusIcon, MinusIcon } from "@/components/ui/icons";
+import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/cn";
 
 export type NestedRunStatus = "running" | "done" | "error" | "unknown";
 
@@ -12,6 +13,13 @@ type Props = {
   status: NestedRunStatus;
   children?: React.ReactNode;
   defaultCollapsed?: boolean;
+};
+
+const STATUS_DOT: Record<NestedRunStatus, string> = {
+  running: "bg-primary",
+  done: "bg-success",
+  error: "bg-danger",
+  unknown: "bg-text-subtle",
 };
 
 const STATUS_COLOR: Record<NestedRunStatus, string> = {
@@ -37,26 +45,38 @@ export function NestedRunBlock({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const color = STATUS_COLOR[status];
   const label = STATUS_LABEL[status];
+  const dot = STATUS_DOT[status];
 
   return (
     <div className="ml-6 border-l-2 border-border pl-3">
       <button
         type="button"
-        className="w-full flex items-center gap-2 px-2 py-1 rounded-md hover:bg-surface-2 transition-colors duration-base text-[12px]"
+        className="flex w-full items-center gap-2 rounded-md border border-transparent bg-surface-2/40 px-2.5 py-1.5 text-[12px] transition-colors duration-fast hover:bg-surface-2 hover:border-border"
         onClick={() => setCollapsed((v) => !v)}
         aria-expanded={!collapsed}
       >
-        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle shrink-0">
+        <span
+          aria-hidden="true"
+          className={cn(
+            "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
+            dot,
+            status === "running" && "animate-[ah-pulse_1.6s_ease-in-out_infinite]",
+          )}
+        />
+        <Icon name="users" size={12} className="shrink-0 text-text-subtle" />
+        <span className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
           dispatch
         </span>
-        <span className="font-medium text-text truncate">{employeeName}</span>
-        <span className={`ml-auto font-medium ${color} shrink-0`}>{label}</span>
-        <span className="text-text-muted shrink-0" aria-hidden="true">
-          {collapsed ? <PlusIcon size={12} /> : <MinusIcon size={12} />}
-        </span>
+        <span className="min-w-0 flex-1 truncate font-medium text-text">{employeeName}</span>
+        <span className={cn("shrink-0 text-[11px] font-medium", color)}>{label}</span>
+        <Icon
+          name={collapsed ? "chevron-down" : "chevron-up"}
+          size={12}
+          className="shrink-0 text-text-subtle"
+        />
       </button>
       {!collapsed && children && (
-        <div className="mt-1 pl-1 space-y-2">{children}</div>
+        <div className="mt-1.5 pl-1 space-y-2">{children}</div>
       )}
     </div>
   );

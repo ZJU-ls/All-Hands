@@ -10,11 +10,15 @@
  * tools (`allhands.meta.*` / `allhands.render.*` / etc.) come with
  * well-known shapes we already render well elsewhere — a collapsible card
  * just adds noise to the transcript. This component surfaces them as a
- * compact, non-interactive line:
+ * compact, non-interactive row:
  *
- *   ● list_providers · 1 providers
- *   ○ create_employee · running
+ *   ● list_providers · 1 项
+ *   ○ create_employee · 运行中
  *   ✕ list_skills · fetch failed
+ *
+ * V2 polish: monospace label, status dot (pulsing while running), small
+ * terminal icon tile so the line reads as "system action" even without the
+ * `allhands.` prefix.
  *
  * Non-interactive on purpose: the point is "you saw Lead call it and saw
  * what came back", not "you could drill into the payload". Drilling is a
@@ -24,6 +28,7 @@
 import type { ToolCall } from "@/lib/protocol";
 import { shortToolName } from "@/lib/tool-kind";
 import { cn } from "@/lib/cn";
+import { Icon } from "@/components/ui/icon";
 
 const STATUS_DOT: Record<string, string> = {
   pending: "bg-text-subtle",
@@ -114,9 +119,15 @@ export function SystemToolLine({ toolCall }: { toolCall: ToolCall }) {
       data-testid="system-tool-line"
       data-tool-id={toolCall.tool_id}
       data-status={toolCall.status}
-      className="inline-flex items-center gap-2 font-mono text-[11px] leading-relaxed"
+      className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] leading-relaxed"
       title={toolCall.tool_id}
     >
+      <span
+        aria-hidden="true"
+        className="grid h-5 w-5 shrink-0 place-items-center rounded bg-surface text-text-subtle"
+      >
+        <Icon name="terminal" size={11} />
+      </span>
       <span
         aria-hidden="true"
         className={cn(
@@ -125,14 +136,14 @@ export function SystemToolLine({ toolCall }: { toolCall: ToolCall }) {
           toolCall.status === "running" && "animate-[ah-pulse_1.6s_ease-in-out_infinite]",
         )}
       />
-      <span className="text-text-muted">{name}</span>
+      <span className="text-text">{name}</span>
       {summary && (
         <>
           <span aria-hidden="true" className="text-text-subtle">·</span>
           <span
             data-testid="system-tool-summary"
             className={
-              toolCall.status === "failed" ? "text-danger" : "text-text-subtle"
+              toolCall.status === "failed" ? "text-danger" : "text-text-muted"
             }
           >
             {summary}

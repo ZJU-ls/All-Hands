@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { ToolCall } from "@/lib/protocol";
-import { PlusIcon, MinusIcon } from "@/components/ui/icons";
+import { Icon, type IconName } from "@/components/ui/icon";
+import { cn } from "@/lib/cn";
 
 type Props = { toolCall: ToolCall };
 
@@ -22,6 +23,15 @@ const STATUS_LABEL: Record<string, string> = {
   succeeded: "ok",
   failed: "failed",
   rejected: "rejected",
+};
+
+const STATUS_BG: Record<string, string> = {
+  pending: "bg-surface-2 text-text-muted",
+  awaiting_confirmation: "bg-warning-soft text-warning",
+  running: "bg-primary-muted text-primary",
+  succeeded: "bg-success-soft text-success",
+  failed: "bg-danger-soft text-danger",
+  rejected: "bg-warning-soft text-warning",
 };
 
 const MAX_SUMMARY_LEN = 80;
@@ -69,6 +79,22 @@ function summarizeResult(result: unknown): string {
   return truncate(formatValue(result));
 }
 
+/** Pick a Lucide icon that visually hints at the tool family. Cheap keyword
+ * match on the id — not a registry, so unseen tools just fall back to the
+ * neutral terminal glyph. */
+function iconForToolId(toolId: string): IconName {
+  const id = toolId.toLowerCase();
+  if (id.includes("search") || id.includes("find")) return "search";
+  if (id.includes("fetch") || id.includes("http") || id.includes("url")) return "external-link";
+  if (id.includes("file") || id.includes("read") || id.includes("write")) return "file-code-2";
+  if (id.includes("db") || id.includes("sql") || id.includes("query")) return "database";
+  if (id.includes("spawn") || id.includes("dispatch") || id.includes("agent")) return "users";
+  if (id.includes("create") || id.includes("add") || id.includes("new")) return "plus";
+  if (id.includes("delete") || id.includes("remove") || id.includes("drop")) return "trash-2";
+  if (id.includes("list") || id.includes("index")) return "layout-grid";
+  return "terminal";
+}
+
 /**
  * Inline, generic tool-call display for the chat stream.
  *
@@ -81,49 +107,81 @@ function summarizeResult(result: unknown): string {
  * Click to expand for the pretty-printed JSON of args / result / error.
  * The rule: the default view tells you *what* the Lead is doing; expand
  * tells you *exactly what* it passed and got back.
+ *
+ * V2 polish: tool-specific icon tile, soft status pill (green/red/blue),
+ * running state gets a spinner that replaces the pill.
  */
 export function ToolCallCard({ toolCall }: Props) {
   const [expanded, setExpanded] = useState(false);
   const color = STATUS_COLOR[toolCall.status] ?? "text-text-muted";
   const statusLabel = STATUS_LABEL[toolCall.status] ?? toolCall.status;
+  const statusBg = STATUS_BG[toolCall.status] ?? "bg-surface-2 text-text-muted";
   const argsSummary = summarizeArgs(toolCall.args);
   const resultSummary =
     toolCall.status === "succeeded" ? summarizeResult(toolCall.result) : "";
+  const iconName = iconForToolId(toolCall.tool_id);
 
   return (
     <div
-      className="rounded-lg border border-border bg-bg text-xs overflow-hidden"
+      className="overflow-hidden rounded-lg border border-border bg-surface-2 text-[12px] transition-colors duration-fast hover:border-border-strong"
       data-testid="tool-call-card"
       data-status={toolCall.status}
     >
       <button
         type="button"
-        className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-surface-2 transition-colors duration-base"
+        className="flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors duration-fast hover:bg-surface-3"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
       >
-        <span className="font-mono text-[10px] text-text-subtle shrink-0 mt-0.5">fn</span>
-        <div className="flex flex-col min-w-0 flex-1">
+        <span
+          aria-hidden="true"
+          className={cn(
+            "grid h-6 w-6 shrink-0 place-items-center rounded-md",
+            toolCall.status === "running"
+              ? "bg-primary-muted text-primary"
+              : "bg-surface text-text-subtle",
+          )}
+        >
+          <Icon name={iconName} size={12} />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <span
-              className="font-mono text-text truncate"
+              className="min-w-0 truncate font-mono text-[12px] text-text"
               data-testid="tool-call-name"
               title={toolCall.tool_id}
             >
               {toolCall.tool_id}
             </span>
             <span
-              className={`ml-auto font-mono text-[10px] shrink-0 ${color}`}
+              className={cn(
+                "ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm px-1.5 font-mono text-[10px] font-medium",
+                statusBg,
+              )}
               data-testid="tool-call-status"
             >
+              {toolCall.status === "running" ? (
+                <Icon name="loader" size={10} className="animate-spin" />
+              ) : toolCall.status === "succeeded" ? (
+                <Icon name="check" size={10} strokeWidth={2.5} />
+              ) : toolCall.status === "failed" ? (
+                <Icon name="alert-circle" size={10} />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className={cn("inline-block h-1.5 w-1.5 rounded-full bg-current", color)}
+                />
+              )}
               {statusLabel}
             </span>
-            <span className="text-text-muted shrink-0" aria-hidden="true">
-              {expanded ? <MinusIcon size={12} /> : <PlusIcon size={12} />}
-            </span>
+            <Icon
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={12}
+              className="shrink-0 text-text-subtle"
+            />
           </div>
           {(argsSummary || resultSummary) && (
-            <div className="mt-0.5 font-mono text-[10px] text-text-muted truncate">
+            <div className="truncate font-mono text-[11px] text-text-muted">
               {argsSummary && <span data-testid="tool-call-args-summary">{argsSummary}</span>}
               {argsSummary && resultSummary && (
                 <span aria-hidden="true" className="mx-1.5 text-text-subtle">→</span>
@@ -138,25 +196,33 @@ export function ToolCallCard({ toolCall }: Props) {
         </div>
       </button>
       {expanded && (
-        <div className="border-t border-border px-3 py-2 space-y-2">
+        <div className="space-y-2.5 border-t border-border bg-surface px-3 py-2.5">
           <div>
-            <p className="text-text-muted mb-0.5">args</p>
-            <pre className="text-text whitespace-pre-wrap break-all">
+            <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-text-subtle">
+              args
+            </p>
+            <pre className="whitespace-pre-wrap break-all rounded-md bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-text">
               {JSON.stringify(toolCall.args, null, 2)}
             </pre>
           </div>
           {toolCall.result !== undefined && (
             <div>
-              <p className="text-text-muted mb-0.5">result</p>
-              <pre className="text-text whitespace-pre-wrap break-all">
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-text-subtle">
+                result
+              </p>
+              <pre className="whitespace-pre-wrap break-all rounded-md bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-text">
                 {JSON.stringify(toolCall.result, null, 2)}
               </pre>
             </div>
           )}
           {toolCall.error && (
             <div>
-              <p className="text-danger mb-0.5">error</p>
-              <pre className="text-danger whitespace-pre-wrap">{toolCall.error}</pre>
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-danger">
+                error
+              </p>
+              <pre className="whitespace-pre-wrap break-all rounded-md border border-danger/30 bg-danger-soft p-2 font-mono text-[11px] leading-relaxed text-danger">
+                {toolCall.error}
+              </pre>
             </div>
           )}
         </div>

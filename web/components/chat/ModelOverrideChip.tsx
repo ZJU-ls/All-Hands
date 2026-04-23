@@ -8,6 +8,7 @@ import {
   type EmployeeDto,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * Per-conversation model override — L11 redesign.
@@ -85,12 +86,12 @@ export function ModelOverrideChip({
   // prior look. `border-primary` when overridden keeps the original signal;
   // `border-danger` if the last PATCH blew up.
   const chipClass = cn(
-    "inline-flex h-6 items-center gap-1 whitespace-nowrap rounded border px-1.5 font-mono text-[11px] transition-colors duration-base",
+    "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 font-mono text-[11px] transition-colors duration-fast",
     error
-      ? "border-danger/60 text-danger"
+      ? "border-danger/50 bg-danger-soft text-danger"
       : isOverridden
-        ? "border-primary text-text hover:border-border-strong"
-        : "border-border text-text-muted hover:text-text hover:border-border-strong",
+        ? "border-primary/40 bg-primary-muted text-primary hover:bg-primary-muted"
+        : "border-border bg-surface text-text-muted hover:text-text hover:border-border-strong hover:bg-surface-2",
   );
 
   return (
@@ -112,18 +113,25 @@ export function ModelOverrideChip({
       className="shrink-0"
       renderTrigger={() => (
         <span
-          className="inline-flex items-center gap-1"
+          className="inline-flex items-center gap-1.5"
           title={title}
           data-overridden={isOverridden ? "true" : "false"}
         >
-          {isOverridden && (
+          {isOverridden ? (
             <span
               aria-hidden="true"
-              className="inline-block h-1 w-1 rounded-full bg-primary shrink-0"
+              className="inline-block h-1.5 w-1.5 rounded-full bg-primary shrink-0"
               data-testid="model-override-dot"
             />
+          ) : (
+            <Icon
+              name="zap"
+              size={11}
+              className="shrink-0 text-text-subtle"
+            />
           )}
-          <span className="truncate max-w-[110px]">{effModel}</span>
+          <span className="truncate max-w-[120px]">{effModel}</span>
+          <Icon name="chevron-down" size={10} className="shrink-0 opacity-60" />
         </span>
       )}
     />

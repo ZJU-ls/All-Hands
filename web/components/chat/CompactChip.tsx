@@ -4,6 +4,8 @@ import { useCallback, useState } from "react";
 import { ApiError, compactConversation } from "@/lib/api";
 import { useChatStore } from "@/lib/store";
 import type { Message } from "@/lib/protocol";
+import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/cn";
 
 type Props = {
   conversationId: string;
@@ -21,10 +23,15 @@ type Props = {
  * window. After the server responds we swap the in-store message list so the
  * UI reflects the new truncated history immediately.
  *
- * The button doubles as a three-state affordance: idle ("压缩上下文"), in
- * flight ("压缩中…"), and a transient "已压缩 · N 条" after success so the
- * user sees the action landed. Errors surface inline as a tooltip + danger
- * border; they don't block retry.
+ * The chip cycles through three states: idle ("压缩上下文"), in-flight
+ * ("压缩中…"), and a transient "已压缩 · N 条" success state so the user
+ * sees the action landed. Errors light the chip danger + surface inline via
+ * the title attribute; the chip stays retryable.
+ *
+ * Visual follows the Brand Blue token chip language (ADR 0016):
+ *   · resting = border + muted text, mono label
+ *   · success = primary-muted fill + primary text
+ *   · error   = danger-soft fill + danger text
  */
 export function CompactChip({
   conversationId,
@@ -83,12 +90,14 @@ export function CompactChip({
       ? `压缩失败 · ${state.message}`
       : "将较早的消息折叠成单条摘要,为后续对话腾出上下文窗口";
 
-  const borderClass =
+  const tone =
     state.kind === "error"
-      ? "border-danger text-danger"
+      ? "border-danger/40 bg-danger-soft text-danger"
       : state.kind === "done"
-        ? "border-primary text-primary"
-        : "border-border text-text-muted hover:text-text hover:border-border-strong";
+        ? "border-primary/40 bg-primary-muted text-primary"
+        : state.kind === "running"
+          ? "border-border bg-surface-2 text-text-muted"
+          : "border-border bg-surface text-text-muted hover:text-text hover:border-border-strong hover:bg-surface-2";
 
   return (
     <button
@@ -99,9 +108,20 @@ export function CompactChip({
       data-testid="compact-chip"
       data-state={state.kind}
       title={title}
-      className={`inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded border px-1.5 font-mono text-[11px] transition-colors duration-base disabled:opacity-40 ${borderClass}`}
+      className={cn(
+        "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 font-mono text-[11px] transition-colors duration-base disabled:opacity-50",
+        tone,
+      )}
     >
-      <span aria-hidden className="font-mono">⌘</span>
+      {state.kind === "running" ? (
+        <Icon name="loader" size={12} className="animate-spin" />
+      ) : state.kind === "done" ? (
+        <Icon name="check" size={12} />
+      ) : state.kind === "error" ? (
+        <Icon name="alert-circle" size={12} />
+      ) : (
+        <Icon name="sparkles" size={12} className="text-text-subtle" />
+      )}
       <span>{label}</span>
     </button>
   );

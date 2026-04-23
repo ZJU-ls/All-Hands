@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useChatStore } from "@/lib/store";
 import { MessageBubble } from "./MessageBubble";
-import { ArrowDownIcon } from "@/components/icons";
+import { Icon } from "@/components/ui/icon";
 import type { Message } from "@/lib/protocol";
 
 type Props = { conversationId: string };
@@ -81,11 +81,9 @@ export function MessageList({ conversationId }: Props) {
         className="h-full overflow-y-auto"
       >
         {!hasAnything ? (
-          <div className="flex h-full items-center justify-center text-text-muted text-sm">
-            Send a message to get started.
-          </div>
+          <EmptyState />
         ) : (
-          <div className="flex flex-col gap-4 p-4">
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-5">
             {renderRows.map(({ msg, streaming }) => (
               <MessageBubble key={msg.id} message={msg} isStreaming={streaming} />
             ))}
@@ -109,9 +107,9 @@ export function MessageList({ conversationId }: Props) {
           }}
           data-testid="jump-to-bottom"
           aria-label="回到最新消息"
-          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 py-1 text-[11px] text-text-muted transition-colors duration-fast hover:text-text hover:border-border-strong"
+          className="absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[11px] font-medium text-text-muted shadow-soft-sm transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2"
         >
-          <ArrowDownIcon size={12} />
+          <Icon name="arrow-down" size={12} />
           回到最新
         </button>
       )}
@@ -119,21 +117,45 @@ export function MessageList({ conversationId }: Props) {
   );
 }
 
+function EmptyState() {
+  return (
+    <div className="flex h-full items-center justify-center px-6">
+      <div className="text-center">
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-primary-muted text-primary">
+          <Icon name="sparkles" size={22} />
+        </div>
+        <p className="text-[14px] font-medium text-text">准备就绪</p>
+        <p className="mt-1 text-[12px] text-text-muted">发一条消息,开始这次对话。</p>
+      </div>
+    </div>
+  );
+}
+
 /** Pre-first-frame placeholder. Shown the moment the user hits send, kept
  * on screen until TEXT_MESSAGE_START / REASONING_MESSAGE_START arrives. The
- * three dots cycle opacity via the shared `ah-dot` keyframe (see
- * `globals.css` · same pattern LoadingState uses) — no translate / scale /
- * box-shadow, honouring the §3.5 motion contract. */
+ * three dots cycle opacity via the shared `ah-dot` keyframe; avatar tile
+ * matches the live agent bubble so the transition into real tokens doesn't
+ * reflow. */
 function PendingAssistantBubble() {
   return (
     <div
       data-testid="pending-assistant-bubble"
       role="status"
       aria-label="模型正在处理"
-      className="flex justify-start"
+      className="flex justify-start gap-3"
     >
-      <div className="max-w-[80%] rounded-xl bg-surface px-4 py-2.5 text-sm text-text-muted">
-        <span className="inline-flex items-center gap-1 align-middle">
+      <span
+        aria-hidden="true"
+        className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-primary-fg shadow-soft-sm"
+        style={{
+          backgroundImage:
+            "linear-gradient(135deg, var(--color-primary), var(--color-accent))",
+        }}
+      >
+        <Icon name="sparkles" size={14} strokeWidth={2.25} />
+      </span>
+      <div className="rounded-2xl rounded-tl-md border border-border bg-surface px-4 py-3 shadow-soft-sm">
+        <span className="inline-flex items-center gap-1.5 align-middle">
           <PendingDot delay={0} />
           <PendingDot delay={160} />
           <PendingDot delay={320} />
@@ -147,7 +169,7 @@ function PendingDot({ delay }: { delay: number }) {
   return (
     <span
       aria-hidden
-      className="inline-block h-1.5 w-1.5 rounded-full bg-text-muted"
+      className="inline-block h-1.5 w-1.5 rounded-full bg-primary"
       style={{ animation: `ah-dot 1.2s ease-in-out ${delay}ms infinite` }}
     />
   );
@@ -157,12 +179,9 @@ function PendingDot({ delay }: { delay: number }) {
  *
  * Most "chat 没有任何反应" reports trace back to provider auth — a seed
  * provider without an API key, a typoed base_url, or a model the
- * upstream rejects. The previous failure mode was a silent `console.error`
- * inside `openStream`'s `onRunError` handler, which meant the user saw
- * their own message echoed and then nothing. Rendering this banner inline,
- * right where the assistant reply would have appeared, makes the failure
- * visible without pushing the user off to a toast or a console they never
- * open.
+ * upstream rejects. Rendering this banner inline, right where the
+ * assistant reply would have appeared, makes the failure visible without
+ * pushing the user off to a toast or a console they never open.
  */
 function StreamErrorBanner({
   message,
@@ -179,16 +198,19 @@ function StreamErrorBanner({
     <div
       data-testid="message-list-stream-error"
       role="alert"
-      className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-[12px] text-danger"
+      className="flex items-start gap-3 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3"
     >
-      <div className="font-medium">助手没能完成这次回复。</div>
-      <div className="mt-1 font-mono text-[11px] text-danger/80 break-all">
-        {message}
-        {code ? (
-          <span className="ml-2 text-danger/60">[{code}]</span>
-        ) : null}
+      <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-danger/15 text-danger">
+        <Icon name="alert-triangle" size={14} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-semibold text-danger">助手没能完成这次回复。</div>
+        <div className="mt-1 break-all font-mono text-[11px] text-danger/80">
+          {message}
+          {code ? <span className="ml-2 text-danger/60">[{code}]</span> : null}
+        </div>
+        {hint && <div className="mt-1.5 text-[11px] text-text-muted">{hint}</div>}
       </div>
-      {hint && <div className="mt-1 text-[11px] text-text-muted">{hint}</div>}
     </div>
   );
 }

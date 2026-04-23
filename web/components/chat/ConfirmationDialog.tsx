@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useChatStore } from "@/lib/store";
 import { resolveConfirmation } from "@/lib/api";
+import { Icon } from "@/components/ui/icon";
 
 export function ConfirmationDialog() {
   const { pendingConfirmations, removeConfirmation, requestResume } = useChatStore();
@@ -37,35 +38,50 @@ export function ConfirmationDialog() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-md rounded-xl bg-surface border border-border p-6 shadow-2xl">
-        <h2 className="text-base font-semibold text-text mb-1">
-          Confirmation Required
-        </h2>
-        {current.rationale && (
-          <p className="text-sm text-text-muted mb-3">{current.rationale}</p>
-        )}
-        <div className="rounded-lg bg-surface-2 px-4 py-3 text-sm text-text mb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-xl bg-surface border border-border shadow-soft-lg p-6">
+        <div className="mb-3 flex items-start gap-3">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-warning-soft text-warning">
+            <Icon name="shield-check" size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[15px] font-semibold text-text">
+              Confirmation Required
+            </h2>
+            {current.rationale && (
+              <p className="mt-0.5 text-[12px] text-text-muted">{current.rationale}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-[13px] leading-relaxed text-text mb-4">
           {current.summary || "An action requires your approval."}
         </div>
+
         {current.diff && (
-          <pre className="text-xs text-text-muted bg-bg rounded p-3 mb-4 overflow-auto max-h-40">
+          <pre className="mb-4 max-h-40 overflow-auto rounded-md border border-border bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-text-muted">
             {JSON.stringify(current.diff, null, 2)}
           </pre>
         )}
-        <div className="flex gap-3 justify-end">
+
+        <div className="flex justify-end gap-2">
           <button
             onClick={() => void handle("reject")}
             disabled={loading}
-            className="rounded-lg border border-border px-4 py-2 text-sm text-text hover:bg-surface-2 disabled:opacity-40 transition-colors"
+            className="h-9 rounded-md border border-border bg-surface px-4 text-[13px] text-text hover:bg-surface-2 hover:border-border-strong disabled:opacity-50 transition-colors duration-fast"
           >
             Reject
           </button>
           <button
             onClick={() => void handle("approve")}
             disabled={loading}
-            className="rounded-lg bg-primary hover:opacity-90 disabled:opacity-40 px-4 py-2 text-sm font-medium text-primary-fg transition-colors"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-[13px] font-medium text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-50 transition-colors duration-fast"
           >
+            {loading ? (
+              <Icon name="loader" size={14} className="animate-spin" />
+            ) : (
+              <Icon name="check" size={14} strokeWidth={2.25} />
+            )}
             Approve
           </button>
         </div>
