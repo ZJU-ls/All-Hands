@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         Confirmation,
         ConfirmationStatus,
         Conversation,
+        ConversationEvent,
         Employee,
         EventEnvelope,
         LLMModel,
@@ -192,3 +193,35 @@ class SkillRuntimeRepo(Protocol):
     async def load(self, conversation_id: str) -> SkillRuntime | None: ...
     async def save(self, conversation_id: str, runtime: SkillRuntime) -> None: ...
     async def delete(self, conversation_id: str) -> None: ...
+
+
+class ConversationEventRepo(Protocol):
+    """ADR 0017 · append-only event log for conversation history.
+
+    This is the *authoritative* source of truth for what happened in a
+    conversation. ``Message`` rows are a projection cache derived from these
+    events so the existing ``/api/conversations/{id}/messages`` endpoint
+    stays unchanged for the frontend.
+    """
+
+    async def append(self, event: ConversationEvent) -> ConversationEvent: ...
+
+    async def list_by_conversation(
+        self,
+        conversation_id: str,
+        *,
+        include_compacted: bool = True,
+        subagent_id: str | None = None,
+    ) -> list[ConversationEvent]: ...
+
+    async def get(self, event_id: str) -> ConversationEvent | None: ...
+
+    async def get_by_idempotency_key(
+        self, conversation_id: str, idempotency_key: str
+    ) -> ConversationEvent | None: ...
+
+    async def find_orphan_turns(self, conversation_id: str) -> list[str]: ...
+
+    async def next_sequence(self, conversation_id: str) -> int: ...
+
+    async def mark_compacted(self, event_ids: list[str]) -> None: ...
