@@ -1,10 +1,28 @@
 "use client";
 
+/**
+ * Triggers · Brand Blue Dual Theme V2 (ADR 0016)
+ *
+ * Layout:
+ *   · eyebrow + h1 hero + primary "new trigger" CTA
+ *   · 4-card summary strip (total · active · fired today · next fire)
+ *     with the first card gradient-primary to anchor the row
+ *   · filter chips (All / Timer / Event / Disabled) — pill style
+ *   · 2-col (xl) trigger cards with icon tile, inline toggle switch,
+ *     mono schedule/event line, action chip, metadata row, footer actions
+ *   · sectioned create modal with type-radio cards
+ *   · dotgrid empty state with preset CTAs
+ *   · bg-danger-soft error banner with retry
+ *
+ * Preserved behavior: list / toggle / delete / fire-now / create mutations,
+ * ConfirmDialog wiring, testids, and AppShell + PageHeader composition.
+ */
+
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
-import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 
@@ -71,14 +89,32 @@ const EMPTY_DRAFT: CreateDraft = {
   min_interval_seconds: 300,
 };
 
+type FilterKey = "all" | "timer" | "event" | "disabled";
+
+const ACTION_META: Record<ActionType, { label: string; icon: IconName }> = {
+  notify_user: { label: "通知用户", icon: "bell" },
+  invoke_tool: { label: "调用 Tool", icon: "zap" },
+  dispatch_employee: { label: "派发员工", icon: "users" },
+  continue_conversation: { label: "续会话", icon: "send" },
+};
+
+const CRON_PRESETS: { cron: string; label: string; hint: string }[] = [
+  { cron: "0 8 * * *", label: "每天 08:00", hint: "daily" },
+  { cron: "0 9 * * 1", label: "每周一 09:00", hint: "weekly" },
+  { cron: "*/15 * * * *", label: "每 15 分钟", hint: "frequent" },
+];
+
 export default function TriggersPage() {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [initialDraft, setInitialDraft] = useState<CreateDraft>(EMPTY_DRAFT);
   const [deleteTarget, setDeleteTarget] = useState<Trigger | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [busyId, setBusyId] = useState<string>("");
+  const [firingId, setFiringId] = useState<string>("");
+  const [filter, setFilter] = useState<FilterKey>("all");
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -97,8 +133,54 @@ export default function TriggersPage() {
     void load();
   }, [load]);
 
+  const stats = useMemo(() => {
+    const active = triggers.filter((t) => t.enabled && !t.auto_disabled_reason).length;
+    const today = new Date();
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    ).getTime();
+    const firedToday = triggers.filter((t) => {
+      if (!t.last_fired_at) return false;
+      const when = new Date(t.last_fired_at).getTime();
+      return Number.isFinite(when) && when >= startOfDay;
+    }).length;
+    const timers = triggers.filter(
+      (t) => t.kind === "timer" && t.enabled && !t.auto_disabled_reason,
+    ).length;
+    return {
+      total: triggers.length,
+      active,
+      firedToday,
+      timers,
+    };
+  }, [triggers]);
+
+  const filtered = useMemo(() => {
+    return triggers.filter((t) => {
+      if (filter === "all") return true;
+      if (filter === "disabled") return !t.enabled || !!t.auto_disabled_reason;
+      return t.kind === filter;
+    });
+  }, [triggers, filter]);
+
+  const filterCounts = useMemo(() => {
+    return {
+      all: triggers.length,
+      timer: triggers.filter((t) => t.kind === "timer").length,
+      event: triggers.filter((t) => t.kind === "event").length,
+      disabled: triggers.filter((t) => !t.enabled || !!t.auto_disabled_reason).length,
+    } satisfies Record<FilterKey, number>;
+  }, [triggers]);
+
   async function handleToggle(t: Trigger) {
     setBusyId(t.id);
+    // Optimistic flip — we'll reload on success; on failure we surface the
+    // error and the next load() reconciles whatever the server says.
+    setTriggers((prev) =>
+      prev.map((x) => (x.id === t.id ? { ...x, enabled: !x.enabled } : x)),
+    );
     try {
       const res = await fetch(`/api/triggers/${t.id}/toggle`, {
         method: "POST",
@@ -109,8 +191,29 @@ export default function TriggersPage() {
       await load();
     } catch (err) {
       setError(String(err));
+      await load();
     } finally {
       setBusyId("");
+    }
+  }
+
+  async function handleFire(t: Trigger) {
+    setFiringId(t.id);
+    try {
+      const res = await fetch(`/api/triggers/${t.id}/fire`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(detail.detail || `HTTP ${res.status}`);
+      }
+      await load();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setFiringId("");
     }
   }
 
@@ -126,78 +229,127 @@ export default function TriggersPage() {
     }
   }
 
+  function openCreate(preset?: Partial<CreateDraft>) {
+    setInitialDraft({ ...EMPTY_DRAFT, ...(preset ?? {}) });
+    setDrawerOpen(true);
+  }
+
   return (
     <AppShell
       title="触发器"
       actions={
         <button
-          onClick={() => setDrawerOpen(true)}
+          onClick={() => openCreate()}
           data-testid="new-trigger"
-          className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-fg hover:bg-primary-hover transition-colors duration-base"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3.5 text-[13px] font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:bg-primary-hover"
         >
-          + 新触发器
+          <Icon name="plus" size={14} />
+          新触发器
         </button>
       }
     >
       <div className="h-full overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-8 space-y-5">
+        <div className="mx-auto max-w-5xl space-y-6 px-8 py-8">
           <PageHeader
             title="触发器"
             count={triggers.length || undefined}
-            subtitle="按时间表(cron)或事件匹配自动执行动作。创建 / 启停 / 手动触发 / 删除都可以让 Lead Agent 在对话里代办。"
+            subtitle={
+              <span className="inline-flex items-center gap-1.5">
+                <Icon name="sparkles" size={13} className="text-accent" />
+                定时或事件驱动自动执行 · 创建 / 启停 / 手动触发都可让 Lead Agent 代办
+              </span>
+            }
           />
 
-          {status === "loading" && (
-            <div data-testid="triggers-loading">
-              <LoadingState title="加载触发器" />
-            </div>
-          )}
+          <SummaryStrip
+            total={stats.total}
+            active={stats.active}
+            firedToday={stats.firedToday}
+            timers={stats.timers}
+          />
 
           {status === "error" && (
             <div
               data-testid="triggers-error"
-              className="rounded-xl border border-danger/30 bg-danger/5 p-6"
+              role="alert"
+              className="flex items-start gap-3 rounded-lg border border-danger/20 bg-danger-soft px-4 py-3"
             >
-              <p className="text-sm text-danger mb-2">加载触发器失败</p>
-              <p className="text-xs text-text-muted mb-3 font-mono">{error}</p>
+              <Icon name="alert-circle" size={16} className="mt-0.5 shrink-0 text-danger" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-danger">加载触发器失败</p>
+                <p className="mt-0.5 truncate font-mono text-[11px] text-text-muted">
+                  {error}
+                </p>
+              </div>
               <button
                 onClick={() => void load()}
-                className="text-xs rounded-md border border-border px-3 py-1.5 hover:bg-surface-2 text-text transition-colors duration-base"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[12px] text-text transition-colors duration-fast hover:bg-surface-2"
               >
+                <Icon name="refresh" size={13} />
                 重试
               </button>
             </div>
           )}
 
-          {status === "ready" && triggers.length === 0 && (
-            <div data-testid="triggers-empty">
-              <EmptyState
-                title="还没有触发器"
-                description={
-                  "用右上“+ 新触发器”开始,或直接对 Lead Agent 说“帮我每天早上 8 点通知今日日程”。"
-                }
-              />
+          {status === "loading" && (
+            <div
+              data-testid="triggers-loading"
+              className="grid grid-cols-1 gap-3 xl:grid-cols-2"
+            >
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-[148px] animate-pulse rounded-lg border border-border bg-surface"
+                />
+              ))}
             </div>
           )}
 
           {status === "ready" && triggers.length > 0 && (
-            <div data-testid="triggers-list" className="flex flex-col gap-2">
-              {triggers.map((t) => (
-                <TriggerRow
-                  key={t.id}
-                  t={t}
-                  busy={busyId === t.id}
-                  onToggle={() => void handleToggle(t)}
-                  onDelete={() => setDeleteTarget(t)}
-                />
-              ))}
-            </div>
+            <>
+              <FilterChips
+                value={filter}
+                counts={filterCounts}
+                onChange={setFilter}
+              />
+
+              {filtered.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center">
+                  <p className="text-[13px] text-text-muted">
+                    当前筛选下没有触发器
+                  </p>
+                </div>
+              ) : (
+                <div
+                  data-testid="triggers-list"
+                  className="grid grid-cols-1 gap-3 xl:grid-cols-2"
+                >
+                  {filtered.map((t) => (
+                    <TriggerCard
+                      key={t.id}
+                      t={t}
+                      busy={busyId === t.id}
+                      firing={firingId === t.id}
+                      onToggle={() => void handleToggle(t)}
+                      onFire={() => void handleFire(t)}
+                      onDelete={() => setDeleteTarget(t)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {status === "ready" && triggers.length === 0 && (
+            <EmptyTriggers onCreate={openCreate} />
           )}
         </div>
       </div>
 
       <CreateDrawer
+        key={drawerOpen ? "open" : "closed"}
         open={drawerOpen}
+        initial={initialDraft}
         onClose={() => setDrawerOpen(false)}
         onCreated={async () => {
           setDrawerOpen(false);
@@ -219,111 +371,479 @@ export default function TriggersPage() {
   );
 }
 
-function StatusDot({ t }: { t: Trigger }) {
-  if (t.auto_disabled_reason) {
-    return (
-      <span
-        title={`auto-disabled: ${t.auto_disabled_reason}`}
-        className="inline-block h-2 w-2 rounded-full bg-warning"
-        aria-label="auto-disabled"
-      />
-    );
-  }
+/* -------------------------------------------------------------------------- */
+/* Summary strip                                                              */
+/* -------------------------------------------------------------------------- */
+
+function SummaryStrip({
+  total,
+  active,
+  firedToday,
+  timers,
+}: {
+  total: number;
+  active: number;
+  firedToday: number;
+  timers: number;
+}) {
   return (
-    <span
-      className={`inline-block h-2 w-2 rounded-full ${t.enabled ? "bg-success" : "bg-border-strong"}`}
-      aria-label={t.enabled ? "enabled" : "disabled"}
-    />
+    <section
+      data-testid="trigger-summary"
+      className="grid grid-cols-2 gap-3 md:grid-cols-4"
+    >
+      <HeroStat
+        icon="zap"
+        label="触发器总数"
+        value={total}
+        hint={total === 0 ? "尚未创建" : `${active} 活跃`}
+      />
+      <Stat
+        icon="activity"
+        label="活跃"
+        value={active}
+        hint={total > 0 ? `${Math.round((active / Math.max(total, 1)) * 100)}% 启用` : undefined}
+      />
+      <Stat
+        icon="check-circle-2"
+        label="今日触发"
+        value={firedToday}
+        tone="success"
+      />
+      <Stat icon="clock" label="定时任务" value={timers} hint="timer 类型" />
+    </section>
   );
 }
 
-function TriggerRow({
-  t,
-  busy,
-  onToggle,
-  onDelete,
+function HeroStat({
+  icon,
+  label,
+  value,
+  hint,
 }: {
-  t: Trigger;
-  busy: boolean;
-  onToggle: () => void;
-  onDelete: () => void;
+  icon: IconName;
+  label: string;
+  value: number;
+  hint?: string;
 }) {
-  const subtitle =
-    t.kind === "timer"
-      ? `cron ${t.timer?.cron ?? ""} · ${t.timer?.timezone ?? "UTC"}`
-      : `event ${t.event?.type ?? ""}`;
-
   return (
-    <div
-      data-testid={`trigger-${t.id}`}
-      className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors duration-base"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <Link href={`/triggers/${t.id}`} className="flex-1 min-w-0 group">
-          <div className="flex items-center gap-2 mb-1">
-            <StatusDot t={t} />
-            <span className="text-sm font-medium text-text group-hover:text-primary transition-colors duration-base">
-              {t.name}
-            </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">
-              {t.kind}
-            </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">
-              {t.action.type}
-            </span>
-          </div>
-          <p className="text-xs font-mono text-text-subtle truncate">{subtitle}</p>
-          <p className="text-[11px] text-text-muted mt-1">
-            今日触发 {t.fires_total} 次
-            {t.last_fired_at ? ` · 最近 ${formatTime(t.last_fired_at)}` : " · 尚未触发"}
-            {t.fires_failed_streak > 0 ? ` · 连续失败 ${t.fires_failed_streak}` : ""}
-          </p>
-        </Link>
-        <div className="flex flex-col gap-1.5 shrink-0">
-          <button
-            onClick={onToggle}
-            disabled={busy}
-            data-testid={`toggle-${t.id}`}
-            className="text-xs px-3 py-1.5 rounded-md border border-border text-text hover:bg-surface-2 disabled:opacity-40 transition-colors duration-base"
-          >
-            {busy ? "…" : t.enabled ? "停用" : "启用"}
-          </button>
-          <button
-            onClick={onDelete}
-            data-testid={`delete-${t.id}`}
-            className="text-xs px-3 py-1.5 rounded-md border border-border text-danger hover:bg-danger/10 transition-colors duration-base"
-          >
-            删除
-          </button>
-        </div>
+    <div className="relative overflow-hidden rounded-lg border border-primary/30 bg-gradient-to-br from-primary to-primary-hover p-4 text-primary-fg shadow-soft">
+      <div
+        aria-hidden
+        className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10 blur-2xl"
+      />
+      <div className="relative flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 backdrop-blur-sm">
+          <Icon name={icon} size={15} />
+        </span>
+        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-primary-fg/80">
+          {label}
+        </span>
+      </div>
+      <div className="relative mt-3 flex items-baseline gap-2">
+        <span className="font-mono text-[28px] font-semibold tabular-nums leading-none">
+          {value}
+        </span>
+        {hint && (
+          <span className="text-[11px] text-primary-fg/75">{hint}</span>
+        )}
       </div>
     </div>
   );
 }
 
+function Stat({
+  icon,
+  label,
+  value,
+  hint,
+  tone = "default",
+}: {
+  icon: IconName;
+  label: string;
+  value: number;
+  hint?: string;
+  tone?: "default" | "success";
+}) {
+  const toneCls =
+    tone === "success"
+      ? "text-success bg-success-soft"
+      : "text-primary bg-primary/10";
+  return (
+    <div className="rounded-lg border border-border bg-surface p-4 transition duration-base hover:-translate-y-px hover:shadow-soft-sm">
+      <div className="flex items-center gap-2">
+        <span className={`flex h-7 w-7 items-center justify-center rounded-md ${toneCls}`}>
+          <Icon name={icon} size={14} />
+        </span>
+        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-subtle">
+          {label}
+        </span>
+      </div>
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="font-mono text-[24px] font-semibold tabular-nums leading-none text-text">
+          {value}
+        </span>
+        {hint && <span className="text-[11px] text-text-muted">{hint}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Filter chips                                                               */
+/* -------------------------------------------------------------------------- */
+
+function FilterChips({
+  value,
+  counts,
+  onChange,
+}: {
+  value: FilterKey;
+  counts: Record<FilterKey, number>;
+  onChange: (v: FilterKey) => void;
+}) {
+  const items: { key: FilterKey; label: string; icon: IconName }[] = [
+    { key: "all", label: "全部", icon: "layout-grid" },
+    { key: "timer", label: "Timer", icon: "clock" },
+    { key: "event", label: "Event", icon: "zap" },
+    { key: "disabled", label: "停用", icon: "pause" },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="触发器筛选"
+      className="flex flex-wrap items-center gap-1.5"
+    >
+      {items.map((it) => {
+        const active = value === it.key;
+        return (
+          <button
+            key={it.key}
+            role="tab"
+            aria-selected={active}
+            data-testid={`filter-${it.key}`}
+            onClick={() => onChange(it.key)}
+            className={
+              active
+                ? "inline-flex h-8 items-center gap-1.5 rounded-full bg-surface px-3 text-[12px] font-medium text-primary shadow-soft-sm"
+                : "inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-[12px] text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text"
+            }
+          >
+            <Icon name={it.icon} size={13} />
+            {it.label}
+            <span
+              className={
+                active
+                  ? "rounded-sm bg-primary/15 px-1 font-mono text-[10px] tabular-nums"
+                  : "font-mono text-[10px] tabular-nums text-text-subtle"
+              }
+            >
+              {counts[it.key]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Trigger card                                                               */
+/* -------------------------------------------------------------------------- */
+
+function TriggerCard({
+  t,
+  busy,
+  firing,
+  onToggle,
+  onFire,
+  onDelete,
+}: {
+  t: Trigger;
+  busy: boolean;
+  firing: boolean;
+  onToggle: () => void;
+  onFire: () => void;
+  onDelete: () => void;
+}) {
+  const actionMeta = ACTION_META[t.action.type];
+  const kindIcon: IconName = t.kind === "timer" ? "clock" : "zap";
+  const autoDisabled = !!t.auto_disabled_reason;
+  const active = t.enabled && !autoDisabled;
+  const scheduleText =
+    t.kind === "timer"
+      ? `${t.timer?.cron ?? ""} · ${t.timer?.timezone ?? "UTC"}`
+      : t.event?.type ?? "";
+
+  return (
+    <div
+      data-testid={`trigger-${t.id}`}
+      className="group relative overflow-hidden rounded-lg border border-border bg-surface p-4 transition duration-base hover:-translate-y-px hover:shadow-soft"
+    >
+      {active && (
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/60 via-primary to-accent"
+        />
+      )}
+
+      <div className="flex items-start gap-3">
+        <span
+          className={
+            active
+              ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+              : "flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-2 text-text-muted"
+          }
+        >
+          <Icon name={kindIcon} size={18} />
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <Link
+              href={`/triggers/${t.id}`}
+              className="group/name min-w-0 flex-1"
+              data-testid={`trigger-link-${t.id}`}
+            >
+              <h3 className="truncate text-[14px] font-semibold text-text transition-colors duration-fast group-hover/name:text-primary">
+                {t.name}
+              </h3>
+              <p className="mt-0.5 truncate font-mono text-[11px] text-text-subtle">
+                {scheduleText}
+              </p>
+            </Link>
+            <ToggleSwitch
+              enabled={t.enabled}
+              busy={busy}
+              onChange={onToggle}
+              testId={`toggle-${t.id}`}
+              disabled={autoDisabled}
+            />
+          </div>
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-sm bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-text-muted">
+              <Icon name={kindIcon} size={11} />
+              {t.kind}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+              <Icon name={actionMeta.icon} size={11} />
+              {actionMeta.label}
+            </span>
+            {autoDisabled && (
+              <span
+                className="inline-flex items-center gap-1 rounded-sm bg-warning-soft px-1.5 py-0.5 text-[11px] font-medium text-warning"
+                title={t.auto_disabled_reason ?? ""}
+              >
+                <Icon name="alert-triangle" size={11} />
+                自动停用
+              </span>
+            )}
+            {t.fires_failed_streak > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-sm bg-danger-soft px-1.5 py-0.5 text-[11px] font-medium text-danger">
+                <Icon name="alert-circle" size={11} />
+                连败 {t.fires_failed_streak}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-muted">
+            <span className="inline-flex items-center gap-1">
+              <Icon name="activity" size={11} className="text-text-subtle" />
+              触发 <span className="font-mono tabular-nums text-text">{t.fires_total}</span> 次
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Icon name="clock" size={11} className="text-text-subtle" />
+              {t.last_fired_at ? (
+                <>最近 <span className="font-mono text-text-subtle">{formatTime(t.last_fired_at)}</span></>
+              ) : (
+                "尚未触发"
+              )}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onFire}
+            disabled={firing || !active}
+            data-testid={`fire-${t.id}`}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] text-text transition-colors duration-fast hover:border-border-strong hover:bg-surface-2 disabled:opacity-40"
+          >
+            <Icon name={firing ? "loader" : "play-circle"} size={13} className={firing ? "animate-spin" : ""} />
+            {firing ? "触发中" : "立即触发"}
+          </button>
+          <Link
+            href={`/triggers/${t.id}`}
+            data-testid={`edit-${t.id}`}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text"
+          >
+            <Icon name="edit" size={13} />
+            编辑
+          </Link>
+        </div>
+        <button
+          onClick={onDelete}
+          data-testid={`delete-${t.id}`}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] text-text-muted transition-colors duration-fast hover:bg-danger-soft hover:text-danger"
+        >
+          <Icon name="trash-2" size={13} />
+          删除
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ToggleSwitch({
+  enabled,
+  busy,
+  onChange,
+  testId,
+  disabled = false,
+}: {
+  enabled: boolean;
+  busy: boolean;
+  onChange: () => void;
+  testId?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={enabled}
+      aria-label={enabled ? "停用触发器" : "启用触发器"}
+      data-testid={testId}
+      onClick={onChange}
+      disabled={busy || disabled}
+      className={
+        enabled
+          ? "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-primary transition-colors duration-base disabled:opacity-40"
+          : "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-surface-3 transition-colors duration-base disabled:opacity-40"
+      }
+    >
+      <span
+        aria-hidden
+        className={
+          enabled
+            ? "inline-block h-4 w-4 translate-x-[18px] rounded-full bg-white shadow-soft-sm transition-transform duration-base"
+            : "inline-block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow-soft-sm transition-transform duration-base"
+        }
+      />
+    </button>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Empty state                                                                */
+/* -------------------------------------------------------------------------- */
+
+function EmptyTriggers({
+  onCreate,
+}: {
+  onCreate: (preset?: Partial<CreateDraft>) => void;
+}) {
+  return (
+    <section
+      data-testid="triggers-empty"
+      className="relative overflow-hidden rounded-xl border border-dashed border-border bg-surface p-10 text-center"
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0 opacity-40"
+        style={{
+          backgroundImage:
+            "radial-gradient(var(--color-border) 1px, transparent 1px)",
+          backgroundSize: "18px 18px",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-40 opacity-60"
+        style={{
+          background:
+            "radial-gradient(60% 50% at 50% 0%, var(--color-primary-glow) 0%, transparent 70%)",
+        }}
+      />
+      <div className="relative mx-auto max-w-md">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-soft-sm">
+          <Icon name="zap" size={24} />
+        </div>
+        <h2 className="text-[18px] font-semibold tracking-tight text-text">
+          添加第一个触发器
+        </h2>
+        <p className="mx-auto mt-2 max-w-sm text-[13px] text-text-muted">
+          按 cron 表达式或事件类型自动执行动作。从下面的预设开始,或跟 Lead Agent
+          说「帮我每天早上 8 点通知今日日程」。
+        </p>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {CRON_PRESETS.map((p) => (
+            <button
+              key={p.cron}
+              data-testid={`preset-${p.hint}`}
+              onClick={() =>
+                onCreate({ kind: "timer", cron: p.cron, name: p.label })
+              }
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[12px] text-text transition duration-base hover:-translate-y-px hover:border-primary/40 hover:shadow-soft-sm"
+            >
+              <Icon name="clock" size={13} className="text-accent" />
+              {p.label}
+            </button>
+          ))}
+          <button
+            onClick={() => onCreate({ kind: "event" })}
+            data-testid="preset-event"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[12px] text-text transition duration-base hover:-translate-y-px hover:border-primary/40 hover:shadow-soft-sm"
+          >
+            <Icon name="zap" size={13} className="text-accent" />
+            事件触发
+          </button>
+        </div>
+        <div className="mt-5">
+          <button
+            onClick={() => onCreate()}
+            data-testid="empty-create"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-[13px] font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:bg-primary-hover"
+          >
+            <Icon name="plus" size={14} />
+            自定义创建
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Create modal                                                               */
+/* -------------------------------------------------------------------------- */
+
 function CreateDrawer({
   open,
+  initial,
   onClose,
   onCreated,
 }: {
   open: boolean;
+  initial: CreateDraft;
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<CreateDraft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<CreateDraft>(initial);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     if (!open) return;
-    setDraft(EMPTY_DRAFT);
+    setDraft(initial);
     setErr("");
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, initial]);
 
   if (!open) return null;
 
@@ -378,7 +898,7 @@ function CreateDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-trigger-title"
@@ -386,180 +906,204 @@ function CreateDrawer({
     >
       <div
         data-testid="create-drawer"
-        className="w-full max-w-xl max-h-[85vh] flex flex-col rounded-xl border border-border bg-surface"
+        className="flex max-h-[86vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-soft-lg"
+        style={{ animation: "ah-fade-up 320ms cubic-bezier(.16,1,.3,1) both" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 border-b border-border">
-          <h3
-            id="create-trigger-title"
-            className="text-sm font-semibold text-text"
-          >
-            新建触发器
-          </h3>
+        <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-text-subtle">
+              Triggers
+            </p>
+            <h3
+              id="create-trigger-title"
+              className="mt-0.5 text-[16px] font-semibold tracking-tight text-text"
+            >
+              新建触发器
+            </h3>
+          </div>
           <button
             onClick={onClose}
             aria-label="关闭"
-            className="text-xs text-text-muted hover:text-text transition-colors duration-base"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text"
           >
-            ×
+            <Icon name="x" size={14} />
           </button>
-        </div>
+        </header>
 
-        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
-          <Field
-            label="名称"
-            value={draft.name}
-            onChange={(v) => setDraft({ ...draft, name: v })}
-            placeholder="每日日报"
-          />
+        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+          <Section label="基础">
+            <Field
+              label="名称"
+              value={draft.name}
+              onChange={(v) => setDraft({ ...draft, name: v })}
+              placeholder="每日日报"
+            />
 
-          <div>
-            <label className="text-xs text-text-muted block mb-1.5">类型</label>
-            <div className="flex gap-2">
-              {(["timer", "event"] as Kind[]).map((k) => (
-                <button
-                  key={k}
-                  data-testid={`kind-${k}`}
-                  onClick={() => setDraft({ ...draft, kind: k })}
-                  className={`text-xs px-3 py-1.5 rounded-md border transition-colors duration-base ${
-                    draft.kind === k
-                      ? "border-primary text-text bg-surface-2"
-                      : "border-border text-text-muted hover:text-text"
-                  }`}
-                >
-                  {k === "timer" ? "Timer · cron" : "Event · 事件匹配"}
-                </button>
-              ))}
+            <div>
+              <MicroLabel>类型</MicroLabel>
+              <div className="grid grid-cols-2 gap-2">
+                <KindRadio
+                  testId="kind-timer"
+                  active={draft.kind === "timer"}
+                  icon="clock"
+                  title="Timer"
+                  hint="cron 定时触发"
+                  onClick={() => setDraft({ ...draft, kind: "timer" })}
+                />
+                <KindRadio
+                  testId="kind-event"
+                  active={draft.kind === "event"}
+                  icon="zap"
+                  title="Event"
+                  hint="事件类型匹配"
+                  onClick={() => setDraft({ ...draft, kind: "event" })}
+                />
+              </div>
             </div>
-          </div>
 
-          {draft.kind === "timer" ? (
-            <div className="grid grid-cols-2 gap-3">
+            {draft.kind === "timer" ? (
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  label="cron 表达式"
+                  mono
+                  value={draft.cron}
+                  onChange={(v) => setDraft({ ...draft, cron: v })}
+                  placeholder="0 8 * * *"
+                />
+                <Field
+                  label="时区"
+                  mono
+                  value={draft.timezone}
+                  onChange={(v) => setDraft({ ...draft, timezone: v })}
+                  placeholder="UTC"
+                />
+              </div>
+            ) : (
               <Field
-                label="cron 表达式"
+                label="事件类型"
                 mono
-                value={draft.cron}
-                onChange={(v) => setDraft({ ...draft, cron: v })}
-                placeholder="0 8 * * *"
+                value={draft.event_type}
+                onChange={(v) => setDraft({ ...draft, event_type: v })}
+                placeholder="artifact.updated"
               />
-              <Field
-                label="时区"
-                mono
-                value={draft.timezone}
-                onChange={(v) => setDraft({ ...draft, timezone: v })}
-                placeholder="UTC"
+            )}
+          </Section>
+
+          <Section label="动作">
+            <div>
+              <MicroLabel>执行类型</MicroLabel>
+              <Select
+                value={draft.action_type}
+                onChange={(v) =>
+                  setDraft({ ...draft, action_type: v as ActionType })
+                }
+                options={[
+                  { value: "notify_user", label: "通知用户", hint: "notify_user" },
+                  { value: "invoke_tool", label: "调用 Tool", hint: "invoke_tool" },
+                  { value: "dispatch_employee", label: "派发员工", hint: "dispatch_employee" },
+                  { value: "continue_conversation", label: "续会话", hint: "continue_conversation" },
+                ]}
+                testId="action-type"
+                ariaLabel="触发动作"
+                className="w-full"
               />
             </div>
-          ) : (
-            <Field
-              label="事件类型"
-              mono
-              value={draft.event_type}
-              onChange={(v) => setDraft({ ...draft, event_type: v })}
-              placeholder="artifact.updated"
-            />
-          )}
 
-          <div>
-            <label className="text-xs text-text-muted block mb-1.5">动作</label>
-            <Select
-              value={draft.action_type}
-              onChange={(v) =>
-                setDraft({ ...draft, action_type: v as ActionType })
-              }
-              options={[
-                { value: "notify_user", label: "通知用户", hint: "notify_user" },
-                { value: "invoke_tool", label: "调用 Tool", hint: "invoke_tool" },
-                { value: "dispatch_employee", label: "派发员工", hint: "dispatch_employee" },
-                { value: "continue_conversation", label: "续会话", hint: "continue_conversation" },
-              ]}
-              testId="action-type"
-              ariaLabel="触发动作"
-              className="w-full"
-            />
-          </div>
-
-          {draft.action_type === "notify_user" && (
-            <Field
-              label="消息模板(支持 {{event.*}} / {{@today}})"
-              value={draft.message}
-              onChange={(v) => setDraft({ ...draft, message: v })}
-              placeholder="今日日程已生成"
-            />
-          )}
-          {draft.action_type === "invoke_tool" && (
-            <Field
-              label="Tool ID"
-              mono
-              value={draft.tool_id}
-              onChange={(v) => setDraft({ ...draft, tool_id: v })}
-              placeholder="allhands.builtin.fetch_url"
-            />
-          )}
-          {draft.action_type === "dispatch_employee" && (
-            <>
+            {draft.action_type === "notify_user" && (
               <Field
-                label="员工 ID"
+                label="消息模板(支持 {{event.*}} / {{@today}})"
+                value={draft.message}
+                onChange={(v) => setDraft({ ...draft, message: v })}
+                placeholder="今日日程已生成"
+                textarea
+              />
+            )}
+            {draft.action_type === "invoke_tool" && (
+              <Field
+                label="Tool ID"
                 mono
-                value={draft.employee_id}
-                onChange={(v) => setDraft({ ...draft, employee_id: v })}
-                placeholder="emp_xxx"
+                value={draft.tool_id}
+                onChange={(v) => setDraft({ ...draft, tool_id: v })}
+                placeholder="allhands.builtin.fetch_url"
               />
-              <Field
-                label="任务模板"
-                value={draft.task_template}
-                onChange={(v) => setDraft({ ...draft, task_template: v })}
-                placeholder="汇总 {{@yesterday}} 的所有 artifact"
-              />
-            </>
-          )}
-          {draft.action_type === "continue_conversation" && (
-            <>
-              <Field
-                label="会话 ID"
-                mono
-                value={draft.conversation_id}
-                onChange={(v) => setDraft({ ...draft, conversation_id: v })}
-                placeholder="conv_xxx"
-              />
-              <Field
-                label="消息模板"
-                value={draft.message_template}
-                onChange={(v) => setDraft({ ...draft, message_template: v })}
-                placeholder="请更新进展"
-              />
-            </>
-          )}
+            )}
+            {draft.action_type === "dispatch_employee" && (
+              <>
+                <Field
+                  label="员工 ID"
+                  mono
+                  value={draft.employee_id}
+                  onChange={(v) => setDraft({ ...draft, employee_id: v })}
+                  placeholder="emp_xxx"
+                />
+                <Field
+                  label="任务模板"
+                  value={draft.task_template}
+                  onChange={(v) => setDraft({ ...draft, task_template: v })}
+                  placeholder="汇总 {{@yesterday}} 的所有 artifact"
+                  textarea
+                />
+              </>
+            )}
+            {draft.action_type === "continue_conversation" && (
+              <>
+                <Field
+                  label="会话 ID"
+                  mono
+                  value={draft.conversation_id}
+                  onChange={(v) => setDraft({ ...draft, conversation_id: v })}
+                  placeholder="conv_xxx"
+                />
+                <Field
+                  label="消息模板"
+                  value={draft.message_template}
+                  onChange={(v) => setDraft({ ...draft, message_template: v })}
+                  placeholder="请更新进展"
+                  textarea
+                />
+              </>
+            )}
+          </Section>
 
-          <div>
-            <label className="text-xs text-text-muted block mb-1">
-              最小触发间隔(秒,≥ 60)
-            </label>
-            <input
-              type="number"
-              min={60}
-              value={draft.min_interval_seconds}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  min_interval_seconds: Number(e.target.value) || 60,
-                })
-              }
-              className="w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text font-mono focus:outline-none focus:border-primary transition-colors duration-base"
-            />
-          </div>
+          <Section label="节流">
+            <div>
+              <MicroLabel>最小触发间隔(秒,≥ 60)</MicroLabel>
+              <input
+                type="number"
+                min={60}
+                value={draft.min_interval_seconds}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    min_interval_seconds: Number(e.target.value) || 60,
+                  })
+                }
+                className="h-10 w-full rounded-md border border-border bg-surface px-3 font-mono text-[13px] text-text transition-colors duration-fast focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
+              />
+            </div>
+          </Section>
 
           {err && (
-            <p className="text-xs text-danger font-mono" data-testid="create-error">
-              {err}
-            </p>
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-danger/20 bg-danger-soft px-3 py-2"
+            >
+              <Icon name="alert-circle" size={14} className="mt-0.5 shrink-0 text-danger" />
+              <p
+                className="font-mono text-[11px] text-danger"
+                data-testid="create-error"
+              >
+                {err}
+              </p>
+            </div>
           )}
         </div>
 
-        <div className="flex justify-end gap-2 p-4 border-t border-border">
+        <footer className="flex items-center justify-end gap-2 border-t border-border px-5 py-3.5">
           <button
             onClick={onClose}
-            className="rounded-md border border-border px-4 py-2 text-sm text-text-muted hover:text-text transition-colors duration-base"
+            className="inline-flex h-9 items-center rounded-md px-3 text-[13px] text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text"
           >
             取消
           </button>
@@ -567,13 +1111,99 @@ function CreateDrawer({
             onClick={() => void submit()}
             disabled={submitting || !draft.name.trim()}
             data-testid="create-submit"
-            className="rounded-md bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-40 px-4 py-2 text-sm font-medium transition-colors duration-base"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-[13px] font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
           >
-            {submitting ? "创建中…" : "创建"}
+            <Icon
+              name={submitting ? "loader" : "save"}
+              size={14}
+              className={submitting ? "animate-spin" : ""}
+            />
+            {submitting ? "创建中…" : "创建触发器"}
           </button>
-        </div>
+        </footer>
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Shared form primitives                                                     */
+/* -------------------------------------------------------------------------- */
+
+function Section({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h4 className="text-[10px] font-medium uppercase tracking-[0.08em] text-text-subtle">
+        {label}
+      </h4>
+      <div className="flex flex-col gap-3">{children}</div>
+    </section>
+  );
+}
+
+function MicroLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="mb-1.5 block text-[11px] font-medium text-text-muted">
+      {children}
+    </label>
+  );
+}
+
+function KindRadio({
+  active,
+  icon,
+  title,
+  hint,
+  onClick,
+  testId,
+}: {
+  active: boolean;
+  icon: IconName;
+  title: string;
+  hint: string;
+  onClick: () => void;
+  testId?: string;
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-pressed={active}
+      onClick={onClick}
+      className={
+        active
+          ? "flex items-start gap-2.5 rounded-lg border border-primary bg-primary/10 p-3 text-left shadow-soft-sm"
+          : "flex items-start gap-2.5 rounded-lg border border-border bg-surface p-3 text-left transition-colors duration-fast hover:border-border-strong hover:bg-surface-2"
+      }
+    >
+      <span
+        className={
+          active
+            ? "mt-0.5 flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-fg"
+            : "mt-0.5 flex h-7 w-7 items-center justify-center rounded-md bg-surface-2 text-text-muted"
+        }
+      >
+        <Icon name={icon} size={14} />
+      </span>
+      <div className="min-w-0">
+        <div
+          className={
+            active
+              ? "text-[13px] font-medium text-primary"
+              : "text-[13px] font-medium text-text"
+          }
+        >
+          {title}
+        </div>
+        <div className="mt-0.5 text-[11px] text-text-muted">{hint}</div>
+      </div>
+    </button>
   );
 }
 
@@ -583,24 +1213,37 @@ function Field({
   onChange,
   placeholder,
   mono = false,
+  textarea = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   mono?: boolean;
+  textarea?: boolean;
 }) {
+  const baseCls =
+    "w-full rounded-md border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle transition-colors duration-fast focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20";
+  const monoCls = mono ? " font-mono" : "";
   return (
     <div>
-      <label className="text-xs text-text-muted block mb-1">{label}</label>
-      <input
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`w-full rounded-md bg-bg border border-border px-3 py-2 text-sm text-text placeholder-text-subtle focus:outline-none focus:border-primary transition-colors duration-base ${
-          mono ? "font-mono" : ""
-        }`}
-      />
+      <MicroLabel>{label}</MicroLabel>
+      {textarea ? (
+        <textarea
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={3}
+          className={`${baseCls} py-2 leading-relaxed${monoCls}`}
+        />
+      ) : (
+        <input
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${baseCls} h-10${monoCls}`}
+        />
+      )}
     </div>
   );
 }
