@@ -75,7 +75,10 @@ def upgrade() -> None:
         "conversation_events",
         ["conversation_id", "idempotency_key"],
         unique=True,
+        # Partial unique index is supported on both SQLite and Postgres.
+        # Keep the predicate identical so behavior matches across drivers.
         sqlite_where=sa.text("idempotency_key IS NOT NULL"),
+        postgresql_where=sa.text("idempotency_key IS NOT NULL"),
     )
 
 
