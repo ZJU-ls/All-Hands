@@ -23,22 +23,36 @@ export function DotGridBackdrop({
   className?: string;
 }) {
   const safeOpacity = Math.min(0.4, Math.max(0, opacity));
+  const mask = fade
+    ? "linear-gradient(to bottom, black 0%, black 60%, transparent 100%)"
+    : undefined;
   return (
     <div
       aria-hidden="true"
       className={`pointer-events-none absolute inset-0 ${className}`}
-      style={{
-        backgroundImage:
-          "radial-gradient(var(--color-border) 1px, transparent 1px)",
-        backgroundSize: `${size}px ${size}px`,
-        opacity: safeOpacity,
-        maskImage: fade
-          ? "linear-gradient(to bottom, black 0%, black 60%, transparent 100%)"
-          : undefined,
-        WebkitMaskImage: fade
-          ? "linear-gradient(to bottom, black 0%, black 60%, transparent 100%)"
-          : undefined,
-      }}
-    />
+    >
+      {/* base dot grid · uses border token for calm neutrality */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(var(--color-border) 1px, transparent 1px)",
+          backgroundSize: `${size}px ${size}px`,
+          opacity: safeOpacity,
+          maskImage: mask,
+          WebkitMaskImage: mask,
+        }}
+      />
+      {/* soft primary hotspot · anchors hero compositions without breaking the
+          "颜色密度 ≤ 3" guard (uses primary-muted, a transparency preset) */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(600px circle at 20% 0%, var(--color-primary-muted), transparent 60%)",
+          opacity: fade ? 0.5 : 0,
+        }}
+      />
+    </div>
   );
 }

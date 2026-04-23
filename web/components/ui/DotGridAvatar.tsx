@@ -14,9 +14,9 @@
  */
 
 const SIZE_CLASS: Record<Size, string> = {
-  sm: "w-5 h-5 text-[10px]",
-  md: "w-7 h-7 text-[11px]",
-  lg: "w-10 h-10 text-[13px]",
+  sm: "w-5 h-5 text-[10px] rounded-sm",
+  md: "w-7 h-7 text-[11px] rounded-md",
+  lg: "w-10 h-10 text-[13px] rounded-lg",
 };
 
 const DOT_SIZE: Record<Size, string> = {
@@ -40,14 +40,23 @@ export function DotGridAvatar({
     <span
       aria-hidden="true"
       data-testid={testId}
-      className={`relative inline-flex items-center justify-center shrink-0 rounded-sm border border-border bg-surface-2 font-mono text-text ${SIZE_CLASS[size]}`}
+      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden border border-border bg-surface-2 font-mono text-text ${SIZE_CLASS[size]}`}
     >
+      {/* dot grid · primary-muted fades into text-subtle for a calm depth cue */}
       <span
-        className="absolute inset-0 opacity-30"
+        className="absolute inset-0 opacity-40"
         style={{
           backgroundImage:
             "radial-gradient(var(--color-text-subtle) 0.5px, transparent 0.5px)",
           backgroundSize: DOT_SIZE[size],
+        }}
+      />
+      <span
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, var(--color-primary-muted), transparent 65%)",
+          opacity: 0.9,
         }}
       />
       <span className="relative z-[1]">{initial}</span>

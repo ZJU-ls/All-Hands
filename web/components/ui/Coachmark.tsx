@@ -52,13 +52,22 @@ export function Coachmark({
       role="status"
       aria-live="polite"
       data-coachmark={id}
-      className={`relative rounded-md border border-border bg-surface px-4 py-3 ${
+      className={`relative overflow-hidden rounded-lg border border-border bg-surface px-4 py-3 shadow-soft animate-fade-up ${
         align === "top" ? "mb-2" : "mt-2"
       }`}
     >
       <span
         aria-hidden="true"
         className="absolute left-0 top-3 bottom-3 w-[2px] rounded-r bg-primary"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(to right, var(--color-primary), transparent)",
+          opacity: 0.25,
+        }}
       />
       <div className="pl-2">
         <div className="flex items-start gap-3">
@@ -76,7 +85,7 @@ export function Coachmark({
             type="button"
             onClick={onDismiss}
             aria-label="关闭引导"
-            className="shrink-0 rounded border border-border hover:border-border-strong hover:bg-surface-2 text-[11px] text-text-muted hover:text-text px-2 py-0.5 transition-colors duration-base"
+            className="shrink-0 rounded-md border border-border bg-surface-2/40 px-2 py-0.5 text-[11px] text-text-muted transition-colors duration-base hover:border-border-strong hover:bg-surface-2 hover:text-text"
           >
             {dismissLabel}
           </button>
