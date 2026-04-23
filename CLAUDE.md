@@ -63,12 +63,15 @@
 
 ### 3.4 Skill = Dynamic Capability Pack(新 · v1)
 
-- Skill 是**激活式**动态能力包:描述层(descriptor · ≤ 50 字符)永驻 system prompt;tool_ids + prompt_fragment **只在 `resolve_skill` 被调用时才注入 runtime**
+- Skill 是**激活式**动态能力包 · **三段渐进加载**(ADR 0015):
+  1. **descriptor 永驻**:name + ≤ 50 字符 description 进 system prompt
+  2. **激活时注入 body**:`resolve_skill` 被调用时,把 `tool_ids` + `prompt_fragment` + **SKILL.md 正文 body**(去 frontmatter)塞进 runtime
+  3. **按需拉资源**:body 引导 agent 自主调 `allhands.meta.read_skill_file(skill_id, relative_path)` 读 `references/` / `templates/` / `scripts/` 等子文件(scope=READ · 沙盒限死 `install_root/<slug>/` 内 · ≤ 256KB · UTF-8)
 - 激活后的 `SkillRuntime` 状态**必须持久化**到 conversation(见 3.7 状态可 checkpoint 条款)· uvicorn reload 不丢
-- 弱模型的 context budget 受控:10 个 skill ≈ 500 字符 ≈ 125 token
-- 新增 Skill = `skills/builtin/<id>/SKILL.yaml` 放目录就被发现
-- 参考:Claude Code skill 体系 descriptor + lazy body-load(`ref-src-claude/V05 § 2.1-2.3`)
-- 回归:`test_skills.py::test_descriptor_cap` · `test_skill_runtime_persistence.py`(ADR 0011 新加)
+- 弱模型的 context budget 受控:descriptor O(1) · activation O(body ≈ 5-20KB) · on-demand O(picked)
+- 新增 Skill = `skills/builtin/<id>/SKILL.yaml` 放目录就被发现;Claude-style 的 SKILL.md + `references/` 目录上传 zip 即可直接投产
+- 参考:Claude Code skill 体系 descriptor + lazy body-load(`ref-src-claude/V05 § 2.1-2.3`)· ADR 0015
+- 回归:`test_skills.py::test_descriptor_cap` · `test_skill_runtime_persistence.py`(ADR 0011)· `test_skills_body.py` · `test_skill_files_sandbox.py` · `test_resolve_skill_body_injection.py` · `test_read_skill_file.py`(ADR 0015)
 
 ### 3.5 Subagent 是 Composition 基元(新 · v1)
 

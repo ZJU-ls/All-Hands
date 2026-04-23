@@ -99,21 +99,33 @@
 
 ### 原则 4 · Skill = Dynamic Capability Pack
 
-**不变量:** Skill 是**激活式**动态能力包 —— 描述层(descriptor · ≤ 50 字符 · 进 system prompt)永驻 context · tool_ids + prompt_fragment 只在 `resolve_skill` 被调用时才注入 runtime。激活后的状态随对话持久化(原则 6 的状态 checkpoint 条款),不丢。
+**不变量:** Skill 是**激活式**动态能力包 · **三段渐进加载契约**(ADR 0015):
+1. **discovery** — 描述层(descriptor · ≤ 50 字符 · 进 system prompt)永驻 context · O(1) 成本
+2. **activation** — `resolve_skill` 被调用时,把 tool_ids + prompt_fragment + **SKILL.md body**(frontmatter 剥离后)塞进 runtime · O(body ≈ 5-20KB)
+3. **on-demand** — body 引导 agent 调 `allhands.meta.read_skill_file(skill_id, rel_path)` 沙盒读 `references/` / `templates/` / `scripts/` 等子文件 · O(picked files)
+
+激活后的状态随对话持久化(原则 6 的状态 checkpoint 条款),不丢。
 
 **来源:**
-- Claude Code · skill 体系 · discover descriptors + memoize + body-load on activate(`ref-src-claude/V05-skills-system § 2.1-2.3`)
+- Claude Code · skill 体系 · discover descriptors + lazy body-load + on-demand references(`ref-src-claude/V05-skills-system § 2.1-2.3`)
 - LangChain · `Runnable` 按需组合(概念借用 · 不直接依赖)
-- 本仓 · [`execution/skills.py`](../backend/src/allhands/execution/skills.py) · [`execution/tools/meta/resolve_skill.py`](../backend/src/allhands/execution/tools/meta/resolve_skill.py)
+- 本仓 · [`execution/skills.py`](../backend/src/allhands/execution/skills.py) · [`execution/skills_body.py`](../backend/src/allhands/execution/skills_body.py) · [`execution/tools/meta/resolve_skill.py`](../backend/src/allhands/execution/tools/meta/resolve_skill.py) · [`execution/tools/meta/skill_files.py`](../backend/src/allhands/execution/tools/meta/skill_files.py)
 
 **推论:**
-- 弱模型的 context budget 受控:10 个 skill ≈ 500 字符 ≈ 125 token(不激活就不展开)。
-- Skill 的 tool_ids 和 fragment 激活后**持久化**到 conversation 层面,uvicorn reload 不丢(见原则 6)。
-- 新增 Skill 不改 core · `skills/builtin/<id>/SKILL.yaml` 放目录就被发现。
+- 弱模型 context budget 受控:激活成本不随 skill 总大小增长,只随 body 大小 · references/scripts 按需付费
+- Skill 的 tool_ids + fragment + 激活状态持久化到 conversation(见原则 6)· uvicorn reload 不丢
+- 新增 built-in Skill 不改 core · `skills/builtin/<id>/SKILL.yaml` 放目录就被发现
+- Claude-style 的 SKILL.md + `references/` 目录 zip 上传即可直接投产(无需把精华重写进 `prompt_fragment`)
+- `read_skill_file` 沙盒死锁在 `install_root/<slug>/` 内 · scope=READ 不过 gate · 对 `..` / 绝对路径 / symlink / > 256KB / 非 UTF-8 一律拒绝
 
 **回归防御:**
 - `backend/tests/unit/test_skills.py::test_descriptor_cap` · descriptor ≤ 50 字符
-- `backend/tests/integration/test_skill_runtime_persistence.py` · runtime 跨 process 保持(ADR 0011 新加)
+- `backend/tests/integration/test_skill_runtime_persistence.py` · runtime 跨 process 保持(ADR 0011)
+- `backend/tests/unit/test_builtin_skill_path.py` · built-in `Skill.path` 非空(ADR 0015)
+- `backend/tests/unit/test_skills_body.py` · SKILL.md body 剥 frontmatter + CRLF 规范化(ADR 0015)
+- `backend/tests/unit/tools/test_skill_files_sandbox.py` · 路径沙盒七种 case(ADR 0015)
+- `backend/tests/integration/test_resolve_skill_body_injection.py` · 激活时 body 进 `resolved_fragments`(ADR 0015)
+- `backend/tests/integration/test_read_skill_file.py` · 未激活拒绝 · 逃逸拒绝 · 读 reference 成功(ADR 0015)
 
 ### 原则 5 · Subagent 是 Composition 基元
 
