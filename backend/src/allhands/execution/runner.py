@@ -44,6 +44,7 @@ from allhands.execution.skills import (
     render_skill_descriptors,
 )
 from allhands.execution.tools.meta.resolve_skill import make_resolve_skill_executor
+from allhands.execution.tools.meta.skill_files import make_read_skill_file_executor
 from allhands.execution.tools.meta.spawn_subagent import make_spawn_subagent_executor
 
 if TYPE_CHECKING:
@@ -59,6 +60,7 @@ if TYPE_CHECKING:
 
 
 DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
+READ_SKILL_FILE_TOOL_ID = "allhands.meta.read_skill_file"
 RESOLVE_SKILL_TOOL_ID = "allhands.meta.resolve_skill"
 SPAWN_SUBAGENT_TOOL_ID = "allhands.meta.spawn_subagent"
 
@@ -441,6 +443,20 @@ class AgentRunner:
             if tool_id == RESOLVE_SKILL_TOOL_ID and self._skill_registry is not None:
                 executor = make_resolve_skill_executor(
                     employee=self._employee,
+                    runtime=self._runtime,
+                    skill_registry=self._skill_registry,
+                )
+                lc_tools.append(
+                    _CoercingStructuredTool.from_function(
+                        coroutine=executor,
+                        name=tool.name,
+                        description=tool.description,
+                    )
+                )
+                continue
+
+            if tool_id == READ_SKILL_FILE_TOOL_ID and self._skill_registry is not None:
+                executor = make_read_skill_file_executor(
                     runtime=self._runtime,
                     skill_registry=self._skill_registry,
                 )

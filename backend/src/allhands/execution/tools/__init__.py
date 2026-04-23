@@ -31,6 +31,7 @@ from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
 from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
 from allhands.execution.tools.meta.resolve_skill import RESOLVE_SKILL_TOOL
 from allhands.execution.tools.meta.review_tools import ALL_REVIEW_META_TOOLS
+from allhands.execution.tools.meta.skill_files import READ_SKILL_FILE_TOOL
 from allhands.execution.tools.meta.skill_tools import ALL_SKILL_META_TOOLS
 from allhands.execution.tools.meta.spawn_subagent import SPAWN_SUBAGENT_TOOL
 from allhands.execution.tools.meta.stock_tools import (  # single-line register: Wave 2 stock-assistant
@@ -135,6 +136,7 @@ def discover_builtin_tools(
 
     for tool in (
         RESOLVE_SKILL_TOOL,
+        READ_SKILL_FILE_TOOL,
         SPAWN_SUBAGENT_TOOL,
         *ALL_META_TOOLS,
         *ALL_PROVIDER_META_TOOLS,
