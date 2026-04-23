@@ -106,6 +106,7 @@ _LEAD_BASELINE_PRE_RENDER_HOT: frozenset[str] = frozenset(
         "allhands.meta.list_employees",
         "allhands.meta.get_employee_detail",
         "allhands.meta.resolve_skill",
+        "allhands.meta.read_skill_file",
         "allhands.meta.dispatch_employee",
         "allhands.meta.spawn_subagent",
         "allhands.meta.plan_create",
@@ -161,6 +162,7 @@ def default_lead_tool_ids() -> list[str]:
         "allhands.meta.get_employee_detail",
         # Orchestration
         "allhands.meta.resolve_skill",
+        "allhands.meta.read_skill_file",
         "allhands.meta.dispatch_employee",
         "allhands.meta.spawn_subagent",
         # Working memo (Plan · 4 small tools · cheap to always have)

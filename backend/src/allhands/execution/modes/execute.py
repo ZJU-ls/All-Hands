@@ -16,6 +16,7 @@ EXECUTE_PRESET = Preset(
         "allhands.builtin.fetch_url",
         "allhands.builtin.write_file",
         "allhands.meta.resolve_skill",
+        "allhands.meta.read_skill_file",
     ],
     skill_ids_whitelist=["sk_research", "sk_write"],
     max_iterations=10,

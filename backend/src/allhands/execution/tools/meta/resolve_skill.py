@@ -48,6 +48,8 @@ RESOLVE_SKILL_TOOL = Tool(
             "tool_ids": {"type": "array", "items": {"type": "string"}},
             "prompt_fragment": {"type": "string"},
             "already_loaded": {"type": "boolean"},
+            "skill_id": {"type": "string"},
+            "hint": {"type": "string"},
             "error": {"type": "string"},
         },
     },
@@ -87,6 +89,11 @@ def make_resolve_skill_executor(
                 "already_loaded": True,
                 "tool_ids": list(runtime.resolved_skills[skill_id]),
                 "prompt_fragment": "",
+                "skill_id": skill_id,
+                "hint": (
+                    "Skill already active. Use read_skill_file(skill_id, "
+                    "relative_path) to pull references/ or templates/ on demand."
+                ),
             }
         skill = skill_registry.get_full(skill_id)
         if skill is None:
@@ -105,6 +112,11 @@ def make_resolve_skill_executor(
             "already_loaded": False,
             "tool_ids": list(skill.tool_ids),
             "prompt_fragment": skill.prompt_fragment or "",
+            "skill_id": skill_id,
+            "hint": (
+                "Skill activated. Use read_skill_file(skill_id, relative_path) "
+                "to pull references/, templates/, or scripts/ content when needed."
+            ),
         }
 
     return _execute

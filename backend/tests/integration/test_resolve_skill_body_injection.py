@@ -58,10 +58,47 @@ async def test_activate_injects_skill_md_body(tmp_path: Path) -> None:
 
     result = await executor(skill_id="skill-1")
     assert result["already_loaded"] is False
+    assert result["skill_id"] == "skill-1"
+    assert "read_skill_file" in result["hint"]
 
     joined = "\n".join(runtime.resolved_fragments)
     assert "fragment text" in joined, "prompt_fragment must still be injected"
     assert "See references/notes.md" in joined, "SKILL.md body must be injected"
+
+
+@pytest.mark.asyncio
+async def test_resolve_returns_hint_on_reactivation(tmp_path: Path) -> None:
+    """Already-loaded branch also includes the read_skill_file hint."""
+    skill_dir = tmp_path / "reload"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: reload\ndescription: d\n---\n\nbody\n", encoding="utf-8"
+    )
+
+    registry = SkillRegistry()
+    skill = Skill(
+        id="sk-re",
+        name="reload",
+        description="d",
+        tool_ids=[],
+        prompt_fragment="p",
+        version="0.1.0",
+        path=str(skill_dir),
+    )
+    registry.register(skill)
+
+    runtime = SkillRuntime()
+    employee = _make_employee(["sk-re"])
+    executor = make_resolve_skill_executor(
+        employee=employee,
+        runtime=runtime,
+        skill_registry=registry,
+    )
+
+    await executor(skill_id="sk-re")
+    second = await executor(skill_id="sk-re")
+    assert second["already_loaded"] is True
+    assert "read_skill_file" in second["hint"]
 
 
 @pytest.mark.asyncio
