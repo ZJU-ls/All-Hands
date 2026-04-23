@@ -1,72 +1,56 @@
 "use client";
 
 /**
- * CommandPalette · ⌘K route jump · Linear Precise
+ * CommandPalette · ⌘K route jump · Brand Blue Dual Theme (ADR 0016)
  *
- * Minimal v0:
- * - Opens on ⌘K / Ctrl+K anywhere in the app (also unopens).
- * - Fuzzy substring match over route list (label + href).
+ * - ⌘K / Ctrl+K anywhere in the app opens / closes (wired in AppShell).
+ * - Fuzzy substring match over label + href + hint + keywords.
  * - Arrow keys navigate, Enter opens, Esc closes.
- * - Visual: rounded-xl border card, ah-fade-up entrance, dotgrid backdrop
- *   behind the input for the "Linear / Raycast" silhouette.
+ * - Active row uses `bg-primary-muted text-primary` + 2px left primary bar
+ *   (per ADR 0016 §D2 "option row" activation language).
+ * - Visual: rounded-2xl card · shadow-soft-lg · DotGrid backdrop · ah-fade-up
+ *   entrance.
  *
- * Wire once at AppShell. Routes are hard-coded here; when the product
- * grows this can move to a registry with each feature declaring entries.
+ * Routes are declared here; when the product grows, migrate to a registry
+ * with each feature declaring its own entries.
  */
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ChatIcon,
-  CockpitIcon,
-  UserIcon,
-  SkillIcon,
-  ModelIcon,
-  PluginIcon,
-  TriggerIcon,
-  TaskIcon,
-  ObservatoryIcon,
-  SettingsIcon,
-  CheckIcon,
-  SearchIcon,
-  MarketIcon,
-  ChannelIcon,
-  StockIcon,
-  ExternalIcon,
-  type IconProps,
-} from "@/components/icons";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { DotGridBackdrop } from "./DotGridBackdrop";
 
-type IconComp = (p: IconProps) => JSX.Element;
 type Entry = {
   label: string;
   href: string;
   hint: string;
-  Icon: IconComp;
+  icon: IconName;
   keywords?: string;
 };
 
+// Icons mirror the AppShell sidebar mapping (ADR 0016 §D1 · all business
+// icons route through <Icon name="...">).
 const ENTRIES: Entry[] = [
-  { label: "驾驶舱", href: "/", hint: "workspace snapshot", Icon: CockpitIcon, keywords: "home dashboard cockpit" },
-  { label: "对话", href: "/chat", hint: "chat with lead", Icon: ChatIcon, keywords: "chat lead" },
-  { label: "历史会话", href: "/conversations", hint: "past conversations", Icon: ChatIcon, keywords: "history conversations" },
-  { label: "任务", href: "/tasks", hint: "async tasks", Icon: TaskIcon, keywords: "tasks jobs async" },
-  { label: "员工", href: "/employees", hint: "digital employees", Icon: UserIcon, keywords: "employees agents team" },
-  { label: "员工设计", href: "/employees/design", hint: "design new employee", Icon: UserIcon, keywords: "employee design new" },
-  { label: "技能", href: "/skills", hint: "skill packs", Icon: SkillIcon, keywords: "skills abilities prompts" },
-  { label: "MCP 服务器", href: "/mcp-servers", hint: "external mcp", Icon: PluginIcon, keywords: "mcp plugins servers" },
-  { label: "供应商与模型", href: "/gateway", hint: "provider + model gateway", Icon: ModelIcon, keywords: "gateway llm provider model openai anthropic" },
-  { label: "技能市场", href: "/market", hint: "browse skill market", Icon: MarketIcon, keywords: "market skills browse install" },
-  { label: "触发器", href: "/triggers", hint: "scheduled + webhook", Icon: TriggerIcon, keywords: "triggers cron webhook schedule" },
-  { label: "通知渠道", href: "/channels", hint: "slack email webhook", Icon: ChannelIcon, keywords: "channels notifications slack email webhook" },
-  { label: "审批", href: "/confirmations", hint: "pending approvals", Icon: CheckIcon, keywords: "confirmations approvals gate" },
-  { label: "追踪", href: "/traces", hint: "langfuse traces", Icon: ExternalIcon, keywords: "traces observability langfuse" },
-  { label: "观测中心", href: "/observatory", hint: "platform observability", Icon: ObservatoryIcon, keywords: "observatory metrics dashboard" },
-  { label: "股票助手", href: "/stock-assistant", hint: "market anomaly demo", Icon: StockIcon, keywords: "stock market demo" },
-  { label: "Review", href: "/review", hint: "agent review", Icon: CheckIcon, keywords: "review approvals" },
-  { label: "设置", href: "/settings", hint: "system settings", Icon: SettingsIcon, keywords: "settings config" },
-  { label: "关于", href: "/about", hint: "about allhands", Icon: SettingsIcon, keywords: "about version" },
+  { label: "驾驶舱", href: "/", hint: "workspace snapshot", icon: "layout-grid", keywords: "home dashboard cockpit" },
+  { label: "对话", href: "/chat", hint: "chat with lead", icon: "message-square", keywords: "chat lead" },
+  { label: "历史会话", href: "/conversations", hint: "past conversations", icon: "clock", keywords: "history conversations" },
+  { label: "任务", href: "/tasks", hint: "async tasks", icon: "check-circle-2", keywords: "tasks jobs async" },
+  { label: "员工", href: "/employees", hint: "digital employees", icon: "users", keywords: "employees agents team" },
+  { label: "员工设计", href: "/employees/design", hint: "design new employee", icon: "user-plus", keywords: "employee design new" },
+  { label: "技能", href: "/skills", hint: "skill packs", icon: "wand-2", keywords: "skills abilities prompts" },
+  { label: "MCP 服务器", href: "/mcp-servers", hint: "external mcp", icon: "plug", keywords: "mcp plugins servers" },
+  { label: "供应商与模型", href: "/gateway", hint: "provider + model gateway", icon: "server", keywords: "gateway llm provider model openai anthropic" },
+  { label: "技能市场", href: "/market", hint: "browse skill market", icon: "store", keywords: "market skills browse install" },
+  { label: "触发器", href: "/triggers", hint: "scheduled + webhook", icon: "zap", keywords: "triggers cron webhook schedule" },
+  { label: "通知渠道", href: "/channels", hint: "slack email webhook", icon: "bell", keywords: "channels notifications slack email webhook" },
+  { label: "审批", href: "/confirmations", hint: "pending approvals", icon: "shield-check", keywords: "confirmations approvals gate" },
+  { label: "追踪", href: "/traces", hint: "langfuse traces", icon: "activity", keywords: "traces observability langfuse" },
+  { label: "观测中心", href: "/observatory", hint: "platform observability", icon: "brain", keywords: "observatory metrics dashboard" },
+  { label: "股票助手", href: "/stock-assistant", hint: "market anomaly demo", icon: "trending-up", keywords: "stock market demo" },
+  { label: "Review", href: "/review", hint: "agent review", icon: "check", keywords: "review approvals" },
+  { label: "设置", href: "/settings", hint: "system settings", icon: "settings", keywords: "settings config" },
+  { label: "关于", href: "/about", hint: "about allhands", icon: "info", keywords: "about version" },
 ];
 
 function fuzzyMatch(q: string, e: Entry): number {
@@ -81,6 +65,14 @@ function fuzzyMatch(q: string, e: Entry): number {
     if (i === needle.length) return 1;
   }
   return 0;
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
+      {children}
+    </span>
+  );
 }
 
 export function CommandPalette({
@@ -183,17 +175,19 @@ export function CommandPalette({
     <div
       role="dialog"
       aria-label="命令面板"
-      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/60 pt-[15vh] px-4"
+      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/60 px-4 pt-[15vh] backdrop-blur-sm"
       onClick={() => setOpen(false)}
     >
       <div
-        className="relative w-full max-w-xl rounded-xl border border-border bg-surface overflow-hidden"
-        style={{ animation: "ah-fade-up 220ms var(--ease-out) both" }}
+        className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-lg"
+        style={{ animation: "ah-fade-up 220ms var(--ease-out-expo) both" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <DotGridBackdrop opacity={0.25} />
-        <div className="relative flex items-center gap-2 px-4 py-3 border-b border-border">
-          <SearchIcon size={16} className="text-text-muted shrink-0" />
+        <DotGridBackdrop opacity={0.22} />
+
+        {/* Search input */}
+        <div className="relative flex h-12 items-center gap-2.5 border-b border-border px-4">
+          <Icon name="search" size={16} className="shrink-0 text-primary" />
           <input
             ref={inputRef}
             type="text"
@@ -202,66 +196,87 @@ export function CommandPalette({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onListKey}
             placeholder="跳转到页面 · 搜索员工 · 技能 · 模型"
-            className="flex-1 bg-transparent outline-none text-[14px] text-text placeholder-text-subtle"
+            className="flex-1 bg-transparent text-sm text-text placeholder:text-text-subtle outline-none"
           />
-          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-border bg-surface-2 text-text-muted">
-            Esc
-          </span>
+          <Kbd>Esc</Kbd>
         </div>
-        <ul className="relative max-h-[50vh] overflow-y-auto py-1">
+
+        {/* Results */}
+        <div className="relative px-2 py-2">
           {filtered.length === 0 ? (
-            <li className="px-4 py-6 text-center text-[12px] text-text-muted">
+            <div className="px-3 py-8 text-center text-sm text-text-muted">
+              <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-surface-2 text-text-subtle">
+                <Icon name="search" size={18} />
+              </div>
               没有匹配的入口 · 试试别的关键词
-            </li>
+            </div>
           ) : (
-            filtered.map((e, i) => {
-              const isActive = i === active;
-              return (
-                <li key={e.href}>
-                  <Link
-                    href={e.href}
-                    onClick={(ev) => {
-                      ev.preventDefault();
-                      pick(e.href);
-                    }}
-                    onMouseEnter={() => setActive(i)}
-                    className={`relative flex items-center gap-3 px-4 py-2 text-[13px] transition-colors duration-base ${
-                      isActive
-                        ? "bg-surface-2 text-text"
-                        : "text-text-muted hover:text-text"
-                    }`}
-                  >
-                    {isActive && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r bg-primary"
-                      />
-                    )}
-                    <e.Icon size={16} className={isActive ? "text-text" : "text-text-muted"} />
-                    <span className="flex-1 truncate">{e.label}</span>
-                    <span className="font-mono text-[10px] text-text-subtle truncate">
-                      {e.hint}
-                    </span>
-                    <span className="font-mono text-[10px] text-text-subtle hidden sm:inline">
-                      {e.href}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })
+            <>
+              {!query && (
+                <div className="px-3 pb-1.5 pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
+                  Suggestions · {filtered.length}
+                </div>
+              )}
+              <ul className="max-h-[50vh] space-y-0.5 overflow-y-auto">
+                {filtered.map((e, i) => {
+                  const isActive = i === active;
+                  return (
+                    <li key={e.href}>
+                      <Link
+                        href={e.href}
+                        onClick={(ev) => {
+                          ev.preventDefault();
+                          pick(e.href);
+                        }}
+                        onMouseEnter={() => setActive(i)}
+                        className={
+                          isActive
+                            ? "relative flex items-center gap-3 rounded-lg bg-primary-muted px-3 py-2 text-sm text-primary transition duration-fast"
+                            : "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-muted hover:bg-surface-2 hover:text-text transition duration-fast"
+                        }
+                      >
+                        {isActive && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-primary"
+                          />
+                        )}
+                        <Icon
+                          name={e.icon}
+                          size={14}
+                          className={isActive ? "" : "text-text-subtle"}
+                        />
+                        <span className="flex-1 truncate font-medium">{e.label}</span>
+                        <span className="hidden truncate font-mono text-[11px] text-text-subtle sm:inline">
+                          {e.hint}
+                        </span>
+                        <span className="font-mono text-[10px] text-text-subtle opacity-60">
+                          {e.href}
+                        </span>
+                        {isActive && (
+                          <Icon name="arrow-right" size={12} className="ml-1" />
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
-        </ul>
-        <div className="relative flex items-center justify-between px-4 py-2 border-t border-border text-[10px] text-text-subtle font-mono">
-          <span>
-            <span className="px-1 py-0.5 rounded border border-border bg-surface-2 text-text-muted">↑↓</span>
-            <span className="ml-1">选择</span>
-            <span className="mx-2">·</span>
-            <span className="px-1 py-0.5 rounded border border-border bg-surface-2 text-text-muted">↵</span>
-            <span className="ml-1">打开</span>
+        </div>
+
+        {/* Footer */}
+        <div className="relative flex items-center justify-between gap-4 border-t border-border bg-surface-2/40 px-4 py-2 font-mono text-[10px] text-text-subtle">
+          <span className="flex items-center gap-1.5">
+            <Kbd>↑↓</Kbd>
+            <span>navigate</span>
+            <span className="mx-1.5">·</span>
+            <Kbd>↵</Kbd>
+            <span>open</span>
           </span>
-          <span>
-            <span className="px-1 py-0.5 rounded border border-border bg-surface-2 text-text-muted">⌘K</span>
-            <span className="ml-1">唤起 / 关闭</span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>⌘K</Kbd>
+            <span>toggle</span>
           </span>
         </div>
       </div>

@@ -39,7 +39,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronDownIcon } from "@/components/icons";
+import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 import {
   computePopoverAlign,
@@ -321,12 +321,14 @@ export function Select(props: SelectProps) {
           pick(opt);
         }}
         className={cn(
-          "relative flex cursor-pointer items-center justify-between gap-3 px-3 py-1.5 text-[12px] transition-colors duration-base",
+          "relative mx-1 flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-1.5 text-[12px] transition-colors duration-fast",
           opt.disabled
             ? "cursor-not-allowed text-text-subtle"
-            : isHighlighted
-              ? "bg-surface-2 text-text"
-              : "text-text-muted hover:text-text",
+            : isSelected
+              ? "bg-primary-muted text-primary"
+              : isHighlighted
+                ? "bg-surface-2 text-text"
+                : "text-text-muted hover:bg-surface-2 hover:text-text",
         )}
       >
         {isSelected && (
@@ -376,7 +378,7 @@ export function Select(props: SelectProps) {
         }}
         onKeyDown={onTriggerKey}
         className={cn(
-          "inline-flex w-full min-w-0 items-center justify-between gap-2 rounded-md border bg-surface text-text transition-colors duration-base hover:border-border-strong focus:outline-none focus:border-border-strong",
+          "inline-flex w-full min-w-0 items-center justify-between gap-2 rounded-md border bg-surface text-text transition duration-fast hover:border-border-strong hover:bg-surface-2 focus:outline-none focus-visible:border-primary",
           sizeClasses,
           openBorder,
           disabledClasses,
@@ -384,10 +386,11 @@ export function Select(props: SelectProps) {
         )}
       >
         <span className="min-w-0 flex-1 truncate text-left">{triggerLabel}</span>
-        <ChevronDownIcon
+        <Icon
+          name="chevron-down"
           size={size === "sm" ? 12 : 14}
           className={cn(
-            "shrink-0 text-text-subtle transition-colors duration-base",
+            "shrink-0 text-text-subtle transition-colors duration-fast",
             open ? "text-text-muted" : "",
           )}
         />
@@ -402,13 +405,12 @@ export function Select(props: SelectProps) {
           data-side={side}
           data-align={align}
           className={cn(
-            "absolute z-30 min-w-full overflow-y-auto rounded-md border border-border bg-surface py-1 shadow-lg",
+            "absolute z-30 min-w-full animate-fade-up overflow-y-auto rounded-xl border border-border bg-surface py-1 shadow-soft-lg",
             panelAlignClass,
             side === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
           )}
           style={{
             maxHeight: panelMaxHeight,
-            animation: "ah-fade-up 160ms var(--ease-out, ease-out) both",
           }}
         >
           {groups
