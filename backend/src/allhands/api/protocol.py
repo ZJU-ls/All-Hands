@@ -58,10 +58,12 @@ class SendMessageRequest(BaseModel):
 class ChatMessageResponse(BaseModel):
     """A single persisted conversation message, as returned by GET/compact.
 
-    Tool-call / render-payload details are omitted deliberately — the UI
-    reconstructs those from its SSE stream for the live turn and doesn't need
-    to reload them for a history read. Keep this shape narrow so it stays
-    stable as the internal Message model evolves.
+    Carries render_payloads, tool_calls, and reasoning so a page reload
+    rehydrates charts / cards / inline tool chips / thinking-channel replay
+    to exactly what the user saw on the live SSE turn. Pre-fix this shape
+    was narrow (id / role / content / created_at) on the assumption that
+    the live SSE stream was the only render delivery path — that broke
+    historical review, trace replay, and "open another tab".
     """
 
     id: str
@@ -69,6 +71,17 @@ class ChatMessageResponse(BaseModel):
     role: str
     content: str
     created_at: str
+    # Empty list when the message is text-only. Serialized as the JSON shape
+    # of core.RenderPayload (component + props + interactions) so the frontend
+    # component-registry can look them up by name.
+    render_payloads: list[dict[str, Any]] = []
+    # Empty list when the turn triggered no tool calls. Serialized as the
+    # JSON shape of core.ToolCall (id / tool_id / args / status / result).
+    tool_calls: list[dict[str, Any]] = []
+    # None when the underlying model did not produce a thinking channel for
+    # this turn. Populated on finalize for Anthropic Extended Thinking /
+    # Qwen3 enable_thinking / DeepSeek-R1 reasoning_content.
+    reasoning: str | None = None
 
 
 class CompactConversationRequest(BaseModel):

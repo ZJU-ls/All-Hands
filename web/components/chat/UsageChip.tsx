@@ -166,7 +166,7 @@ export function UsageChip({ conversationId, employeeModelRef, disabled }: Props)
 
   return (
     <div
-      className="flex items-center gap-2 font-mono text-[10px]"
+      className="flex shrink-0 items-center gap-2 whitespace-nowrap font-mono text-[10px]"
       data-testid="usage-chip"
       data-tier={tier}
       title={err ?? `${usedTokens} / ${window} tokens (估算)`}

@@ -105,6 +105,63 @@ def test_probe_endpoint_openai_no_api_key_omits_auth_header() -> None:
     assert "Authorization" not in headers
 
 
+# --- E18 regression · per-turn thinking override must hit the wire ---------
+#
+# First attempt (2026-04-21) only handled OpenAI-compat `extra_body` and relied
+# on `.bind(thinking=...)` for anthropic kind. Verified via curl: user clicked
+# the grey "深度思考" button, sent a message, and the SSE stream still carried
+# 146 REASONING_MESSAGE_CHUNK frames. Root cause: `ChatAnthropic.thinking` is a
+# Pydantic ctor field consumed at `_get_request_payload` time — `.bind()`
+# kwargs land on a RunnableBinding and never reach the payload. Fix: bake
+# `thinking={"type": "disabled"|"enabled", "budget_tokens": 8000}` into the
+# ChatAnthropic constructor via `build_llm(thinking=...)`.
+
+
+def test_build_llm_anthropic_bakes_thinking_disabled_into_ctor() -> None:
+    provider = _p(
+        kind="anthropic",
+        base_url="https://coding.dashscope.aliyuncs.com/apps/anthropic",
+        default_model="qwen3.6-plus",
+    )
+    llm = build_llm(provider, "qwen3.6-plus", thinking=False)
+    assert getattr(llm, "thinking", None) == {"type": "disabled"}
+
+
+def test_build_llm_anthropic_bakes_thinking_enabled_with_budget() -> None:
+    provider = _p(kind="anthropic", base_url="https://api.anthropic.com")
+    llm = build_llm(provider, "claude-3-5-sonnet-latest", thinking=True)
+    thinking = getattr(llm, "thinking", None)
+    assert isinstance(thinking, dict)
+    assert thinking["type"] == "enabled"
+    # Anthropic API rejects budget_tokens < 1024; the factory must default to
+    # a safe value.
+    assert thinking["budget_tokens"] >= 1024
+
+
+def test_build_llm_anthropic_thinking_none_leaves_field_default() -> None:
+    """thinking=None → caller didn't express a preference → inherit default."""
+    provider = _p(kind="anthropic", base_url="https://api.anthropic.com")
+    llm = build_llm(provider, "claude-3-5-sonnet-latest", thinking=None)
+    # langchain_anthropic default is None (= provider default wins).
+    assert getattr(llm, "thinking", None) is None
+
+
+def test_build_llm_openai_ignores_thinking_arg() -> None:
+    """OpenAI-compat adapters handle thinking via `.bind(extra_body=...)` at
+    the runner layer — the factory itself should NOT inject anything into the
+    ChatOpenAI ctor, otherwise langchain_openai will warn / error on unknown
+    kwargs.
+    """
+    from langchain_openai import ChatOpenAI
+
+    provider = _p(kind="openai", base_url="https://api.openai.com/v1")
+    llm = build_llm(provider, "gpt-4o-mini", thinking=False)
+    assert isinstance(llm, ChatOpenAI)
+    # No `thinking` field baked into the OpenAI adapter — that's handled by
+    # runner._bind_thinking for this kind.
+    assert not hasattr(llm, "thinking") or getattr(llm, "thinking", None) is None
+
+
 # --- resolve_model_name --------------------------------------------------
 
 

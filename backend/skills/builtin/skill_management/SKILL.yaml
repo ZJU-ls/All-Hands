@@ -1,0 +1,15 @@
+id: allhands.skill_management
+name: 技能管理
+description: 安装 / 删除 / 浏览 Skill 市场 · 技能库 CRUD
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.list_skill_market
+  - allhands.meta.preview_skill_market
+  - allhands.meta.install_skill_from_github
+  - allhands.meta.install_skill_from_market
+  - allhands.meta.update_skill
+  - allhands.meta.delete_skill
+
+prompt_fragment_file: prompts/guidance.md

@@ -30,7 +30,14 @@ from sqlalchemy.pool import StaticPool
 
 from allhands.api import create_app
 from allhands.api.deps import get_session
-from allhands.core import Conversation, Employee, Message
+from allhands.core import (
+    Conversation,
+    Employee,
+    Message,
+    RenderPayload,
+    ToolCall,
+    ToolCallStatus,
+)
 from allhands.persistence.orm.base import Base
 from allhands.persistence.sql_repos import SqlConversationRepo, SqlEmployeeRepo
 
@@ -161,3 +168,130 @@ def test_list_messages_returns_404_for_unknown_conversation(make_client) -> None
     client = make_client(n_messages=1)
     resp = client.get("/api/conversations/does-not-exist/messages")
     assert resp.status_code == 404
+
+
+async def _seed_with_render_row(engine: AsyncEngine) -> tuple[str, str]:
+    """Seed one assistant message carrying render_payloads + tool_calls +
+    reasoning so the endpoint shape can be exercised end-to-end. Returns the
+    message_id and tool_call_id so assertions can pin exact fields."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    msg_id = str(uuid.uuid4())
+    tc_id = str(uuid.uuid4())
+    async with maker() as session, session.begin():
+        await SqlEmployeeRepo(session).upsert(_make_emp())
+        conv_repo = SqlConversationRepo(session)
+        await conv_repo.create(_make_conv())
+        await conv_repo.append_message(
+            Message(
+                id=msg_id,
+                conversation_id="conv1",
+                role="assistant",
+                content="Here is a chart:",
+                reasoning="decided BarChart was the right component",
+                render_payloads=[
+                    RenderPayload(
+                        component="BarChart",
+                        props={"bars": [1, 2, 3]},
+                    )
+                ],
+                tool_calls=[
+                    ToolCall(
+                        id=tc_id,
+                        tool_id="allhands.render.bar_chart",
+                        args={"title": "Tasks"},
+                        status=ToolCallStatus.SUCCEEDED,
+                        result={"component": "BarChart", "props": {"bars": [1, 2, 3]}},
+                    )
+                ],
+                created_at=datetime(2026, 4, 22, 12, 0, 0, tzinfo=UTC),
+            )
+        )
+    return msg_id, tc_id
+
+
+def test_list_messages_endpoint_returns_render_payloads_and_tool_calls() -> None:
+    """Historical rehydrate: GET /messages must surface what the DB stored so
+    the chat UI redraws charts / cards / tool chips after a reload.
+    Bug before fix: ChatMessageResponse silently dropped these fields."""
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    msg_id, tc_id = asyncio.run(_seed_with_render_row(engine))
+
+    async def _session() -> AsyncIterator[AsyncSession]:
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        async with maker() as s, s.begin():
+            yield s
+
+    app = create_app()
+    app.dependency_overrides[get_session] = _session
+    client = TestClient(app)
+
+    resp = client.get("/api/conversations/conv1/messages")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert len(body) == 1
+    row = body[0]
+
+    assert row["id"] == msg_id
+    assert row["content"] == "Here is a chart:"
+    assert row["reasoning"] == "decided BarChart was the right component"
+
+    assert len(row["render_payloads"]) == 1
+    assert row["render_payloads"][0]["component"] == "BarChart"
+    assert row["render_payloads"][0]["props"] == {"bars": [1, 2, 3]}
+
+    assert len(row["tool_calls"]) == 1
+    assert row["tool_calls"][0]["id"] == tc_id
+    assert row["tool_calls"][0]["tool_id"] == "allhands.render.bar_chart"
+
+
+def test_compact_response_preserves_render_payloads_on_kept_tail() -> None:
+    """Compaction path symmetry: the kept-tail messages returned in the
+    compact response must also carry render_payloads / tool_calls / reasoning
+    so the store swap on the client doesn't wipe charts the user just saw."""
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    asyncio.run(_seed_with_render_row(engine))
+    # Pad so compact has something to drop; the seeded render row is the
+    # newest one so it survives the compaction.
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def _pad() -> None:
+        async with maker() as session, session.begin():
+            repo = SqlConversationRepo(session)
+            for i in range(10):
+                await repo.append_message(
+                    Message(
+                        id=str(uuid.uuid4()),
+                        conversation_id="conv1",
+                        role="user" if i % 2 == 0 else "assistant",
+                        content=f"pad-{i}",
+                        created_at=datetime(2026, 4, 22, 11, i, tzinfo=UTC),
+                    )
+                )
+
+    asyncio.run(_pad())
+
+    async def _session() -> AsyncIterator[AsyncSession]:
+        async with maker() as s, s.begin():
+            yield s
+
+    app = create_app()
+    app.dependency_overrides[get_session] = _session
+    client = TestClient(app)
+
+    resp = client.post("/api/conversations/conv1/compact", json={"keep_last": 5})
+    assert resp.status_code == 200, resp.text
+    messages = resp.json()["messages"]
+    # The render-carrying assistant row must still be in the kept tail.
+    render_rows = [m for m in messages if m.get("render_payloads")]
+    assert len(render_rows) == 1
+    assert render_rows[0]["render_payloads"][0]["component"] == "BarChart"

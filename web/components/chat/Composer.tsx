@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { ArrowUpIcon } from "@/components/icons";
+import { isImeComposing } from "@/lib/ime";
 
 /**
  * Composer — unified AI-native chat input (I-0015 spec).
@@ -70,6 +71,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   ref,
 ) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const isComposingRef = useRef(false);
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
@@ -88,6 +90,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key !== "Enter") return;
+      if (isImeComposing(event, isComposingRef.current)) return;
       // ⌘↵ / Ctrl↵ always sends; bare Enter (no shift) also sends as the
       // convention on chat-first AI products. Shift+Enter keeps newline.
       const metaSend = event.metaKey || event.ctrlKey;
@@ -115,12 +118,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           ref={textareaRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
           onKeyDown={handleKeyDown}
           rows={rows}
           placeholder={placeholder}
           disabled={textareaDisabled}
           data-testid="composer-textarea"
-          className="flex-1 resize-none bg-transparent text-sm text-text placeholder-text-subtle outline-none disabled:opacity-60"
+          className="flex-1 resize-none bg-transparent text-base leading-[1.55] text-text placeholder-text-subtle outline-none disabled:opacity-60"
         />
         <SendOrStopButton
           isStreaming={isStreaming}
@@ -136,7 +145,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           {controls}
         </div>
         {controlsTrailing && (
-          <div className="font-mono text-[10px] text-text-subtle">{controlsTrailing}</div>
+          <div className="shrink-0 whitespace-nowrap font-mono text-[10px] text-text-subtle">
+            {controlsTrailing}
+          </div>
         )}
       </div>
     </div>
@@ -203,7 +214,7 @@ export function ThinkingToggle({
       onClick={() => onChange(!enabled)}
       data-testid="composer-thinking-toggle"
       data-state={enabled ? "on" : "off"}
-      className={`inline-flex h-6 items-center gap-1.5 rounded border px-2 text-[11px] transition-colors duration-fast disabled:opacity-40 ${
+      className={`inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded border px-2 text-[11px] transition-colors duration-fast disabled:opacity-40 ${
         enabled
           ? "border-primary/60 bg-primary/10 text-primary"
           : "border-border bg-transparent text-text-muted hover:text-text hover:border-border-strong"

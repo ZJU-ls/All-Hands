@@ -98,6 +98,27 @@ describe("Composer", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
+  it("does not send while IME composition is active", () => {
+    const onSend = vi.fn();
+    const onAbort = vi.fn();
+    render(
+      <Harness
+        isStreaming={false}
+        onSend={onSend}
+        onAbort={onAbort}
+        initial="ni"
+      />,
+    );
+    const textarea = screen.getByTestId("composer-textarea");
+    fireEvent.compositionStart(textarea);
+    fireEvent.keyDown(textarea, { key: "Enter", isComposing: true });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onAbort).not.toHaveBeenCalled();
+    fireEvent.compositionEnd(textarea);
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledOnce();
+  });
+
   it("Enter during streaming triggers onAbort (same button semantics)", () => {
     const onSend = vi.fn();
     const onAbort = vi.fn();

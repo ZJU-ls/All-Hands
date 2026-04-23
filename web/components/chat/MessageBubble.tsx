@@ -58,8 +58,10 @@ export function MessageBubble({ message, isStreaming }: Props) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[80%] rounded-xl px-4 py-2 text-sm ${
-          isUser ? "bg-surface-2 text-text" : "bg-surface text-text"
+        className={`max-w-[78ch] rounded-xl px-5 py-3 text-base leading-[1.6] ${
+          isUser
+            ? "bg-surface-2 text-text border border-border/60"
+            : "bg-surface text-text shadow-[0_0_0_1px_var(--color-border)]"
         }`}
       >
         {hasReasoning && (

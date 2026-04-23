@@ -3,11 +3,12 @@
 import type { RenderProps } from "@/lib/component-registry";
 
 export function LinkCard({ props }: RenderProps) {
-  const url = (props.url as string | undefined) ?? "#";
-  const title = (props.title as string | undefined) ?? "";
-  const description = props.description as string | undefined;
-  const favicon = props.favicon as string | undefined;
-  const siteName = props.siteName as string | undefined;
+  const url = typeof props.url === "string" && props.url ? props.url : "#";
+  const title = typeof props.title === "string" ? props.title : "";
+  const description =
+    typeof props.description === "string" ? props.description : undefined;
+  const favicon = typeof props.favicon === "string" ? props.favicon : undefined;
+  const siteName = typeof props.siteName === "string" ? props.siteName : undefined;
 
   let host = "";
   try {

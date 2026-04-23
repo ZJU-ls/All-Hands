@@ -7,3 +7,7 @@ export { Code } from "./Code";
 export { Diff } from "./Diff";
 export { Callout } from "./Callout";
 export { LinkCard } from "./LinkCard";
+export { Stat } from "./Stat";
+export { LineChart } from "./LineChart";
+export { BarChart } from "./BarChart";
+export { PieChart } from "./PieChart";

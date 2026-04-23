@@ -1,0 +1,10 @@
+id: allhands.cockpit_admin
+name: 驾驶舱管理
+description: 全局概览(runs / KPI / health)· 急停 · 运营态快照
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.cockpit.pause_all_runs
+
+prompt_fragment_file: prompts/guidance.md

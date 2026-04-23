@@ -27,6 +27,7 @@ from allhands.api.protocol import (
     SendMessageRequest,
     UpdateConversationRequest,
 )
+from allhands.core import Message
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
 
@@ -38,6 +39,23 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["chat"])
+
+
+def _to_message_response(m: Message) -> ChatMessageResponse:
+    """Serialize a domain Message into the wire shape with the render /
+    tool-call / reasoning fields that rehydrate a prior turn's visuals.
+    Shared between GET /messages and POST /compact so compaction's kept-tail
+    never diverges from history reload."""
+    return ChatMessageResponse(
+        id=m.id,
+        conversation_id=m.conversation_id,
+        role=m.role,
+        content=m.content,
+        created_at=m.created_at.isoformat(),
+        render_payloads=[rp.model_dump(mode="json") for rp in m.render_payloads],
+        tool_calls=[tc.model_dump(mode="json") for tc in m.tool_calls],
+        reasoning=m.reasoning,
+    )
 
 
 @router.post("", response_model=ConversationResponse)
@@ -169,16 +187,7 @@ async def list_messages(
         messages = await chat_svc.list_messages(conversation_id)
     except DomainError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return [
-        ChatMessageResponse(
-            id=m.id,
-            conversation_id=m.conversation_id,
-            role=m.role,
-            content=m.content,
-            created_at=m.created_at.isoformat(),
-        )
-        for m in messages
-    ]
+    return [_to_message_response(m) for m in messages]
 
 
 @router.post("/{conversation_id}/compact", response_model=CompactConversationResponse)
@@ -207,16 +216,7 @@ async def compact_conversation(
     return CompactConversationResponse(
         dropped=result.dropped,
         summary_id=result.summary_id,
-        messages=[
-            ChatMessageResponse(
-                id=m.id,
-                conversation_id=m.conversation_id,
-                role=m.role,
-                content=m.content,
-                created_at=m.created_at.isoformat(),
-            )
-            for m in result.messages
-        ],
+        messages=[_to_message_response(m) for m in result.messages],
     )
 
 

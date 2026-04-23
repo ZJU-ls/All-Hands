@@ -1,3 +1,5 @@
+import type { RenderPayload, ToolCall } from "@/lib/protocol";
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export class ApiError extends Error {
@@ -10,8 +12,32 @@ export class ApiError extends Error {
   }
 }
 
-function throwApiError(label: string, status: number): never {
-  throw new ApiError(status, `${label} failed: ${status}`);
+/**
+ * Backend process is unreachable (uvicorn down / restarting / crashed).
+ *
+ * Next.js dev rewrites `/api/*` → `http://localhost:8000/api/*`; when upstream
+ * is offline the dev server answers `500 text/plain "Internal Server Error"`
+ * instead of a JSON error from our FastAPI app. We detect that shape and raise
+ * this subclass so callers can render an actionable "backend offline" state
+ * with retry, rather than a raw red "500" banner. See L07 / E14.
+ */
+export class BackendUnreachableError extends ApiError {
+  constructor(label: string, status: number) {
+    super(status, `${label}: backend unreachable (status ${status})`);
+    this.name = "BackendUnreachableError";
+  }
+}
+
+async function checkResponse(res: Response, label: string): Promise<void> {
+  if (res.ok) return;
+  const ct = res.headers.get("content-type") ?? "";
+  const looksLikeProxyError =
+    (res.status === 500 || res.status === 502 || res.status === 503 || res.status === 504) &&
+    !ct.toLowerCase().includes("application/json");
+  if (looksLikeProxyError) {
+    throw new BackendUnreachableError(`${label} failed`, res.status);
+  }
+  throw new ApiError(res.status, `${label} failed: ${res.status}`);
 }
 
 export type EmployeeStatus = "draft" | "published";
@@ -68,7 +94,7 @@ export type ConversationDto = {
 
 export async function getConversation(id: string): Promise<ConversationDto> {
   const res = await fetch(`${BASE}/api/conversations/${id}`);
-  if (!res.ok) throwApiError("getConversation", res.status);
+  await checkResponse(res, "getConversation");
   return res.json() as Promise<ConversationDto>;
 }
 
@@ -102,7 +128,7 @@ export async function updateConversation(
 
 export async function getEmployee(id: string): Promise<EmployeeDto> {
   const res = await fetch(`${BASE}/api/employees/${id}`);
-  if (!res.ok) throwApiError("getEmployee", res.status);
+  await checkResponse(res, "getEmployee");
   return res.json() as Promise<EmployeeDto>;
 }
 
@@ -139,13 +165,31 @@ export type ChatMessageDto = {
   role: "user" | "assistant" | "tool" | "system";
   content: string;
   created_at: string;
+  /**
+   * Persisted render envelopes — empty for text-only turns. Populated when
+   * the assistant invoked render tools (allhands.render.*) and must be
+   * rehydrated on history reload so charts / cards / tables don't vanish.
+   */
+  render_payloads?: RenderPayload[];
+  /**
+   * Persisted tool call records — empty for turns with no tool activity.
+   * Rehydrates inline system-tool chips (L14) + external tool cards after
+   * the live SSE has closed.
+   */
+  tool_calls?: ToolCall[];
+  /**
+   * Reasoning / thinking transcript for assistant rows backed by a
+   * thinking-capable model (Anthropic Extended Thinking, Qwen3
+   * enable_thinking, DeepSeek-R1). None otherwise.
+   */
+  reasoning?: string | null;
 };
 
 export async function listConversationMessages(
   conversationId: string,
 ): Promise<ChatMessageDto[]> {
   const res = await fetch(`${BASE}/api/conversations/${conversationId}/messages`);
-  if (!res.ok) throwApiError("listConversationMessages", res.status);
+  await checkResponse(res, "listConversationMessages");
   return res.json() as Promise<ChatMessageDto[]>;
 }
 

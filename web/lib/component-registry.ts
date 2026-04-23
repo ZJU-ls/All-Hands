@@ -66,6 +66,10 @@ if (typeof window !== "undefined") {
     safeRegister("Viz.Diff", Viz.Diff);
     safeRegister("Viz.Callout", Viz.Callout);
     safeRegister("Viz.LinkCard", Viz.LinkCard);
+    safeRegister("Viz.Stat", Viz.Stat);
+    safeRegister("Viz.LineChart", Viz.LineChart);
+    safeRegister("Viz.BarChart", Viz.BarChart);
+    safeRegister("Viz.PieChart", Viz.PieChart);
   });
   import("../components/render/Artifact/Preview").then(({ ArtifactPreview }) => {
     safeRegister("Artifact.Preview", ArtifactPreview);

@@ -98,8 +98,8 @@ function CmdKHint({ onOpen }: { onOpen: () => void }) {
       title="⌘K 打开命令面板"
     >
       <SearchIcon size={12} />
-      <span className="text-[11px]">跳转到…</span>
-      <span className="font-mono text-[10px] px-1 py-0.5 rounded border border-border bg-surface-2 text-text-subtle group-hover:text-text-muted">
+      <span className="text-caption">跳转到…</span>
+      <span className="font-mono text-caption px-1.5 py-0.5 rounded border border-border bg-surface-2 text-text-subtle group-hover:text-text-muted">
         {isMac ? "⌘K" : "Ctrl K"}
       </span>
     </button>
@@ -136,7 +136,7 @@ function SidebarItem({
     <li>
       <Link
         href={href}
-        className={`relative flex items-center h-8 pl-5 pr-3 gap-2.5 text-[12px] transition-colors duration-base ${
+        className={`relative flex items-center h-9 pl-5 pr-3 gap-2.5 text-sm transition-colors duration-base ${
           active
             ? "text-text font-medium"
             : "text-text-muted hover:text-text"
@@ -177,15 +177,15 @@ function Sidebar() {
   const pathname = usePathname();
   const allHrefs = MENU.flatMap((s) => s.items.map((i) => i.href));
   return (
-    <aside className="w-56 shrink-0 border-r border-border bg-surface flex flex-col">
-      <div className="h-11 flex items-center px-4 gap-2 border-b border-border">
+    <aside className="w-60 shrink-0 border-r border-border bg-surface flex flex-col">
+      <div className="h-12 flex items-center px-4 gap-2 border-b border-border">
         <LogoDotgrid />
-        <span className="text-[13px] font-semibold tracking-tight text-text">allhands</span>
+        <span className="text-base font-semibold tracking-tight text-text">allhands</span>
       </div>
       <nav className="flex-1 overflow-y-auto py-2">
         {MENU.map((section) => (
-          <div key={section.title} className="mb-2">
-            <div className="px-5 mt-3 mb-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-text-subtle">
+          <div key={section.title} className="mb-3">
+            <div className="px-5 mt-3 mb-1.5 font-mono text-caption font-semibold uppercase tracking-[0.12em] text-text-subtle">
               {section.title}
             </div>
             <ul>
@@ -205,7 +205,7 @@ function Sidebar() {
           </div>
         ))}
       </nav>
-      <div className="border-t border-border px-4 py-2 font-mono text-[10px] text-text-subtle">
+      <div className="border-t border-border px-4 py-2.5 font-mono text-caption text-text-subtle">
         v0 · MVP
       </div>
     </aside>
@@ -252,8 +252,8 @@ export function AppShell({
     <div className="flex h-screen w-full bg-bg text-text">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-11 shrink-0 border-b border-border flex items-center justify-between px-6">
-          <h1 className="text-[13px] font-semibold tracking-tight">{title}</h1>
+        <header className="h-12 shrink-0 border-b border-border flex items-center justify-between px-6">
+          <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
           <div className="flex items-center gap-2">
             <CmdKHint onOpen={openPalette} />
             {actions}
@@ -262,7 +262,7 @@ export function AppShell({
         </header>
         <main
           className="flex-1 overflow-hidden"
-          style={{ animation: "ah-fade-up 220ms var(--ease-out) both" }}
+          style={{ animation: "ah-fade-up var(--dur-mid) var(--ease-out-quart) both" }}
         >
           {children}
         </main>

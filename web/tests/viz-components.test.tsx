@@ -19,6 +19,10 @@ import {
   Diff,
   Callout,
   LinkCard,
+  Stat,
+  LineChart,
+  BarChart,
+  PieChart,
 } from "@/components/render/Viz";
 
 afterEach(cleanup);
@@ -250,5 +254,212 @@ describe("Viz.LinkCard", () => {
     const anchor = screen.getByRole("link");
     expect(anchor.getAttribute("href")).toBe("https://example.com/path");
     expect(anchor.getAttribute("target")).toBe("_blank");
+  });
+});
+
+describe("Viz.Stat", () => {
+  it("renders label + value + unit + delta + sparkline", () => {
+    render(
+      <Stat
+        props={{
+          label: "Active runs",
+          value: 42,
+          unit: "runs",
+          delta: { value: 8, direction: "up", tone: "positive" },
+          spark: [1, 2, 3, 2.5, 4],
+          caption: "last 24h",
+        }}
+        interactions={NO_INTERACTIONS}
+      />,
+    );
+    expect(screen.getByText("Active runs")).toBeDefined();
+    expect(screen.getByText("42")).toBeDefined();
+    expect(screen.getByText("runs")).toBeDefined();
+    // Delta block renders direction glyph + value together
+    expect(screen.getByText(/↑/)).toBeDefined();
+    expect(screen.getByText("8")).toBeDefined();
+    expect(screen.getByText("last 24h")).toBeDefined();
+  });
+
+  it("falls back to em-dash when value missing", () => {
+    render(
+      <Stat
+        props={{ label: "Cost", value: undefined }}
+        interactions={NO_INTERACTIONS}
+      />,
+    );
+    expect(screen.getByText("—")).toBeDefined();
+  });
+});
+
+describe("Viz.LineChart", () => {
+  it("renders an SVG with polylines and series legend when multi-series", () => {
+    const { container } = render(
+      <LineChart
+        props={{
+          x: ["Mon", "Tue", "Wed"],
+          series: [
+            { label: "p50", values: [120, 140, 130] },
+            { label: "p95", values: [300, 420, 360] },
+          ],
+          y_label: "ms",
+          caption: "weekly latency",
+        }}
+        interactions={NO_INTERACTIONS}
+      />,
+    );
+    expect(container.querySelector("svg")).toBeTruthy();
+    // ADR-0012 polish: each ≤2-series chart gets one area fill + one
+    // line path per series (4 paths for 2 series). Assert on series
+    // count not path count so future visual tweaks don't rebreak this.
+    const paths = container.querySelectorAll("path");
+    expect(paths.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("p50")).toBeDefined();
+    expect(screen.getByText("p95")).toBeDefined();
+    expect(screen.getByText("weekly latency")).toBeDefined();
+  });
+});
+
+describe("Viz.BarChart", () => {
+  it("renders vertical bars with value labels", () => {
+    render(
+      <BarChart
+        props={{
+          bars: [
+            { label: "A", value: 3 },
+            { label: "B", value: 7 },
+            { label: "C", value: 5 },
+          ],
+          value_label: "count",
+        }}
+        interactions={NO_INTERACTIONS}
+      />,
+    );
+    expect(screen.getByText("A")).toBeDefined();
+    expect(screen.getByText("7")).toBeDefined();
+    expect(screen.getByText(/count/)).toBeDefined();
+  });
+
+  it("renders horizontal orientation", () => {
+    render(
+      <BarChart
+        props={{
+          bars: [{ label: "Only", value: 2 }],
+          orientation: "horizontal",
+        }}
+        interactions={NO_INTERACTIONS}
+      />,
+    );
+    expect(screen.getByText("Only")).toBeDefined();
+    expect(screen.getByText("2")).toBeDefined();
+  });
+
+  it("shows empty placeholder when bars missing", () => {
+    render(
+      <BarChart props={{ bars: [] }} interactions={NO_INTERACTIONS} />,
+    );
+    expect(screen.getByText(/No bars/)).toBeDefined();
+  });
+});
+
+/**
+ * Malformed-props crash safety — the Lead Agent can produce envelopes where
+ * required fields are missing or of the wrong type (common when a new model
+ * hallucinates the args). None of these should throw during render; the
+ * component should either show the empty placeholder or silently default.
+ * Regression guard for the `Cannot read properties of undefined (reading
+ * 'map')` runtime error.
+ */
+describe("Viz.* crash safety — malformed props", () => {
+  const NULL_PROPS: Record<string, unknown> = {};
+  const NULL_INTERACTIONS: never[] = [];
+
+  const cases: Array<[string, React.ComponentType<{ props: Record<string, unknown>; interactions: never[] }>]> = [
+    ["Table", Table],
+    ["KV", KV],
+    ["Cards", Cards],
+    ["Timeline", Timeline],
+    ["Steps", Steps],
+    ["Code", Code],
+    ["Diff", Diff],
+    ["Callout", Callout],
+    ["LinkCard", LinkCard],
+    ["Stat", Stat],
+    ["LineChart", LineChart],
+    ["BarChart", BarChart],
+    ["PieChart", PieChart],
+  ];
+
+  for (const [name, Comp] of cases) {
+    it(`${name} does not throw with empty props`, () => {
+      expect(() =>
+        render(<Comp props={NULL_PROPS} interactions={NULL_INTERACTIONS} />),
+      ).not.toThrow();
+    });
+
+    it(`${name} does not throw when array fields are null`, () => {
+      const props: Record<string, unknown> = {
+        columns: null,
+        rows: null,
+        items: null,
+        cards: null,
+        steps: null,
+        bars: null,
+        slices: null,
+        series: null,
+        x: null,
+        spark: null,
+      };
+      expect(() =>
+        render(<Comp props={props} interactions={NULL_INTERACTIONS} />),
+      ).not.toThrow();
+    });
+  }
+
+  it("Code handles missing interactions without crashing", () => {
+    expect(() =>
+      // @ts-expect-error — simulate malformed payload where interactions is undefined
+      render(<Code props={{ code: "a" }} interactions={undefined} />),
+    ).not.toThrow();
+  });
+});
+
+describe("Viz.PieChart", () => {
+  it("renders donut slices with labels and percentages", () => {
+    const { container } = render(
+      <PieChart
+        props={{
+          slices: [
+            { label: "OpenAI", value: 60 },
+            { label: "Anthropic", value: 40 },
+          ],
+          caption: "token spend",
+        }}
+        interactions={NO_INTERACTIONS}
+      />,
+    );
+    expect(container.querySelector("svg")).toBeTruthy();
+    // Donut center echoes the headline slice, so "OpenAI" + "60%" each
+    // appear twice (center label + legend). Use getAllByText.
+    expect(screen.getAllByText("OpenAI").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Anthropic")).toBeDefined();
+    expect(screen.getAllByText("60%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("40%")).toBeDefined();
+    expect(screen.getByText("token spend")).toBeDefined();
+  });
+
+  it("shows empty placeholder when total is zero", () => {
+    render(
+      <PieChart
+        props={{
+          slices: [
+            { label: "x", value: 0 },
+            { label: "y", value: 0 },
+          ],
+        }}
+        interactions={NO_INTERACTIONS}
+      />,
+    );
+    expect(screen.getByText(/No slices/)).toBeDefined();
   });
 });

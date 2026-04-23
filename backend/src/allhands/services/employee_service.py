@@ -43,6 +43,21 @@ COORDINATION_TOOL_IDS: tuple[str, ...] = (
 
 DEFAULT_SKILL_IDS: tuple[str, ...] = ("allhands.render", "allhands.artifacts")
 
+# E22 · Lead-specific skill pack.
+# Normal employees get DEFAULT_SKILL_IDS (render + artifacts). The Lead Agent
+# additionally gets 5 platform-admin packs, descriptor-only at turn 0; their
+# tool_ids load on ``resolve_skill`` activation. This is how the Claude-Code
+# style progressive loading lands for platform management — Lead's prompt
+# stays small, tool-schema bloat is gated behind user intent.
+LEAD_EXTRA_SKILL_IDS: tuple[str, ...] = (
+    "allhands.team_management",
+    "allhands.model_management",
+    "allhands.skill_management",
+    "allhands.mcp_management",
+    "allhands.cockpit_admin",
+)
+LEAD_SKILL_IDS: tuple[str, ...] = DEFAULT_SKILL_IDS + LEAD_EXTRA_SKILL_IDS
+
 
 def _inject_coordination_tools(tool_ids: list[str]) -> list[str]:
     out = list(tool_ids)

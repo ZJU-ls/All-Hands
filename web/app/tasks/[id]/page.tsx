@@ -8,6 +8,7 @@ import { LoadingState } from "@/components/state";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
 import { RunTracePanel } from "@/components/runs/RunTracePanel";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { isImeComposing } from "@/lib/ime";
 import {
   answerTask,
   approveTask,
@@ -347,6 +348,8 @@ function NeedsInputPanel({
   busy: boolean;
   onSubmit: () => void;
 }) {
+  const isComposingRef = useRef(false);
+
   return (
     <div
       data-testid="needs-input-panel"
@@ -360,10 +363,22 @@ function NeedsInputPanel({
         data-testid="answer-input"
         value={answer}
         onChange={(e) => onChange(e.target.value)}
+        onCompositionStart={() => {
+          isComposingRef.current = true;
+        }}
+        onCompositionEnd={() => {
+          isComposingRef.current = false;
+        }}
         rows={3}
         placeholder="一两句话回给员工 · Enter 发送 / Shift+Enter 换行"
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && !busy && answer.trim()) {
+          if (
+            e.key === "Enter" &&
+            !isImeComposing(e, isComposingRef.current) &&
+            !e.shiftKey &&
+            !busy &&
+            answer.trim()
+          ) {
             e.preventDefault();
             onSubmit();
           }

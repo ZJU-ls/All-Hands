@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MessageList } from "@/components/chat/MessageList";
 import { InputBar } from "@/components/chat/InputBar";
@@ -14,6 +14,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
 import {
   ApiError,
+  BackendUnreachableError,
   getConversation,
   getEmployee,
   listConversationMessages,
@@ -25,6 +26,14 @@ import type { Message } from "@/lib/protocol";
 
 const CONVERSATION_STORAGE_KEY = "allhands_conversation_id";
 
+type LoadState =
+  | { kind: "loading" }
+  | { kind: "ready" }
+  | { kind: "unreachable"; attempt: number }
+  | { kind: "error"; message: string };
+
+const RETRY_DELAYS_MS = [2000, 4000, 8000, 16000, 16000];
+
 function toHeaderEmployee(e: EmployeeDto): ConversationHeaderEmployee {
   return {
     id: e.id,
@@ -35,53 +44,93 @@ function toHeaderEmployee(e: EmployeeDto): ConversationHeaderEmployee {
   };
 }
 
+function BackendOfflineBanner({
+  attempt,
+  onRetry,
+}: {
+  attempt: number;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="backend-offline-banner"
+      className="border-b border-border bg-surface-2 px-4 py-2"
+    >
+      <div className="flex items-center gap-3 text-[12px]">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning" aria-hidden="true" />
+        <span className="text-text">后端未就绪 · 正在自动重连</span>
+        <span className="font-mono text-text-subtle">尝试 {attempt}</span>
+        <span className="flex-1" />
+        <span className="hidden font-mono text-text-subtle md:inline">
+          backend · port 8000
+        </span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex h-6 items-center rounded-md border border-border px-2 font-mono text-[11px] text-text-muted transition-colors duration-base hover:border-border-strong hover:text-text"
+        >
+          立即重试
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const router = useRouter();
   const [conv, setConv] = useState<ConversationDto | null>(null);
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
   const [panelOpen, setPanelOpen] = useState(false);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
+  const retryAttemptRef = useRef(0);
+  const manualRetryRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    async function attempt(): Promise<void> {
       try {
         const c = await getConversation(conversationId);
         if (cancelled) return;
-        setConv(c);
-        const e = await getEmployee(c.employee_id);
+        // Parallel: employee metadata + persisted history. Either failing in
+        // isolation was previously a silent catch; with BackendUnreachableError
+        // we treat the pair as one transaction so a flaky backend shows the
+        // unified "offline" state instead of half-loading.
+        const [e, history] = await Promise.all([
+          getEmployee(c.employee_id),
+          listConversationMessages(conversationId),
+        ]);
         if (cancelled) return;
+        // Historical rehydrate: the live SSE stream no longer owns these
+        // fields exclusively — GET /messages now returns render_payloads /
+        // tool_calls / reasoning persisted on finalize so reopening a chat
+        // restores charts, cards, inline tool chips, and thinking-channel
+        // replay to exactly the state the user saw mid-turn. Dropping them
+        // here was the second half of the "historical render vanished" bug.
+        const asMessages: Message[] = history.map((m) => ({
+          id: m.id,
+          conversation_id: m.conversation_id,
+          role: m.role,
+          content: m.content,
+          tool_calls: m.tool_calls ?? [],
+          render_payloads: m.render_payloads ?? [],
+          reasoning: m.reasoning ?? undefined,
+          created_at: m.created_at,
+        }));
+        setConv(c);
         setEmployee(e);
-        // Rehydrate persisted history so MessageList + UsageChip reflect the
-        // conversation immediately on reload. New SSE-streamed messages get
-        // appended via addMessage; this is just the initial snapshot.
-        try {
-          const history = await listConversationMessages(conversationId);
-          if (cancelled) return;
-          const asMessages: Message[] = history.map((m) => ({
-            id: m.id,
-            conversation_id: m.conversation_id,
-            role: m.role,
-            content: m.content,
-            tool_calls: [],
-            render_payloads: [],
-            created_at: m.created_at,
-          }));
-          replaceMessages(asMessages);
-        } catch {
-          // history load failure is non-fatal — chat still works for new turns
-        }
+        replaceMessages(asMessages);
+        retryAttemptRef.current = 0;
+        setLoadState({ kind: "ready" });
       } catch (e) {
         if (cancelled) return;
-        // B05 · a 404 means the conversation id in the URL (typically
-        // restored from localStorage after a db reset or manual deletion)
-        // no longer exists. Silently evict the stale pointer and bounce
-        // back to /chat — the landing page will mint a fresh conversation.
-        // Surfacing the raw "404" error card would suggest the backend is
-        // broken, which it isn't.
-        if (e instanceof ApiError && e.status === 404) {
+        // B05 · stale-id 404 → evict pointer + bounce to landing (unchanged).
+        if (e instanceof ApiError && e.status === 404 && !(e instanceof BackendUnreachableError)) {
           try {
             localStorage.removeItem(CONVERSATION_STORAGE_KEY);
           } catch {
@@ -90,12 +139,36 @@ export default function ConversationPage() {
           router.replace("/chat");
           return;
         }
-        setError(String(e));
+        // Backend offline / restarting → show actionable card + auto-retry.
+        if (e instanceof BackendUnreachableError) {
+          const attemptN = retryAttemptRef.current;
+          const delay = RETRY_DELAYS_MS[Math.min(attemptN, RETRY_DELAYS_MS.length - 1)];
+          retryAttemptRef.current = attemptN + 1;
+          setLoadState({ kind: "unreachable", attempt: attemptN + 1 });
+          retryTimer = setTimeout(() => {
+            if (!cancelled) void attempt();
+          }, delay);
+          return;
+        }
+        // Real application error → surface, no auto-retry.
+        setLoadState({ kind: "error", message: String(e) });
       }
     }
-    void load();
+
+    manualRetryRef.current = () => {
+      if (cancelled) return;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      retryAttemptRef.current = 0;
+      setLoadState({ kind: "loading" });
+      void attempt();
+    };
+    void attempt();
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [conversationId, router, replaceMessages]);
 
@@ -113,43 +186,50 @@ export default function ConversationPage() {
   const headerEmployee = employee ? toHeaderEmployee(employee) : null;
 
   return (
-    <AppShell
-      title="对话"
-      actions={
-        <div className="flex items-center gap-2">
-          <ConversationHeader
-            employee={headerEmployee}
-            conversationTitle={conv?.title ?? null}
-            effectiveModelRef={conv?.model_ref_override ?? employee?.model_ref ?? null}
-            isOverridden={Boolean(conv?.model_ref_override)}
-          />
-          <ConversationSwitcher
-            employeeId={employee?.id ?? null}
-            currentConversationId={conversationId}
-          />
-          <button
-            onClick={() => setPanelOpen((v) => !v)}
-            aria-pressed={panelOpen}
-            aria-label="切换制品区"
-            title="制品区 · Cmd/Ctrl+J"
-            className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 font-mono text-[11px] transition-colors duration-base ${
-              panelOpen
-                ? "border-border-strong bg-surface-2 text-text"
-                : "border-border text-text-muted hover:text-text hover:border-border-strong"
-            }`}
-          >
-            制品 <span className="text-text-subtle">⌘J</span>
-          </button>
-        </div>
-      }
-    >
+    <AppShell title="One for All · 一个 Lead Agent 搞定一切">
       <div className="flex h-full min-w-0">
         <div className="flex h-full flex-1 flex-col min-w-0">
-          {error && (
+          {loadState.kind === "unreachable" && (
+            <BackendOfflineBanner
+              attempt={loadState.attempt}
+              onRetry={() => manualRetryRef.current()}
+            />
+          )}
+          {loadState.kind === "error" && (
             <div className="border-b border-border bg-surface-2 px-4 py-2 text-[12px] text-danger">
-              {error}
+              {loadState.message}
             </div>
           )}
+          <div
+            data-testid="conversation-toolbar"
+            className="flex items-center gap-2 border-b border-border px-3 h-9 min-w-0"
+          >
+            <div className="min-w-0 flex-1">
+              <ConversationHeader
+                employee={headerEmployee}
+                conversationTitle={conv?.title ?? null}
+                effectiveModelRef={conv?.model_ref_override ?? employee?.model_ref ?? null}
+                isOverridden={Boolean(conv?.model_ref_override)}
+              />
+            </div>
+            <ConversationSwitcher
+              employeeId={employee?.id ?? null}
+              currentConversationId={conversationId}
+            />
+            <button
+              onClick={() => setPanelOpen((v) => !v)}
+              aria-pressed={panelOpen}
+              aria-label="切换制品区"
+              title="制品区 · Cmd/Ctrl+J"
+              className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 font-mono text-[11px] transition-colors duration-base ${
+                panelOpen
+                  ? "border-border-strong bg-surface-2 text-text"
+                  : "border-border text-text-muted hover:text-text hover:border-border-strong"
+              }`}
+            >
+              制品 <span className="text-text-subtle">⌘J</span>
+            </button>
+          </div>
           <div className="flex-1 min-h-0">
             <MessageList conversationId={conversationId} />
           </div>

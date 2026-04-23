@@ -80,8 +80,14 @@ export function InputBar({
     // deliberately not configurable per-turn from the chat surface — those
     // belong on the employee design page and are inherited here. The chat
     // only carries `thinking` (a per-turn user action) forward.
-    const body: Record<string, unknown> = { content };
-    if (thinking) body.thinking = true;
+    //
+    // IMPORTANT (E17): always send the boolean, never omit. Omitting leaves
+    // `SendMessageRequest.thinking = None` on the backend, which the runner
+    // reads as "inherit provider default" — and DashScope/Qwen3 defaults to
+    // `enable_thinking=true`. Result: grayed toggle, reasoning still streams.
+    // Explicit `false` hits `extra_body={"enable_thinking": false}` downstream
+    // and the model stops thinking for real.
+    const body: Record<string, unknown> = { content, thinking };
 
     const toolCalls = new Map<string, ToolCallAccumulator>();
 

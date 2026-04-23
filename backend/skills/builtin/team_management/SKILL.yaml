@@ -1,0 +1,14 @@
+id: allhands.team_management
+name: 团队管理
+description: 员工 CRUD · 创建 / 修改 / 删除 / 发布 / 派活(dispatch)
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.create_employee
+  - allhands.meta.update_employee
+  - allhands.meta.delete_employee
+  - allhands.meta.preview_employee_composition
+  - allhands.meta.dispatch_employee
+
+prompt_fragment_file: prompts/guidance.md

@@ -80,6 +80,28 @@ export type PlanCardProps = {
   steps: PlanCardStep[];
 };
 
+/**
+ * MessageSegment — ordered pointer into the parallel `tool_calls` /
+ * `render_payloads` arrays of a Message, plus inline text chunks.
+ *
+ * The original Message model bucketed content / tool_calls / render_payloads
+ * into three separate arrays rendered as three stacked blocks. That made the
+ * assistant's narrative illegible for turns like "text A → render → text B
+ * → render" — everything collapsed into
+ * "text A + text B / tool_1 + tool_2 / render_1 + render_2".
+ *
+ * `segments` captures the actual temporal order so MessageBubble can render
+ * the narrative as it streamed, with Viz cards inline between text chunks.
+ * Optional because:
+ *  - historical messages loaded from the DB don't have per-turn tool/render
+ *    history persisted, so they just carry `content` and render legacy.
+ *  - user messages don't produce tool calls, they have no segments.
+ */
+export type MessageSegment =
+  | { kind: "text"; content: string }
+  | { kind: "tool_call"; tool_call_id: string }
+  | { kind: "render"; index: number };
+
 export type Message = {
   id: string;
   conversation_id: string;
@@ -98,6 +120,8 @@ export type Message = {
   reasoning?: string;
   tool_calls: ToolCall[];
   render_payloads: RenderPayload[];
+  /** Ordered narrative of the assistant turn. See MessageSegment. */
+  segments?: MessageSegment[];
   tool_call_id?: string | null;
   trace_ref?: string | null;
   parent_run_id?: string | null;

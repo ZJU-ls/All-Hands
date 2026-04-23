@@ -12,6 +12,10 @@ import {
   Diff,
   Callout,
   LinkCard,
+  Stat,
+  LineChart,
+  BarChart,
+  PieChart,
 } from "@/components/render/Viz";
 import {
   EmptyState,
@@ -1548,6 +1552,64 @@ function VizShowcase() {
               title: "Anthropic Docs",
               description: "Claude API / Agent SDK / Model docs.",
               siteName: "Anthropic",
+            }}
+            interactions={[]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="Viz.Stat · 单值 KPI">
+          <Stat
+            props={{
+              label: "Active runs",
+              value: 42,
+              unit: "runs",
+              delta: { value: 8, direction: "up", tone: "positive" },
+              spark: [3, 5, 4, 7, 6, 9, 8, 12],
+              caption: "last 24h",
+            }}
+            interactions={[]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="Viz.LineChart · 趋势">
+          <LineChart
+            props={{
+              x: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+              series: [
+                { label: "p50", values: [120, 135, 125, 150, 145, 130, 140] },
+                { label: "p95", values: [300, 420, 360, 480, 440, 390, 410] },
+              ],
+              y_label: "ms",
+              caption: "weekly latency",
+            }}
+            interactions={[]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="Viz.BarChart · 分类对比">
+          <BarChart
+            props={{
+              bars: [
+                { label: "OpenAI", value: 124 },
+                { label: "Anthropic", value: 87 },
+                { label: "Qwen", value: 56 },
+                { label: "DeepSeek", value: 33 },
+              ],
+              value_label: "runs this week",
+            }}
+            interactions={[]}
+          />
+        </ShowcaseCard>
+
+        <ShowcaseCard title="Viz.PieChart · 占比 (donut)">
+          <PieChart
+            props={{
+              slices: [
+                { label: "OpenAI", value: 58 },
+                { label: "Anthropic", value: 27 },
+                { label: "Qwen", value: 15 },
+              ],
+              caption: "token spend",
             }}
             interactions={[]}
           />

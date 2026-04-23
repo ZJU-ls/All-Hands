@@ -30,6 +30,7 @@ from allhands.persistence.sql_repos import (
     SqlMCPServerRepo,
     SqlObservabilityConfigRepo,
     SqlSkillRepo,
+    SqlSkillRuntimeRepo,
     SqlTaskRepo,
     SqlTriggerFireRepo,
     SqlTriggerRepo,
@@ -55,8 +56,12 @@ if TYPE_CHECKING:
 
 @lru_cache(maxsize=1)
 def get_tool_registry() -> ToolRegistry:
+    # E21: pass the sessionmaker so READ meta tools (list_* / get_*) get
+    # real executors that read the DB. Without it they'd fall back to the
+    # no-op stub and return {} — which is exactly the "Lead 查不到已配置
+    # 的东西" bug the user reported.
     reg = ToolRegistry()
-    discover_builtin_tools(reg)
+    discover_builtin_tools(reg, session_maker=get_sessionmaker())
     return reg
 
 
@@ -120,6 +125,8 @@ async def get_chat_service(
         gate=gate,
         provider_repo=SqlLLMProviderRepo(session),
         bus=bus,
+        skill_runtime_repo=SqlSkillRuntimeRepo(session),
+        mcp_repo=SqlMCPServerRepo(session),
     )
 
 
