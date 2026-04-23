@@ -13,7 +13,11 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from allhands.config import get_settings
-from allhands.execution.gate import BaseGate, PersistentConfirmationGate
+from allhands.execution.gate import (
+    BaseGate,
+    InterruptConfirmationGate,
+    PersistentConfirmationGate,
+)
 from allhands.execution.mcp.adapter import RealMCPAdapter
 from allhands.execution.registry import ToolRegistry
 from allhands.execution.skills import SkillRegistry, seed_skills
@@ -97,7 +101,17 @@ async def get_confirmation_service(session: AsyncSession) -> ConfirmationService
     return ConfirmationService(SqlConfirmationRepo(session))
 
 
-async def get_gate(session: AsyncSession) -> BaseGate:
+async def get_gate(session: AsyncSession, *, use_interrupt: bool = False) -> BaseGate:
+    """Return the confirmation gate implementation (ADR 0014 Phase 4d).
+
+    ``use_interrupt=True`` (default for chat paths that have a checkpointer
+    wired) selects ``InterruptConfirmationGate`` — pauses via LangGraph
+    interrupt(), DB row is written by the chat_service tap. Without a
+    checkpointer, interrupt() has nothing to resume from, so callers fall
+    back to the legacy ``PersistentConfirmationGate`` (polling + DB).
+    """
+    if use_interrupt:
+        return InterruptConfirmationGate()
     queue = get_confirmation_queue()
     return PersistentConfirmationGate(
         confirmation_repo=SqlConfirmationRepo(session),
@@ -109,7 +123,6 @@ async def get_chat_service(
     session: AsyncSession,
     request: Request | None = None,
 ) -> ChatService:
-    gate = await get_gate(session)
     # Pull the EventBus off the trigger runtime so chat turns surface in the
     # cockpit activity feed. When there's no Request (CLI / tests), skip — the
     # service still works, just without the cockpit beat.
@@ -119,9 +132,15 @@ async def get_chat_service(
         runtime = getattr(request.app.state, "trigger_runtime", None)
         bus = getattr(runtime, "bus", None) if runtime is not None else None
         # ADR 0014 · process-singleton checkpointer lives on app.state. None
-        # when the flag is off (default) or startup failed — runner falls
-        # back to pure-function behaviour.
+        # when startup failed — runner falls back to v0 pure-function path.
         checkpointer = getattr(request.app.state, "checkpointer", None)
+
+    # ADR 0014 Phase 4d: interrupt-gate when we have a checkpointer (the
+    # interrupt() primitive requires one). Otherwise fall back to the legacy
+    # polling gate so chat still works even if the checkpointer failed to
+    # start (e.g. disk full at boot).
+    gate = await get_gate(session, use_interrupt=checkpointer is not None)
+
     return ChatService(
         employee_repo=SqlEmployeeRepo(session),
         conversation_repo=SqlConversationRepo(session),
@@ -133,6 +152,7 @@ async def get_chat_service(
         skill_runtime_repo=SqlSkillRuntimeRepo(session),
         mcp_repo=SqlMCPServerRepo(session),
         checkpointer=checkpointer,
+        confirmation_repo=SqlConfirmationRepo(session),
     )
 
 

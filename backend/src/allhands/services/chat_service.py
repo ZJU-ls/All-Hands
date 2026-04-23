@@ -8,7 +8,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from allhands.core import Conversation, Employee, Message, RenderPayload, ToolCall
+from allhands.core import (
+    Confirmation,
+    ConfirmationStatus,
+    Conversation,
+    Employee,
+    Message,
+    RenderPayload,
+    ToolCall,
+)
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
 from allhands.execution.dispatch import DispatchService
@@ -27,6 +35,7 @@ if TYPE_CHECKING:
     from allhands.execution.registry import ToolRegistry
     from allhands.execution.skills import SkillRegistry
     from allhands.persistence.repositories import (
+        ConfirmationRepo,
         ConversationRepo,
         EmployeeRepo,
         LLMProviderRepo,
@@ -79,6 +88,7 @@ class ChatService:
         skill_runtime_repo: SkillRuntimeRepo | None = None,
         mcp_repo: MCPServerRepo | None = None,
         checkpointer: Any | None = None,
+        confirmation_repo: ConfirmationRepo | None = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -106,9 +116,14 @@ class ChatService:
         self._runtime_cache: dict[str, SkillRuntime] = {}
         # ADR 0014 · LangGraph checkpointer for graph-internal state (interrupt
         # resume / tool pending / subagent stack). Separate from MessageRepo
-        # which stays the SoT for user-visible messages (R2). None in v0-compat
-        # mode; populated once ALLHANDS_ENABLE_CHECKPOINTER is flipped on.
+        # which stays the SoT for user-visible messages (R2).
         self._checkpointer = checkpointer
+        # ADR 0014 Phase 4c/4d · When the runner pauses at an interrupt, the
+        # tap in _persist_assistant_reply writes a PENDING Confirmation row so
+        # /confirmations/pending can see it and the frontend's dialog has a
+        # persistent handle. None in unit tests that don't exercise the gate
+        # flow; optional keeps those tests unchanged.
+        self._confirmation_repo = confirmation_repo
 
     async def _compute_platform_snapshot(self) -> str:
         """Fresh DB-verified snapshot of platform capabilities, injected into
@@ -645,6 +660,15 @@ class ChatService:
                     # turn without duplicating rows.
                     tc = event.tool_call
                     tool_calls_by_id[tc.id] = tc
+                elif event.kind == "interrupt_required":
+                    # ADR 0014 Phase 4d · write a PENDING Confirmation row
+                    # so /confirmations/pending can see what's waiting and
+                    # /confirmations/{id}/resolve has a handle. Keyed on
+                    # LangGraph's interrupt_id which is stable across the
+                    # pause — the frontend gets that id in the CUSTOM event
+                    # and echoes it back as the confirmation_id.
+                    if self._confirmation_repo is not None:
+                        await self._write_pending_confirmation(event)
                 elif event.kind == "error":
                     error_payload = {"code": event.code, "message": event.message}
                     await flush()
@@ -660,6 +684,47 @@ class ChatService:
             # round-trip, and after flush() so the assistant message is
             # durable first (if this errors, at least the reply is saved).
             await self._flush_runtime(conversation_id)
+
+    async def _write_pending_confirmation(self, event: Any) -> None:
+        """Persist a Confirmation row on InterruptEvent (ADR 0014 Phase 4d).
+
+        Called from the ``_persist_assistant_reply`` tap exactly once per
+        pause (the runner's re-execution on resume produces no new
+        InterruptEvent — LangGraph auto-matches). Keyed on the LangGraph
+        interrupt id so /confirmations/{id}/resolve and the frontend dialog
+        agree on the handle.
+
+        Failure is swallowed on purpose — the graph has already paused and
+        the UI has already rendered the dialog from the CUSTOM event; the
+        DB row is a secondary concern for the pending-list endpoint. A
+        hard throw here would kill the SSE + lose graph state.
+        """
+        if self._confirmation_repo is None:
+            return
+        try:
+            value = event.value if isinstance(event.value, dict) else {}
+            tool_call_id = str(value.get("tool_call_id", "") or "")
+            summary = str(value.get("summary", "") or "")
+            rationale = str(value.get("rationale", "") or "")
+            diff_raw = value.get("diff")
+            diff: dict[str, object] | None = dict(diff_raw) if isinstance(diff_raw, dict) else None
+            now = datetime.now(UTC)
+            confirmation = Confirmation(
+                id=str(event.interrupt_id) or f"itr_{uuid.uuid4().hex[:16]}",
+                tool_call_id=tool_call_id,
+                rationale=rationale,
+                summary=summary,
+                diff=diff,
+                status=ConfirmationStatus.PENDING,
+                created_at=now,
+                expires_at=now + timedelta(seconds=300),
+            )
+            await self._confirmation_repo.save(confirmation)
+        except Exception:
+            log.exception(
+                "interrupt.confirmation.save.failed",
+                extra={"interrupt_id": getattr(event, "interrupt_id", None)},
+            )
 
     def _build_runner_factory(self, provider: Any) -> Any:
         """Closure used by DispatchService to spawn sub-runners.
