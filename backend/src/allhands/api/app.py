@@ -66,6 +66,26 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.exception("trigger.runtime.start.failed")
         app.state.trigger_runtime = None
 
+    # Register installed skills (market / github / upload) into the shared
+    # SkillRegistry. Without this, `employee.skill_ids` referencing installed
+    # skills resolve to None at runtime and the agent's system prompt silently
+    # drops them (ADR 0015 live-smoke regression). Built-in skills go through
+    # `seed_skills()` on first `get_skill_registry()` call; this loads the
+    # second leg from the DB. Exceptions are logged — we never block startup
+    # over skill-registry load failure (chat still works with built-ins).
+    try:
+        from allhands.api.deps import get_skill_registry
+        from allhands.execution.skills import load_installed_skills
+        from allhands.persistence.sql_repos import SqlSkillRepo
+
+        maker = get_sessionmaker()
+        registry = get_skill_registry()
+        async with maker() as session, session.begin():
+            count = await load_installed_skills(registry, SqlSkillRepo(session))
+        logger.info("installed_skills.loaded count=%d", count)
+    except Exception:
+        logger.exception("installed_skills.load.failed")
+
     # ADR 0014 · checkpointer is default-on after Phase 4. The context-manager
     # lifetime is owned here so setup() + conn.close() happen in the right
     # order even if the lifespan body throws. Factory lives in

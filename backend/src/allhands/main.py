@@ -67,24 +67,6 @@ async def startup() -> None:
     except Exception as exc:
         log.warning("lead_agent.seed.failed", error=str(exc))
 
-    # Register installed skills (market / github / upload) into the shared
-    # SkillRegistry. Without this, `employee.skill_ids` that reference
-    # installed-skill UUIDs resolve to None at runtime — the agent's system
-    # prompt silently drops them and tool calls fail. Built-in skills are
-    # already wired by `seed_skills()`; this is the second leg.
-    try:
-        from allhands.api.deps import get_skill_registry
-        from allhands.execution.skills import load_installed_skills
-        from allhands.persistence.sql_repos import SqlSkillRepo
-
-        registry = get_skill_registry()
-        maker = get_sessionmaker()
-        async with maker() as session, session.begin():
-            count = await load_installed_skills(registry, SqlSkillRepo(session))
-        log.info("installed_skills.loaded", count=count)
-    except Exception as exc:
-        log.warning("installed_skills.load.failed", error=str(exc))
-
     # Dev / test seed: ensure every page has real "full house" data on cold start
     # (I-0020). No-op in prod unless ALLHANDS_SEED=1. Track N's seed_service
     # supersedes Track K's bootstrap_service.ensure_gateway_demo_seeds — the
