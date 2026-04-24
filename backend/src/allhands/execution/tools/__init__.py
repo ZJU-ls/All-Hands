@@ -109,6 +109,7 @@ _META_EXECUTOR_TOOL_IDS = frozenset(t.id for t, _ in _META_TOOLS_WITH_EXECUTORS)
 def discover_builtin_tools(
     registry: ToolRegistry,
     session_maker: Any | None = None,
+    extra_executors: dict[str, Any] | None = None,
 ) -> None:
     """Register every builtin / render / meta tool on the registry.
 
@@ -118,6 +119,12 @@ def discover_builtin_tools(
     return ``{}``; that's the path Lead was on, and why Lead reported "0 of
     each" even though the DB clearly had records. Keep the ``None`` branch
     for unit tests that build registries without any DB.
+
+    ``extra_executors``: optional ``{tool_id: executor}`` mapping injected
+    from the ``api/`` layer for meta tools whose executors close over a
+    service (e.g. ``SkillService`` for skill install). The ``execution/``
+    layer cannot import from ``services/`` by the layered contract, so the
+    caller constructs these executors and passes them in.
     """
 
     registry.register(FETCH_URL_TOOL, fetch_url_execute)
@@ -155,6 +162,10 @@ def discover_builtin_tools(
         *ALL_OBSERVATORY_META_TOOLS,
     ):
         if tool.id in _META_EXECUTOR_TOOL_IDS:
+            continue
+        injected = extra_executors.get(tool.id) if extra_executors else None
+        if injected is not None:
+            registry.register(tool, injected)
             continue
         real_executor = read_meta_executors.get(tool.id)
         if real_executor is not None:

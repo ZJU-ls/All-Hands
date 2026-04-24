@@ -755,6 +755,19 @@ def make_artifact_search_executor(
     return _exec
 
 
+def _make_delete_conversation_exec_factory() -> Callable[
+    [async_sessionmaker[AsyncSession]], ToolExecutor
+]:
+    """Deferred import so this module stays free of a direct dependency on
+    ``conversation_tools`` (keeping the meta-tools import graph flat)."""
+
+    from allhands.execution.tools.meta.conversation_tools import (
+        make_delete_conversation_executor,
+    )
+
+    return make_delete_conversation_executor
+
+
 # Tool-id → executor-factory map. Keys match the ``Tool.id`` strings in
 # ``tools/meta/*.py``; values are callables that take a session_maker and
 # return an executor. Resolved in ``tools/__init__.discover_builtin_tools``.
@@ -765,6 +778,11 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     "allhands.meta.get_model": make_get_model_executor,
     "allhands.meta.list_skills": make_list_skills_executor,
     "allhands.meta.get_skill_detail": make_get_skill_detail_executor,
+    # Note: list_skill_market / preview_skill_market / install_skill_from_*
+    # / update_skill / delete_skill executors live in api/skill_executors.py
+    # because they close over SkillService (services/). The execution/ layer
+    # is forbidden from importing services/ by the import-linter contract,
+    # so api/deps.py injects them via ``discover_builtin_tools(..., extra_executors=...)``.
     "allhands.meta.list_mcp_servers": make_list_mcp_servers_executor,
     "allhands.meta.get_mcp_server": make_get_mcp_server_executor,
     "allhands.meta.list_employees": make_list_employees_executor,
@@ -780,4 +798,6 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     "allhands.artifacts.delete": make_artifact_delete_executor,
     "allhands.artifacts.pin": make_artifact_pin_executor,
     "allhands.artifacts.search": make_artifact_search_executor,
+    # History-panel conversation lifecycle (Tool First · L01).
+    "allhands.meta.delete_conversation": _make_delete_conversation_exec_factory(),
 }

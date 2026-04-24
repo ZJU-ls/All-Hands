@@ -111,7 +111,9 @@ def service(repo: FakeSkillRepo, install_root: Path, market: FakeGithubMarket) -
 async def test_install_from_github_registers_skill(
     service: SkillService, repo: FakeSkillRepo
 ) -> None:
-    skill = await service.install_from_github("https://github.com/example/test-skill", ref="main")
+    skills = await service.install_from_github("https://github.com/example/test-skill", ref="main")
+    assert len(skills) == 1
+    skill = skills[0]
     assert skill.name == "test-skill"
     assert skill.source == SkillSource.GITHUB
     assert skill.source_url == "https://github.com/example/test-skill"
@@ -136,6 +138,69 @@ async def test_install_from_market_uses_github_archive(
 async def test_install_from_market_unknown_slug_raises(service: SkillService) -> None:
     with pytest.raises(SkillInstallError):
         await service.install_from_market("nope")
+
+
+async def test_install_from_github_multi_skill_repo_installs_all(
+    repo: FakeSkillRepo, install_root: Path, market: FakeGithubMarket
+) -> None:
+    """Repo layout like anthropics/skills: no root SKILL.md, multiple under
+    `skills/<name>/SKILL.md`. All should install, each with its own slug."""
+
+    def _md(name: str) -> str:
+        return (
+            "---\n"
+            f"name: {name}\n"
+            f"description: {name} skill\n"
+            "version: 1.0.0\n"
+            "tool_ids: []\n"
+            "---\n\nbody\n"
+        )
+
+    class MultiCloner:
+        async def clone(self, url: str, ref: str, dest: Path) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
+            for slug in ("alpha", "beta", "gamma"):
+                sd = dest / "skills" / slug
+                sd.mkdir(parents=True)
+                (sd / "SKILL.md").write_text(_md(slug), encoding="utf-8")
+
+    svc = SkillService(repo=repo, install_root=install_root, market=market, cloner=MultiCloner())
+    installed = await svc.install_from_github("https://github.com/anthropics/skills", ref="main")
+    assert {s.name for s in installed} == {"alpha", "beta", "gamma"}
+    for s in installed:
+        assert s.source == SkillSource.GITHUB
+        assert s.source_url.endswith(f"/tree/main/skills/{s.name}")
+        assert s.path is not None
+        assert (Path(s.path) / "SKILL.md").exists()
+    # all persisted separately
+    assert len(await repo.list_all()) == 3
+
+
+async def test_install_from_github_skips_dot_and_noise_dirs(
+    repo: FakeSkillRepo, install_root: Path, market: FakeGithubMarket
+) -> None:
+    class NoisyCloner:
+        async def clone(self, url: str, ref: str, dest: Path) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
+            # real skill
+            sd = dest / "skills" / "real"
+            sd.mkdir(parents=True)
+            (sd / "SKILL.md").write_text(
+                "---\nname: real\ndescription: r\nversion: 1.0.0\ntool_ids: []\n---\nbody\n",
+                encoding="utf-8",
+            )
+            # noise — must be skipped
+            for noise in (".git", "node_modules", "tests"):
+                nd = dest / noise / "accidental"
+                nd.mkdir(parents=True)
+                (nd / "SKILL.md").write_text(
+                    "---\nname: accidental\ndescription: x\nversion: 1.0.0\ntool_ids: []\n---\n",
+                    encoding="utf-8",
+                )
+
+    svc = SkillService(repo=repo, install_root=install_root, market=market, cloner=NoisyCloner())
+    installed = await svc.install_from_github("https://github.com/x/y")
+    assert [s.name for s in installed] == ["real"]
 
 
 async def test_install_from_github_missing_skill_md_raises(
@@ -195,7 +260,8 @@ async def test_preview_market_skill_unknown_raises(service: SkillService) -> Non
 async def test_delete_removes_db_and_disk(
     service: SkillService, repo: FakeSkillRepo, install_root: Path
 ) -> None:
-    skill = await service.install_from_github("https://github.com/example/test-skill")
+    skills = await service.install_from_github("https://github.com/example/test-skill")
+    skill = skills[0]
     assert skill.path is not None
     skill_path = Path(skill.path)
     assert skill_path.exists()
@@ -209,7 +275,8 @@ async def test_delete_removes_db_and_disk(
 async def test_update_only_description_and_prompt(
     service: SkillService, repo: FakeSkillRepo
 ) -> None:
-    skill = await service.install_from_github("https://github.com/example/test-skill")
+    skills = await service.install_from_github("https://github.com/example/test-skill")
+    skill = skills[0]
     updated = await service.update(skill.id, description="new desc", prompt_fragment="new prompt")
     assert updated is not None
     assert updated.description == "new desc"

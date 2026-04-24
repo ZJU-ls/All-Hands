@@ -173,16 +173,24 @@ async def delete_skill(
     await svc.delete(skill_id)
 
 
-@router.post("/install/github", response_model=SkillResponse, status_code=201)
+class InstallGithubResponse(BaseModel):
+    skills: list[SkillResponse]
+    count: int
+
+
+@router.post("/install/github", response_model=InstallGithubResponse, status_code=201)
 async def install_from_github(
     body: InstallGithubRequest,
     svc: SkillService = Depends(get_skill_service),
-) -> SkillResponse:
+) -> InstallGithubResponse:
     try:
-        skill = await svc.install_from_github(body.url, ref=body.ref)
+        skills = await svc.install_from_github(body.url, ref=body.ref)
     except SkillInstallError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _to_response(skill)
+    return InstallGithubResponse(
+        skills=[_to_response(s) for s in skills],
+        count=len(skills),
+    )
 
 
 @router.post("/install/market", response_model=SkillResponse, status_code=201)

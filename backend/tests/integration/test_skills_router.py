@@ -141,7 +141,9 @@ def test_install_from_github_then_patch_then_delete(client: TestClient) -> None:
         json={"url": "https://github.com/example/foo", "ref": "main"},
     )
     assert r1.status_code == 201
-    skill = r1.json()
+    body = r1.json()
+    assert body["count"] == 1
+    skill = body["skills"][0]
     sid = skill["id"]
 
     r2 = client.patch(f"/api/skills/{sid}", json={"description": "updated"})

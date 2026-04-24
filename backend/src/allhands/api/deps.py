@@ -65,8 +65,20 @@ def get_tool_registry() -> ToolRegistry:
     # real executors that read the DB. Without it they'd fall back to the
     # no-op stub and return {} — which is exactly the "Lead 查不到已配置
     # 的东西" bug the user reported.
+    #
+    # extra_executors: wire Lead-Agent-driven skill management (install /
+    # update / delete / market browse). These factories live in ``api/``
+    # because they close over SkillService; the execution layer is
+    # forbidden from importing services/ by the import-linter contract.
+    from allhands.api.skill_executors import build_skill_management_executors
+
+    maker = get_sessionmaker()
     reg = ToolRegistry()
-    discover_builtin_tools(reg, session_maker=get_sessionmaker())
+    discover_builtin_tools(
+        reg,
+        session_maker=maker,
+        extra_executors=build_skill_management_executors(maker),
+    )
     return reg
 
 
