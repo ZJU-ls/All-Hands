@@ -564,11 +564,23 @@ class ChatService:
             model_ref_override=conv.model_ref_override,
             checkpointer=self._checkpointer,
         )
+        # ADR 0017 · per-turn thread_id. Claude Code invariant (V02 § 1.3):
+        # each query() gets a fresh in-memory messages array; there's no
+        # cross-query state leak. Our equivalent: fresh LangGraph thread_id
+        # per turn. Reason: LangGraph's AsyncSqliteSaver persists graph
+        # state under thread_id; sharing it across turns means a crashed
+        # tool_use (no matching tool_result) leaves a zombie AIMessage in
+        # state that poisons the next turn's validation ("AIMessage with
+        # tool_calls has no corresponding ToolMessage"). By scoping state
+        # to the turn, zombies die with the turn that created them.
+        # Interrupt within a turn still works (same thread). Resume is
+        # handled in resume_message which looks up the specific turn_id.
+        thread_id = active_turn.turn_id if active_turn is not None else conversation_id
         return self._persist_assistant_reply(
             conversation_id,
             runner.stream(
                 messages=lc_messages,
-                thread_id=conversation_id,
+                thread_id=thread_id,
                 overrides=overrides,
             ),
             employee=employee,
@@ -643,11 +655,34 @@ class ChatService:
             model_ref_override=conv.model_ref_override,
             checkpointer=self._checkpointer,
         )
+        # Per-turn thread_id (see send_message). For resume we need the
+        # specific turn_id where the interrupt was raised — that's where
+        # the checkpointer saved the pause state. Look it up from the
+        # latest unresolved INTERRUPT_RAISED event.
+        resume_thread_id = conversation_id  # legacy fallback
+        if self._event_repo is not None:
+            try:
+                events = await self._event_repo.list_by_conversation(conversation_id)
+                interrupt_raised = None
+                for evt in reversed(events):
+                    if evt.kind == EventKind.INTERRUPT_RESUMED:
+                        # This interrupt already resumed; stop looking further back.
+                        break
+                    if evt.kind == EventKind.INTERRUPT_RAISED and evt.turn_id:
+                        interrupt_raised = evt
+                        break
+                if interrupt_raised is not None and interrupt_raised.turn_id:
+                    resume_thread_id = interrupt_raised.turn_id
+            except Exception:
+                log.exception(
+                    "resume_message.interrupt_lookup.failed",
+                    extra={"conversation_id": conversation_id},
+                )
         return self._persist_assistant_reply(
             conversation_id,
             runner.stream(
                 messages=[],
-                thread_id=conversation_id,
+                thread_id=resume_thread_id,
                 resume={"value": resume_value},
             ),
             employee=employee,

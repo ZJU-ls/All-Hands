@@ -101,13 +101,50 @@ def _extract_text(content_json: dict[str, Any]) -> str:
 
 
 def _project_assistant(event: ConversationEvent) -> dict[str, Any]:
-    """ASSISTANT events may carry either a flat ``content`` string OR
-    Anthropic-style ``content_blocks`` (text + tool_use mixtures). We
-    preserve whichever shape the event was written with so downstream
-    providers see the right format."""
+    """ASSISTANT events may carry any of three shapes, in priority order:
+
+    1. ``content_blocks`` — already Anthropic-style (text + tool_use).
+       Pass through verbatim.
+    2. ``tool_calls`` — our internal ToolCall dicts (id, tool_id, args,
+       status, result, ...). Reconstruct Anthropic-style content_blocks
+       so the LLM sees the tool_use it originally emitted. Required for
+       history validation: when a prior turn's tool_use has no paired
+       tool_result, ``fill_orphan_tool_results`` can only detect it when
+       the tool_use block is visible.
+    3. Flat ``content`` — plain text, no tool usage.
+    """
     blocks = event.content_json.get("content_blocks")
     if isinstance(blocks, list) and blocks:
         return {"role": "assistant", "content": list(blocks), "id": event.id}
+
+    # Reconstruct content_blocks from tool_calls if present — defensive
+    # against ASSISTANT events written by _persist_turn_events (which
+    # stores ToolCall dicts, not Anthropic blocks).
+    tool_calls = event.content_json.get("tool_calls")
+    if isinstance(tool_calls, list) and tool_calls:
+        text = event.content_json.get("content", "") or ""
+        reconstructed: list[dict[str, Any]] = []
+        if isinstance(text, str) and text.strip():
+            reconstructed.append({"type": "text", "text": text})
+        for tc in tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            tc_id = tc.get("id")
+            tc_name = tc.get("tool_id") or tc.get("name") or ""
+            tc_args = tc.get("args") or tc.get("arguments") or {}
+            if not isinstance(tc_id, str):
+                continue
+            reconstructed.append(
+                {
+                    "type": "tool_use",
+                    "id": tc_id,
+                    "name": str(tc_name),
+                    "input": tc_args if isinstance(tc_args, dict) else {},
+                }
+            )
+        if reconstructed:
+            return {"role": "assistant", "content": reconstructed, "id": event.id}
+
     return {
         "role": "assistant",
         "content": event.content_json.get("content", ""),
