@@ -234,9 +234,14 @@ export async function resolveConfirmation(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ decision }),
   });
-  if (!res.ok && res.status !== 204) {
-    throw new Error(`resolveConfirmation failed: ${res.status}`);
+  // 204 = success; 404 = already resolved / expired / never persisted (e.g.
+  // interrupt-sourced pause whose tap didn't land yet — ADR 0014 Phase 4e).
+  // Either way the UI can safely forget the confirmation — treating 404 as
+  // a crash dead-ended the user with no recovery, so we downgrade to a warn.
+  if (res.ok || res.status === 204 || res.status === 404) {
+    return;
   }
+  throw new Error(`resolveConfirmation failed: ${res.status}`);
 }
 
 export async function getPendingConfirmations(): Promise<unknown[]> {

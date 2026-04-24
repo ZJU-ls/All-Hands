@@ -24,9 +24,27 @@ Lead can't *see* the platform, Lead can't suggest the right action.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import difflib
+import mimetypes
+import re
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from allhands.config.settings import get_settings
+from allhands.core import (
+    BINARY_KINDS,
+    TEXT_KINDS,
+    Artifact,
+    ArtifactKind,
+    ArtifactVersion,
+)
+from allhands.core.errors import DomainError
 from allhands.persistence.sql_repos import (
+    SqlArtifactRepo,
     SqlEmployeeRepo,
     SqlLLMModelRepo,
     SqlLLMProviderRepo,
@@ -254,6 +272,489 @@ def make_get_employee_detail_executor(
     return _exec
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Artifact tools — WRITE + READ executors bridging to ArtifactService.
+#
+# Context: the Tool() schemas in tools/meta/artifact_tools.py declare the tool
+# surface, but before this block the registry bound them to `_async_noop`,
+# so agent calls to `artifact_create` silently returned {} without persisting
+# anything. That's the "agent can't draw HTML" regression — the tool "works"
+# but the side effect was a no-op. These executors open a fresh session per
+# invocation (same pattern as the READ executors above), construct an
+# ArtifactService around SqlArtifactRepo + settings.data_dir, and return
+# JSON-safe payloads. No event bus wired here — live UI refresh still works
+# because ArtifactPanel polls on-mount and reloads when conversationId changes.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# Private helpers that replicate the ArtifactService surface using only
+# persistence + core, so executors stay within the execution layer's allowed
+# imports (layer contract: execution MUST NOT import services). The logic is
+# a narrow copy of services/artifact_service.py; keep the two in sync when
+# either changes. DRY is tempting, but pushing an import into execution →
+# services would violate ADR-wide layer discipline.
+
+_SAFE_NAME = re.compile(r"[A-Za-z0-9._\-一-鿿 ]+")
+_MAX_TEXT_BYTES = 1 * 1024 * 1024
+_MAX_BINARY_BYTES = 20 * 1024 * 1024
+_DEFAULT_WORKSPACE_ID = "default"
+
+_ARTIFACT_DEFAULT_MIME: dict[ArtifactKind, str] = {
+    ArtifactKind.MARKDOWN: "text/markdown",
+    ArtifactKind.CODE: "text/plain",
+    ArtifactKind.HTML: "text/html",
+    ArtifactKind.IMAGE: "application/octet-stream",
+    ArtifactKind.DATA: "application/json",
+    ArtifactKind.MERMAID: "text/vnd.mermaid",
+}
+
+_ARTIFACT_EXT: dict[ArtifactKind, str] = {
+    ArtifactKind.MARKDOWN: "md",
+    ArtifactKind.CODE: "txt",
+    ArtifactKind.HTML: "html",
+    ArtifactKind.IMAGE: "bin",
+    ArtifactKind.DATA: "json",
+    ArtifactKind.MERMAID: "mmd",
+}
+
+
+class _ArtifactExecutorError(DomainError):
+    pass
+
+
+def _data_dir() -> Path:
+    return Path(get_settings().data_dir)
+
+
+def _artifact_root() -> Path:
+    root = _data_dir() / "artifacts"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _validate_artifact_name(name: str) -> None:
+    if not name or len(name) > 256:
+        raise _ArtifactExecutorError("Artifact name must be 1..256 chars.")
+    if not _SAFE_NAME.fullmatch(name):
+        raise _ArtifactExecutorError(
+            "Artifact name may contain letters, digits, CJK characters, space, '.', '_', '-' only."
+        )
+
+
+def _decode_artifact_base64(payload: str) -> bytes:
+    try:
+        return base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise _ArtifactExecutorError(f"Invalid base64 payload: {exc}") from exc
+
+
+def _artifact_ext(mime: str, kind: ArtifactKind) -> str:
+    guessed = mimetypes.guess_extension(mime)
+    if guessed:
+        return guessed.lstrip(".")
+    return _ARTIFACT_EXT[kind]
+
+
+def _write_artifact_blob(
+    workspace_id: str,
+    artifact_id: str,
+    *,
+    version: int,
+    kind: ArtifactKind,
+    mime: str,
+    blob: bytes,
+) -> str:
+    ext = _artifact_ext(mime, kind)
+    folder = _artifact_root() / workspace_id / artifact_id
+    folder.mkdir(parents=True, exist_ok=True)
+    filename = f"v{version}.{ext}"
+    (folder / filename).write_bytes(blob)
+    return str(Path(workspace_id) / artifact_id / filename)
+
+
+def _artifact_diff(prev: str, curr: str) -> str:
+    return "".join(
+        difflib.unified_diff(
+            prev.splitlines(keepends=True),
+            curr.splitlines(keepends=True),
+            fromfile="prev",
+            tofile="curr",
+            n=3,
+        )
+    )
+
+
+def make_artifact_create_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(
+        name: str,
+        kind: str,
+        content: str | None = None,
+        content_base64: str | None = None,
+        mime_type: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        try:
+            kind_enum = ArtifactKind(kind)
+        except ValueError:
+            return {
+                "error": f"unknown kind {kind!r}; expected one of "
+                "markdown/code/html/image/data/mermaid",
+            }
+        try:
+            _validate_artifact_name(name)
+            mime = mime_type or _ARTIFACT_DEFAULT_MIME[kind_enum]
+            now = datetime.now(UTC)
+            artifact_id = str(uuid.uuid4())
+            if kind_enum in TEXT_KINDS:
+                if content is None:
+                    return {"error": f"kind={kind!r} requires `content`"}
+                size = len(content.encode("utf-8"))
+                if size > _MAX_TEXT_BYTES:
+                    return {"error": f"size {size}B exceeds text ceiling {_MAX_TEXT_BYTES}B"}
+                file_path: str | None = None
+                art_content: str | None = content
+            elif kind_enum in BINARY_KINDS:
+                if content_base64 is None:
+                    return {"error": f"kind={kind!r} requires `content_base64`"}
+                blob = _decode_artifact_base64(content_base64)
+                size = len(blob)
+                if size > _MAX_BINARY_BYTES:
+                    return {"error": f"size {size}B exceeds binary ceiling {_MAX_BINARY_BYTES}B"}
+                file_path = _write_artifact_blob(
+                    _DEFAULT_WORKSPACE_ID,
+                    artifact_id,
+                    version=1,
+                    kind=kind_enum,
+                    mime=mime,
+                    blob=blob,
+                )
+                art_content = None
+            else:  # pragma: no cover
+                return {"error": f"unsupported kind {kind!r}"}
+
+            artifact = Artifact(
+                id=artifact_id,
+                workspace_id=_DEFAULT_WORKSPACE_ID,
+                name=name,
+                kind=kind_enum,
+                mime_type=mime,
+                content=art_content,
+                file_path=file_path,
+                size_bytes=size,
+                version=1,
+                created_at=now,
+                updated_at=now,
+            )
+            async with _session_context(maker) as session:
+                repo = SqlArtifactRepo(session)
+                await repo.upsert(artifact)
+                await repo.save_version(
+                    ArtifactVersion(
+                        id=str(uuid.uuid4()),
+                        artifact_id=artifact.id,
+                        version=1,
+                        content=artifact.content,
+                        file_path=artifact.file_path,
+                        diff_from_prev=None,
+                        created_at=now,
+                    )
+                )
+        except _ArtifactExecutorError as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create failed: {exc}"}
+        return {
+            "artifact_id": artifact.id,
+            "version": artifact.version,
+            "kind": artifact.kind.value,
+        }
+
+    return _exec
+
+
+def make_artifact_render_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    """Return a render payload targeting the Artifact.Preview component.
+
+    The agent calls this after `artifact_create` / `artifact_update` so the
+    chat renders a rich preview card without replaying the content through
+    the LLM's context window. The frontend ComponentRegistry maps
+    `Artifact.Preview` to `components/render/Artifact/Preview.tsx`.
+    """
+
+    async def _exec(
+        artifact_id: str,
+        version: int | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        # Touch the artifact to fail fast if the id is invalid — avoids
+        # rendering a dead card the user has to click to discover is broken.
+        async with _session_context(maker) as session:
+            art = await SqlArtifactRepo(session).get(artifact_id)
+        if art is None:
+            return {"error": f"artifact {artifact_id!r} not found"}
+        props: dict[str, Any] = {"artifact_id": artifact_id}
+        if version is not None:
+            props["version"] = version
+        return {
+            "component": "Artifact.Preview",
+            "props": props,
+            "interactions": [],
+        }
+
+    return _exec
+
+
+def make_artifact_list_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(
+        kind: str | None = None,
+        name_prefix: str | None = None,
+        pinned: bool | None = None,
+        limit: int = 100,
+        include_deleted: bool = False,
+        **_: Any,
+    ) -> dict[str, Any]:
+        kind_filter: str | None = None
+        if kind is not None:
+            try:
+                kind_filter = ArtifactKind(kind).value
+            except ValueError:
+                return {"error": f"unknown kind {kind!r}"}
+        async with _session_context(maker) as session:
+            rows = await SqlArtifactRepo(session).list_for_workspace(
+                _DEFAULT_WORKSPACE_ID,
+                kind=kind_filter,
+                name_prefix=name_prefix,
+                pinned_only=bool(pinned),
+                include_deleted=include_deleted,
+                limit=limit,
+            )
+        return {
+            "artifacts": [
+                {
+                    "id": a.id,
+                    "name": a.name,
+                    "kind": a.kind.value,
+                    "version": a.version,
+                    "size_bytes": a.size_bytes,
+                    "updated_at": a.updated_at.isoformat(),
+                    "pinned": a.pinned,
+                }
+                for a in rows
+            ],
+            "count": len(rows),
+        }
+
+    return _exec
+
+
+def make_artifact_read_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(
+        artifact_id: str,
+        version: int | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        async with _session_context(maker) as session:
+            repo = SqlArtifactRepo(session)
+            art = await repo.get(artifact_id)
+            if art is None:
+                return {"error": f"artifact {artifact_id!r} not found"}
+            content: str | None = art.content
+            resolved_version = art.version
+            if version is not None and version != art.version:
+                v = await repo.get_version(artifact_id, version)
+                if v is None:
+                    return {"error": f"artifact {artifact_id!r} version {version} not found"}
+                content = v.content
+                resolved_version = version
+        return {
+            "artifact_id": art.id,
+            "name": art.name,
+            "kind": art.kind.value,
+            "version": resolved_version,
+            "mime_type": art.mime_type,
+            "size_bytes": art.size_bytes,
+            "content": content,
+        }
+
+    return _exec
+
+
+def make_artifact_update_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(
+        artifact_id: str,
+        mode: str = "overwrite",
+        content: str | None = None,
+        content_base64: str | None = None,
+        patch: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        if mode not in ("overwrite", "patch"):
+            return {"error": f"mode must be 'overwrite' or 'patch', got {mode!r}"}
+        try:
+            async with _session_context(maker) as session:
+                repo = SqlArtifactRepo(session)
+                existing = await repo.get(artifact_id)
+                if existing is None:
+                    return {"error": f"artifact {artifact_id!r} not found"}
+                now = datetime.now(UTC)
+                next_version = existing.version + 1
+
+                if existing.kind in TEXT_KINDS:
+                    if mode == "patch":
+                        return {
+                            "error": "mode='patch' is not supported by the inline "
+                            "execution-layer executor yet; use mode='overwrite'"
+                        }
+                    if content is None:
+                        return {"error": "mode='overwrite' requires `content`"}
+                    new_content = content
+                    size = len(new_content.encode("utf-8"))
+                    if size > _MAX_TEXT_BYTES:
+                        return {"error": f"size {size}B exceeds text ceiling {_MAX_TEXT_BYTES}B"}
+                    diff = _artifact_diff(existing.content or "", new_content)
+                    updated = existing.model_copy(
+                        update={
+                            "content": new_content,
+                            "size_bytes": size,
+                            "version": next_version,
+                            "updated_at": now,
+                        }
+                    )
+                    await repo.upsert(updated)
+                    await repo.save_version(
+                        ArtifactVersion(
+                            id=str(uuid.uuid4()),
+                            artifact_id=existing.id,
+                            version=next_version,
+                            content=new_content,
+                            file_path=None,
+                            diff_from_prev=diff,
+                            created_at=now,
+                        )
+                    )
+                    return {"artifact_id": updated.id, "version": updated.version}
+
+                # binary path (image)
+                if mode == "patch":
+                    return {"error": f"kind={existing.kind.value!r} does not support 'patch'"}
+                if content_base64 is None:
+                    return {"error": "binary update requires `content_base64`"}
+                blob = _decode_artifact_base64(content_base64)
+                size = len(blob)
+                if size > _MAX_BINARY_BYTES:
+                    return {"error": f"size {size}B exceeds binary ceiling {_MAX_BINARY_BYTES}B"}
+                rel = _write_artifact_blob(
+                    existing.workspace_id,
+                    existing.id,
+                    version=next_version,
+                    kind=existing.kind,
+                    mime=existing.mime_type,
+                    blob=blob,
+                )
+                updated = existing.model_copy(
+                    update={
+                        "file_path": rel,
+                        "size_bytes": size,
+                        "version": next_version,
+                        "updated_at": now,
+                    }
+                )
+                await repo.upsert(updated)
+                await repo.save_version(
+                    ArtifactVersion(
+                        id=str(uuid.uuid4()),
+                        artifact_id=existing.id,
+                        version=next_version,
+                        content=None,
+                        file_path=rel,
+                        diff_from_prev=None,
+                        created_at=now,
+                    )
+                )
+                return {"artifact_id": updated.id, "version": updated.version}
+        except _ArtifactExecutorError as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_update failed: {exc}"}
+
+    return _exec
+
+
+def make_artifact_delete_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(artifact_id: str, **_: Any) -> dict[str, Any]:
+        async with _session_context(maker) as session:
+            repo = SqlArtifactRepo(session)
+            existing = await repo.get(artifact_id)
+            if existing is None:
+                return {"error": f"artifact {artifact_id!r} not found"}
+            if existing.deleted_at is None:
+                await repo.soft_delete(artifact_id, datetime.now(UTC))
+        return {"artifact_id": artifact_id, "deleted": True}
+
+    return _exec
+
+
+def make_artifact_pin_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(
+        artifact_id: str,
+        pinned: bool = True,
+        **_: Any,
+    ) -> dict[str, Any]:
+        async with _session_context(maker) as session:
+            repo = SqlArtifactRepo(session)
+            existing = await repo.get(artifact_id)
+            if existing is None:
+                return {"error": f"artifact {artifact_id!r} not found"}
+            if existing.pinned == pinned:
+                return {"artifact_id": existing.id, "pinned": existing.pinned}
+            updated = existing.model_copy(
+                update={"pinned": pinned, "updated_at": datetime.now(UTC)},
+            )
+            await repo.upsert(updated)
+        return {"artifact_id": updated.id, "pinned": updated.pinned}
+
+    return _exec
+
+
+def make_artifact_search_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(query: str, limit: int = 50, **_: Any) -> dict[str, Any]:
+        if not query.strip():
+            return {"artifacts": [], "count": 0}
+        async with _session_context(maker) as session:
+            rows = await SqlArtifactRepo(session).search(_DEFAULT_WORKSPACE_ID, query, limit=limit)
+        return {
+            "artifacts": [
+                {
+                    "id": a.id,
+                    "name": a.name,
+                    "kind": a.kind.value,
+                    "version": a.version,
+                    "updated_at": a.updated_at.isoformat(),
+                }
+                for a in rows
+            ],
+            "count": len(rows),
+        }
+
+    return _exec
+
+
 # Tool-id → executor-factory map. Keys match the ``Tool.id`` strings in
 # ``tools/meta/*.py``; values are callables that take a session_maker and
 # return an executor. Resolved in ``tools/__init__.discover_builtin_tools``.
@@ -268,4 +769,15 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     "allhands.meta.get_mcp_server": make_get_mcp_server_executor,
     "allhands.meta.list_employees": make_list_employees_executor,
     "allhands.meta.get_employee_detail": make_get_employee_detail_executor,
+    # Artifact executors — originally stuck on _async_noop, now bridged to
+    # ArtifactService so agent-produced HTML / markdown / code / images /
+    # mermaid / data actually persist and can be re-rendered.
+    "allhands.artifacts.create": make_artifact_create_executor,
+    "allhands.artifacts.render": make_artifact_render_executor,
+    "allhands.artifacts.list": make_artifact_list_executor,
+    "allhands.artifacts.read": make_artifact_read_executor,
+    "allhands.artifacts.update": make_artifact_update_executor,
+    "allhands.artifacts.delete": make_artifact_delete_executor,
+    "allhands.artifacts.pin": make_artifact_pin_executor,
+    "allhands.artifacts.search": make_artifact_search_executor,
 }

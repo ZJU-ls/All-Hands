@@ -20,7 +20,16 @@ export function ConfirmationDialog() {
     try {
       // /resolve updates the Confirmation row's status (both sources — legacy
       // polling and interrupt-sourced — keep the audit trail in the same table).
-      await resolveConfirmation(conf.confirmationId, decision);
+      // resolveConfirmation tolerates 404 (already resolved / never persisted)
+      // so the UI doesn't crash when a stale confirmationId arrives.
+      try {
+        await resolveConfirmation(conf.confirmationId, decision);
+      } catch (err) {
+        // Non-404 errors: log but still continue the resume flow so the turn
+        // doesn't hang. User can retry the action afterwards if needed.
+        // eslint-disable-next-line no-console
+        console.warn("[ConfirmationDialog] resolve failed · continuing resume:", err);
+      }
 
       // ADR 0014 Phase 4e · interrupt-sourced pauses need a second call to
       // /conversations/{id}/resume so the paused LangGraph turn continues.
