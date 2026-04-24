@@ -765,6 +765,11 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     "allhands.meta.get_model": make_get_model_executor,
     "allhands.meta.list_skills": make_list_skills_executor,
     "allhands.meta.get_skill_detail": make_get_skill_detail_executor,
+    # Note: list_skill_market / preview_skill_market / install_skill_from_*
+    # / update_skill / delete_skill executors live in api/skill_executors.py
+    # because they close over SkillService (services/). The execution/ layer
+    # is forbidden from importing services/ by the import-linter contract,
+    # so api/deps.py injects them via ``discover_builtin_tools(..., extra_executors=...)``.
     "allhands.meta.list_mcp_servers": make_list_mcp_servers_executor,
     "allhands.meta.get_mcp_server": make_get_mcp_server_executor,
     "allhands.meta.list_employees": make_list_employees_executor,

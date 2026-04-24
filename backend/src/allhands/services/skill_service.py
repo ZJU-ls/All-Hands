@@ -184,22 +184,53 @@ class SkillService:
         except GithubMarketError as exc:
             raise SkillInstallError(f"market preview failed: {exc}") from exc
 
-    async def install_from_github(self, url: str, ref: str = "main") -> Skill:
-        slug = _slug_from_name(url.rstrip("/").split("/")[-1] or "skill")
-        dest = self._install_root / slug
-        if dest.exists():
-            shutil.rmtree(dest)
-        self._install_root.mkdir(parents=True, exist_ok=True)
-        await self._cloner.clone(url, ref, dest)
+    async def install_from_github(self, url: str, ref: str = "main") -> list[Skill]:
+        """Clone a GitHub repo and install every discovered skill.
 
-        skill_md = dest / "SKILL.md"
-        if not skill_md.exists():
-            shutil.rmtree(dest, ignore_errors=True)
-            raise SkillInstallError("SKILL.md missing in cloned repo root")
-        fm = _parse_frontmatter(skill_md.read_text(encoding="utf-8"))
-        skill = _build_skill(fm, source=SkillSource.GITHUB, source_url=url, path=dest)
-        await self._repo.upsert(skill)
-        return skill
+        Supports three repo layouts:
+        1. Repo root has SKILL.md → install as single skill.
+        2. Repo root has NO SKILL.md but subdirs (1-3 levels) each contain
+           SKILL.md → install each as its own skill (e.g. anthropics/skills).
+        3. Nothing found → raise SkillInstallError.
+
+        Returns the list of installed skills (always ≥ 1 on success).
+        """
+        url_clean = url.rstrip("/")
+        # Temporary clone destination; we move discovered skills to final
+        # install_root/<slug>/ locations after scanning.
+        with tempfile.TemporaryDirectory(prefix="allhands-gh-skill-") as tmp:
+            tmp_root = Path(tmp) / "repo"
+            await self._cloner.clone(url_clean, ref, tmp_root)
+            skill_dirs = _discover_skill_dirs(tmp_root)
+            if not skill_dirs:
+                raise SkillInstallError(
+                    "no SKILL.md found in cloned repo (searched root + top 3 levels of subdirs)"
+                )
+            self._install_root.mkdir(parents=True, exist_ok=True)
+            installed: list[Skill] = []
+            for skill_dir in skill_dirs:
+                skill_md = skill_dir / "SKILL.md"
+                fm = _parse_frontmatter(skill_md.read_text(encoding="utf-8"))
+                slug = _slug_from_name(str(fm.get("name", skill_dir.name)))
+                if not slug:
+                    slug = _slug_from_name(skill_dir.name) or "skill"
+                dest = self._install_root / slug
+                if dest.exists():
+                    shutil.rmtree(dest)
+                shutil.move(str(skill_dir), str(dest))
+                # Prefer a source_url that points at the specific subdir when
+                # we installed from a multi-skill repo.
+                if len(skill_dirs) == 1 and skill_dir == tmp_root:
+                    source_url = url_clean
+                else:
+                    rel = skill_dir.relative_to(tmp_root).as_posix()
+                    source_url = f"{url_clean}/tree/{ref}/{rel}" if rel else url_clean
+                skill = _build_skill(
+                    fm, source=SkillSource.GITHUB, source_url=source_url, path=dest
+                )
+                await self._repo.upsert(skill)
+                installed.append(skill)
+            return installed
 
     async def install_from_market(self, slug: str) -> Skill:
         try:
@@ -266,3 +297,43 @@ def _find_skill_md(root: Path) -> Path | None:
     for candidate in root.rglob("SKILL.md"):
         return candidate
     return None
+
+
+_MAX_DISCOVER_DEPTH = 3
+
+
+def _discover_skill_dirs(root: Path) -> list[Path]:
+    """Return every directory that contains a SKILL.md at its root, searched
+    up to ``_MAX_DISCOVER_DEPTH`` levels under ``root``.
+
+    - If ``root/SKILL.md`` exists → return ``[root]`` (single-skill repo).
+    - Else scan children; skip dot-dirs, ``node_modules``, ``.git``, ``tests``
+      so that large scaffolding repos don't drown the agent in noise.
+    - A directory nested *inside* another discovered skill (e.g. a skill's
+      ``references/sub/SKILL.md``) is ignored — outer skill owns the tree.
+    """
+    if (root / "SKILL.md").exists():
+        return [root]
+    out: list[Path] = []
+    skip = {".git", ".github", "node_modules", "__pycache__", "tests", "test", "dist", "build"}
+
+    def visit(p: Path, depth: int) -> None:
+        if depth > _MAX_DISCOVER_DEPTH:
+            return
+        try:
+            children = sorted(p.iterdir())
+        except OSError:
+            return
+        if (p / "SKILL.md").exists() and p != root:
+            out.append(p)
+            return  # don't descend into an already-discovered skill
+        for child in children:
+            if not child.is_dir():
+                continue
+            name = child.name
+            if name.startswith(".") or name in skip:
+                continue
+            visit(child, depth + 1)
+
+    visit(root, 0)
+    return out
