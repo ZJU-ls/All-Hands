@@ -741,6 +741,23 @@ function MarketList({
   onInstall: (slug: string) => void;
   onPreview: (slug: string) => void;
 }) {
+  const [activeTag, setActiveTag] = useState<string>("");
+
+  // Collect every tag + how many skills use it. Sorted by popularity so the
+  // filter row puts the most-useful pills first.
+  const tagCounts = new Map<string, number>();
+  for (const e of entries) {
+    for (const t of e.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  }
+  const topTags = Array.from(tagCounts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 12);
+
+  const visible = activeTag
+    ? entries.filter((e) => e.tags.includes(activeTag))
+    : entries;
+  const totalInstalled = entries.filter((e) => installedSlugs.has(e.name)).length;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="relative flex items-center gap-2">
@@ -771,11 +788,86 @@ function MarketList({
         )}
       </div>
 
-      {entries.length === 0 ? (
+      {topTags.length > 0 && (
+        <div
+          data-testid="market-tag-filter"
+          className="flex items-center gap-1.5 flex-wrap text-[11px]"
+        >
+          <span className="font-mono uppercase tracking-wider text-text-subtle mr-1">
+            Tags
+          </span>
+          <button
+            type="button"
+            onClick={() => setActiveTag("")}
+            aria-pressed={activeTag === ""}
+            className={`inline-flex items-center gap-1 h-6 px-2.5 rounded-full border transition duration-base ${
+              activeTag === ""
+                ? "bg-primary text-primary-fg border-primary shadow-soft-sm"
+                : "bg-surface-2 text-text-muted border-border hover:border-border-strong"
+            }`}
+          >
+            全部
+            <span className="font-mono tabular-nums opacity-80">
+              {entries.length}
+            </span>
+          </button>
+          {topTags.map(([tag, count]) => {
+            const active = activeTag === tag;
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setActiveTag(active ? "" : tag)}
+                aria-pressed={active}
+                className={`inline-flex items-center gap-1 h-6 px-2.5 rounded-full border transition duration-base ${
+                  active
+                    ? "bg-primary text-primary-fg border-primary shadow-soft-sm"
+                    : "bg-surface-2 text-text-muted border-border hover:border-border-strong hover:text-text"
+                }`}
+              >
+                {tag}
+                <span
+                  className={`font-mono tabular-nums ${
+                    active ? "opacity-80" : "opacity-60"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-3 text-[11px] text-text-subtle">
+        <span data-testid="market-summary" className="font-mono">
+          {visible.length} / {entries.length} 个技能
+          {activeTag && (
+            <>
+              {" "}
+              · 标签:
+              <span className="text-text"> {activeTag}</span>
+            </>
+          )}
+        </span>
+        {totalInstalled > 0 && (
+          <span className="font-mono">
+            已安装 <span className="text-text">{totalInstalled}</span>
+          </span>
+        )}
+      </div>
+
+      {visible.length === 0 ? (
         <div data-testid="market-empty">
           <EmptyState
-            title={query ? `未找到匹配 "${query}" 的技能` : "市场目录为空"}
-            description={query ? "换个关键词试试" : undefined}
+            title={
+              activeTag
+                ? `没有标签为 "${activeTag}" 的技能`
+                : query
+                  ? `未找到匹配 "${query}" 的技能`
+                  : "市场目录为空"
+            }
+            description={activeTag || query ? "换个关键词或清除标签" : undefined}
           />
         </div>
       ) : (
@@ -783,7 +875,7 @@ function MarketList({
           data-testid="market-list"
           className="grid grid-cols-1 md:grid-cols-2 gap-3"
         >
-          {entries.map((e) => {
+          {visible.map((e) => {
             const installed = installedSlugs.has(e.name);
             const busy = busySlug === e.slug;
             return (
@@ -1083,11 +1175,13 @@ function GithubInstallForm({ onInstalled }: { onInstalled: () => Promise<void> }
   const [ref, setRef] = useState("main");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [lastInstalled, setLastInstalled] = useState<string[]>([]);
 
   async function submit() {
     if (!url) return;
     setBusy(true);
     setErr("");
+    setLastInstalled([]);
     try {
       const res = await fetch("/api/skills/install/github", {
         method: "POST",
@@ -1098,6 +1192,10 @@ function GithubInstallForm({ onInstalled }: { onInstalled: () => Promise<void> }
         const body = (await res.json()) as { detail?: string };
         throw new Error(body.detail || `HTTP ${res.status}`);
       }
+      // Backend now returns { count, skills: [...] }. One repo can contain
+      // many skills (e.g. anthropics/skills with skills/<name>/SKILL.md).
+      const body = (await res.json()) as { count: number; skills: { name: string }[] };
+      setLastInstalled(body.skills.map((s) => s.name));
       setUrl("");
       setRef("main");
       await onInstalled();
@@ -1145,7 +1243,26 @@ function GithubInstallForm({ onInstalled }: { onInstalled: () => Promise<void> }
             <span className="font-mono min-w-0 break-words">{err}</span>
           </div>
         )}
+        {lastInstalled.length > 0 && (
+          <div
+            className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary-muted px-3 py-2 text-[12px] text-primary"
+            data-testid="github-install-ok"
+          >
+            <Icon name="check" size={14} className="mt-0.5 shrink-0" />
+            <span className="min-w-0 break-words">
+              已安装 {lastInstalled.length} 个技能:
+              <span className="font-mono ml-1">{lastInstalled.join(" · ")}</span>
+            </span>
+          </div>
+        )}
         <div className="pt-1">
+          <p className="text-[11px] text-text-subtle mb-2 leading-relaxed">
+            支持单 skill 仓库(根目录含{" "}
+            <span className="font-mono text-text">SKILL.md</span>)和多 skill
+            仓库(如{" "}
+            <span className="font-mono text-text">anthropics/skills</span>,
+            会扫描前 3 级子目录,自动批量安装每个找到的 SKILL.md)。
+          </p>
           <button
             onClick={() => void submit()}
             disabled={busy || !url}
