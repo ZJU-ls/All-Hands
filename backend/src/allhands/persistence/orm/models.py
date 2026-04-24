@@ -9,7 +9,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from allhands.persistence.orm.base import Base
@@ -336,3 +347,52 @@ class SkillRuntimeRow(Base):
     conversation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     body: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class ConversationEventRow(Base):
+    """ADR 0017 · append-only conversation event log.
+
+    The single source of truth for conversation history. ``content_json`` is
+    the flexible payload (Claude Code's JSONL entry.content equivalent).
+
+    - ``(conversation_id, sequence)`` has a UNIQUE index — no holes, no
+      duplicates in a single conversation's timeline.
+    - ``idempotency_key`` is UNIQUE per conversation (partial index, SQLite
+      ``WHERE idempotency_key IS NOT NULL``) so client retries dedup cleanly.
+    - ``parent_id`` references another event in the same log (not FK'd
+      because cross-branch references may point at events that got soft-
+      deleted during snip repair; the projection logic handles broken links).
+    """
+
+    __tablename__ = "conversation_events"
+
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "sequence", name="uq_conv_events_conv_seq"),
+        Index(
+            "ix_conversation_events_subagent",
+            "conversation_id",
+            "subagent_id",
+            "sequence",
+        ),
+        Index("ix_conversation_events_turn", "turn_id"),
+        Index(
+            "ix_conversation_events_idempotency",
+            "conversation_id",
+            "idempotency_key",
+            unique=True,
+            sqlite_where=text("idempotency_key IS NOT NULL"),
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(String(64))
+    parent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(48))
+    content_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    subagent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    turn_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    is_compacted: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime)

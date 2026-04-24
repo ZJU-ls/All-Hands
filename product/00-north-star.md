@@ -36,7 +36,7 @@
 
 ---
 
-## 核心设计原则(6 条,排序即优先级 · 见 [ADR 0011](adr/0011-principles-refresh.md))
+## 核心设计原则(8 条,排序即优先级 · 原则 1-7 见 [ADR 0011](adr/0011-principles-refresh.md) · 原则 8 见 [ADR 0017](adr/0017-event-sourced-claude-code-pattern.md))
 
 > **每条原则都给出「不变量 / 来源 / 推论 / 回归防御」四段结构。**
 >
@@ -99,21 +99,33 @@
 
 ### 原则 4 · Skill = Dynamic Capability Pack
 
-**不变量:** Skill 是**激活式**动态能力包 —— 描述层(descriptor · ≤ 50 字符 · 进 system prompt)永驻 context · tool_ids + prompt_fragment 只在 `resolve_skill` 被调用时才注入 runtime。激活后的状态随对话持久化(原则 6 的状态 checkpoint 条款),不丢。
+**不变量:** Skill 是**激活式**动态能力包 · **三段渐进加载契约**(ADR 0015):
+1. **discovery** — 描述层(descriptor · ≤ 50 字符 · 进 system prompt)永驻 context · O(1) 成本
+2. **activation** — `resolve_skill` 被调用时,把 tool_ids + prompt_fragment + **SKILL.md body**(frontmatter 剥离后)塞进 runtime · O(body ≈ 5-20KB)
+3. **on-demand** — body 引导 agent 调 `allhands.meta.read_skill_file(skill_id, rel_path)` 沙盒读 `references/` / `templates/` / `scripts/` 等子文件 · O(picked files)
+
+激活后的状态随对话持久化(原则 6 的状态 checkpoint 条款),不丢。
 
 **来源:**
-- Claude Code · skill 体系 · discover descriptors + memoize + body-load on activate(`ref-src-claude/V05-skills-system § 2.1-2.3`)
+- Claude Code · skill 体系 · discover descriptors + lazy body-load + on-demand references(`ref-src-claude/V05-skills-system § 2.1-2.3`)
 - LangChain · `Runnable` 按需组合(概念借用 · 不直接依赖)
-- 本仓 · [`execution/skills.py`](../backend/src/allhands/execution/skills.py) · [`execution/tools/meta/resolve_skill.py`](../backend/src/allhands/execution/tools/meta/resolve_skill.py)
+- 本仓 · [`execution/skills.py`](../backend/src/allhands/execution/skills.py) · [`execution/skills_body.py`](../backend/src/allhands/execution/skills_body.py) · [`execution/tools/meta/resolve_skill.py`](../backend/src/allhands/execution/tools/meta/resolve_skill.py) · [`execution/tools/meta/skill_files.py`](../backend/src/allhands/execution/tools/meta/skill_files.py)
 
 **推论:**
-- 弱模型的 context budget 受控:10 个 skill ≈ 500 字符 ≈ 125 token(不激活就不展开)。
-- Skill 的 tool_ids 和 fragment 激活后**持久化**到 conversation 层面,uvicorn reload 不丢(见原则 6)。
-- 新增 Skill 不改 core · `skills/builtin/<id>/SKILL.yaml` 放目录就被发现。
+- 弱模型 context budget 受控:激活成本不随 skill 总大小增长,只随 body 大小 · references/scripts 按需付费
+- Skill 的 tool_ids + fragment + 激活状态持久化到 conversation(见原则 6)· uvicorn reload 不丢
+- 新增 built-in Skill 不改 core · `skills/builtin/<id>/SKILL.yaml` 放目录就被发现
+- Claude-style 的 SKILL.md + `references/` 目录 zip 上传即可直接投产(无需把精华重写进 `prompt_fragment`)
+- `read_skill_file` 沙盒死锁在 `install_root/<slug>/` 内 · scope=READ 不过 gate · 对 `..` / 绝对路径 / symlink / > 256KB / 非 UTF-8 一律拒绝
 
 **回归防御:**
 - `backend/tests/unit/test_skills.py::test_descriptor_cap` · descriptor ≤ 50 字符
-- `backend/tests/integration/test_skill_runtime_persistence.py` · runtime 跨 process 保持(ADR 0011 新加)
+- `backend/tests/integration/test_skill_runtime_persistence.py` · runtime 跨 process 保持(ADR 0011)
+- `backend/tests/unit/test_builtin_skill_path.py` · built-in `Skill.path` 非空(ADR 0015)
+- `backend/tests/unit/test_skills_body.py` · SKILL.md body 剥 frontmatter + CRLF 规范化(ADR 0015)
+- `backend/tests/unit/tools/test_skill_files_sandbox.py` · 路径沙盒七种 case(ADR 0015)
+- `backend/tests/integration/test_resolve_skill_body_injection.py` · 激活时 body 进 `resolved_fragments`(ADR 0015)
+- `backend/tests/integration/test_read_skill_file.py` · 未激活拒绝 · 逃逸拒绝 · 读 reference 成功(ADR 0015)
 
 ### 原则 5 · Subagent 是 Composition 基元
 
@@ -169,10 +181,36 @@
 - 任何"内存字典"作为状态都是反模式,除非旁边有一份 repo 版本同步落地。
 - `SkillRuntime` 重启不丢(从 v1 起 · 见 [ADR 0011 §3](adr/0011-principles-refresh.md))。
 - 未来要完整 LangGraph Checkpointer · 单独 ADR · 本条只要求"状态可持久化",不强制 framework。
+- **消息恢复路径 · ADR 0014 R3**(2026-04-23):用户可见历史由 MessageRepo 承载 · LLM 短期记忆由 checkpointer 承载 · 每轮只送 delta(新 user 输入) · 冷启自动 bootstrap · compaction 整理账本时不影响 LLM 上下文。详见 [ADR 0014 R3](adr/0014-langgraph-checkpointer.md#r3--dual-sot-消息恢复路径--delta-send-契约)。
 
 **回归防御:**
 - `backend/pyproject.toml` · `.importlinter` 配置 · 跑 `uv run lint-imports`
 - `backend/tests/integration/test_skill_runtime_persistence.py` · cache miss → repo load · 进程边界模拟
+- `backend/tests/integration/test_dual_sot_delta_consistency.py` · compaction 下 LLM 上下文不掉(ADR 0014 R3)
+
+### 原则 8 · 参考系统 · Claude Code 为首要架构参考(新 · 见 [ADR 0017](adr/0017-event-sourced-claude-code-pattern.md))
+
+**不变量:** 参考系统的优先级明确 —— **Claude Code(`ref-src-claude/`)是首要参考**;LangGraph / LangChain 等框架仅作"工具编排 + interrupt 原语"等局部引擎使用,**不作消息历史 / resume / subagent / 压缩的 SoT**。任何"是否该用某框架的 X 机制"的架构讨论,先问"Claude Code 怎么做的";框架默认做法与 Claude Code 模式冲突时,**Claude Code 优先**。
+
+**来源:**
+- Claude Code · 全量实现源码参考(`ref-src-claude/INDEX.md` · `volumes/V01-V11`)· 18 个月生产环境验证的 LLM agent 产品架构
+- ADR 0017 · 事件日志 + 纯投影对齐 · 把 Claude Code 立为首要参考
+- L19 · 不要被 LangGraph 抽象绑架 · 方法论基石
+
+**推论:**
+- **消息历史 = append-only 事件日志**(对标 Claude `{sessionId}.jsonl`)· 不是 MessageRepo + Checkpointer dual-SoT
+- **LLM 上下文 = 纯函数每轮重算投影**(对标 `normalizeMessagesForAPI`)· 不是 delta-send + reducer dedup
+- **每轮发全量 + provider prompt caching**(对标 Anthropic `cache_control`)· 不搞客户端 delta 优化
+- **Resume / fork / regenerate 全部走事件日志遍历**(对标 `parentUuid` DAG + `buildConversationChain`)· 不搞框架特定机制
+- **Subagent 独立 sidechain**(对标 `agent-{id}.jsonl`)· 不叠在主 conversation state 里
+- **Auto-compact 带熔断器 + PTL fallback**(对标 `autoCompact` V08 § 2.2-2.3)· 不裸奔
+- **引入新框架时评审口径**:"这个框架解决的问题和我们架构的职责是否混淆 · 它的默认做法和 Claude Code 模式是否冲突 · 冲突时谁让步"
+
+**回归防御:**
+- ADR 0017 立契约 · 任何违反事件日志 SoT / 纯投影 / 全量发送的 PR · review 打回
+- `uv run lint-imports` · `langgraph.checkpoint.*` 不泄出 `execution/`(ADR 0014 R1 继续生效)· 新增 `langgraph.graph.*` 同等守护(Phase 1 落地时加)
+- P1-P4 回归测试套件(见 ADR 0017 · Regression defense)验证:事件日志作唯一 SoT · `messages` 表作 projection cache · `build_llm_context` 纯函数性 · turn abort 合成 assistant 注入
+- 未来引入新大型框架 · 必须在 PR 说明里回答"是否与 Claude Code 模式冲突"· reviewer 按 L19 打回
 
 ---
 

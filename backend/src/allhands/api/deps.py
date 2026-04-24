@@ -26,6 +26,7 @@ from allhands.persistence.db import get_sessionmaker
 from allhands.persistence.sql_repos import (
     SqlArtifactRepo,
     SqlConfirmationRepo,
+    SqlConversationEventRepo,
     SqlConversationRepo,
     SqlEmployeeRepo,
     SqlEventRepo,
@@ -97,6 +98,10 @@ async def get_conversation_repo(session: AsyncSession) -> SqlConversationRepo:
     return SqlConversationRepo(session)
 
 
+async def get_conversation_event_repo(session: AsyncSession) -> SqlConversationEventRepo:
+    return SqlConversationEventRepo(session)
+
+
 async def get_confirmation_service(session: AsyncSession) -> ConfirmationService:
     return ConfirmationService(SqlConfirmationRepo(session))
 
@@ -153,6 +158,10 @@ async def get_chat_service(
         mcp_repo=SqlMCPServerRepo(session),
         checkpointer=checkpointer,
         confirmation_repo=SqlConfirmationRepo(session),
+        # ADR 0017 · wire the event log so ChatService writes USER /
+        # ASSISTANT / TURN_ABORTED events and build_llm_context reads
+        # from it. Unset → fall back to pre-ADR-0017 MessageRepo path.
+        event_repo=SqlConversationEventRepo(session),
     )
 
 

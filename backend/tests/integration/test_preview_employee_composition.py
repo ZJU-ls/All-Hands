@@ -51,6 +51,7 @@ EXPECTED_EXECUTE = {
         "allhands.builtin.fetch_url",
         "allhands.builtin.write_file",
         "allhands.meta.resolve_skill",
+        "allhands.meta.read_skill_file",
     ],
     "skill_ids": ["sk_research", "sk_write"],
     "max_iterations": 10,
@@ -60,6 +61,7 @@ EXPECTED_PLAN = {
     "tool_ids": [
         "allhands.builtin.render_plan",
         "allhands.meta.resolve_skill",
+        "allhands.meta.read_skill_file",
     ],
     "skill_ids": ["sk_planner"],
     "max_iterations": 3,
@@ -71,6 +73,7 @@ EXPECTED_PLAN_WITH_SUBAGENT = {
         "allhands.builtin.render_plan",
         "allhands.meta.spawn_subagent",
         "allhands.meta.resolve_skill",
+        "allhands.meta.read_skill_file",
     ],
     "skill_ids": ["sk_planner", "sk_executor_spawn"],
     "max_iterations": 15,

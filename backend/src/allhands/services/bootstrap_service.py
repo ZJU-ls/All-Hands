@@ -92,7 +92,7 @@ LEAD_ALWAYS_HOT_RENDER_TOOL_IDS: list[str] = [
 # promoted to always-hot (L16 · 2026-04-22). Used only by the on-boot
 # migration guard to detect Leads bootstrapped pre-L16 so they auto-upgrade.
 # Do NOT reuse this for anything else — new invariants belong in
-# ``default_lead_tool_ids``.
+# ``default_lead_tool_ids``. **Historical frozen snapshot — must not grow.**
 _LEAD_BASELINE_PRE_RENDER_HOT: frozenset[str] = frozenset(
     [
         "allhands.meta.list_providers",
@@ -114,6 +114,16 @@ _LEAD_BASELINE_PRE_RENDER_HOT: frozenset[str] = frozenset(
         "allhands.meta.plan_view",
         "allhands.meta.cockpit.get_workspace_summary",
     ]
+)
+
+
+# Captures the post-L16 pre-ADR-0015 baseline — Lead had render hot but no
+# `allhands.meta.read_skill_file` yet. Leads bootstrapped between 2026-04-22
+# and 2026-04-23 are in this state and must auto-upgrade on next boot so
+# progressive skill loading (ADR 0015) works for them too.
+# **Historical frozen snapshot — must not grow.** New baselines need a new constant.
+_LEAD_BASELINE_POST_L16_PRE_ADR_0015: frozenset[str] = frozenset(
+    _LEAD_BASELINE_PRE_RENDER_HOT | set(LEAD_ALWAYS_HOT_RENDER_TOOL_IDS)
 )
 
 
@@ -161,6 +171,7 @@ def default_lead_tool_ids() -> list[str]:
         "allhands.meta.get_employee_detail",
         # Orchestration
         "allhands.meta.resolve_skill",
+        "allhands.meta.read_skill_file",
         "allhands.meta.dispatch_employee",
         "allhands.meta.spawn_subagent",
         # Working memo (Plan · 4 small tools · cheap to always have)
@@ -243,7 +254,11 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
             and existing_tools != canonical_tools
             and len(legacy_signature & existing_tools) >= 2
         )
-        if looks_like_legacy_lead or existing_tools == set(_LEAD_BASELINE_PRE_RENDER_HOT):
+        if (
+            looks_like_legacy_lead
+            or existing_tools == set(_LEAD_BASELINE_PRE_RENDER_HOT)
+            or existing_tools == set(_LEAD_BASELINE_POST_L16_PRE_ADR_0015)
+        ):
             updates["tool_ids"] = list(default_lead_tool_ids())
 
         existing_skills = set(existing.skill_ids)

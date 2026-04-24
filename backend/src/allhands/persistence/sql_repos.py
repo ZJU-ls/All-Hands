@@ -19,8 +19,10 @@ from allhands.core import (
     Confirmation,
     ConfirmationStatus,
     Conversation,
+    ConversationEvent,
     Employee,
     EventEnvelope,
+    EventKind,
     InteractionSpec,
     LLMModel,
     LLMProvider,
@@ -52,6 +54,7 @@ from allhands.persistence.orm.models import (
     ArtifactRow,
     ArtifactVersionRow,
     ConfirmationRow,
+    ConversationEventRow,
     ConversationRow,
     EmployeeRow,
     EventRow,
@@ -1321,3 +1324,125 @@ class SqlSkillRuntimeRepo:
         if row is not None:
             await self._s.delete(row)
             await self._s.flush()
+
+
+def _row_to_conversation_event(row: ConversationEventRow) -> ConversationEvent:
+    return ConversationEvent(
+        id=row.id,
+        conversation_id=row.conversation_id,
+        parent_id=row.parent_id,
+        sequence=row.sequence,
+        kind=EventKind(row.kind),
+        content_json=dict(row.content_json),
+        subagent_id=row.subagent_id,
+        turn_id=row.turn_id,
+        idempotency_key=row.idempotency_key,
+        is_compacted=row.is_compacted,
+        created_at=_utc(row.created_at),
+    )
+
+
+class SqlConversationEventRepo:
+    """ADR 0017 · append-only event log (Claude Code ``{sessionId}.jsonl`` equivalent).
+
+    All reads go through ``sequence``-ordered queries; writes use
+    ``next_sequence`` atomically within the caller's transaction. Idempotency
+    is enforced by the partial unique index on
+    ``(conversation_id, idempotency_key)``; callers that send the same
+    idempotency_key twice can either swallow the IntegrityError or look up
+    via ``get_by_idempotency_key`` first — we prefer the latter so the
+    original event surfaces cleanly.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def next_sequence(self, conversation_id: str) -> int:
+        stmt = select(func.coalesce(func.max(ConversationEventRow.sequence), 0)).where(
+            ConversationEventRow.conversation_id == conversation_id,
+        )
+        current = await self._s.scalar(stmt)
+        return int(current or 0) + 1
+
+    async def append(self, event: ConversationEvent) -> ConversationEvent:
+        row = ConversationEventRow(
+            id=event.id,
+            conversation_id=event.conversation_id,
+            parent_id=event.parent_id,
+            sequence=event.sequence,
+            kind=event.kind.value,
+            content_json=dict(event.content_json),
+            subagent_id=event.subagent_id,
+            turn_id=event.turn_id,
+            idempotency_key=event.idempotency_key,
+            is_compacted=event.is_compacted,
+            created_at=_naive(_utc(event.created_at)),
+        )
+        self._s.add(row)
+        await self._s.flush()
+        return event
+
+    async def list_by_conversation(
+        self,
+        conversation_id: str,
+        *,
+        include_compacted: bool = True,
+        subagent_id: str | None = None,
+    ) -> list[ConversationEvent]:
+        stmt = select(ConversationEventRow).where(
+            ConversationEventRow.conversation_id == conversation_id,
+        )
+        if not include_compacted:
+            stmt = stmt.where(ConversationEventRow.is_compacted.is_(False))
+        if subagent_id is None:
+            stmt = stmt.where(ConversationEventRow.subagent_id.is_(None))
+        elif subagent_id != "*":
+            stmt = stmt.where(ConversationEventRow.subagent_id == subagent_id)
+        stmt = stmt.order_by(ConversationEventRow.sequence.asc())
+        rows = (await self._s.scalars(stmt)).all()
+        return [_row_to_conversation_event(r) for r in rows]
+
+    async def get(self, event_id: str) -> ConversationEvent | None:
+        row = await self._s.get(ConversationEventRow, event_id)
+        return _row_to_conversation_event(row) if row is not None else None
+
+    async def get_by_idempotency_key(
+        self, conversation_id: str, idempotency_key: str
+    ) -> ConversationEvent | None:
+        stmt = select(ConversationEventRow).where(
+            ConversationEventRow.conversation_id == conversation_id,
+            ConversationEventRow.idempotency_key == idempotency_key,
+        )
+        row = await self._s.scalar(stmt)
+        return _row_to_conversation_event(row) if row is not None else None
+
+    async def find_orphan_turns(self, conversation_id: str) -> list[str]:
+        """Return turn_ids that have TURN_STARTED but no
+        TURN_COMPLETED / TURN_ABORTED. Used at startup for crash recovery.
+        """
+        started_stmt = select(ConversationEventRow.turn_id).where(
+            ConversationEventRow.conversation_id == conversation_id,
+            ConversationEventRow.kind == EventKind.TURN_STARTED.value,
+            ConversationEventRow.turn_id.is_not(None),
+        )
+        closed_stmt = select(ConversationEventRow.turn_id).where(
+            ConversationEventRow.conversation_id == conversation_id,
+            ConversationEventRow.kind.in_(
+                [EventKind.TURN_COMPLETED.value, EventKind.TURN_ABORTED.value]
+            ),
+            ConversationEventRow.turn_id.is_not(None),
+        )
+        started = {tid for tid in (await self._s.scalars(started_stmt)).all() if tid}
+        closed = {tid for tid in (await self._s.scalars(closed_stmt)).all() if tid}
+        return sorted(started - closed)
+
+    async def mark_compacted(self, event_ids: list[str]) -> None:
+        if not event_ids:
+            return
+        stmt = (
+            update(ConversationEventRow)
+            .where(ConversationEventRow.id.in_(event_ids))
+            .values(is_compacted=True)
+        )
+        await self._s.execute(stmt)
+        await self._s.flush()

@@ -16,6 +16,7 @@ PLAN_WITH_SUBAGENT_PRESET = Preset(
         "allhands.builtin.render_plan",
         "allhands.meta.spawn_subagent",
         "allhands.meta.resolve_skill",
+        "allhands.meta.read_skill_file",
     ],
     skill_ids_whitelist=["sk_planner", "sk_executor_spawn"],
     max_iterations=15,

@@ -13,13 +13,14 @@ At chat-runtime the AgentRunner uses `bootstrap_employee_runtime` +
 
 from __future__ import annotations
 
+import typing
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
 
-from allhands.core import Employee, Skill, SkillDescriptor, SkillRuntime, Tool
+from allhands.core import Employee, Skill, SkillDescriptor, SkillRuntime, SkillSource, Tool
 from allhands.core.skill_runtime import DESCRIPTOR_MAX_CHARS as _DESCRIPTOR_MAX_CHARS
 
 # Re-export so existing `from allhands.execution.skills import SkillRuntime / SkillDescriptor`
@@ -31,6 +32,7 @@ __all__ = [
     "SkillRuntime",
     "bootstrap_employee_runtime",
     "expand_skills_to_tools",
+    "load_installed_skills",
     "render_skill_descriptors",
     "seed_skills",
 ]
@@ -154,6 +156,7 @@ def _load_builtin_skill_manifest(skill_dir: Path) -> tuple[SkillDescriptor, Call
             tool_ids=[str(t) for t in data.get("tool_ids", [])],
             prompt_fragment=prompt_fragment,
             version=str(data.get("version", "1.0.0")),
+            path=str(skill_dir),
         )
 
     return descriptor, _loader
@@ -193,6 +196,34 @@ def seed_skills(registry: SkillRegistry) -> None:
             if entry.is_dir() and (entry / "SKILL.yaml").exists():
                 descriptor, loader = _load_builtin_skill_manifest(entry)
                 registry.register_lazy(descriptor, loader)
+
+
+class _InstalledSkillRepo(typing.Protocol):  # pragma: no cover - structural
+    async def list_all(self) -> list[Skill]: ...
+
+
+async def load_installed_skills(registry: SkillRegistry, repo: _InstalledSkillRepo) -> int:
+    """Pull installed skills (market / github / upload) out of the SkillRepo
+    and register them into the shared SkillRegistry.
+
+    Built-in rows are skipped — `seed_skills()` owns that path and reads from
+    ``skills/builtin/*/SKILL.yaml`` so the descriptor / prompt_fragment stay
+    in sync with the on-disk source of truth. Re-registering here would
+    clobber the lazy loader with a stale DB copy.
+
+    Idempotent: re-calling on the same repo re-registers the same ids
+    (dict-based, so no duplicates).
+
+    Returns the count of installed skills registered this call.
+    """
+    skills = await repo.list_all()
+    count = 0
+    for skill in skills:
+        if skill.source == SkillSource.BUILTIN:
+            continue
+        registry.register(skill)
+        count += 1
+    return count
 
 
 def bootstrap_employee_runtime(

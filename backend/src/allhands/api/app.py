@@ -66,6 +66,76 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.exception("trigger.runtime.start.failed")
         app.state.trigger_runtime = None
 
+    # Register installed skills (market / github / upload) into the shared
+    # SkillRegistry. Without this, `employee.skill_ids` referencing installed
+    # skills resolve to None at runtime and the agent's system prompt silently
+    # drops them (ADR 0015 live-smoke regression). Built-in skills go through
+    # `seed_skills()` on first `get_skill_registry()` call; this loads the
+    # second leg from the DB. Exceptions are logged — we never block startup
+    # over skill-registry load failure (chat still works with built-ins).
+    try:
+        from allhands.api.deps import get_skill_registry
+        from allhands.execution.skills import load_installed_skills
+        from allhands.persistence.sql_repos import SqlSkillRepo
+
+        maker = get_sessionmaker()
+        registry = get_skill_registry()
+        async with maker() as session, session.begin():
+            count = await load_installed_skills(registry, SqlSkillRepo(session))
+        logger.info("installed_skills.loaded count=%d", count)
+    except Exception:
+        logger.exception("installed_skills.load.failed")
+
+    # ADR 0017 · one-time replay of legacy conversations into the event
+    # log. A conversation that existed before this refactor has messages
+    # rows but no events; without this replay, build_llm_context returns
+    # empty messages and the LLM forgets earlier context. Idempotent —
+    # re-runs skip conversations that already have events.
+    try:
+        from allhands.persistence.sql_repos import (
+            SqlConversationEventRepo,
+            SqlConversationRepo,
+        )
+        from allhands.services.legacy_event_migration import (
+            replay_all_legacy_conversations,
+        )
+
+        maker = get_sessionmaker()
+        async with maker() as session, session.begin():
+            convs, events = await replay_all_legacy_conversations(
+                conversation_repo=SqlConversationRepo(session),
+                event_repo=SqlConversationEventRepo(session),
+            )
+        logger.info(
+            "legacy_migration.done conversations=%d events=%d",
+            convs,
+            events,
+        )
+    except Exception:
+        logger.exception("legacy_migration.failed")
+
+    # ADR 0017 · P2.A — crash-recovery scan. Any TURN_STARTED without a
+    # matching TURN_COMPLETED / TURN_ABORTED is orphaned (process killed
+    # mid-turn, OOM, etc). Close each with reason=crash_recovery so the
+    # next build_llm_context can synthesize a coherent assistant message
+    # rather than leaving the LLM with two back-to-back user turns.
+    try:
+        from allhands.persistence.sql_repos import (
+            SqlConversationEventRepo,
+            SqlConversationRepo,
+        )
+        from allhands.services.turn_lock import scan_and_close_orphan_turns
+
+        maker = get_sessionmaker()
+        async with maker() as session, session.begin():
+            closed = await scan_and_close_orphan_turns(
+                event_repo=SqlConversationEventRepo(session),
+                conversation_repo=SqlConversationRepo(session),
+            )
+        logger.info("turn_lock.orphan_scan.done closed=%d", closed)
+    except Exception:
+        logger.exception("turn_lock.orphan_scan.failed")
+
     # ADR 0014 · checkpointer is default-on after Phase 4. The context-manager
     # lifetime is owned here so setup() + conn.close() happen in the right
     # order even if the lifespan body throws. Factory lives in

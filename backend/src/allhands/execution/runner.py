@@ -44,6 +44,7 @@ from allhands.execution.skills import (
     render_skill_descriptors,
 )
 from allhands.execution.tools.meta.resolve_skill import make_resolve_skill_executor
+from allhands.execution.tools.meta.skill_files import make_read_skill_file_executor
 from allhands.execution.tools.meta.spawn_subagent import make_spawn_subagent_executor
 
 if TYPE_CHECKING:
@@ -59,8 +60,39 @@ if TYPE_CHECKING:
 
 
 DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
+READ_SKILL_FILE_TOOL_ID = "allhands.meta.read_skill_file"
 RESOLVE_SKILL_TOOL_ID = "allhands.meta.resolve_skill"
 SPAWN_SUBAGENT_TOOL_ID = "allhands.meta.spawn_subagent"
+
+
+def _coerce_stringified_json(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Recover nested object/array args that the LLM serialized as JSON strings.
+
+    Some providers (and some models on fuzzy tool-use training) flatten nested
+    object / array arguments to a single JSON-encoded string instead of sending
+    a structured value. Pydantic v2 in lax mode does NOT auto-parse `str → dict`
+    or `str → list`, so the tool call blows up with `ToolInvocationError` at
+    `_parse_input`. This walker rescues any `str` value that parses to a `dict`
+    or `list`, leaves everything else untouched.
+
+    Real-world trigger: `render_stat` called with `delta='{"value": 2, ...}'`
+    instead of `delta={"value": 2, ...}`; `render_bar_chart` with `bars='[...]'`.
+    Regression: `test_runner_coerce_stringified_json.py`.
+    """
+    out: dict[str, Any] = {}
+    for k, v in kwargs.items():
+        if isinstance(v, str):
+            stripped = v.strip()
+            if stripped.startswith(("{", "[")):
+                try:
+                    parsed = json.loads(stripped)
+                except (ValueError, TypeError):
+                    parsed = None
+                if isinstance(parsed, (dict, list)):
+                    out[k] = parsed
+                    continue
+        out[k] = v
+    return out
 
 
 def _make_dispatch_executor(dispatch_service: DispatchService) -> Any:
@@ -381,11 +413,21 @@ class AgentRunner:
             AIMessage,
             AIMessageChunk,
             HumanMessage,
-            SystemMessage,
         )
         from langchain_core.tools import StructuredTool
         from langgraph.prebuilt import create_react_agent
         from langgraph.types import Command
+
+        class _CoercingStructuredTool(StructuredTool):
+            """Override `_parse_input` so we coerce stringified-JSON nested
+            args back to structured values before Pydantic validates. See
+            `_coerce_stringified_json` for the failure mode this rescues.
+            """
+
+            def _parse_input(self, tool_input: Any, tool_call_id: str | None) -> Any:
+                if isinstance(tool_input, dict):
+                    tool_input = _coerce_stringified_json(tool_input)
+                return super()._parse_input(tool_input, tool_call_id)
 
         message_id = str(uuid.uuid4())
         gate = self._gate
@@ -404,7 +446,21 @@ class AgentRunner:
                     skill_registry=self._skill_registry,
                 )
                 lc_tools.append(
-                    StructuredTool.from_function(
+                    _CoercingStructuredTool.from_function(
+                        coroutine=executor,
+                        name=tool.name,
+                        description=tool.description,
+                    )
+                )
+                continue
+
+            if tool_id == READ_SKILL_FILE_TOOL_ID and self._skill_registry is not None:
+                executor = make_read_skill_file_executor(
+                    runtime=self._runtime,
+                    skill_registry=self._skill_registry,
+                )
+                lc_tools.append(
+                    _CoercingStructuredTool.from_function(
                         coroutine=executor,
                         name=tool.name,
                         description=tool.description,
@@ -414,7 +470,7 @@ class AgentRunner:
 
             if tool_id == DISPATCH_TOOL_ID and self._dispatch_service is not None:
                 lc_tools.append(
-                    StructuredTool.from_function(
+                    _CoercingStructuredTool.from_function(
                         coroutine=_make_dispatch_executor(self._dispatch_service),
                         name=tool.name,
                         description=tool.description,
@@ -453,14 +509,14 @@ class AgentRunner:
 
                     return _gated
 
-                lc_tool = StructuredTool.from_function(
+                lc_tool = _CoercingStructuredTool.from_function(
                     coroutine=_make_gated(_tool, _executor),
                     name=tool.name,
                     description=tool.description,
                 )
             else:
                 _executor2 = executor
-                lc_tool = StructuredTool.from_function(
+                lc_tool = _CoercingStructuredTool.from_function(
                     coroutine=_executor2,
                     name=tool.name,
                     description=tool.description,
@@ -484,18 +540,45 @@ class AgentRunner:
             system_parts.append(base_prompt)
         system_prompt = "\n\n".join(system_parts).strip()
 
-        lc_messages: list[Any] = []
-        if system_prompt:
-            lc_messages.append(SystemMessage(content=system_prompt))
-        lc_messages.extend(
-            HumanMessage(content=m["content"])
-            if m["role"] == "user"
-            else AIMessage(content=m["content"])
-            for m in messages
-            if m["role"] in ("user", "assistant")
-        )
-
+        # The system prompt goes through `create_react_agent(prompt=...)` below
+        # so LangGraph prepends it at model-call time rather than storing it as
+        # a message in graph state. With `checkpointer=` enabled (ADR 0014
+        # default-on) and `add_messages` as the reducer, putting `SystemMessage`
+        # in the input `messages` channel caused it to accumulate across turns
+        # at non-consecutive positions (one per turn) — providers validating
+        # message order (e.g. Qwen/OpenAI-compatible) reject with
+        # "Received multiple non-consecutive system messages" (see E26).
         from langchain_core.messages import ToolMessage
+
+        # Stable message ids flow in from chat_service so LangGraph's
+        # ``add_messages`` reducer can dedup by id across turns.
+        #
+        # ADR 0017 · build_llm_context returns user / assistant / tool roles,
+        # and assistant content can be either a plain string or a list of
+        # content_blocks (text + tool_use mixtures from prior turns where
+        # the agent called tools). We materialize all three LC message
+        # subclasses so the history stays faithful to what actually
+        # happened — dropping tool messages would leave the LLM seeing
+        # ``assistant(tool_use) → assistant(next turn)`` with no tool_result
+        # in between, which Anthropic rejects and OpenAI interprets
+        # incorrectly.
+        def _to_lc_message(m: dict[str, Any]) -> Any:
+            role = m.get("role")
+            if role == "user":
+                return HumanMessage(content=m["content"], id=m.get("id"))
+            if role == "assistant":
+                return AIMessage(content=m["content"], id=m.get("id"))
+            if role == "tool":
+                return ToolMessage(
+                    content=str(m.get("content", "")),
+                    tool_call_id=str(m.get("tool_call_id", "")),
+                    id=m.get("id"),
+                )
+            return None
+
+        lc_messages: list[Any] = [
+            lc for lc in (_to_lc_message(m) for m in messages) if lc is not None
+        ]
 
         # Per-turn bookkeeping so tool_call lifecycle events stay in sync
         # with LangGraph's node stream:
@@ -515,7 +598,19 @@ class AgentRunner:
             # interrupt() + resume. The runner never reads back from the
             # checkpointer directly; that's LangGraph's responsibility when the
             # same thread_id is re-invoked.
-            agent = create_react_agent(model, lc_tools, checkpointer=self._checkpointer)
+            # `prompt=` is the LangGraph-idiomatic way to inject the system
+            # message: it's prepended at model-call time and never persisted
+            # into the message channel, so the checkpointer can't accumulate
+            # duplicates across turns (E26). `_compose_system_prompt()` is
+            # evaluated fresh every `runner.stream()` call (principle 3.3
+            # Pure-Function Query Loop), so skill activations that happened
+            # on earlier turns are reflected in later turns' prompts.
+            agent = create_react_agent(
+                model,
+                lc_tools,
+                checkpointer=self._checkpointer,
+                prompt=system_prompt or None,
+            )
             # ADR 0014 · Phase 3 — multi-mode streaming.
             # - "messages" gives per-token deltas (AIMessageChunk tuples) —
             #   the only mode that supports token-level streaming for the

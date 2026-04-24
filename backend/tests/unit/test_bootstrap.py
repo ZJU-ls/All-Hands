@@ -312,3 +312,98 @@ async def test_user_customised_lead_is_not_forced_to_render_hot() -> None:
     # No upsert because prompt already matches + tool_ids is not exact baseline
     # (has the extra user-added tool) → guard falls through.
     repo.upsert.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_pre_render_hot_baseline_frozen_snapshot_excludes_future_tools() -> None:
+    """The pre-L16 historical snapshot must stay frozen — it represents the
+    exact tool set a Lead booted *before* render-hot landed. Future additions
+    like `read_skill_file` (ADR 0015, 2026-04-23) belong to a later baseline
+    and must not leak into this snapshot, otherwise the migration guard
+    compares against a fiction and can mis-trigger or mis-skip.
+    """
+    from allhands.services.bootstrap_service import _LEAD_BASELINE_PRE_RENDER_HOT
+
+    assert "allhands.meta.read_skill_file" not in _LEAD_BASELINE_PRE_RENDER_HOT, (
+        "ADR 0015 tools did not exist at L16 — do not mutate historical snapshots"
+    )
+    # Also guard the render toolset, which is the whole point of this being
+    # the "pre-render-hot" snapshot.
+    assert "allhands.render.bar_chart" not in _LEAD_BASELINE_PRE_RENDER_HOT
+
+
+@pytest.mark.asyncio
+async def test_post_l16_lead_without_read_skill_file_migrates_on_boot() -> None:
+    """ADR 0015 auto-migration. A Lead bootstrapped between L16 (2026-04-22)
+    and ADR 0015 (2026-04-23) has the full render toolset but no
+    `read_skill_file`. Next boot must detect that exact baseline and upgrade
+    in place — same contract as the L16 migration, just for the next hop.
+    """
+    from allhands.services.bootstrap_service import (
+        _LEAD_BASELINE_POST_L16_PRE_ADR_0015,
+        default_lead_tool_ids,
+        load_lead_prompt,
+    )
+
+    existing = Employee(
+        id="lead-post-l16",
+        name="LeadAgent",
+        description="migrated",
+        system_prompt=load_lead_prompt(),
+        model_ref="openai/gpt-4o-mini",
+        tool_ids=list(_LEAD_BASELINE_POST_L16_PRE_ADR_0015),
+        skill_ids=["allhands.render", "allhands.artifacts"],
+        is_lead_agent=True,
+        created_by="system",
+        created_at=datetime.now(UTC),
+    )
+    captured: list[Employee] = []
+
+    async def upsert(emp: Employee) -> Employee:
+        captured.append(emp)
+        return emp
+
+    repo = AsyncMock()
+    repo.get_lead = AsyncMock(return_value=existing)
+    repo.upsert = upsert
+
+    lead = await ensure_lead_agent(repo)
+
+    assert len(captured) == 1
+    assert set(captured[0].tool_ids) == set(default_lead_tool_ids())
+    assert "allhands.meta.read_skill_file" in captured[0].tool_ids
+    assert lead.id == "lead-post-l16"
+
+
+@pytest.mark.asyncio
+async def test_user_customised_post_l16_lead_is_not_forced_to_upgrade() -> None:
+    """Safety rail for the ADR 0015 baseline: if the Lead's tool_ids differ
+    from the exact post-L16 snapshot (even by one extra user-added tool),
+    don't force the upgrade — mirror the render-hot safety rail.
+    """
+    from allhands.services.bootstrap_service import (
+        _LEAD_BASELINE_POST_L16_PRE_ADR_0015,
+        load_lead_prompt,
+    )
+
+    custom = list(_LEAD_BASELINE_POST_L16_PRE_ADR_0015)
+    custom.append("some.custom.extra_tool")
+
+    existing = Employee(
+        id="lead-custom-post-l16",
+        name="LeadAgent",
+        description="customised",
+        system_prompt=load_lead_prompt(),
+        model_ref="openai/gpt-4o-mini",
+        tool_ids=custom,
+        skill_ids=["allhands.render", "allhands.artifacts"],
+        is_lead_agent=True,
+        created_by="system",
+        created_at=datetime.now(UTC),
+    )
+    repo = AsyncMock()
+    repo.get_lead = AsyncMock(return_value=existing)
+    repo.upsert = AsyncMock()
+
+    await ensure_lead_agent(repo)
+    repo.upsert.assert_not_called()

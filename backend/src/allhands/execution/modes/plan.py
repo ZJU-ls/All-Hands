@@ -15,6 +15,7 @@ PLAN_PRESET = Preset(
     tool_ids_base=[
         "allhands.builtin.render_plan",
         "allhands.meta.resolve_skill",
+        "allhands.meta.read_skill_file",
     ],
     skill_ids_whitelist=["sk_planner"],
     max_iterations=3,
