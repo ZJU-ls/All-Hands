@@ -1,0 +1,22 @@
+<svg width="180" height="36" viewBox="0 0 180 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g stroke="#0A5BFF" stroke-width="1.2" stroke-linecap="round" opacity="0.35">
+    <line x1="18" y1="18" x2="18" y2="6"/>
+    <line x1="18" y1="18" x2="30" y2="18"/>
+    <line x1="18" y1="18" x2="18" y2="30"/>
+    <line x1="18" y1="18" x2="6" y2="18"/>
+  </g>
+  <g fill="#0A5BFF">
+    <circle cx="18" cy="6" r="2.4"/>
+    <circle cx="30" cy="18" r="2.4"/>
+    <circle cx="18" cy="30" r="2.4"/>
+    <circle cx="6" cy="18" r="2.4"/>
+  </g>
+  <circle cx="18" cy="18" r="5" fill="url(#hub)"/>
+  <text x="42" y="24.5" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="600" font-size="20" letter-spacing="-0.02em" fill="#141A26">allhands</text>
+  <defs>
+    <linearGradient id="hub" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A5BFF"/>
+      <stop offset="1" stop-color="#4EA8FF"/>
+    </linearGradient>
+  </defs>
+</svg>

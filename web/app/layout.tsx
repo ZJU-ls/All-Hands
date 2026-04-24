@@ -16,8 +16,28 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "allhands",
-  description: "One for All — open-source digital employee organization platform",
+  title: {
+    default: "allhands · 数字员工组织平台",
+    template: "%s · allhands",
+  },
+  description:
+    "与 Lead Agent 对话,设计、调度、观测你的数字员工团队。开源自部署,Tool First 架构。",
+  applicationName: "allhands",
+  keywords: [
+    "AI agent",
+    "digital employee",
+    "agent orchestration",
+    "LangGraph",
+    "Claude",
+    "open source",
+  ],
+  openGraph: {
+    type: "website",
+    title: "allhands · 数字员工组织平台",
+    description:
+      "One Lead Agent, a team of employees. 对话即编排,UI 即观测。",
+    siteName: "allhands",
+  },
 };
 
 export default function RootLayout({

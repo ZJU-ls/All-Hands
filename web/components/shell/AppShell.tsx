@@ -3,9 +3,9 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
-import { LogoDotgrid } from "@/components/ui/icons";
+import { Logo } from "@/components/brand/Logo";
 import { Icon, type IconName } from "@/components/ui/icon";
 
 // Lazy-load the two global overlays so their module graph (DotGridBackdrop,
@@ -173,14 +173,14 @@ function WorkspaceSwitcher() {
       className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-transparent px-2 hover:border-border-strong hover:bg-surface-2 transition duration-fast"
     >
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-fg shadow-soft-sm">
-        <LogoDotgrid />
+        <Logo variant="mark" size={18} monochrome />
       </span>
       <div className="min-w-0 flex-1 text-left">
         <div className="truncate text-sm font-semibold leading-tight tracking-tight">
           allhands
         </div>
         <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
-          v0 · mvp
+          digital workforce
         </div>
       </div>
       <Icon name="chevrons-up-down" size={14} className="text-text-subtle" />
@@ -258,8 +258,6 @@ export function AppShell({
   // Gate the dynamic-imported CommandPalette behind first-open so its module
   // graph never loads on a dev session where the user never presses ⌘K.
   const [paletteMounted, setPaletteMounted] = useState(false);
-  const searchParams = useSearchParams();
-  const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
 
   // Global ⌘K is owned here (not inside CommandPalette) so the palette can
   // stay unloaded until first open.
@@ -326,7 +324,18 @@ export function AppShell({
       {paletteMounted && (
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       )}
-      {hasTrace && <RunTraceDrawer />}
+      {/* Suspense isolates useSearchParams() so AppShell-using pages can
+          still statically prerender. Without this, every route that wraps
+          its content in AppShell bails to CSR. */}
+      <Suspense fallback={null}>
+        <TraceDrawerGate />
+      </Suspense>
     </div>
   );
+}
+
+function TraceDrawerGate() {
+  const searchParams = useSearchParams();
+  const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
+  return hasTrace ? <RunTraceDrawer /> : null;
 }
