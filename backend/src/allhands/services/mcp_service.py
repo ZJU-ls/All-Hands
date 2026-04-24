@@ -176,6 +176,31 @@ class MCPService:
             await self._client.unregister_server_tools(updated.id)
         return updated
 
+    async def dry_run_connection(
+        self,
+        *,
+        transport: MCPTransport,
+        config: dict[str, object],
+    ) -> MCPHealth:
+        """Probe an unsaved config · used by the Add form's test-before-save button.
+
+        Does NOT persist. Returns the same MCPHealth outcomes handshake does.
+        """
+        ephemeral = MCPServer(
+            id="__dry_run__",
+            name="__dry_run__",
+            transport=transport,
+            config=dict(config),
+            enabled=True,
+            exposed_tool_ids=[],
+            last_handshake_at=None,
+            health=MCPHealth.UNKNOWN,
+        )
+        try:
+            return await self._adapter.handshake(ephemeral)
+        except MCPInvocationError:
+            return MCPHealth.UNREACHABLE
+
     async def list_server_tools(self, server_id: str) -> list[MCPToolInfo]:
         server = await self._repo.get(server_id)
         if server is None:

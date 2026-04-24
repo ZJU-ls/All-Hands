@@ -205,3 +205,37 @@ def test_invoke_adapter_error_502(client: TestClient, adapter: FakeAdapter) -> N
         json={"tool_name": "echo", "arguments": {}},
     )
     assert r.status_code == 502
+
+
+def test_dry_run_test_ok(client: TestClient) -> None:
+    """POST /mcp-servers/test (no ID) → probes config without persisting."""
+    r = client.post(
+        "/api/mcp-servers/test",
+        json={
+            "transport": "http",
+            "config": {"url": "https://x", "auth": {"type": "bearer", "token": "t"}},
+        },
+    )
+    assert r.status_code == 200
+    assert r.json() == {"health": "ok"}
+
+    # No record was persisted.
+    assert client.get("/api/mcp-servers").json() == []
+
+
+def test_dry_run_test_unreachable(client: TestClient, adapter: FakeAdapter) -> None:
+    adapter.health = MCPHealth.UNREACHABLE
+    r = client.post(
+        "/api/mcp-servers/test",
+        json={"transport": "http", "config": {"url": "https://nope"}},
+    )
+    assert r.status_code == 200
+    assert r.json()["health"] == "unreachable"
+
+
+def test_dry_run_test_invalid_transport(client: TestClient) -> None:
+    r = client.post(
+        "/api/mcp-servers/test",
+        json={"transport": "carrier-pigeon", "config": {}},
+    )
+    assert r.status_code == 400
