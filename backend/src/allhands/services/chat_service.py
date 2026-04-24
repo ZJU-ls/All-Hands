@@ -12,10 +12,14 @@ from allhands.core import (
     Confirmation,
     ConfirmationStatus,
     Conversation,
+    ConversationEvent,
     Employee,
+    EventKind,
     Message,
     RenderPayload,
     ToolCall,
+    ToolCallStatus,
+    TurnAbortReason,
 )
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
@@ -23,6 +27,9 @@ from allhands.execution.dispatch import DispatchService
 from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
 from allhands.execution.tools.meta.spawn_subagent import SpawnSubagentService
+from allhands.services.auto_compact import AutoCompactManager, CompactionConfig
+from allhands.services.context_builder import build_llm_context
+from allhands.services.turn_lock import TurnLockManager
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +43,7 @@ if TYPE_CHECKING:
     from allhands.execution.skills import SkillRegistry
     from allhands.persistence.repositories import (
         ConfirmationRepo,
+        ConversationEventRepo,
         ConversationRepo,
         EmployeeRepo,
         LLMProviderRepo,
@@ -89,6 +97,7 @@ class ChatService:
         mcp_repo: MCPServerRepo | None = None,
         checkpointer: Any | None = None,
         confirmation_repo: ConfirmationRepo | None = None,
+        event_repo: ConversationEventRepo | None = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -124,6 +133,21 @@ class ChatService:
         # persistent handle. None in unit tests that don't exercise the gate
         # flow; optional keeps those tests unchanged.
         self._confirmation_repo = confirmation_repo
+        # ADR 0017 · append-only event log. The authoritative SoT for
+        # conversation history; ``messages`` table becomes a projection
+        # cache. None keeps pre-ADR-0017 tests compiling — when unset the
+        # service falls back to MessageRepo-driven context (old path).
+        self._event_repo = event_repo
+        # ADR 0017 · P2.A — per-conversation turn lock + supersede handling.
+        # Shared across all send_message calls so two concurrent users on
+        # the same conversation serialize through one lock and the late
+        # writer writes TURN_ABORTED for whatever was in flight.
+        self._turn_lock = TurnLockManager()
+        # ADR 0017 · P2.B — auto-compaction manager. Per-process state
+        # holds the circuit breaker counters; call maybe_compact before
+        # build_llm_context so long conversations stay within the model's
+        # context window.
+        self._auto_compact = AutoCompactManager(config=CompactionConfig())
 
     async def _compute_platform_snapshot(self) -> str:
         """Fresh DB-verified snapshot of platform capabilities, injected into
@@ -397,6 +421,49 @@ class ChatService:
         )
         await self._conversations.append_message(user_msg)
 
+        # ADR 0017 · also write the USER event to the event log when wired.
+        # The Message row stays as a projection cache for the frontend
+        # /messages API; the event log is the authoritative source we read
+        # from in build_llm_context below.
+        #
+        # Plan §1 (P2.A) · Turn lifecycle:
+        # - If a turn is already in flight on this conversation, supersede
+        #   it by writing TURN_ABORTED(user_superseded) and cancelling the
+        #   prior task. The synthetic assistant message emitted by
+        #   build_llm_context then tells the model it was interrupted.
+        # - Write TURN_STARTED so orphan-scan at restart can detect crashes.
+        active_turn = None
+        if self._event_repo is not None:
+            async with self._turn_lock.conversation_lock(conversation_id):
+                await self._turn_lock.supersede_if_active(self._event_repo, conversation_id)
+                await self._event_repo.append(
+                    ConversationEvent(
+                        id=user_msg.id,  # same id so projection ↔ event align
+                        conversation_id=conversation_id,
+                        parent_id=None,
+                        sequence=await self._event_repo.next_sequence(conversation_id),
+                        kind=EventKind.USER,
+                        content_json={"content": user_content, "run_id": run_id},
+                        created_at=run_started_at,
+                    )
+                )
+                active_turn = self._turn_lock.start_turn(conversation_id, run_id=run_id)
+                await self._event_repo.append(
+                    ConversationEvent(
+                        id=str(uuid.uuid4()),
+                        conversation_id=conversation_id,
+                        parent_id=None,
+                        sequence=await self._event_repo.next_sequence(conversation_id),
+                        kind=EventKind.TURN_STARTED,
+                        content_json={
+                            "turn_id": active_turn.turn_id,
+                            "run_id": run_id,
+                        },
+                        turn_id=active_turn.turn_id,
+                        created_at=datetime.now(UTC),
+                    )
+                )
+
         if self._bus is not None:
             # E18: fire-and-forget so a contended events-table write doesn't
             # stall the SSE response before any token streams.
@@ -412,43 +479,55 @@ class ChatService:
 
         runtime = await self.get_or_load_runtime(conversation_id, employee)
 
-        # ADR 0014 R3 · dual-SoT delta-send:
-        # - **Hot turn** (checkpointer already holds graph state for this
-        #   ``thread_id``): send only the *new* user message. The LangGraph
-        #   state carries the full prior conversation, and re-sending history
-        #   would double it (the assistant side especially, because LangGraph
-        #   writes its own AIMessage ids and the reducer can't reconcile our
-        #   MessageRepo-side ids with those).
-        # - **Cold start** (no prior state — fresh conversation, legacy
-        #   conversation from before ADR 0014, or state manually cleared):
-        #   seed the graph with the full MessageRepo history so the first
-        #   turn has context. Subsequent turns automatically hit the hot
-        #   path.
-        # - Stable ids are always attached so `add_messages` can dedup if a
-        #   retry accidentally re-sends the same user content in one flight.
-        history = await self._conversations.list_messages(conversation_id)
-        user_asst_history = [m for m in history if m.role in ("user", "assistant")]
-        if await self._has_checkpoint_state(conversation_id):
-            # Hot turn: only the newest user message goes over the wire.
-            # MessageRepo always ends with the freshly appended user msg
-            # (chat_service persisted it before calling into the runner).
-            latest_user = next(
-                (m for m in reversed(user_asst_history) if m.role == "user"),
-                None,
-            )
-            lc_messages: list[dict[str, Any]] = (
-                [{"role": latest_user.role, "content": latest_user.content, "id": latest_user.id}]
-                if latest_user is not None
-                else []
-            )
-        else:
-            lc_messages = [
-                {"role": m.role, "content": m.content, "id": m.id} for m in user_asst_history
-            ]
-
+        # ADR 0017 · the event log is the authoritative SoT; every turn
+        # rebuilds the LLM input from scratch via the pure
+        # ``build_llm_context`` projection (Claude Code
+        # ``normalizeMessagesForAPI`` equivalent). Full history every
+        # turn — no delta-send, no ``_has_checkpoint_state`` probe. The
+        # runner then sends the full list to the provider and lets
+        # prompt caching (P3.C) handle efficiency.
+        #
+        # Fallback (``event_repo is None``, legacy tests): read the
+        # MessageRepo directly. This path is removed when P1.E completes
+        # the migration.
         provider = None
         if self._providers is not None:
             provider = await self._providers.get_default()
+
+        if self._event_repo is not None:
+            # P2.B · auto-compact before projecting the context. If the
+            # event log has crossed the trigger threshold, the manager
+            # calls the summarizer (a small LLM turn), writes a SUMMARY
+            # event, and marks the oldest events compacted. Original
+            # events are never deleted — projection / audit / branch all
+            # still work.
+            try:
+                await self._auto_compact.maybe_compact(
+                    conversation_id,
+                    self._event_repo,
+                    self._build_summarizer(provider, employee),
+                )
+            except Exception:
+                log.exception(
+                    "auto_compact.failed",
+                    extra={"conversation_id": conversation_id},
+                )
+
+            _, lc_messages = await build_llm_context(
+                conversation_id,
+                employee,
+                runtime,
+                self._event_repo,
+                skill_registry=self._skills,
+                system_override=overrides.system_override if overrides else None,
+            )
+        else:
+            history = await self._conversations.list_messages(conversation_id)
+            lc_messages = [
+                {"role": m.role, "content": m.content, "id": m.id}
+                for m in history
+                if m.role in ("user", "assistant")
+            ]
 
         # E20 / L12: Lead turns get a fresh DB-verified snapshot injected as
         # the very first system segment (prepended via RunOverrides.system_override
@@ -495,6 +574,7 @@ class ChatService:
             employee=employee,
             run_id=run_id,
             run_started_at=run_started_at,
+            active_turn=active_turn,
         )
 
     async def resume_message(
@@ -583,6 +663,7 @@ class ChatService:
         employee: Employee | None = None,
         run_id: str | None = None,
         run_started_at: datetime | None = None,
+        active_turn: Any = None,
     ) -> AsyncIterator[AgentEvent]:
         """Tap the runner stream, persist the assistant's reply to the DB.
 
@@ -644,6 +725,37 @@ class ChatService:
                     extra={"conversation_id": conversation_id, "message_id": message_id},
                 )
                 return
+            # ADR 0017 · also write the ASSISTANT event. We embed tool_calls
+            # and render_payloads into content_json so the event row is a
+            # self-contained snapshot — the Message table stays as the
+            # projection cache; projections like /messages stay cheap.
+            if self._event_repo is not None:
+                try:
+                    await self._event_repo.append(
+                        ConversationEvent(
+                            id=message_id,
+                            conversation_id=conversation_id,
+                            parent_id=None,
+                            sequence=await self._event_repo.next_sequence(conversation_id),
+                            kind=EventKind.ASSISTANT,
+                            content_json={
+                                "content": content,
+                                "reasoning": reasoning_text,
+                                "tool_calls": [tc.model_dump() for tc in tool_calls_by_id.values()],
+                                "render_payloads": [rp.model_dump() for rp in render_payloads],
+                                "run_id": run_id,
+                            },
+                            created_at=first_seen or datetime.now(UTC),
+                        )
+                    )
+                except Exception:
+                    log.exception(
+                        "Failed to persist ASSISTANT event",
+                        extra={
+                            "conversation_id": conversation_id,
+                            "message_id": message_id,
+                        },
+                    )
             # Publish a cockpit beat for the activity feed. Fire-and-forget
             # (E18): awaiting this added 3-5 s between the last token and
             # RUN_FINISHED because the bus writes on a separate DB session
@@ -693,6 +805,11 @@ class ChatService:
                     message_id = event.message_id
                     if first_seen is None:
                         first_seen = datetime.now(UTC)
+                    # Track partial content on the active turn so a
+                    # supersede / abort event carries what the model
+                    # had already produced (debug / audit value).
+                    if active_turn is not None:
+                        active_turn.partial_content.append(event.delta)
                 elif event.kind == "reasoning":
                     reasoning_buffer.append(event.delta)
                     if message_id is None:
@@ -713,6 +830,48 @@ class ChatService:
                     # turn without duplicating rows.
                     tc = event.tool_call
                     tool_calls_by_id[tc.id] = tc
+                    # ADR 0017 · P2.C — fine-grained tool events. Write a
+                    # TOOL_CALL_EXECUTED (or _FAILED) event so
+                    # build_llm_context can pair it with the assistant's
+                    # tool_use block on the next turn. The assistant event
+                    # itself still carries the tool_use in content_blocks.
+                    if self._event_repo is not None and active_turn is not None:
+                        try:
+                            failed = tc.status == ToolCallStatus.FAILED
+                            kind_to_write = (
+                                EventKind.TOOL_CALL_FAILED
+                                if failed
+                                else EventKind.TOOL_CALL_EXECUTED
+                            )
+                            result_body: dict[str, object] = {
+                                "tool_use_id": tc.id,
+                                "tool_call_id": tc.id,
+                                "tool_id": tc.tool_id,
+                            }
+                            if failed:
+                                result_body["error"] = tc.error or "tool failed"
+                            else:
+                                result_body["content"] = tc.result
+                            await self._event_repo.append(
+                                ConversationEvent(
+                                    id=str(uuid.uuid4()),
+                                    conversation_id=conversation_id,
+                                    parent_id=None,
+                                    sequence=await self._event_repo.next_sequence(conversation_id),
+                                    kind=kind_to_write,
+                                    content_json=result_body,
+                                    turn_id=active_turn.turn_id,
+                                    created_at=datetime.now(UTC),
+                                )
+                            )
+                        except Exception:
+                            log.exception(
+                                "tool_call_event.append.failed",
+                                extra={
+                                    "conversation_id": conversation_id,
+                                    "tool_call_id": tc.id,
+                                },
+                            )
                 elif event.kind == "interrupt_required":
                     # ADR 0014 Phase 4d · write a PENDING Confirmation row
                     # so /confirmations/pending can see what's waiting and
@@ -725,11 +884,64 @@ class ChatService:
                 elif event.kind == "error":
                     error_payload = {"code": event.code, "message": event.message}
                     await flush()
+                    # ADR 0017 · surface stream errors as TURN_ABORTED so
+                    # the next build_llm_context projects a synthetic
+                    # assistant message explaining the gap.
+                    if self._event_repo is not None:
+                        try:
+                            await self._event_repo.append(
+                                ConversationEvent(
+                                    id=str(uuid.uuid4()),
+                                    conversation_id=conversation_id,
+                                    parent_id=None,
+                                    sequence=await self._event_repo.next_sequence(conversation_id),
+                                    kind=EventKind.TURN_ABORTED,
+                                    content_json={
+                                        "reason": TurnAbortReason.STREAM_ERROR.value,
+                                        "error_code": event.code,
+                                        "error_message": event.message,
+                                        "partial_content": "".join(buffer),
+                                        "run_id": run_id,
+                                    },
+                                    created_at=datetime.now(UTC),
+                                )
+                            )
+                        except Exception:
+                            log.exception(
+                                "Failed to persist TURN_ABORTED event",
+                                extra={"conversation_id": conversation_id},
+                            )
                 elif event.kind == "done":
                     await flush()
                 yield event
         finally:
             await flush()
+            # P2.A · close the active turn in the event log. Complete path
+            # if we have a flushed assistant reply and no error_payload;
+            # abort path (stream_error) if there was an error or the stream
+            # ended without producing any content (client disconnect case).
+            if active_turn is not None and self._event_repo is not None:
+                try:
+                    if error_payload is not None:
+                        # TURN_ABORTED already written by the error branch
+                        # above; skip the duplicate here.
+                        self._turn_lock.clear(conversation_id)
+                    elif persisted:
+                        await self._turn_lock.complete_turn(
+                            self._event_repo, conversation_id, active_turn
+                        )
+                    else:
+                        await self._turn_lock.abort_turn(
+                            self._event_repo,
+                            conversation_id,
+                            active_turn,
+                            reason=TurnAbortReason.CLIENT_DISCONNECT,
+                        )
+                except Exception:
+                    log.exception(
+                        "turn_lock.close.failed",
+                        extra={"conversation_id": conversation_id},
+                    )
             await finalize_run()
             # ADR 0011 · principle 7: flush any resolve_skill mutations made
             # during this turn so a uvicorn reload doesn't wipe them. Runs
@@ -778,6 +990,51 @@ class ChatService:
                 "interrupt.confirmation.save.failed",
                 extra={"interrupt_id": getattr(event, "interrupt_id", None)},
             )
+
+    def _build_summarizer(self, provider: Any, employee: Employee) -> Any:
+        """Build a callable that takes a list of {role, content} dicts and
+        returns a compressed summary string. Used by auto-compact (P2.B).
+
+        Uses the same LLM the conversation is already using — keeps
+        provider / API key / base_url plumbing consistent. The call is a
+        short one-shot: system prompt instructs brevity, payload is the
+        events being compacted.
+        """
+        from allhands.execution.runner import _build_model
+
+        async def _summarize(messages: list[dict[str, Any]]) -> str:
+            model = _build_model(employee.model_ref, provider)
+            from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+            system = SystemMessage(
+                content=(
+                    "You compress conversation histories. Summarize the "
+                    "following exchange in 3-6 sentences, preserving any "
+                    "decisions made, open questions, and key facts. Output "
+                    "only the summary text — no preamble, no markdown."
+                )
+            )
+            lc_msgs: list[Any] = [system]
+            for m in messages:
+                role = m.get("role")
+                content = m.get("content", "")
+                if role == "user":
+                    lc_msgs.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    lc_msgs.append(AIMessage(content=content))
+            # .ainvoke returns a BaseMessage; its .content is the text we want.
+            response = await model.ainvoke(lc_msgs)
+            content = getattr(response, "content", "")
+            if isinstance(content, list):
+                # Some providers return structured blocks — flatten text ones.
+                content = " ".join(
+                    b.get("text", "")
+                    for b in content
+                    if isinstance(b, dict) and b.get("type") == "text"
+                )
+            return str(content or "").strip()
+
+        return _summarize
 
     def _build_runner_factory(self, provider: Any) -> Any:
         """Closure used by DispatchService to spawn sub-runners.

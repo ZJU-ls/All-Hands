@@ -548,22 +548,37 @@ class AgentRunner:
         # at non-consecutive positions (one per turn) — providers validating
         # message order (e.g. Qwen/OpenAI-compatible) reject with
         # "Received multiple non-consecutive system messages" (see E26).
-        # Stable message ids flow in from chat_service so LangGraph's
-        # ``add_messages`` reducer can dedup by id across turns. When id is
-        # None (e.g. a caller that doesn't plumb MessageRepo ids — subagent
-        # turn-0 bootstrap, tests, dispatch), LangChain assigns a fresh UUID,
-        # which is fine since those messages are only sent once.
-        lc_messages: list[Any] = [
-            (
-                HumanMessage(content=m["content"], id=m.get("id"))
-                if m["role"] == "user"
-                else AIMessage(content=m["content"], id=m.get("id"))
-            )
-            for m in messages
-            if m["role"] in ("user", "assistant")
-        ]
-
         from langchain_core.messages import ToolMessage
+
+        # Stable message ids flow in from chat_service so LangGraph's
+        # ``add_messages`` reducer can dedup by id across turns.
+        #
+        # ADR 0017 · build_llm_context returns user / assistant / tool roles,
+        # and assistant content can be either a plain string or a list of
+        # content_blocks (text + tool_use mixtures from prior turns where
+        # the agent called tools). We materialize all three LC message
+        # subclasses so the history stays faithful to what actually
+        # happened — dropping tool messages would leave the LLM seeing
+        # ``assistant(tool_use) → assistant(next turn)`` with no tool_result
+        # in between, which Anthropic rejects and OpenAI interprets
+        # incorrectly.
+        def _to_lc_message(m: dict[str, Any]) -> Any:
+            role = m.get("role")
+            if role == "user":
+                return HumanMessage(content=m["content"], id=m.get("id"))
+            if role == "assistant":
+                return AIMessage(content=m["content"], id=m.get("id"))
+            if role == "tool":
+                return ToolMessage(
+                    content=str(m.get("content", "")),
+                    tool_call_id=str(m.get("tool_call_id", "")),
+                    id=m.get("id"),
+                )
+            return None
+
+        lc_messages: list[Any] = [
+            lc for lc in (_to_lc_message(m) for m in messages) if lc is not None
+        ]
 
         # Per-turn bookkeeping so tool_call lifecycle events stay in sync
         # with LangGraph's node stream:

@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import (
     get_chat_service,
+    get_conversation_event_repo,
     get_conversation_repo,
     get_employee_service,
     get_session,
@@ -30,6 +31,7 @@ from allhands.api.protocol import (
 from allhands.core import Message
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
+from allhands.services.branch_service import branch_from_event, regenerate_last_turn
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
@@ -190,6 +192,72 @@ async def list_messages(
     except DomainError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return [_to_message_response(m) for m in messages]
+
+
+@router.post("/{conversation_id}/branch", response_model=ConversationResponse)
+async def branch_conversation(
+    conversation_id: str,
+    body: dict[str, object],
+    session: AsyncSession = Depends(get_session),
+) -> ConversationResponse:
+    """ADR 0017 · P3.B — fork a new conversation from an existing event.
+
+    Body: ``{"from_event_id": "<event-id>", "title": "optional"}``.
+    """
+    raw_from = body.get("from_event_id")
+    if not isinstance(raw_from, str) or not raw_from:
+        raise HTTPException(status_code=400, detail="from_event_id is required")
+    raw_title = body.get("title")
+    new_title: str | None = raw_title if isinstance(raw_title, str) else None
+
+    conv_repo = await get_conversation_repo(session)
+    event_repo = await get_conversation_event_repo(session)
+    try:
+        new_conv = await branch_from_event(
+            source_conversation_id=conversation_id,
+            from_event_id=raw_from,
+            new_title=new_title,
+            conversation_repo=conv_repo,
+            event_repo=event_repo,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ConversationResponse(
+        id=new_conv.id,
+        employee_id=new_conv.employee_id,
+        title=new_conv.title,
+        model_ref_override=new_conv.model_ref_override,
+        created_at=new_conv.created_at.isoformat(),
+    )
+
+
+@router.post("/{conversation_id}/regenerate", response_model=ConversationResponse)
+async def regenerate_conversation(
+    conversation_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> ConversationResponse:
+    """ADR 0017 · P3.B — shortcut for branching from the last USER event.
+
+    Use case: user wasn't happy with the last assistant reply and wants to
+    re-ask the same question without deleting the prior attempt.
+    """
+    conv_repo = await get_conversation_repo(session)
+    event_repo = await get_conversation_event_repo(session)
+    try:
+        new_conv = await regenerate_last_turn(
+            conversation_id=conversation_id,
+            conversation_repo=conv_repo,
+            event_repo=event_repo,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ConversationResponse(
+        id=new_conv.id,
+        employee_id=new_conv.employee_id,
+        title=new_conv.title,
+        model_ref_override=new_conv.model_ref_override,
+        created_at=new_conv.created_at.isoformat(),
+    )
 
 
 @router.post("/{conversation_id}/compact", response_model=CompactConversationResponse)

@@ -36,7 +36,7 @@
 
 ---
 
-## 核心设计原则(6 条,排序即优先级 · 见 [ADR 0011](adr/0011-principles-refresh.md))
+## 核心设计原则(8 条,排序即优先级 · 原则 1-7 见 [ADR 0011](adr/0011-principles-refresh.md) · 原则 8 见 [ADR 0017](adr/0017-event-sourced-claude-code-pattern.md))
 
 > **每条原则都给出「不变量 / 来源 / 推论 / 回归防御」四段结构。**
 >
@@ -187,6 +187,30 @@
 - `backend/pyproject.toml` · `.importlinter` 配置 · 跑 `uv run lint-imports`
 - `backend/tests/integration/test_skill_runtime_persistence.py` · cache miss → repo load · 进程边界模拟
 - `backend/tests/integration/test_dual_sot_delta_consistency.py` · compaction 下 LLM 上下文不掉(ADR 0014 R3)
+
+### 原则 8 · 参考系统 · Claude Code 为首要架构参考(新 · 见 [ADR 0017](adr/0017-event-sourced-claude-code-pattern.md))
+
+**不变量:** 参考系统的优先级明确 —— **Claude Code(`ref-src-claude/`)是首要参考**;LangGraph / LangChain 等框架仅作"工具编排 + interrupt 原语"等局部引擎使用,**不作消息历史 / resume / subagent / 压缩的 SoT**。任何"是否该用某框架的 X 机制"的架构讨论,先问"Claude Code 怎么做的";框架默认做法与 Claude Code 模式冲突时,**Claude Code 优先**。
+
+**来源:**
+- Claude Code · 全量实现源码参考(`ref-src-claude/INDEX.md` · `volumes/V01-V11`)· 18 个月生产环境验证的 LLM agent 产品架构
+- ADR 0017 · 事件日志 + 纯投影对齐 · 把 Claude Code 立为首要参考
+- L19 · 不要被 LangGraph 抽象绑架 · 方法论基石
+
+**推论:**
+- **消息历史 = append-only 事件日志**(对标 Claude `{sessionId}.jsonl`)· 不是 MessageRepo + Checkpointer dual-SoT
+- **LLM 上下文 = 纯函数每轮重算投影**(对标 `normalizeMessagesForAPI`)· 不是 delta-send + reducer dedup
+- **每轮发全量 + provider prompt caching**(对标 Anthropic `cache_control`)· 不搞客户端 delta 优化
+- **Resume / fork / regenerate 全部走事件日志遍历**(对标 `parentUuid` DAG + `buildConversationChain`)· 不搞框架特定机制
+- **Subagent 独立 sidechain**(对标 `agent-{id}.jsonl`)· 不叠在主 conversation state 里
+- **Auto-compact 带熔断器 + PTL fallback**(对标 `autoCompact` V08 § 2.2-2.3)· 不裸奔
+- **引入新框架时评审口径**:"这个框架解决的问题和我们架构的职责是否混淆 · 它的默认做法和 Claude Code 模式是否冲突 · 冲突时谁让步"
+
+**回归防御:**
+- ADR 0017 立契约 · 任何违反事件日志 SoT / 纯投影 / 全量发送的 PR · review 打回
+- `uv run lint-imports` · `langgraph.checkpoint.*` 不泄出 `execution/`(ADR 0014 R1 继续生效)· 新增 `langgraph.graph.*` 同等守护(Phase 1 落地时加)
+- P1-P4 回归测试套件(见 ADR 0017 · Regression defense)验证:事件日志作唯一 SoT · `messages` 表作 projection cache · `build_llm_context` 纯函数性 · turn abort 合成 assistant 注入
+- 未来引入新大型框架 · 必须在 PR 说明里回答"是否与 Claude Code 模式冲突"· reviewer 按 L19 打回
 
 ---
 

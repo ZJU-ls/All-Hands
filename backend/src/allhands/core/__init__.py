@@ -33,6 +33,11 @@ from allhands.core.conversation import (
     ToolCall,
     ToolCallStatus,
 )
+from allhands.core.conversation_event import (
+    ConversationEvent,
+    EventKind,
+    TurnAbortReason,
+)
 from allhands.core.employee import Employee, EmployeeStatus
 from allhands.core.errors import (
     ConfirmationExpired,
@@ -125,12 +130,14 @@ __all__ = [
     "ConfirmationStatus",
     "ConvCard",
     "Conversation",
+    "ConversationEvent",
     "CostHint",
     "DomainError",
     "Employee",
     "EmployeeNotFound",
     "EmployeeStatus",
     "EventEnvelope",
+    "EventKind",
     "EventPattern",
     "HealthSnapshot",
     "InteractionSpec",
@@ -180,6 +187,7 @@ __all__ = [
     "TriggerFireStatus",
     "TriggerKind",
     "Turn",
+    "TurnAbortReason",
     "TurnMessage",
     "TurnThinking",
     "TurnToolCall",
