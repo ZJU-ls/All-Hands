@@ -79,7 +79,7 @@ export function MessageBubble({ message, isStreaming }: Props) {
     <div className="flex justify-start gap-3">
       <AgentAvatar />
       <div className="min-w-0 flex-1">
-        <div className="max-w-prose rounded-2xl rounded-tl-md border border-border bg-surface px-4 py-3 text-[14px] leading-[1.6] text-text shadow-soft-sm">
+        <div className="rounded-2xl rounded-tl-md border border-border bg-surface px-4 py-3 text-[14px] leading-[1.6] text-text shadow-soft-sm">
           {hasReasoning && (
             <ReasoningBlock
               text={message.reasoning ?? ""}

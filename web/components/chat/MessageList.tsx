@@ -83,7 +83,7 @@ export function MessageList({ conversationId }: Props) {
         {!hasAnything ? (
           <EmptyState />
         ) : (
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-5">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5">
             {renderRows.map(({ msg, streaming }) => (
               <MessageBubble key={msg.id} message={msg} isStreaming={streaming} />
             ))}
