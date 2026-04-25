@@ -18,7 +18,7 @@
  *     │ KB info  │  │ Search results (when query)   │
  *     │ Tags     │  │  ── or ──                     │
  *     │ Grants   │  │ Documents grid                │
- *     │ ⚙ Tune   │  │                               │
+ *     │ Tune     │  │                               │
  *     └──────────┘  └───────────────────────────────┘
  *
  * Visual contract: Brand Blue Dual Theme tokens only. No native <select>
@@ -132,7 +132,7 @@ export default function KnowledgePage() {
       setKbs(data);
       const target = preserve ? data.find((k) => k.id === preserve.id) : null;
       if (target) setActiveKb(target);
-      else if (!activeKb && data.length > 0) setActiveKb(data[0]);
+      else if (!activeKb && data[0]) setActiveKb(data[0]);
       setPageState("ok");
     } catch (e) {
       setError(String(e));
@@ -516,10 +516,10 @@ function KBInfoCard({ kb, onTune }: { kb: KBDto; onTune: () => void }) {
         </div>
         <div className="flex flex-wrap gap-1.5 text-[11px]">
           <span className="inline-flex items-center rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-text-muted">
-            BM25 ×{cfg.bm25_weight}
+            BM25 x{cfg.bm25_weight}
           </span>
           <span className="inline-flex items-center rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-text-muted">
-            vec ×{cfg.vector_weight}
+            vec x{cfg.vector_weight}
           </span>
           <span className="inline-flex items-center rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-text-muted">
             top {cfg.top_k}

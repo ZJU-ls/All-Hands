@@ -961,6 +961,83 @@ async def test_astream_chat_test_anthropic_empty_stream_yields_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_astream_chat_test_anthropic_thinking_400_auto_retries() -> None:
+    """MiniMax-M2.5 regression contract:
+    Some upstream models hard-reject `thinking: disabled` (or `enabled`)
+    with a 400 mentioning the thinking field. The streamer must:
+      1. detect the thinking-related 400
+      2. emit a warning event (so UI can surface "thinking was forced ON")
+      3. retry once with the thinking field stripped
+      4. yield a normal done event from the retry's content
+    """
+    call_count = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        call_count["n"] += 1
+        body = json.loads(request.content.decode("utf-8"))
+        # First attempt has `thinking: disabled` → mimic MiniMax-M2.5's 400.
+        if "thinking" in body:
+            return httpx.Response(
+                400,
+                json={
+                    "error": {
+                        "code": "InvalidParameter",
+                        "message": (
+                            "<400> InternalError.Algo.InvalidParameter: "
+                            "The value of the enable_thinking parameter is "
+                            "restricted to True."
+                        ),
+                    }
+                },
+            )
+        # Second attempt without thinking → success.
+        frames = _anthropic_sse_bytes(
+            [
+                ("message_start", {"message": {"usage": {"input_tokens": 5, "output_tokens": 0}}}),
+                (
+                    "content_block_start",
+                    {"index": 0, "content_block": {"type": "text", "text": ""}},
+                ),
+                (
+                    "content_block_delta",
+                    {"index": 0, "delta": {"type": "text_delta", "text": "ok"}},
+                ),
+                ("content_block_stop", {"index": 0}),
+                ("message_stop", {}),
+            ]
+        )
+        return httpx.Response(200, content=frames, headers={"Content-Type": "text/event-stream"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        events = [
+            e
+            async for e in astream_chat_test(
+                _anthropic_provider(
+                    base_url="https://coding.dashscope.aliyuncs.com/apps/anthropic"
+                ),
+                "MiniMax-M2.5",
+                prompt="hi",
+                enable_thinking=False,
+                http_client=client,
+            )
+        ]
+
+    # Two HTTP calls — first 400, second 200.
+    assert call_count["n"] == 2, "must auto-retry exactly once after thinking-400"
+    types = [e["type"] for e in events]
+    # Order: meta → warning → delta → done. NO error event (the retry succeeded).
+    assert "warning" in types, "user-visible warning must announce the auto-retry"
+    assert "done" in types and "error" not in types
+    # Warning should be categorised so UI can pick a specific style.
+    warning = next(e for e in events if e["type"] == "warning")
+    assert warning["category"] == "thinking_unsupported"
+    # Final response is the retry's content.
+    done = next(e for e in events if e["type"] == "done")
+    assert done["response"] == "ok"
+
+
+@pytest.mark.asyncio
 async def test_astream_chat_test_anthropic_4xx_emits_error() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(401, text="Unauthorized")

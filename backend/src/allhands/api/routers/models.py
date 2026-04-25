@@ -333,6 +333,16 @@ async def test_model_stream(
                 metrics = {k: v for k, v in evt.items() if k != "type"}
                 yield agui.encode_sse(agui.custom("allhands.model_test_metrics", metrics))
                 yield agui.encode_sse(agui.run_finished(thread_id, run_id))
+            elif kind == "warning":
+                # 让用户知道发生了 vendor-specific fallback(例:'thinking'
+                # 字段被某些模型拒绝时,我们自动剥离重试)— 透明告知,而不是
+                # 默默 retry 让用户困惑"我没勾深度思考为啥还在思考"。
+                yield agui.encode_sse(
+                    agui.custom(
+                        "allhands.model_test_warning",
+                        {k: v for k, v in evt.items() if k != "type"},
+                    )
+                )
             elif kind == "error":
                 err_msg = str(evt.get("error", "upstream error"))
                 err_code = str(evt.get("error_category", "INTERNAL"))
