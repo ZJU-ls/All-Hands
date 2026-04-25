@@ -157,6 +157,12 @@
       "traces": {
         "title": "近 50 条 trace",
         "selfInstrumentedNote": "自建埋点 · 本地 events.run.*",
+        "searchPlaceholder": "搜索 trace_id / 员工 / 模型 / 状态",
+        "searchAria": "搜索 trace",
+        "searchEmpty": {
+          "title": "无匹配结果",
+          "description": "调整搜索词,或留空显示全部 50 条 trace。"
+        },
         "empty": {
           "title": "还没有 run 事件",
           "description": "和 Lead 对话发起第一条任务,这里会出现 trace 摘要。"

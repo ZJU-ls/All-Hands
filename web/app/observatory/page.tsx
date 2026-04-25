@@ -508,10 +508,24 @@ export default function ObservatoryPage() {
   const [range, setRange] = useState<TimeRange>("24h");
   const [drawerMetric, setDrawerMetric] = useState<ObservatoryMetric | null>(null);
   const [drawerLabel, setDrawerLabel] = useState<string | undefined>(undefined);
+  const [traceSearch, setTraceSearch] = useState("");
   const openDrawer = (metric: ObservatoryMetric, label?: string) => {
     setDrawerMetric(metric);
     setDrawerLabel(label);
   };
+  const filteredTraces = useMemo(() => {
+    const q = traceSearch.trim().toLowerCase();
+    if (!q) return traces;
+    return traces.filter((tr) => {
+      return (
+        tr.trace_id.toLowerCase().includes(q) ||
+        (tr.employee_name?.toLowerCase().includes(q) ?? false) ||
+        (tr.employee_id?.toLowerCase().includes(q) ?? false) ||
+        (tr.model_ref?.toLowerCase().includes(q) ?? false) ||
+        tr.status.toLowerCase().includes(q)
+      );
+    });
+  }, [traces, traceSearch]);
   // Real sparkline values for the 4 KPI cards · 24h × 1h buckets.
   const [sparks, setSparks] = useState<{
     runs: number[];
@@ -1014,21 +1028,47 @@ export default function ObservatoryPage() {
 
               {/* TRACES */}
               <section>
-                <div className="flex items-baseline justify-between mb-3">
+                <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
                   <h2 className="text-[18px] font-semibold tracking-tight text-text flex items-center gap-2">
                     <Icon name="activity" size={16} className="text-primary" />
                     {t("traces.title")}
                   </h2>
-                  <div className="inline-flex items-center gap-2 text-[11px] font-mono text-text-subtle">
-                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${toneDot}`} />
-                    {t("traces.selfInstrumentedNote")}
+                  <div className="flex items-center gap-2 ml-auto">
+                    <div className="relative">
+                      <Icon
+                        name="search"
+                        size={13}
+                        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-subtle"
+                      />
+                      <input
+                        value={traceSearch}
+                        onChange={(e) => setTraceSearch(e.target.value)}
+                        placeholder={t("traces.searchPlaceholder")}
+                        aria-label={t("traces.searchAria")}
+                        className="h-8 w-[260px] rounded-md border border-border bg-surface pl-8 pr-3 text-[12px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+                      />
+                    </div>
+                    <div className="inline-flex items-center gap-2 text-[11px] font-mono text-text-subtle">
+                      <span
+                        className={`inline-block w-1.5 h-1.5 rounded-full ${toneDot}`}
+                      />
+                      {t("traces.selfInstrumentedNote")}
+                    </div>
                   </div>
                 </div>
 
-                {traces.length === 0 ? (
+                {filteredTraces.length === 0 ? (
                   <EmptyState
-                    title={t("traces.empty.title")}
-                    description={t("traces.empty.description")}
+                    title={
+                      traceSearch
+                        ? t("traces.searchEmpty.title")
+                        : t("traces.empty.title")
+                    }
+                    description={
+                      traceSearch
+                        ? t("traces.searchEmpty.description")
+                        : t("traces.empty.description")
+                    }
                   />
                 ) : (
                   <div className="rounded-xl bg-surface border border-border shadow-soft-sm overflow-hidden">
@@ -1056,7 +1096,7 @@ export default function ObservatoryPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {traces.map((row) => (
+                        {filteredTraces.map((row) => (
                           <tr
                             key={row.trace_id}
                             className="border-b border-border last:border-b-0 hover:bg-surface-2 transition-colors duration-fast"

@@ -157,6 +157,12 @@
       "traces": {
         "title": "Latest 50 traces",
         "selfInstrumentedNote": "self-instrumented · local events.run.*",
+        "searchPlaceholder": "Search trace_id / employee / model / status",
+        "searchAria": "Search traces",
+        "searchEmpty": {
+          "title": "No matches",
+          "description": "Adjust the search, or clear it to show all 50 traces."
+        },
         "empty": {
           "title": "No run events yet",
           "description": "Chat with Lead and kick off the first task — trace summaries will appear here."
