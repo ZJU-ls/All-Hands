@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 MessageRole = Literal["user", "assistant", "tool", "system"]
 
@@ -44,11 +44,49 @@ class RenderPayload(BaseModel):
     interactions: list[InteractionSpec] = Field(default_factory=list)
 
 
+# --- Content blocks (ADR 0018) ----------------------------------------------
+# AgentLoop emits internal events carrying typed content_blocks rather
+# than a flat ``content: str``. Persistence keeps ``content`` for back-compat
+# (concatenated text); ``content_blocks`` is the authoritative source for
+# new code paths (execution/agent_loop, execution/tool_pipeline, internal
+# event protocol).
+
+
+class TextBlock(BaseModel):
+    type: Literal["text"] = "text"
+    text: str
+
+
+class ToolUseBlock(BaseModel):
+    type: Literal["tool_use"] = "tool_use"
+    id: str
+    name: str
+    input: dict[str, object]
+
+
+class ReasoningBlock(BaseModel):
+    """Extended-thinking output (Anthropic) or reasoning channel (Qwen3 /
+    DeepSeek-R1). NOT user-facing text — surfaces in the dedicated
+    reasoning UI surface."""
+
+    type: Literal["reasoning"] = "reasoning"
+    text: str
+
+
+ContentBlock = Annotated[
+    TextBlock | ToolUseBlock | ReasoningBlock,
+    Field(discriminator="type"),
+]
+
+
 class Message(BaseModel):
     id: str
     conversation_id: str
     role: MessageRole
     content: str
+    # ADR 0018 · authoritative content for new agent loop. Defaults to []
+    # so legacy callers that only set ``content`` continue to work.
+    content_blocks: list[ContentBlock] = Field(default_factory=list)
     tool_calls: list[ToolCall] = Field(default_factory=list)
     tool_call_id: str | None = None
     render_payloads: list[RenderPayload] = Field(default_factory=list)
@@ -61,6 +99,18 @@ class Message(BaseModel):
     # ReasoningEvent / AG-UI REASONING_MESSAGE_CHUNK.
     reasoning: str | None = None
     created_at: datetime
+
+    @model_validator(mode="after")
+    def _derive_content_from_blocks(self) -> Message:
+        # If caller pinned content to a non-empty string, leave it alone —
+        # they may be migrating from legacy or doing custom projection.
+        # If content is empty AND content_blocks has TextBlocks, derive
+        # ``content`` as concatenated text. ToolUseBlock / ReasoningBlock
+        # do NOT contribute to ``content``: the legacy ``content`` field
+        # is user-visible chat text only.
+        if not self.content and self.content_blocks:
+            self.content = "".join(b.text for b in self.content_blocks if isinstance(b, TextBlock))
+        return self
 
 
 class Conversation(BaseModel):
