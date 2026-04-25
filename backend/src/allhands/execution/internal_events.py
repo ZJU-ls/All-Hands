@@ -111,6 +111,7 @@ LoopExitReason = Literal[
     "aborted",
     "prompt_too_long",
     "stopped_by_hook",
+    "empty_response",
 ]
 
 
