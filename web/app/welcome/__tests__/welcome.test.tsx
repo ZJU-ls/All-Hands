@@ -8,10 +8,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 
 import WelcomePage, { FIRST_RUN_SCOPE } from "../page";
 import { hasCompletedFirstRun } from "@/lib/first-run";
+import { renderWithI18n as render } from "@/tests/test-utils/i18n-render";
 
 const replaceSpy = vi.fn();
 
@@ -41,7 +42,7 @@ describe("WelcomePage", () => {
     render(<WelcomePage />);
     expect(screen.getByTestId("welcome-page")).toBeDefined();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
-      "欢迎来到 allhands",
+      "欢迎来到 allhands。",
     );
     // 3 highlight cards live as h3 (the section above them owns the h2).
     expect(screen.getAllByRole("heading", { level: 3 }).length).toBeGreaterThanOrEqual(3);

@@ -3,7 +3,7 @@
 /**
  * PingIndicator · /gateway connectivity state (ADR 0016 · V2 · 2-layer rewrite).
  *
- * 第一性原理: "连通" 不是单一布尔。我们把它拆成两个独立维度并独立显示 ——
+ * 第一性原理: "连通" 不是单一布尔。把它拆成两个独立维度,独立显示 ——
  *
  *   端点 (Endpoint)  → 这把 key + base_url 能不能触达 provider
  *                       (GET /v1/models · 不调推理)
@@ -11,11 +11,15 @@
  *                       (max_tokens=1 · 白名单分类)
  *
  * 视觉契约:
- *   待测  → "待测" 单 pill
- *   测试中 → "测试中" 单 pill (animate-pulse-ring)
- *   完成  → 两个 pill 并排 — `EP {ms}` + `M {ms / 类别}`
- *           颜色独立:每层各自 success / warning / danger,所以用户一眼就能
- *           区分 "端点挂了" / "认证错" / "模型不在" / "连通但慢"。
+ *   idle    → 6px neutral dot 占位(行尾活动图标已暗示"点击测试",一颗
+ *             "待测" 占位 pill 在每行重复是视觉噪音)
+ *   running → "测试中" 单 pill (primary-soft + animate-pulse-ring)
+ *   ok/fail → 两个 pill 并排 · `EP {状态}` + `M {状态}`
+ *             颜色独立:每层各自 success / warning / danger,所以一眼就能
+ *             区分 "端点挂了" / "认证错" / "模型不在" / "连通但慢"。
+ *   legacy  → 旧 ok/fail 单 pill 形态保留兼容(e2e mock 仍发旧格式)。
+ *
+ * 所有 wrapper 高度对齐 h-6,行不会因状态切换发生 reflow。
  */
 
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -159,14 +163,14 @@ export function PingIndicator({ state }: { state: PingState }) {
     return (
       <span
         data-ping-state="idle"
-        aria-label="未测试"
-        className={`${BASE_PILL} border-border bg-surface-2 text-text-subtle`}
+        aria-label="未测试 · 点右侧测试按钮"
+        title="未测试"
+        className="inline-flex h-6 w-6 items-center justify-center"
       >
         <span
           aria-hidden="true"
-          className="inline-block w-[6px] h-[6px] rounded-full bg-text-subtle/60"
+          className="inline-block h-1.5 w-1.5 rounded-full bg-text-subtle/50"
         />
-        <span>待测</span>
       </span>
     );
   }

@@ -33,7 +33,7 @@ import {
 } from "react";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { Composer, ThinkingToggle } from "@/components/chat/Composer";
-import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
+import { BrandMark } from "@/components/brand/BrandMark";
 import { Icon } from "@/components/ui/icon";
 import { openStream, type StreamHandle } from "@/lib/stream-client";
 import { useDismissOnEscape } from "@/lib/use-dismiss-on-escape";
@@ -383,7 +383,6 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
   }
 
   const modelTitle = model.display_name || model.name;
-  const hasAlias = model.display_name && model.display_name !== model.name;
 
   return (
     <div
@@ -435,23 +434,14 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 <Icon name="terminal" size={10} className="shrink-0" />
                 <span className="truncate">{model.name}</span>
               </span>
-              {hasAlias && (
-                <>
-                  <DotGridAvatar
-                    initial={initialFromName(modelTitle)}
-                    size="sm"
-                    testId="model-test-avatar"
-                  />
-                </>
-              )}
-              {!hasAlias && (
-                // Keep the avatar for visual anchoring + testid parity
-                <DotGridAvatar
-                  initial={initialFromName(modelTitle)}
-                  size="sm"
-                  testId="model-test-avatar"
-                />
-              )}
+              {/* Brand glyph · resolved from model.name (qwen → qwen-color.svg,
+                  kimi → moonshot-color.svg, …). Falls back to dot-grid initials
+                  for unknown brands. */}
+              <BrandMark
+                name={modelTitle}
+                size="sm"
+                testId="model-test-avatar"
+              />
             </div>
           </div>
 

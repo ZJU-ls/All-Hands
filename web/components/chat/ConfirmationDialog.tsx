@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/icon";
 import { useDismissOnEscape } from "@/lib/use-dismiss-on-escape";
 
 export function ConfirmationDialog() {
-  const { pendingConfirmations, removeConfirmation, requestResume } = useChatStore();
+  const { pendingConfirmations, removeConfirmation } = useChatStore();
   const [loading, setLoading] = useState(false);
 
   const current = pendingConfirmations[0];
@@ -19,27 +19,17 @@ export function ConfirmationDialog() {
     if (!conf) return;
     setLoading(true);
     try {
-      // /resolve updates the Confirmation row's status (both sources — legacy
-      // polling and interrupt-sourced — keep the audit trail in the same table).
-      // resolveConfirmation tolerates 404 (already resolved / never persisted)
-      // so the UI doesn't crash when a stale confirmationId arrives.
+      // ADR 0018 · single round-trip resume.
+      // POST /api/confirmations/{id}/resolve flips the row status. The
+      // backend agent loop is awaiting a polling DeferredSignal that
+      // sees the new status on its next tick and unblocks the tool —
+      // the original /messages SSE keeps streaming the rest of the
+      // turn. No second SSE. No graph replay.
       try {
         await resolveConfirmation(conf.confirmationId, decision);
       } catch (err) {
-        // Non-404 errors: log but still continue the resume flow so the turn
-        // doesn't hang. User can retry the action afterwards if needed.
         // eslint-disable-next-line no-console
-        console.warn("[ConfirmationDialog] resolve failed · continuing resume:", err);
-      }
-
-      // ADR 0014 Phase 4e · interrupt-sourced pauses need a second call to
-      // /conversations/{id}/resume so the paused LangGraph turn continues.
-      // We hand that off to InputBar (which owns the chat SSE lifecycle) by
-      // publishing the request; InputBar's useEffect picks it up, opens a
-      // resume SSE, and pipes tokens into the same message bubble so the UI
-      // experience is "one continuous turn with a pause in the middle".
-      if (conf.source === "interrupt" && conf.conversationId) {
-        requestResume({ conversationId: conf.conversationId, decision });
+        console.warn("[ConfirmationDialog] resolve failed:", err);
       }
     } finally {
       removeConfirmation(conf.confirmationId);

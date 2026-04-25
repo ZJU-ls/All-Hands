@@ -31,6 +31,7 @@ from allhands.api.protocol import (
 from allhands.core import Message
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
+from allhands.i18n import t
 from allhands.services.branch_service import branch_from_event, regenerate_last_turn
 
 if TYPE_CHECKING:
@@ -247,7 +248,7 @@ async def branch_conversation(
     """
     raw_from = body.get("from_event_id")
     if not isinstance(raw_from, str) or not raw_from:
-        raise HTTPException(status_code=400, detail="from_event_id is required")
+        raise HTTPException(status_code=400, detail=t("errors.from_event_id_required"))
     raw_title = body.get("title")
     new_title: str | None = raw_title if isinstance(raw_title, str) else None
 

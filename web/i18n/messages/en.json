@@ -1,0 +1,166 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "New",
+    "search": "Search",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "close": "Close",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No",
+    "more": "More",
+    "settings": "Settings",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "copied": "Copied",
+    "comingSoon": "Coming soon"
+  },
+  "shell": {
+    "workspaceVersion": "v0 · mvp",
+    "usage": "Usage",
+    "tokens": "{used} / {total} tokens",
+    "search": {
+      "placeholder": "Jump to…",
+      "ariaOpen": "Open command palette",
+      "title": "⌘K to open command palette"
+    },
+    "topbar": {
+      "notifications": "Notifications",
+      "account": "Your account",
+      "switchToLight": "Switch to light",
+      "switchToDark": "Switch to dark",
+      "themeAriaLight": "Switch to light theme",
+      "themeAriaDark": "Switch to dark theme",
+      "languageTitle": "Change language",
+      "languageAria": "Change language"
+    },
+    "sections": {
+      "workspace": "Workspace",
+      "team": "Team & Skills",
+      "gateway": "Model Gateway",
+      "runtime": "Runtime",
+      "system": "System"
+    },
+    "menu": {
+      "cockpit": "Cockpit",
+      "chat": "Chat",
+      "tasks": "Tasks",
+      "conversations": "History",
+      "employees": "Employees",
+      "employeeDesign": "Employee Designer",
+      "skills": "Skills",
+      "mcpServers": "MCP Servers",
+      "providers": "Providers & Models",
+      "triggers": "Triggers",
+      "confirmations": "Approvals",
+      "traces": "Traces",
+      "observatory": "Observatory",
+      "review": "Review",
+      "settings": "Settings",
+      "about": "About"
+    }
+  },
+  "locale": {
+    "zh-CN": "简体中文",
+    "en": "English",
+    "label": "Language"
+  },
+  "welcome": {
+    "skip": "Maybe later →",
+    "eyebrow": "v0 · Open Source · Self-hosted",
+    "h1Line1": "Welcome to allhands.",
+    "h1Line2": "One Lead Agent. Done.",
+    "subtitle": "Talk to your chief digital employee and stand up a team that writes code, queries data, and ships messages — no workflows, no forms, no enum fields.",
+    "getStarted": "Get started",
+    "browseDesignSystem": "Browse design system",
+    "stats": {
+      "layers": "layers · one-way deps",
+      "principles": "core design principles",
+      "tools": "tools / skills you can register"
+    },
+    "highlightsEyebrow": "What you get",
+    "highlightsHeading": "AI apps as a platform — not yet another agent demo.",
+    "highlights": {
+      "h1": {
+        "eyebrow": "01 · Lead Agent",
+        "title": "Conversation is the operation",
+        "body": "Managing a team collapses into chatting with one agent. It designs employees, dispatches tasks, and reads telemetry for you.",
+        "b1": "Create employees in natural language",
+        "b2": "Delegate complex tasks in one sentence",
+        "b3": "Interrupt and add context any time"
+      },
+      "h2": {
+        "eyebrow": "02 · Digital employee org",
+        "title": "Employees / Skills / Tools are first-class",
+        "body": "Unified ReAct runner · no mode field · adding a role = adding a Skill / Tool, not a database enum.",
+        "b1": "10-layer architecture, sharp boundaries",
+        "b2": "Skills loaded progressively",
+        "b3": "MCP plug-and-play"
+      },
+      "h3": {
+        "eyebrow": "03 · Guardrails & observability",
+        "title": "Safe by default · end-to-end traced",
+        "body": "WRITE-level tools wire through a Confirmation Gate · every step lands in a trace · resumes across restarts.",
+        "b1": "Writes must be confirmed",
+        "b2": "Event log + projections",
+        "b3": "Full-trail visibility via LangFuse"
+      }
+    },
+    "ctaHeading": "Ready to stand up your first team?",
+    "ctaBody": "Next: tell the Lead Agent “hire me an X.” Take it from there.",
+    "ctaButton": "Enter workspace",
+    "replay": {
+      "title": "Click to replay the origami animation",
+      "aria": "Replay brand animation",
+      "hint": "Click the logo to replay"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Preferences and workspace config · theme toggle is top-right · find models / providers under \"Model Gateway\"",
+    "language": "Language",
+    "languageDescription": "Choose the interface language; takes effect immediately.",
+    "footnote": "More preferences (timezone, keybinding overrides, AP long-loop budgets, etc.) coming soon. The sun / moon toggle in the top-right still controls themes.",
+    "cards": {
+      "providers": {
+        "title": "Providers",
+        "description": "Manage LLM provider credentials, base URLs, and enable flags.",
+        "cta": "Go to providers"
+      },
+      "models": {
+        "title": "Models",
+        "description": "Model catalog, defaults, usage caps, and fallback chains.",
+        "cta": "Go to models"
+      },
+      "mcp": {
+        "title": "MCP Servers",
+        "description": "Register, connect, and sync external tool servers.",
+        "cta": "Go to MCP"
+      },
+      "notifications": {
+        "title": "Notification Channels",
+        "description": "Slack, email, webhooks, and other delivery channels.",
+        "cta": "Go to channels"
+      }
+    }
+  },
+  "errors": {
+    "unknown": "Unknown error",
+    "network": "Network error, please check your connection and retry",
+    "notFoundEyebrow": "404 · not found",
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "There's no page at this address.",
+    "notFoundCta": "Back to chat",
+    "runtimeTitle": "Runtime error",
+    "runtimeBadge": "ERROR",
+    "digest": "digest"
+  }
+}
