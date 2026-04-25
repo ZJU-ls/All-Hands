@@ -48,6 +48,11 @@ class ObservabilityConfig(BaseModel):
     bootstrap_error: str | None = None
     bootstrapped_at: datetime | None = None
     updated_at: datetime | None = None
+    # System-wide toggle for LLM-summarised conversation titles. When False
+    # (default) the platform falls back to a truncated copy of the user's
+    # first message. The flag lives on this row because the v1 platform has
+    # no separate ``system_config`` table; ADR follow-up may extract it.
+    auto_title_enabled: bool = False
 
     @property
     def observability_enabled(self) -> bool:

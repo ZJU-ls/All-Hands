@@ -1373,6 +1373,7 @@ class SqlObservabilityConfigRepo:
             bootstrap_error=row.bootstrap_error,
             bootstrapped_at=_utc(row.bootstrapped_at) if row.bootstrapped_at else None,
             updated_at=_utc(row.updated_at) if row.updated_at else None,
+            auto_title_enabled=bool(row.auto_title_enabled),
         )
 
     async def save(self, config: ObservabilityConfig) -> ObservabilityConfig:
@@ -1393,6 +1394,7 @@ class SqlObservabilityConfigRepo:
         row.bootstrap_status = config.bootstrap_status.value
         row.bootstrap_error = config.bootstrap_error
         row.bootstrapped_at = _naive(config.bootstrapped_at) if config.bootstrapped_at else None
+        row.auto_title_enabled = config.auto_title_enabled
         row.updated_at = now
         await self._s.flush()
         return config
