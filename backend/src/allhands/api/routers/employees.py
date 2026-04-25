@@ -15,16 +15,22 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from allhands.api.deps import (
     get_employee_service,
     get_session,
+    get_skill_registry,
 )
-from allhands.core.errors import EmployeeNotFound
+from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.execution.modes import PRESETS, compose_preview
+from allhands.persistence.sql_repos import SqlLLMProviderRepo, SqlMCPServerRepo
+from allhands.services import ai_explainer
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -112,6 +118,57 @@ def _to_response(emp: object) -> EmployeeResponse:
         status=emp.status,  # type: ignore[attr-defined]
         published_at=published_at.isoformat() if published_at else None,
     )
+
+
+class ComposePromptRequest(BaseModel):
+    """Inputs for the AI-drafted system_prompt helper.
+
+    All fields are optional — when the user has only filled in a name
+    we still produce something useful (the model infers the rest from
+    the name + picked skills). The form lives at ``/employees/[id]``
+    and ``/employees/design``; both reuse this endpoint.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(default="", max_length=128)
+    description: str = Field(default="", max_length=2000)
+    skill_ids: list[str] = Field(default_factory=list)
+    mcp_server_ids: list[str] = Field(default_factory=list)
+
+
+@router.post("/compose-prompt")
+async def compose_employee_prompt(
+    body: ComposePromptRequest,
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    """Stream a draft ``system_prompt`` for a yet-to-be-saved employee.
+
+    The chip on the textarea calls this; the response body streams plain
+    text so the frontend's ``getReader()`` loop can append chunks live.
+    No persistence — caller decides whether to write the draft into the
+    form. The picked skills + MCP servers must reference real installed
+    rows; unknown ids are silently dropped (we don't want a strict-fail
+    blocking the user from iterating on the form).
+    """
+
+    async def _gen() -> AsyncIterator[bytes]:
+        try:
+            async for chunk in ai_explainer.compose_employee_prompt_stream(
+                name=body.name,
+                description=body.description,
+                skill_ids=list(body.skill_ids),
+                mcp_server_ids=list(body.mcp_server_ids),
+                provider_repo=SqlLLMProviderRepo(session),
+                skill_registry=get_skill_registry(),
+                mcp_repo=SqlMCPServerRepo(session),
+            ):
+                if chunk:
+                    yield chunk.encode("utf-8")
+        except DomainError as exc:
+            yield f"\n\n[错误] {exc}".encode()
+
+    return StreamingResponse(_gen(), media_type="text/plain; charset=utf-8")
 
 
 @router.post("/preview", response_model=EmployeePreviewResponse)
