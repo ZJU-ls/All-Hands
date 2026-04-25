@@ -311,9 +311,9 @@ def _is_anthropic(provider: LLMProvider) -> bool:
 def _is_native_anthropic_base(base_url: str | None) -> bool:
     """True when base_url points at api.anthropic.com (not a compat gateway).
 
-    Native Anthropic only accepts `thinking.type == "enabled"`; sending
-    `"disabled"` 400s. DashScope / Zhipu / coding-plan gateways reuse the
-    Anthropic wire but accept `"disabled"` as the official off-switch.
+    Kept for callers that historically branched on it; the new opt-in-only
+    thinking policy doesn't actually need to distinguish (we never send
+    `thinking: disabled` to anyone).
     """
     base = (base_url or "").lower()
     return "api.anthropic.com" in base
@@ -396,23 +396,27 @@ def _build_anthropic_body(
         body["top_p"] = top_p
     if stop:
         body["stop_sequences"] = stop
-    if enable_thinking is not None:
-        # Multi-vendor reasoning switch. Different gateways honor different
-        # field names, so we speak all of them at once:
-        #   - Qwen / DashScope: `enable_thinking: bool` at body root
-        #   - Zhipu GLM / DashScope coding-plan (Anthropic-compat) / Anthropic
-        #     native: `thinking: {"type": "enabled"|"disabled"}`
-        # Native Anthropic rejects `"disabled"`, so we suppress that variant
-        # when we know we're talking to api.anthropic.com directly (its
-        # default is already off when the field is omitted).
-        body["enable_thinking"] = enable_thinking
-        if enable_thinking:
-            body["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": ANTHROPIC_DEFAULT_MAX_TOKENS // 2,
-            }
-        elif not native_anthropic:
-            body["thinking"] = {"type": "disabled"}
+    # Toggle 语义(2026-04-25 final):用户的显式决策必须被执行,不能因为
+    # vendor 默认行为不一致就把 toggle 变成"建议性"。
+    #
+    # - True  → 发 thinking: enabled  (强制思考)
+    # - False → 发 thinking: disabled (强制不思考 — 用户点 off 就该 off)
+    # - None  → 不发 thinking 字段     (没指定,用 server default)
+    #
+    # 唯一例外:Native api.anthropic.com 协议层面拒绝 "disabled"(400),
+    # 它的 server default 本来就是 no-thinking,所以 False 时 omit 即可。
+    # 这是协议事实,不是 vendor 偏好。
+    #
+    # 半 anthropic-compat 反代(IDEALAB / 自建网关)不识别 thinking 字段 →
+    # 上游返回空 SSE → 由 _astream_anthropic_chat 的空响应检测兜底报错。
+    # 报错路径,不是默认路径 —— 用户偏好 > 上游兼容性。
+    if enable_thinking is True:
+        body["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": ANTHROPIC_DEFAULT_MAX_TOKENS // 2,
+        }
+    elif enable_thinking is False and not native_anthropic:
+        body["thinking"] = {"type": "disabled"}
     return body
 
 
@@ -742,6 +746,23 @@ async def _astream_anthropic_chat(
         tok_per_sec = round(output_tokens / elapsed_s, 2)
     else:
         tok_per_sec = 0.0
+
+    # IDEALAB / 半 anthropic-compat 反代防御:
+    # 流"成功结束"(无 HTTP error · 无 exception)但 content + reasoning
+    # 都是空字符串,几乎一定是代理不识别 thinking 字段把整个流吞了。
+    # 翻成 error event,告诉用户上游兼容性问题(而不是默默给 0 tokens)。
+    if not response and not reasoning_text and output_tokens == 0:
+        yield {
+            "type": "error",
+            "error": (
+                "上游返回了空响应流 — 该 anthropic-compat 反代可能不支持 "
+                "thinking 字段(无论开关状态)。换一个 provider 或换非思考的"
+                "模型变体试试。"
+            ),
+            "error_category": "provider_error",
+            "latency_ms": latency_ms,
+        }
+        return
 
     yield {
         "type": "done",

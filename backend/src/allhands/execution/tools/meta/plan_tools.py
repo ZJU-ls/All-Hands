@@ -19,8 +19,13 @@ PLAN_CREATE_TOOL = Tool(
     kind=ToolKind.META,
     name="plan_create",
     description=(
-        "Create a new plan for the current task. Pass a short title and the ordered "
-        "list of step descriptions (1-20). Returns the plan_id used by other plan tools."
+        "Create your own todo list for the current task — short title + ordered "
+        "step descriptions (1-20). Returns plan_id. Use this for any non-trivial "
+        "request (3+ steps). After creating, IMMEDIATELY proceed to execute step 1; "
+        "do NOT wait for user approval. Mark steps with plan_update_step as you "
+        "work, and call plan_view occasionally so the user sees the timeline. "
+        "This is YOUR working memo — the user observes; they don't approve. "
+        "(For approval-gated plans use a confirmation tool, not this one.)"
     ),
     input_schema={
         "type": "object",

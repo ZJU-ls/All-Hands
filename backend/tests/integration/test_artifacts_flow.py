@@ -46,11 +46,11 @@ def client(maker_and_dir: tuple[async_sessionmaker[AsyncSession], Path]) -> Test
     maker, data_dir = maker_and_dir
 
     async def _session() -> AsyncIterator[AsyncSession]:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     async def _svc_override() -> AsyncIterator[ArtifactService]:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield ArtifactService(SqlArtifactRepo(s), data_dir)
 
     app = create_app()
@@ -65,7 +65,7 @@ def _seed_markdown(
     maker, data_dir = maker_and_dir
 
     async def _go() -> str:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             svc = ArtifactService(SqlArtifactRepo(s), data_dir)
             art = await svc.create(
                 name="proposal",
@@ -85,7 +85,7 @@ def _update_markdown(
     maker, data_dir = maker_and_dir
 
     async def _go() -> None:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             svc = ArtifactService(SqlArtifactRepo(s), data_dir)
             await svc.update(artifact_id, mode="overwrite", content=content)
 
@@ -96,7 +96,7 @@ def _seed_image(maker_and_dir: tuple[async_sessionmaker[AsyncSession], Path], pn
     maker, data_dir = maker_and_dir
 
     async def _go() -> str:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             svc = ArtifactService(SqlArtifactRepo(s), data_dir)
             art = await svc.create(
                 name="logo.png",

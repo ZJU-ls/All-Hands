@@ -90,7 +90,7 @@ async def test_ensure_all_dev_seeds_populates_every_domain(
 
     This is the contract: cold start + startup hook → every page has data.
     """
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         report = await seed_service.ensure_all_dev_seeds(session)
 
     # The report returns counts per domain so startup logs are meaningful.
@@ -129,7 +129,7 @@ async def test_ensure_all_dev_seeds_creates_lead_agent(
     reachable from cold start. Without Lead, the conversational platform
     administration promise (CLAUDE.md §3.1) is completely broken.
     """
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_all_dev_seeds(session)
 
     async with session_maker() as session:
@@ -152,11 +152,11 @@ async def test_ensure_all_dev_seeds_is_idempotent(
     data must be keyed by business identity, not random UUIDs that dup on
     each call.
     """
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_all_dev_seeds(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_all_dev_seeds(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_all_dev_seeds(session)
 
     async with session_maker() as session:
@@ -191,9 +191,9 @@ async def test_ensure_all_dev_seeds_is_idempotent(
 async def test_ensure_providers_idempotent_by_name(
     session_maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         count_1 = await seed_service.ensure_providers(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         count_2 = await seed_service.ensure_providers(session)
 
     assert count_1 == count_2 >= MIN_PROVIDERS
@@ -210,11 +210,11 @@ async def test_ensure_providers_idempotent_by_name(
 async def test_ensure_models_idempotent_and_linked_to_providers(
     session_maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_providers(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_models(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_models(session)
 
     async with session_maker() as session:
@@ -234,12 +234,12 @@ async def test_ensure_models_idempotent_and_linked_to_providers(
 async def test_ensure_employees_idempotent_no_mode_field(
     session_maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_providers(session)
         await seed_service.ensure_models(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         count_1 = await seed_service.ensure_employees(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         count_2 = await seed_service.ensure_employees(session)
 
     assert count_1 == count_2 >= MIN_SEED_EMPLOYEES
@@ -259,9 +259,9 @@ async def test_ensure_employees_idempotent_no_mode_field(
 async def test_ensure_mcp_servers_idempotent(
     session_maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_mcp_servers(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_mcp_servers(session)
 
     async with session_maker() as session:
@@ -274,13 +274,13 @@ async def test_ensure_mcp_servers_idempotent(
 async def test_ensure_conversations_idempotent_with_messages(
     session_maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_providers(session)
         await seed_service.ensure_models(session)
         await seed_service.ensure_employees(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_conversations(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_conversations(session)
 
     async with session_maker() as session:
@@ -301,9 +301,9 @@ async def test_ensure_conversations_idempotent_with_messages(
 async def test_ensure_events_idempotent_covers_all_statuses(
     session_maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_events(session)
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_events(session)
 
     async with session_maker() as session:
@@ -330,7 +330,7 @@ async def test_seed_content_is_real_not_placeholder(
     Placeholder values like foo/bar/lorem defeat that purpose — the product
     reviewer still sees a half-empty page. This test is the trip wire.
     """
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_all_dev_seeds(session)
 
     # Word-boundary match instead of plain substring so legitimate tool
@@ -381,7 +381,7 @@ async def test_seed_provider_base_urls_align_with_env_example(
     the gateway UI. Drift means the Bailian key they configured goes to the
     wrong record.
     """
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         await seed_service.ensure_providers(session)
 
     async with session_maker() as session:

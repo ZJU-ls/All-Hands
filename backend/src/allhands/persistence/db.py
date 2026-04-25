@@ -63,10 +63,15 @@ def _install_sqlite_pragmas(engine: AsyncEngine) -> None:
             # WAL: concurrent readers + one writer (vs default `delete`
             # where any read blocks writes and vice-versa).
             cursor.execute("PRAGMA journal_mode=WAL")
-            # 3 s max lock wait. Default Python sqlite3 timeout is 5 s which
-            # turns every EventBus publish during an SSE stream into a 5 s
-            # stall — E18 diagnosis.
-            cursor.execute("PRAGMA busy_timeout=3000")
+            # 15 s max lock wait. Was 3 s — but with the 2026-04-25 short-
+            # transaction refactor (get_session no longer pre-opens a
+            # transaction; each repo write commits immediately) the writer-
+            # lock is held for milliseconds per write, so this generous
+            # timeout only matters for true edge cases (massive concurrent
+            # bursts). Set high enough that legitimate retries succeed,
+            # low enough that real deadlocks still surface within ~human
+            # patience.
+            cursor.execute("PRAGMA busy_timeout=15000")
             # synchronous=NORMAL is the right pair with WAL: fsync only at
             # checkpoint boundaries, still durable for committed transactions
             # (SQLite docs § "WAL mode").

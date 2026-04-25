@@ -37,6 +37,7 @@ const MENU: MenuSection[] = [
       { labelKey: "chat", href: "/chat", icon: "message-square" },
       { labelKey: "tasks", href: "/tasks", icon: "check-circle-2" },
       { labelKey: "conversations", href: "/conversations", icon: "clock" },
+      { labelKey: "artifacts", href: "/artifacts", icon: "folder" },
     ],
   },
   {
@@ -46,6 +47,7 @@ const MENU: MenuSection[] = [
       { labelKey: "employeeDesign", href: "/employees/design", icon: "user-plus" },
       { labelKey: "skills", href: "/skills", icon: "wand-2" },
       { labelKey: "mcpServers", href: "/mcp-servers", icon: "plug" },
+      { labelKey: "knowledge", href: "/knowledge", icon: "book-open" },
     ],
   },
   {

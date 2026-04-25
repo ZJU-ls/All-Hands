@@ -163,9 +163,9 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
       setCopyState("copied");
       window.setTimeout(() => setCopyState("idle"), 1600);
     } catch (e) {
-      setError(`复制失败:${e}`);
+      setError(t("copyFailed", { error: String(e) }));
     }
-  }, [content]);
+  }, [content, t]);
 
   const handleStartEdit = useCallback(() => {
     if (!content || content.kind !== "text") return;
@@ -200,7 +200,9 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
   const handleRollback = useCallback(
     async (target: number) => {
       if (!meta) return;
-      if (!window.confirm(`确认把当前版本回退到 v${target}?\n会创建一个新版本 v${meta.version + 1},内容来自 v${target}。`)) {
+      if (
+        !window.confirm(t("rollbackConfirm", { target, next: meta.version + 1 }))
+      ) {
         return;
       }
       setBusy("rollback");
@@ -219,7 +221,7 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
         setBusy(null);
       }
     },
-    [meta],
+    [meta, t],
   );
 
   if (error && !meta) {
@@ -255,22 +257,22 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
             {canCopy && (
               <ToolButton
                 onClick={handleCopy}
-                title="复制内容到剪贴板"
+                title={t("toolbarCopyTitle")}
                 data-testid="artifact-copy"
                 accent={copyState === "copied"}
               >
                 <Icon name={copyState === "copied" ? "check" : "copy"} size={11} />
-                {copyState === "copied" ? "已复制" : "复制"}
+                {copyState === "copied" ? t("copied") : t("copy")}
               </ToolButton>
             )}
             {canEdit && (
               <ToolButton
                 onClick={handleStartEdit}
-                title="切到编辑模式"
+                title={t("toolbarEditTitle")}
                 data-testid="artifact-edit"
               >
                 <Icon name="edit" size={11} />
-                编辑
+                {t("edit")}
               </ToolButton>
             )}
             {canOpenNew && (
@@ -279,11 +281,11 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
                 href={`${BASE}/api/artifacts/${meta.id}/content`}
                 target="_blank"
                 rel="noreferrer"
-                title="在新窗口打开 — 看全屏渲染"
+                title={t("toolbarOpenNewTitle")}
                 data-testid="artifact-open-new"
               >
                 <Icon name="external-link" size={11} />
-                新窗口
+                {t("openNew")}
               </ToolButton>
             )}
             <div className="ml-auto" />
@@ -291,38 +293,38 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
               as="a"
               href={`${BASE}/api/artifacts/${meta.id}/content?download=true`}
               accent
-              title="下载到本地"
+              title={t("toolbarDownloadTitle")}
               data-testid="artifact-download"
             >
               <Icon name="download" size={11} />
-              下载
+              {t("download")}
             </ToolButton>
           </>
         ) : (
           <>
-            <span className="text-[11px] text-primary font-mono">编辑模式</span>
+            <span className="text-[11px] text-primary font-mono">{t("editMode")}</span>
             <span className="text-[10px] text-text-subtle font-mono">
-              ⌘S 保存 · Esc 取消
+              {t("editModeHint")}
             </span>
             <div className="ml-auto" />
             <ToolButton
               onClick={handleCancelEdit}
               disabled={busy != null}
-              title="不保存"
+              title={t("editCancelTitle")}
               data-testid="artifact-edit-cancel"
             >
-              取消
+              {t("cancel")}
             </ToolButton>
             <ToolButton
               onClick={() => void handleSave()}
               disabled={busy != null}
               accent
-              title="保存为新版本"
+              title={t("editSaveTitle")}
               data-testid="artifact-edit-save"
             >
               <Icon name={busy === "save" ? "loader" : "check"} size={11}
                 className={busy === "save" ? "animate-spin-slow" : ""} />
-              {busy === "save" ? "保存中…" : "保存"}
+              {busy === "save" ? t("saving") : t("save")}
             </ToolButton>
           </>
         )}

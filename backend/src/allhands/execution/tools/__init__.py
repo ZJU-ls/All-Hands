@@ -28,6 +28,7 @@ from allhands.execution.tools.meta.employee_tools import (
     CREATE_EMPLOYEE_TOOL,
     execute_create_employee,
 )
+from allhands.execution.tools.meta.knowledge_tools import ALL_KB_META_TOOLS
 from allhands.execution.tools.meta.market_tools import (  # single-line register: Wave 2 market-data
     ALL_MARKET_META_TOOLS,
 )
@@ -66,8 +67,12 @@ from allhands.execution.tools.render.markdown_card import TOOL as MARKDOWN_CARD_
 from allhands.execution.tools.render.markdown_card import execute as markdown_card_execute
 from allhands.execution.tools.render.pie_chart import TOOL as PIE_CHART_TOOL
 from allhands.execution.tools.render.pie_chart import execute as pie_chart_execute
-from allhands.execution.tools.render.plan import TOOL as RENDER_PLAN_TOOL
-from allhands.execution.tools.render.plan import execute as render_plan_execute
+
+# render_plan deprecated (2026-04-25 user feedback): the Approve/Reject/Edit
+# gate-style card semantic conflicts with the new "make plan AND execute"
+# default. Use plan_create + plan_view (plan_executors.py) instead. The
+# render module file is retained for component registry compatibility but
+# the tool is no longer registered with the ToolRegistry.
 from allhands.execution.tools.render.stat import TOOL as STAT_TOOL
 from allhands.execution.tools.render.stat import execute as stat_execute
 from allhands.execution.tools.render.steps import TOOL as STEPS_TOOL
@@ -93,7 +98,7 @@ _RENDER_TOOLS = (
     (DIFF_TOOL, diff_execute),
     (CALLOUT_TOOL, callout_execute),
     (LINK_CARD_TOOL, link_card_execute),
-    (RENDER_PLAN_TOOL, render_plan_execute),
+    # render_plan removed 2026-04-25 — see import block comment above
     (STAT_TOOL, stat_execute),
     (LINE_CHART_TOOL, line_chart_execute),
     (BAR_CHART_TOOL, bar_chart_execute),
@@ -169,6 +174,7 @@ def discover_builtin_tools(
         *ALL_STOCK_ASSISTANT_TOOLS,  # single-line register: Wave 2 stock-assistant
         *ALL_REVIEW_META_TOOLS,
         *ALL_OBSERVATORY_META_TOOLS,
+        *ALL_KB_META_TOOLS,
     ):
         if tool.id in _META_EXECUTOR_TOOL_IDS:
             continue

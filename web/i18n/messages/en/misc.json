@@ -165,7 +165,27 @@
       "loadingMeta": "Loading…",
       "loadingContent": "Loading content…",
       "download": "Download",
-      "unsupportedKind": "Kind {kind} can't be previewed in the panel."
+      "unsupportedKind": "Kind {kind} can't be previewed in the panel.",
+      "copyFailed": "Copy failed: {error}",
+      "rollbackConfirm": "Roll back the current version to v{target}?\nA new version v{next} will be created with content from v{target}.",
+      "toolbarCopyTitle": "Copy content to clipboard",
+      "toolbarEditTitle": "Switch to edit mode",
+      "toolbarOpenNewTitle": "Open in a new window — full-screen render",
+      "toolbarDownloadTitle": "Download to local",
+      "copy": "Copy",
+      "copied": "Copied",
+      "edit": "Edit",
+      "openNew": "New window",
+      "editMode": "Edit mode",
+      "editModeHint": "⌘S save · Esc cancel",
+      "editCancelTitle": "Don't save",
+      "editSaveTitle": "Save as a new version",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…"
+    },
+    "editor": {
+      "loading": "Loading editor…"
     },
     "list": {
       "pinned": "Pinned",
@@ -197,6 +217,28 @@
     },
     "mermaid": {
       "renderFailed": "Mermaid render failed: {error}"
+    },
+    "drawio": {
+      "title": "drawio diagram",
+      "loading": "Loading drawio editor…"
+    },
+    "page": {
+      "title": "Artifacts",
+      "subtitle": "Workspace-wide artifact catalog · filter by kind, employee, conversation, tag",
+      "search": "Search name / description / summary",
+      "all": "All",
+      "allKinds": "All kinds",
+      "sort": {
+        "updated_at_desc": "Recently updated",
+        "created_at_desc": "Newest",
+        "created_at_asc": "Oldest",
+        "name_asc": "Name A-Z",
+        "name_desc": "Name Z-A",
+        "size_desc": "Size large→small"
+      },
+      "empty": "No artifacts match the current filter.",
+      "loadFailed": "Failed to load artifacts: {error}",
+      "count": "{n} artifacts"
     }
   },
   "brand": {
@@ -262,6 +304,27 @@
         "navigate": "navigate",
         "open": "open",
         "toggle": "toggle"
+      },
+      "hints": {
+        "cockpit": "workspace snapshot",
+        "chat": "chat with lead",
+        "conversations": "past conversations",
+        "tasks": "async tasks",
+        "employees": "digital employees",
+        "employeeDesign": "design new employee",
+        "skills": "skill packs",
+        "mcp": "external mcp",
+        "gateway": "provider + model gateway",
+        "market": "browse skill market",
+        "triggers": "scheduled + webhook",
+        "channels": "slack email webhook",
+        "confirmations": "pending approvals",
+        "traces": "langfuse traces",
+        "observatory": "platform observability",
+        "stockAssistant": "market anomaly demo",
+        "review": "agent review",
+        "settings": "system settings",
+        "about": "about allhands"
       },
       "entries": {
         "cockpit": "Cockpit",

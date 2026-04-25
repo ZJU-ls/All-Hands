@@ -41,6 +41,9 @@
         "failed": "failed",
         "pending": "pending"
       }
+    },
+    "traceChip": {
+      "label": "追踪"
     }
   },
   "traces": {

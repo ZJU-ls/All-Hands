@@ -109,7 +109,7 @@
       "sectionMcp": "Mount MCP servers",
       "sectionMcpSubtitle": "Tools from selected MCP servers are exposed to this employee",
       "sectionMaxIter": "Iteration cap",
-      "sectionMaxIterSubtitle": "Max tool-call rounds per agent session (1-10000)",
+      "sectionMaxIterSubtitle": "Max tool-call rounds per session · presets only set the default — free to adjust here (1-10000)",
       "iterUnit": "iter",
       "sectionPrompt": "System prompt fragment",
       "promptHint": "Personality / style / forbidden actions — or let AI draft one from the name / description / skills / MCP above",
@@ -150,11 +150,11 @@
     "presetRadio": {
       "ariaLabel": "Run mode",
       "executeLabel": "Standard execute",
-      "executeCaption": "Get to work · fetch + write · 10-iter cap",
+      "executeCaption": "Direct work · no plan · no subagents · 10 iter default (editable)",
       "planLabel": "Plan first",
-      "planCaption": "Structured plan only · sk_planner · 3-iter cap",
+      "planCaption": "Plan + self-execute · no subagents · 15 iter default (editable)",
       "planSubagentLabel": "Plan + spawn subagents",
-      "planSubagentCaption": "Plan and dispatch · spawn_subagent · 15-iter cap"
+      "planSubagentCaption": "Plan + dispatch parallel subagents · 20 iter default (editable)"
     },
     "skillPicker": {
       "empty": "No skills installed yet. Install one on the \"Skills\" page, then come back to mount it.",

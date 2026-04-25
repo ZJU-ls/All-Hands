@@ -222,6 +222,15 @@ export function ThinkingToggle({
 }) {
   const t = useTranslations("chat.composer");
   const resolvedLabel = label ?? t("thinking");
+  // Toggle 语义 (2026-04-25 first-principles):
+  // - on  → 强制要求模型思考(发 thinking: enabled)
+  // - off → 用模型自身的默认行为(不发 thinking 字段)
+  // 协议事实:不同 vendor 表达"别思考"的方式不同 · 我们不维护 vendor 白
+  // 名单。如果你选了 thinking-by-default 模型(qwen3.6-plus / claude
+  // thinking 系)又想要无思考输出 — 直接选非思考变体(qwen-plus 等)。
+  const tooltip = enabled
+    ? t("thinkingTooltipOn")
+    : t("thinkingTooltipOff");
   return (
     <button
       type="button"
@@ -229,6 +238,7 @@ export function ThinkingToggle({
       aria-checked={enabled}
       disabled={disabled}
       onClick={() => onChange(!enabled)}
+      title={tooltip}
       data-testid="composer-thinking-toggle"
       data-state={enabled ? "on" : "off"}
       className={cn(

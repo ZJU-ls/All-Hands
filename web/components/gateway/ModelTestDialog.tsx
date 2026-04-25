@@ -134,11 +134,15 @@ type LastRun = {
 };
 
 const DEFAULT_SYSTEM = "";
+// 2026-04-25 (IDEALAB regression): default `enable_thinking` to false.
+// thinking 是 opt-in 的,且不少 anthropic-compat 反代(IDEALAB / OpenRouter
+// / 自建网关)不识别 thinking 字段,默认开启会导致空响应或上游 400。
+// 用户想测思考模型时手动点开 toggle 即可。
 const DEFAULT_PARAMS = {
   temperature: 0.7,
   top_p: 1.0,
   max_tokens: 512,
-  enable_thinking: true,
+  enable_thinking: false,
 };
 
 export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
@@ -900,6 +904,7 @@ function ReasoningBlock({
 }
 
 function MetricsRow({ metrics }: { metrics: TestMetrics }) {
+  const t = useTranslations("modelTestMetrics");
   const showReasoningMetric =
     metrics.reasoningFirstMs !== undefined && metrics.reasoningFirstMs > 0;
   // tok i/o/t 三个数都走 fmtCount,但格式串本身要紧凑(占 1 个 chip 宽),
@@ -915,12 +920,12 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
     >
       <MetricChip
         icon="clock"
-        label="latency"
+        label={t("latency")}
         value={fmtDuration(metrics.latencyMs)}
       />
       <MetricChip
         icon="zap"
-        label={showReasoningMetric ? "ttft·thinking" : "ttft"}
+        label={showReasoningMetric ? t("ttftThinking") : t("ttft")}
         value={fmtDuration(
           showReasoningMetric ? metrics.reasoningFirstMs : metrics.ttftMs,
         )}
@@ -928,15 +933,15 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
       {showReasoningMetric ? (
         <MetricChip
           icon="zap"
-          label="ttft·answer"
+          label={t("ttftAnswer")}
           value={fmtDuration(metrics.ttftMs)}
         />
       ) : (
-        <MetricChip icon="database" label="tok i/o/t" value={tokIO} />
+        <MetricChip icon="database" label={t("tokIO")} value={tokIO} />
       )}
       <MetricChip
         icon="activity"
-        label="tok/s"
+        label={t("tokPerSec")}
         value={
           metrics.tokensPerSecond !== undefined
             ? metrics.tokensPerSecond.toFixed(1)
@@ -944,7 +949,7 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
         }
       />
       {showReasoningMetric && (
-        <MetricChip icon="database" label="tok i/o/t" value={tokIO} />
+        <MetricChip icon="database" label={t("tokIO")} value={tokIO} />
       )}
     </div>
   );

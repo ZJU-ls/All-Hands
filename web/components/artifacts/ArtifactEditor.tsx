@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 
 /**
  * Lazy-loaded monaco editor wrapper.
@@ -13,12 +14,17 @@ import { useEffect, useRef } from "react";
  */
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-full items-center justify-center text-[12px] text-text-muted">
-      加载编辑器…
-    </div>
-  ),
+  loading: () => <MonacoLoading />,
 });
+
+function MonacoLoading() {
+  const t = useTranslations("artifacts.editor");
+  return (
+    <div className="flex h-full items-center justify-center text-[12px] text-text-muted">
+      {t("loading")}
+    </div>
+  );
+}
 
 type Lang =
   | "markdown"

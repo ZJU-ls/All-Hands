@@ -1,25 +1,22 @@
 """Phase 3 · render_plan render tool + PlanCard envelope.
 
-Spec: docs/specs/agent-runtime-contract.md § 6.1 (render_plan · PlanCard).
-
-Contract highlights under test:
-- Tool id `allhands.builtin.render_plan` · kind RENDER · scope READ · no gate
-- First call with steps list → envelope `{component: "PlanCard", props, interactions}`
-- Each step defaults status="pending" when omitted
-- Approve round-trip: second call with `{plan_id, decision: "approve"}` flips
-  every step.status to "approved" and keeps title/plan_id stable.
-- Props shape matches `allhands.api.protocol.PlanCardProps` (parity guard).
-
-Ref: ref-src-claude/V04-tool-call-mechanism.md § 2.2.2 · internal tools resolve
-by name; same-kind tools coexist (render_plan vs plan_create).
-Ref: ref-src-claude/V05-skills-system.md § 2.3 · skill bundles a prompt_fragment
-that teaches the agent when to reach for the tool (sk_planner fragment tells
-the model to always render_plan before side-effecting).
+> **DEPRECATED 2026-04-25** (user feedback): the Approve/Reject/Edit gate
+> semantic conflicts with the new "make plan AND execute" default. The
+> tool was de-registered from ToolRegistry; the executor function and
+> PlanCard component remain for any code path that still wants the
+> envelope shape. Use plan_create + plan_view (plan_executors.py) for
+> new agents. Tests in this file kept as documentation of the old
+> contract but skipped at module level.
 """
 
+# ruff: noqa: E402
 from __future__ import annotations
 
 import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="render_plan deprecated 2026-04-25 · use plan_create / plan_view"
+)
 
 from allhands.core import ToolKind, ToolScope
 from allhands.execution.registry import ToolRegistry

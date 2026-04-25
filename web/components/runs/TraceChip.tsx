@@ -11,6 +11,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import type { MouseEvent } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/icon";
 
@@ -25,10 +26,12 @@ type Props = {
 
 export function TraceChip({
   runId,
-  label = "trace",
+  label,
   variant = "chip",
   className,
 }: Props) {
+  const t = useTranslations("runs.traceChip");
+  const resolvedLabel = label ?? t("label");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -54,7 +57,7 @@ export function TraceChip({
         )}
       >
         <span aria-hidden>↗</span>
-        {label}
+        {resolvedLabel}
       </button>
     );
   }

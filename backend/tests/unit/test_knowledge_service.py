@@ -1,0 +1,155 @@
+"""KnowledgeService end-to-end unit tests.
+
+Covers the v0 happy path: create KB → upload markdown doc → ingest →
+search returns the right chunk first. Plus the grant gate behavior used
+by the agent-side `kb_create_document` Meta Tool.
+
+Uses the mock embedder (`mock:hash-64`) so no API key is required and
+results are deterministic.
+"""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+
+from allhands.core import GrantScope
+from allhands.persistence.orm.base import Base
+from allhands.services.knowledge_service import KnowledgeService
+
+
+@pytest.fixture
+async def engine() -> AsyncIterator[AsyncEngine]:
+    eng = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        # FTS5 virtual table + trigger (mirroring alembic 0024)
+        await conn.exec_driver_sql(
+            "CREATE VIRTUAL TABLE kb_chunks_fts USING fts5("
+            "text, kb_id UNINDEXED, content='kb_chunks', content_rowid='id', "
+            "tokenize='unicode61 remove_diacritics 2')"
+        )
+        await conn.exec_driver_sql(
+            "CREATE TRIGGER kb_chunks_ai AFTER INSERT ON kb_chunks BEGIN "
+            "INSERT INTO kb_chunks_fts(rowid, text, kb_id) "
+            "VALUES (new.id, new.text, new.kb_id); END"
+        )
+    yield eng
+    await eng.dispose()
+
+
+@pytest.fixture
+def svc(engine: AsyncEngine, tmp_path: Path) -> KnowledgeService:
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    return KnowledgeService(maker, data_dir=tmp_path)
+
+
+_SAMPLE_MD = b"""# Hybrid Retrieval
+
+Brief overview of combining lexical and dense vector search techniques.
+
+## RRF Fusion
+
+Reciprocal Rank Fusion (RRF) is a parameter-free way to combine ranked
+lists from BM25 and dense vector retrieval into a single ordered list.
+
+## Reranking
+
+The bge-reranker model improves precision-at-k on top of fused results,
+at the cost of an extra inference pass per query.
+"""
+
+
+async def test_create_kb_defaults_to_mock_embedder(svc: KnowledgeService) -> None:
+    kb = await svc.create_kb(name="brain")
+    assert kb.embedding_model_ref.startswith("mock:hash-")
+    assert kb.embedding_dim == 64
+    assert kb.document_count == 0
+
+
+async def test_upload_markdown_then_search_returns_relevant_chunk_first(
+    svc: KnowledgeService,
+) -> None:
+    kb = await svc.create_kb(name="brain")
+    doc = await svc.upload_document(
+        kb.id, title="Survey", content_bytes=_SAMPLE_MD, filename="survey.md"
+    )
+    assert doc.state.value == "ready"
+    assert doc.chunk_count >= 2
+
+    # FTS-driven query — RRF Fusion section should win on "rrf"
+    results = await svc.search(kb.id, "rrf")
+    assert len(results) >= 1
+    top = results[0]
+    assert "RRF Fusion" in (top.chunk.section_path or "")
+    assert top.chunk.text.lower().count("rrf") >= 1
+    assert top.citation.startswith("doc ")
+
+
+async def test_dedup_on_sha_returns_same_doc(svc: KnowledgeService) -> None:
+    kb = await svc.create_kb(name="brain")
+    a = await svc.upload_document(kb.id, title="dup", content_bytes=_SAMPLE_MD, filename="a.md")
+    b = await svc.upload_document(
+        kb.id, title="dup-again", content_bytes=_SAMPLE_MD, filename="b.md"
+    )
+    assert a.id == b.id
+
+
+async def test_grant_gate_no_grant_then_grant(svc: KnowledgeService) -> None:
+    kb = await svc.create_kb(name="brain")
+    # No grant for emp_x → False
+    assert await svc.has_write_grant(kb.id, employee_id="emp_x") is False
+    await svc.grant_permission(kb.id, scope=GrantScope.WRITE, employee_id="emp_x")
+    assert await svc.has_write_grant(kb.id, employee_id="emp_x") is True
+    # Different principal still denied
+    assert await svc.has_write_grant(kb.id, employee_id="emp_other") is False
+
+
+async def test_list_documents_filters_by_title_prefix(svc: KnowledgeService) -> None:
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(
+        kb.id, title="alpha", content_bytes=b"# alpha\n\nbody", filename="a.md"
+    )
+    await svc.upload_document(kb.id, title="beta", content_bytes=b"# beta\n\nbody", filename="b.md")
+    res = await svc.list_documents(kb.id, title_prefix="alp")
+    assert len(res) == 1
+    assert res[0].title == "alpha"
+
+
+async def test_search_empty_query_returns_empty(svc: KnowledgeService) -> None:
+    kb = await svc.create_kb(name="brain")
+    assert await svc.search(kb.id, "") == []
+    assert await svc.search(kb.id, "   ") == []
+
+
+async def test_create_kb_honors_explicit_embedding_ref(svc: KnowledgeService) -> None:
+    kb = await svc.create_kb(name="alt", embedding_model_ref="mock:hash-128")
+    assert kb.embedding_model_ref == "mock:hash-128"
+    assert kb.embedding_dim == 128
+
+
+def test_list_embedding_models_marks_mock_available_and_default(
+    svc: KnowledgeService,
+) -> None:
+    opts = svc.list_embedding_models()
+    refs = [o.ref for o in opts]
+    # Mock dims always present
+    assert "mock:hash-64" in refs
+    assert "mock:hash-256" in refs
+    # OpenAI / bailian present but conditional on env keys
+    assert any(o.ref.startswith("openai:") for o in opts)
+    assert any(o.ref.startswith("bailian:") for o in opts)
+    # Mock is always available
+    assert all(o.available for o in opts if o.ref.startswith("mock:"))
+    # Default surfaces; in test env it's mock:hash-64
+    defaults = [o for o in opts if o.is_default]
+    assert len(defaults) == 1
+    assert defaults[0].ref == "mock:hash-64"
+
+
+def test_default_embedding_model_ref_pulled_from_settings() -> None:
+    # Settings.kb_default_embedding_model_ref drives the default
+    assert KnowledgeService.default_embedding_model_ref() == "mock:hash-64"

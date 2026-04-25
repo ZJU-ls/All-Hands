@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { CopyButton } from "@/components/render/_shared/CopyButton";
@@ -58,6 +59,7 @@ function normKind(raw: unknown): Kind {
  * agent outputs don't lose their callouts after a misclick.
  */
 export function Callout({ props }: RenderProps) {
+  const t = useTranslations("viz.callout");
   const kind = normKind(props.kind);
   const title = typeof props.title === "string" ? props.title : undefined;
   const content = typeof props.content === "string" ? props.content : "";
@@ -94,14 +96,14 @@ export function Callout({ props }: RenderProps) {
       {(showCopy || dismissable) ? (
         <div className="ml-2 flex shrink-0 items-start gap-1 opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-within:opacity-100">
           {showCopy ? (
-            <CopyButton value={title ? `${title}\n\n${content}` : content} label="复制内容" />
+            <CopyButton value={title ? `${title}\n\n${content}` : content} label={t("copyLabel")} />
           ) : null}
           {dismissable ? (
             <button
               type="button"
               onClick={() => setDismissed(true)}
-              aria-label="关闭"
-              title="关闭"
+              aria-label={t("dismiss")}
+              title={t("dismiss")}
               className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text"
             >
               <Icon name="x" size={12} />

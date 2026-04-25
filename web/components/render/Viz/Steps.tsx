@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { Icon } from "@/components/ui/icon";
 
@@ -63,6 +64,7 @@ function normStepStatus(raw: unknown): Status {
  * steps > 4 — otherwise it's noise on a 3-step pipeline.
  */
 export function Steps({ props }: RenderProps) {
+  const t = useTranslations("viz.steps");
   const stepsRaw = Array.isArray(props.steps) ? (props.steps as unknown[]) : [];
   const steps: Step[] = stepsRaw
     .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
@@ -81,7 +83,7 @@ export function Steps({ props }: RenderProps) {
   if (total === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-3 text-caption text-text-muted">
-        No steps
+        {t("empty")}
       </div>
     );
   }
@@ -98,7 +100,7 @@ export function Steps({ props }: RenderProps) {
       {showToolbar ? (
         <div className="flex items-center gap-2 border-b border-border bg-surface-2/40 px-3 py-2">
           <span className="text-caption font-mono text-text-muted tabular-nums">
-            {doneCount}/{total} · {pctDone}% 完成
+            {t("progress", { done: doneCount, total, pct: pctDone })}
           </span>
           <div className="ml-auto flex items-center gap-1">
             <button
@@ -108,7 +110,7 @@ export function Steps({ props }: RenderProps) {
                 setExpandFold(false);
               }}
               aria-pressed={hideDone}
-              title={hideDone ? "显示已完成步骤" : "隐藏已完成步骤"}
+              title={hideDone ? t("showDone") : t("hideDone")}
               className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 text-caption transition-colors duration-fast ${
                 hideDone
                   ? "border-primary/40 bg-primary-muted text-primary"
@@ -116,7 +118,7 @@ export function Steps({ props }: RenderProps) {
               }`}
             >
               <Icon name={hideDone ? "eye-off" : "eye"} size={12} />
-              {hideDone ? "已折叠完成" : "折叠完成"}
+              {hideDone ? t("folded") : t("fold")}
             </button>
           </div>
         </div>
@@ -137,7 +139,7 @@ export function Steps({ props }: RenderProps) {
                     onClick={() => setExpandFold(true)}
                     className="block w-full rounded-md border border-dashed border-border bg-surface-2/30 px-3 py-2 text-left text-caption font-mono text-text-subtle transition-colors duration-fast hover:bg-surface-2 hover:text-text-muted"
                   >
-                    ⋯ {doneCount} 个已完成 · 点击展开
+                    {t("foldedSummary", { count: doneCount })}
                   </button>
                 </li>
               );

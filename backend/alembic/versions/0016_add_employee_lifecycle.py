@@ -17,6 +17,7 @@ browse page until the user explicitly publishes.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0016"

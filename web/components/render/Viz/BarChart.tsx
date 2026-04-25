@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { Toolbar, ToolButton } from "@/components/render/_shared/Toolbar";
 
@@ -36,6 +37,7 @@ const BAR_COLORS = [
  *   - orientation kept as a prop · controls vertical vs horizontal
  */
 export function BarChart({ props }: RenderProps) {
+  const t = useTranslations("viz.barChart");
   const rawBars: Bar[] = Array.isArray(props.bars)
     ? (props.bars as unknown[])
         .filter((b): b is Record<string, unknown> => !!b && typeof b === "object")
@@ -96,7 +98,7 @@ export function BarChart({ props }: RenderProps) {
   if (rawBars.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-surface p-3 text-caption text-text-muted">
-        No bars
+        {t("empty")}
       </div>
     );
   }
@@ -109,10 +111,10 @@ export function BarChart({ props }: RenderProps) {
       : "chevrons-up-down";
   const sortLabel =
     sortMode === "desc"
-      ? "排序 · 降序(再点切换)"
+      ? t("sortDesc")
       : sortMode === "asc"
-      ? "排序 · 升序(再点恢复)"
-      : "排序 · 原序(点击切换)";
+      ? t("sortAsc")
+      : t("sortDefault");
 
   const FooterBlock =
     value_label || caption ? (
@@ -142,7 +144,7 @@ export function BarChart({ props }: RenderProps) {
                 onClick={() => toggleMute(b._idx)}
                 onMouseEnter={() => setHoverIndex(b._idx)}
                 onMouseLeave={() => setHoverIndex(null)}
-                title={isMuted ? "已隐藏 · 点击恢复" : `${b.value} · 占比 ${sharePct}% · 点击隐藏`}
+                title={isMuted ? t("muted") : t("activeTooltip", { value: b.value, pct: sharePct })}
                 className="group grid grid-cols-[minmax(72px,22%)_1fr_auto] items-center gap-2 rounded-md px-1 py-1 text-left transition-colors duration-fast hover:bg-surface-2/40"
               >
                 <div className={`truncate text-caption font-mono ${isMuted ? "text-text-subtle line-through" : "text-text-muted"}`}>
@@ -194,7 +196,7 @@ export function BarChart({ props }: RenderProps) {
               onClick={() => toggleMute(b._idx)}
               onMouseEnter={() => setHoverIndex(b._idx)}
               onMouseLeave={() => setHoverIndex(null)}
-              title={isMuted ? "已隐藏 · 点击恢复" : `${b.value} · 占比 ${sharePct}% · 点击隐藏`}
+              title={isMuted ? t("muted") : t("activeTooltip", { value: b.value, pct: sharePct })}
               className="group flex flex-1 flex-col items-center gap-1 min-w-0"
             >
               <div

@@ -14,6 +14,7 @@ market-data spec § 3.2. Four tables:
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0010"

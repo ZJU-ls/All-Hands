@@ -13,6 +13,7 @@ unique INDEX rather than a CONSTRAINT — SQLite friendly (E06/E07).
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0004"

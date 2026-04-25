@@ -89,7 +89,7 @@ async def test_create_publishes_artifact_changed(
     bus: EventBus,
     received: list[EventEnvelope],
 ) -> None:
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         svc = ArtifactService(SqlArtifactRepo(s), tmp_path, bus=bus)
         art = await svc.create(
             name="proposal",
@@ -116,7 +116,7 @@ async def test_update_publishes_artifact_changed(
     bus: EventBus,
     received: list[EventEnvelope],
 ) -> None:
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         svc = ArtifactService(SqlArtifactRepo(s), tmp_path, bus=bus)
         art = await svc.create(name="n", kind=ArtifactKind.MARKDOWN, content="v1")
         await svc.update(art.id, mode="overwrite", content="v2")
@@ -133,7 +133,7 @@ async def test_delete_publishes_artifact_changed(
     bus: EventBus,
     received: list[EventEnvelope],
 ) -> None:
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         svc = ArtifactService(SqlArtifactRepo(s), tmp_path, bus=bus)
         art = await svc.create(name="doomed", kind=ArtifactKind.MARKDOWN, content="x")
         await svc.delete(art.id)
@@ -148,7 +148,7 @@ async def test_pin_publishes_artifact_changed(
     bus: EventBus,
     received: list[EventEnvelope],
 ) -> None:
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         svc = ArtifactService(SqlArtifactRepo(s), tmp_path, bus=bus)
         art = await svc.create(name="keep", kind=ArtifactKind.MARKDOWN, content="x")
         await svc.set_pinned(art.id, True)
@@ -166,7 +166,7 @@ async def test_no_bus_is_silent(
     """Services built without a bus must still write artifacts — the publish
     path is opt-in so unit tests / one-off scripts don't need to wire the bus.
     """
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         svc = ArtifactService(SqlArtifactRepo(s), tmp_path)  # no bus
         art = await svc.create(name="quiet", kind=ArtifactKind.MARKDOWN, content="ok")
         assert art.version == 1
@@ -243,7 +243,7 @@ async def test_stream_forwards_bus_event_as_sse_frame(
     assert '"name": "allhands.artifacts_ready"' in ready
 
     # 3. Drive a real write, then pull the next artifact_changed CUSTOM frame.
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         svc = ArtifactService(SqlArtifactRepo(s), tmp_path, bus=bus)
         art = await svc.create(name="stream-me", kind=ArtifactKind.MARKDOWN, content="hi")
 
