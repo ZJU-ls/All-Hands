@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ToolCall } from "@/lib/protocol";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
+import { TraceChip } from "@/components/runs/TraceChip";
 
 type Props = { toolCall: ToolCall };
 
@@ -197,6 +198,31 @@ export function ToolCallCard({ toolCall }: Props) {
       </button>
       {expanded && (
         <div className="space-y-2.5 border-t border-border bg-surface px-3 py-2.5">
+          {/* ADR 0019 C2 · subagent run_id surfaces a link into the
+              RunTraceDrawer (?trace=<run_id>). Detected by duck-typing
+              the result envelope; no special tool flag — any tool that
+              wants its run inspectable can include run_id in its result. */}
+          {(() => {
+            const subRunId =
+              toolCall.result &&
+              typeof toolCall.result === "object" &&
+              !Array.isArray(toolCall.result)
+                ? (toolCall.result as Record<string, unknown>).run_id
+                : undefined;
+            if (typeof subRunId !== "string" || !subRunId) return null;
+            return (
+              <div data-testid="tool-call-card-subrun-link">
+                <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-text-subtle">
+                  子代理 run
+                </p>
+                <TraceChip
+                  runId={subRunId}
+                  label="查看链路详情 →"
+                  variant="link"
+                />
+              </div>
+            );
+          })()}
           <div>
             <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-text-subtle">
               args

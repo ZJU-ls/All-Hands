@@ -345,6 +345,8 @@ def _facade_stream(
     model_ref_override: str | None,
     messages: list[dict[str, Any]],
     overrides: RunOverrides | None,
+    plan_repo: Any = None,
+    conversation_id: str = "",
 ) -> AsyncIterator[AgentEvent]:
     """Run the new AgentLoop, translate its InternalEvent stream into the
     legacy AgentEvent surface, yield. Async generator factory.
@@ -376,6 +378,8 @@ def _facade_stream(
         spawn_subagent_service=spawn_subagent_service,
         model_ref_override=model_ref_override,
         confirmation_signal=confirmation_signal,
+        plan_repo=plan_repo,
+        conversation_id=conversation_id,
     )
 
     async def _gen() -> AsyncIterator[AgentEvent]:
@@ -516,6 +520,8 @@ class AgentRunner:
         spawn_subagent_service: SpawnSubagentService | None = None,
         model_ref_override: str | None = None,
         checkpointer: Any | None = None,  # accepted for back-compat; unused
+        plan_repo: Any = None,
+        conversation_id: str = "",
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
@@ -540,6 +546,9 @@ class AgentRunner:
         # restarts. MessageRepo remains the user-visible ledger (ADR 0014 R2);
         # this is **only** for graph-internal state.
         self._checkpointer = checkpointer
+        # ADR 0019 C1 · plan tools · per-conversation AgentPlanRepo binding
+        self._plan_repo = plan_repo
+        self._conversation_id = conversation_id
 
     def _active_tool_ids(self) -> list[str]:
         """Contract § 8.2 · base + flatten(resolved_skills.values())."""
@@ -597,6 +606,8 @@ class AgentRunner:
             model_ref_override=self._model_ref_override,
             messages=messages,
             overrides=overrides,
+            plan_repo=self._plan_repo,
+            conversation_id=self._conversation_id,
         ):
             yield legacy_event
         return
