@@ -28,6 +28,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
+import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/icon";
@@ -99,6 +100,13 @@ const MIME_ICON: Record<string, { tone: string; label: string }> = {
     label: "DOCX",
   },
 };
+
+function isMarkdownLikely(mime: string): boolean {
+  const sub = mime.split("/").pop() ?? "";
+  // markdown / x-markdown / md / mdx — and we treat plain as markdown
+  // because most things people upload as .txt are still markdown-ish.
+  return /(markdown|^md$|^mdx$|plain|html)/.test(sub);
+}
 
 function MimeBadge({ mime }: { mime: string }) {
   const subtype = mime.split("/").pop() || mime;
@@ -179,18 +187,89 @@ export default function KnowledgePage() {
     }
   }, [activeKb?.id]);
 
-  async function handleUpload(file: File) {
+  // Bulk upload — single file calls go through this too. Tracks per-file
+  // status so the user can see N/M progress instead of one opaque spinner.
+  type UploadEntry = {
+    id: string;
+    name: string;
+    state: "queued" | "uploading" | "done" | "failed";
+    error?: string;
+  };
+  const [uploads, setUploads] = useState<UploadEntry[]>([]);
+
+  async function handleUploadFiles(files: FileList | File[]) {
     if (!activeKb) return;
+    const list = Array.from(files);
+    if (list.length === 0) return;
+    const entries: UploadEntry[] = list.map((f, i) => ({
+      id: `${Date.now()}-${i}-${f.name}`,
+      name: f.name,
+      state: "queued",
+    }));
+    setUploads((prev) => [...entries, ...prev].slice(0, 20));
     setUploading(true);
     try {
-      await uploadDocument(activeKb.id, file, { title: file.name });
+      // Sequential upload — concurrent would race the SQLite writer lock
+      // and embedder rate limits; one-at-a-time keeps the UI honest about
+      // what's happening too.
+      for (const e of entries) {
+        const file = list.find((f) => `${e.id.split("-")[2] ?? ""}` === e.name) || list[entries.indexOf(e)];
+        if (!file) continue;
+        setUploads((prev) =>
+          prev.map((p) => (p.id === e.id ? { ...p, state: "uploading" } : p)),
+        );
+        try {
+          await uploadDocument(activeKb.id, file, { title: file.name });
+          setUploads((prev) =>
+            prev.map((p) => (p.id === e.id ? { ...p, state: "done" } : p)),
+          );
+        } catch (err) {
+          setUploads((prev) =>
+            prev.map((p) =>
+              p.id === e.id ? { ...p, state: "failed", error: String(err) } : p,
+            ),
+          );
+        }
+      }
       await refreshDocs(activeKb.id);
       await refreshKbs(activeKb);
-    } catch (e) {
-      setError(String(e));
     } finally {
       setUploading(false);
+      // Clear done entries after 4s so panel doesn't accrete
+      setTimeout(() => {
+        setUploads((prev) => prev.filter((p) => p.state !== "done"));
+      }, 4000);
     }
+  }
+
+  async function handleUpload(file: File) {
+    await handleUploadFiles([file]);
+  }
+
+  // Page-level drag-drop receiver
+  const [dragOver, setDragOver] = useState(false);
+  function onDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (!activeKb) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragOver) setDragOver(true);
+  }
+  function onDragLeave(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      e.currentTarget === e.target ||
+      !e.currentTarget.contains(e.relatedTarget as Node)
+    ) {
+      setDragOver(false);
+    }
+  }
+  async function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (!activeKb || !e.dataTransfer.files.length) return;
+    await handleUploadFiles(e.dataTransfer.files);
   }
 
   async function handleSearch() {
@@ -267,7 +346,16 @@ export default function KnowledgePage() {
 
   return (
     <AppShell>
-      <div className="flex h-full flex-col gap-4 p-6">
+      <div
+        className={`relative flex h-full flex-col gap-4 p-6 ${
+          dragOver
+            ? "outline-dashed outline-2 outline-primary outline-offset-[-12px]"
+            : ""
+        }`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
         <PageHeader
           title="知识库"
           subtitle="把资料存进来 · 自己搜得到 · 员工也能引用回答"
@@ -406,15 +494,48 @@ export default function KnowledgePage() {
               {uploading ? "Uploading…" : "上传"}
               <input
                 type="file"
+                multiple
                 disabled={!activeKb || uploading}
                 className="hidden"
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void handleUpload(f);
+                  if (e.target.files?.length) {
+                    void handleUploadFiles(e.target.files);
+                  }
                   e.currentTarget.value = "";
                 }}
               />
             </label>
+          </div>
+        )}
+
+        {/* Upload progress strip — pin under toolbar so user sees what's
+            happening with bulk drops */}
+        {uploads.length > 0 && (
+          <UploadProgressStrip
+            uploads={uploads}
+            onClear={() => setUploads([])}
+          />
+        )}
+
+        {/* Drag-drop hint overlay — only when dragging files in */}
+        {dragOver && activeKb && (
+          <div
+            className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center"
+            aria-hidden="true"
+          >
+            <div className="rounded-2xl border border-primary bg-surface px-8 py-6 text-center shadow-soft-lg">
+              <Icon
+                name="upload"
+                size={28}
+                className="mx-auto mb-2 text-primary"
+              />
+              <div className="text-[14px] font-semibold text-text">
+                松手即添加到 {activeKb.name}
+              </div>
+              <div className="font-mono text-[11px] text-text-subtle">
+                支持 markdown / pdf / docx / html / txt / csv …
+              </div>
+            </div>
           </div>
         )}
 
@@ -765,6 +886,87 @@ function DocumentsView({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Upload progress strip
+// ─────────────────────────────────────────────────────────────────────────────
+
+function UploadProgressStrip({
+  uploads,
+  onClear,
+}: {
+  uploads: Array<{
+    id: string;
+    name: string;
+    state: "queued" | "uploading" | "done" | "failed";
+    error?: string;
+  }>;
+  onClear: () => void;
+}) {
+  const done = uploads.filter((u) => u.state === "done").length;
+  const failed = uploads.filter((u) => u.state === "failed").length;
+  const inflight = uploads.filter(
+    (u) => u.state === "queued" || u.state === "uploading",
+  ).length;
+
+  return (
+    <div className="rounded-xl border border-border bg-surface px-4 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[12px]">
+          <Icon name="upload" size={12} className="text-primary" />
+          <span className="text-text">
+            上传 · 完成 {done}/{uploads.length}
+            {failed > 0 && (
+              <span className="ml-2 text-danger">{failed} 失败</span>
+            )}
+            {inflight > 0 && (
+              <span className="ml-2 text-warning">{inflight} 进行中</span>
+            )}
+          </span>
+        </div>
+        {inflight === 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[11px] text-text-subtle hover:text-text"
+          >
+            清除
+          </button>
+        )}
+      </div>
+      <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
+        {uploads.slice(0, 6).map((u) => {
+          const tone =
+            u.state === "done"
+              ? "text-success"
+              : u.state === "failed"
+                ? "text-danger"
+                : "text-warning";
+          const icon =
+            u.state === "done"
+              ? "check"
+              : u.state === "failed"
+                ? "alert-triangle"
+                : "loader";
+          return (
+            <li
+              key={u.id}
+              className="flex items-center gap-1.5 truncate font-mono text-[10px] text-text-muted"
+              title={u.error || u.name}
+            >
+              <Icon
+                name={icon}
+                size={10}
+                className={`${tone} ${u.state === "uploading" ? "animate-spin" : ""}`}
+              />
+              <span className="truncate">{u.name}</span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -1815,7 +2017,7 @@ function DocDrawer({
           )}
 
           {tab === "text" && (
-            <div className="p-5">
+            <div className="p-5" id="doc-text-pane">
               {loading && text === null ? (
                 <LoadingState title="加载原文…" />
               ) : textErr ? (
@@ -1824,6 +2026,11 @@ function DocDrawer({
                 <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[12px] text-text-muted">
                   文件为空或不可读
                 </div>
+              ) : isMarkdownLikely(doc.mime_type) ? (
+                <AgentMarkdown
+                  content={text}
+                  className="rounded-xl border border-border bg-surface-2 px-5 py-4 text-[13px] leading-relaxed"
+                />
               ) : (
                 <pre className="whitespace-pre-wrap break-words rounded-xl border border-border bg-surface-2 p-4 text-[12px] leading-relaxed text-text">
                   {text}
@@ -1863,6 +2070,50 @@ function DocDrawer({
                         <span className="ml-auto">
                           {c.span_start}–{c.span_end} · ~{c.token_count} tokens
                         </span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            // Switch to text tab + scroll to span. AgentMarkdown
+                            // renders async, so wait one frame then locate by
+                            // searching the rendered text for a unique-enough
+                            // prefix of the chunk.
+                            setTab("text");
+                            await new Promise((r) => setTimeout(r, 80));
+                            const root = document.getElementById("doc-text-pane");
+                            if (!root) return;
+                            const needle = c.text.slice(0, 40);
+                            const walker = document.createTreeWalker(
+                              root,
+                              NodeFilter.SHOW_TEXT,
+                            );
+                            let n: Node | null = walker.nextNode();
+                            while (n) {
+                              if ((n.textContent ?? "").includes(needle)) {
+                                (n.parentElement as HTMLElement)?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "center",
+                                });
+                                (n.parentElement as HTMLElement)?.classList.add(
+                                  "kb-highlight",
+                                );
+                                setTimeout(
+                                  () =>
+                                    (n!.parentElement as HTMLElement)?.classList.remove(
+                                      "kb-highlight",
+                                    ),
+                                  1800,
+                                );
+                                return;
+                              }
+                              n = walker.nextNode();
+                            }
+                          }}
+                          className="inline-flex h-5 items-center gap-1 rounded border border-border bg-surface px-1.5 text-[10px] text-text-muted hover:text-text hover:border-border-strong transition duration-fast"
+                          title="跳到原文位置"
+                        >
+                          <Icon name="external-link" size={10} />
+                          跳原文
+                        </button>
                       </div>
                       <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-text">
                         {c.text}
