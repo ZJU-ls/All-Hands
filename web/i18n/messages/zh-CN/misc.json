@@ -246,6 +246,15 @@
       "loadFailed": "制品列表加载失败:{error}",
       "count": "{n} 个制品",
       "selectHint": "从左侧选一个制品查看详情",
+      "filters": {
+        "pinnedOnly": "仅置顶",
+        "dateAll": "全部时间",
+        "date7d": "近 7 天",
+        "date30d": "近 30 天",
+        "clearAll": "清空筛选",
+        "activeChip": "已选: {label}",
+        "removeChipAria": "移除筛选 {label}"
+      },
       "stats": {
         "total": "总数",
         "totalHint": "全部制品",

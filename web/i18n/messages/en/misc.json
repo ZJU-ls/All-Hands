@@ -244,6 +244,15 @@
       "loadFailed": "Failed to load artifacts: {error}",
       "count": "{n} artifacts",
       "selectHint": "Pick an artifact on the left to see its detail",
+      "filters": {
+        "pinnedOnly": "Pinned only",
+        "dateAll": "All time",
+        "date7d": "Last 7d",
+        "date30d": "Last 30d",
+        "clearAll": "Clear filters",
+        "activeChip": "Filter: {label}",
+        "removeChipAria": "Remove filter {label}"
+      },
       "stats": {
         "total": "Total",
         "totalHint": "All artifacts",
