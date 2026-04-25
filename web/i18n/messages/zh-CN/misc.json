@@ -193,7 +193,9 @@
       }
     },
     "versionSwitcher": {
-      "ariaLabel": "版本切换"
+      "ariaLabel": "版本切换",
+      "rollbackTitle": "回退到 v{current}(创建新版本 v{next},内容来自 v{current})",
+      "rollbackLabel": "回退到 v{v}"
     },
     "mermaid": {
       "renderFailed": "mermaid 渲染失败:{error}"
