@@ -355,10 +355,12 @@ export function DesignForm({
             </button>
           </div>
         </div>
-        {/* Both views share the same height so the page doesn't jump when
-            the user toggles. 320px = the textarea's natural rows={10}
-            after the 12px / 1.65 line-height we picked for ah-prose-sm. */}
-        {promptView === "edit" ? (
+        {/* Both views render simultaneously inside one fixed-height
+            relative box; toggling is a pure CSS visibility flip so the
+            outer layout never reflows. Hidden view stays in DOM (and
+            keeps state) — no remount, no scroll-position loss, no
+            focus-ring micro-jiggle from textarea unmount/mount. */}
+        <div className="relative w-full h-[320px]">
           <textarea
             ref={textareaRef}
             data-testid="field-system-prompt"
@@ -366,13 +368,25 @@ export function DesignForm({
             onChange={(e) => setSystemPrompt(e.target.value)}
             placeholder="员工性格 / 风格 / 禁止事项"
             disabled={composeState === "loading"}
-            className="w-full h-[320px] resize-none rounded-md bg-bg border border-border px-3 py-2 text-[12px] leading-[1.65] text-text placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-70 transition-colors duration-base"
+            aria-hidden={promptView !== "edit"}
+            tabIndex={promptView === "edit" ? 0 : -1}
+            className={
+              "absolute inset-0 w-full h-full resize-none rounded-md bg-bg border border-border px-3 py-2 text-[12px] leading-[1.65] text-text placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-70 transition-opacity duration-fast " +
+              (promptView === "edit"
+                ? "opacity-100"
+                : "opacity-0 pointer-events-none")
+            }
           />
-        ) : (
           <div
             ref={previewRef}
             data-testid="prompt-preview"
-            className="w-full h-[320px] overflow-y-auto rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text"
+            aria-hidden={promptView !== "preview"}
+            className={
+              "absolute inset-0 w-full h-full overflow-y-auto rounded-md bg-bg border border-border px-3 py-2 text-[12px] leading-[1.65] text-text transition-opacity duration-fast " +
+              (promptView === "preview"
+                ? "opacity-100"
+                : "opacity-0 pointer-events-none")
+            }
           >
             {systemPrompt ? (
               <AgentMarkdown
@@ -387,7 +401,7 @@ export function DesignForm({
               </p>
             )}
           </div>
-        )}
+        </div>
         {/* Hidden textarea keeps the value in the form even while we're
             on the preview tab; submit reads from `systemPrompt` state so
             this is only a visual fallback for older a11y tools. */}
