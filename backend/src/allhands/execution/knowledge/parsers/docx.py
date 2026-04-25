@@ -32,7 +32,7 @@ class DocxParser:
 
     def parse(self, file_path: str) -> ParseResult:
         try:
-            import docx  # type: ignore[import-not-found]
+            import docx
         except ImportError as exc:
             raise DocxParseError(
                 "python-docx is required to ingest DOCX. Install with `uv add python-docx`."

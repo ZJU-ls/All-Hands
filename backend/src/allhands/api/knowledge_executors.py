@@ -209,7 +209,7 @@ def kb_executors_for(svc: KnowledgeService) -> dict[str, ToolExecutor]:
                     "reason": o.reason,
                     "is_default": o.is_default,
                 }
-                for o in svc.list_embedding_models()
+                for o in await svc.list_embedding_models()
             ]
         }
 

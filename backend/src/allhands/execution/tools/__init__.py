@@ -17,6 +17,7 @@ from allhands.execution.tools.builtin.fetch_url import TOOL as FETCH_URL_TOOL
 from allhands.execution.tools.builtin.fetch_url import execute as fetch_url_execute
 from allhands.execution.tools.builtin.write_file import TOOL as WRITE_FILE_TOOL
 from allhands.execution.tools.builtin.write_file import execute as write_file_execute
+from allhands.execution.tools.meta.artifact_office import ALL_ARTIFACT_OFFICE_TOOLS
 from allhands.execution.tools.meta.artifact_tools import ALL_ARTIFACT_TOOLS
 from allhands.execution.tools.meta.channel_tools import (
     ALL_CHANNEL_META_TOOLS,  # single-line register: Wave 2 notification-channels
@@ -166,6 +167,7 @@ def discover_builtin_tools(
         *ALL_PLAN_TOOLS,
         *ALL_TRIGGER_META_TOOLS,
         *ALL_ARTIFACT_TOOLS,
+        *ALL_ARTIFACT_OFFICE_TOOLS,
         *ALL_COCKPIT_META_TOOLS,
         *ALL_TASK_META_TOOLS,
         *ALL_CONVERSATION_META_TOOLS,  # history panel · delete_conversation

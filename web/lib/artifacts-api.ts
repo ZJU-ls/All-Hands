@@ -8,6 +8,10 @@ export type ArtifactKind =
   | "data"
   | "mermaid"
   | "drawio"
+  | "pdf"
+  | "xlsx"
+  | "csv"
+  | "docx"
   | "pptx"
   | "video";
 
@@ -44,9 +48,18 @@ export type ArtifactContentDto = {
   truncated: boolean;
 };
 
-// drawio is XML text on disk (mxfile), surfaced as `content` like markdown/html.
-// pptx / video remain binary placeholders for forward-compat kinds.
-const BINARY: ReadonlySet<ArtifactKind> = new Set(["image", "pptx", "video"]);
+// drawio + csv are text-identity (XML / CSV both round-trip as utf-8). The
+// rest of the office family (pdf / xlsx / docx / pptx) lands as binary blobs
+// the LLM never reads back as raw text — viewers fetch via /content
+// directly. Image + video stay binary as before.
+const BINARY: ReadonlySet<ArtifactKind> = new Set([
+  "image",
+  "pdf",
+  "xlsx",
+  "docx",
+  "pptx",
+  "video",
+]);
 
 export function isBinaryKind(kind: ArtifactKind): boolean {
   return BINARY.has(kind);

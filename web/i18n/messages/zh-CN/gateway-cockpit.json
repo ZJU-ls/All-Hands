@@ -53,7 +53,8 @@
       "sectionCapability": "能力",
       "fieldModelName": "模型名称 (API 调用值)",
       "fieldDisplayName": "显示名称 (可选)",
-      "fieldContextWindow": "上下文窗口 tokens (可选)",
+      "fieldContextWindow": "上下文窗口 tokens · 输入+输出总额 (可选)",
+      "fieldContextWindowHint": "模型一次能处理的 token 总额(prompt + completion)。chat 输入框右侧的预算条以此为分母,显示「已用输入 / 上下文窗口」。请按模型官方文档填写,不是最大输出。",
       "apiKeyShow": "显示 API Key",
       "apiKeyHide": "隐藏 API Key"
     },
@@ -225,7 +226,6 @@
       "statusDown": "DOWN",
       "healthGateway": "模型网关",
       "healthMcp": "MCP 服务器",
-      "healthLangfuse": "Langfuse",
       "healthDb": "数据库",
       "healthTriggers": "触发器调度",
       "costTitle": "估算成本 · 24h",

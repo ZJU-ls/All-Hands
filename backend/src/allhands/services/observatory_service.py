@@ -1,22 +1,9 @@
-"""ObservatoryService — summary + trace listing + bootstrap orchestration.
+"""ObservatoryService — summary + trace listing.
 
-Spec `docs/specs/agent-design/2026-04-18-observatory.md` § 5 - § 8.
-
-v0 MVP scope (delivered this wave):
-- `get_summary()` aggregates `events` + `observability_config` into an
-  `ObservatorySummary` so `/observatory` and `observatory.get_status` return
-  consistent numbers.
-- `list_traces(filter)` / `get_trace(id)` read from the local `events` table
-  filtered on `run.*` kinds. Once the Langfuse HTTP API client lands the
-  implementation swaps over without touching callers.
-- `get_status()` / `bootstrap_now()` expose the singleton
-  `observability_config` row.
-
-Deferred to a follow-up (Langfuse wave 2):
-- 8-step Langfuse bootstrap orchestration (spec § 5.1)
-- CallbackHandler hot-reload (spec § 5.4)
-- iframe session proxy (spec § 6.3)
-- AES-256-GCM wrapping of `secret_key` / `admin_password`
+Self-instrumented · sources are the local ``events`` table (run.* / llm.call /
+tool.invoked / tool.returned) and the ``messages`` projection. Langfuse and
+the embedded bootstrap flow were removed in 2026-04-25 — every metric the
+UI shows comes from data the platform produces itself.
 
 This is the L01 shared implementation — both `api/routers/observatory.py`
 and the 4 Meta Tools in `execution/tools/meta/observatory_tools.py` delegate
@@ -30,7 +17,6 @@ from typing import TYPE_CHECKING
 
 from allhands.core import (
     ArtifactSummary,
-    BootstrapStatus,
     Message,
     ObservabilityConfig,
     ObservatoryEmployeeBreakdown,
@@ -48,6 +34,7 @@ from allhands.core import (
     TurnToolCall,
     TurnUserInput,
 )
+from allhands.services.model_pricing import estimate_cost_usd
 
 if TYPE_CHECKING:
     from allhands.core import EventEnvelope
@@ -136,6 +123,8 @@ class ObservatoryService:
             if isinstance(e.payload.get("duration_s"), (int, float))
         ]
         p50 = _percentile(durations, 0.5) if durations else 0.0
+        p95 = _percentile(durations, 0.95) if durations else 0.0
+        p99 = _percentile(durations, 0.99) if durations else 0.0
 
         # Token aggregation. We accept three payload shapes for back-compat:
         #   - new: payload.tokens = {"input":N,"output":N,"total":N}
@@ -177,8 +166,9 @@ class ObservatoryService:
 
         employees = await self._employees.list_all()
         name_by_id = {e.id: e.name for e in employees}
-        emp_stats: dict[str, dict[str, int]] = {}
-        model_stats: dict[str, dict[str, int]] = {}
+        emp_stats: dict[str, dict[str, float]] = {}
+        model_stats: dict[str, dict[str, float]] = {}
+        cost_total = 0.0
         for e in recent:
             tok = e.payload.get("tokens")
             ti = to = tt = 0
@@ -188,62 +178,74 @@ class ObservatoryService:
                 tt = int(tok.get("total", 0) or 0) or (ti + to)
             elif isinstance(tok, int):
                 tt = int(tok)
+            model_ref = e.payload.get("model_ref")
+            mr = model_ref if isinstance(model_ref, str) and model_ref else None
+            run_cost = estimate_cost_usd(mr, ti, to)
+            cost_total += run_cost
+
             emp_id = e.payload.get("employee_id") or e.actor
             if isinstance(emp_id, str):
                 slot = emp_stats.setdefault(
-                    emp_id, {"runs": 0, "input": 0, "output": 0, "total": 0}
+                    emp_id,
+                    {"runs": 0.0, "input": 0.0, "output": 0.0, "total": 0.0, "cost": 0.0},
                 )
                 slot["runs"] += 1
                 slot["input"] += ti
                 slot["output"] += to
                 slot["total"] += tt
-            model_ref = e.payload.get("model_ref")
-            if isinstance(model_ref, str) and model_ref:
+                slot["cost"] += run_cost
+            if mr:
                 m = model_stats.setdefault(
-                    model_ref, {"runs": 0, "input": 0, "output": 0, "total": 0}
+                    mr,
+                    {"runs": 0.0, "input": 0.0, "output": 0.0, "total": 0.0, "cost": 0.0},
                 )
                 m["runs"] += 1
                 m["input"] += ti
                 m["output"] += to
                 m["total"] += tt
+                m["cost"] += run_cost
 
         by_employee = [
             ObservatoryEmployeeBreakdown(
                 employee_id=eid,
                 employee_name=name_by_id.get(eid, eid),
-                runs_count=stats["runs"],
-                input_tokens=stats["input"],
-                output_tokens=stats["output"],
-                total_tokens=stats["total"],
+                runs_count=int(stats["runs"]),
+                input_tokens=int(stats["input"]),
+                output_tokens=int(stats["output"]),
+                total_tokens=int(stats["total"]),
+                estimated_cost_usd=round(stats["cost"], 6),
             )
             for eid, stats in sorted(emp_stats.items(), key=lambda kv: -kv[1]["runs"])
         ]
         by_model = [
             ObservatoryModelBreakdown(
                 model_ref=ref,
-                runs_count=stats["runs"],
-                input_tokens=stats["input"],
-                output_tokens=stats["output"],
-                total_tokens=stats["total"],
+                runs_count=int(stats["runs"]),
+                input_tokens=int(stats["input"]),
+                output_tokens=int(stats["output"]),
+                total_tokens=int(stats["total"]),
+                estimated_cost_usd=round(stats["cost"], 6),
             )
             for ref, stats in sorted(model_stats.items(), key=lambda kv: -kv[1]["runs"])
         ]
+        # cfg.observability_enabled is always True now (self-instrumented),
+        # but we still load() the row to surface the flush of any flag mutation.
+        _ = cfg
 
         return ObservatorySummary(
             traces_total=runs_total,
             failure_rate_24h=round(failure_rate, 4),
             latency_p50_s=round(p50, 3),
+            latency_p95_s=round(p95, 3),
+            latency_p99_s=round(p99, 3),
             avg_tokens_per_run=avg_tokens,
             input_tokens_total=input_total,
             output_tokens_total=output_total,
             total_tokens_total=total_total,
             llm_calls_total=llm_calls_total,
+            estimated_cost_usd=round(cost_total, 6),
             by_employee=by_employee,
             by_model=by_model,
-            observability_enabled=cfg.observability_enabled,
-            bootstrap_status=cfg.bootstrap_status,
-            bootstrap_error=cfg.bootstrap_error,
-            host=cfg.host,
         )
 
     async def list_traces(
@@ -514,6 +516,8 @@ class ObservatoryService:
                     )
                 )
 
+        cost_estimate = estimate_cost_usd(model_ref, tokens.prompt, tokens.completion)
+
         return RunDetail(
             run_id=run_id,
             task_id=task_id,
@@ -527,6 +531,7 @@ class ObservatoryService:
             tokens=tokens,
             llm_calls=llm_calls_count,
             model_ref=model_ref,
+            estimated_cost_usd=round(cost_estimate, 6),
             error=error,
             turns=turns,
             artifacts=artifacts,
@@ -570,15 +575,6 @@ class ObservatoryService:
             cfg = cfg.model_copy(update={"auto_title_enabled": auto_title_enabled})
             cfg = await self._config.save(cfg)
         return cfg
-
-    async def bootstrap_now(self) -> ObservabilityConfig:
-        """Idempotent status refresh (spec § 7 BOOTSTRAP semantics).
-
-        v0 MVP: returns current config without touching Langfuse. When the
-        8-step bootstrap service lands it replaces this body; the tool +
-        REST contract stays identical because both call through this method.
-        """
-        return await self._config.load()
 
 
 def _compose_turns(
@@ -704,6 +700,5 @@ def _percentile(values: list[float], pct: float) -> float:
 
 
 __all__ = [
-    "BootstrapStatus",
     "ObservatoryService",
 ]
