@@ -576,7 +576,6 @@ class ObservatoryService:
             cfg = await self._config.save(cfg)
         return cfg
 
-
 def _compose_turns(
     messages: list[Message],
     llm_call_events: list[EventEnvelope] | None = None,

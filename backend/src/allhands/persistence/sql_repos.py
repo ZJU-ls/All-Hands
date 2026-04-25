@@ -1498,7 +1498,9 @@ class SqlObservabilityConfigRepo:
     async def load(self) -> ObservabilityConfig:
         row = await self._s.get(ObservabilityConfigRow, 1)
         if row is None:
-            row = ObservabilityConfigRow(id=1, updated_at=datetime.now(UTC).replace(tzinfo=None))
+            row = ObservabilityConfigRow(
+                id=1, updated_at=datetime.now(UTC).replace(tzinfo=None)
+            )
             self._s.add(row)
             await self._s.commit()
         return ObservabilityConfig(
