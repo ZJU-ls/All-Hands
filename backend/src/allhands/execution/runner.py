@@ -123,6 +123,8 @@ def _build_model(
     model_ref: str,
     provider: LLMProvider | None = None,
     overrides: RunOverrides | None = None,
+    *,
+    max_output_tokens: int | None = None,
 ) -> Any:
     # ``thinking`` must be baked at ctor time for anthropic kind (bind
     # doesn't propagate — see llm_factory.build_llm docstring / E18). For
@@ -131,10 +133,21 @@ def _build_model(
     if provider is not None and provider.kind == "anthropic" and overrides is not None:
         thinking_for_ctor = overrides.thinking
 
+    # Per-model output cap. Same ctor-vs-bind dichotomy as thinking on
+    # Anthropic: bake it into the ctor so it lands on the request payload.
+    # OpenAI-compat adapters honor ctor max_tokens too. Per-turn overrides
+    # still win via `_apply_overrides` below.
+    cap_for_ctor = max_output_tokens
+
     if provider is not None:
         from allhands.execution.llm_factory import build_llm
 
-        model = build_llm(provider, model_ref, thinking=thinking_for_ctor)
+        model = build_llm(
+            provider,
+            model_ref,
+            thinking=thinking_for_ctor,
+            max_output_tokens=cap_for_ctor,
+        )
         return _apply_overrides(model, overrides, provider_kind=provider.kind)
 
     # fallback path — no provider bound (dev / test), treat as OpenAI-compat
@@ -350,6 +363,7 @@ def _facade_stream(
     conversation_id: str = "",
     user_input_signal: Any = None,
     run_id: str | None = None,
+    max_output_tokens: int | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """Run the new AgentLoop, translate its InternalEvent stream into the
     legacy AgentEvent surface, yield. Async generator factory.
@@ -385,6 +399,7 @@ def _facade_stream(
         plan_repo=plan_repo,
         conversation_id=conversation_id,
         run_id=run_id,
+        max_output_tokens=max_output_tokens,
     )
 
     async def _gen() -> AsyncIterator[AgentEvent]:
@@ -553,6 +568,7 @@ class AgentRunner:
         conversation_id: str = "",
         user_input_signal: Any = None,
         run_id: str | None = None,
+        max_output_tokens: int | None = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
@@ -587,6 +603,10 @@ class AgentRunner:
         # ChatService mints it once per send_message and threads it down so
         # AgentLoop can stamp Artifact / ArtifactVersion rows.
         self._run_id = run_id
+        # 2026-04-25 · per-model output cap, threaded into AgentLoop so
+        # build_llm bakes it onto the LangChain ctor (Anthropic kind needs
+        # ctor-time max_tokens — bind doesn't propagate).
+        self._max_output_tokens = max_output_tokens
 
     def _active_tool_ids(self) -> list[str]:
         """Contract § 8.2 · base + flatten(resolved_skills.values())."""
@@ -648,6 +668,7 @@ class AgentRunner:
             conversation_id=self._conversation_id,
             user_input_signal=self._user_input_signal,
             run_id=self._run_id,
+            max_output_tokens=self._max_output_tokens,
         ):
             yield legacy_event
         return

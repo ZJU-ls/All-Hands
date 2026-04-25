@@ -1,0 +1,12 @@
+id: allhands.review_gates
+name: 三级闸门
+description: self-review / walkthrough / harness · 把 spec 推到能交付的三道关
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.cockpit.run_self_review
+  - allhands.meta.cockpit.run_walkthrough_acceptance
+  - allhands.meta.cockpit.run_harness_review
+
+prompt_fragment_file: prompts/guidance.md

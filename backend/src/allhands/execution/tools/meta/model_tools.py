@@ -45,8 +45,12 @@ CREATE_MODEL_TOOL = Tool(
     kind=ToolKind.META,
     name="create_model",
     description=(
-        "Register a model under a provider. Provide provider_id, the model's "
-        "API name (e.g. 'gpt-4o-mini'), optional display_name and context_window."
+        "Register a model under a provider. Required: provider_id + API name "
+        "(e.g. 'gpt-4o-mini'). Optional advanced caps: display_name, "
+        "context_window (total prompt+completion budget), max_input_tokens "
+        "(composer chip denominator), max_output_tokens (forwarded as "
+        "max_tokens on outbound chat). Caps default to None = use model's "
+        "own ceiling."
     ),
     input_schema={
         "type": "object",
@@ -55,6 +59,8 @@ CREATE_MODEL_TOOL = Tool(
             "name": {"type": "string"},
             "display_name": {"type": "string", "default": ""},
             "context_window": {"type": "integer", "default": 0},
+            "max_input_tokens": {"type": "integer", "minimum": 1},
+            "max_output_tokens": {"type": "integer", "minimum": 1},
         },
         "required": ["provider_id", "name"],
     },
@@ -75,6 +81,8 @@ UPDATE_MODEL_TOOL = Tool(
             "name": {"type": "string"},
             "display_name": {"type": "string"},
             "context_window": {"type": "integer"},
+            "max_input_tokens": {"type": "integer", "minimum": 1},
+            "max_output_tokens": {"type": "integer", "minimum": 1},
             "enabled": {"type": "boolean"},
         },
         "required": ["model_id"],

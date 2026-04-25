@@ -203,6 +203,14 @@ class LLMModelRow(Base):
     name: Mapped[str] = mapped_column(String(128), index=True)
     display_name: Mapped[str] = mapped_column(String(128), default="")
     context_window: Mapped[int] = mapped_column(Integer, default=0)
+    # Optional explicit caps. None → "use model default" (we don't constrain
+    # the request). When set, max_input_tokens drives the composer's budget
+    # chip denominator and max_output_tokens is forwarded as `max_tokens` on
+    # outbound chat requests. Kept separate from `context_window` because
+    # vendors expose three distinct numbers (total / input / output) and
+    # collapsing them produced the "6/64k" UX confusion.
+    max_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # System-wide singleton: at most one row has is_default=True. Service
     # layer enforces — see LLMModelRepo.set_default(). Indexed because

@@ -87,19 +87,22 @@ def _provider(pid: str = "p1", name: str = "Bailian") -> LLMProvider:
 
 
 # ---------------------------------------------------------------------------
-# I-0002 · context_window must be > 0 at the service boundary
+# I-0002 · context_window must be >= 0 at the service boundary
+# 2026-04-25:zero is now treated as "未设置 / 用 fallback"(token cap 三件
+# 套都改为可选高级设置,缺省走 composer 兜底)。负值仍然拒。
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_model_create_rejects_zero_context_window() -> None:
+async def test_model_create_accepts_zero_context_window_as_unset() -> None:
     provider = _provider()
     svc = LLMModelService(
         cast("LLMModelRepo", _ModelRepo()),
         cast("LLMProviderRepo", _ProviderRepo([provider])),
     )
-    with pytest.raises(ModelConfigError, match="context_window"):
-        await svc.create(provider.id, name="qwen3.6-plus", context_window=0)
+    model = await svc.create(provider.id, name="qwen3.6-plus", context_window=0)
+    assert model is not None
+    assert model.context_window == 0
 
 
 @pytest.mark.asyncio
@@ -126,7 +129,7 @@ async def test_model_create_accepts_positive_context_window() -> None:
 
 
 @pytest.mark.asyncio
-async def test_model_update_rejects_zero_context_window() -> None:
+async def test_model_update_accepts_zero_context_window_as_unset() -> None:
     model = LLMModel(
         id="m1",
         provider_id="p1",
@@ -138,8 +141,29 @@ async def test_model_update_rejects_zero_context_window() -> None:
         cast("LLMModelRepo", _ModelRepo([model])),
         cast("LLMProviderRepo", _ProviderRepo([_provider()])),
     )
-    with pytest.raises(ModelConfigError):
-        await svc.update(model.id, context_window=0)
+    updated = await svc.update(model.id, context_window=0)
+    assert updated is not None
+    assert updated.context_window == 0
+
+
+@pytest.mark.asyncio
+async def test_model_update_rejects_negative_max_caps() -> None:
+    """token caps 是可选高级字段,负值或零必须拒(0 没业务含义,留空请传 None)。"""
+    model = LLMModel(
+        id="m1",
+        provider_id="p1",
+        name="qwen",
+        display_name="qwen",
+        context_window=128_000,
+    )
+    svc = LLMModelService(
+        cast("LLMModelRepo", _ModelRepo([model])),
+        cast("LLMProviderRepo", _ProviderRepo([_provider()])),
+    )
+    with pytest.raises(ModelConfigError, match="max_input_tokens"):
+        await svc.update(model.id, max_input_tokens=0)
+    with pytest.raises(ModelConfigError, match="max_output_tokens"):
+        await svc.update(model.id, max_output_tokens=-1)
 
 
 # ---------------------------------------------------------------------------

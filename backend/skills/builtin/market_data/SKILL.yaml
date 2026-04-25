@@ -1,0 +1,25 @@
+id: allhands.market_data
+name: 行情数据
+description: 股票行情 / K 线 / 新闻 / 公告 / 自选 / 持仓 · 金融场景的底层读写层
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.get_quote
+  - allhands.meta.get_quote_batch
+  - allhands.meta.get_bars
+  - allhands.meta.get_news
+  - allhands.meta.get_announcements
+  - allhands.meta.search_symbol
+  - allhands.meta.screen_stocks
+  - allhands.meta.list_watched
+  - allhands.meta.add_watched
+  - allhands.meta.remove_watched
+  - allhands.meta.list_holdings
+  - allhands.meta.add_holding
+  - allhands.meta.update_holding
+  - allhands.meta.remove_holding
+  - allhands.meta.import_holdings_csv
+  - allhands.meta.set_poller_thresholds
+
+prompt_fragment_file: prompts/guidance.md
