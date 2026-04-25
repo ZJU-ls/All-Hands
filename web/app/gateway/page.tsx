@@ -597,9 +597,11 @@ function GatewayHero({
           <p className="mt-1 text-[13px] text-text-muted leading-relaxed">
             {defaultProvider ? (
               <>
-                默认走{" "}
-                <span className="font-medium text-text">{defaultProvider.name}</span>
-                ,其余作 fallback · 一键健康检查所有模型。
+                全局默认 ={" "}
+                <span className="font-medium text-text">
+                  {defaultProvider.name}/{defaultProvider.default_model}
+                </span>
+                ;员工 / 对话未指定模型时回退到这一对 · 卡片右上角「设为默认」切换 · 编辑供应商可改默认模型。
               </>
             ) : (
               <>尚未选择默认供应商 · 任一卡片右上角点「设为默认」即可。</>
@@ -617,9 +619,12 @@ function GatewayHero({
               tone="success"
             />
             {defaultProvider && (
-              <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20">
+              <span
+                className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20"
+                title="未指定时所有对话回退到这一对 (供应商, 模型)"
+              >
                 <Icon name="star" size={11} />
-                默认 · {defaultProvider.name}
+                全局默认 · {defaultProvider.name}/{defaultProvider.default_model}
               </span>
             )}
           </div>

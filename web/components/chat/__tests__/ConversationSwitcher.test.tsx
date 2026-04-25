@@ -55,6 +55,8 @@ describe("ConversationSwitcher", () => {
         employee_id: "emp1",
         title: "current",
         model_ref_override: null,
+        effective_model_ref: null,
+        effective_model_source: null,
         created_at: "2026-04-20T10:00:00Z",
       },
       {
@@ -62,6 +64,8 @@ describe("ConversationSwitcher", () => {
         employee_id: "emp1",
         title: "older one",
         model_ref_override: null,
+        effective_model_ref: null,
+        effective_model_source: null,
         created_at: "2026-04-19T09:00:00Z",
       },
     ]);
@@ -91,6 +95,8 @@ describe("ConversationSwitcher", () => {
         employee_id: "emp1",
         title: "current",
         model_ref_override: null,
+        effective_model_ref: null,
+        effective_model_source: null,
         created_at: "2026-04-20T10:00:00Z",
       },
       {
@@ -98,6 +104,8 @@ describe("ConversationSwitcher", () => {
         employee_id: "emp1",
         title: "older",
         model_ref_override: null,
+        effective_model_ref: null,
+        effective_model_source: null,
         created_at: "2026-04-19T09:00:00Z",
       },
     ]);

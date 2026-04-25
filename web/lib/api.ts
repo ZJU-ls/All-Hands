@@ -89,6 +89,13 @@ export type ConversationDto = {
   employee_id: string;
   title: string | null;
   model_ref_override: string | null;
+  // Three-stage resolved (provider/model) — what will actually run this turn.
+  // Differs from `model_ref_override` when the override / employee.model_ref
+  // points at a provider/model that isn't actually configured: the backend
+  // falls through to the workspace default and surfaces it here so the chip
+  // can show the truthful binding instead of a stale label.
+  effective_model_ref: string | null;
+  effective_model_source: "override" | "employee" | "global_default" | null;
   created_at: string;
 };
 
