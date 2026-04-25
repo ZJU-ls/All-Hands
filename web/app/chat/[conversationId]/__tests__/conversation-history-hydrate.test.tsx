@@ -64,8 +64,9 @@ vi.mock("@/components/artifacts/ArtifactPanel", () => ({
 // The page pulls replaceMessages via a selector; we intercept it at the hook
 // boundary so the tap sees exactly what the page hands to the store.
 vi.mock("@/lib/store", () => ({
-  useChatStore: (selector: (s: { replaceMessages: typeof replaceMessagesSpy }) => unknown) =>
-    selector({ replaceMessages: replaceMessagesSpy }),
+  useChatStore: (
+    selector: (s: { replaceMessages: typeof replaceMessagesSpy; reset: () => void }) => unknown,
+  ) => selector({ replaceMessages: replaceMessagesSpy, reset: () => {} }),
 }));
 
 import ConversationPage from "@/app/chat/[conversationId]/page";

@@ -101,12 +101,18 @@ export default function ConversationPage() {
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
   const [panelOpen, setPanelOpen] = useState(false);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
+  const resetChatStore = useChatStore((s) => s.reset);
   const retryAttemptRef = useRef(0);
   const manualRetryRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    // Wipe any in-flight streaming state from the previous conversation so a
+    // half-rendered assistant bubble (e.g. mid-tool-call from the chat we
+    // just navigated away from) doesn't bleed into the new conversation
+    // before its history finishes loading.
+    resetChatStore();
 
     async function attempt(): Promise<void> {
       try {
@@ -185,7 +191,7 @@ export default function ConversationPage() {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [conversationId, router, replaceMessages]);
+  }, [conversationId, router, replaceMessages, resetChatStore]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

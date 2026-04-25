@@ -278,6 +278,17 @@ export function InputBar({
     cancelStreaming();
   }, [cancelStreaming]);
 
+  // Abort any in-flight SSE when the conversation switches (or on unmount).
+  // Without this, navigating away mid-stream leaves the previous chat's
+  // tokens writing into the global store, which then bleeds into the next
+  // conversation's view.
+  useEffect(() => {
+    return () => {
+      streamRef.current?.abort();
+      streamRef.current = null;
+    };
+  }, [conversationId]);
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 border-t border-border bg-bg px-4 pb-4 pt-3">
       <Composer
