@@ -89,19 +89,6 @@ type ChatState = {
   messages: Message[];
   streamingMessage: StreamingMessage | null;
   pendingConfirmations: PendingConfirmation[];
-  /**
-   * ADR 0014 Phase 4e · cross-component resume handoff.
-   *
-   * The ConfirmationDialog resolves a confirmation by (a) POSTing the
-   * decision to /resolve and (b) for interrupt-sourced confirmations,
-   * asking InputBar to open a /resume SSE that continues the paused turn.
-   * Because streaming lives in InputBar's useEffect (one owner per page),
-   * the Dialog publishes its request here and InputBar picks it up.
-   *
-   * Shape: { conversationId, decision }. Cleared by InputBar once the
-   * resume SSE is opened. Null when nothing is pending.
-   */
-  pendingResumeRequest: { conversationId: string; decision: "approve" | "reject" } | null;
   isStreaming: boolean;
   streamError: StreamError | null;
 
@@ -131,9 +118,6 @@ type ChatState = {
   addRenderPayload: (messageId: string, payload: RenderPayload) => void;
   addConfirmation: (conf: PendingConfirmation) => void;
   removeConfirmation: (confirmationId: string) => void;
-  /** ADR 0014 Phase 4e · published by ConfirmationDialog, consumed by InputBar. */
-  requestResume: (req: { conversationId: string; decision: "approve" | "reject" }) => void;
-  clearResumeRequest: () => void;
   setStreamError: (err: StreamError | null) => void;
   reset: () => void;
 };
@@ -143,7 +127,6 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   streamingMessage: null,
   pendingConfirmations: [],
-  pendingResumeRequest: null,
   isStreaming: false,
   streamError: null,
 
@@ -325,10 +308,6 @@ export const useChatStore = create<ChatState>((set) => ({
       ),
     })),
 
-  requestResume: (req) => set({ pendingResumeRequest: req }),
-
-  clearResumeRequest: () => set({ pendingResumeRequest: null }),
-
   setStreamError: (err) => set({ streamError: err }),
 
   reset: () =>
@@ -336,7 +315,6 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: [],
       streamingMessage: null,
       pendingConfirmations: [],
-      pendingResumeRequest: null,
       isStreaming: false,
       streamError: null,
     }),
