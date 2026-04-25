@@ -298,7 +298,11 @@
         "last7d": "Last 7d",
         "last7dHint": "Recently created",
         "byKind": "By kind",
-        "topKindHint": "Largest kind · {kind}"
+        "topKindHint": "Largest kind · {kind}",
+        "activity": "Last 14 days",
+        "activityHint": "Artifacts created per day",
+        "contributors": "Top contributors",
+        "contributorsHint": "Most prolific employees in this workspace"
       }
     }
   },

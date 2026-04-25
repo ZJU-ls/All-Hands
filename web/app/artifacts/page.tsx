@@ -636,14 +636,116 @@ function Hero({
       </div>
 
       {stats && stats.total > 0 ? (
-        <ByKindStrip
-          stats={stats}
-          t={t}
-          activeKind={activeKind}
-          onPickKind={onPickKind}
-        />
+        <div className="grid gap-3 lg:grid-cols-2">
+          <ByKindStrip
+            stats={stats}
+            t={t}
+            activeKind={activeKind}
+            onPickKind={onPickKind}
+          />
+          <ActivityCard stats={stats} t={t} />
+        </div>
       ) : null}
     </header>
+  );
+}
+
+function ActivityCard({
+  stats,
+  t,
+}: {
+  stats: ArtifactStatsDto;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const max = Math.max(1, ...stats.daily_counts);
+  // Plain SVG sparkline · same primitive used in cockpit but inlined here
+  // since we want a slightly different visual treatment (filled-area under
+  // the line, end-of-line dot to anchor today). 14 buckets · 200×40 vbox.
+  const w = 200;
+  const h = 40;
+  const stepX = stats.daily_counts.length > 1 ? w / (stats.daily_counts.length - 1) : 0;
+  const points = stats.daily_counts.map((v, i) => {
+    const x = i * stepX;
+    const y = h - (v / max) * (h - 6) - 3;
+    return { x, y };
+  });
+  const linePath = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .join(" ");
+  const areaPath = `${linePath} L${w},${h} L0,${h} Z`;
+  const last = points[points.length - 1];
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm">
+      <div className="mb-3 flex items-baseline justify-between">
+        <div>
+          <div className="text-caption font-mono uppercase tracking-wider text-text-muted">
+            {t("stats.activity")}
+          </div>
+          <div className="text-caption text-text-subtle">{t("stats.activityHint")}</div>
+        </div>
+        <div className="font-mono text-2xl font-semibold tabular-nums text-text">
+          {stats.last_7d}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-10 w-full">
+        <path d={areaPath} fill="var(--color-primary)" fillOpacity={0.12} />
+        <path
+          d={linePath}
+          stroke="var(--color-primary)"
+          strokeWidth="1.5"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {last ? (
+          <circle cx={last.x} cy={last.y} r={2.4} fill="var(--color-primary)" />
+        ) : null}
+      </svg>
+
+      {stats.top_employees.length > 0 ? (
+        <div className="mt-4 border-t border-border pt-3">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-caption font-mono uppercase tracking-wider text-text-muted">
+              {t("stats.contributors")}
+            </span>
+            <span className="text-caption text-text-subtle">{t("stats.contributorsHint")}</span>
+          </div>
+          <ul className="space-y-1.5">
+            {stats.top_employees.map((row) => {
+              const pct =
+                stats.top_employees[0]?.count
+                  ? (row.count / stats.top_employees[0].count) * 100
+                  : 0;
+              const shortKey = row.key.slice(0, 8);
+              return (
+                <li key={row.key} className="flex items-center gap-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 text-text-muted">
+                    <Icon name="users" size={11} />
+                  </span>
+                  <span
+                    className="font-mono text-caption text-text"
+                    title={row.key}
+                  >
+                    {shortKey}
+                  </span>
+                  <div className="relative ml-2 h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                      style={{ width: `${pct}%`, opacity: 0.85 }}
+                    />
+                  </div>
+                  <span className="font-mono text-caption tabular-nums text-text-muted">
+                    {row.count}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

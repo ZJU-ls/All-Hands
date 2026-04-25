@@ -300,7 +300,11 @@
         "last7d": "近 7 天",
         "last7dHint": "新增制品",
         "byKind": "按类型分布",
-        "topKindHint": "最多类型 · {kind}"
+        "topKindHint": "最多类型 · {kind}",
+        "activity": "近 14 天活跃度",
+        "activityHint": "每日新增产物",
+        "contributors": "Top 创作者",
+        "contributorsHint": "本工作区贡献最多的员工"
       }
     }
   },
