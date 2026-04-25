@@ -118,14 +118,14 @@ export function BarChart({ props }: RenderProps) {
   return (
     <div className={shell}>
       {TitleBlock}
-      <div className="flex h-44 items-end gap-2">
+      <div className="flex h-44 items-stretch gap-2">
         {bars.map((b, i) => {
           const pct = Math.max(0, (b.value / safeMax) * 100);
           const color = BAR_COLORS[i % BAR_COLORS.length];
           return (
             <div
               key={i}
-              className="group flex flex-1 flex-col items-center justify-end gap-1 min-w-0"
+              className="group flex flex-1 flex-col items-center gap-1 min-w-0"
             >
               <div
                 className="font-mono text-caption tabular-nums"
@@ -133,15 +133,21 @@ export function BarChart({ props }: RenderProps) {
               >
                 {b.value}
               </div>
-              <div
-                className="w-full rounded-t-sm transition-[height] duration-mid"
-                style={{
-                  height: `${pct}%`,
-                  minHeight: b.value > 0 ? 2 : 0,
-                  background: `linear-gradient(to top, ${color} 0%, color-mix(in srgb, ${color} 70%, transparent) 100%)`,
-                }}
-                aria-hidden
-              />
+              {/* Track · flex-1 gives it a real height inside the h-44 row,
+                  which the absolutely-positioned bar then resolves its
+                  percent height against. Without this intermediate, the
+                  column had no defined height and bars collapsed to 2px. */}
+              <div className="relative w-full flex-1">
+                <div
+                  className="absolute inset-x-0 bottom-0 rounded-t-sm transition-[height] duration-mid"
+                  style={{
+                    height: `${pct}%`,
+                    minHeight: b.value > 0 ? 2 : 0,
+                    background: `linear-gradient(to top, ${color} 0%, color-mix(in srgb, ${color} 70%, transparent) 100%)`,
+                  }}
+                  aria-hidden
+                />
+              </div>
               <div className="w-full truncate text-center text-caption font-mono text-text-muted">
                 {b.label}
               </div>
