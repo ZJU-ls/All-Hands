@@ -52,17 +52,18 @@
 ### 3.2 统一 React Agent
 
 - 数据模型里**没有 `mode` 字段**。PR 里出现 `mode` 字段立即打回
-- 所有员工走同一 `AgentRunner`(封装 LangGraph `create_react_agent`)
+- 所有员工走同一 `AgentLoop`(`execution/agent_loop.py` · `AgentRunner` 是面向旧调用者的 facade)
 - 模式差异由 `tools[]` / `skill_ids[]` / `max_iterations` / `system_prompt` / `model_ref` 决定(只有这 5 个字段)
 - "新增一种模式" = 加 Skill 或 Tool,**不许**给 Employee / Conversation 加枚举字段
 
-### 3.3 Pure-Function Query Loop(新 · v1)
+### 3.3 Pure-Function Query Loop(2026-04-25 落到代码 · ADR 0018)
 
-- `AgentRunner.stream(messages, thread_id)` 是 state 的纯函数 —— **每一轮都重新计算** `lc_tools` + `system_prompt`,runner 自己不藏状态
-- 所有状态在 `SkillRuntime` / 消息历史 / 外部 repo 里;runner 读入、yield `AgentEvent`、**不把 LangGraph 类型泄漏**到 `services/` 以上(import-linter 守护)
-- streaming mode 必须是 `stream_mode="messages"`(per-token),不是 `updates` / `values`;`ReasoningEvent` 和 `TokenEvent` 通过 `_split_content_blocks` 分流(extended thinking)
-- 参考:Claude Code `query()` while-true 主循环(`ref-src-claude/V02 § 2.1`)· LangGraph graph-as-state-transform
-- 回归:`test_runner_per_turn_rebuild.py` · import-linter 规则
+- `AgentLoop.stream(messages)` 是 state 的纯函数 —— **每一轮都重新计算** `lc_tools` + `system_prompt`,loop 自己不藏状态
+- 所有状态在 `SkillRuntime` / 消息历史 / 外部 repo 里(MessageRepo + ConfirmationRepo + SkillRuntimeRepo · 唯一 SoT)· loop 读入,yield `InternalEvent`(terminal + preview 两层)
+- 内部事件协议:`AssistantMessageCommitted` / `ToolMessageCommitted` / `ConfirmationRequested` / `LoopExited(5 reasons)` / `AssistantMessagePartial` / `ToolCallProgress`
+- AG-UI 翻译只在 `api/ag_ui_translator.py`,`execution/` 不直接 import AG-UI 类型(import-linter 守护)
+- 参考:Claude Code `query()` while-true 主循环 · ADR 0018 落地实现
+- 回归:`test_agent_loop.py` · `test_tool_pipeline.py` · `test_internal_events.py` · import-linter "no langgraph anywhere"
 
 ### 3.4 Skill = Dynamic Capability Pack(新 · v1)
 
@@ -85,28 +86,28 @@
 - 参考:Claude Code Task tool · LangGraph subgraph composition
 - 回归:`test_spawn_subagent.py` · `test_dispatch_trace.py`
 
-### 3.6 L4 对话式操作 + 护栏 + Interrupt
+### 3.6 L4 对话式操作 + 护栏 + Deferred Tool
 
 - Tool 必须声明 `scope`(READ / WRITE / IRREVERSIBLE / BOOTSTRAP)· 未声明 → 注册拒绝
-- WRITE 以上默认 `requires_confirmation=True`,不能绕过 `ConfirmationGate`(gate 绑在 executor 闭包里 · LLM 看不到"不 gate"版本 · 见 `runner.py:307-344`)
+- WRITE 以上 + `requires_confirmation=True` 走 **DeferredSignal**(`execution/deferred.py`)· `_permission_check` 返回 `Defer(signal, kwargs)` · pipeline 自动 publish/wait
 - BOOTSTRAP 必须走"候选版本 + 显式切换"流程,不能直接生效
-- 测试里跳 gate 只许用 `AutoApprovePolicy` 显式注入,不许改 gate.py
-- 参考:Claude Code permission mode · LangGraph `interrupt()` + human-in-the-loop(语义同构)
-- 回归:`test_runner.py::test_gate_wraps_write_tools` · `test_tool_scope.py`
+- 测试里跳 confirmation:用 `AutoApproveGate` 或不注入 `confirmation_signal`,Allow 默认通过
+- 参考:Claude Code `shouldDefer: true` tool · ADR 0018 deferred tool 一等公民
+- 回归:`test_agent_loop.py::test_loop_defers_write_tool_*` · `test_tool_pipeline.py::test_iter_emits_confirmation_requested_*` · `test_deferred.py`
 
 ### 3.7 低耦合 / 高扩展 + 状态可 Checkpoint(v1 扩展)
 
 **三条不变量:**
 
-1. **层间 import 契约**:`core/` 禁止 import `sqlalchemy` / `fastapi` / `langgraph` / `langchain` / `openai` / `anthropic`;跨层只 import 接口(ABC),不 import 具体实现;依赖方向严格自上而下(L10 → L1)
+1. **层间 import 契约**:`core/` 禁止 import `sqlalchemy` / `fastapi` / `langchain` / `openai` / `anthropic`;`langgraph` 全仓 forbid(ADR 0018)· 跨层只 import 接口(ABC),不 import 具体实现;依赖方向严格自上而下(L10 → L1)
 2. **注册式扩展**:新能力走注册(ToolRegistry / ComponentRegistry / MCPClient / ModelGateway),不走"改核心代码"
-3. **状态可 checkpoint(v1 新)**:所有影响后续决策的 runtime 状态**必须可持久化到 L3**(进程重启可 resume)· 包括:SkillRuntime · 消息 · Confirmation 挂起态 · Artifact · **graph 内部状态**(interrupt / tool pending / subagent stack · 通过 LangGraph `AsyncSqliteSaver`)
+3. **状态终态化(2026-04-25 · ADR 0018)**:所有影响后续决策的 runtime 状态**必须可从 repo 完整重建** —— 进程重启 / uvicorn reload 不丢
    - 任何"内存 dict"作为状态都是反模式 · 除非旁边有 repo 同步落地
-   - `SkillRuntime` 从 v1 起必须在 `chat_service.send_message` 结束时 flush 到 `SkillRuntimeRepo`(ADR 0011)
-   - **2026-04-23 更新:** LangGraph Checkpointer 通过 [ADR 0014](product/adr/0014-langgraph-checkpointer.md) 落地 · `AgentRunner` 接 `AsyncSqliteSaver`(separate `checkpoints.db`)· `thread_id=conversation_id` · `MessageRepo` 仍是用户可见消息的 SoT(R2),checkpointer 只管 graph 内部状态。禁止 `services/` / `api/` / `core/` direct import `langgraph.checkpoint.*`(import-linter 守 · R1)
+   - `SkillRuntime` 在 `chat_service.send_message` 结束时 flush 到 `SkillRuntimeRepo`(ADR 0011)
+   - **ADR 0018(2026-04-25):** LangGraph Checkpointer 已被 ADR 0018 移除 · 状态 SoT 只剩 `MessageRepo` + `ConfirmationRepo` + `SkillRuntimeRepo` · 挂起 / 恢复经由 `DeferredSignal`(轮询 ConfirmationRepo · 协程 await)· import-linter "no langgraph anywhere" 守护
 
-- 参考:LangGraph Checkpointer · Claude Code `--resume <session>`(基于消息表 replay)
-- 回归:`lint-imports` · `test_skill_runtime_persistence.py` · `test_checkpointer_phase1.py` · `test_dual_sot_consistency.py` · `test_interrupt_resume.py`
+- 参考:Claude Code 自有 query 循环 · 全部状态在 messages list + repos
+- 回归:`lint-imports` · `test_skill_runtime_persistence.py` · `test_deferred.py` · `test_agent_loop.py`
 
 ### 3.8 视觉纪律 · Brand Blue Dual Theme(`web/` 代码必读)
 
