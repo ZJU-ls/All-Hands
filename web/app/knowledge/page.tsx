@@ -141,6 +141,8 @@ export default function KnowledgePage() {
   const [asking, setAsking] = useState(false);
   const [askResult, setAskResult] = useState<AskResponse | null>(null);
   const [stateFilter, setStateFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pageState, setPageState] = useState<"loading" | "ok" | "error">(
@@ -347,12 +349,42 @@ export default function KnowledgePage() {
     [kbs],
   );
 
-  // Document filter (state)
+  // Document filter (state + tag)
   const filteredDocs = useMemo(() => {
     if (!docs) return [];
-    if (!stateFilter) return docs;
-    return docs.filter((d) => d.state === stateFilter);
-  }, [docs, stateFilter]);
+    return docs.filter((d) => {
+      if (stateFilter && d.state !== stateFilter) return false;
+      if (tagFilter && !d.tags.includes(tagFilter)) return false;
+      return true;
+    });
+  }, [docs, stateFilter, tagFilter]);
+
+  // Selection helpers
+  function toggleSelect(id: string) {
+    setSelectedDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelectedDocs(new Set());
+  }
+  async function bulkDelete() {
+    if (!activeKb || selectedDocs.size === 0) return;
+    if (!confirm(`软删除 ${selectedDocs.size} 个文档?`)) return;
+    try {
+      for (const id of selectedDocs) {
+        await deleteDocument(activeKb.id, id);
+      }
+      clearSelection();
+      await refreshDocs(activeKb.id);
+      await refreshKbs(activeKb);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -580,7 +612,11 @@ export default function KnowledgePage() {
                   kb={activeKb}
                   onOpenSettings={() => setShowSettings(true)}
                 />
-                <TagsCard docs={docs ?? []} />
+                <TagsCard
+                  docs={docs ?? []}
+                  active={tagFilter}
+                  onPick={setTagFilter}
+                />
                 <ToolsCard />
               </>
             )}
@@ -628,13 +664,19 @@ export default function KnowledgePage() {
               <DocumentsView
                 docs={filteredDocs}
                 allDocsCount={docs?.length ?? 0}
-                hasFilter={!!stateFilter}
+                hasFilter={!!stateFilter || !!tagFilter}
                 onClickDoc={setOpenDoc}
                 onUpload={() => {
                   setError("点右上角「上传」按钮添加文档");
                   setTimeout(() => setError(null), 2500);
                 }}
                 onReindex={handleReindexDoc}
+                selected={selectedDocs}
+                onToggleSelect={toggleSelect}
+                onClearSelection={clearSelection}
+                onBulkDelete={bulkDelete}
+                tagFilter={tagFilter}
+                onClearTagFilter={() => setTagFilter(null)}
               />
             )}
           </main>
@@ -789,7 +831,15 @@ function KBInfoCard({
   );
 }
 
-function TagsCard({ docs }: { docs: DocumentDto[] }) {
+function TagsCard({
+  docs,
+  active,
+  onPick,
+}: {
+  docs: DocumentDto[];
+  active: string | null;
+  onPick: (t: string | null) => void;
+}) {
   const tags = useMemo(() => {
     const counts = new Map<string, number>();
     for (const d of docs) {
@@ -800,8 +850,40 @@ function TagsCard({ docs }: { docs: DocumentDto[] }) {
   if (tags.length === 0) return null;
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <div className={SECTION_LABEL}>Tags</div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mb-2 flex items-center justify-between">
+        <span className={SECTION_LABEL}>Tags</span>
+        {active && (
+          <button
+            type="button"
+            onClick={() => onPick(null)}
+            className="text-[11px] text-text-subtle hover:text-text"
+          >
+            清除
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {tags.map(([t, n]) => {
+          const isActive = active === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onPick(isActive ? null : t)}
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition duration-fast ${
+                isActive
+                  ? "border-primary bg-primary-muted text-primary"
+                  : "border-border bg-surface-2 text-text-muted hover:border-border-strong hover:text-text"
+              }`}
+            >
+              <span>#{t}</span>
+              <span className="font-mono text-[10px] text-text-subtle">{n}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Suppress the original span loop — replaced with the buttons above */}
+      <div className="hidden">
         {tags.map(([t, n]) => (
           <span
             key={t}
@@ -842,6 +924,12 @@ function DocumentsView({
   onClickDoc,
   onUpload,
   onReindex,
+  selected,
+  onToggleSelect,
+  onClearSelection,
+  onBulkDelete,
+  tagFilter,
+  onClearTagFilter,
 }: {
   docs: DocumentDto[];
   allDocsCount: number;
@@ -849,6 +937,12 @@ function DocumentsView({
   onClickDoc: (d: DocumentDto) => void;
   onUpload: () => void;
   onReindex: (d: DocumentDto) => Promise<void>;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onClearSelection: () => void;
+  onBulkDelete: () => Promise<void>;
+  tagFilter: string | null;
+  onClearTagFilter: () => void;
 }) {
   if (allDocsCount === 0) {
     return (
@@ -875,20 +969,74 @@ function DocumentsView({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <div className={SECTION_LABEL}>Documents</div>
-        <span className="font-mono text-[10px] text-text-subtle">
-          {docs.length} / {allDocsCount}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          <div className={SECTION_LABEL}>Documents</div>
+          <span className="font-mono text-[10px] text-text-subtle">
+            {docs.length} / {allDocsCount}
+          </span>
+          {tagFilter && (
+            <button
+              type="button"
+              onClick={onClearTagFilter}
+              className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary-muted px-2 py-0.5 text-[11px] text-primary"
+              title="移除标签筛选"
+            >
+              #{tagFilter} ✕
+            </button>
+          )}
+        </div>
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-text-muted">
+              选中 {selected.size}
+            </span>
+            <button
+              type="button"
+              onClick={onClearSelection}
+              className="inline-flex h-7 items-center rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted hover:text-text"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => void onBulkDelete()}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-danger/40 bg-danger-soft px-2 text-[11px] text-danger hover:bg-danger/10"
+            >
+              <Icon name="trash-2" size={11} />
+              批量删除
+            </button>
+          </div>
+        )}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-5 sm:grid-cols-2 xl:grid-cols-3">
-        {docs.map((d) => (
-          <button
+        {docs.map((d) => {
+          const isSelected = selected.has(d.id);
+          return (
+          <div
             key={d.id}
-            type="button"
+            className={`group relative flex cursor-pointer flex-col gap-2 rounded-xl border bg-surface-2 p-3 text-left transition duration-fast hover:-translate-y-px hover:shadow-soft-sm ${
+              isSelected
+                ? "border-primary ring-1 ring-primary/30"
+                : "border-border hover:border-border-strong"
+            }`}
             onClick={() => onClickDoc(d)}
-            className="group flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-3 text-left transition duration-fast hover:-translate-y-px hover:border-border-strong hover:shadow-soft-sm"
           >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect(d.id);
+              }}
+              className={`absolute left-2 top-2 grid h-5 w-5 place-items-center rounded border transition duration-fast ${
+                isSelected
+                  ? "border-primary bg-primary text-primary-fg opacity-100"
+                  : "border-border bg-surface text-transparent opacity-0 group-hover:opacity-100 hover:border-border-strong"
+              }`}
+              aria-label="选择"
+            >
+              <Icon name="check" size={12} />
+            </button>
             <div className="flex items-start justify-between gap-2">
               <MimeBadge mime={d.mime_type} />
               <StatePill state={d.state} />
@@ -942,8 +1090,9 @@ function DocumentsView({
                 重试入库
               </span>
             )}
-          </button>
-        ))}
+          </div>
+          );
+        })}
       </div>
     </div>
   );
