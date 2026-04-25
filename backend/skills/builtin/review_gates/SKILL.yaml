@@ -1,6 +1,6 @@
 id: allhands.review_gates
 name: 三级闸门
-description: self-review / walkthrough / harness · 把 spec 推到能交付的三道关
+description: self-review walkthrough harness 三道关 · 把 spec 推到可交付状态
 version: 1.0.0
 builtin: true
 

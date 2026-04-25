@@ -1,6 +1,6 @@
 id: allhands.market_data
 name: 行情数据
-description: 股票行情 / K 线 / 新闻 / 公告 / 自选 / 持仓 · 金融场景的底层读写层
+description: 股票 quote / K线 / 新闻 / 公告 / 自选 / 持仓 · stock_assistant 的底层数据层
 version: 1.0.0
 builtin: true
 
