@@ -278,6 +278,12 @@
         "activeChip": "Filter: {label}",
         "removeChipAria": "Remove filter {label}"
       },
+      "view": {
+        "list": "List",
+        "grid": "Grid",
+        "listAria": "Switch to list view",
+        "gridAria": "Switch to grid view"
+      },
       "stats": {
         "total": "Total",
         "totalHint": "All artifacts",
