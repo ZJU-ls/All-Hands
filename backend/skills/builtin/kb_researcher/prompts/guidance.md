@@ -35,3 +35,35 @@
 ```
 
 引用块给用户;`citation` 字段就是这一块要填的内容,直接复制即可。
+
+## 何时调用
+
+用户提一个具体问题(尤其涉及内部资料 / 团队历史 / 项目细节)→ 这套技能。触发关键词:「找一下」「查」「我之前文档里说过」「KB」。
+
+## 典型工作流
+
+`kb_list` → `kb_search(query)` → 看 results 是否够回答 → 不够 `kb_read_document` 取原文 → 综合答 + citation。
+
+## 调用示例
+
+```
+kb_list()                                # 找最相关 KB
+kb_search(kb_id="kb_main", query="审批流程", top_k=8)
+# 看 results · 够答就直接答 + citation
+# 不够:
+kb_read_document(document_id="doc_xxx", max_chars=20000)
+```
+
+## 常见坑
+
+- 不要答「KB 里没有」就打住 · 至少 2 个不同 query 再下结论
+- 不要把 `kb_read_document` 全文贴回对话 · 答案 + citation 就够
+- 不要 `kb_create_document` · 此 skill 只读 · 沉淀走 kb_curator
+
+## 失败时怎么办
+
+| 现象 | 做什么 |
+|---|---|
+| `kb_search` 返回 0 结果 | 换关键词 / 拆细子问题 / 用 `kb_browse_collection` 定位 |
+| `kb_read_document` 报「max_chars 超」 | 缩 max_chars · 分段拉 |
+| 用户说「答错了」 | 重新检索 · 可能 query 偏了 · 用用户原话作 query |
