@@ -16,7 +16,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Icon, type IconName } from "@/components/ui/icon";
-import { AllhandsLogo, type LogoConcept } from "@/components/brand/AllhandsLogo";
+import { AllhandsLogo } from "@/components/brand/AllhandsLogo";
 import { cn } from "@/lib/cn";
 
 type SceneId = "chat" | "skills" | "gateway" | "traces";
@@ -30,11 +30,7 @@ const SIDEBAR: Array<{ id: SceneId; label: string; icon: IconName }> = [
 
 const ROTATE_MS = 5000;
 
-export function WorkspacePreview({
-  logoConcept = "constellation",
-}: {
-  logoConcept?: LogoConcept;
-}) {
+export function WorkspacePreview() {
   const [activeId, setActiveId] = useState<SceneId>("chat");
   const startRef = useRef<number>(Date.now());
   const [progress, setProgress] = useState(0);
@@ -135,7 +131,7 @@ export function WorkspacePreview({
         {/* Stage · all scenes layered, transition opacity + translate */}
         <div className="relative col-span-9 min-h-[320px] p-6">
           <Scene visible={activeId === "chat"}>
-            <ChatScene logoConcept={logoConcept} />
+            <ChatScene />
           </Scene>
           <Scene visible={activeId === "skills"}>
             <SkillsScene />
@@ -176,12 +172,12 @@ function Scene({
 
 // ───────────────────────── Scenes ─────────────────────────
 
-function ChatScene({ logoConcept }: { logoConcept: LogoConcept }) {
+function ChatScene() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <AllhandsLogo size={26} concept={logoConcept} />
+          <AllhandsLogo size={26} />
           <h3 className="text-base font-semibold tracking-tight text-text">
             Lead Agent
           </h3>
