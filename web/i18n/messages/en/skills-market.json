@@ -43,9 +43,9 @@
         "sourceUpload": "Upload .zip"
       },
       "market": {
-        "searchPlaceholder": "Search by name, description, or tag...",
+        "searchPlaceholder": "Search by name, description, or tag…",
         "searchAria": "Search official market",
-        "loading": "Searching...",
+        "loading": "Searching…",
         "tagsLabel": "Tags",
         "tagsAll": "All",
         "summary": "{shown} / {total} skills",
@@ -65,12 +65,12 @@
         "ai": "AI explanation",
         "raw": "Raw SKILL.md",
         "close": "Close",
-        "loadingMeta": "Reading skill metadata...",
-        "loadingMd": "Reading SKILL.md...",
+        "loadingMeta": "Reading skill metadata…",
+        "loadingMd": "Reading SKILL.md…",
         "noBody": "Explanation failed: response has no body",
         "regenerate": "Re-explain",
         "aiHint": "AI explanation based on SKILL.md · for reference only",
-        "aiWaiting": "AI is reading SKILL.md, hang on...",
+        "aiWaiting": "AI is reading SKILL.md, hang on…",
         "filesHeading": "Files ({count})",
         "skillMdHeading": "SKILL.md",
         "installed": "Installed",
@@ -168,11 +168,11 @@
       "trigger": "AI explain",
       "tooltip": "Use AI to explain what this skill does and when to use it",
       "panelTitle": "AI explanation",
-      "generating": "Generating...",
+      "generating": "Generating…",
       "done": "Done",
       "regenerate": "Re-explain",
       "noBody": "Explanation failed: response has no body",
-      "waiting": "Waiting for the first chunk..."
+      "waiting": "Waiting for the first chunk…"
     }
   },
   "market": {
@@ -253,7 +253,7 @@
         "notesHint": "Optional",
         "close": "Close",
         "cancel": "Cancel",
-        "saving": "Saving...",
+        "saving": "Saving…",
         "save": "Save"
       }
     },
@@ -341,7 +341,7 @@
         "test": "Test",
         "tools": "Tools",
         "delete": "Delete",
-        "loadingTools": "Loading tools...",
+        "loadingTools": "Loading tools…",
         "emptyTools": "This server declares no tools.",
         "featured": "featured"
       },

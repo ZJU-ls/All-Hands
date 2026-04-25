@@ -136,3 +136,28 @@ validation 等)未走 i18n。
 - catalog audit 现在是回归测试的一部分,半合并永远不再悄悄过线
 
 **commits**:待提交
+
+## Round 6 · 2026-04-26 03:00
+
+**主题**:i18n bad-pattern 修复 + 标点统一 + pnpm 别名
+
+**碰到**:翻译质量复审发现 triggers card 用了"split-translation"反模式 ——
+`{prefix} N {suffix}` 三段拼接,这种模式在英文里语法可能错(因为词序不
+一定能匹配 prefix-N-suffix)。10 处 en/json 用了 ASCII "..." 而不是
+horizontal ellipsis "…",和其他 placeholder 不一致。
+
+**做的事**:
+- 重构 `triggers.list.card.{firesPrefix,firesSuffix}` 拼接 → 单一 ICU 字符串
+  `firesTotal: "Fired <n></n> times"` / "触发 <n></n> 次"
+  + `lastFiredAt: "Last fired <time></time>"` / "最近触发 <time></time>"
+  · 用 `t.rich()` 渲染 inline `<span>` 保持原本字体效果
+- 11 处 `...` → `…`(horizontal ellipsis · U+2026):skills-market.json
+  10 处 + gateway-cockpit.json 1 处 · 保留 sk-... 作为 API key prefix 示例
+- package.json 加 `pnpm audit-i18n` + `pnpm audit-i18n:strict` 别名
+  让本地 / pre-push hook 一行跑形状校验
+
+**结果**:
+- 所有现有形状 / 占位符 / 空值检查仍通过
+- 1884 web tests · backend 11 i18n tests 全绿 · build 绿
+
+**commits**:待提交

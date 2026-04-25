@@ -657,12 +657,24 @@ function TriggerCard({
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-muted">
             <span className="inline-flex items-center gap-1">
               <Icon name="activity" size={11} className="text-text-subtle" />
-              {t("firesPrefix")} <span className="font-mono tabular-nums text-text">{trigger.fires_total}</span> {t("firesSuffix")}
+              {t.rich("firesTotal", {
+                n: () => (
+                  <span className="font-mono tabular-nums text-text">
+                    {trigger.fires_total}
+                  </span>
+                ),
+              })}
             </span>
             <span className="inline-flex items-center gap-1">
               <Icon name="clock" size={11} className="text-text-subtle" />
               {trigger.last_fired_at ? (
-                <>{t("lastPrefix")} <span className="font-mono text-text-subtle">{formatTime(trigger.last_fired_at)}</span></>
+                t.rich("lastFiredAt", {
+                  time: () => (
+                    <span className="font-mono text-text-subtle">
+                      {formatTime(trigger.last_fired_at!)}
+                    </span>
+                  ),
+                })
               ) : (
                 t("neverFired")
               )}
