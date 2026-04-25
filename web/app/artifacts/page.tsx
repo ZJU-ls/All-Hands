@@ -19,8 +19,10 @@ import { ArtifactGrid } from "@/components/artifacts/ArtifactGrid";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import {
   artifactStreamUrl,
+  deleteArtifact,
   getArtifactStats,
   listArtifacts,
+  pinArtifact,
   type ArtifactDto,
   type ArtifactKind,
   type ArtifactSort,
@@ -110,6 +112,62 @@ export default function ArtifactsGlobalPage() {
     setKind("");
     setPinnedOnly(false);
     setDateRange("all");
+  }
+
+  // Bulk-selection set · disjoint from `selectedId` (the singular detail
+  // pane focus). Cmd/Ctrl+click on a list/grid item toggles its membership.
+  // Once non-empty, the floating BulkActionBar appears with pin/delete.
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  function toggleBulk(id: string) {
+    setBulkSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearBulk() {
+    setBulkSelected(new Set());
+  }
+
+  // Resolve "are all currently bulk-selected items pinned?" to decide the
+  // pin/unpin label. If mixed, default to pin (most common intent).
+  const allPinned =
+    bulkSelected.size > 0 &&
+    items.filter((a) => bulkSelected.has(a.id)).every((a) => a.pinned);
+
+  async function bulkPin() {
+    if (bulkSelected.size === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const targetPinned = !allPinned;
+      // Sequential to avoid hammering the backend; the SSE stream pushes
+      // the resulting `artifact_changed` frames back so the list rerenders
+      // naturally without a manual refetch.
+      for (const id of bulkSelected) {
+        await pinArtifact(id, targetPinned);
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+  async function bulkDelete() {
+    if (bulkSelected.size === 0 || bulkBusy) return;
+    if (typeof window !== "undefined") {
+      if (!window.confirm(`Delete ${bulkSelected.size} artifact(s)? This is reversible (soft-delete).`)) return;
+    }
+    setBulkBusy(true);
+    try {
+      for (const id of bulkSelected) {
+        await deleteArtifact(id);
+      }
+      // SSE refresh handles the list; clear the local selection set.
+      clearBulk();
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   // Keyboard navigation · j/k (or ↓/↑) move selection through the visible
@@ -412,7 +470,9 @@ export default function ArtifactsGlobalPage() {
               <ArtifactGrid
                 artifacts={items}
                 selectedId={selectedId}
+                bulkSelected={bulkSelected}
                 onSelect={setSelectedId}
+                onToggleBulk={toggleBulk}
               />
             ) : (
               <ArtifactList
@@ -440,7 +500,77 @@ export default function ArtifactsGlobalPage() {
           )}
         </div>
       </div>
+      {/* Floating bulk action bar · only renders when ≥1 item is in the
+          bulk-selection set. Patterns from Linear (issue list bulk) and
+          Gmail (selection toolbar). Pin/Unpin label adapts: if all picked
+          items are currently pinned, the action becomes "Unpin". */}
+      {bulkSelected.size > 0 ? (
+        <BulkActionBar
+          count={bulkSelected.size}
+          allPinned={allPinned}
+          busy={bulkBusy}
+          onPinToggle={bulkPin}
+          onDelete={bulkDelete}
+          onClear={clearBulk}
+        />
+      ) : null}
     </AppShell>
+  );
+}
+
+function BulkActionBar({
+  count,
+  allPinned,
+  busy,
+  onPinToggle,
+  onDelete,
+  onClear,
+}: {
+  count: number;
+  allPinned: boolean;
+  busy: boolean;
+  onPinToggle: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      role="toolbar"
+      aria-label="bulk actions"
+      className="fixed bottom-6 left-1/2 z-30 inline-flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-border bg-surface px-3 py-2 shadow-soft-lg animate-fade-up"
+    >
+      <span className="font-mono text-[11px] text-text-muted">
+        {count} selected
+      </span>
+      <span className="h-4 w-px bg-border" aria-hidden />
+      <button
+        type="button"
+        onClick={onPinToggle}
+        disabled={busy}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text disabled:opacity-50"
+      >
+        <Icon name="check" size={12} />
+        {allPinned ? "Unpin" : "Pin"}
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={busy}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-danger-soft px-2.5 text-[12px] text-danger transition-colors duration-fast hover:border-danger/50 disabled:opacity-50"
+      >
+        <Icon name="trash-2" size={12} />
+        Delete
+      </button>
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label="clear selection"
+        title="clear selection"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-subtle transition-colors duration-fast hover:bg-surface-2 hover:text-text"
+      >
+        <Icon name="x" size={12} />
+      </button>
+    </div>
   );
 }
 

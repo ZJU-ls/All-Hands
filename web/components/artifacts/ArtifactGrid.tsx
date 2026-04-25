@@ -71,11 +71,16 @@ function relativeTime(iso: string): string {
 export function ArtifactGrid({
   artifacts,
   selectedId,
+  bulkSelected,
   onSelect,
+  onToggleBulk,
 }: {
   artifacts: ArtifactDto[];
   selectedId: string | null;
+  bulkSelected?: Set<string>;
   onSelect: (id: string) => void;
+  /** Cmd/Ctrl-click toggles bulk membership; plain click sets selectedId. */
+  onToggleBulk?: (id: string) => void;
 }) {
   const t = useTranslations("artifacts.list");
   // Stable order: pinned first, then upstream sort (which the page already
@@ -106,6 +111,7 @@ export function ArtifactGrid({
     >
       {ordered.map((a) => {
         const active = a.id === selectedId;
+        const isBulkSelected = bulkSelected?.has(a.id) ?? false;
         const tone = KIND_TONE[a.kind] ?? "bg-surface-2 text-text-muted";
         const icon = KIND_ICON[a.kind] ?? "file";
         return (
@@ -116,15 +122,31 @@ export function ArtifactGrid({
               type="button"
               role="option"
               aria-selected={active}
-              onClick={() => onSelect(a.id)}
+              onClick={(e) => {
+                if ((e.metaKey || e.ctrlKey) && onToggleBulk) {
+                  onToggleBulk(a.id);
+                  return;
+                }
+                onSelect(a.id);
+              }}
               data-testid={`grid-item-${a.id}`}
               {...handlers}
               className={`group relative flex h-full w-full flex-col gap-2 rounded-xl border p-3 text-left transition-colors duration-fast ${
-                active
+                isBulkSelected
+                  ? "border-primary bg-primary-muted shadow-glow-sm"
+                  : active
                   ? "border-primary/50 bg-primary-muted/40 shadow-glow-sm"
                   : "border-border bg-surface hover:border-border-strong hover:bg-surface-2"
               }`}
             >
+              {isBulkSelected ? (
+                <span
+                  aria-hidden
+                  className="absolute left-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-fg"
+                >
+                  <Icon name="check" size={11} />
+                </span>
+              ) : null}
               {a.pinned ? (
                 <span
                   aria-hidden

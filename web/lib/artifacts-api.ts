@@ -224,6 +224,32 @@ export async function updateArtifact(
   return res.json() as Promise<ArtifactDto>;
 }
 
+/** Pin / unpin · REST mirror of the artifact_pin meta tool. */
+export async function pinArtifact(
+  id: string,
+  pinned: boolean,
+): Promise<ArtifactDto> {
+  const res = await fetch(`${BASE}/api/artifacts/${id}/pin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pinned }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`pinArtifact failed: ${res.status} ${detail}`);
+  }
+  return res.json() as Promise<ArtifactDto>;
+}
+
+/** Soft-delete · REST mirror of the artifact_delete meta tool. */
+export async function deleteArtifact(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/artifacts/${id}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    const detail = await res.text();
+    throw new Error(`deleteArtifact failed: ${res.status} ${detail}`);
+  }
+}
+
 /**
  * Roll back to an older version. Creates a new v{N+1} carrying the older
  * version's content; original history is preserved.
