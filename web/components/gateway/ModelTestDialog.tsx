@@ -39,6 +39,46 @@ import { openStream, type StreamHandle } from "@/lib/stream-client";
 
 const STICK_THRESHOLD_PX = 64;
 
+// ---------------------------------------------------------------------------
+// Friendly formatting — durations + token counts auto-pick the right unit.
+// ---------------------------------------------------------------------------
+
+/** Format milliseconds as the most natural compact unit:
+ *    < 1s   → "732ms"
+ *    < 60s  → "4.2s"
+ *    < 60m  → "1m 23s"
+ *    >= 1h  → "1h 5m"
+ *  Sub-second precision matters when comparing fast models; once we're past
+ *  a minute, seconds-level precision adds noise without insight.
+ */
+function fmtDuration(ms: number | undefined): string {
+  if (ms === undefined || ms === null || !Number.isFinite(ms)) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60);
+  const sr = Math.round(s - m * 60);
+  if (m < 60) return sr === 0 ? `${m}m` : `${m}m ${sr}s`;
+  const h = Math.floor(m / 60);
+  const mr = m - h * 60;
+  return mr === 0 ? `${h}h` : `${h}h ${mr}m`;
+}
+
+/** Format an integer count with k/M suffix once it crosses 4-digit threshold:
+ *    < 10_000     → raw "1234"
+ *    < 1_000_000  → "12.3k"
+ *    >= 1M        → "1.20M"
+ *  Keeps small counts readable as exact integers (token-level audits) while
+ *  large counts collapse to readable order-of-magnitude.
+ */
+function fmtCount(n: number | undefined): string {
+  if (n === undefined || n === null || !Number.isFinite(n)) return "—";
+  const v = Math.round(n);
+  if (v < 10_000) return v.toLocaleString();
+  if (v < 1_000_000) return `${(v / 1_000).toFixed(1)}k`;
+  return `${(v / 1_000_000).toFixed(2)}M`;
+}
+
 export type ModelTestDialogProps = {
   model: {
     id: string;
@@ -159,6 +199,24 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
   useLayoutEffect(() => {
     if (stickToBottom) scrollToBottom("auto");
   }, [messages, streamContent, streamReasoning, stickToBottom, scrollToBottom]);
+
+  // 测试结束的下降沿:把滚动条拉到最底,让 metrics 卡片(latency / ttft / tokens)
+  // 出现在视野中。流式过程中用户可能向上滚去看 reasoning,我们尊重那个意图;
+  // 但一旦本次测试落地(metrics 或 error 到达),就视为"用户希望看到结果",
+  // 哪怕 stickToBottom 已被翻成 false 也强制拉一次 —— 这是产品语义而非滚动状态机。
+  const wasLoadingRef = useRef(false);
+  useEffect(() => {
+    const justFinished = wasLoadingRef.current && !isLoading;
+    wasLoadingRef.current = isLoading;
+    if (!justFinished) return;
+    if (!lastRun || lastRun.streaming) return;
+    // 等下一帧让 metrics / error 卡片完成挂载,再滚动 —— 否则 scrollHeight 还没把
+    // 新增的 80px 算进去,会差一截。
+    requestAnimationFrame(() => {
+      scrollToBottom("smooth");
+      setStickToBottom(true);
+    });
+  }, [isLoading, lastRun, scrollToBottom]);
 
   useEffect(() => {
     return () => streamRef.current?.abort();
@@ -522,7 +580,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                   </span>
                   {lastRun.metrics?.latencyMs !== undefined && (
                     <span className="font-mono text-[11px] text-text-muted tabular-nums">
-                      {lastRun.metrics.latencyMs} ms
+                      {fmtDuration(lastRun.metrics.latencyMs)}
                     </span>
                   )}
                 </div>
@@ -675,7 +733,7 @@ function ThinkingPlaceholder({ elapsedMs }: { elapsedMs: number }) {
           <span className="italic">正在处理请求</span>
           {elapsedMs >= 1000 && (
             <span className="ml-1 font-mono not-italic text-[10.5px] tabular-nums text-text">
-              {(elapsedMs / 1000).toFixed(1)}s
+              {fmtDuration(elapsedMs)}
             </span>
           )}
         </span>
@@ -698,16 +756,9 @@ function MessageRow({
   phase?: "idle" | "thinking" | "answering";
 }) {
   const isUser = role === "user";
-  const [expanded, setExpanded] = useState<boolean>(
-    Boolean(streaming && phase === "thinking"),
-  );
-  useEffect(() => {
-    if (!streaming) return;
-    if (phase === "thinking") setExpanded(true);
-    if (phase === "answering") setExpanded(false);
-  }, [streaming, phase]);
-
   const hasReasoning = Boolean(reasoning && reasoning.length > 0);
+  // 思考过程是否仍在生成 — 与主聊天 ReasoningBlock 对齐:仅 streaming + thinking 阶段视为"活跃"
+  const reasoningStreaming = Boolean(streaming && phase === "thinking");
 
   if (isUser) {
     return (
@@ -746,43 +797,7 @@ function MessageRow({
             : "ASSISTANT"}
         </span>
         {hasReasoning && (
-          <div
-            data-testid="model-test-reasoning"
-            className="mb-2 rounded-lg border border-border bg-surface-2/60"
-          >
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="w-full flex items-center justify-between px-2.5 py-1.5 text-[10.5px] font-medium text-text-muted hover:text-text transition-colors duration-fast"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  aria-hidden="true"
-                  className={`inline-block w-1.5 h-1.5 rounded-full ${
-                    streaming && phase === "thinking"
-                      ? "bg-primary animate-pulse-ring"
-                      : "bg-text-subtle"
-                  }`}
-                />
-                思考过程 · {reasoning!.length} 字
-              </span>
-              <Icon
-                name="chevron-down"
-                size={11}
-                className={`transition-transform duration-base ${
-                  expanded ? "rotate-180" : "rotate-0"
-                }`}
-              />
-            </button>
-            {expanded && (
-              <div className="px-2.5 pb-2 pt-1.5 text-[12px] text-text-muted border-t border-border max-h-48 overflow-y-auto">
-                <AgentMarkdown
-                  content={reasoning!}
-                  className="prose prose-invert prose-sm max-w-none text-text-muted [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                />
-              </div>
-            )}
-          </div>
+          <ReasoningBlock text={reasoning!} isStreaming={reasoningStreaming} />
         )}
         {content || (streaming && phase === "thinking" && !hasReasoning) ? (
           <>
@@ -808,9 +823,101 @@ function MessageRow({
   );
 }
 
+/**
+ * Reasoning 块视觉契约对齐主聊天 `MessageBubble.ReasoningBlock`(ADR 0016 V2 §3.19):
+ *   - 容器 primary-tinted (`border-primary/20 bg-primary-muted`) 而非 surface-2
+ *   - 标题用 `Icon name="brain"` + "思考过程…"(streaming 时带省略号)
+ *   - 计数显示 `tokens` 而非"字"
+ *   - 折叠箭头切换 `chevron-up` ↔ `chevron-down`,不用 rotate
+ *   - streaming 时 240px 固定窗口 + MutationObserver 自动 pin 到底
+ *   - 流式结束的下降沿自动折叠,除非用户点过(userTouched)
+ *
+ * 一份代码而不是 import — `MessageBubble.ReasoningBlock` 没 export,且后续这两个
+ * 上下文可能各自微调,所以局部克隆比强行解耦更便宜,代价是注释里说清楚就好。
+ */
+function ReasoningBlock({
+  text,
+  isStreaming,
+}: {
+  text: string;
+  isStreaming: boolean;
+}) {
+  const [open, setOpen] = useState(isStreaming);
+  const userTouched = useRef(false);
+  const prevStreamingRef = useRef(isStreaming);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming && !userTouched.current) {
+      setOpen(false);
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  useEffect(() => {
+    if (!open || !isStreaming) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    body.scrollTop = body.scrollHeight;
+    if (typeof MutationObserver === "undefined") return;
+    const mo = new MutationObserver(() => {
+      body.scrollTop = body.scrollHeight;
+    });
+    mo.observe(body, { childList: true, subtree: true, characterData: true });
+    return () => mo.disconnect();
+  }, [open, isStreaming]);
+
+  return (
+    <div
+      data-testid="model-test-reasoning"
+      className="mb-2.5 rounded-lg border border-primary/20 bg-primary-muted"
+    >
+      <button
+        type="button"
+        onClick={() => {
+          userTouched.current = true;
+          setOpen((v) => !v);
+        }}
+        className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-[11px] text-primary transition-colors duration-fast hover:text-primary-hover"
+        aria-expanded={open}
+        data-testid="model-test-reasoning-toggle"
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="brain" size={12} />
+          <span className="font-medium">思考过程{isStreaming ? "…" : ""}</span>
+        </span>
+        <span className="inline-flex items-center gap-1 font-mono text-[10px] text-primary/80">
+          {text.length} tokens
+          <Icon name={open ? "chevron-up" : "chevron-down"} size={10} />
+        </span>
+      </button>
+      {open && (
+        <div
+          ref={bodyRef}
+          data-testid="model-test-reasoning-body"
+          className={`border-t border-primary/15 px-3 py-2 text-[12px] leading-relaxed text-text-muted ${
+            isStreaming ? "max-h-60 overflow-y-auto" : ""
+          }`}
+        >
+          <AgentMarkdown
+            content={text}
+            className="prose prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:text-[11px] [&_code]:text-[11px]"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MetricsRow({ metrics }: { metrics: TestMetrics }) {
   const showReasoningMetric =
     metrics.reasoningFirstMs !== undefined && metrics.reasoningFirstMs > 0;
+  // tok i/o/t 三个数都走 fmtCount,但格式串本身要紧凑(占 1 个 chip 宽),
+  // 所以小数据保留原始数字,k/M 截断只在 ≥ 10000 时启动。
+  const tokIO =
+    metrics.inputTokens !== undefined
+      ? `${fmtCount(metrics.inputTokens)} / ${fmtCount(metrics.outputTokens ?? 0)} / ${fmtCount(metrics.totalTokens ?? 0)}`
+      : "—";
   return (
     <div
       data-testid="model-test-metrics"
@@ -819,41 +926,23 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
       <MetricChip
         icon="clock"
         label="latency"
-        value={
-          metrics.latencyMs !== undefined ? `${metrics.latencyMs}ms` : "—"
-        }
+        value={fmtDuration(metrics.latencyMs)}
       />
       <MetricChip
         icon="zap"
         label={showReasoningMetric ? "ttft·thinking" : "ttft"}
-        value={
-          showReasoningMetric
-            ? `${metrics.reasoningFirstMs}ms`
-            : metrics.ttftMs !== undefined
-              ? `${metrics.ttftMs}ms`
-              : "—"
-        }
+        value={fmtDuration(
+          showReasoningMetric ? metrics.reasoningFirstMs : metrics.ttftMs,
+        )}
       />
       {showReasoningMetric ? (
         <MetricChip
           icon="zap"
           label="ttft·answer"
-          value={
-            metrics.ttftMs !== undefined ? `${metrics.ttftMs}ms` : "—"
-          }
+          value={fmtDuration(metrics.ttftMs)}
         />
       ) : (
-        <MetricChip
-          icon="database"
-          label="tok i/o/t"
-          value={
-            metrics.inputTokens !== undefined
-              ? `${metrics.inputTokens}/${metrics.outputTokens ?? 0}/${
-                  metrics.totalTokens ?? 0
-                }`
-              : "—"
-          }
-        />
+        <MetricChip icon="database" label="tok i/o/t" value={tokIO} />
       )}
       <MetricChip
         icon="activity"
@@ -865,17 +954,7 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
         }
       />
       {showReasoningMetric && (
-        <MetricChip
-          icon="database"
-          label="tok i/o/t"
-          value={
-            metrics.inputTokens !== undefined
-              ? `${metrics.inputTokens}/${metrics.outputTokens ?? 0}/${
-                  metrics.totalTokens ?? 0
-                }`
-              : "—"
-          }
-        />
+        <MetricChip icon="database" label="tok i/o/t" value={tokIO} />
       )}
     </div>
   );
