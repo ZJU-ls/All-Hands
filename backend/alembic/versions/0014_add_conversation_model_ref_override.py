@@ -12,6 +12,7 @@ employee's model_ref"; any other string shape is `<provider_name>/<model_name>`
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0014"

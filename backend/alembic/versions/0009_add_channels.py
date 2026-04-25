@@ -16,6 +16,7 @@ All tables are additive; no existing schema touched. SQLite-compatible
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0009"

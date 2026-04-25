@@ -10,6 +10,7 @@ Creates: employees, skills, mcp_servers, conversations, messages, tool_calls, co
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0001"
