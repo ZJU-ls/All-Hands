@@ -140,8 +140,9 @@ export default function KnowledgePage() {
             type="button"
             onClick={() => setError(null)}
             className="ml-2 text-faint hover:text-strong"
+            aria-label="dismiss"
           >
-            ×
+            close
           </button>
         </div>
       )}
@@ -231,7 +232,7 @@ export default function KnowledgePage() {
                     onClick={() => setShowCfg((s) => !s)}
                     className="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong"
                   >
-                    {showCfg ? "Close ⚙" : "⚙ Tune"}
+                    {showCfg ? "Close" : "Tune"}
                   </button>
                   <label className="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong cursor-pointer">
                     {uploading ? "Uploading…" : "+ 上传文档"}
