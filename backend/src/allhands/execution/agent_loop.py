@@ -42,13 +42,14 @@ from langchain_core.messages import (
     ToolMessage as LCToolMessage,
 )
 
-from allhands.core import Tool
+from allhands.core import Tool, ToolScope
 from allhands.core.conversation import (
     Message,
     ReasoningBlock,
     TextBlock,
     ToolUseBlock,
 )
+from allhands.execution.deferred import DeferredSignal
 from allhands.execution.internal_events import (
     AssistantMessageCommitted,
     AssistantMessagePartial,
@@ -194,6 +195,7 @@ class AgentLoop:
         runtime: Any = None,
         spawn_subagent_service: Any = None,
         model_ref_override: str | None = None,
+        confirmation_signal: DeferredSignal | None = None,
         **_unused: Any,
     ) -> None:
         self._employee = employee
@@ -205,6 +207,12 @@ class AgentLoop:
         self._runtime = runtime
         self._spawn_subagent_service = spawn_subagent_service
         self._model_ref_override = model_ref_override
+        # Deferred suspend primitive used by _permission_check to gate
+        # WRITE+ / requires_confirmation tool execution. None = legacy
+        # auto-approve behaviour (matches old AutoApproveGate path);
+        # production wiring (B3) injects a ConfirmationDeferred backed
+        # by ConfirmationRepo.
+        self._confirmation_signal = confirmation_signal
 
     # --- public stream ----------------------------------------------------
 
@@ -450,18 +458,42 @@ class AgentLoop:
         block: ToolUseBlock,
         tool: Tool,
     ) -> PermissionDecision:
-        """Default permission policy.
+        """Permission decision for one tool_use.
 
-        Task 7: everything Allowed (the gate is wired up in Task 8).
-        Future plan-mode support: return Deny() when conversation_mode
-        forbids the tool's scope. This method is the SINGLE place that
-        decision lives — tools never check permissions themselves.
+        Currently:
+          * WRITE / IRREVERSIBLE / BOOTSTRAP scope ∧ requires_confirmation
+            ∧ confirmation_signal wired → Defer (suspend, ask user)
+          * everything else → Allow
+
+        Future extensions plug in here:
+          * plan mode → Deny when conversation_mode == 'plan' and tool is
+            mutator
+          * clarification → Defer with UserInputDeferred when tool is
+            an ask_user_question
+          * sub-agent → executor itself does the recursion; the pipeline
+            doesn't need to defer at this layer
         """
-        # Task 8 will replace this stub with: WRITE+ or requires_confirmation
-        # → Defer(ConfirmationDeferred, summary=..., rationale=...).
-        # For Task 7 we keep everything Allow so the loop logic itself
-        # is testable without gate plumbing.
-        _ = (block, tool, Defer, Deny)  # silence unused-import linter
+        needs_confirm = (
+            tool.scope
+            in (
+                ToolScope.WRITE,
+                ToolScope.IRREVERSIBLE,
+                ToolScope.BOOTSTRAP,
+            )
+            and tool.requires_confirmation
+        )
+        if needs_confirm and self._confirmation_signal is not None:
+            return Defer(
+                signal=self._confirmation_signal,
+                publish_kwargs={
+                    "tool_use_id": block.id,
+                    "summary": f"Execute {tool.name} with args: {block.input}",
+                    "rationale": f"Tool {tool.name!r} requires confirmation.",
+                },
+            )
+        # No signal wired (test path / read-only) → straight allow.
+        # Deny is only used by future plan-mode hooks.
+        _ = Deny  # keep import live for future extension
         return Allow()
 
 

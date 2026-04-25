@@ -18,6 +18,7 @@ Tests grow incrementally per plan task:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
@@ -29,10 +30,16 @@ from langchain_core.messages import AIMessage, AIMessageChunk
 from allhands.core import Employee, Tool, ToolKind, ToolScope
 from allhands.core.conversation import ToolUseBlock
 from allhands.execution.agent_loop import AgentLoop
+from allhands.execution.deferred import (
+    DeferredOutcome,
+    DeferredRequest,
+    DeferredSignal,
+)
 from allhands.execution.gate import AutoApproveGate
 from allhands.execution.internal_events import (
     AssistantMessageCommitted,
     AssistantMessagePartial,
+    ConfirmationRequested,
     LoopExited,
     ToolMessageCommitted,
 )
@@ -460,3 +467,169 @@ async def test_loop_replays_tool_history_into_lc_messages() -> None:
     # AIMessage carried the tool_calls
     ai_msg = next(m for m in msgs if isinstance(m, LCAI))
     assert ai_msg.tool_calls and ai_msg.tool_calls[0]["id"] == "tu_old"
+
+
+# --- Task 8: deferred (confirmation) flow ----------------------------------
+
+
+class _ScriptedSignal(DeferredSignal):
+    """Test fake DeferredSignal · external code calls .approve()/.reject()
+    to flip the wait() result. Use to simulate UI dialog responses."""
+
+    def __init__(self) -> None:
+        self._evt = asyncio.Event()
+        self._outcome: str = "approved"
+        self.last_publish_kwargs: dict[str, Any] | None = None
+
+    def approve(self) -> None:
+        self._outcome = "approved"
+        self._evt.set()
+
+    def reject(self) -> None:
+        self._outcome = "rejected"
+        self._evt.set()
+
+    async def publish(self, **kwargs: Any) -> DeferredRequest:
+        self.last_publish_kwargs = dict(kwargs)
+        return DeferredRequest(request_id="r1", confirmation_id="c1")
+
+    async def wait(self, _req: DeferredRequest) -> DeferredOutcome:
+        await self._evt.wait()
+        return DeferredOutcome(kind=self._outcome)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_loop_defers_write_tool_emits_confirmation_then_executes_on_approve() -> None:
+    """A WRITE-scope, requires_confirmation tool routes through the
+    deferred signal: loop emits ConfirmationRequested, awaits, then on
+    approve runs the executor and emits the success ToolMessage."""
+    write_tool = _tool("danger", scope=ToolScope.WRITE, requires_confirmation=True)
+
+    async def _ex(**_: Any) -> dict[str, str]:
+        return {"executed": "yes"}
+
+    reg = ToolRegistry()
+    reg.register(write_tool, _ex)
+    sig = _ScriptedSignal()
+
+    scripts = [
+        [
+            AIMessageChunk(
+                content="",
+                tool_calls=[{"id": "tu1", "name": "danger", "args": {"k": "v"}}],
+            )
+        ],
+        [AIMessageChunk(content="done")],
+    ]
+    emp = _employee(tool_ids=["t.danger"])
+
+    async def _drive() -> list[Any]:
+        with patch(
+            "allhands.execution.agent_loop._build_model", return_value=_ScriptedModel(scripts)
+        ):
+            loop = AgentLoop(
+                employee=emp,
+                tool_registry=reg,
+                gate=AutoApproveGate(),
+                confirmation_signal=sig,
+            )
+            evs = []
+            async for ev in loop.stream(messages=[{"role": "user", "content": "go"}]):
+                evs.append(ev)
+                if isinstance(ev, ConfirmationRequested):
+                    sig.approve()  # simulate UI flipping APPROVED on dialog
+            return evs
+
+    events = await _drive()
+
+    confirm = [ev for ev in events if isinstance(ev, ConfirmationRequested)]
+    tool_committed = [ev for ev in events if isinstance(ev, ToolMessageCommitted)]
+    exits = [ev for ev in events if isinstance(ev, LoopExited)]
+
+    assert len(confirm) == 1
+    assert confirm[0].tool_use_id == "tu1"
+    assert confirm[0].summary  # non-empty summary built from tool meta
+    assert sig.last_publish_kwargs is not None
+    assert sig.last_publish_kwargs["tool_use_id"] == "tu1"
+
+    assert len(tool_committed) == 1
+    assert tool_committed[0].message.content == {"executed": "yes"}
+    assert exits[-1].reason == "completed"
+
+
+@pytest.mark.asyncio
+async def test_loop_defers_write_tool_records_rejection_message_on_reject() -> None:
+    """When user rejects, the executor MUST NOT run; the tool_message
+    records a rejection envelope. The model sees the rejection in
+    next-turn replay and can adjust."""
+    write_tool = _tool("danger", scope=ToolScope.WRITE, requires_confirmation=True)
+    executor_called = False
+
+    async def _ex(**_: Any) -> dict[str, str]:
+        nonlocal executor_called
+        executor_called = True
+        return {"executed": "yes"}
+
+    reg = ToolRegistry()
+    reg.register(write_tool, _ex)
+    sig = _ScriptedSignal()
+    sig.reject()  # immediate rejection on wait()
+
+    scripts = [
+        [AIMessageChunk(content="", tool_calls=[{"id": "tu1", "name": "danger", "args": {}}])],
+        [AIMessageChunk(content="ok then")],
+    ]
+    emp = _employee(tool_ids=["t.danger"])
+
+    with patch("allhands.execution.agent_loop._build_model", return_value=_ScriptedModel(scripts)):
+        loop = AgentLoop(
+            employee=emp,
+            tool_registry=reg,
+            gate=AutoApproveGate(),
+            confirmation_signal=sig,
+        )
+        events = [ev async for ev in loop.stream(messages=[{"role": "user", "content": "go"}])]
+
+    tool_committed = [ev for ev in events if isinstance(ev, ToolMessageCommitted)]
+    exits = [ev for ev in events if isinstance(ev, LoopExited)]
+
+    assert not executor_called, "executor must not run after reject"
+    assert len(tool_committed) == 1
+    assert isinstance(tool_committed[0].message.content, dict)
+    assert "rejected" in str(tool_committed[0].message.content.get("error", ""))
+    assert exits[-1].reason == "completed"
+
+
+@pytest.mark.asyncio
+async def test_loop_read_only_tool_with_signal_wired_does_not_defer() -> None:
+    """The signal is only consulted for WRITE+ + requires_confirmation
+    tools. Plain reads bypass it entirely (no ConfirmationRequested
+    emitted)."""
+    read_tool = _tool("list_things")
+
+    async def _ex(**_: Any) -> list[str]:
+        return ["a", "b"]
+
+    reg = ToolRegistry()
+    reg.register(read_tool, _ex)
+    sig = _ScriptedSignal()
+
+    scripts = [
+        [AIMessageChunk(content="", tool_calls=[{"id": "tu1", "name": "list_things", "args": {}}])],
+        [AIMessageChunk(content="found two")],
+    ]
+    emp = _employee(tool_ids=["t.list_things"])
+    with patch("allhands.execution.agent_loop._build_model", return_value=_ScriptedModel(scripts)):
+        loop = AgentLoop(
+            employee=emp,
+            tool_registry=reg,
+            gate=AutoApproveGate(),
+            confirmation_signal=sig,
+        )
+        events = [ev async for ev in loop.stream(messages=[{"role": "user", "content": "go"}])]
+
+    confirm = [ev for ev in events if isinstance(ev, ConfirmationRequested)]
+    tool_committed = [ev for ev in events if isinstance(ev, ToolMessageCommitted)]
+    assert confirm == []
+    assert tool_committed and tool_committed[0].message.content == ["a", "b"]
+    assert sig.last_publish_kwargs is None  # signal never invoked
