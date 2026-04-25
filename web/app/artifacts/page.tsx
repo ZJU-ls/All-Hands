@@ -8,7 +8,7 @@
  * the list.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -112,6 +112,62 @@ export default function ArtifactsGlobalPage() {
     setDateRange("all");
   }
 
+  // Keyboard navigation · j/k (or ↓/↑) move selection through the visible
+  // list, Enter is a no-op since selecting already opens detail (the right
+  // pane subscribes to selectedId), / focuses the search input, Esc clears
+  // search when focused or otherwise drops selection. Same shortcuts that
+  // power Linear's issue list / GitHub's PR list — keyboard-first users
+  // get full coverage without touching the mouse.
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    function isTypingTarget(el: EventTarget | null): boolean {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        el.isContentEditable
+      );
+    }
+    function onKey(e: KeyboardEvent) {
+      // `/` focuses search · always honored, even from inside other inputs
+      // would be too invasive · skip when already typing somewhere.
+      if (e.key === "/" && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      // Esc · if search is focused, blur + clear; else drop selection.
+      if (e.key === "Escape") {
+        if (document.activeElement === searchInputRef.current) {
+          if (q) setQ("");
+          else searchInputRef.current?.blur();
+        } else if (selectedId) {
+          setSelectedId(null);
+        }
+        return;
+      }
+      // j/k or arrow up/down · skip when typing.
+      if (isTypingTarget(e.target)) return;
+      const isDown = e.key === "j" || e.key === "ArrowDown";
+      const isUp = e.key === "k" || e.key === "ArrowUp";
+      if (!isDown && !isUp) return;
+      if (items.length === 0) return;
+      e.preventDefault();
+      const currentIdx = selectedId
+        ? items.findIndex((a) => a.id === selectedId)
+        : -1;
+      const nextIdx = isDown
+        ? Math.min(items.length - 1, currentIdx + 1)
+        : Math.max(0, currentIdx - 1);
+      const next = items[nextIdx === -1 ? 0 : nextIdx];
+      if (next) setSelectedId(next.id);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [items, selectedId, q]);
+
   // Refetch list when filters move; throttled-by-React-batch is fine here.
   useEffect(() => {
     let cancelled = false;
@@ -209,11 +265,20 @@ export default function ArtifactsGlobalPage() {
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
             />
             <input
+              ref={searchInputRef}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t("search")}
-              className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+              className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-12 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
             />
+            {!q ? (
+              <kbd
+                aria-hidden
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-text-subtle"
+              >
+                {t("kbd.search")}
+              </kbd>
+            ) : null}
             {q ? (
               <button
                 type="button"

@@ -17,6 +17,7 @@
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { ArtifactPeek } from "./ArtifactPeek";
 import type { ArtifactDto, ArtifactKind } from "@/lib/artifacts-api";
 
 const KIND_ICON: Record<ArtifactKind, IconName> = {
@@ -109,12 +110,15 @@ export function ArtifactGrid({
         const icon = KIND_ICON[a.kind] ?? "file";
         return (
           <li key={a.id}>
+            <ArtifactPeek artifact={a}>
+              {(handlers) => (
             <button
               type="button"
               role="option"
               aria-selected={active}
               onClick={() => onSelect(a.id)}
               data-testid={`grid-item-${a.id}`}
+              {...handlers}
               className={`group relative flex h-full w-full flex-col gap-2 rounded-xl border p-3 text-left transition-colors duration-fast ${
                 active
                   ? "border-primary/50 bg-primary-muted/40 shadow-glow-sm"
@@ -152,6 +156,8 @@ export function ArtifactGrid({
                 <span>{relativeTime(a.updated_at)}</span>
               </div>
             </button>
+              )}
+            </ArtifactPeek>
           </li>
         );
       })}
