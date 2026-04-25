@@ -9,6 +9,7 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { MetricDrawer } from "@/components/observatory/MetricDrawer";
 import { LatencyHeatmap } from "@/components/observatory/LatencyHeatmap";
 import {
+  fetchMetricSeries,
   fetchObservatorySummary,
   fetchTraces,
   type ObservatoryMetric,
@@ -86,12 +87,29 @@ interface KpiCardProps {
   hero?: boolean;
   sparkSeed: number;
   sparkTone?: "primary" | "success" | "warning" | "danger";
+  /** Real values to render as a sparkline (overrides seeded fallback). */
+  sparkValues?: number[];
   /** When set, the card becomes a button that opens the metric drilldown drawer. */
   onClick?: () => void;
   clickHint?: string;
 }
 
-function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "primary", onClick, clickHint }: KpiCardProps) {
+/** Render a sparkline path from real data values (or seeded fallback). */
+function realSparkPath(values: number[], height = 28, width = 88): string {
+  if (values.length < 2) return "";
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const stepX = width / (values.length - 1);
+  return values
+    .map((v, i) => {
+      const y = height - ((v - min) / range) * (height - 4) - 2;
+      return `${i === 0 ? "M" : "L"}${(i * stepX).toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "primary", sparkValues, onClick, clickHint }: KpiCardProps) {
   const deltaToneClass =
     delta?.tone === "success"
       ? "text-success"
@@ -152,7 +170,13 @@ function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "prim
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d={sparkPath(sparkSeed)} />
+            <path
+              d={
+                sparkValues && sparkValues.length > 1
+                  ? realSparkPath(sparkValues)
+                  : sparkPath(sparkSeed)
+              }
+            />
           </svg>
         </div>
       </Tag>
@@ -204,7 +228,13 @@ function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "prim
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d={sparkPath(sparkSeed)} />
+          <path
+            d={
+              sparkValues && sparkValues.length > 1
+                ? realSparkPath(sparkValues)
+                : sparkPath(sparkSeed)
+            }
+          />
         </svg>
       </div>
     </Tag>
@@ -481,17 +511,34 @@ export default function ObservatoryPage() {
     setDrawerMetric(metric);
     setDrawerLabel(label);
   };
+  // Real sparkline values for the 4 KPI cards · 24h × 1h buckets.
+  const [sparks, setSparks] = useState<{
+    runs: number[];
+    failure_rate: number[];
+    latency_p50: number[];
+    tokens_total: number[];
+  } | null>(null);
 
   async function load() {
     setState("loading");
     setError(null);
     try {
-      const [s, t] = await Promise.all([
+      const [s, t, runs, fr, lat, tok] = await Promise.all([
         fetchObservatorySummary(),
         fetchTraces({ limit: 50 }),
+        fetchMetricSeries({ metric: "runs", bucket: "1h" }),
+        fetchMetricSeries({ metric: "failure_rate", bucket: "1h" }),
+        fetchMetricSeries({ metric: "latency_p50", bucket: "1h" }),
+        fetchMetricSeries({ metric: "tokens_total", bucket: "1h" }),
       ]);
       setSummary(s);
       setTraces(t.traces);
+      setSparks({
+        runs: runs.points.map((p) => p.value),
+        failure_rate: fr.points.map((p) => p.value),
+        latency_p50: lat.points.map((p) => p.value),
+        tokens_total: tok.points.map((p) => p.value),
+      });
       setState("ok");
     } catch (e) {
       setError((e as Error).message);
@@ -608,6 +655,11 @@ export default function ObservatoryPage() {
                           tone: uptimeDelta.tone,
                         }}
                         sparkSeed={11}
+                        sparkValues={
+                          sparks
+                            ? sparks.failure_rate.map((v) => 1 - v)
+                            : undefined
+                        }
                         onClick={() => openDrawer("failure_rate", t("kpi.uptime"))}
                         clickHint={t("kpi.clickHint")}
                       />
@@ -636,6 +688,7 @@ export default function ObservatoryPage() {
                         }}
                         sparkSeed={23}
                         sparkTone="primary"
+                        sparkValues={sparks?.latency_p50}
                         onClick={() => openDrawer("latency_p50", t("kpi.latency"))}
                         clickHint={t("kpi.clickHint")}
                       />
@@ -664,6 +717,7 @@ export default function ObservatoryPage() {
                                 : "success",
                         }}
                         sparkSeed={37}
+                        sparkValues={sparks?.failure_rate}
                         sparkTone={
                           summary.failure_rate_24h > 0.05
                             ? "danger"
@@ -698,6 +752,7 @@ export default function ObservatoryPage() {
                     }}
                     sparkSeed={53}
                     sparkTone="primary"
+                    sparkValues={sparks?.tokens_total}
                     onClick={() => openDrawer("tokens_total", t("kpi.tokens"))}
                     clickHint={t("kpi.clickHint")}
                   />
