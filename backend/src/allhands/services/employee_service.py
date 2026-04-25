@@ -55,6 +55,17 @@ LEAD_EXTRA_SKILL_IDS: tuple[str, ...] = (
     "allhands.skill_management",
     "allhands.mcp_management",
     "allhands.cockpit_admin",
+    # 2026-04-25 · 渐进式 skill pack · spec
+    # docs/specs/2026-04-25-progressive-skill-packs.md
+    # 把原本裸露在 ALL_*_TOOLS 里的 36 个 meta tool 装进 6 个新 skill ·
+    # Lead 上下文 -8.7k token / turn(冷激活路径)。其他员工也可以挂 ·
+    # 例如 「金融分析师」 = market_data + stock_assistant + artifacts。
+    "allhands.triggers_management",
+    "allhands.channels_management",
+    "allhands.task_management",
+    "allhands.market_data",
+    "allhands.observatory",
+    "allhands.review_gates",
 )
 LEAD_SKILL_IDS: tuple[str, ...] = DEFAULT_SKILL_IDS + LEAD_EXTRA_SKILL_IDS
 

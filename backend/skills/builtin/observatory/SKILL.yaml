@@ -1,0 +1,13 @@
+id: allhands.observatory
+name: 运行观测
+description: 查 trace / run 状态 / langfuse 健康 · 排障与运行分析的入口
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.observatory.get_status
+  - allhands.meta.observatory.bootstrap_now
+  - allhands.meta.observatory.query_traces
+  - allhands.meta.observatory.get_trace
+
+prompt_fragment_file: prompts/guidance.md

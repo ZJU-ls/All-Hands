@@ -1,0 +1,16 @@
+id: allhands.task_management
+name: 任务管理
+description: 创建 / 跟进 / 验收异步任务 · 长流程不靠对话堆叠 · 跨会话也能续做
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.tasks.list
+  - allhands.meta.tasks.get
+  - allhands.meta.tasks.create
+  - allhands.meta.tasks.cancel
+  - allhands.meta.tasks.approve
+  - allhands.meta.tasks.answer_input
+  - allhands.meta.tasks.add_artifact
+
+prompt_fragment_file: prompts/guidance.md
