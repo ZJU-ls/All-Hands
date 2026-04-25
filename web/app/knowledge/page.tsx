@@ -218,7 +218,8 @@ export default function KnowledgePage() {
       // and embedder rate limits; one-at-a-time keeps the UI honest about
       // what's happening too.
       for (const e of entries) {
-        const file = list.find((f) => `${e.id.split("-")[2] ?? ""}` === e.name) || list[entries.indexOf(e)];
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const file = list.find((_f) => `${e.id.split("-")[2] ?? ""}` === e.name) || list[entries.indexOf(e)];
         if (!file) continue;
         setUploads((prev) =>
           prev.map((p) => (p.id === e.id ? { ...p, state: "uploading" } : p)),
@@ -245,10 +246,6 @@ export default function KnowledgePage() {
         setUploads((prev) => prev.filter((p) => p.state !== "done"));
       }, 4000);
     }
-  }
-
-  async function handleUpload(file: File) {
-    await handleUploadFiles([file]);
   }
 
   // Page-level drag-drop receiver
