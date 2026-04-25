@@ -132,8 +132,8 @@ function SidebarItem({
         href={href}
         className={
           active
-            ? "relative flex h-9 items-center gap-2.5 rounded-lg bg-primary pl-3 pr-2 text-sm font-medium text-primary-fg shadow-soft-sm transition duration-fast"
-            : "group relative flex h-9 items-center gap-2.5 rounded-lg pl-3 pr-2 text-sm text-text-muted hover:bg-surface-2 hover:text-text transition duration-fast"
+            ? "relative flex h-9 items-center gap-2.5 rounded-lg bg-primary pl-3 pr-2 text-sm font-medium text-primary-fg shadow-soft-sm transition duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-fg/40"
+            : "group relative flex h-9 items-center gap-2.5 rounded-lg pl-3 pr-2 text-sm text-text-muted hover:bg-surface-2 hover:text-text transition duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:bg-surface-2"
         }
       >
         <Icon
