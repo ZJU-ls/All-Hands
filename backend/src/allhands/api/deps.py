@@ -179,6 +179,9 @@ async def get_chat_service(
         # / plan_view / plan_update_step actually save & render.
         plan_repo=SqlAgentPlanRepo(session),
         user_input_signal=user_input_signal,
+        # System-config singleton (auto_title_enabled etc). Optional —
+        # when omitted the service skips LLM-summarised titles.
+        observability_config_repo=SqlObservabilityConfigRepo(session),
     )
 
 

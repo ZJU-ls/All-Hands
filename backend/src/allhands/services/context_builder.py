@@ -112,10 +112,20 @@ def _project_assistant(event: ConversationEvent) -> dict[str, Any]:
        tool_result, ``fill_orphan_tool_results`` can only detect it when
        the tool_use block is visible.
     3. Flat ``content`` — plain text, no tool usage.
+
+    The ``_interrupted`` flag (2026-04-25) propagates from the event's
+    ``content_json["interrupted"]`` so ``fill_orphan_tool_results`` can
+    pick the user-friendly "Interrupted by user" placeholder for any
+    orphan tool_use blocks coming from this message (vs the generic
+    crash-recovery placeholder).
     """
+    interrupted = bool(event.content_json.get("interrupted", False))
     blocks = event.content_json.get("content_blocks")
     if isinstance(blocks, list) and blocks:
-        return {"role": "assistant", "content": list(blocks), "id": event.id}
+        out: dict[str, Any] = {"role": "assistant", "content": list(blocks), "id": event.id}
+        if interrupted:
+            out["_interrupted"] = True
+        return out
 
     # Reconstruct content_blocks from tool_calls if present — defensive
     # against ASSISTANT events written by _persist_turn_events (which
@@ -143,13 +153,19 @@ def _project_assistant(event: ConversationEvent) -> dict[str, Any]:
                 }
             )
         if reconstructed:
-            return {"role": "assistant", "content": reconstructed, "id": event.id}
+            out2: dict[str, Any] = {"role": "assistant", "content": reconstructed, "id": event.id}
+            if interrupted:
+                out2["_interrupted"] = True
+            return out2
 
-    return {
+    out3: dict[str, Any] = {
         "role": "assistant",
         "content": event.content_json.get("content", ""),
         "id": event.id,
     }
+    if interrupted:
+        out3["_interrupted"] = True
+    return out3
 
 
 def _project_tool_result(event: ConversationEvent) -> dict[str, Any] | None:
@@ -280,8 +296,10 @@ def _merge_consecutive_user_messages(
             }
         else:
             out.append(msg)
-    # Strip the internal marker before returning to caller
-    return [{k: v for k, v in m.items() if k != "_synthetic"} for m in out]
+    # Strip internal markers before returning to caller. ``_synthetic`` is
+    # the merger guard; ``_interrupted`` is a fill_orphan_tool_results signal
+    # consumed earlier in the pipeline. Neither belongs on the LLM wire.
+    return [{k: v for k, v in m.items() if k not in ("_synthetic", "_interrupted")} for m in out]
 
 
 async def build_llm_context(

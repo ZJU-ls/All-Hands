@@ -13,7 +13,6 @@ type Props = { conversationId: string };
 const STICK_THRESHOLD_PX = 64;
 
 export function MessageList({ conversationId }: Props) {
-  const t = useTranslations("chat.messageList");
   const { messages, streamingMessage, streamError, isStreaming } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);

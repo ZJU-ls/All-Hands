@@ -128,6 +128,12 @@
     "subtitle": "Preferences and workspace config · theme toggle is top-right · find models / providers under \"Model Gateway\"",
     "language": "Language",
     "languageDescription": "Choose the interface language; takes effect immediately.",
+    "autoTitle": "Auto-summarise conversation titles",
+    "autoTitleDescription": "When on, the default model summarises your first message into a short title; when off, the literal first message is truncated (max 40 chars).",
+    "autoTitleOn": "Enabled · model summary",
+    "autoTitleOff": "Disabled · literal copy",
+    "autoTitleSaving": "Saving…",
+    "autoTitleError": "Save failed, please retry",
     "footnote": "More preferences (timezone, keybinding overrides, AP long-loop budgets, etc.) coming soon. The sun / moon toggle in the top-right still controls themes.",
     "cards": {
       "providers": {
