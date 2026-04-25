@@ -284,6 +284,10 @@
         "listAria": "Switch to list view",
         "gridAria": "Switch to grid view"
       },
+      "kbd": {
+        "search": "/",
+        "navHint": "j / k navigate · / search · Esc clear"
+      },
       "stats": {
         "total": "Total",
         "totalHint": "All artifacts",
