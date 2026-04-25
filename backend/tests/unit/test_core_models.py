@@ -132,7 +132,7 @@ def test_employee_max_iterations_bounds() -> None:
     with pytest.raises(ValidationError):
         Employee(**base, max_iterations=0)
     with pytest.raises(ValidationError):
-        Employee(**base, max_iterations=101)
+        Employee(**base, max_iterations=10001)
 
 
 def test_message_with_tool_calls() -> None:

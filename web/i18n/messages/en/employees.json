@@ -109,7 +109,7 @@
       "sectionMcp": "Mount MCP servers",
       "sectionMcpSubtitle": "Tools from selected MCP servers are exposed to this employee",
       "sectionMaxIter": "Iteration cap",
-      "sectionMaxIterSubtitle": "Max tool-call rounds per agent session (1-50)",
+      "sectionMaxIterSubtitle": "Max tool-call rounds per agent session (1-10000)",
       "iterUnit": "iter",
       "sectionPrompt": "System prompt fragment",
       "promptHint": "Personality / style / forbidden actions — or let AI draft one from the name / description / skills / MCP above",

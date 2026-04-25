@@ -109,7 +109,7 @@
       "sectionMcp": "挂载 MCP 服务器",
       "sectionMcpSubtitle": "勾选的 MCP server 的工具会暴露给该员工",
       "sectionMaxIter": "迭代上限",
-      "sectionMaxIterSubtitle": "Agent 单次会话的最大工具调用轮次(1-50)",
+      "sectionMaxIterSubtitle": "Agent 单次会话的最大工具调用轮次(1-10000)",
       "iterUnit": "轮",
       "sectionPrompt": "系统提示词片段",
       "promptHint": "员工性格 / 风格 / 禁止事项 — 也可以让 AI 根据上方的名字 / 描述 / 技能 / MCP 起草一份",

@@ -281,7 +281,7 @@ export function DesignForm({
           <input
             type="number"
             min={1}
-            max={50}
+            max={10000}
             data-testid="field-max-iterations"
             value={String(maxIterations)}
             onChange={(e) => {

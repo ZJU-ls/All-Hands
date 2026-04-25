@@ -21,9 +21,10 @@
     },
     "tracePanel": {
       "loading": "Loading trace",
-      "errorTitle": "Failed to load trace",
-      "notFoundTitle": "Trace not found",
-      "notFoundDescription": "This run has expired or no longer exists",
+      "errorTitle": "Couldn't load this trace",
+      "errorDescription": "Network hiccup or backend briefly unreachable. Try again in a moment.",
+      "notFoundTitle": "Trace isn't around anymore",
+      "notFoundDescription": "It may have expired, been cleaned up, or never produced a trace. Open a more recent run.",
       "loadFailed": "Couldn't load trace, please try again"
     },
     "turnList": {

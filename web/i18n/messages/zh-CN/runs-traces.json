@@ -21,9 +21,10 @@
     },
     "tracePanel": {
       "loading": "加载 trace",
-      "errorTitle": "trace 加载失败",
-      "notFoundTitle": "trace 取不到",
-      "notFoundDescription": "这条 run 已经过期或不存在",
+      "errorTitle": "加载 trace 失败",
+      "errorDescription": "网络抖动或服务暂时不可达 · 可以稍后重试。",
+      "notFoundTitle": "这次执行的 trace 已不在",
+      "notFoundDescription": "可能已过期、被清理,或这次 run 没产生 trace。打开一条更近期的 run 试试。",
       "loadFailed": "加载 trace 出错,请稍后重试"
     },
     "turnList": {

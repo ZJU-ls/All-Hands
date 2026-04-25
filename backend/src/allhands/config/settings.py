@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
     confirmation_ttl_seconds: int = Field(default=300, ge=10)
-    max_iterations_default: int = Field(default=10, ge=1, le=100)
+    max_iterations_default: int = Field(default=10, ge=1, le=10000)
 
     # ---- Skill market (GitHub-backed, default: anthropics/skills) ----
     skill_market_owner: str = Field(default="anthropics")

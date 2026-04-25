@@ -12,7 +12,7 @@ import {
   RunNotFoundError,
   type RunDetailDto,
 } from "@/lib/observatory-api";
-import { LoadingState, ErrorState } from "@/components/state";
+import { LoadingState, ErrorState, EmptyState } from "@/components/state";
 import { RunHeader } from "./RunHeader";
 import { RunTurnList } from "./RunTurnList";
 import { RunError } from "./RunError";
@@ -70,12 +70,27 @@ export function RunTracePanel(props: Props) {
   }
 
   if (state.status === "error") {
+    // Not-found is not an *error* — the run just isn't around anymore (TTL,
+    // cleanup, or never persisted). Use a neutral EmptyState so the drawer
+    // doesn't scream red at the user. Reserve ErrorState for real failures
+    // (network drop, parse error) where retry makes sense.
+    if (state.notFound) {
+      return (
+        <div data-testid="run-trace-panel" data-state="error">
+          <EmptyState
+            icon="clock"
+            title={t("notFoundTitle")}
+            description={t("notFoundDescription")}
+          />
+        </div>
+      );
+    }
     return (
       <div data-testid="run-trace-panel" data-state="error">
         <ErrorState
-          title={state.notFound ? t("notFoundTitle") : t("errorTitle")}
-          description={state.notFound ? t("notFoundDescription") : undefined}
-          detail={state.notFound ? undefined : state.message}
+          title={t("errorTitle")}
+          description={t("errorDescription")}
+          detail={state.message}
         />
       </div>
     );
