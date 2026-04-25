@@ -17,6 +17,10 @@ class ConversationResponse(BaseModel):
     title: str | None = None
     model_ref_override: str | None = None
     created_at: str
+    # Persisted message count (user + assistant + tool). The history panel
+    # renders this as the "N 轮" badge — defaults to 0 so older clients can
+    # ignore it. Derived field, not stored on core.Conversation.
+    message_count: int = 0
 
 
 class UpdateConversationRequest(BaseModel):

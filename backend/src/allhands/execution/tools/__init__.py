@@ -16,6 +16,7 @@ from allhands.execution.tools.meta.channel_tools import (
     ALL_CHANNEL_META_TOOLS,  # single-line register: Wave 2 notification-channels
 )
 from allhands.execution.tools.meta.cockpit_tools import ALL_COCKPIT_META_TOOLS
+from allhands.execution.tools.meta.conversation_tools import ALL_CONVERSATION_META_TOOLS
 from allhands.execution.tools.meta.employee_tools import (
     ALL_META_TOOLS,
     CREATE_EMPLOYEE_TOOL,
@@ -155,6 +156,7 @@ def discover_builtin_tools(
         *ALL_ARTIFACT_TOOLS,
         *ALL_COCKPIT_META_TOOLS,
         *ALL_TASK_META_TOOLS,
+        *ALL_CONVERSATION_META_TOOLS,  # history panel · delete_conversation
         *ALL_CHANNEL_META_TOOLS,  # single-line register: Wave 2 notification-channels
         *ALL_MARKET_META_TOOLS,  # single-line register: Wave 2 market-data
         *ALL_STOCK_ASSISTANT_TOOLS,  # single-line register: Wave 2 stock-assistant

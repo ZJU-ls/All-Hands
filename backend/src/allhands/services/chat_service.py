@@ -58,6 +58,24 @@ MIN_COMPACT_THRESHOLD = 4
 # Cap the first-line snippet shown in the cockpit activity feed — the feed
 # row is tight and a long reply would wrap into the next card.
 _TURN_SUMMARY_MAX_CHARS = 80
+_AUTO_TITLE_MAX_CHARS = 40
+
+
+def _auto_title_from_user_content(content: str) -> str:
+    """Pick a history-panel-friendly title from the user's first message.
+
+    Strip wrapping whitespace, collapse the first non-empty line, and hard-cap
+    at 40 characters with an ellipsis. Python 3 strings are unicode code
+    points, so 40 points ≈ ~40 visible chars for CJK — UTF-8 safe.
+    Zero-cost (no LLM round-trip), matching the ChatGPT / Claude sidebar
+    baseline; explicit PATCH titles are preserved.
+    """
+    stripped = content.strip()
+    first_line = next((line for line in stripped.splitlines() if line.strip()), stripped)
+    collapsed = " ".join(first_line.split())
+    if len(collapsed) <= _AUTO_TITLE_MAX_CHARS:
+        return collapsed
+    return collapsed[: _AUTO_TITLE_MAX_CHARS - 1].rstrip() + "…"
 
 
 def _summarize_turn(content: str, employee: Employee | None) -> str:

@@ -8,7 +8,7 @@ import logging
 import secrets
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from allhands.api import ag_ui_encoder as agui
@@ -113,6 +113,7 @@ async def list_conversations(
         if lead is None:
             return []
         convs = await conv_repo.list_for_employee(lead.id)
+    counts = await conv_repo.count_messages([c.id for c in convs])
     return [
         ConversationResponse(
             id=c.id,
@@ -120,6 +121,7 @@ async def list_conversations(
             title=c.title,
             model_ref_override=c.model_ref_override,
             created_at=c.created_at.isoformat(),
+            message_count=counts.get(c.id, 0),
         )
         for c in convs
     ]
@@ -134,13 +136,33 @@ async def get_conversation(
     conv = await conv_repo.get(conversation_id)
     if conv is None:
         raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+    counts = await conv_repo.count_messages([conv.id])
     return ConversationResponse(
         id=conv.id,
         employee_id=conv.employee_id,
         title=conv.title,
         model_ref_override=conv.model_ref_override,
         created_at=conv.created_at.isoformat(),
+        message_count=counts.get(conv.id, 0),
     )
+
+
+@router.delete("/{conversation_id}", status_code=204)
+async def delete_conversation(
+    conversation_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Hard-delete a conversation + its messages / events / skill runtime.
+
+    Paired with the ``allhands.meta.delete_conversation`` meta tool so the
+    Lead Agent can perform the same action via chat (Tool First · L01).
+    """
+
+    conv_repo = await get_conversation_repo(session)
+    deleted = await conv_repo.delete(conversation_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+    return Response(status_code=204)
 
 
 @router.patch("/{conversation_id}", response_model=ConversationResponse)
