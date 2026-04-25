@@ -109,6 +109,7 @@
       "labelUntested": "Untested · click the test button on the right",
       "labelPending": "Pending",
       "labelRunning": "Testing",
+      "labelSlow": "slow",
       "ariaOk": "Connected · {ms}ms",
       "ariaFail": "Failed · {label} · {error}",
       "endpointOk": "Endpoint OK",

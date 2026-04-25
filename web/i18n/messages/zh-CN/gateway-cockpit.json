@@ -109,6 +109,7 @@
       "labelUntested": "未测试 · 点右侧测试按钮",
       "labelPending": "待测",
       "labelRunning": "测试中",
+      "labelSlow": "较慢",
       "ariaOk": "连通 · {ms}ms",
       "ariaFail": "失败 · {label} · {error}",
       "endpointOk": "端点 OK",

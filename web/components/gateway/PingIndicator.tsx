@@ -103,44 +103,13 @@ const LEGACY_CATEGORY_KEYS: Record<string, string> = {
 const BASE_PILL =
   "inline-flex items-center gap-1 h-6 px-2 rounded-full border text-[11px] font-mono tabular-nums";
 
-const SLOW_THRESHOLD_MS = 5_000;
-
-function endpointTone(
-  e: EndpointPart,
-  m: ModelPart,
-): "success" | "warning" | "danger" {
-  // 第一性原理:model probe 成功了 = 端点必然能触达 + 凭证必然 OK,
-  // 即便 GET /v1/models 返回 404 也只是"该 provider 不暴露 list 路由"
-  // (anthropic-compat / 自建反代 / coding-plan 都这样)。这种情况下
-  // 端点的客观状态就是健康的,不该报 warning。
-  if (m.usable && m.classification === "ok") return "success";
-  if (e.errorKind === "ok") return "success";
-  // not_found 单独处理:model probe 不一定 ok,但 not_found 本身只代表
-  // "list-models 路径不存在",不是连通问题。视为信息性 success 而不是
-  // warning,跟 ok 同色。真正的 warning 留给 server_error(5xx)。
-  if (e.errorKind === "not_found") return "success";
-  if (e.errorKind === "auth") return "danger";
-  if (
-    e.errorKind === "network" ||
-    e.errorKind === "timeout" ||
-    e.errorKind === "unknown"
-  )
-    return "danger";
-  // server_error
-  return "warning";
-}
-
-function modelTone(m: ModelPart): "success" | "warning" | "danger" {
-  if (!m.usable) return "danger";
-  if (
-    m.classification === "rate_limit" ||
-    m.classification === "provider_error" ||
-    m.classification === "param_error" ||
-    m.latencyMs > SLOW_THRESHOLD_MS
-  )
-    return "warning";
-  return "success";
-}
+// Note (2026-04-25): the per-layer `endpointTone` / `modelTone` helpers + the
+// SLOW_THRESHOLD_MS const from the dual-pill era have been retired. The
+// single-pill view derives tone directly from `state.overall`, which is
+// computed on the backend (see `services.connectivity.overall_status` —
+// "ok" / "degraded" / "auth_failed" / "endpoint_unreachable" / "model_unavailable")
+// with both layers in scope. The frontend doesn't second-guess the server's
+// classification any more.
 
 const TONE_CLASS: Record<"success" | "warning" | "danger", string> = {
   success: "border-success/25 bg-success-soft text-success",
@@ -226,19 +195,32 @@ export function PingIndicator({ state }: { state: PingState }) {
     );
   }
 
-  // status === "done" — two pills
-  const eTone = endpointTone(state.endpoint, state.model);
-  const mTone = modelTone(state.model);
-  const eLabel = t(ENDPOINT_KEYS[state.endpoint.errorKind]);
-  const mLabel = t(MODEL_KEYS[state.model.classification]);
+  // status === "done" — single pill summarising overall reachability.
+  //
+  // Design rationale (2026-04-25 simplification):
+  // - Default state, where everything works, was 2 pills "EP {ms} · M {ms}".
+  //   `EP`/`M` are internal jargon (endpoint vs model probe layers); users
+  //   only care "can I use it, how fast". Collapse to ONE pill with the
+  //   model latency — that's the number that matches actual chat speed.
+  // - The two-layer breakdown still has diagnostic value when something
+  //   fails (was it auth? was the model name wrong? was the network bad?).
+  //   So we keep it, but move it into the tooltip — visible on hover, not
+  //   shouting at the user every row.
+  const tone: "success" | "warning" | "danger" =
+    state.overall === "ok"
+      ? "success"
+      : state.overall === "degraded"
+        ? "warning"
+        : "danger";
 
+  const label = labelForOverall(state, t);
   const tooltip = t("doneTooltip", {
-    endpoint: eLabel,
+    endpoint: t(ENDPOINT_KEYS[state.endpoint.errorKind]),
     endpointStatus:
       state.endpoint.statusCode != null ? ` (HTTP ${state.endpoint.statusCode})` : "",
     endpointLatency: fmt(state.endpoint.latencyMs),
     endpointError: state.endpoint.error ? `\n${state.endpoint.error}` : "",
-    model: mLabel,
+    model: t(MODEL_KEYS[state.model.classification]),
     modelStatus:
       state.model.statusCode != null ? ` (HTTP ${state.model.statusCode})` : "",
     modelLatency: fmt(state.model.latencyMs),
@@ -250,35 +232,41 @@ export function PingIndicator({ state }: { state: PingState }) {
       data-ping-state="done"
       data-ping-overall={state.overall}
       title={tooltip}
-      aria-label={t("doneAria", { endpoint: eLabel, model: mLabel })}
-      className="inline-flex items-center gap-1.5"
+      aria-label={label}
+      className={`${BASE_PILL} ${TONE_CLASS[tone]}`}
     >
-      <span
-        data-ping-layer="endpoint"
-        className={`${BASE_PILL} ${TONE_CLASS[eTone]}`}
-      >
-        <Icon name={TONE_ICON[eTone]} size={11} strokeWidth={2} />
-        <span className="opacity-60">EP</span>
-        <span>
-          {/* Show latency when the endpoint pill is green (ok / not_found
-              when model is ok / model_ok-implies-endpoint-ok) — the
-              probe round-tripped, the number is real. Show the textual
-              error label only when the pill is yellow/red. */}
-          {eTone === "success" ? fmt(state.endpoint.latencyMs) : eLabel}
-        </span>
-      </span>
-      <span
-        data-ping-layer="model"
-        className={`${BASE_PILL} ${TONE_CLASS[mTone]}`}
-      >
-        <Icon name={TONE_ICON[mTone]} size={11} strokeWidth={2} />
-        <span className="opacity-60">M</span>
-        <span>
-          {state.model.usable && state.model.classification === "ok"
-            ? fmt(state.model.latencyMs)
-            : mLabel}
-        </span>
-      </span>
+      <Icon name={TONE_ICON[tone]} size={11} strokeWidth={2} />
+      <span>{label}</span>
     </span>
   );
+}
+
+/**
+ * Plain-language pill text for the user-friendly single-pill view.
+ *
+ *   ok                    → "1.7s"          (just the time)
+ *   degraded              → "9.3s 较慢"     (slow but works)
+ *   auth_failed           → "凭证错误"
+ *   endpoint_unreachable  → "端点不通"
+ *   model_unavailable     → 具体分类 (模型不存在 / 网络不通 / 超时 / 限流 / ...)
+ *
+ * Single source of truth for the friendly label so the tooltip + aria-label
+ * stay in sync.
+ */
+function labelForOverall(
+  state: Extract<PingState, { status: "done" }>,
+  t: (key: string) => string,
+): string {
+  switch (state.overall) {
+    case "ok":
+      return fmt(state.model.latencyMs);
+    case "degraded":
+      return `${fmt(state.model.latencyMs)} · ${t("labelSlow")}`;
+    case "auth_failed":
+      return t("categoryAuth");
+    case "endpoint_unreachable":
+      return t("endpointNetwork");
+    case "model_unavailable":
+      return t(MODEL_KEYS[state.model.classification] ?? "modelUnknown");
+  }
 }
