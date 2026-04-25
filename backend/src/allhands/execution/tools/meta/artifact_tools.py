@@ -18,7 +18,20 @@ from __future__ import annotations
 
 from allhands.core import Tool, ToolKind, ToolScope
 
-_KIND_ENUM = ["markdown", "code", "html", "image", "data", "mermaid"]
+_KIND_ENUM = [
+    "markdown",
+    "code",
+    "html",
+    "image",
+    "data",
+    "mermaid",
+    "drawio",
+    "pdf",
+    "xlsx",
+    "csv",
+    "docx",
+    "pptx",
+]
 
 ARTIFACT_CREATE_TOOL = Tool(
     id="allhands.artifacts.create",

@@ -53,6 +53,10 @@ const KIND_ICON: Record<ArtifactKind, IconName> = {
   data: "database",
   mermaid: "activity",
   drawio: "layout-grid",
+  pdf: "file",
+  xlsx: "database",
+  csv: "database",
+  docx: "file",
   pptx: "file",
   video: "play-circle",
 };

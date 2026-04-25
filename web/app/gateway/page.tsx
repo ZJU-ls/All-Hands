@@ -1205,6 +1205,7 @@ function ModelFormDialog({
           value={String(form.context_window || "")}
           onChange={(v) => onChange({ ...form, context_window: Number(v) || 0 })}
           icon="database"
+          hint={t("fieldContextWindowHint")}
         />
       </FormSection>
       <DialogFooter
@@ -1379,6 +1380,7 @@ function LabeledInput({
   mono = false,
   icon,
   disabled = false,
+  hint,
 }: {
   label: string;
   value: string;
@@ -1388,6 +1390,7 @@ function LabeledInput({
   mono?: boolean;
   icon?: Parameters<typeof Icon>[0]["name"];
   disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <div>
@@ -1413,6 +1416,9 @@ function LabeledInput({
           } ${mono ? "font-mono text-[12.5px]" : ""}`}
         />
       </div>
+      {hint && (
+        <p className="mt-1 text-[11px] leading-snug text-text-subtle">{hint}</p>
+      )}
     </div>
   );
 }

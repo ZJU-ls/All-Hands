@@ -21,6 +21,12 @@ import { HtmlView } from "./kinds/HtmlView";
 import { ImageView } from "./kinds/ImageView";
 import { DataView } from "./kinds/DataView";
 import { MermaidView } from "./kinds/MermaidView";
+import { DrawioView } from "./kinds/DrawioView";
+import { PdfView } from "./kinds/PdfView";
+import { CsvView } from "./kinds/CsvView";
+import { XlsxView } from "./kinds/XlsxView";
+import { DocxView } from "./kinds/DocxView";
+import { PptxView } from "./kinds/PptxView";
 import { ArtifactVersionSwitcher } from "./ArtifactVersionSwitcher";
 import { ArtifactEditor, pickEditorLanguage } from "./ArtifactEditor";
 
@@ -62,6 +68,12 @@ function renderBody(
       return loaded.kind === "text" ? <DataView content={loaded.content} /> : null;
     case "mermaid":
       return loaded.kind === "text" ? <MermaidView content={loaded.content} /> : null;
+    case "drawio":
+      return loaded.kind === "text" ? (
+        <DrawioView content={loaded.content} editable artifactId={artifact.id} height={560} />
+      ) : null;
+    case "csv":
+      return loaded.kind === "text" ? <CsvView content={loaded.content} /> : null;
     case "image": {
       const src =
         loaded.kind === "base64"
@@ -71,6 +83,14 @@ function renderBody(
             : "";
       return <ImageView src={src} alt={artifact.name} />;
     }
+    case "pdf":
+      return <PdfView artifactId={artifact.id} height={640} />;
+    case "xlsx":
+      return <XlsxView artifactId={artifact.id} />;
+    case "docx":
+      return <DocxView artifactId={artifact.id} />;
+    case "pptx":
+      return <PptxView artifactId={artifact.id} artifactName={artifact.name} />;
     default:
       return (
         <div className="px-4 py-3 text-xs text-text-muted">
