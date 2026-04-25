@@ -134,11 +134,15 @@ type LastRun = {
 };
 
 const DEFAULT_SYSTEM = "";
+// 2026-04-25 (IDEALAB regression): default `enable_thinking` to false.
+// thinking 是 opt-in 的,且不少 anthropic-compat 反代(IDEALAB / OpenRouter
+// / 自建网关)不识别 thinking 字段,默认开启会导致空响应或上游 400。
+// 用户想测思考模型时手动点开 toggle 即可。
 const DEFAULT_PARAMS = {
   temperature: 0.7,
   top_p: 1.0,
   max_tokens: 512,
-  enable_thinking: true,
+  enable_thinking: false,
 };
 
 export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
