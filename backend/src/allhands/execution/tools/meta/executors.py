@@ -307,6 +307,11 @@ _ARTIFACT_DEFAULT_MIME: dict[ArtifactKind, str] = {
     ArtifactKind.DATA: "application/json",
     ArtifactKind.MERMAID: "text/vnd.mermaid",
     ArtifactKind.DRAWIO: "application/vnd.jgraph.mxfile",
+    ArtifactKind.PDF: "application/pdf",
+    ArtifactKind.XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ArtifactKind.CSV: "text/csv",
+    ArtifactKind.DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ArtifactKind.PPTX: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
 _ARTIFACT_EXT: dict[ArtifactKind, str] = {
@@ -317,6 +322,11 @@ _ARTIFACT_EXT: dict[ArtifactKind, str] = {
     ArtifactKind.DATA: "json",
     ArtifactKind.MERMAID: "mmd",
     ArtifactKind.DRAWIO: "drawio",
+    ArtifactKind.PDF: "pdf",
+    ArtifactKind.XLSX: "xlsx",
+    ArtifactKind.CSV: "csv",
+    ArtifactKind.DOCX: "docx",
+    ArtifactKind.PPTX: "pptx",
 }
 
 
@@ -882,6 +892,301 @@ def make_artifact_search_executor(
     return _exec
 
 
+# 2026-04-25 · structured-build artifact factories. Each follows the same
+# pattern as make_artifact_create_executor: build bytes via a generator
+# module, persist + emit a v1 ArtifactVersion, return {artifact_id, version,
+# warnings?}. The provenance binding (conversation_id / employee_id /
+# run_id) is identical across all five so the /artifacts page can filter by
+# any of them.
+
+
+async def _persist_office_artifact(
+    *,
+    maker: async_sessionmaker[AsyncSession],
+    name: str,
+    kind: ArtifactKind,
+    blob: bytes,
+    description: str | None,
+    tags: list[str] | None,
+    change_message: str | None,
+    conversation_id: str | None,
+    employee_id: str | None,
+    run_id: str | None,
+) -> dict[str, Any]:
+    """Shared write path for office artifacts. Validates name, sizes the
+    blob, writes the v1 file, and persists Artifact + ArtifactVersion."""
+    _validate_artifact_name(name)
+    size = len(blob)
+    if size > _MAX_BINARY_BYTES:
+        raise _ArtifactExecutorError(
+            f"size {size}B exceeds binary ceiling {_MAX_BINARY_BYTES}B"
+        )
+    mime = _ARTIFACT_DEFAULT_MIME[kind]
+    now = datetime.now(UTC)
+    artifact_id = str(uuid.uuid4())
+    file_path = _write_artifact_blob(
+        _DEFAULT_WORKSPACE_ID,
+        artifact_id,
+        version=1,
+        kind=kind,
+        mime=mime,
+        blob=blob,
+    )
+    artifact = Artifact(
+        id=artifact_id,
+        workspace_id=_DEFAULT_WORKSPACE_ID,
+        name=name,
+        kind=kind,
+        mime_type=mime,
+        file_path=file_path,
+        size_bytes=size,
+        version=1,
+        created_at=now,
+        updated_at=now,
+        conversation_id=conversation_id,
+        created_by_employee_id=employee_id,
+        created_by_run_id=run_id,
+        description=description,
+        tags=list(tags) if tags else [],
+    )
+    async with _session_context(maker) as session:
+        repo = SqlArtifactRepo(session)
+        await repo.upsert(artifact)
+        await repo.save_version(
+            ArtifactVersion(
+                id=str(uuid.uuid4()),
+                artifact_id=artifact.id,
+                version=1,
+                file_path=file_path,
+                diff_from_prev=None,
+                created_at=now,
+                change_message=change_message or "initial",
+                parent_version=None,
+                created_by_employee_id=employee_id,
+                created_by_run_id=run_id,
+                size_bytes=size,
+            )
+        )
+    return {
+        "artifact_id": artifact.id,
+        "version": 1,
+        "kind": kind.value,
+    }
+
+
+def make_artifact_create_pdf_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.pdf import (
+        ArtifactGenerationError,
+        render_pdf,
+    )
+
+    async def _exec(
+        name: str,
+        source: str = "markdown",
+        content: str = "",
+        title: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        if source not in ("markdown", "html"):
+            return {"error": f"source must be 'markdown' or 'html', got {source!r}"}
+        try:
+            blob = render_pdf(source=source, content=content, title=title)  # type: ignore[arg-type]
+            return await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.PDF,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create_pdf failed: {exc}"}
+
+    return _exec
+
+
+def make_artifact_create_xlsx_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.pdf import ArtifactGenerationError
+    from allhands.execution.artifact_generators.xlsx import render_xlsx
+
+    async def _exec(
+        name: str,
+        sheets: list[dict[str, Any]] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        try:
+            blob = render_xlsx(sheets=sheets or [])
+            return await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.XLSX,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create_xlsx failed: {exc}"}
+
+    return _exec
+
+
+def make_artifact_create_csv_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.csv import render_csv
+    from allhands.execution.artifact_generators.pdf import ArtifactGenerationError
+
+    async def _exec(
+        name: str,
+        rows: list[list[Any]] | None = None,
+        headers: list[str] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        try:
+            blob = render_csv(headers=headers, rows=rows or [])
+            return await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.CSV,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create_csv failed: {exc}"}
+
+    return _exec
+
+
+def make_artifact_create_docx_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.docx import render_docx
+    from allhands.execution.artifact_generators.pdf import ArtifactGenerationError
+
+    async def _exec(
+        name: str,
+        blocks: list[dict[str, Any]] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        try:
+            blob, warnings = render_docx(blocks=blocks or [])
+            result = await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.DOCX,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+            if warnings:
+                result["warnings"] = warnings
+            return result
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create_docx failed: {exc}"}
+
+    return _exec
+
+
+def make_artifact_create_pptx_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.pdf import ArtifactGenerationError
+    from allhands.execution.artifact_generators.pptx import render_pptx
+
+    async def _exec(
+        name: str,
+        slides: list[dict[str, Any]] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        try:
+            blob, warnings = render_pptx(slides=slides or [])
+            result = await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.PPTX,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+            if warnings:
+                result["warnings"] = warnings
+            return result
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create_pptx failed: {exc}"}
+
+    return _exec
+
+
 def _make_delete_conversation_exec_factory() -> Callable[
     [async_sessionmaker[AsyncSession]], ToolExecutor
 ]:
@@ -919,6 +1224,11 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     # ArtifactService so agent-produced HTML / markdown / code / images /
     # mermaid / data actually persist and can be re-rendered.
     "allhands.artifacts.create": make_artifact_create_executor,
+    "allhands.artifacts.create_pdf": make_artifact_create_pdf_executor,
+    "allhands.artifacts.create_xlsx": make_artifact_create_xlsx_executor,
+    "allhands.artifacts.create_csv": make_artifact_create_csv_executor,
+    "allhands.artifacts.create_docx": make_artifact_create_docx_executor,
+    "allhands.artifacts.create_pptx": make_artifact_create_pptx_executor,
     "allhands.artifacts.render": make_artifact_render_executor,
     "allhands.artifacts.list": make_artifact_list_executor,
     "allhands.artifacts.read": make_artifact_read_executor,
