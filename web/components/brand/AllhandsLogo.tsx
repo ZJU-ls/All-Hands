@@ -85,7 +85,7 @@ export function AllhandsLogo({
       </defs>
 
       {variant === "tile" ? (
-        <>
+        <g className={animateIn ? "ah-fold-tile" : undefined}>
           <rect width="32" height="32" rx="8" fill={`url(#${TILE_GRAD_ID})`} />
           <rect width="32" height="32" rx="8" fill={`url(#${TILE_GLOW_ID})`} />
           {/* Bottom-right darker face · clipped to tile by rx=8 */}
@@ -121,7 +121,23 @@ export function AllhandsLogo({
             fillOpacity="0.92"
             className={animateIn ? "ah-fold-disc" : undefined}
           />
-        </>
+          {/* Sweep highlight · a single bright streak crossing the seam,
+              gives the fold a "paper just caught the light" moment. */}
+          {animateIn ? (
+            <line
+              x1="7"
+              y1="11"
+              x2="25"
+              y2="29"
+              stroke="white"
+              strokeOpacity="0.95"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+              className="ah-fold-sweep"
+              pathLength={1}
+            />
+          ) : null}
+        </g>
       ) : (
         // Mono · outline + seam · for dense / dark surfaces.
         <>
@@ -151,39 +167,62 @@ export function AllhandsLogo({
 
       {animateIn ? (
         <style>{`
+          @keyframes ah-fold-tile-in {
+            0%   { opacity: 0; transform: scale(0.62) rotate(-8deg); }
+            55%  { opacity: 1; transform: scale(1.04) rotate(2deg); }
+            80%  { transform: scale(0.99) rotate(-0.8deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); }
+          }
           @keyframes ah-fold-seam-draw {
             from { stroke-dasharray: 0 1; }
             to   { stroke-dasharray: 1 0; }
           }
+          @keyframes ah-fold-sweep {
+            0%   { stroke-dasharray: 0 1; opacity: 0.95; }
+            70%  { stroke-dasharray: 0.5 0.5; opacity: 0.95; }
+            100% { stroke-dasharray: 1 0; opacity: 0; }
+          }
           @keyframes ah-fold-face-in {
-            from { opacity: 0; transform: translateX(6px); }
+            from { opacity: 0; transform: translateX(8px); }
             to   { opacity: 1; transform: translateX(0); }
           }
           @keyframes ah-fold-disc-in {
-            from { opacity: 0; transform: scale(0.6); }
-            to   { opacity: 0.92; transform: scale(1); }
+            0%   { opacity: 0; transform: scale(0.3); }
+            70%  { opacity: 0.92; transform: scale(1.25); }
+            100% { opacity: 0.92; transform: scale(1); }
+          }
+          .ah-fold-tile {
+            transform-origin: 16px 16px;
+            transform-box: fill-box;
+            animation: ah-fold-tile-in 900ms cubic-bezier(.34,1.4,.4,1) forwards;
           }
           .ah-fold-seam {
             stroke-dasharray: 0 1;
-            animation: ah-fold-seam-draw 720ms cubic-bezier(.2,.8,.2,1) 80ms forwards;
+            animation: ah-fold-seam-draw 1100ms cubic-bezier(.2,.8,.2,1) 320ms forwards;
+          }
+          .ah-fold-sweep {
+            stroke-dasharray: 0 1;
+            opacity: 0;
+            animation: ah-fold-sweep 1100ms cubic-bezier(.4,.0,.2,1) 320ms forwards;
           }
           .ah-fold-face {
             opacity: 0;
-            animation: ah-fold-face-in 560ms cubic-bezier(.2,.8,.2,1) 480ms forwards;
+            animation: ah-fold-face-in 720ms cubic-bezier(.2,.8,.2,1) 880ms forwards;
           }
           .ah-fold-disc {
             opacity: 0;
             transform-origin: 12.5px 19.5px;
             transform-box: fill-box;
-            animation: ah-fold-disc-in 420ms cubic-bezier(.2,.8,.2,1) 800ms forwards;
+            animation: ah-fold-disc-in 600ms cubic-bezier(.34,1.6,.4,1) 1300ms forwards;
           }
           @media (prefers-reduced-motion: reduce) {
-            .ah-fold-seam, .ah-fold-face, .ah-fold-disc {
+            .ah-fold-tile, .ah-fold-seam, .ah-fold-sweep, .ah-fold-face, .ah-fold-disc {
               animation: none;
               opacity: 1;
               stroke-dasharray: none;
               transform: none;
             }
+            .ah-fold-sweep { opacity: 0; }
           }
         `}</style>
       ) : null}
