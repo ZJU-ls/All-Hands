@@ -354,6 +354,70 @@ async def test_loop_records_tool_executor_error_and_continues() -> None:
     assert exits[-1].reason == "completed"
 
 
+# --- P2 (2026-04-25): per-iteration tool rebind for progressive loading ---
+
+
+@pytest.mark.asyncio
+async def test_loop_rebinds_tools_per_iteration_for_progressive_loading() -> None:
+    """Regression for the progressive-loading bug: when ``resolve_skill``
+    runs in iteration N and mutates ``runtime.resolved_skills``, the new
+    tools must be visible to the LLM on iteration N+1.
+
+    Previously AgentLoop bound tools once before the while loop, so
+    mid-turn skill activation didn't surface new tools (artifact_create
+    error). The fix moves binding into the loop body; we assert this by
+    counting bind_tools() calls — once per iteration.
+    """
+
+    class _RebindCountingModel:
+        def __init__(self, scripts: list[list[AIMessageChunk]]) -> None:
+            self._scripts = list(scripts)
+            self._calls = 0
+            self.bind_count = 0
+
+        def bind_tools(self, *_a: object, **_kw: object) -> Any:
+            self.bind_count += 1
+            return self
+
+        async def astream(self, *_a: object, **_kw: object) -> Any:
+            chunks = self._scripts[self._calls]
+            self._calls += 1
+            for chunk in chunks:
+                yield chunk
+
+    add = _tool("add")
+
+    async def _add(**kw: Any) -> dict[str, int]:
+        return {"sum": kw["a"] + kw["b"]}
+
+    reg = ToolRegistry()
+    reg.register(add, _add)
+
+    scripts = [
+        [
+            AIMessageChunk(
+                content="",
+                tool_calls=[{"id": "tu1", "name": "add", "args": {"a": 1, "b": 2}}],
+            )
+        ],
+        [AIMessageChunk(content="3")],
+    ]
+    fake = _RebindCountingModel(scripts)
+    emp = _employee(tool_ids=["t.add"])
+    with patch("allhands.execution.agent_loop._build_model", return_value=fake):
+        loop = AgentLoop(employee=emp, tool_registry=reg, gate=AutoApproveGate())
+        events = [ev async for ev in loop.stream(messages=[{"role": "user", "content": "1+2"}])]
+
+    # Two LLM iterations → bind_tools called twice (was 1 before P2).
+    assert fake.bind_count == 2, (
+        f"Expected bind_tools to be called once per iteration (2x), got {fake.bind_count}. "
+        "Tools must be rebuilt per iteration so resolve_skill can unlock new tools mid-turn."
+    )
+    # Sanity: loop completed normally.
+    exits = [ev for ev in events if isinstance(ev, LoopExited)]
+    assert exits[-1].reason == "completed"
+
+
 # --- Task 10 (folded in here for B1 closure): phantom regression -----------
 
 

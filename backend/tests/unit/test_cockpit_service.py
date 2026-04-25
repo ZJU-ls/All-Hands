@@ -117,7 +117,7 @@ def _artifact(id_: str, name: str, *, created_at: datetime) -> Artifact:
         name=name,
         kind=ArtifactKind.MARKDOWN,
         mime_type="text/markdown",
-        content="# " + name,
+        file_path=f"default/{id_}/v1.md",
         size_bytes=10,
         version=1,
         pinned=False,

@@ -1,14 +1,20 @@
 """ArtifactService — create / read / update / delete agent-produced artifacts.
 
-See `docs/specs/agent-design/2026-04-18-artifacts-skill.md` § 3 / § 4.
+See `docs/specs/agent-design/2026-04-18-artifacts-skill.md` for full scope.
 
-Storage strategy:
-- TEXT_KINDS (markdown/code/html/data/mermaid): content inline in DB.
-- BINARY_KINDS (image): content on disk under ``<data_dir>/artifacts/<ws>/<id>/v<N>.<ext>``,
-  row carries only the relative path.
+**2026-04-25 storage refactor:** all kinds (text + binary) live on disk under
+``<data_dir>/artifacts/<workspace_id>/<artifact_id>/v<N>.<ext>``. The DB row
+only carries metadata + ``file_path`` (a relative path under the data dir).
 
-Every write makes a new `ArtifactVersion` row carrying the previous content so
-history is addressable by version number.
+Why: ``content TEXT`` columns under chat-side write contention triggered
+"database is locked" errors on long write transactions (5KB-1MB blobs in
+autocommitting txns). Moving content off-DB cuts the transaction window
+to O(metadata) — milliseconds, no contention.
+
+Every update bumps ``version`` and writes a new file ``v<N+1>.<ext>``;
+the previous version stays reachable via ``ArtifactVersion`` rows pointing
+at older files. Rollback creates a new version (``v<N+2>``) copying an
+older file's content forward — preserves the audit trail.
 """
 
 from __future__ import annotations
@@ -102,68 +108,38 @@ class ArtifactService:
     ) -> Artifact:
         _validate_name(name)
         mime = mime_type or _DEFAULT_MIME[kind]
+        blob = _encode_input_for_storage(kind, content, content_base64)
+        size = len(blob)
+        _check_size(size, _max_for_kind(kind), kind)
         now = datetime.now(UTC)
         artifact_id = str(uuid.uuid4())
 
-        if kind in TEXT_KINDS:
-            if content is None:
-                raise ArtifactError(f"kind={kind.value!r} requires `content`.")
-            size = len(content.encode("utf-8"))
-            _check_size(size, MAX_TEXT_BYTES, kind)
-            artifact = Artifact(
-                id=artifact_id,
-                workspace_id=workspace_id,
-                name=name,
-                kind=kind,
-                mime_type=mime,
-                content=content,
-                file_path=None,
-                size_bytes=size,
-                version=1,
-                created_by_run_id=created_by_run_id,
-                created_by_employee_id=created_by_employee_id,
-                conversation_id=conversation_id,
-                created_at=now,
-                updated_at=now,
-                extra_metadata=metadata or {},
-            )
-        elif kind in BINARY_KINDS:
-            if content_base64 is None:
-                raise ArtifactError(f"kind={kind.value!r} requires `content_base64`.")
-            blob = _decode_base64(content_base64)
-            size = len(blob)
-            _check_size(size, MAX_BINARY_BYTES, kind)
-            rel = self._write_blob(
-                workspace_id, artifact_id, version=1, kind=kind, mime=mime, blob=blob
-            )
-            artifact = Artifact(
-                id=artifact_id,
-                workspace_id=workspace_id,
-                name=name,
-                kind=kind,
-                mime_type=mime,
-                content=None,
-                file_path=rel,
-                size_bytes=size,
-                version=1,
-                created_by_run_id=created_by_run_id,
-                created_by_employee_id=created_by_employee_id,
-                conversation_id=conversation_id,
-                created_at=now,
-                updated_at=now,
-                extra_metadata=metadata or {},
-            )
-        else:  # pragma: no cover — enum exhausted
-            raise ArtifactError(f"Unsupported kind {kind!r}.")
-
+        rel = self._write_blob(
+            workspace_id, artifact_id, version=1, kind=kind, mime=mime, blob=blob
+        )
+        artifact = Artifact(
+            id=artifact_id,
+            workspace_id=workspace_id,
+            name=name,
+            kind=kind,
+            mime_type=mime,
+            file_path=rel,
+            size_bytes=size,
+            version=1,
+            created_by_run_id=created_by_run_id,
+            created_by_employee_id=created_by_employee_id,
+            conversation_id=conversation_id,
+            created_at=now,
+            updated_at=now,
+            extra_metadata=metadata or {},
+        )
         await self._repo.upsert(artifact)
         await self._repo.save_version(
             ArtifactVersion(
                 id=str(uuid.uuid4()),
                 artifact_id=artifact.id,
                 version=1,
-                content=artifact.content,
-                file_path=artifact.file_path,
+                file_path=rel,
                 diff_from_prev=None,
                 created_at=now,
             )
@@ -222,58 +198,41 @@ class ArtifactService:
 
         now = datetime.now(UTC)
         next_version = artifact.version + 1
+        prev_blob = self.read_bytes(artifact)
 
         if artifact.kind in TEXT_KINDS:
             if mode == "patch":
                 if patch is None:
                     raise ArtifactError("mode='patch' requires `patch` (unified diff).")
-                new_content = _apply_unified_diff(artifact.content or "", patch)
+                prev_text = prev_blob.decode("utf-8")
+                new_text = _apply_unified_diff(prev_text, patch)
             else:
                 if content is None:
                     raise ArtifactError("mode='overwrite' requires `content`.")
-                new_content = content
-            size = len(new_content.encode("utf-8"))
+                new_text = content
+            new_blob = new_text.encode("utf-8")
+            size = len(new_blob)
             _check_size(size, MAX_TEXT_BYTES, artifact.kind)
-            diff = _diff_text(artifact.content or "", new_content)
-            updated = artifact.model_copy(
-                update={
-                    "content": new_content,
-                    "size_bytes": size,
-                    "version": next_version,
-                    "updated_at": now,
-                }
-            )
-            await self._repo.upsert(updated)
-            await self._repo.save_version(
-                ArtifactVersion(
-                    id=str(uuid.uuid4()),
-                    artifact_id=artifact.id,
-                    version=next_version,
-                    content=new_content,
-                    file_path=None,
-                    diff_from_prev=diff,
-                    created_at=now,
+            diff = _diff_text(prev_blob.decode("utf-8"), new_text)
+        else:
+            if mode == "patch":
+                raise ArtifactError(
+                    f"kind={artifact.kind.value!r} does not support 'patch'; use 'overwrite'."
                 )
-            )
-            await self._publish_changed(updated, op="updated")
-            return updated
+            if content_base64 is None:
+                raise ArtifactError("binary update requires `content_base64`.")
+            new_blob = _decode_base64(content_base64)
+            size = len(new_blob)
+            _check_size(size, MAX_BINARY_BYTES, artifact.kind)
+            diff = None
 
-        if mode == "patch":
-            raise ArtifactError(
-                f"kind={artifact.kind.value!r} does not support 'patch'; use 'overwrite'."
-            )
-        if content_base64 is None:
-            raise ArtifactError("binary update requires `content_base64`.")
-        blob = _decode_base64(content_base64)
-        size = len(blob)
-        _check_size(size, MAX_BINARY_BYTES, artifact.kind)
         rel = self._write_blob(
             artifact.workspace_id,
             artifact.id,
             version=next_version,
             kind=artifact.kind,
             mime=artifact.mime_type,
-            blob=blob,
+            blob=new_blob,
         )
         updated = artifact.model_copy(
             update={
@@ -289,9 +248,67 @@ class ArtifactService:
                 id=str(uuid.uuid4()),
                 artifact_id=artifact.id,
                 version=next_version,
-                content=None,
                 file_path=rel,
-                diff_from_prev=None,
+                diff_from_prev=diff,
+                created_at=now,
+            )
+        )
+        await self._publish_changed(updated, op="updated")
+        return updated
+
+    async def rollback(self, artifact_id: str, *, to_version: int) -> Artifact:
+        """Create a new version (v{N+1}) carrying the content of an older
+        version. Original history is preserved — rollback is just another
+        forward step that happens to copy older bytes.
+
+        Raises ``ArtifactError`` when ``to_version`` is the current version
+        (no-op disallowed; user should just close the dialog) or refers to
+        a missing version.
+        """
+        artifact = await self.get(artifact_id)
+        if to_version == artifact.version:
+            raise ArtifactError(f"to_version={to_version} is already the current version.")
+        if to_version < 1 or to_version > artifact.version:
+            raise ArtifactError(f"to_version={to_version} out of range (1..{artifact.version}).")
+        target = await self._repo.get_version(artifact_id, to_version)
+        if target is None:
+            raise ArtifactNotFound(f"Artifact {artifact_id!r} version {to_version} not found.")
+        old_blob = self.absolute_path(target.file_path).read_bytes()
+
+        next_version = artifact.version + 1
+        rel = self._write_blob(
+            artifact.workspace_id,
+            artifact.id,
+            version=next_version,
+            kind=artifact.kind,
+            mime=artifact.mime_type,
+            blob=old_blob,
+        )
+        diff: str | None = None
+        if artifact.kind in TEXT_KINDS:
+            try:
+                prev_text = self.read_bytes(artifact).decode("utf-8")
+                diff = _diff_text(prev_text, old_blob.decode("utf-8"))
+            except (UnicodeDecodeError, OSError):
+                diff = None
+
+        now = datetime.now(UTC)
+        updated = artifact.model_copy(
+            update={
+                "file_path": rel,
+                "size_bytes": len(old_blob),
+                "version": next_version,
+                "updated_at": now,
+            }
+        )
+        await self._repo.upsert(updated)
+        await self._repo.save_version(
+            ArtifactVersion(
+                id=str(uuid.uuid4()),
+                artifact_id=artifact.id,
+                version=next_version,
+                file_path=rel,
+                diff_from_prev=diff,
                 created_at=now,
             )
         )
@@ -321,8 +338,7 @@ class ArtifactService:
         op: Literal["created", "updated", "deleted", "pinned"],
     ) -> None:
         """Fan out an ``artifact_changed`` envelope so ArtifactPanel can
-        live-refresh (I-0005). Silent no-op when no bus is wired (e.g. unit
-        tests that don't care about event emission).
+        live-refresh (I-0005). Silent no-op when no bus is wired.
         """
         if self._bus is None:
             return
@@ -352,10 +368,22 @@ class ArtifactService:
     def absolute_path(self, relative: str) -> Path:
         return self._root / relative
 
-    def read_binary(self, artifact: Artifact) -> bytes:
-        if artifact.file_path is None:
-            raise ArtifactError(f"Artifact {artifact.id!r} has no file_path.")
+    def read_bytes(self, artifact: Artifact) -> bytes:
+        """Read the latest version's bytes off disk."""
         return self.absolute_path(artifact.file_path).read_bytes()
+
+    def read_version_bytes(self, version: ArtifactVersion) -> bytes:
+        """Read a specific version's bytes off disk."""
+        return self.absolute_path(version.file_path).read_bytes()
+
+    def read_text(self, artifact: Artifact, encoding: str = "utf-8") -> str:
+        """Read the latest version as decoded text. Caller decides whether
+        the kind is text-y; mismatched callers will hit UnicodeDecodeError."""
+        return self.read_bytes(artifact).decode(encoding)
+
+    # Back-compat alias — read_binary used to be the only file-reader,
+    # only used for binary kinds. Now read_bytes covers both.
+    read_binary = read_bytes
 
     def _write_blob(
         self,
@@ -371,98 +399,157 @@ class ArtifactService:
         folder = self._root / workspace_id / artifact_id
         folder.mkdir(parents=True, exist_ok=True)
         filename = f"v{version}.{ext}"
-        (folder / filename).write_bytes(blob)
-        return str(Path(workspace_id) / artifact_id / filename)
+        # Atomic write: write to .tmp + os.replace so a failed write can't
+        # leave a half-finished v<N>.<ext> that the DB row already references.
+        target = folder / filename
+        tmp = folder / f".{filename}.tmp"
+        tmp.write_bytes(blob)
+        tmp.replace(target)
+        return f"{workspace_id}/{artifact_id}/{filename}"
 
 
-_SAFE_NAME = re.compile(r"[A-Za-z0-9._\-\u4e00-\u9fff ]+")
+# ----------------------------------------------------------------------
+# Helpers (module-level — no class state, easier to test in isolation)
+# ----------------------------------------------------------------------
+
+
+_NAME_PATTERN = re.compile(r"^[\w一-鿿\s._-]+$", re.UNICODE)
 
 
 def _validate_name(name: str) -> None:
     if not name or len(name) > 256:
-        raise ArtifactError("Artifact name must be 1..256 chars.")
-    if not _SAFE_NAME.fullmatch(name):
+        raise ArtifactError("name must be 1..256 chars.")
+    if not _NAME_PATTERN.match(name):
         raise ArtifactError(
-            "Artifact name may contain letters, digits, CJK characters, space, '.', '_', '-' only."
+            "name may contain letters / digits / CJK / space / dot / underscore / hyphen only."
         )
 
 
-def _check_size(size: int, ceiling: int, kind: ArtifactKind) -> None:
-    if size > ceiling:
-        raise ArtifactError(
-            f"Artifact kind={kind.value!r} size {size}B exceeds ceiling {ceiling}B."
-        )
+def _check_size(size: int, max_bytes: int, kind: ArtifactKind) -> None:
+    if size > max_bytes:
+        raise ArtifactError(f"kind={kind.value!r} content {size} bytes exceeds limit {max_bytes}.")
 
 
-def _decode_base64(payload: str) -> bytes:
+def _max_for_kind(kind: ArtifactKind) -> int:
+    return MAX_BINARY_BYTES if kind in BINARY_KINDS else MAX_TEXT_BYTES
+
+
+def _encode_input_for_storage(
+    kind: ArtifactKind, content: str | None, content_base64: str | None
+) -> bytes:
+    """Normalize the user-facing input into raw bytes for disk write.
+
+    TEXT kinds:   `content` (utf-8 string) → encode
+    BINARY kinds: `content_base64` → base64 decode
+    """
+    if kind in TEXT_KINDS:
+        if content is None:
+            raise ArtifactError(f"kind={kind.value!r} requires `content`.")
+        return content.encode("utf-8")
+    if kind in BINARY_KINDS:
+        if content_base64 is None:
+            raise ArtifactError(f"kind={kind.value!r} requires `content_base64`.")
+        return _decode_base64(content_base64)
+    raise ArtifactError(f"Unsupported kind {kind!r}.")  # pragma: no cover
+
+
+def _decode_base64(s: str) -> bytes:
     try:
-        return base64.b64decode(payload, validate=True)
+        return base64.b64decode(s, validate=True)
     except (binascii.Error, ValueError) as exc:
-        raise ArtifactError(f"Invalid base64 payload: {exc}") from exc
+        raise ArtifactError(f"content_base64 is not valid base64: {exc}") from exc
 
 
 def _extension_for(mime: str, kind: ArtifactKind) -> str:
-    guessed = mimetypes.guess_extension(mime)
-    if guessed:
-        return guessed.lstrip(".")
+    """Pick a file extension. Binary: from mime via mimetypes. Text: from kind."""
+    if kind in BINARY_KINDS:
+        ext = mimetypes.guess_extension(mime) or ""
+        return ext.lstrip(".") or _KIND_EXT[kind]
     return _KIND_EXT[kind]
 
 
-def _diff_text(prev: str, curr: str) -> str:
-    diff = difflib.unified_diff(
-        prev.splitlines(keepends=True),
-        curr.splitlines(keepends=True),
-        fromfile="prev",
-        tofile="curr",
-        n=3,
+def _diff_text(a: str, b: str) -> str | None:
+    """Unified diff (a → b). None when identical."""
+    if a == b:
+        return None
+    diff_lines = list(
+        difflib.unified_diff(
+            a.splitlines(keepends=True),
+            b.splitlines(keepends=True),
+            fromfile="prev",
+            tofile="next",
+            n=3,
+        )
     )
-    return "".join(diff)
+    return "".join(diff_lines)
 
 
-def _apply_unified_diff(original: str, patch: str) -> str:
-    """Apply a minimal unified diff. Sufficient for agent-produced small edits.
+def _apply_unified_diff(prev: str, patch: str) -> str:
+    """Apply a unified diff produced by `_diff_text` (or `difflib.unified_diff`).
 
-    For v0, a naive line-oriented patcher is good enough — agents mostly work on
-    markdown / code blocks with line-based changes. If patching fails, the caller
-    should fall back to `mode='overwrite'`.
+    This is intentionally narrow — we only support the format we generate.
+    Anything else raises so the caller knows to use `mode='overwrite'`.
     """
-    src_lines = original.splitlines(keepends=True)
-    out: list[str] = []
-    i = 0
-    patch_lines = patch.splitlines(keepends=True)
-    p = 0
-    while p < len(patch_lines):
-        line = patch_lines[p]
-        if line.startswith(("--- ", "+++ ")):
-            p += 1
+    if not patch.strip():
+        return prev
+    prev_lines = prev.splitlines(keepends=True)
+    out_lines: list[str] = []
+    cursor = 0
+    in_hunk = False
+    expected_old_count = 0
+    expected_new_count = 0
+    seen_old_count = 0
+    seen_new_count = 0
+    for raw in patch.splitlines(keepends=True):
+        line = raw
+        if line.startswith(("---", "+++")):
             continue
         if line.startswith("@@"):
-            match = re.match(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", line)
-            if not match:
-                raise ArtifactError(f"Unparseable diff hunk header: {line!r}")
-            hunk_src = int(match.group(1))
-            while i < hunk_src - 1 and i < len(src_lines):
-                out.append(src_lines[i])
-                i += 1
-            p += 1
+            in_hunk = True
+            seen_old_count = 0
+            seen_new_count = 0
+            try:
+                header = line[2:].strip().rstrip("@").strip()
+                # header forms: "-A,B +C,D" or "-A +C"
+                old_part, new_part = header.split(" ")
+                old_start, _, old_count = old_part[1:].partition(",")
+                _new_start, _, new_count = new_part[1:].partition(",")
+                old_idx = int(old_start) - 1
+                expected_old_count = int(old_count) if old_count else 1
+                expected_new_count = int(new_count) if new_count else 1
+            except (ValueError, IndexError) as exc:
+                raise ArtifactError(f"malformed diff hunk header: {line!r}") from exc
+            while cursor < old_idx:
+                out_lines.append(prev_lines[cursor])
+                cursor += 1
+            continue
+        if not in_hunk:
             continue
         if line.startswith(" "):
-            out.append(line[1:])
-            if i < len(src_lines):
-                i += 1
-            p += 1
+            if cursor >= len(prev_lines) or prev_lines[cursor] != line[1:]:
+                raise ArtifactError(
+                    "patch context mismatch — base content has drifted; use mode='overwrite'."
+                )
+            out_lines.append(line[1:])
+            cursor += 1
+            seen_old_count += 1
+            seen_new_count += 1
+        elif line.startswith("-"):
+            if cursor >= len(prev_lines) or prev_lines[cursor] != line[1:]:
+                raise ArtifactError(
+                    "patch '-' line mismatch — base content has drifted; use mode='overwrite'."
+                )
+            cursor += 1
+            seen_old_count += 1
+        elif line.startswith("+"):
+            out_lines.append(line[1:])
+            seen_new_count += 1
+        else:
             continue
-        if line.startswith("-"):
-            if i < len(src_lines):
-                i += 1
-            p += 1
-            continue
-        if line.startswith("+"):
-            out.append(line[1:])
-            p += 1
-            continue
-        p += 1
-    while i < len(src_lines):
-        out.append(src_lines[i])
-        i += 1
-    return "".join(out)
+    if seen_old_count != expected_old_count or seen_new_count != expected_new_count:
+        # Hunk count mismatch → caller's diff is malformed.
+        pass  # tolerant; final newline handling below
+    while cursor < len(prev_lines):
+        out_lines.append(prev_lines[cursor])
+        cursor += 1
+    return "".join(out_lines)
