@@ -3,6 +3,7 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useRef,
   type KeyboardEvent,
@@ -80,6 +81,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
   }));
+
+  // Autosize: grow with content up to ~8 rows, then internal scroll. Without
+  // this users typing a 200-char paragraph stare at a 2-line window with the
+  // cursor falling off the bottom — a chat-first product should feel like
+  // ChatGPT / Claude, not a console line edit.
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    const lineHeight = 22; // matches leading-[1.55] @ 14px
+    const maxHeight = lineHeight * 8 + 12;
+    const next = Math.min(ta.scrollHeight, maxHeight);
+    ta.style.height = `${next}px`;
+    ta.style.overflowY = ta.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [value]);
 
   const canSend = !isStreaming && !disabled && value.trim().length > 0;
 

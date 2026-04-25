@@ -50,9 +50,7 @@ def test_pack_dir_layout(pack: str) -> None:
     pack_dir = SKILLS_ROOT / pack
     assert pack_dir.is_dir(), f"{pack}: directory missing"
     assert (pack_dir / "SKILL.yaml").is_file(), f"{pack}: SKILL.yaml missing"
-    assert (pack_dir / "prompts" / "guidance.md").is_file(), (
-        f"{pack}: prompts/guidance.md missing"
-    )
+    assert (pack_dir / "prompts" / "guidance.md").is_file(), f"{pack}: prompts/guidance.md missing"
 
 
 @pytest.mark.parametrize("pack", NEW_PACKS)
@@ -70,8 +68,7 @@ def test_pack_description_within_budget(pack: str) -> None:
     data = yaml.safe_load((SKILLS_ROOT / pack / "SKILL.yaml").read_text())
     desc = str(data["description"])
     assert len(desc) <= 80, (
-        f"{pack}: description {len(desc)} chars > 80 budget — tighten it. "
-        f"Got: {desc!r}"
+        f"{pack}: description {len(desc)} chars > 80 budget — tighten it. Got: {desc!r}"
     )
 
 
