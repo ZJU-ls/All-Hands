@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_model_service, get_session
 from allhands.core.model import LLMModel
+from allhands.i18n import t
 from allhands.services.model_service import astream_chat_test, run_chat_test
 
 PING_TIMEOUT_SECONDS = 15.0
@@ -123,7 +124,7 @@ async def create_model(
         context_window=body.context_window,
     )
     if model is None:
-        raise HTTPException(status_code=404, detail="Provider not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
     return _to_response(model)
 
 
@@ -142,7 +143,7 @@ async def update_model(
         enabled=body.enabled,
     )
     if model is None:
-        raise HTTPException(status_code=404, detail="Model not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.model"))
     return _to_response(model)
 
 
@@ -178,7 +179,7 @@ async def ping_model(
     svc = await get_model_service(session)
     pair = await svc.resolve_with_provider(model_id)
     if pair is None:
-        raise HTTPException(status_code=404, detail="Model or provider not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.model_or_provider"))
     model, provider = pair
     async with httpx.AsyncClient(timeout=PING_TIMEOUT_SECONDS) as client:
         return await run_chat_test(
@@ -200,7 +201,7 @@ async def test_model(
     svc = await get_model_service(session)
     pair = await svc.resolve_with_provider(model_id)
     if pair is None:
-        raise HTTPException(status_code=404, detail="Model or provider not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.model_or_provider"))
     model, provider = pair
     return await run_chat_test(provider, model.name, **_to_svc_kwargs(body))
 
@@ -225,7 +226,7 @@ async def test_model_stream(
     svc = await get_model_service(session)
     pair = await svc.resolve_with_provider(model_id)
     if pair is None:
-        raise HTTPException(status_code=404, detail="Model or provider not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.model_or_provider"))
     model, provider = pair
     kwargs = _to_svc_kwargs(body)
 

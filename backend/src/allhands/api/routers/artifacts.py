@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_artifact_service
 from allhands.core import BINARY_KINDS, Artifact, ArtifactKind, ArtifactVersion
+from allhands.i18n import t
 from allhands.services.artifact_service import ArtifactNotFound, ArtifactService
 
 if TYPE_CHECKING:
@@ -277,7 +278,7 @@ async def get_artifact_version_content(
 
     if art.kind in BINARY_KINDS:
         if v.file_path is None:
-            raise HTTPException(status_code=404, detail="version has no stored blob")
+            raise HTTPException(status_code=404, detail=t("errors.not_found.version_blob"))
         blob = (svc.absolute_path(v.file_path)).read_bytes()
         return ArtifactContentResponse(
             id=art.id,

@@ -13,6 +13,7 @@
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 import { Icon, type IconName } from "@/components/ui/icon";
 import { AllhandsLogo, AllhandsWordmark } from "@/components/brand/AllhandsLogo";
@@ -22,48 +23,25 @@ import { markFirstRunCompleted } from "@/lib/first-run";
 
 export const FIRST_RUN_SCOPE = "welcome";
 
-type Highlight = {
-  icon: IconName;
-  eyebrow: string;
-  title: string;
-  body: string;
-  bullets: string[];
+type HighlightKey = "h1" | "h2" | "h3";
+const HIGHLIGHT_ICONS: Record<HighlightKey, IconName> = {
+  h1: "sparkles",
+  h2: "users",
+  h3: "shield-check",
 };
+const HIGHLIGHT_KEYS: HighlightKey[] = ["h1", "h2", "h3"];
 
-const HIGHLIGHTS: Highlight[] = [
-  {
-    icon: "sparkles",
-    eyebrow: "01 · Lead Agent",
-    title: "对话即操作",
-    body: "把「管理一支团队」压缩成和一个 Agent 聊天。它替你设计员工、调度任务、读取观测。",
-    bullets: ["自然语言创建员工", "复杂任务一句话委派", "随时打断、追加上下文"],
-  },
-  {
-    icon: "users",
-    eyebrow: "02 · 数字员工组织",
-    title: "员工 / Skill / Tool 都是一等公民",
-    body: "统一 ReAct runner · 没有 mode 字段 · 加新角色 = 加 Skill / Tool · 不是给数据库加枚举。",
-    bullets: ["10 层架构 · 边界清晰", "Skill 渐进加载", "MCP 即插即用"],
-  },
-  {
-    icon: "shield-check",
-    eyebrow: "03 · 护栏与可观测",
-    title: "默认安全 · 全链路追踪",
-    body: "WRITE 以上 Tool 自动接 Confirmation Gate · 每一步都进 Trace · 进程重启可 resume。",
-    bullets: ["写操作必须确认", "事件日志 + 投影", "LangFuse 全链可视化"],
-  },
-];
-
-type Stat = { value: number | string; label: string };
-
-const STATS: Stat[] = [
-  { value: 10, label: "层架构 · 单向依赖" },
-  { value: 8, label: "条核心设计原则" },
-  { value: "∞", label: "可注册 Tool / Skill" },
+const STAT_DEFS: { value: number | string; labelKey: "layers" | "principles" | "tools" }[] = [
+  { value: 10, labelKey: "layers" },
+  { value: 8, labelKey: "principles" },
+  { value: "∞", labelKey: "tools" },
 ];
 
 export default function WelcomePage() {
   const router = useRouter();
+  const t = useTranslations("welcome");
+  const tStats = useTranslations("welcome.stats");
+  const tH = useTranslations("welcome.highlights");
 
   const handleStart = useCallback(() => {
     markFirstRunCompleted(FIRST_RUN_SCOPE);
@@ -133,7 +111,7 @@ export default function WelcomePage() {
           onClick={handleSkip}
           className="text-caption text-text-subtle transition-colors duration-fast hover:text-text-muted"
         >
-          稍后再说 →
+          {t("skip")}
         </button>
       </div>
 
@@ -147,7 +125,7 @@ export default function WelcomePage() {
               <span className="absolute inset-0 rounded-full bg-primary" />
             </span>
             <span className="text-caption font-mono uppercase tracking-wider text-text-muted">
-              v0 · Open Source · Self-hosted
+              {t("eyebrow")}
             </span>
           </div>
 
@@ -168,17 +146,16 @@ export default function WelcomePage() {
 
           {/* Massive h1 · gradient on the second line */}
           <h1 className="mt-7 max-w-5xl text-[44px] font-bold leading-[0.98] tracking-[-0.04em] text-text sm:text-[64px] lg:text-[80px]">
-            欢迎来到 allhands。
+            {t("h1Line1")}
             <br />
             <span className="bg-gradient-to-r from-primary via-accent to-primary-glow bg-clip-text text-transparent">
-              一个 Lead Agent · 搞定一切。
+              {t("h1Line2")}
             </span>
           </h1>
 
           {/* Subtitle */}
           <p className="mt-7 max-w-2xl text-lg leading-relaxed text-text-muted">
-            和你的首席数字员工对话,把「会写代码、查数据、推消息」的一支团队
-            搭起来 —— 不写工作流、不点表单、不加枚举字段。
+            {t("subtitle")}
           </p>
 
           {/* CTAs */}
@@ -190,7 +167,7 @@ export default function WelcomePage() {
               className="group inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-primary via-primary-glow to-accent px-6 text-base font-semibold text-primary-fg shadow-glow transition-transform duration-base hover:-translate-y-px"
             >
               <Icon name="sparkles" size={16} />
-              开始使用
+              {t("getStarted")}
               <Icon
                 name="arrow-right"
                 size={16}
@@ -202,14 +179,14 @@ export default function WelcomePage() {
               className="inline-flex h-12 items-center gap-2 rounded-xl border border-border-strong bg-surface px-6 text-base font-medium text-text shadow-soft-sm transition-colors duration-fast hover:bg-surface-2"
             >
               <Icon name="layout-grid" size={16} className="text-primary" />
-              浏览设计系统
+              {t("browseDesignSystem")}
             </Link>
           </div>
 
           {/* Mini stat strip · numbers count up on first paint */}
           <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3">
-            {STATS.map((s, i) => (
-              <div key={s.label} className="flex items-baseline gap-2">
+            {STAT_DEFS.map((s, i) => (
+              <div key={s.labelKey} className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold tracking-tight text-text tabular-nums">
                   {typeof s.value === "number" ? (
                     <CountUp value={s.value} />
@@ -217,8 +194,8 @@ export default function WelcomePage() {
                     s.value
                   )}
                 </span>
-                <span className="text-caption text-text-muted">{s.label}</span>
-                {i < STATS.length - 1 ? (
+                <span className="text-caption text-text-muted">{tStats(s.labelKey)}</span>
+                {i < STAT_DEFS.length - 1 ? (
                   <span aria-hidden className="ml-2 text-text-subtle">
                     ·
                   </span>
@@ -246,41 +223,40 @@ export default function WelcomePage() {
           <div className="mb-8 flex items-end justify-between gap-6">
             <div className="space-y-2">
               <div className="text-caption font-mono uppercase tracking-[0.16em] text-primary">
-                What you get
+                {t("highlightsEyebrow")}
               </div>
               <h2 className="max-w-xl text-2xl font-semibold tracking-tight text-text sm:text-3xl">
-                以平台的方式做 AI 应用 · 不是又一个 Agent demo。
+                {t("highlightsHeading")}
               </h2>
             </div>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            {HIGHLIGHTS.map((h) => (
+            {HIGHLIGHT_KEYS.map((key) => (
               <article
-                key={h.title}
+                key={key}
                 className="group relative overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-soft-sm transition-colors duration-base hover:border-border-strong hover:bg-surface-2"
               >
-                {/* Top hairline accent on hover */}
                 <div
                   aria-hidden
                   className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent opacity-0 transition-opacity duration-base group-hover:opacity-100"
                 />
                 <div className="flex items-center gap-3">
                   <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary-muted text-primary">
-                    <Icon name={h.icon} size={18} />
+                    <Icon name={HIGHLIGHT_ICONS[key]} size={18} />
                   </span>
                   <span className="text-caption font-mono uppercase tracking-wider text-text-subtle">
-                    {h.eyebrow}
+                    {tH(`${key}.eyebrow`)}
                   </span>
                 </div>
                 <h3 className="mt-5 text-lg font-semibold tracking-tight text-text">
-                  {h.title}
+                  {tH(`${key}.title`)}
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                  {h.body}
+                  {tH(`${key}.body`)}
                 </p>
                 <ul className="mt-4 space-y-1.5">
-                  {h.bullets.map((b) => (
+                  {(["b1", "b2", "b3"] as const).map((b) => (
                     <li
                       key={b}
                       className="flex items-start gap-2 text-caption text-text-muted"
@@ -290,7 +266,7 @@ export default function WelcomePage() {
                         size={12}
                         className="mt-1 shrink-0 text-primary"
                       />
-                      <span>{b}</span>
+                      <span>{tH(`${key}.${b}`)}</span>
                     </li>
                   ))}
                 </ul>
@@ -313,10 +289,10 @@ export default function WelcomePage() {
             <div className="relative flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
               <div className="space-y-2">
                 <h3 className="text-2xl font-semibold tracking-tight text-text">
-                  准备好搭你的第一支团队了吗?
+                  {t("ctaHeading")}
                 </h3>
                 <p className="text-sm text-text-muted">
-                  下一步:对 Lead Agent 说一句「帮我招一个 X」,剩下的它来。
+                  {t("ctaBody")}
                 </p>
               </div>
               <button
@@ -324,7 +300,7 @@ export default function WelcomePage() {
                 onClick={handleStart}
                 className="group inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-primary via-primary-glow to-accent px-6 text-base font-semibold text-primary-fg shadow-glow transition-transform duration-base hover:-translate-y-px"
               >
-                进入工作区
+                {t("ctaButton")}
                 <Icon
                   name="arrow-right"
                   size={16}

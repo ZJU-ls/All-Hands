@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from allhands import __version__
+from allhands.api.middleware import LocaleMiddleware
 from allhands.api.routers import health
 from allhands.api.routers.artifacts import router as artifacts_router
 from allhands.api.routers.channels import (  # single-line register: Wave 2 notification-channels
@@ -191,6 +192,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Locale resolution must run before any handler so `i18n.t(...)` reflects
+    # the right cookie/header. Order: Starlette wraps middlewares in reverse
+    # add order, so this stays inside CORS and outside everything else.
+    app.add_middleware(LocaleMiddleware)
 
     app.include_router(health.router, prefix="/api")
     app.include_router(chat_router, prefix="/api")

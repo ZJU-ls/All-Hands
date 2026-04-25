@@ -84,7 +84,9 @@ describe.skipIf(!existsSync(BUILD_ID))("routes smoke (needs `pnpm build`)", () =
       expect(body, `E04/E05 route ${route} served broken shell: ${pat}`).not.toMatch(pat);
     }
     // Sanity: should contain at least our <html> wrapper and the app font vars.
-    expect(body, `route ${route} body too small`).toMatch(/<html[^>]*lang="en"/);
+    // Locale comes from the LocaleProvider (cookie / Accept-Language). Default
+    // is zh-CN; tests don't set headers, so we just assert *some* lang attr.
+    expect(body, `route ${route} body too small`).toMatch(/<html[^>]*lang="[^"]+"/);
   });
 });
 

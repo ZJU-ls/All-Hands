@@ -1,0 +1,161 @@
+{
+  "common": {
+    "loading": "加载中…",
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确认",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "新建",
+    "search": "搜索",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "close": "关闭",
+    "ok": "确定",
+    "yes": "是",
+    "no": "否",
+    "more": "更多",
+    "settings": "设置",
+    "retry": "重试",
+    "refresh": "刷新",
+    "copy": "复制",
+    "copied": "已复制",
+    "comingSoon": "即将上线"
+  },
+  "shell": {
+    "workspaceVersion": "v0 · mvp",
+    "usage": "用量",
+    "tokens": "{used} / {total} tokens",
+    "search": {
+      "placeholder": "跳转到…",
+      "ariaOpen": "打开命令面板",
+      "title": "⌘K 打开命令面板"
+    },
+    "topbar": {
+      "notifications": "通知",
+      "account": "你的账户",
+      "switchToLight": "切换到浅色",
+      "switchToDark": "切换到深色",
+      "themeAriaLight": "切换到浅色主题",
+      "themeAriaDark": "切换到深色主题",
+      "languageTitle": "切换语言",
+      "languageAria": "切换语言"
+    },
+    "sections": {
+      "workspace": "工作区",
+      "team": "团队与能力",
+      "gateway": "模型网关",
+      "runtime": "运行时",
+      "system": "系统"
+    },
+    "menu": {
+      "cockpit": "驾驶舱",
+      "chat": "对话",
+      "tasks": "任务",
+      "conversations": "历史会话",
+      "employees": "员工",
+      "employeeDesign": "员工设计",
+      "skills": "技能",
+      "mcpServers": "MCP 服务器",
+      "providers": "供应商与模型",
+      "triggers": "触发器",
+      "confirmations": "审批",
+      "traces": "追踪",
+      "observatory": "观测中心",
+      "review": "Review",
+      "settings": "设置",
+      "about": "关于"
+    }
+  },
+  "locale": {
+    "zh-CN": "简体中文",
+    "en": "English",
+    "label": "语言"
+  },
+  "welcome": {
+    "skip": "稍后再说 →",
+    "eyebrow": "v0 · Open Source · Self-hosted",
+    "h1Line1": "欢迎来到 allhands。",
+    "h1Line2": "一个 Lead Agent · 搞定一切。",
+    "subtitle": "和你的首席数字员工对话,把「会写代码、查数据、推消息」的一支团队搭起来 —— 不写工作流、不点表单、不加枚举字段。",
+    "getStarted": "开始使用",
+    "browseDesignSystem": "浏览设计系统",
+    "stats": {
+      "layers": "层架构 · 单向依赖",
+      "principles": "条核心设计原则",
+      "tools": "可注册 Tool / Skill"
+    },
+    "highlightsEyebrow": "What you get",
+    "highlightsHeading": "以平台的方式做 AI 应用 · 不是又一个 Agent demo。",
+    "highlights": {
+      "h1": {
+        "eyebrow": "01 · Lead Agent",
+        "title": "对话即操作",
+        "body": "把「管理一支团队」压缩成和一个 Agent 聊天。它替你设计员工、调度任务、读取观测。",
+        "b1": "自然语言创建员工",
+        "b2": "复杂任务一句话委派",
+        "b3": "随时打断、追加上下文"
+      },
+      "h2": {
+        "eyebrow": "02 · 数字员工组织",
+        "title": "员工 / Skill / Tool 都是一等公民",
+        "body": "统一 ReAct runner · 没有 mode 字段 · 加新角色 = 加 Skill / Tool · 不是给数据库加枚举。",
+        "b1": "10 层架构 · 边界清晰",
+        "b2": "Skill 渐进加载",
+        "b3": "MCP 即插即用"
+      },
+      "h3": {
+        "eyebrow": "03 · 护栏与可观测",
+        "title": "默认安全 · 全链路追踪",
+        "body": "WRITE 以上 Tool 自动接 Confirmation Gate · 每一步都进 Trace · 进程重启可 resume。",
+        "b1": "写操作必须确认",
+        "b2": "事件日志 + 投影",
+        "b3": "LangFuse 全链可视化"
+      }
+    },
+    "ctaHeading": "准备好搭你的第一支团队了吗?",
+    "ctaBody": "下一步:对 Lead Agent 说一句「帮我招一个 X」,剩下的它来。",
+    "ctaButton": "进入工作区"
+  },
+  "settings": {
+    "title": "设置",
+    "subtitle": "偏好与工作区配置 · 主题切换在右上角 · 模型/供应商请到「模型网关」",
+    "language": "语言",
+    "languageDescription": "选择界面显示语言;切换后会立即生效",
+    "footnote": "更多偏好项(时区、快捷键覆盖、AP 长循环预算等)即将加入。主题切换仍在右上角 sun/moon 按钮。",
+    "cards": {
+      "providers": {
+        "title": "供应商",
+        "description": "管理 LLM 供应商凭证、基础 URL 与启用开关。",
+        "cta": "前往供应商"
+      },
+      "models": {
+        "title": "模型",
+        "description": "模型列表、默认模型、用量限额与故障回退。",
+        "cta": "前往模型"
+      },
+      "mcp": {
+        "title": "MCP 服务器",
+        "description": "外接工具服务器的注册、连接与同步。",
+        "cta": "前往 MCP"
+      },
+      "notifications": {
+        "title": "通知渠道",
+        "description": "Slack、邮件、Webhook 等推送渠道配置。",
+        "cta": "前往通知"
+      }
+    }
+  },
+  "errors": {
+    "unknown": "未知错误",
+    "network": "网络错误,请检查连接后重试",
+    "notFoundEyebrow": "404 · not found",
+    "notFoundTitle": "页面不存在",
+    "notFoundBody": "这个地址没有对应的页面。",
+    "notFoundCta": "返回对话",
+    "runtimeTitle": "运行错误",
+    "runtimeBadge": "ERROR",
+    "digest": "digest"
+  }
+}

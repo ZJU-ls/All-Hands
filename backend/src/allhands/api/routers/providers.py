@@ -15,6 +15,7 @@ from allhands.core.provider_presets import (
     ProviderKind,
 )
 from allhands.execution.llm_factory import build_llm, probe_endpoint
+from allhands.i18n import t
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -127,7 +128,7 @@ async def update_provider(
         enabled=body.enabled,
     )
     if provider is None:
-        raise HTTPException(status_code=404, detail="Provider not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
     return _to_response(provider)
 
 
@@ -139,7 +140,7 @@ async def set_default_provider(
     svc = await get_provider_service(session)
     p = await svc.get(provider_id)
     if p is None:
-        raise HTTPException(status_code=404, detail="Provider not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
     await svc.set_default(provider_id)
 
 
@@ -161,7 +162,7 @@ async def test_provider(
     svc = await get_provider_service(session)
     provider = await svc.get(provider_id)
     if provider is None:
-        raise HTTPException(status_code=404, detail="Provider not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
 
     url, headers = probe_endpoint(provider)
     try:
