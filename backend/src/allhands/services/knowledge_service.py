@@ -518,6 +518,45 @@ class KnowledgeService:
                 offset=offset,
             )
 
+    async def reindex_document(self, document_id: str) -> Document:
+        """Re-run ingest pipeline for a doc. Wipes its chunks + embedding
+        jobs first, resets state to PENDING, then runs the orchestrator
+        from scratch. Useful for FAILED docs after the user fixed env
+        (e.g. installed pypdf) or for re-chunking after settings changed."""
+        doc = await self.get_document(document_id)
+        async with self._session_maker() as s:
+            from allhands.persistence.knowledge_repos import (
+                SqlChunkRepo,
+                SqlDocumentRepo,
+                SqlEmbeddingJobRepo,
+                SqlKnowledgeBaseRepo,
+            )
+
+            chunk_repo = SqlChunkRepo(s)
+            removed = await chunk_repo.delete_for_document(document_id)
+            jobs = SqlEmbeddingJobRepo(s)
+            # Reset any jobs that exist for this doc (lease/done/failed all
+            # become queued again — but we'll wipe then re-enqueue, so just
+            # delete by setting them all to a dead state via reset).
+            await jobs.reset_failed_for_doc(document_id)
+            doc_repo = SqlDocumentRepo(s)
+            await doc_repo.update_state(
+                document_id,
+                DocumentState.PENDING,
+                error=None,
+                chunk_count=0,
+                failed_chunk_count=0,
+            )
+            # Counters: subtract the removed chunks from the KB total.
+            if removed:
+                await SqlKnowledgeBaseRepo(s).bump_counters(doc.kb_id, docs=0, chunks=-removed)
+            await s.commit()
+
+        abs_path = self._data_dir / "kb" / doc.file_path
+        with contextlib.suppress(Exception):
+            await self._ingest.ingest_document(document_id, file_path_abs=abs_path)
+        return await self.get_document(document_id)
+
     async def soft_delete_document(self, document_id: str) -> None:
         async with self._session_maker() as s:
             await SqlDocumentRepo(s).soft_delete(document_id)

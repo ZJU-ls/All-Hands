@@ -48,6 +48,7 @@ import {
   getKBStats,
   ingestUrl,
   listDocumentChunks,
+  reindexDocument,
   createKB,
   deleteDocument,
   listDocuments,
@@ -317,6 +318,17 @@ export default function KnowledgePage() {
     try {
       await deleteDocument(activeKb.id, d.id);
       setOpenDoc(null);
+      await refreshDocs(activeKb.id);
+      await refreshKbs(activeKb);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleReindexDoc(d: DocumentDto) {
+    if (!activeKb) return;
+    try {
+      await reindexDocument(activeKb.id, d.id);
       await refreshDocs(activeKb.id);
       await refreshKbs(activeKb);
     } catch (e) {
@@ -619,11 +631,10 @@ export default function KnowledgePage() {
                 hasFilter={!!stateFilter}
                 onClickDoc={setOpenDoc}
                 onUpload={() => {
-                  // Trigger the toolbar upload — fastest path is to focus the
-                  // hidden input, but simpler: surface a hint.
                   setError("点右上角「上传」按钮添加文档");
                   setTimeout(() => setError(null), 2500);
                 }}
+                onReindex={handleReindexDoc}
               />
             )}
           </main>
@@ -830,12 +841,14 @@ function DocumentsView({
   hasFilter,
   onClickDoc,
   onUpload,
+  onReindex,
 }: {
   docs: DocumentDto[];
   allDocsCount: number;
   hasFilter: boolean;
   onClickDoc: (d: DocumentDto) => void;
   onUpload: () => void;
+  onReindex: (d: DocumentDto) => Promise<void>;
 }) {
   if (allDocsCount === 0) {
     return (
@@ -907,6 +920,27 @@ function DocumentsView({
               <div className="rounded-md border border-danger/30 bg-danger-soft px-2 py-1 text-[10px] text-danger">
                 {d.state_error}
               </div>
+            )}
+            {d.state === "failed" && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onReindex(d);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void onReindex(d);
+                  }
+                }}
+                className="inline-flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-warning/40 bg-warning-soft px-2 text-[11px] text-warning hover:bg-warning/10 transition duration-fast"
+              >
+                <Icon name="refresh" size={11} />
+                重试入库
+              </span>
             )}
           </button>
         ))}

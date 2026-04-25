@@ -269,6 +269,18 @@ export async function uploadDocument(
   );
 }
 
+export async function reindexDocument(
+  kbId: string,
+  docId: string,
+): Promise<DocumentDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/documents/${docId}/reindex`, {
+      method: "POST",
+    }),
+    "reindexDocument",
+  );
+}
+
 export async function ingestUrl(
   kbId: string,
   url: string,

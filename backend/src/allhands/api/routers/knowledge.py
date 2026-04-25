@@ -426,6 +426,16 @@ async def delete_document(kb_id: str, doc_id: str) -> None:
     await _service().soft_delete_document(doc_id)
 
 
+@router.post("/{kb_id}/documents/{doc_id}/reindex")
+async def reindex_document(kb_id: str, doc_id: str) -> DocOut:
+    """Wipe + re-run ingest. Surfaces the resulting Document state."""
+    try:
+        doc = await _service().reindex_document(doc_id)
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _doc_out(doc)
+
+
 # ----------------------------------------------------------------------
 # Search
 # ----------------------------------------------------------------------
