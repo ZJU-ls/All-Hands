@@ -162,6 +162,7 @@
       "loadFailed": "制品加载失败:{error}",
       "loadingMeta": "读取中…",
       "loadingContent": "读取内容…",
+      "contentMissing": "这份制品的内容文件已不在磁盘上(元数据仍在)· 可能因清理 / 工作区切换造成,可以重新生成或删除元数据。",
       "download": "下载",
       "unsupportedKind": "kind {kind} 暂不支持在面板内预览。",
       "copyFailed": "复制失败:{error}",

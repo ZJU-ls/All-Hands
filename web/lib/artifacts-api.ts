@@ -135,8 +135,27 @@ export async function getArtifact(id: string): Promise<ArtifactDto> {
   return res.json() as Promise<ArtifactDto>;
 }
 
+export class ArtifactContentMissingError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ArtifactContentMissingError";
+    this.status = status;
+  }
+}
+
 export async function getArtifactTextContent(id: string): Promise<string> {
   const res = await fetch(`${BASE}/api/artifacts/${id}/content`);
+  if (res.status === 404) {
+    // Backend distinguishes "no such artifact" from "row exists but file
+    // gone" (ArtifactContentMissing → 404 with descriptive detail). Surface
+    // it as a typed error so the UI can render an empty-state instead of
+    // a red "Failed: 404".
+    throw new ArtifactContentMissingError(
+      "artifact content is missing on disk",
+      404,
+    );
+  }
   if (!res.ok) throw new Error(`getArtifactTextContent failed: ${res.status}`);
   return res.text();
 }
