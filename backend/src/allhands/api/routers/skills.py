@@ -11,13 +11,24 @@ The `/market` subtree surfaces a real GitHub-backed market (default:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from allhands.api.deps import get_skill_service
+from allhands.api.deps import get_session, get_skill_service, get_tool_registry
 from allhands.core import Skill
+from allhands.core.errors import DomainError
+from allhands.persistence.sql_repos import SqlLLMProviderRepo
+from allhands.services import ai_explainer
 from allhands.services.github_market import GithubMarketEntry, GithubMarketPreview
 from allhands.services.skill_service import SkillInstallError, SkillService
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 
@@ -162,6 +173,7 @@ async def update_skill(
     )
     if skill is None:
         raise HTTPException(status_code=404, detail="Skill not found.")
+    ai_explainer.invalidate_skill_explanation(skill_id)
     return _to_response(skill)
 
 
@@ -170,7 +182,52 @@ async def delete_skill(
     skill_id: str,
     svc: SkillService = Depends(get_skill_service),
 ) -> None:
+    ai_explainer.invalidate_skill_explanation(skill_id)
     await svc.delete(skill_id)
+
+
+@router.post("/{skill_id}/explain")
+async def explain_skill(
+    skill_id: str,
+    svc: SkillService = Depends(get_skill_service),
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    """Stream a Markdown "what does this skill do" explanation.
+
+    Single-turn LLM call backed by the workspace default provider/model
+    (no agent loop). The frontend reads the body as a plain text stream
+    (text/event-stream framing not needed — we write raw chunks so the
+    consumer can append straight to a textarea / Markdown renderer).
+    Cached per-skill in-memory; cleared on update / delete / reinstall.
+    """
+    skill = await svc.get(skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found.")
+
+    async def _gen() -> AsyncIterator[bytes]:
+        try:
+            async for chunk in ai_explainer.explain_skill_stream(
+                skill,
+                provider_repo=SqlLLMProviderRepo(session),
+                tool_registry=get_tool_registry(),
+            ):
+                if chunk:
+                    yield chunk.encode("utf-8")
+        except DomainError as exc:
+            yield f"\n\n[错误] {exc}".encode()
+
+    # text/plain so a fetch().getReader() in the browser hands chunks back
+    # as the stream lands. Not text/event-stream because we don't need the
+    # SSE framing (no client-side EventSource — the chip uses fetch()).
+    return StreamingResponse(
+        _gen(),
+        media_type="text/plain; charset=utf-8",
+        # Belt-and-braces against intermediate proxies (nginx · Next dev
+        # rewrite path) that buffer text/* responses by default and turn
+        # this into "20s blank → big drop". Keep both — different proxies
+        # honour different headers.
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
 
 
 class InstallGithubResponse(BaseModel):

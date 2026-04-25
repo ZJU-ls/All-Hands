@@ -15,6 +15,7 @@ import { McpMultiPicker } from "./McpMultiPicker";
 import { PresetRadio } from "./PresetRadio";
 import { DryRunPanel } from "./DryRunPanel";
 import { ModelPicker } from "@/components/model-picker/ModelPicker";
+import { Icon } from "@/components/ui/icon";
 
 /**
  * 设计表单 · 受控 state 全部在这里,**无 mode 字段**(§3.2 红线)。
@@ -61,11 +62,58 @@ export function DesignForm({
   const [maxIterations, setMaxIterations] = useState<number>(initial?.max_iterations ?? 10);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string>("");
+  // AI prompt-composer state. Only "streaming" needs to disable the
+  // textarea (we're writing into it live); "idle" / "done" / "error"
+  // leave it editable so the user can keep iterating.
+  // P04 三态:loading 走 streaming 分支 · empty 不适用(prompt 是单条文本)·
+  // error 走 composeError + 错误提示。
+  const [composeState, setComposeState] = useState<"idle" | "loading" | "error">(
+    "idle",
+  );
+  const [composeError, setComposeError] = useState<string | null>(null);
 
   const canSave = name.trim().length > 0 && !busy;
 
   function toggle(list: string[], id: string, setter: (v: string[]) => void) {
     setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  }
+
+  async function composePrompt() {
+    setComposeState("loading");
+    setComposeError(null);
+    setSystemPrompt("");
+    try {
+      const res = await fetch("/api/employees/compose-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          description,
+          skill_ids: skillIds,
+          mcp_server_ids: mcpIds,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`${res.status} ${body || res.statusText}`);
+      }
+      if (!res.body) throw new Error("生成失败:响应没有 body");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let acc = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setSystemPrompt(acc);
+      }
+      acc += decoder.decode();
+      setSystemPrompt(acc);
+      setComposeState("idle");
+    } catch (e) {
+      setComposeError(e instanceof Error ? e.message : String(e));
+      setComposeState("error");
+    }
   }
 
   useEffect(() => {
@@ -221,14 +269,40 @@ export function DesignForm({
       </Section>
 
       <Section title="系统提示词片段">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <p className="text-[11px] text-text-muted">
+            员工性格 / 风格 / 禁止事项 — 也可以让 AI 根据上方的名字 / 描述 / 技能 / MCP 起草一份
+          </p>
+          <button
+            type="button"
+            onClick={() => void composePrompt()}
+            disabled={composeState === "loading"}
+            data-testid="compose-prompt-trigger"
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-primary/30 bg-primary/5 text-[11px] font-medium text-primary hover:bg-primary/10 hover:border-primary/50 disabled:opacity-50 transition-colors duration-fast shrink-0"
+            title="根据当前表单内容,用 AI 起草一份系统提示词(会覆盖现有内容)"
+          >
+            <Icon
+              name={composeState === "loading" ? "loader" : "sparkles"}
+              size={11}
+              className={composeState === "loading" ? "animate-spin-slow" : ""}
+            />
+            {composeState === "loading" ? "生成中…" : "AI 生成"}
+          </button>
+        </div>
         <textarea
           data-testid="field-system-prompt"
           value={systemPrompt}
           onChange={(e) => setSystemPrompt(e.target.value)}
-          rows={6}
+          rows={8}
           placeholder="员工性格 / 风格 / 禁止事项"
-          className="w-full rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text placeholder-text-subtle focus:outline-none focus:border-primary transition-colors duration-base"
+          disabled={composeState === "loading"}
+          className="w-full rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-70 transition-colors duration-base"
         />
+        {composeState === "error" && composeError && (
+          <p className="mt-1.5 text-[11px] text-danger" data-testid="compose-prompt-error">
+            生成失败:{composeError}
+          </p>
+        )}
       </Section>
 
       <Section
