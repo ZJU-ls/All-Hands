@@ -326,6 +326,7 @@ class ObservabilityConfigRow(Base):
     bootstrap_error: Mapped[str | None] = mapped_column(String, nullable=True)
     bootstrapped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
+    auto_title_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class SkillRuntimeRow(Base):

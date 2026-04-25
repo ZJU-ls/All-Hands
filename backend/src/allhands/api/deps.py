@@ -168,6 +168,9 @@ async def get_chat_service(
         # ASSISTANT / TURN_ABORTED events and build_llm_context reads
         # from it. Unset → fall back to pre-ADR-0017 MessageRepo path.
         event_repo=SqlConversationEventRepo(session),
+        # System-config singleton (auto_title_enabled etc). Optional —
+        # when omitted the service skips LLM-summarised titles.
+        observability_config_repo=SqlObservabilityConfigRepo(session),
     )
 
 

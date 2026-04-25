@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from allhands.api.deps import get_observatory_service
 
@@ -46,7 +46,31 @@ async def get_status(
         "bootstrap_error": cfg.bootstrap_error,
         "host": cfg.host,
         "observability_enabled": cfg.observability_enabled,
+        "auto_title_enabled": cfg.auto_title_enabled,
         "bootstrapped_at": cfg.bootstrapped_at.isoformat() if cfg.bootstrapped_at else None,
+    }
+
+
+@router.patch("/config")
+async def patch_config(
+    payload: dict[str, object] = Body(...),
+    svc: ObservatoryService = Depends(get_observatory_service),
+) -> dict[str, object]:
+    """Mutate user-toggleable system flags (currently `auto_title_enabled`).
+
+    Kept on the observatory router because the singleton row that backs it
+    also stores observability bootstrap state; once a dedicated
+    `system_config` table lands this endpoint moves with it.
+    """
+    cfg = await svc.update_flags(
+        auto_title_enabled=(
+            bool(payload["auto_title_enabled"]) if "auto_title_enabled" in payload else None
+        ),
+    )
+    return {
+        "auto_title_enabled": cfg.auto_title_enabled,
+        "bootstrap_status": cfg.bootstrap_status.value,
+        "observability_enabled": cfg.observability_enabled,
     }
 
 

@@ -171,8 +171,13 @@ class ObservatoryService:
         until: datetime | None = None,
         limit: int = 50,
     ) -> list[TraceSummary]:
+        # Pull a generous window of events; each run produces ≥2 (started +
+        # completed/failed), and we collapse them into one TraceSummary keyed
+        # by ``payload.run_id`` so the listing is run-addressable rather than
+        # event-addressable. Without this, click-through to /runs/{run_id}
+        # 404s because event ids (`evt_…`) are not run ids.
         events = await self._events.list_recent(
-            limit=max(limit * 4, limit),
+            limit=max(limit * 8, 200),
             workspace_id=self._ws,
             kind_prefixes=list(_RUN_KINDS),
             since=since,
@@ -180,37 +185,73 @@ class ObservatoryService:
         employees = await self._employees.list_all()
         name_by_id = {e.id: e.name for e in employees}
 
-        out: list[TraceSummary] = []
+        # Group by run_id; merge started + terminator into a single row.
+        grouped: dict[str, dict[str, object]] = {}
         for e in events:
             if until is not None and e.published_at > until:
                 continue
-            eid = e.payload.get("employee_id") or e.actor
+            run_id_raw = e.payload.get("run_id")
+            # Production runs always set ``payload.run_id`` (chat_service.py
+            # mints one per send_message). Legacy fixtures and test seeds may
+            # omit it; we fall back to the event id so historical rows still
+            # appear in the listing — they remain non-clickable but visible.
+            run_id = run_id_raw if isinstance(run_id_raw, str) and run_id_raw else e.id
+            slot = grouped.setdefault(run_id, {})
+            emp = e.payload.get("employee_id") or e.actor
+            if isinstance(emp, str) and "employee_id" not in slot:
+                slot["employee_id"] = emp
+            is_terminator = e.kind.endswith((".completed", ".failed", ".finished"))
+            if e.kind.endswith(".started") and "started_at" not in slot:
+                slot["started_at"] = e.published_at
+            elif is_terminator:
+                slot["terminator_kind"] = e.kind
+                duration = e.payload.get("duration_s")
+                if isinstance(duration, (int, float)):
+                    slot["duration_s"] = float(duration)
+                tokens = e.payload.get("tokens")
+                if isinstance(tokens, int):
+                    slot["tokens"] = tokens
+                elif isinstance(tokens, dict):
+                    total = tokens.get("total")
+                    if isinstance(total, int):
+                        slot["tokens"] = total
+                slot.setdefault("started_at", e.published_at)
+            else:
+                slot.setdefault("started_at", e.published_at)
+
+        out: list[TraceSummary] = []
+        for run_id, slot in grouped.items():
+            eid_obj = slot.get("employee_id")
+            eid: str | None = eid_obj if isinstance(eid_obj, str) else None
             if employee_id and eid != employee_id:
                 continue
-            trace_status = "failed" if e.kind.endswith(".failed") else "ok"
+            trace_status = "failed" if slot.get("terminator_kind") == "run.failed" else "ok"
             if status and trace_status != status:
                 continue
-            trace_id_raw = e.payload.get("trace_id") or e.id
-            trace_id = str(trace_id_raw)
-            duration = e.payload.get("duration_s")
-            tokens = e.payload.get("tokens")
+            started_at_obj = slot.get("started_at")
+            if not isinstance(started_at_obj, datetime):
+                continue
+            duration_obj = slot.get("duration_s")
+            tokens_obj = slot.get("tokens")
             out.append(
                 TraceSummary(
-                    trace_id=trace_id,
-                    employee_id=eid if isinstance(eid, str) else None,
-                    employee_name=name_by_id.get(eid) if isinstance(eid, str) else None,
+                    trace_id=run_id,
+                    employee_id=eid,
+                    employee_name=name_by_id.get(eid) if eid else None,
                     status=trace_status,
-                    duration_s=float(duration) if isinstance(duration, (int, float)) else None,
-                    tokens=int(tokens) if isinstance(tokens, int) else 0,
-                    started_at=e.published_at,
+                    duration_s=float(duration_obj)
+                    if isinstance(duration_obj, (int, float))
+                    else None,
+                    tokens=int(tokens_obj) if isinstance(tokens_obj, int) else 0,
+                    started_at=started_at_obj,
                 )
             )
-            if len(out) >= limit:
-                break
-        return out
+
+        out.sort(key=lambda t: t.started_at, reverse=True)
+        return out[:limit]
 
     async def get_trace(self, trace_id: str) -> TraceSummary | None:
-        traces = await self.list_traces(limit=500)
+        traces = await self.list_traces(limit=1000)
         for t in traces:
             if t.trace_id == trace_id:
                 return t
@@ -338,6 +379,23 @@ class ObservatoryService:
         matched = [e for e in recent if e.payload.get("run_id") == run_id]
         matched.sort(key=lambda e: e.published_at)
         return matched
+
+    async def update_flags(
+        self,
+        *,
+        auto_title_enabled: bool | None = None,
+    ) -> ObservabilityConfig:
+        """Patch toggleable system flags on the singleton config row.
+
+        Currently only ``auto_title_enabled`` is wired through; future
+        platform-wide booleans land on this method so the REST `PATCH
+        /api/observatory/config` body stays append-only.
+        """
+        cfg = await self._config.load()
+        if auto_title_enabled is not None:
+            cfg = cfg.model_copy(update={"auto_title_enabled": auto_title_enabled})
+            cfg = await self._config.save(cfg)
+        return cfg
 
     async def bootstrap_now(self) -> ObservabilityConfig:
         """Idempotent status refresh (spec § 7 BOOTSTRAP semantics).
