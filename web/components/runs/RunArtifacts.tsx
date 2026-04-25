@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
 import type { ArtifactSummaryDto } from "@/lib/observatory-api";
+import { formatBytes } from "@/lib/format";
 
 const KIND_BADGE: Record<string, { label: string; cls: string }> = {
   markdown: { label: "MD", cls: "bg-primary-muted text-primary" },
@@ -13,12 +14,6 @@ const KIND_BADGE: Record<string, { label: string; cls: string }> = {
   data: { label: "JSON", cls: "bg-surface-2 text-text-muted" },
   mermaid: { label: "MMD", cls: "bg-success-soft text-success" },
 };
-
-function formatBytes(b: number): string {
-  if (b < 1024) return `${b}B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)}KB`;
-  return `${(b / 1024 / 1024).toFixed(1)}MB`;
-}
 
 export function RunArtifacts({ artifacts }: { artifacts: ArtifactSummaryDto[] }) {
   const t = useTranslations("runs.artifacts");

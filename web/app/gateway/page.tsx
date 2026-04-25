@@ -65,6 +65,10 @@ const EMPTY_MODEL_FORM = {
   name: "",
   display_name: "",
   context_window: 0,
+  // 2026-04-25: optional advanced caps. 0 in form state = "未设置" (sent as
+  // null to the backend); user explicitly opens 高级设置 to override.
+  max_input_tokens: 0,
+  max_output_tokens: 0,
 };
 
 export default function GatewayPage() {
@@ -415,10 +419,20 @@ function GatewayPageInner() {
     if (!modelFormFor) return;
     setSaving(true);
     try {
+      // 0 in form state = "未设置" → send null so backend keeps the column
+      // unset and downstream falls back to "use model default".
+      const payload: Record<string, unknown> = {
+        provider_id: modelFormFor.id,
+        name: modelForm.name,
+        display_name: modelForm.display_name,
+        context_window: modelForm.context_window,
+        max_input_tokens: modelForm.max_input_tokens > 0 ? modelForm.max_input_tokens : null,
+        max_output_tokens: modelForm.max_output_tokens > 0 ? modelForm.max_output_tokens : null,
+      };
       await fetch("/api/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider_id: modelFormFor.id, ...modelForm }),
+        body: JSON.stringify(payload),
       });
       setModelFormFor(null);
       setModelForm(EMPTY_MODEL_FORM);
@@ -432,14 +446,19 @@ function GatewayPageInner() {
     if (!editingModelId) return;
     setSaving(true);
     try {
-      // PATCH 只发可变字段(display_name + context_window)。name(API 名)
-      // 故意不允许 in-place 改 — 改 API 名等同换模型,应该新建 + 删旧。
+      // PATCH 只发可变字段(display_name + context_window + 两个 cap)。
+      // name(API 名)故意不允许 in-place 改 — 改 API 名等同换模型,应
+      // 该新建 + 删旧。0 → null 语义见 handleCreateModel 注释。
       await fetch(`/api/models/${editingModelId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           display_name: modelForm.display_name,
           context_window: modelForm.context_window,
+          max_input_tokens:
+            modelForm.max_input_tokens > 0 ? modelForm.max_input_tokens : null,
+          max_output_tokens:
+            modelForm.max_output_tokens > 0 ? modelForm.max_output_tokens : null,
         }),
       });
       setEditingModelId(null);
@@ -591,6 +610,8 @@ function GatewayPageInner() {
                           name: m.name,
                           display_name: m.display_name,
                           context_window: m.context_window,
+                          max_input_tokens: m.max_input_tokens ?? 0,
+                          max_output_tokens: m.max_output_tokens ?? 0,
                         });
                       }}
                     />
@@ -1198,7 +1219,20 @@ function ModelFormDialog({
           onChange={(v) => onChange({ ...form, display_name: v })}
         />
       </FormSection>
-      <FormSection label={t("sectionCapability")}>
+      {/* 2026-04-25: 注册时只必填 name + display_name。三个 token cap 收进
+          折叠的"高级设置"区,默认收起。也对 Lead Agent 友好 — 它通过
+          update_model meta tool 同样可以触达。顶部的 RotatingTip 会循环
+          提示用户:caps 是可选的、高级用户才需要、Lead Agent 也能配。 */}
+      <RotatingTip messages={t.raw("modelFormTips") as string[]} />
+      <Collapsible
+        label={t("sectionAdvanced")}
+        defaultOpen={
+          editing &&
+          (form.context_window > 0 ||
+            form.max_input_tokens > 0 ||
+            form.max_output_tokens > 0)
+        }
+      >
         <LabeledInput
           label={t("fieldContextWindow")}
           placeholder="128000"
@@ -1207,7 +1241,23 @@ function ModelFormDialog({
           icon="database"
           hint={t("fieldContextWindowHint")}
         />
-      </FormSection>
+        <LabeledInput
+          label={t("fieldMaxInputTokens")}
+          placeholder={t("fieldMaxInputTokensPlaceholder")}
+          value={String(form.max_input_tokens || "")}
+          onChange={(v) => onChange({ ...form, max_input_tokens: Number(v) || 0 })}
+          icon="arrow-down"
+          hint={t("fieldMaxInputTokensHint")}
+        />
+        <LabeledInput
+          label={t("fieldMaxOutputTokens")}
+          placeholder={t("fieldMaxOutputTokensPlaceholder")}
+          value={String(form.max_output_tokens || "")}
+          onChange={(v) => onChange({ ...form, max_output_tokens: Number(v) || 0 })}
+          icon="arrow-up"
+          hint={t("fieldMaxOutputTokensHint")}
+        />
+      </Collapsible>
       <DialogFooter
         saveLabel={saving ? t("saving") : t("save")}
         saveDisabled={saving || !form.name}
@@ -1285,13 +1335,79 @@ function Modal({
             type="button"
             onClick={onClose}
             aria-label={t("modalClose")}
-            className="shrink-0 grid h-7 w-7 place-items-center rounded-md text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast"
+            className="shrink-0 grid h-7 w-7 place-items-center rounded-md text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             <Icon name="x" size={14} />
           </button>
         </header>
         <div className="px-5 pb-5 space-y-4">{children}</div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 折叠区(2026-04-25):用于"高级设置"。token cap 这类高级字段默认收起,
+ * 普通用户注册模型只看到 name + display_name 两栏 + 一个折叠提示;编辑
+ * 时若已填过则自动展开。点头部即可切换。轻量自管 state,无需 deps。
+ */
+function Collapsible({
+  label,
+  defaultOpen = false,
+  children,
+}: {
+  label: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="space-y-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 group"
+      >
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-subtle group-hover:text-text-muted transition">
+          {label}
+        </span>
+        <span
+          aria-hidden="true"
+          className="flex-1 h-px bg-gradient-to-r from-border to-transparent"
+        />
+        <Icon
+          name={open ? "chevron-up" : "chevron-down"}
+          size={12}
+          className="text-text-subtle group-hover:text-text-muted transition"
+        />
+      </button>
+      {open && <div className="space-y-2.5">{children}</div>}
+    </section>
+  );
+}
+
+/**
+ * 滚动 tip(2026-04-25):一行高的"小贴士"区,固定间隔轮换文案。把"高级
+ * 设置可手动配 / Lead Agent 也能配 / 不填就用模型默认"这类辅助知识
+ * 塞进去,让最低门槛(只填 name)的注册流仍然能把进阶能力露出来。
+ */
+function RotatingTip({ messages }: { messages: string[] }) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (messages.length <= 1) return;
+    const id = setInterval(() => setIdx((i) => (i + 1) % messages.length), 4500);
+    return () => clearInterval(id);
+  }, [messages.length]);
+  if (messages.length === 0) return null;
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-[11.5px] leading-snug text-text-muted"
+    >
+      <Icon name="sparkles" size={12} className="mt-0.5 shrink-0 text-primary" />
+      <span key={idx} className="animate-fade-in">
+        {messages[idx]}
+      </span>
     </div>
   );
 }

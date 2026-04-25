@@ -90,6 +90,8 @@ def _build_model(
     model_ref: str,
     provider: Any = None,
     overrides: Any = None,
+    *,
+    max_output_tokens: int | None = None,
 ) -> Any:
     """Bridge to the existing model factory in runner.py.
 
@@ -98,7 +100,7 @@ def _build_model(
     """
     from allhands.execution.runner import _build_model as _impl
 
-    return _impl(model_ref, provider, overrides)
+    return _impl(model_ref, provider, overrides, max_output_tokens=max_output_tokens)
 
 
 def _split_content_blocks(content: Any) -> tuple[str, str]:
@@ -212,6 +214,7 @@ class AgentLoop:
         plan_repo: Any = None,
         conversation_id: str = "",
         run_id: str | None = None,
+        max_output_tokens: int | None = None,
         **_unused: Any,
     ) -> None:
         self._employee = employee
@@ -235,6 +238,13 @@ class AgentLoop:
         # the audit trail and /artifacts page filters can answer "what came
         # out of run X".
         self._run_id = run_id
+        # 2026-04-25 · per-model output cap. None = "use model default" (no
+        # max_tokens forwarded). When ChatService resolves a per-model cap,
+        # it threads it here and we bake it into the LLM ctor below so it
+        # rides on every request payload (Anthropic ChatAnthropic.max_tokens
+        # is also ctor-time only — bind() doesn't propagate, mirroring the
+        # `thinking` field handling).
+        self._max_output_tokens = max_output_tokens
         # Deferred suspend primitive used by _permission_check to gate
         # WRITE+ / requires_confirmation tool execution. None = legacy
         # auto-approve behaviour (matches old AutoApproveGate path);
@@ -259,7 +269,12 @@ class AgentLoop:
         last event is always a LoopExited."""
         try:
             effective_model_ref = self._model_ref_override or self._employee.model_ref
-            base_model = _build_model(effective_model_ref, self._provider, overrides)
+            base_model = _build_model(
+                effective_model_ref,
+                self._provider,
+                overrides,
+                max_output_tokens=self._max_output_tokens,
+            )
             lc_messages = self._build_lc_messages(messages, overrides)
 
             iteration = 0

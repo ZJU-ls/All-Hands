@@ -90,6 +90,8 @@ export type ArtifactListFilter = {
   createdBefore?: string;
 };
 
+export type ContributorEntry = { key: string; count: number };
+
 export type ArtifactStatsDto = {
   total: number;
   pinned: number;
@@ -98,6 +100,10 @@ export type ArtifactStatsDto = {
   by_kind: Record<string, number>;
   largest_kind: string | null;
   latest_updated_at: string | null;
+  /** 14-day daily creation histogram, oldest → newest. */
+  daily_counts: number[];
+  /** Top 5 employees by artifact count. */
+  top_employees: ContributorEntry[];
 };
 
 export async function getArtifactStats(): Promise<ArtifactStatsDto> {
@@ -135,8 +141,27 @@ export async function getArtifact(id: string): Promise<ArtifactDto> {
   return res.json() as Promise<ArtifactDto>;
 }
 
+export class ArtifactContentMissingError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ArtifactContentMissingError";
+    this.status = status;
+  }
+}
+
 export async function getArtifactTextContent(id: string): Promise<string> {
   const res = await fetch(`${BASE}/api/artifacts/${id}/content`);
+  if (res.status === 404) {
+    // Backend distinguishes "no such artifact" from "row exists but file
+    // gone" (ArtifactContentMissing → 404 with descriptive detail). Surface
+    // it as a typed error so the UI can render an empty-state instead of
+    // a red "Failed: 404".
+    throw new ArtifactContentMissingError(
+      "artifact content is missing on disk",
+      404,
+    );
+  }
   if (!res.ok) throw new Error(`getArtifactTextContent failed: ${res.status}`);
   return res.text();
 }
@@ -203,6 +228,32 @@ export async function updateArtifact(
     throw new Error(`updateArtifact failed: ${res.status} ${detail}`);
   }
   return res.json() as Promise<ArtifactDto>;
+}
+
+/** Pin / unpin · REST mirror of the artifact_pin meta tool. */
+export async function pinArtifact(
+  id: string,
+  pinned: boolean,
+): Promise<ArtifactDto> {
+  const res = await fetch(`${BASE}/api/artifacts/${id}/pin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pinned }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`pinArtifact failed: ${res.status} ${detail}`);
+  }
+  return res.json() as Promise<ArtifactDto>;
+}
+
+/** Soft-delete · REST mirror of the artifact_delete meta tool. */
+export async function deleteArtifact(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/artifacts/${id}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    const detail = await res.text();
+    throw new Error(`deleteArtifact failed: ${res.status} ${detail}`);
+  }
 }
 
 /**

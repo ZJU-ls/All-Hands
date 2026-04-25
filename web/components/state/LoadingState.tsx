@@ -18,14 +18,21 @@ export function LoadingState({
   title,
   description,
   variant = "dots",
+  lines,
 }: {
   title?: string;
   description?: string;
   variant?: "dots" | "skeleton";
+  /** When variant="skeleton", number of shimmer rows. Default 3. Ignored for "dots". */
+  lines?: number;
 }) {
   const t = useTranslations("state.loading");
   const resolvedTitle = title ?? t("defaultTitle");
   if (variant === "skeleton") {
+    // Pseudo-randomised but deterministic widths so consecutive renders
+    // (e.g. SSR vs hydration) match. Cycles through 60/40/75/55/68/45.
+    const widths = ["60%", "40%", "75%", "55%", "68%", "45%"];
+    const rows = Math.max(1, Math.min(8, lines ?? 3));
     return (
       <div
         role="status"
@@ -35,9 +42,9 @@ export function LoadingState({
         className="rounded-xl border border-border bg-surface px-4 py-4 space-y-2.5 shadow-soft-sm"
       >
         <span className="sr-only">{resolvedTitle}</span>
-        <ShimmerBar width="60%" />
-        <ShimmerBar width="40%" />
-        <ShimmerBar width="75%" />
+        {Array.from({ length: rows }, (_, i) => (
+          <ShimmerBar key={i} width={widths[i % widths.length] ?? "60%"} />
+        ))}
       </div>
     );
   }

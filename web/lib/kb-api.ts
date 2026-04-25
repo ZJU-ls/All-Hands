@@ -42,6 +42,43 @@ export interface DocumentDto {
   updated_at: string;
 }
 
+export interface AskSource {
+  n: number;
+  chunk_id: number;
+  doc_id: string;
+  section_path: string | null;
+  page: number | null;
+  citation: string;
+  text: string;
+  score: number;
+}
+
+export interface AskResponse {
+  answer: string;
+  sources: AskSource[];
+  used_model: string | null;
+  latency_ms: number;
+}
+
+export async function askKB(
+  kbId: string,
+  question: string,
+  opts: { topK?: number; modelRef?: string } = {},
+): Promise<AskResponse> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/ask`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        question,
+        top_k: opts.topK ?? 5,
+        model_ref: opts.modelRef,
+      }),
+    }),
+    "askKB",
+  );
+}
+
 export interface DiagnoseDto {
   bm25_only: ScoredChunkDto[];
   vector_only: ScoredChunkDto[];
@@ -229,6 +266,33 @@ export async function uploadDocument(
   return check(
     await fetch(`${BASE}/api/kb/${kbId}/documents`, { method: "POST", body: fd }),
     "uploadDocument",
+  );
+}
+
+export async function reindexDocument(
+  kbId: string,
+  docId: string,
+): Promise<DocumentDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/documents/${docId}/reindex`, {
+      method: "POST",
+    }),
+    "reindexDocument",
+  );
+}
+
+export async function ingestUrl(
+  kbId: string,
+  url: string,
+  opts: { title?: string; tags?: string[] } = {},
+): Promise<DocumentDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/ingest-url`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url, title: opts.title, tags: opts.tags }),
+    }),
+    "ingestUrl",
   );
 }
 

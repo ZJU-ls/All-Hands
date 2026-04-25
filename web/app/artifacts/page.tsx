@@ -8,18 +8,21 @@
  * the list.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Select } from "@/components/ui/Select";
-import { LoadingState, ErrorState } from "@/components/state";
+import { ErrorState } from "@/components/state";
 import { ArtifactList } from "@/components/artifacts/ArtifactList";
+import { ArtifactGrid } from "@/components/artifacts/ArtifactGrid";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import {
   artifactStreamUrl,
+  deleteArtifact,
   getArtifactStats,
   listArtifacts,
+  pinArtifact,
   type ArtifactDto,
   type ArtifactKind,
   type ArtifactSort,
@@ -83,6 +86,17 @@ export default function ArtifactsGlobalPage() {
   const [q, setQ] = useState("");
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>("all");
+  // localStorage-backed view mode · sticks across page visits so the user's
+  // preferred density stays put. SSR-safe: lazy initial.
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    if (typeof window === "undefined") return "list";
+    return (localStorage.getItem("allhands.artifacts.viewMode") as "list" | "grid" | null) ?? "list";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("allhands.artifacts.viewMode", viewMode);
+    }
+  }, [viewMode]);
 
   const createdAfter = useMemo(() => {
     if (dateRange === "all") return undefined;
@@ -99,6 +113,118 @@ export default function ArtifactsGlobalPage() {
     setPinnedOnly(false);
     setDateRange("all");
   }
+
+  // Bulk-selection set · disjoint from `selectedId` (the singular detail
+  // pane focus). Cmd/Ctrl+click on a list/grid item toggles its membership.
+  // Once non-empty, the floating BulkActionBar appears with pin/delete.
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  function toggleBulk(id: string) {
+    setBulkSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearBulk() {
+    setBulkSelected(new Set());
+  }
+
+  // Resolve "are all currently bulk-selected items pinned?" to decide the
+  // pin/unpin label. If mixed, default to pin (most common intent).
+  const allPinned =
+    bulkSelected.size > 0 &&
+    items.filter((a) => bulkSelected.has(a.id)).every((a) => a.pinned);
+
+  async function bulkPin() {
+    if (bulkSelected.size === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const targetPinned = !allPinned;
+      // Sequential to avoid hammering the backend; the SSE stream pushes
+      // the resulting `artifact_changed` frames back so the list rerenders
+      // naturally without a manual refetch.
+      for (const id of bulkSelected) {
+        await pinArtifact(id, targetPinned);
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+  async function bulkDelete() {
+    if (bulkSelected.size === 0 || bulkBusy) return;
+    if (typeof window !== "undefined") {
+      if (!window.confirm(`Delete ${bulkSelected.size} artifact(s)? This is reversible (soft-delete).`)) return;
+    }
+    setBulkBusy(true);
+    try {
+      for (const id of bulkSelected) {
+        await deleteArtifact(id);
+      }
+      // SSE refresh handles the list; clear the local selection set.
+      clearBulk();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  // Keyboard navigation · j/k (or ↓/↑) move selection through the visible
+  // list, Enter is a no-op since selecting already opens detail (the right
+  // pane subscribes to selectedId), / focuses the search input, Esc clears
+  // search when focused or otherwise drops selection. Same shortcuts that
+  // power Linear's issue list / GitHub's PR list — keyboard-first users
+  // get full coverage without touching the mouse.
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    function isTypingTarget(el: EventTarget | null): boolean {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        el.isContentEditable
+      );
+    }
+    function onKey(e: KeyboardEvent) {
+      // `/` focuses search · always honored, even from inside other inputs
+      // would be too invasive · skip when already typing somewhere.
+      if (e.key === "/" && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      // Esc · if search is focused, blur + clear; else drop selection.
+      if (e.key === "Escape") {
+        if (document.activeElement === searchInputRef.current) {
+          if (q) setQ("");
+          else searchInputRef.current?.blur();
+        } else if (selectedId) {
+          setSelectedId(null);
+        }
+        return;
+      }
+      // j/k or arrow up/down · skip when typing.
+      if (isTypingTarget(e.target)) return;
+      const isDown = e.key === "j" || e.key === "ArrowDown";
+      const isUp = e.key === "k" || e.key === "ArrowUp";
+      if (!isDown && !isUp) return;
+      if (items.length === 0) return;
+      e.preventDefault();
+      const currentIdx = selectedId
+        ? items.findIndex((a) => a.id === selectedId)
+        : -1;
+      const nextIdx = isDown
+        ? Math.min(items.length - 1, currentIdx + 1)
+        : Math.max(0, currentIdx - 1);
+      const next = items[nextIdx === -1 ? 0 : nextIdx];
+      if (next) setSelectedId(next.id);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [items, selectedId, q]);
 
   // Refetch list when filters move; throttled-by-React-batch is fine here.
   useEffect(() => {
@@ -183,7 +309,12 @@ export default function ArtifactsGlobalPage() {
           onPickKind={(k) => setKind(k === kind ? "" : k)}
         />
 
-        {/* Filter row · search + Select + range pills + pinned toggle + count */}
+        {/* Sticky toolbar · filter row + active-chip strip in one band that
+            sticks at top while scrolling so search/filters stay reachable
+            after the hero scrolls away. The `-mx-6 px-6` extends the band
+            edge-to-edge under the page padding; backdrop-blur softens the
+            content scrolling underneath. z-10 keeps it above chart fills. */}
+        <div className="sticky top-0 z-10 -mx-6 border-y border-border bg-bg/80 px-6 py-2 backdrop-blur-md">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[240px]">
             <Icon
@@ -192,11 +323,20 @@ export default function ArtifactsGlobalPage() {
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
             />
             <input
+              ref={searchInputRef}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t("search")}
-              className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+              className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-12 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
             />
+            {!q ? (
+              <kbd
+                aria-hidden
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-text-subtle"
+              >
+                {t("kbd.search")}
+              </kbd>
+            ) : null}
             {q ? (
               <button
                 type="button"
@@ -244,37 +384,103 @@ export default function ArtifactsGlobalPage() {
             {t("filters.pinnedOnly")}
           </button>
 
-          <span className="ml-auto font-mono text-[11px] text-text-subtle">
+          {/* List / grid view toggle · localStorage-backed so the user's
+              density preference sticks across visits. */}
+          <div className="ml-auto inline-flex h-9 items-center rounded-xl border border-border bg-surface p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              aria-pressed={viewMode === "list"}
+              aria-label={t("view.listAria")}
+              title={t("view.list")}
+              className={`inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[12px] transition-colors duration-fast ${
+                viewMode === "list"
+                  ? "bg-primary-muted text-primary"
+                  : "text-text-muted hover:text-text"
+              }`}
+            >
+              <Icon name="list" size={12} />
+              <span className="hidden md:inline">{t("view.list")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              aria-pressed={viewMode === "grid"}
+              aria-label={t("view.gridAria")}
+              title={t("view.grid")}
+              className={`inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[12px] transition-colors duration-fast ${
+                viewMode === "grid"
+                  ? "bg-primary-muted text-primary"
+                  : "text-text-muted hover:text-text"
+              }`}
+            >
+              <Icon name="layout-grid" size={12} />
+              <span className="hidden md:inline">{t("view.grid")}</span>
+            </button>
+          </div>
+
+          <span className="hidden font-mono text-[11px] text-text-subtle md:inline">
+            {t("kbd.navHint")}
+          </span>
+          <span className="font-mono text-[11px] text-text-subtle">
             {t("count", { n: items.length })}
           </span>
         </div>
 
         {/* Active filter chip strip · removable individual chips + clear-all
-            button. Only renders when at least one filter is active. */}
+            button. Only renders when at least one filter is active. Lives
+            inside the sticky toolbar so chips stay glued under the filter
+            row even after scrolling. */}
         {hasActiveFilters ? (
-          <ActiveFilterChips
-            t={t}
-            q={q}
-            kind={kind}
-            pinnedOnly={pinnedOnly}
-            dateRange={dateRange}
-            onClearQ={() => setQ("")}
-            onClearKind={() => setKind("")}
-            onClearPinned={() => setPinnedOnly(false)}
-            onClearDate={() => setDateRange("all")}
-            onClearAll={clearAllFilters}
-          />
+          <div className="mt-2">
+            <ActiveFilterChips
+              t={t}
+              q={q}
+              kind={kind}
+              pinnedOnly={pinnedOnly}
+              dateRange={dateRange}
+              onClearQ={() => setQ("")}
+              onClearKind={() => setKind("")}
+              onClearPinned={() => setPinnedOnly(false)}
+              onClearDate={() => setDateRange("all")}
+              onClearAll={clearAllFilters}
+            />
+          </div>
         ) : null}
+        </div>
 
-        {/* List + detail · stays as 4/8 split on lg */}
+        {/* List + detail · proportions vary by view mode:
+              · list  · sidebar 4/12  · detail 8/12   (dense)
+              · grid  · gallery 8/12  · detail 4/12   (gallery-first)
+                  if nothing selected, gallery takes all 12 cols */}
         <div className="grid min-h-[60vh] flex-1 grid-cols-12 gap-4">
-          <aside className="col-span-12 overflow-y-auto rounded-xl border border-border bg-surface lg:col-span-4 xl:col-span-3">
+          <aside
+            className={
+              viewMode === "list"
+                ? "col-span-12 overflow-y-auto rounded-xl border border-border bg-surface lg:col-span-4 xl:col-span-3"
+                : selectedId
+                ? "col-span-12 overflow-y-auto rounded-xl border border-border bg-surface lg:col-span-8"
+                : "col-span-12 overflow-y-auto rounded-xl border border-border bg-surface"
+            }
+          >
             {state === "loading" ? (
-              <LoadingState title={t("title")} description={t("subtitle")} />
+              // Skeleton matches the view mode so the layout doesn't pop
+              // when results land — list rows for list view, card grid
+              // for grid view. Reference: Vercel deployments / GitHub
+              // Files use shape-of-final-content skeletons.
+              <SkeletonList viewMode={viewMode} />
             ) : state === "error" && error ? (
               <ErrorState title={t("loadFailed", { error })} />
             ) : items.length === 0 ? (
-              <EmptyList q={q} kind={kind} t={t} />
+              <EmptyList q={q} kind={kind} hasActiveFilters={hasActiveFilters} onClearAll={clearAllFilters} t={t} />
+            ) : viewMode === "grid" ? (
+              <ArtifactGrid
+                artifacts={items}
+                selectedId={selectedId}
+                bulkSelected={bulkSelected}
+                onSelect={setSelectedId}
+                onToggleBulk={toggleBulk}
+              />
             ) : (
               <ArtifactList
                 artifacts={items}
@@ -284,16 +490,94 @@ export default function ArtifactsGlobalPage() {
             )}
           </aside>
 
-          <main className="col-span-12 overflow-hidden rounded-xl border border-border bg-surface lg:col-span-8 xl:col-span-9">
-            {selectedId ? (
-              <ArtifactDetail artifactId={selectedId} />
-            ) : (
-              <DetailPlaceholder t={t} />
-            )}
-          </main>
+          {(viewMode === "list" || selectedId) && (
+            <main
+              className={
+                viewMode === "list"
+                  ? "col-span-12 overflow-hidden rounded-xl border border-border bg-surface lg:col-span-8 xl:col-span-9"
+                  : "col-span-12 overflow-hidden rounded-xl border border-border bg-surface lg:col-span-4"
+              }
+            >
+              {selectedId ? (
+                <ArtifactDetail artifactId={selectedId} />
+              ) : (
+                <DetailPlaceholder t={t} />
+              )}
+            </main>
+          )}
         </div>
       </div>
+      {/* Floating bulk action bar · only renders when ≥1 item is in the
+          bulk-selection set. Patterns from Linear (issue list bulk) and
+          Gmail (selection toolbar). Pin/Unpin label adapts: if all picked
+          items are currently pinned, the action becomes "Unpin". */}
+      {bulkSelected.size > 0 ? (
+        <BulkActionBar
+          count={bulkSelected.size}
+          allPinned={allPinned}
+          busy={bulkBusy}
+          onPinToggle={bulkPin}
+          onDelete={bulkDelete}
+          onClear={clearBulk}
+        />
+      ) : null}
     </AppShell>
+  );
+}
+
+function BulkActionBar({
+  count,
+  allPinned,
+  busy,
+  onPinToggle,
+  onDelete,
+  onClear,
+}: {
+  count: number;
+  allPinned: boolean;
+  busy: boolean;
+  onPinToggle: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      role="toolbar"
+      aria-label="bulk actions"
+      className="fixed bottom-6 left-1/2 z-30 inline-flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-border bg-surface px-3 py-2 shadow-soft-lg animate-fade-up"
+    >
+      <span className="font-mono text-[11px] text-text-muted">
+        {count} selected
+      </span>
+      <span className="h-4 w-px bg-border" aria-hidden />
+      <button
+        type="button"
+        onClick={onPinToggle}
+        disabled={busy}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text disabled:opacity-50"
+      >
+        <Icon name="check" size={12} />
+        {allPinned ? "Unpin" : "Pin"}
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={busy}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-danger-soft px-2.5 text-[12px] text-danger transition-colors duration-fast hover:border-danger/50 disabled:opacity-50"
+      >
+        <Icon name="trash-2" size={12} />
+        Delete
+      </button>
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label="clear selection"
+        title="clear selection"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-subtle transition-colors duration-fast hover:bg-surface-2 hover:text-text"
+      >
+        <Icon name="x" size={12} />
+      </button>
+    </div>
   );
 }
 
@@ -359,14 +643,116 @@ function Hero({
       </div>
 
       {stats && stats.total > 0 ? (
-        <ByKindStrip
-          stats={stats}
-          t={t}
-          activeKind={activeKind}
-          onPickKind={onPickKind}
-        />
+        <div className="grid gap-3 lg:grid-cols-2">
+          <ByKindStrip
+            stats={stats}
+            t={t}
+            activeKind={activeKind}
+            onPickKind={onPickKind}
+          />
+          <ActivityCard stats={stats} t={t} />
+        </div>
       ) : null}
     </header>
+  );
+}
+
+function ActivityCard({
+  stats,
+  t,
+}: {
+  stats: ArtifactStatsDto;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const max = Math.max(1, ...stats.daily_counts);
+  // Plain SVG sparkline · same primitive used in cockpit but inlined here
+  // since we want a slightly different visual treatment (filled-area under
+  // the line, end-of-line dot to anchor today). 14 buckets · 200×40 vbox.
+  const w = 200;
+  const h = 40;
+  const stepX = stats.daily_counts.length > 1 ? w / (stats.daily_counts.length - 1) : 0;
+  const points = stats.daily_counts.map((v, i) => {
+    const x = i * stepX;
+    const y = h - (v / max) * (h - 6) - 3;
+    return { x, y };
+  });
+  const linePath = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .join(" ");
+  const areaPath = `${linePath} L${w},${h} L0,${h} Z`;
+  const last = points[points.length - 1];
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm">
+      <div className="mb-3 flex items-baseline justify-between">
+        <div>
+          <div className="text-caption font-mono uppercase tracking-wider text-text-muted">
+            {t("stats.activity")}
+          </div>
+          <div className="text-caption text-text-subtle">{t("stats.activityHint")}</div>
+        </div>
+        <div className="font-mono text-2xl font-semibold tabular-nums text-text">
+          {stats.last_7d}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-10 w-full">
+        <path d={areaPath} fill="var(--color-primary)" fillOpacity={0.12} />
+        <path
+          d={linePath}
+          stroke="var(--color-primary)"
+          strokeWidth="1.5"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {last ? (
+          <circle cx={last.x} cy={last.y} r={2.4} fill="var(--color-primary)" />
+        ) : null}
+      </svg>
+
+      {stats.top_employees.length > 0 ? (
+        <div className="mt-4 border-t border-border pt-3">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-caption font-mono uppercase tracking-wider text-text-muted">
+              {t("stats.contributors")}
+            </span>
+            <span className="text-caption text-text-subtle">{t("stats.contributorsHint")}</span>
+          </div>
+          <ul className="space-y-1.5">
+            {stats.top_employees.map((row) => {
+              const pct =
+                stats.top_employees[0]?.count
+                  ? (row.count / stats.top_employees[0].count) * 100
+                  : 0;
+              const shortKey = row.key.slice(0, 8);
+              return (
+                <li key={row.key} className="flex items-center gap-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 text-text-muted">
+                    <Icon name="users" size={11} />
+                  </span>
+                  <span
+                    className="font-mono text-caption text-text"
+                    title={row.key}
+                  >
+                    {shortKey}
+                  </span>
+                  <div className="relative ml-2 h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                      style={{ width: `${pct}%`, opacity: 0.85 }}
+                    />
+                  </div>
+                  <span className="font-mono text-caption tabular-nums text-text-muted">
+                    {row.count}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -586,17 +972,23 @@ function ActiveFilterChips({
 function EmptyList({
   q,
   kind,
+  hasActiveFilters,
+  onClearAll,
   t,
 }: {
   q: string;
   kind: string;
+  hasActiveFilters: boolean;
+  onClearAll: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
   // Differentiate "no artifacts at all" vs "filtered to nothing" so the
-  // user knows whether to clear filters or seed work.
-  const isFiltered = q.trim().length > 0 || kind !== "";
+  // user knows whether to clear filters or seed work. The "filtered →
+  // nothing" branch gets a CTA reset button; the "fresh workspace"
+  // branch gets a quiet hint pointing at the chat.
+  const isFiltered = q.trim().length > 0 || kind !== "" || hasActiveFilters;
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-10 text-center">
       <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-muted text-primary">
         <Icon name="folder" size={20} />
       </span>
@@ -605,8 +997,64 @@ function EmptyList({
       </p>
       {!isFiltered ? (
         <p className="max-w-xs text-caption text-text-muted">{t("emptyAllHint")}</p>
-      ) : null}
+      ) : (
+        <button
+          type="button"
+          onClick={onClearAll}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-caption text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text"
+        >
+          <Icon name="x" size={11} />
+          {t("filters.clearAll")}
+        </button>
+      )}
     </div>
+  );
+}
+
+/**
+ * SkeletonList · shape-of-final-content placeholder while the list is
+ * loading. Reference: Vercel deployments + GitHub Files. Reduces perceived
+ * latency vs a centered spinner because the user can already see "rows
+ * are coming" and the surrounding chrome stays put when data lands.
+ */
+function SkeletonList({ viewMode }: { viewMode: "list" | "grid" }) {
+  // 6 skeleton rows for list, 6 cards for grid · enough to fill the
+  // typical viewport without thrashing the DOM if content lands fast.
+  const count = 6;
+  if (viewMode === "grid") {
+    return (
+      <ul aria-busy className="grid grid-cols-1 gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: count }, (_, i) => (
+          <li key={i} className="rounded-xl border border-border bg-surface p-3">
+            <div className="flex items-center gap-2">
+              <span className="h-9 w-9 rounded-lg bg-surface-2 animate-pulse-soft" />
+              <div className="flex-1 space-y-2">
+                <span className="block h-3 w-[70%] rounded bg-surface-2 animate-pulse-soft" />
+                <span className="block h-2 w-[35%] rounded bg-surface-2 animate-pulse-soft" />
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="h-2 w-8 rounded bg-surface-2 animate-pulse-soft" />
+              <span className="h-2 w-12 rounded bg-surface-2 animate-pulse-soft" />
+              <span className="h-2 w-8 rounded bg-surface-2 animate-pulse-soft" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <ul aria-busy className="flex flex-col gap-1 p-2">
+      {Array.from({ length: count }, (_, i) => (
+        <li key={i} className="flex items-center gap-2 rounded-md px-2 py-2">
+          <span className="h-7 w-7 rounded-md bg-surface-2 animate-pulse-soft" />
+          <div className="flex-1 space-y-1.5">
+            <span className="block h-3 w-[60%] rounded bg-surface-2 animate-pulse-soft" />
+            <span className="block h-2 w-[35%] rounded bg-surface-2 animate-pulse-soft" />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

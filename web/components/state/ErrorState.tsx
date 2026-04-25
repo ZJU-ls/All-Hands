@@ -31,7 +31,7 @@ export function ErrorState({
     <div
       role="alert"
       data-state="error"
-      className="rounded-xl border border-danger/30 bg-danger-soft p-5 shadow-soft-sm"
+      className="rounded-xl border border-danger/45 bg-danger-soft p-5 shadow-soft-sm ring-1 ring-danger/10"
     >
       <div className="flex items-start gap-3">
         <span
@@ -57,7 +57,7 @@ export function ErrorState({
             <button
               type="button"
               onClick={action.onClick}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-danger/30 px-3 py-1.5 text-caption font-medium text-danger transition-colors duration-base hover:bg-danger/10 hover:border-danger/50"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-danger/40 px-3 py-1.5 text-caption font-medium text-danger transition-colors duration-base hover:bg-danger/10 hover:border-danger/60 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-danger/30"
             >
               <Icon name="refresh" size={12} />
               {action.label}

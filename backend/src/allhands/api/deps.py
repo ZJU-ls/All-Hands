@@ -244,6 +244,10 @@ async def get_skill_service(session: AsyncSession = Depends(get_session)) -> Ski
         repo=SqlSkillRepo(session),
         install_root=settings.resolved_skills_dir(),
         market=get_skill_market(),
+        # 让 list_all 合并 in-memory builtin · 否则设置页「平台内建」永远 0
+        # (2026-04-25 修 · builtin 只在 SkillRegistry 里 register_lazy ·
+        # 从未持久化到 skills 表 · 之前查 DB 拉不到)
+        registry=get_skill_registry(),
     )
 
 

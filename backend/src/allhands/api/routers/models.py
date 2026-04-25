@@ -38,6 +38,8 @@ class ModelResponse(BaseModel):
     name: str
     display_name: str
     context_window: int
+    max_input_tokens: int | None = None
+    max_output_tokens: int | None = None
     enabled: bool
     is_default: bool
 
@@ -61,12 +63,16 @@ class CreateModelRequest(BaseModel):
     name: str
     display_name: str = ""
     context_window: int = 0
+    max_input_tokens: int | None = Field(default=None, ge=1)
+    max_output_tokens: int | None = Field(default=None, ge=1)
 
 
 class UpdateModelRequest(BaseModel):
     name: str | None = None
     display_name: str | None = None
     context_window: int | None = None
+    max_input_tokens: int | None = Field(default=None, ge=1)
+    max_output_tokens: int | None = Field(default=None, ge=1)
     enabled: bool | None = None
 
 
@@ -101,6 +107,8 @@ def _to_response(m: LLMModel) -> ModelResponse:
         name=m.name,
         display_name=m.display_name,
         context_window=m.context_window,
+        max_input_tokens=m.max_input_tokens,
+        max_output_tokens=m.max_output_tokens,
         enabled=m.enabled,
         is_default=m.is_default,
     )
@@ -143,6 +151,8 @@ async def create_model(
         name=body.name,
         display_name=body.display_name,
         context_window=body.context_window,
+        max_input_tokens=body.max_input_tokens,
+        max_output_tokens=body.max_output_tokens,
     )
     if model is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
@@ -161,6 +171,8 @@ async def update_model(
         name=body.name,
         display_name=body.display_name,
         context_window=body.context_window,
+        max_input_tokens=body.max_input_tokens,
+        max_output_tokens=body.max_output_tokens,
         enabled=body.enabled,
     )
     if model is None:
