@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 type State = { status: "loading" } | { status: "ok"; version: string } | { status: "error" };
 
 export function HealthBadge() {
+  const t = useTranslations("healthBadge");
   const [state, setState] = useState<State>({ status: "loading" });
 
   useEffect(() => {
@@ -27,10 +29,10 @@ export function HealthBadge() {
 
   const label =
     state.status === "ok"
-      ? `backend ok · ${state.version}`
+      ? t("ok", { version: state.version })
       : state.status === "error"
-        ? "backend unreachable"
-        : "pinging backend…";
+        ? t("error")
+        : t("pinging");
 
   return (
     <span

@@ -263,6 +263,27 @@
         "open": "open",
         "toggle": "toggle"
       },
+      "hints": {
+        "cockpit": "workspace snapshot",
+        "chat": "chat with lead",
+        "conversations": "past conversations",
+        "tasks": "async tasks",
+        "employees": "digital employees",
+        "employeeDesign": "design new employee",
+        "skills": "skill packs",
+        "mcp": "external mcp",
+        "gateway": "provider + model gateway",
+        "market": "browse skill market",
+        "triggers": "scheduled + webhook",
+        "channels": "slack email webhook",
+        "confirmations": "pending approvals",
+        "traces": "langfuse traces",
+        "observatory": "platform observability",
+        "stockAssistant": "market anomaly demo",
+        "review": "agent review",
+        "settings": "system settings",
+        "about": "about allhands"
+      },
       "entries": {
         "cockpit": "Cockpit",
         "chat": "Chat",

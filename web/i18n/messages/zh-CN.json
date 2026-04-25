@@ -73,6 +73,11 @@
     "en": "English",
     "label": "语言"
   },
+  "healthBadge": {
+    "ok": "后端正常 · {version}",
+    "error": "后端不可达",
+    "pinging": "正在 ping 后端…"
+  },
   "welcome": {
     "skip": "稍后再说 →",
     "eyebrow": "v0 · Open Source · Self-hosted",

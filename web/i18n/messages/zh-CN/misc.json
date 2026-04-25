@@ -257,11 +257,32 @@
       "ariaLabel": "命令面板",
       "placeholder": "跳转到页面 · 搜索员工 · 技能 · 模型",
       "noMatch": "没有匹配的入口 · 试试别的关键词",
-      "suggestions": "Suggestions · {count}",
+      "suggestions": "建议 · {count}",
       "footer": {
-        "navigate": "navigate",
-        "open": "open",
-        "toggle": "toggle"
+        "navigate": "上下移动",
+        "open": "打开",
+        "toggle": "开关"
+      },
+      "hints": {
+        "cockpit": "工作区快照",
+        "chat": "和 Lead Agent 对话",
+        "conversations": "历史会话",
+        "tasks": "异步任务",
+        "employees": "数字员工",
+        "employeeDesign": "设计新员工",
+        "skills": "技能包",
+        "mcp": "外部 MCP",
+        "gateway": "供应商与模型网关",
+        "market": "浏览技能市场",
+        "triggers": "定时与 webhook",
+        "channels": "Slack · 邮件 · webhook",
+        "confirmations": "待审批",
+        "traces": "LangFuse 追踪",
+        "observatory": "平台观测",
+        "stockAssistant": "市场异动 demo",
+        "review": "代理审查",
+        "settings": "系统设置",
+        "about": "关于 allhands"
       },
       "entries": {
         "cockpit": "驾驶舱",

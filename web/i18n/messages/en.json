@@ -73,6 +73,11 @@
     "en": "English",
     "label": "Language"
   },
+  "healthBadge": {
+    "ok": "backend ok · {version}",
+    "error": "backend unreachable",
+    "pinging": "pinging backend…"
+  },
   "welcome": {
     "skip": "Maybe later →",
     "eyebrow": "v0 · Open Source · Self-hosted",
