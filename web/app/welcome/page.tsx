@@ -16,6 +16,7 @@ import Link from "next/link";
 
 import { Icon, type IconName } from "@/components/ui/icon";
 import { AllhandsLogo, AllhandsWordmark } from "@/components/brand/AllhandsLogo";
+import { WorkspacePreview } from "@/components/welcome/WorkspacePreview";
 import { markFirstRunCompleted } from "@/lib/first-run";
 
 export const FIRST_RUN_SCOPE = "welcome";
@@ -205,104 +206,12 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* ─── Workspace preview · floats below hero, browser-chrome card. ─── */}
+        {/* ─── Workspace preview · auto-cycles through chat / skills / gateway / traces. ─── */}
         <section
           className="relative mt-16 animate-fade-up"
           style={{ animationDelay: "120ms" }}
         >
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-lg">
-            {/* Browser chrome */}
-            <div className="flex h-10 items-center gap-2 border-b border-border bg-surface-2/60 px-4 backdrop-blur-md">
-              <span className="h-3 w-3 rounded-full bg-danger/70" />
-              <span className="h-3 w-3 rounded-full bg-warning/70" />
-              <span className="h-3 w-3 rounded-full bg-success/70" />
-              <span className="ml-3 text-caption font-mono text-text-muted">
-                allhands.local / chat
-              </span>
-            </div>
-
-            <div className="grid grid-cols-12">
-              {/* Mini sidebar */}
-              <aside className="col-span-3 space-y-1 border-r border-border bg-surface-2/40 p-4">
-                <div className="relative flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-primary-fg shadow-soft-sm">
-                  <Icon name="message-square" size={14} />
-                  <span className="text-sm font-medium">对话</span>
-                  <span className="ml-auto rounded bg-primary-fg/20 px-1.5 text-caption font-mono">
-                    42
-                  </span>
-                </div>
-                {(
-                  [
-                    { l: "员工", i: "users" },
-                    { l: "Skills", i: "wand-2" },
-                    { l: "Gateway", i: "plug" },
-                    { l: "Traces", i: "activity" },
-                  ] as { l: string; i: IconName }[]
-                ).map((x) => (
-                  <div
-                    key={x.l}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-text-muted"
-                  >
-                    <Icon name={x.i} size={14} />
-                    <span className="text-sm">{x.l}</span>
-                  </div>
-                ))}
-              </aside>
-
-              {/* Main pane · stylised chat */}
-              <div className="col-span-9 space-y-4 p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <AllhandsLogo size={26} />
-
-                    <h3 className="text-base font-semibold tracking-tight text-text">
-                      Lead Agent
-                    </h3>
-                    <span className="rounded bg-surface-2 px-1.5 py-0.5 text-caption font-mono text-text-subtle">
-                      gpt-4o-mini
-                    </span>
-                  </div>
-                  <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-success-soft px-2.5 text-caption font-medium text-success">
-                    <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-soft" />
-                    在线
-                  </span>
-                </div>
-
-                {/* User bubble */}
-                <div className="flex justify-end">
-                  <div className="max-w-md rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-fg shadow-soft-sm">
-                    帮我招一个研究员,每天读 5 篇 Hacker News 头条。
-                  </div>
-                </div>
-
-                {/* Assistant bubble */}
-                <div className="flex justify-start">
-                  <div className="max-w-xl space-y-2 rounded-2xl rounded-bl-sm border border-border bg-surface-2/70 px-4 py-3 text-sm text-text shadow-soft-sm">
-                    <p>
-                      已为你创建员工{" "}
-                      <span className="font-mono font-medium text-primary">
-                        hn-researcher
-                      </span>
-                      ,挂上了 fetch_url + summarize 两个 Tool。
-                    </p>
-                    <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
-                      <Icon
-                        name="check-circle-2"
-                        size={14}
-                        className="text-success"
-                      />
-                      <span className="text-caption font-mono text-text-muted">
-                        create_employee
-                      </span>
-                      <span className="ml-auto text-caption text-success">
-                        ok · 320ms
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <WorkspacePreview />
         </section>
 
         {/* ─── Highlights ─── */}
