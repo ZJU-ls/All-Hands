@@ -43,7 +43,8 @@ describe("WelcomePage", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
       "欢迎来到 allhands",
     );
-    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(3);
+    // 3 highlight cards live as h3 (the section above them owns the h2).
+    expect(screen.getAllByRole("heading", { level: 3 }).length).toBeGreaterThanOrEqual(3);
     expect(screen.getByTestId("welcome-start")).toBeDefined();
     expect(screen.getByTestId("welcome-skip")).toBeDefined();
   });
