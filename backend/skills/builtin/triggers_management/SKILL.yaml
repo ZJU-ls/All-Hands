@@ -1,6 +1,6 @@
 id: allhands.triggers_management
 name: 触发器管理
-description: 创建 / 启停 / 立即触发定时与事件 · 让员工的工作可以无人值守自动跑
+description: 定时 / 自动跑 / cron / 事件触发 · 创建 启停 立即 fire 和查执行历史
 version: 1.0.0
 builtin: true
 

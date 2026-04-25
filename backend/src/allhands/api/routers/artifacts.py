@@ -226,9 +226,7 @@ async def artifact_stats(
         if 0 <= delta_days < 14:
             daily_counts[13 - delta_days] += 1
         if a.created_by_employee_id:
-            by_employee[a.created_by_employee_id] = (
-                by_employee.get(a.created_by_employee_id, 0) + 1
-            )
+            by_employee[a.created_by_employee_id] = by_employee.get(a.created_by_employee_id, 0) + 1
     largest_kind = max(by_kind.items(), key=lambda kv: kv[1])[0] if by_kind else None
     top_employees = [
         ContributorEntry(key=k, count=v)
