@@ -30,7 +30,9 @@
       "placeholder": "Type a message…",
       "stop": "Stop",
       "send": "Send",
-      "thinking": "Deep thinking"
+      "thinking": "Deep thinking",
+      "thinkingTooltipOn": "On · model thinks (sends thinking: enabled)",
+      "thinkingTooltipOff": "Off · model does not think (sends thinking: disabled). If the upstream proxy does not recognise the field, it returns an empty response and the dialog will suggest switching providers"
     },
     "header": {
       "loading": "Loading…",

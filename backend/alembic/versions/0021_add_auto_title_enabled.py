@@ -15,6 +15,7 @@ back to a truncated copy of the user's first message.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0021_auto_title"

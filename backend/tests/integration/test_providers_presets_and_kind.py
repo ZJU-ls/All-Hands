@@ -43,14 +43,14 @@ def client_with_providers() -> tuple[TestClient, dict[str, str]]:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     async def _seed() -> None:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with maker() as s, s.begin():
+        async with maker() as s:
             repo = SqlLLMProviderRepo(s)
             await repo.upsert(
                 LLMProvider(
@@ -109,7 +109,7 @@ def test_create_provider_with_anthropic_kind_round_trips() -> None:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     async def _init() -> None:

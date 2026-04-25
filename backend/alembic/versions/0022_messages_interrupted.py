@@ -13,6 +13,7 @@ turns — the flag is opt-in to the new behaviour.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0022"

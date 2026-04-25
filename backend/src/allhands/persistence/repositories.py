@@ -155,6 +155,14 @@ class ArtifactRepo(Protocol):
         pinned_only: bool = False,
         include_deleted: bool = False,
         limit: int = 100,
+        conversation_id: str | None = None,
+        employee_id: str | None = None,
+        status: str | None = None,
+        tag: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        q: str | None = None,
+        sort: str = "updated_at_desc",
     ) -> list[Artifact]: ...
     async def search(self, workspace_id: str, query: str, limit: int = 50) -> list[Artifact]: ...
     async def upsert(self, artifact: Artifact) -> Artifact: ...

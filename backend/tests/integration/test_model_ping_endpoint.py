@@ -49,14 +49,14 @@ def seeded_client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, str, str
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     async def _seed() -> None:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with maker() as s, s.begin():
+        async with maker() as s:
             p_repo = SqlLLMProviderRepo(s)
             m_repo = SqlLLMModelRepo(s)
             await p_repo.upsert(

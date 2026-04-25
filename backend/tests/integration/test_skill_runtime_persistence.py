@@ -91,7 +91,7 @@ async def session_maker() -> AsyncIterator[async_sessionmaker]:
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
 
-    async with maker() as session, session.begin():
+    async with maker() as session:
         await SqlEmployeeRepo(session).upsert(_make_emp())
         await SqlConversationRepo(session).create(_make_conv())
 
@@ -103,7 +103,7 @@ async def session_maker() -> AsyncIterator[async_sessionmaker]:
 async def test_repo_round_trips_runtime_across_sessions(session_maker: async_sessionmaker) -> None:
     runtime_in = _activated_runtime()
 
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         await SqlSkillRuntimeRepo(s).save("conv1", runtime_in)
 
     # Fresh session = fresh process · the only way the runtime can come back
@@ -132,7 +132,7 @@ async def test_repo_delete_is_idempotent(session_maker: async_sessionmaker) -> N
     # delete on an empty row must not raise — compact calls this
     # unconditionally on every compact, regardless of whether the runtime
     # had been saved yet.
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         await SqlSkillRuntimeRepo(s).delete("never-saved")
 
 
@@ -149,7 +149,7 @@ async def test_chat_service_cache_miss_falls_through_to_repo(
     # Session 1: flush a runtime to the repo (as if ChatService ran a turn
     # and persisted at turn end).
     runtime_saved = _activated_runtime()
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         await SqlSkillRuntimeRepo(s).save("conv1", runtime_saved)
 
     # Session 2: brand-new ChatService (empty cache) · pulls runtime from repo.
@@ -182,12 +182,12 @@ async def test_compact_clears_both_cache_and_repo(session_maker: async_sessionma
     """
     # Seed: a persisted runtime with an activated skill.
     runtime = _activated_runtime()
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         await SqlSkillRuntimeRepo(s).save("conv1", runtime)
 
     # A fresh ChatService that has cached the runtime (emulate an in-process
     # turn that happened to populate the cache).
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         conv_repo = SqlConversationRepo(s)
         emp_repo = SqlEmployeeRepo(s)
         runtime_repo = SqlSkillRuntimeRepo(s)

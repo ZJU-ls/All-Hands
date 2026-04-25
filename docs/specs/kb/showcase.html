@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>allhands · Knowledge Base — 设计方案预览</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root[data-theme="dark"] {
+    --bg-base: #0a0d14;
+    --bg-surface: #11151f;
+    --bg-elevated: #161b28;
+    --bg-soft: #1c2233;
+    --border-hairline: rgba(120, 140, 200, 0.10);
+    --border-strong: rgba(140, 165, 220, 0.18);
+    --text-strong: #f4f6fb;
+    --text-default: #c9d1e3;
+    --text-muted: #8590a8;
+    --text-faint: #5d6680;
+    --primary: #4a7dff;
+    --primary-soft: rgba(74, 125, 255, 0.14);
+    --primary-glow: rgba(74, 125, 255, 0.42);
+    --accent-cyan: #38c8d8;
+    --accent-violet: #8b6cff;
+    --success: #44d18a;
+    --warning: #f0b048;
+    --danger: #ff6477;
+  }
+  :root[data-theme="light"] {
+    --bg-base: #f5f7fc;
+    --bg-surface: #ffffff;
+    --bg-elevated: #ffffff;
+    --bg-soft: #eef2fa;
+    --border-hairline: rgba(20, 30, 60, 0.08);
+    --border-strong: rgba(20, 30, 60, 0.16);
+    --text-strong: #0c1426;
+    --text-default: #2c364c;
+    --text-muted: #5a6680;
+    --text-faint: #8a93ab;
+    --primary: #2c5cff;
+    --primary-soft: rgba(44, 92, 255, 0.10);
+    --primary-glow: rgba(44, 92, 255, 0.35);
+    --accent-cyan: #1e9aa8;
+    --accent-violet: #6a4cf0;
+    --success: #1fae6a;
+    --warning: #c98a25;
+    --danger: #d8324a;
+  }
+  html, body { background: var(--bg-base); color: var(--text-default); }
+  body { font-family: 'Inter', 'PingFang SC', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .text-strong { color: var(--text-strong); }
+  .text-default { color: var(--text-default); }
+  .text-muted { color: var(--text-muted); }
+  .text-faint { color: var(--text-faint); }
+  .bg-surface { background: var(--bg-surface); }
+  .bg-elevated { background: var(--bg-elevated); }
+  .bg-soft { background: var(--bg-soft); }
+  .bg-primary-soft { background: var(--primary-soft); }
+  .text-primary { color: var(--primary); }
+  .border-hairline { border-color: var(--border-hairline); }
+  .border-strong { border-color: var(--border-strong); }
+
+  .gradient-text {
+    background: linear-gradient(120deg, var(--primary), var(--accent-cyan), var(--accent-violet));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .glow {
+    box-shadow: 0 0 0 1px var(--border-strong), 0 12px 48px -16px var(--primary-glow);
+  }
+  .accent-bar {
+    background: linear-gradient(90deg, var(--primary), var(--accent-cyan));
+    height: 2px; border-radius: 2px;
+  }
+  .hero-mesh {
+    background:
+      radial-gradient(60% 50% at 20% 0%, var(--primary-soft) 0%, transparent 60%),
+      radial-gradient(50% 40% at 90% 20%, rgba(56, 200, 216, 0.10) 0%, transparent 60%),
+      radial-gradient(40% 30% at 50% 100%, rgba(139, 108, 255, 0.10) 0%, transparent 60%);
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; font-size: 11px; line-height: 1.4;
+    border-radius: 999px; border: 1px solid var(--border-strong);
+    color: var(--text-muted); background: var(--bg-soft);
+    font-weight: 500; letter-spacing: 0.02em;
+  }
+  .pill-primary { color: var(--primary); border-color: var(--primary-soft); background: var(--primary-soft); }
+  .pill-success { color: var(--success); border-color: rgba(68, 209, 138, 0.2); background: rgba(68, 209, 138, 0.10); }
+  .pill-warning { color: var(--warning); border-color: rgba(240, 176, 72, 0.2); background: rgba(240, 176, 72, 0.10); }
+  .pill-danger  { color: var(--danger);  border-color: rgba(255, 100, 119, 0.2); background: rgba(255, 100, 119, 0.10); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-hairline); border-radius: 14px; }
+  .card:hover { border-color: var(--border-strong); }
+  .card-elev { background: var(--bg-elevated); border: 1px solid var(--border-hairline); border-radius: 12px; }
+  .kbd {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px; padding: 2px 6px; border-radius: 4px;
+    background: var(--bg-soft); border: 1px solid var(--border-hairline); color: var(--text-default);
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .scroll-x { overflow-x: auto; }
+  .scroll-x::-webkit-scrollbar { height: 6px; }
+  .scroll-x::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+  .fade-in { animation: fade-in 0.5s ease; }
+  @keyframes fade-in { from {opacity: 0; transform: translateY(8px);} to {opacity: 1; transform: none;} }
+
+  .pulse-ring::after {
+    content: ''; position: absolute; inset: -3px; border-radius: 50%;
+    border: 2px solid var(--primary); opacity: 0; animation: pulse-ring 2s ease-out infinite;
+  }
+  @keyframes pulse-ring {
+    0% { opacity: 0.6; transform: scale(0.6); }
+    100% { opacity: 0; transform: scale(1.6); }
+  }
+
+  /* mock chat */
+  .msg-user { background: var(--primary-soft); border: 1px solid var(--primary-soft); color: var(--text-strong); }
+  .msg-agent { background: var(--bg-elevated); border: 1px solid var(--border-hairline); }
+  .msg-tool { background: var(--bg-soft); border: 1px dashed var(--border-strong); color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+  .pipeline-arrow::after {
+    content: '→'; color: var(--text-faint); margin: 0 4px;
+  }
+
+  /* Tree */
+  .tree-line { border-left: 1px dashed var(--border-strong); padding-left: 12px; }
+
+  /* Citation */
+  .cite {
+    display: inline-flex; align-items: baseline; gap: 4px;
+    padding: 1px 6px; border-radius: 4px; font-size: 11px;
+    background: var(--primary-soft); color: var(--primary);
+    border: 1px solid var(--primary-soft);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Score bar */
+  .score-bar { height: 6px; border-radius: 3px; background: var(--bg-soft); overflow: hidden; }
+  .score-bar > span { display:block; height:100%; background: linear-gradient(90deg, var(--primary), var(--accent-cyan)); }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- top nav -->
+<header class="sticky top-0 z-50 backdrop-blur-xl" style="background: color-mix(in srgb, var(--bg-base) 80%, transparent); border-bottom: 1px solid var(--border-hairline);">
+  <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, var(--primary), var(--accent-violet));">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M4 7l8-4 8 4M4 7v10l8 4 8-4V7M4 7l8 4 8-4M12 11v10"/></svg>
+      </div>
+      <span class="text-strong font-semibold tracking-tight">allhands · KB</span>
+      <span class="pill">v0 · design preview</span>
+    </div>
+    <nav class="flex items-center gap-1 text-sm">
+      <a href="#overview" class="px-3 py-1.5 rounded-md text-muted hover:text-strong">Overview</a>
+      <a href="#architecture" class="px-3 py-1.5 rounded-md text-muted hover:text-strong">Architecture</a>
+      <a href="#ui" class="px-3 py-1.5 rounded-md text-muted hover:text-strong">UI</a>
+      <a href="#tools" class="px-3 py-1.5 rounded-md text-muted hover:text-strong">Tools</a>
+      <a href="#agentic" class="px-3 py-1.5 rounded-md text-muted hover:text-strong">Agentic</a>
+      <a href="#roadmap" class="px-3 py-1.5 rounded-md text-muted hover:text-strong">Roadmap</a>
+      <button id="themeToggle" class="ml-2 px-3 py-1.5 rounded-md text-muted hover:text-strong border border-hairline">主题</button>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero-mesh">
+  <div class="max-w-7xl mx-auto px-6 pt-20 pb-24">
+    <div class="flex items-center gap-2 mb-6">
+      <span class="pill pill-primary"><span class="dot"></span>Tool-First · Agentic 检索 · 多格式</span>
+      <span class="pill">2026-04-25 · Draft</span>
+    </div>
+    <h1 class="text-5xl md:text-6xl font-semibold tracking-tight leading-[1.1] text-strong mb-6">
+      给 allhands 一座 <span class="gradient-text">第二大脑</span>
+    </h1>
+    <p class="text-lg max-w-3xl leading-relaxed text-muted mb-10">
+      一套 workspace 级知识库 — 摄取多格式资料、Hybrid 检索、Agent 主动查证 / 可授权写入。
+      完整复用平台已有的 <span class="text-strong">Tool-First / Skill 渐进加载 / Confirmation Gate / 双主题视觉</span>,零新范式。
+    </p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="card p-4">
+        <div class="text-3xl font-semibold gradient-text">12+</div>
+        <div class="text-xs text-muted mt-1">支持格式 · md/pdf/docx/pptx/xlsx/html/epub/audio…</div>
+      </div>
+      <div class="card p-4">
+        <div class="text-3xl font-semibold gradient-text">15</div>
+        <div class="text-xs text-muted mt-1">Meta Tool · UI ↔ Agent 对称</div>
+      </div>
+      <div class="card p-4">
+        <div class="text-3xl font-semibold gradient-text">2</div>
+        <div class="text-xs text-muted mt-1">预置 Skill · researcher + curator</div>
+      </div>
+      <div class="card p-4">
+        <div class="text-3xl font-semibold gradient-text">6w</div>
+        <div class="text-xs text-muted mt-1">M1+M2+M3 全量交付</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OVERVIEW -->
+<section id="overview" class="max-w-7xl mx-auto px-6 py-16">
+  <div class="flex items-end justify-between mb-8">
+    <div>
+      <div class="accent-bar w-10 mb-4"></div>
+      <h2 class="text-3xl font-semibold text-strong">能做什么</h2>
+      <p class="text-muted mt-2 max-w-2xl">
+        把零散的资料聚成可检索的库;让任何员工通过 <span class="kbd">kb_search</span> 主动查证;给授权员工开 <span class="kbd">WRITE</span>,把对话沉淀回 KB。
+      </p>
+    </div>
+  </div>
+  <div class="grid md:grid-cols-3 gap-4">
+    <div class="card p-6">
+      <div class="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center mb-4">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-primary" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      </div>
+      <h3 class="text-strong font-semibold mb-2">多格式摄取</h3>
+      <p class="text-sm text-muted leading-relaxed">md / txt / pdf(含扫描件 OCR)/ docx / pptx / xlsx / csv / html / epub / 图片 / 音频(Whisper)/ 视频 / 代码 / URL 递归。每种格式 = 注册一个 Parser。</p>
+    </div>
+    <div class="card p-6">
+      <div class="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center mb-4">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-primary" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </div>
+      <h3 class="text-strong font-semibold mb-2">Hybrid 检索</h3>
+      <p class="text-sm text-muted leading-relaxed">SQLite FTS5(BM25)+ sqlite-vec(向量)+ RRF 融合 + 可选 reranker。每个 KB 可调权重 / top_k / reranker 开关。</p>
+    </div>
+    <div class="card p-6">
+      <div class="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center mb-4">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-primary" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15 15 0 010 20 15 15 0 010-20z"/></svg>
+      </div>
+      <h3 class="text-strong font-semibold mb-2">Agentic 多轮</h3>
+      <p class="text-sm text-muted leading-relaxed">不内置"检索引擎",把检索拆成 Meta Tool。Agent 在 query 主循环里自己决定要 search 几次、要不要拉原文 — 完全对齐 P3 Pure-Function Loop。</p>
+    </div>
+    <div class="card p-6">
+      <div class="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center mb-4">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-primary" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </div>
+      <h3 class="text-strong font-semibold mb-2">权限闭环</h3>
+      <p class="text-sm text-muted leading-relaxed">写操作走 Confirmation Gate;无 grant 自动 Defer 到用户审批。Grant 可挂在 employee 也可挂在 skill,带 expiry。</p>
+    </div>
+    <div class="card p-6">
+      <div class="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center mb-4">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-primary" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h6"/></svg>
+      </div>
+      <h3 class="text-strong font-semibold mb-2">引用回链</h3>
+      <p class="text-sm text-muted leading-relaxed">每个 chunk 保留 section_path / page / span。Agent 回答带 <span class="cite">doc#2.3</span> 渲染卡,点开看原文位置。</p>
+    </div>
+    <div class="card p-6">
+      <div class="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center mb-4">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-primary" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></svg>
+      </div>
+      <h3 class="text-strong font-semibold mb-2">可观测</h3>
+      <p class="text-sm text-muted leading-relaxed">摄取状态机 → SSE 实时;每次 search 上 LangFuse trace,看 latency / hit-rate / 命中分布。检索回归套件挂 P@5 / MRR。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture" class="max-w-7xl mx-auto px-6 py-16">
+  <div class="accent-bar w-10 mb-4"></div>
+  <h2 class="text-3xl font-semibold text-strong mb-2">10 层架构里的位置</h2>
+  <p class="text-muted mb-8">复用现有 L4→L10 分层。<span class="text-strong">不引入任何新范式</span>,只新增 <span class="kbd">execution/knowledge/</span> 一个子模块。</p>
+
+  <div class="card p-6">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+      <div class="card-elev p-4">
+        <div class="text-faint mono mb-1">L9 / L10</div>
+        <div class="text-strong font-semibold mb-2">Web</div>
+        <ul class="space-y-1 text-muted">
+          <li>web/app/knowledge/*</li>
+          <li>web/components/knowledge/*</li>
+          <li>KB.Citation render</li>
+        </ul>
+      </div>
+      <div class="card-elev p-4">
+        <div class="text-faint mono mb-1">L7</div>
+        <div class="text-strong font-semibold mb-2">API</div>
+        <ul class="space-y-1 text-muted">
+          <li>routers/knowledge.py</li>
+          <li>SSE 摄取进度</li>
+          <li>multipart upload</li>
+        </ul>
+      </div>
+      <div class="card-elev p-4">
+        <div class="text-faint mono mb-1">L6</div>
+        <div class="text-strong font-semibold mb-2">Service</div>
+        <ul class="space-y-1 text-muted">
+          <li>knowledge_service</li>
+          <li>统一业务一份</li>
+        </ul>
+      </div>
+      <div class="card-elev p-4" style="border-color: var(--primary-soft);">
+        <div class="text-primary mono mb-1">L5 · 新</div>
+        <div class="text-strong font-semibold mb-2">Execution</div>
+        <ul class="space-y-1 text-muted">
+          <li>knowledge/parsers</li>
+          <li>knowledge/chunker</li>
+          <li>knowledge/embedder</li>
+          <li>knowledge/retriever</li>
+          <li>knowledge/ingest</li>
+          <li>tools/meta/knowledge_tools</li>
+        </ul>
+      </div>
+      <div class="card-elev p-4">
+        <div class="text-faint mono mb-1">L4 / L3</div>
+        <div class="text-strong font-semibold mb-2">Domain + DB</div>
+        <ul class="space-y-1 text-muted">
+          <li>core/knowledge.py</li>
+          <li>orm/knowledge_orm</li>
+          <li>FTS5 + sqlite-vec</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-8">
+      <div class="text-xs uppercase tracking-wide text-faint mb-3">摄取管线 · 状态机</div>
+      <div class="flex flex-wrap items-center gap-3 text-sm">
+        <span class="pill"><span class="dot" style="color:var(--text-muted)"></span>upload / url / paste</span>
+        <span class="text-faint">→</span>
+        <span class="pill pill-warning"><span class="dot"></span>PARSING</span>
+        <span class="text-faint">→</span>
+        <span class="pill pill-warning"><span class="dot"></span>CHUNKING</span>
+        <span class="text-faint">→</span>
+        <span class="pill pill-warning"><span class="dot"></span>INDEXING</span>
+        <span class="text-faint">→</span>
+        <span class="pill pill-success"><span class="dot"></span>READY</span>
+        <span class="text-faint">/</span>
+        <span class="pill pill-danger"><span class="dot"></span>FAILED · 可重跑</span>
+      </div>
+      <div class="text-xs text-faint mt-3">每一步发 KBEvent → SSE 推前端。状态落 <span class="kbd">documents.state</span>,uvicorn reload 续跑(P7 状态可 checkpoint)。</div>
+    </div>
+
+    <div class="mt-8">
+      <div class="text-xs uppercase tracking-wide text-faint mb-3">检索流</div>
+      <div class="flex flex-wrap items-center gap-3 text-sm">
+        <span class="pill">query</span>
+        <span class="text-faint">→</span>
+        <span class="pill pill-primary">BM25 (FTS5) top-50</span>
+        <span class="text-faint">+</span>
+        <span class="pill pill-primary">Vector (sqlite-vec) top-50</span>
+        <span class="text-faint">→</span>
+        <span class="pill">RRF fusion</span>
+        <span class="text-faint">→</span>
+        <span class="pill">[opt] bge-reranker</span>
+        <span class="text-faint">→</span>
+        <span class="pill pill-success">top-k chunks + citations</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- UI MOCKUP -->
+<section id="ui" class="py-16" style="background: var(--bg-surface); border-top: 1px solid var(--border-hairline); border-bottom: 1px solid var(--border-hairline);">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="accent-bar w-10 mb-4"></div>
+    <h2 class="text-3xl font-semibold text-strong mb-2">UI 草图</h2>
+    <p class="text-muted mb-8">三栏 — 树 / 文档列表 / 详情。所有色值走 brand-blue token,light/dark 一份代码。</p>
+
+    <div class="card p-0 overflow-hidden glow">
+      <!-- toolbar -->
+      <div class="flex items-center justify-between px-4 py-3 border-b border-hairline bg-soft">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="text-faint">Workspace</span>
+          <span class="text-faint">/</span>
+          <span class="text-strong font-medium">Personal Brain</span>
+          <span class="pill pill-success ml-2"><span class="dot"></span>1,247 docs · 18,532 chunks</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong">⚙ 检索配置</button>
+          <button class="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong">🔐 Grant 管理</button>
+          <button class="px-3 py-1.5 text-xs rounded-md text-white" style="background: var(--primary);">+ 上传 / 摄取 URL</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 min-h-[560px]">
+        <!-- left tree -->
+        <aside class="col-span-3 border-r border-hairline p-4 text-sm">
+          <input type="text" placeholder="搜索文档…" class="w-full px-3 py-2 mb-4 rounded-md text-xs bg-soft border border-hairline text-default" style="background: var(--bg-soft);"/>
+          <div class="text-xs text-faint uppercase tracking-wide mb-2">Collections</div>
+          <ul class="space-y-1">
+            <li class="px-2 py-1.5 rounded text-strong font-medium" style="background: var(--primary-soft);">📁 Research</li>
+            <li class="tree-line ml-3 mt-1">
+              <ul class="space-y-1">
+                <li class="px-2 py-1 rounded text-muted hover:text-strong">📁 Papers · 2026 <span class="text-faint text-xs">(48)</span></li>
+                <li class="px-2 py-1 rounded text-muted hover:text-strong">📁 Notes <span class="text-faint text-xs">(112)</span></li>
+                <li class="px-2 py-1 rounded text-muted hover:text-strong">📁 Slides <span class="text-faint text-xs">(23)</span></li>
+              </ul>
+            </li>
+            <li class="px-2 py-1.5 rounded text-muted hover:text-strong">📁 Engineering Specs <span class="text-faint text-xs">(86)</span></li>
+            <li class="px-2 py-1.5 rounded text-muted hover:text-strong">📁 Meeting Transcripts <span class="text-faint text-xs">(34)</span></li>
+            <li class="px-2 py-1.5 rounded text-muted hover:text-strong">📁 Books · EPUB <span class="text-faint text-xs">(17)</span></li>
+            <li class="px-2 py-1.5 rounded text-muted hover:text-strong">📁 Web Clips <span class="text-faint text-xs">(204)</span></li>
+          </ul>
+          <div class="mt-6 text-xs text-faint uppercase tracking-wide mb-2">Tags</div>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="pill">#agent</span>
+            <span class="pill">#rag</span>
+            <span class="pill">#design</span>
+            <span class="pill">#team</span>
+            <span class="pill">#sqlite</span>
+          </div>
+        </aside>
+
+        <!-- middle list -->
+        <main class="col-span-5 border-r border-hairline p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-xs text-faint">Research / 全部 · 183 项</div>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="text-faint">排序</span>
+              <select class="bg-soft text-muted px-2 py-1 rounded border border-hairline" style="background: var(--bg-soft);">
+                <option>最近更新</option><option>名称</option><option>大小</option>
+              </select>
+            </div>
+          </div>
+          <ul class="space-y-2">
+            <li class="card-elev p-3 hover:border-strong cursor-pointer" style="border-color: var(--primary-soft);">
+              <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="pill mono text-[10px]">PDF</span>
+                    <span class="text-strong font-medium truncate">RAG-Survey-2026.pdf</span>
+                  </div>
+                  <div class="text-xs text-muted truncate">A comprehensive survey of retrieval-augmented generation techniques, covering hybrid retrieval, reranking…</div>
+                  <div class="text-xs text-faint mt-1.5 flex items-center gap-3">
+                    <span>📄 42 pages</span><span>🧩 218 chunks</span><span>v3</span><span>2 天前</span>
+                  </div>
+                </div>
+                <span class="pill pill-success ml-2"><span class="dot"></span>READY</span>
+              </div>
+            </li>
+            <li class="card-elev p-3 hover:border-strong cursor-pointer">
+              <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="pill mono text-[10px]">DOCX</span>
+                    <span class="text-strong font-medium truncate">2026 Q1 Strategy Memo</span>
+                  </div>
+                  <div class="text-xs text-muted truncate">Internal · roadmap, OKRs, headcount plan…</div>
+                  <div class="text-xs text-faint mt-1.5 flex items-center gap-3">
+                    <span>🧩 38 chunks</span><span>v1</span><span>5 天前</span><span class="cite">#research/notes</span>
+                  </div>
+                </div>
+                <span class="pill pill-success ml-2"><span class="dot"></span>READY</span>
+              </div>
+            </li>
+            <li class="card-elev p-3 hover:border-strong cursor-pointer">
+              <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="pill mono text-[10px]">URL</span>
+                    <span class="text-strong font-medium truncate">Anthropic · Claude Code skills 设计</span>
+                  </div>
+                  <div class="text-xs text-muted truncate">https://docs.anthropic.com/claude-code/skills · clipped 2026-04-18</div>
+                  <div class="text-xs text-faint mt-1.5 flex items-center gap-3">
+                    <span>🧩 24 chunks</span><span>v1</span></div>
+                </div>
+                <span class="pill pill-success ml-2"><span class="dot"></span>READY</span>
+              </div>
+            </li>
+            <li class="card-elev p-3">
+              <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="pill mono text-[10px]">MP3</span>
+                    <span class="text-strong font-medium truncate">2026-04-23 product sync (43min)</span>
+                  </div>
+                  <div class="text-xs text-muted truncate">Whisper transcribing… 64% · 切到 12:34</div>
+                  <div class="mt-2 score-bar"><span style="width:64%"></span></div>
+                </div>
+                <span class="pill pill-warning ml-2 relative"><span class="dot pulse-ring"></span>INDEXING</span>
+              </div>
+            </li>
+            <li class="card-elev p-3 hover:border-strong cursor-pointer">
+              <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="pill mono text-[10px]">XLSX</span>
+                    <span class="text-strong font-medium truncate">competitor-pricing.xlsx</span>
+                  </div>
+                  <div class="text-xs text-muted truncate">7 sheets · 1,432 rows → 1,432 record-chunks</div>
+                </div>
+                <span class="pill pill-success ml-2"><span class="dot"></span>READY</span>
+              </div>
+            </li>
+            <li class="card-elev p-3">
+              <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="pill mono text-[10px]">EPUB</span>
+                    <span class="text-strong font-medium truncate">designing-data-intensive-applications.epub</span>
+                  </div>
+                  <div class="text-xs text-muted truncate">Parser failed · OCR fallback needed for embedded scans</div>
+                </div>
+                <span class="pill pill-danger ml-2"><span class="dot"></span>FAILED</span>
+              </div>
+            </li>
+          </ul>
+        </main>
+
+        <!-- right detail -->
+        <aside class="col-span-4 p-4">
+          <div class="text-xs text-faint mb-2">DOCUMENT</div>
+          <h3 class="text-strong font-semibold text-base mb-1">RAG-Survey-2026.pdf</h3>
+          <div class="text-xs text-muted mb-4">42 pages · 218 chunks · v3 · 2 天前更新</div>
+
+          <div class="flex items-center gap-1 text-xs mb-4 border-b border-hairline">
+            <button class="px-3 py-2 text-strong border-b-2" style="border-color: var(--primary);">Preview</button>
+            <button class="px-3 py-2 text-muted">Chunks (218)</button>
+            <button class="px-3 py-2 text-muted">Versions</button>
+            <button class="px-3 py-2 text-muted">Metadata</button>
+          </div>
+
+          <div class="card-elev p-3 mb-3 text-xs leading-relaxed">
+            <div class="text-faint mb-2 mono">§ 2.3 Hybrid Retrieval</div>
+            <p class="text-default">
+              Hybrid retrieval combines lexical signals (BM25) with dense vector
+              similarity. Reciprocal Rank Fusion (RRF) is widely adopted for its
+              parameter-free combination behavior. Reranker models like
+              <span style="background: var(--primary-soft); padding: 0 2px; border-radius: 2px;">bge-reranker-base</span>
+              push P@5 by 8-15% over RRF alone…
+            </p>
+            <div class="text-faint mt-2 text-[11px]">page 14 · chars 8,432–9,011</div>
+          </div>
+
+          <div class="text-xs text-faint mb-2 mt-4">写入活动 · 最近</div>
+          <ul class="space-y-1.5 text-xs">
+            <li class="flex items-center gap-2 text-muted">
+              <span class="pill pill-primary mono text-[10px]">v3</span>
+              <span class="text-default">kb_update_document</span>
+              <span class="text-faint">by</span>
+              <span class="text-strong">@curator-agent</span>
+              <span class="text-faint ml-auto">2 天前</span>
+            </li>
+            <li class="flex items-center gap-2 text-muted">
+              <span class="pill mono text-[10px]">v2</span>
+              <span class="text-default">kb_tag_document</span>
+              <span class="text-faint">+#rag</span>
+              <span class="text-faint ml-auto">2 天前</span>
+            </li>
+            <li class="flex items-center gap-2 text-muted">
+              <span class="pill mono text-[10px]">v1</span>
+              <span class="text-default">created (upload)</span>
+              <span class="text-faint">by</span> <span class="text-strong">you</span>
+              <span class="text-faint ml-auto">5 天前</span>
+            </li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+
+    <!-- Retrieval Playground -->
+    <div class="mt-8 grid md:grid-cols-2 gap-6">
+      <div class="card p-6">
+        <div class="text-xs uppercase tracking-wide text-faint mb-2">Retrieval Playground</div>
+        <h3 class="text-strong font-semibold mb-4">"Personal Brain · 检索调参"</h3>
+        <div class="bg-soft rounded-md p-3 mb-3 text-sm" style="background: var(--bg-soft);">
+          <span class="text-faint">query</span> · <span class="text-strong">"hybrid retrieval reranker tradeoff"</span>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-xs mb-4">
+          <div class="card-elev p-2">
+            <div class="text-faint">BM25 weight</div>
+            <div class="text-strong text-lg font-semibold">1.0</div>
+          </div>
+          <div class="card-elev p-2">
+            <div class="text-faint">Vector weight</div>
+            <div class="text-strong text-lg font-semibold">1.0</div>
+          </div>
+          <div class="card-elev p-2">
+            <div class="text-faint">Reranker</div>
+            <div class="text-strong text-sm font-semibold mt-1">bge-base · on</div>
+          </div>
+        </div>
+        <ul class="space-y-2.5 text-sm">
+          <li>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-strong text-xs">RAG-Survey-2026.pdf · §2.3</span>
+              <span class="cite">0.91</span>
+            </div>
+            <div class="score-bar"><span style="width:91%"></span></div>
+          </li>
+          <li>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-strong text-xs">notes/reranker-cost-benchmark.md</span>
+              <span class="cite">0.84</span>
+            </div>
+            <div class="score-bar"><span style="width:84%"></span></div>
+          </li>
+          <li>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-strong text-xs">Web · cohere-vs-bge.html</span>
+              <span class="cite">0.77</span>
+            </div>
+            <div class="score-bar"><span style="width:77%"></span></div>
+          </li>
+          <li>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-strong text-xs">slides/retrieval-deck.pptx · slide 12</span>
+              <span class="cite">0.62</span>
+            </div>
+            <div class="score-bar"><span style="width:62%"></span></div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="card p-6">
+        <div class="text-xs uppercase tracking-wide text-faint mb-2">Grant 面板</div>
+        <h3 class="text-strong font-semibold mb-4">谁能写这个 KB</h3>
+        <ul class="space-y-2">
+          <li class="card-elev p-3 flex items-center justify-between">
+            <div>
+              <div class="text-strong text-sm font-medium">@curator-agent</div>
+              <div class="text-xs text-faint">挂在 employee · 永久</div>
+            </div>
+            <span class="pill pill-primary"><span class="dot"></span>WRITE</span>
+          </li>
+          <li class="card-elev p-3 flex items-center justify-between">
+            <div>
+              <div class="text-strong text-sm font-medium">skill: kb-curator</div>
+              <div class="text-xs text-faint">挂在 skill · 30 天后过期</div>
+            </div>
+            <span class="pill pill-primary"><span class="dot"></span>WRITE</span>
+          </li>
+          <li class="card-elev p-3 flex items-center justify-between">
+            <div>
+              <div class="text-strong text-sm font-medium">@meeting-bot</div>
+              <div class="text-xs text-faint">仅会议 transcript collection</div>
+            </div>
+            <span class="pill"><span class="dot"></span>WRITE · scoped</span>
+          </li>
+          <li class="card-elev p-3 flex items-center justify-between text-muted">
+            <div>
+              <div class="text-sm">all employees</div>
+              <div class="text-xs text-faint">workspace 默认</div>
+            </div>
+            <span class="pill"><span class="dot"></span>READ</span>
+          </li>
+        </ul>
+        <button class="mt-4 w-full py-2 text-xs rounded-md border border-hairline text-muted hover:text-strong">+ 颁发 grant</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TOOLS -->
+<section id="tools" class="max-w-7xl mx-auto px-6 py-16">
+  <div class="accent-bar w-10 mb-4"></div>
+  <h2 class="text-3xl font-semibold text-strong mb-2">Meta Tool 矩阵</h2>
+  <p class="text-muted mb-8">UI 上每个按钮 = 一个同名 Meta Tool。L01 回归测试自动校验配对。</p>
+
+  <div class="card p-6 scroll-x">
+    <table class="w-full text-sm min-w-[900px]">
+      <thead>
+        <tr class="text-faint text-xs uppercase tracking-wide border-b border-hairline">
+          <th class="text-left py-3 pr-4 font-medium">Tool</th>
+          <th class="text-left py-3 pr-4 font-medium">Scope</th>
+          <th class="text-left py-3 pr-4 font-medium">Confirm</th>
+          <th class="text-left py-3 pr-4 font-medium">说明</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y" style="--tw-divide-opacity:1; border-color: var(--border-hairline);">
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_list</td>
+          <td class="py-2.5 pr-4"><span class="pill">READ</span></td>
+          <td class="py-2.5 pr-4 text-faint">—</td>
+          <td class="py-2.5 pr-4 text-muted">列 workspace 下所有 KB</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_browse_collection</td>
+          <td class="py-2.5 pr-4"><span class="pill">READ</span></td>
+          <td class="py-2.5 pr-4 text-faint">—</td>
+          <td class="py-2.5 pr-4 text-muted">按路径列子 collection + 文档</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_search</td>
+          <td class="py-2.5 pr-4"><span class="pill">READ</span></td>
+          <td class="py-2.5 pr-4 text-faint">—</td>
+          <td class="py-2.5 pr-4 text-muted">Hybrid 检索 · 返回 chunks + scores + citations</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_read_document</td>
+          <td class="py-2.5 pr-4"><span class="pill">READ</span></td>
+          <td class="py-2.5 pr-4 text-faint">—</td>
+          <td class="py-2.5 pr-4 text-muted">拉文档全文或指定 section / span</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_render_citation</td>
+          <td class="py-2.5 pr-4"><span class="pill">READ</span></td>
+          <td class="py-2.5 pr-4 text-faint">—</td>
+          <td class="py-2.5 pr-4 text-muted">在聊天里发 KB.Citation render envelope</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_create_document</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-warning">WRITE</span></td>
+          <td class="py-2.5 pr-4"><span class="pill pill-primary">需要</span></td>
+          <td class="py-2.5 pr-4 text-muted">新建文档 · 无 grant 走 Defer 申请</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_update_document</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-warning">WRITE</span></td>
+          <td class="py-2.5 pr-4"><span class="pill pill-primary">需要 · 显示 diff</span></td>
+          <td class="py-2.5 pr-4 text-muted">overwrite / patch · 升 version</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_move_document</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-warning">WRITE</span></td>
+          <td class="py-2.5 pr-4"><span class="pill">需要</span></td>
+          <td class="py-2.5 pr-4 text-muted">改 collection_id</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_tag_document</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-warning">WRITE</span></td>
+          <td class="py-2.5 pr-4"><span class="pill">需要</span></td>
+          <td class="py-2.5 pr-4 text-muted">加/删 tags</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_ingest_url</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-warning">WRITE</span></td>
+          <td class="py-2.5 pr-4"><span class="pill pill-primary">需要</span></td>
+          <td class="py-2.5 pr-4 text-muted">抓 URL → parse → ingest · 支持递归</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_delete_document</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-danger">IRREVERSIBLE</span></td>
+          <td class="py-2.5 pr-4"><span class="pill pill-primary">需要</span></td>
+          <td class="py-2.5 pr-4 text-muted">软删 30 天</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_grant_permission</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-warning">WRITE</span></td>
+          <td class="py-2.5 pr-4"><span class="pill pill-primary">需要</span></td>
+          <td class="py-2.5 pr-4 text-muted">颁发/调整 grant</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_reindex_document</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-warning">WRITE</span></td>
+          <td class="py-2.5 pr-4 text-faint">—</td>
+          <td class="py-2.5 pr-4 text-muted">重跑 chunk + embed</td>
+        </tr>
+        <tr class="border-hairline border-b">
+          <td class="py-2.5 pr-4 mono text-strong">kb_set_retrieval_config</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-warning">WRITE</span></td>
+          <td class="py-2.5 pr-4 text-faint">—</td>
+          <td class="py-2.5 pr-4 text-muted">调权重 / top_k / reranker</td>
+        </tr>
+        <tr>
+          <td class="py-2.5 pr-4 mono text-strong">kb_create</td>
+          <td class="py-2.5 pr-4"><span class="pill pill-warning">WRITE</span></td>
+          <td class="py-2.5 pr-4"><span class="pill">需要</span></td>
+          <td class="py-2.5 pr-4 text-muted">新建 KB(workspace 维度)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- AGENTIC -->
+<section id="agentic" class="max-w-7xl mx-auto px-6 py-16">
+  <div class="accent-bar w-10 mb-4"></div>
+  <h2 class="text-3xl font-semibold text-strong mb-2">Agentic 检索 · 真实对话流</h2>
+  <p class="text-muted mb-8">不内置"检索引擎",检索是 stateless tool · agent 在主循环里自己驱动。</p>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <div class="card p-5">
+      <div class="text-xs text-faint mb-3">CASE A · 研究员模式 · kb-researcher skill</div>
+      <div class="space-y-3">
+        <div class="msg-user p-3 rounded-lg text-sm">我去年做的那个 hybrid retrieval 调研笔记里说 reranker 收益是多少?</div>
+        <div class="msg-tool p-2 rounded">→ kb_search(kb="brain", q="hybrid retrieval reranker 收益", k=8)</div>
+        <div class="msg-tool p-2 rounded">← 5 候选 · 最高 0.84 (notes/reranker-benchmark.md)</div>
+        <div class="msg-tool p-2 rounded">→ kb_read_document(id="doc_abc", sections=["§2 results"])</div>
+        <div class="msg-agent p-3 rounded-lg text-sm">
+          根据笔记 <span class="cite">notes#§2</span> · bge-reranker-base 把 P@5 从 0.61 提到 0.74(<span class="text-strong">+13pt</span>),代价是单次延迟 +120ms。如果开 bge-large 收益再 +3pt 但延迟翻倍。
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-5">
+      <div class="text-xs text-faint mb-3">CASE B · 沉淀模式 · kb-curator skill (有 grant)</div>
+      <div class="space-y-3">
+        <div class="msg-user p-3 rounded-lg text-sm">把刚才整理的 KB 设计要点存进 Engineering Specs collection</div>
+        <div class="msg-tool p-2 rounded">→ kb_create_document(kb="brain", collection="engineering-specs", title="KB v0 设计要点", content=…, kind=md)</div>
+        <div class="msg-tool p-2 rounded" style="border-color: var(--primary); color: var(--primary);">⏸ Confirmation Gate · "新建 1 个文档到 Engineering Specs · 24KB" · [Allow] [Deny]</div>
+        <div class="msg-tool p-2 rounded">← 已创建 doc_xyz · v1</div>
+        <div class="msg-tool p-2 rounded">→ kb_render_citation([chunk_xyz_1])</div>
+        <div class="msg-agent p-3 rounded-lg text-sm">已沉淀到 <span class="cite">engineering-specs/KB v0 设计要点</span> · 38 chunks 已索引,接下来 @researcher 就能搜到了。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-6 grid md:grid-cols-2 gap-6">
+    <div class="card p-5">
+      <div class="text-xs text-faint mb-2">SKILL · kb-researcher</div>
+      <pre class="text-xs mono leading-relaxed text-muted whitespace-pre-wrap">id: allhands.skills.kb_researcher
+name: 知识库研究员
+description: 在知识库里检索资料、引用原文回答
+tool_ids:
+  - allhands.kb.list
+  - allhands.kb.search
+  - allhands.kb.read_document
+  - allhands.kb.render_citation
+prompt_fragment: |
+  优先 kb_search 拿候选 → 必要时 kb_read_document 拉原文
+  → kb_render_citation 给引用。绝不编造。</pre>
+    </div>
+    <div class="card p-5">
+      <div class="text-xs text-faint mb-2">SKILL · kb-curator (写)</div>
+      <pre class="text-xs mono leading-relaxed text-muted whitespace-pre-wrap">id: allhands.skills.kb_curator
+name: 知识库整理员
+description: 听完会议/读完资料,把要点沉淀进 KB
+tool_ids:
+  - allhands.kb.list
+  - allhands.kb.search
+  - allhands.kb.create_document
+  - allhands.kb.update_document
+  - allhands.kb.tag_document
+prompt_fragment: |
+  写之前先 kb_search 看是否已存在(去重)。
+  新建优先 markdown · 标题用问题/结论形式 · 加 tag。</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap" class="py-16" style="background: var(--bg-surface); border-top: 1px solid var(--border-hairline);">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="accent-bar w-10 mb-4"></div>
+    <h2 class="text-3xl font-semibold text-strong mb-2">交付路线 · 6 周</h2>
+    <p class="text-muted mb-8">每个阶段都能落地用 — 不堆功能,先有 BM25 → 再加向量 → 再加 agentic。</p>
+
+    <div class="grid md:grid-cols-3 gap-4">
+      <div class="card p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="pill pill-primary">M1</span>
+          <span class="text-faint text-xs">2 周 · 最小可用</span>
+        </div>
+        <h3 class="text-strong font-semibold mb-3">把骨架立起来</h3>
+        <ul class="text-sm text-muted space-y-2">
+          <li>✦ core models + alembic</li>
+          <li>✦ parsers: md / txt / pdf</li>
+          <li>✦ chunker(heading + recursive)</li>
+          <li>✦ FTS5 BM25 检索</li>
+          <li>✦ Meta Tools: list / search / read_document / create_document</li>
+          <li>✦ UI: 三栏 + 上传 + 简易 search</li>
+          <li>✦ kb-researcher skill 上架</li>
+        </ul>
+        <div class="text-xs text-faint mt-4">验收:能上传 100 篇 PDF · agent 能引用原文回答</div>
+      </div>
+
+      <div class="card p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="pill pill-primary">M2</span>
+          <span class="text-faint text-xs">2 周 · 向量 + 多格式</span>
+        </div>
+        <h3 class="text-strong font-semibold mb-3">让检索"懂语义"</h3>
+        <ul class="text-sm text-muted space-y-2">
+          <li>✦ sqlite-vec + ModelGateway.embed</li>
+          <li>✦ docx / html / pptx / xlsx / csv / epub parser</li>
+          <li>✦ Hybrid + RRF</li>
+          <li>✦ Grant 模型 + 写 tools 全套</li>
+          <li>✦ UI: GrantPanel / RetrievalPlayground / 摄取进度时间线</li>
+          <li>✦ kb-curator skill 上架</li>
+        </ul>
+        <div class="text-xs text-faint mt-4">验收:多格式覆盖 · grant 闭环 · 检索质量肉眼可见提升</div>
+      </div>
+
+      <div class="card p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="pill pill-primary">M3</span>
+          <span class="text-faint text-xs">2 周 · Agentic + 高级</span>
+        </div>
+        <h3 class="text-strong font-semibold mb-3">把质量做硬</h3>
+        <ul class="text-sm text-muted space-y-2">
+          <li>✦ bge reranker(本地 ONNX)</li>
+          <li>✦ audio/video transcription · faster-whisper</li>
+          <li>✦ image OCR</li>
+          <li>✦ URL 摄取 + sha256 增量</li>
+          <li>✦ 检索回归:固定 query · P@5 / MRR 不退化</li>
+          <li>✦ LangFuse trace + ADR 收尾</li>
+        </ul>
+        <div class="text-xs text-faint mt-4">验收:全格式 · 回归套件 · ADR 立项</div>
+      </div>
+    </div>
+
+    <div class="mt-8 card p-6">
+      <div class="text-xs uppercase tracking-wide text-faint mb-4">原则对齐自检</div>
+      <div class="grid md:grid-cols-4 gap-3 text-sm">
+        <div><span class="kbd">P1</span> <span class="text-default ml-1">每个 UI 操作都有 Meta Tool · L01 自动验</span></div>
+        <div><span class="kbd">P2</span> <span class="text-default ml-1">不引入 KB-agent · 走 AgentLoop + skill</span></div>
+        <div><span class="kbd">P3</span> <span class="text-default ml-1">检索是 stateless tool · 多轮由主循环驱</span></div>
+        <div><span class="kbd">P4</span> <span class="text-default ml-1">researcher / curator 走渐进加载</span></div>
+        <div><span class="kbd">P5</span> <span class="text-default ml-1">大批沉淀可 spawn curator subagent</span></div>
+        <div><span class="kbd">P6</span> <span class="text-default ml-1">写走 Confirmation · 无 grant 走 Defer</span></div>
+        <div><span class="kbd">P7</span> <span class="text-default ml-1">摄取状态机 + repo · reload 续跑</span></div>
+        <div><span class="kbd">P8</span> <span class="text-default ml-1">brand-blue token · light/dark 一份代码</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="py-10 text-center text-xs text-faint">
+  <div class="max-w-7xl mx-auto px-6 border-t border-hairline pt-8">
+    allhands · Knowledge Base design preview ·
+    <span class="kbd">docs/specs/kb/2026-04-25-knowledge-base-design.md</span>
+  </div>
+</footer>
+
+<script>
+  const root = document.documentElement;
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  });
+</script>
+
+</body>
+</html>

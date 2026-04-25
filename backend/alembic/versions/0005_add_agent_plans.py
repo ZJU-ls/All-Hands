@@ -12,6 +12,7 @@ FK for the typical access pattern (look up a plan by current conversation).
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0005"

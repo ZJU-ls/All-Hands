@@ -76,11 +76,11 @@ def client(
     pause_switch: PauseSwitch,
 ) -> TestClient:
     async def _session() -> AsyncIterator[AsyncSession]:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     async def _cockpit_svc() -> AsyncIterator[CockpitService]:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield CockpitService(
                 event_repo=SqlEventRepo(s),
                 confirmation_repo=SqlConfirmationRepo(s),
@@ -102,7 +102,7 @@ def _seed(maker: async_sessionmaker[AsyncSession]) -> None:
     now = datetime.now(UTC)
 
     async def _go() -> None:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             emp_repo = SqlEmployeeRepo(s)
             trig_repo = SqlTriggerRepo(s)
             evt_repo = SqlEventRepo(s)
