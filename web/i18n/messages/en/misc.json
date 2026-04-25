@@ -212,7 +212,9 @@
       }
     },
     "versionSwitcher": {
-      "ariaLabel": "Switch version"
+      "ariaLabel": "Switch version",
+      "rollbackTitle": "Roll back to v{current} (creates a new version v{next} with content from v{current})",
+      "rollbackLabel": "Roll back to v{v}"
     },
     "mermaid": {
       "renderFailed": "Mermaid render failed: {error}"
@@ -284,7 +286,7 @@
         "size": "Disk usage",
         "sizeHint": "Sum across versions",
         "pinned": "Pinned",
-        "pinnedHint": "Team favourites",
+        "pinnedHint": "Team favorites",
         "last7d": "Last 7d",
         "last7dHint": "Recently created",
         "byKind": "By kind",
