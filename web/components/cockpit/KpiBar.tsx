@@ -30,11 +30,9 @@ type Kpi = {
   trend?: { direction: "up" | "down" | "flat"; label: string; tone: "success" | "danger" | "muted" };
 };
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
+// formatTokens centralised in `web/lib/format.ts` — re-export for callsites
+// that previously imported it from this module.
+import { formatTokens } from "@/lib/format";
 
 type KpiTranslate = (key: string, values?: Record<string, string | number>) => string;
 
