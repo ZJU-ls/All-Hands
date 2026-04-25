@@ -57,8 +57,6 @@ export function InputBar({
     finalizeStreaming,
     cancelStreaming,
     setStreamError,
-    pendingResumeRequest,
-    clearResumeRequest,
   } = useChatStore();
 
   // ADR 0014 Phase 4e · build the AG-UI stream callbacks once per render so
@@ -122,32 +120,6 @@ export function InputBar({
             diff: ev.diff,
             conversationId,
             source: "polling",
-          });
-        } else if (name === "allhands.interrupt_required") {
-          // ADR 0014 Phase 4e · LangGraph interrupt() surfaced as CUSTOM.
-          // Payload shape: { interrupt_id, value: { kind, tool_call_id,
-          // summary, rationale, diff? } }. We unwrap the nested value so
-          // the ConfirmationDialog sees the same fields it gets for the
-          // legacy polling path and can stay largely source-agnostic.
-          const ev = (value ?? {}) as {
-            interrupt_id?: string;
-            value?: {
-              tool_call_id?: string;
-              summary?: string;
-              rationale?: string;
-              diff?: Record<string, unknown> | null;
-            };
-          };
-          if (!ev.interrupt_id) return;
-          const inner = ev.value ?? {};
-          addConfirmation({
-            confirmationId: ev.interrupt_id,
-            toolCallId: inner.tool_call_id ?? "",
-            summary: inner.summary ?? "",
-            rationale: inner.rationale ?? "",
-            diff: inner.diff,
-            conversationId,
-            source: "interrupt",
           });
         } else if (name === "allhands.render") {
           const ev = (value ?? {}) as {
@@ -244,36 +216,11 @@ export function InputBar({
     buildStreamCallbacks,
   ]);
 
-  // ADR 0014 Phase 4e · subscribe to resume requests from the
-  // ConfirmationDialog. When the user approves/rejects an interrupt-sourced
-  // confirmation, the Dialog publishes to the store; this effect opens a
-  // /resume SSE and pipes it through the same callbacks as the original
-  // turn so the UI sees "one continuous turn with a pause in the middle".
-  useEffect(() => {
-    if (!pendingResumeRequest) return;
-    if (pendingResumeRequest.conversationId !== conversationId) {
-      // A resume for a different conversation — not ours to handle; leave
-      // the request in the store so the matching InputBar picks it up.
-      return;
-    }
-    // beginTurn re-flips isStreaming so the user sees the pending-bubble
-    // state during the resume leg (otherwise the UI looks frozen between
-    // dialog close and the first continuation token).
-    beginTurn();
-    const handle = openStream(
-      `${BASE}/api/conversations/${conversationId}/resume`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume_value: pendingResumeRequest.decision }),
-      },
-      buildStreamCallbacks(),
-    );
-    streamRef.current = handle;
-    // Clear the request so the same decision doesn't double-fire on next
-    // render (e.g. after a store update that isn't related to this flow).
-    clearResumeRequest();
-  }, [pendingResumeRequest, conversationId, beginTurn, buildStreamCallbacks, clearResumeRequest]);
+  // ADR 0018 · resume protocol simplified to a single round-trip.
+  // ConfirmationDialog flips the Confirmation row directly via
+  // /api/confirmations/{id}/resolve; the backend's polling
+  // DeferredSignal sees the flip and unblocks the in-flight /messages
+  // SSE. No second SSE, no client-side resume bookkeeping.
 
   const handleAbort = useCallback(() => {
     streamRef.current?.abort();

@@ -7,6 +7,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useDismissOnEscape } from "@/lib/use-dismiss-on-escape";
 
 /**
  * Market page · ADR 0016 V2 Azure Live polish.
@@ -1140,6 +1141,8 @@ function Drawer({
   children: React.ReactNode;
 }) {
   const t = useTranslations("market.list.drawer");
+  // ESC closes the drawer — matches the global dialog contract.
+  useDismissOnEscape(true, onClose);
   return (
     <div
       className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex justify-end animate-fade-up"

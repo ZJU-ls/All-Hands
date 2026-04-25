@@ -351,6 +351,20 @@ def _facade_stream(
     """
     from allhands.execution.agent_loop import AgentLoop
 
+    # ADR 0018: if the gate doubles as a DeferredSignal (PersistentConfirmationGate
+    # does · BaseGate does NOT) hand it to AgentLoop as the confirmation_signal.
+    # Falls back to None for AutoApproveGate / AutoRejectGate (test paths) — those
+    # don't need to defer; AgentLoop's _permission_check returns Allow when no
+    # signal is wired.
+    # cast to DeferredSignal when the gate implements its protocol (duck-typed)
+    from allhands.execution.deferred import DeferredSignal as _DefSig
+
+    confirmation_signal: _DefSig | None = (
+        gate  # type: ignore[assignment]
+        if hasattr(gate, "publish") and hasattr(gate, "wait")
+        else None
+    )
+
     loop = AgentLoop(
         employee=employee,
         tool_registry=tool_registry,
@@ -361,6 +375,7 @@ def _facade_stream(
         runtime=runtime,
         spawn_subagent_service=spawn_subagent_service,
         model_ref_override=model_ref_override,
+        confirmation_signal=confirmation_signal,
     )
 
     async def _gen() -> AsyncIterator[AgentEvent]:

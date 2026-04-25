@@ -32,6 +32,7 @@ import {
   type ProviderKind,
 } from "@/components/gateway/ProviderSection";
 import type { GatewayModel } from "@/components/gateway/ModelRow";
+import { useDismissOnEscape } from "@/lib/use-dismiss-on-escape";
 import type { PingState } from "@/components/gateway/PingIndicator";
 
 type ProviderPreset = {
@@ -185,12 +186,80 @@ function GatewayPageInner() {
         }));
         return;
       }
-      const data = (await res.json()) as {
+      // New 2-layer ping shape (services/connectivity.py · to_legacy_shape)
+      type PingResponse = {
         ok: boolean;
         latency_ms?: number;
-        error?: string;
-        error_category?: string;
+        error?: string | null;
+        error_category?: string | null;
+        status?:
+          | "ok"
+          | "degraded"
+          | "endpoint_unreachable"
+          | "auth_failed"
+          | "model_unavailable";
+        endpoint?: {
+          reachable: boolean;
+          auth_ok: boolean | null;
+          status_code: number | null;
+          latency_ms: number;
+          error_kind:
+            | "ok"
+            | "network"
+            | "timeout"
+            | "auth"
+            | "not_found"
+            | "server_error"
+            | "unknown";
+          error?: string | null;
+        };
+        model_probe?: {
+          usable: boolean;
+          classification:
+            | "ok"
+            | "auth"
+            | "model_not_found"
+            | "network"
+            | "timeout"
+            | "rate_limit"
+            | "provider_error"
+            | "param_error"
+            | "unknown";
+          status_code: number | null;
+          latency_ms: number;
+          error?: string | null;
+        };
       };
+      const data = (await res.json()) as PingResponse;
+
+      // Prefer the structured 2-layer state when the backend returned it.
+      if (data.endpoint && data.model_probe && data.status) {
+        setPingStates((prev) => ({
+          ...prev,
+          [model.id]: {
+            status: "done",
+            overall: data.status!,
+            endpoint: {
+              reachable: data.endpoint!.reachable,
+              authOk: data.endpoint!.auth_ok,
+              statusCode: data.endpoint!.status_code,
+              latencyMs: data.endpoint!.latency_ms,
+              errorKind: data.endpoint!.error_kind,
+              error: data.endpoint!.error ?? null,
+            },
+            model: {
+              usable: data.model_probe!.usable,
+              classification: data.model_probe!.classification,
+              statusCode: data.model_probe!.status_code,
+              latencyMs: data.model_probe!.latency_ms,
+              error: data.model_probe!.error ?? null,
+            },
+          },
+        }));
+        return;
+      }
+
+      // Fallback to legacy single-tone shape (older backends / mocked tests).
       if (data.ok) {
         setPingStates((prev) => ({
           ...prev,
@@ -1116,6 +1185,8 @@ function Modal({
   onClose: () => void;
 }) {
   const t = useTranslations("gateway.page");
+  // ESC = close — shared by all ProviderFormDialog / ModelFormDialog on Gateway
+  useDismissOnEscape(true, onClose);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
