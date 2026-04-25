@@ -97,7 +97,7 @@ export function RunHeader({ run }: { run: RunDetailDto }) {
             </span>
             <span
               className={cn(
-                "inline-flex h-5 items-center gap-1 rounded-full border px-2 font-mono text-[10px]",
+                "inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 font-mono text-[10px]",
                 status.chipClass,
               )}
             >
@@ -125,10 +125,16 @@ export function RunHeader({ run }: { run: RunDetailDto }) {
           <TraceChip runId={run.run_id} label={run.run_id.slice(0, 8)} />
         </div>
       </div>
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-3 text-caption sm:grid-cols-4">
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-3 text-caption sm:grid-cols-3 lg:grid-cols-5">
         <div>
           <dt className="text-text-muted">{t("employee")}</dt>
-          <dd className="text-text">{run.employee_name ?? fallback}</dd>
+          <dd className="text-text truncate">{run.employee_name ?? fallback}</dd>
+        </div>
+        <div>
+          <dt className="text-text-muted">{t("model")}</dt>
+          <dd className="font-mono text-text truncate" title={run.model_ref ?? undefined}>
+            {run.model_ref ?? fallback}
+          </dd>
         </div>
         <div>
           <dt className="text-text-muted">{t("duration")}</dt>
@@ -136,7 +142,16 @@ export function RunHeader({ run }: { run: RunDetailDto }) {
         </div>
         <div>
           <dt className="text-text-muted">{t("tokens")}</dt>
-          <dd className="font-mono text-text">{run.tokens.total || 0}</dd>
+          {run.tokens.total > 0 ? (
+            <dd className="font-mono text-text">
+              {run.tokens.total.toLocaleString()}
+              <span className="ml-1 text-text-subtle text-[10px]">
+                · in {run.tokens.prompt.toLocaleString()} · out {run.tokens.completion.toLocaleString()}
+              </span>
+            </dd>
+          ) : (
+            <dd className="font-mono text-text-subtle">{fallback}</dd>
+          )}
         </div>
         <div>
           <dt className="text-text-muted">{t("startedAt")}</dt>

@@ -63,6 +63,24 @@ class ObservatoryEmployeeBreakdown(BaseModel):
     employee_id: str
     employee_name: str
     runs_count: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+    model_config = {"frozen": True}
+
+
+class ObservatoryModelBreakdown(BaseModel):
+    """Per-model rollup row · keyed on the resolved ``model_ref`` written
+    into the ``run.completed`` payload. Counts every run that hit that
+    binding plus the in / out / total token sums.
+    """
+
+    model_ref: str
+    runs_count: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
 
     model_config = {"frozen": True}
 
@@ -78,7 +96,12 @@ class ObservatorySummary(BaseModel):
     failure_rate_24h: float = 0.0
     latency_p50_s: float = 0.0
     avg_tokens_per_run: int = 0
+    input_tokens_total: int = 0
+    output_tokens_total: int = 0
+    total_tokens_total: int = 0
+    llm_calls_total: int = 0
     by_employee: list[ObservatoryEmployeeBreakdown] = Field(default_factory=list)
+    by_model: list[ObservatoryModelBreakdown] = Field(default_factory=list)
     observability_enabled: bool = False
     bootstrap_status: BootstrapStatus = BootstrapStatus.PENDING
     bootstrap_error: str | None = None
@@ -138,7 +161,28 @@ class TurnMessage(BaseModel):
     model_config = {"frozen": True}
 
 
-Turn = TurnUserInput | TurnThinking | TurnToolCall | TurnMessage
+class TurnLLMCall(BaseModel):
+    """A single ``model.astream`` round-trip rendered as a timeline segment.
+
+    Sourced from the ``llm.call`` event the chat service emits per turn.
+    Carries the model identifier, wall-clock duration, and the per-call
+    token split so the trace viewer can show "LLM call #N · gpt-4o-mini ·
+    3.2s · in 1.2k / out 420 / total 1.6k".
+    """
+
+    kind: Literal["llm_call"] = "llm_call"
+    call_index: int
+    model_ref: str | None = None
+    duration_s: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    ts: datetime
+
+    model_config = {"frozen": True}
+
+
+Turn = TurnUserInput | TurnThinking | TurnToolCall | TurnMessage | TurnLLMCall
 
 
 class RunTokenUsage(BaseModel):
@@ -152,6 +196,26 @@ class RunTokenUsage(BaseModel):
 class RunError(BaseModel):
     message: str
     kind: str = "unknown"
+
+    model_config = {"frozen": True}
+
+
+class ArtifactSummary(BaseModel):
+    """Minimal artifact projection embedded in ``RunDetail``.
+
+    Sourced via ``ArtifactRepo.list_by_run_id`` — every artifact this run
+    wrote (``created_by_run_id == run_id``). Lets the trace drawer render
+    a "产出制品" panel without a second round-trip.
+    """
+
+    id: str
+    name: str
+    kind: str
+    mime_type: str
+    version: int
+    size_bytes: int = 0
+    pinned: bool = False
+    created_at: datetime
 
     model_config = {"frozen": True}
 
@@ -175,8 +239,11 @@ class RunDetail(BaseModel):
     finished_at: datetime | None = None
     duration_s: float | None = None
     tokens: RunTokenUsage = Field(default_factory=RunTokenUsage)
+    llm_calls: int = 0
+    model_ref: str | None = None
     error: RunError | None = None
     turns: list[Turn] = Field(default_factory=list)
+    artifacts: list[ArtifactSummary] = Field(default_factory=list)
 
     model_config = {"frozen": True}
 
@@ -186,23 +253,31 @@ class TraceSummary(BaseModel):
 
     Deliberately trace_id-addressable so the Lead Agent can answer
     'how many runs did writer do last week' and hand back clickable ids.
+
+    ``tokens`` carries the per-run input / output / total split; the legacy
+    single-int field stays available via ``tokens.total`` for callers that
+    only care about a headline number.
     """
 
     trace_id: str
     employee_id: str | None = None
     employee_name: str | None = None
-    status: str = "ok"  # "ok" | "failed"
+    model_ref: str | None = None
+    status: str = "ok"  # "ok" | "failed" | "running"
     duration_s: float | None = None
-    tokens: int = 0
+    tokens: RunTokenUsage = Field(default_factory=RunTokenUsage)
+    llm_calls: int = 0
     started_at: datetime
 
     model_config = {"frozen": True}
 
 
 __all__ = [
+    "ArtifactSummary",
     "BootstrapStatus",
     "ObservabilityConfig",
     "ObservatoryEmployeeBreakdown",
+    "ObservatoryModelBreakdown",
     "ObservatorySummary",
     "RunDetail",
     "RunError",
@@ -210,6 +285,7 @@ __all__ = [
     "RunTokenUsage",
     "TraceSummary",
     "Turn",
+    "TurnLLMCall",
     "TurnMessage",
     "TurnThinking",
     "TurnToolCall",

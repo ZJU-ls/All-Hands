@@ -58,9 +58,11 @@ function makeTrace(over: Partial<TraceSummaryDto> = {}): TraceSummaryDto {
     trace_id: over.trace_id ?? "tr_1",
     employee_id: over.employee_id ?? "emp_1",
     employee_name: over.employee_name ?? "writer",
+    model_ref: over.model_ref ?? null,
     status: over.status ?? "ok",
     duration_s: over.duration_s ?? 1.2,
-    tokens: over.tokens ?? 1500,
+    tokens: over.tokens ?? { prompt: 1000, completion: 500, total: 1500 },
+    llm_calls: over.llm_calls ?? 1,
     started_at: over.started_at ?? "2026-04-19T12:00:00Z",
   };
 }
@@ -137,12 +139,12 @@ describe("/traces page", () => {
       traces: [
         makeTrace({
           trace_id: "tr_small",
-          tokens: 100,
+          tokens: { prompt: 60, completion: 40, total: 100 },
           started_at: "2026-04-19T12:00:00Z",
         }),
         makeTrace({
           trace_id: "tr_big",
-          tokens: 9000,
+          tokens: { prompt: 6000, completion: 3000, total: 9000 },
           started_at: "2026-04-19T11:00:00Z",
         }),
       ],

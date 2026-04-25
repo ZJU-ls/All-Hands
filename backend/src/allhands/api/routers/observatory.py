@@ -90,7 +90,7 @@ async def post_bootstrap(
 async def list_traces(
     svc: ObservatoryService = Depends(get_observatory_service),
     employee_id: str | None = Query(default=None),
-    status: str | None = Query(default=None, pattern="^(ok|failed)$"),
+    status: str | None = Query(default=None, pattern="^(ok|failed|running)$"),
     since: datetime | None = Query(default=None),
     until: datetime | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),

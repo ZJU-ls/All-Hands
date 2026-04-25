@@ -46,8 +46,8 @@ export function sortTraces(traces: TraceSummaryDto[], sort: TraceSort): TraceSum
       av = a.duration_s ?? 0;
       bv = b.duration_s ?? 0;
     } else if (sort.key === "tokens") {
-      av = a.tokens;
-      bv = b.tokens;
+      av = a.tokens.total;
+      bv = b.tokens.total;
     } else {
       av = new Date(a.started_at).getTime();
       bv = new Date(b.started_at).getTime();
@@ -139,6 +139,7 @@ export function TraceTable({
         {traces.map((row) => {
           const active = row.trace_id === selectedId;
           const failed = row.status === "failed";
+          const running = row.status === "running";
           return (
             <tr
               key={row.trace_id}
@@ -180,21 +181,31 @@ export function TraceTable({
                     "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium " +
                     (failed
                       ? "bg-danger-soft text-danger"
-                      : "bg-success-soft text-success")
+                      : running
+                        ? "bg-warning-soft text-warning"
+                        : "bg-success-soft text-success")
                   }
                 >
                   <Icon
-                    name={failed ? "alert-circle" : "check-circle-2"}
+                    name={failed ? "alert-circle" : running ? "loader" : "check-circle-2"}
                     size={11}
+                    className={running ? "animate-spin-slow" : undefined}
                   />
-                  {failed ? t("failed") : t("ok")}
+                  {failed ? t("failed") : running ? t("running") : t("ok")}
                 </span>
               </td>
               <td className="py-2.5 px-3 text-right font-mono text-[11px] text-text-muted tabular-nums">
                 {formatDuration(row.duration_s)}
               </td>
-              <td className="py-2.5 px-3 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                {row.tokens.toLocaleString()}
+              <td
+                className="py-2.5 px-3 text-right font-mono text-[11px] text-text-muted tabular-nums"
+                title={
+                  row.tokens.total > 0
+                    ? `in ${row.tokens.prompt.toLocaleString()} · out ${row.tokens.completion.toLocaleString()} · total ${row.tokens.total.toLocaleString()}`
+                    : undefined
+                }
+              >
+                {row.tokens.total > 0 ? row.tokens.total.toLocaleString() : "—"}
               </td>
               <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted">
                 {formatStartedAt(row.started_at)}

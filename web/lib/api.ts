@@ -431,3 +431,41 @@ export async function previewEmployeeComposition(body: {
   }
   return res.json() as Promise<EmployeePreviewResult>;
 }
+
+// ADR 0019 C1 · ProgressPanel data source ----------------------------
+
+export type PlanStepStatus = "pending" | "running" | "done" | "skipped" | "failed";
+
+export type PlanStepDto = {
+  index: number;
+  title: string;
+  status: PlanStepStatus;
+  note: string | null;
+};
+
+export type PlanLatestDto = {
+  plan_id: string;
+  title: string;
+  owner_employee_id: string;
+  created_at: string;
+  updated_at: string;
+  steps: PlanStepDto[];
+};
+
+/** Fetch the latest plan for the conversation. ``null`` (200 status, null
+ * body) when the agent hasn't called plan_create yet — caller should hide
+ * the plan section in that case. */
+export async function getLatestPlan(
+  conversationId: string,
+): Promise<PlanLatestDto | null> {
+  const res = await fetch(
+    `${BASE}/api/conversations/${conversationId}/plans/latest`,
+  );
+  if (!res.ok) {
+    // Network / 5xx errors fall through as null so the panel stays
+    // empty rather than blocking chat with an error toast.
+    return null;
+  }
+  const body = (await res.json()) as PlanLatestDto | null;
+  return body;
+}
