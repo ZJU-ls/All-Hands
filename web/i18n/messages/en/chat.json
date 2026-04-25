@@ -30,7 +30,9 @@
       "placeholder": "Type a message…",
       "stop": "Stop",
       "send": "Send",
-      "thinking": "Deep thinking"
+      "thinking": "Deep thinking",
+      "thinkingTooltipOn": "On · force the model to think (sends the thinking-enabled signal)",
+      "thinkingTooltipOff": "Off · use the model's default. For guaranteed no-thinking, pick a non-thinking variant of the model"
     },
     "header": {
       "loading": "Loading…",

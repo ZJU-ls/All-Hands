@@ -311,9 +311,9 @@ def _is_anthropic(provider: LLMProvider) -> bool:
 def _is_native_anthropic_base(base_url: str | None) -> bool:
     """True when base_url points at api.anthropic.com (not a compat gateway).
 
-    Native Anthropic only accepts `thinking.type == "enabled"`; sending
-    `"disabled"` 400s. DashScope / Zhipu / coding-plan gateways reuse the
-    Anthropic wire but accept `"disabled"` as the official off-switch.
+    Kept for callers that historically branched on it; the new opt-in-only
+    thinking policy doesn't actually need to distinguish (we never send
+    `thinking: disabled` to anyone).
     """
     base = (base_url or "").lower()
     return "api.anthropic.com" in base
