@@ -237,6 +237,43 @@ async def list_messages(
     return [_to_message_response(m) for m in messages]
 
 
+@router.get("/{conversation_id}/plans/latest")
+async def get_latest_plan(
+    conversation_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object] | None:
+    """Latest agent-authored plan for this conversation · ADR 0019 C1.
+
+    Powers the ProgressPanel's plan section. Returns ``None`` (200 status,
+    null body) when the agent hasn't called plan_create yet — the
+    frontend treats null as "no plan, hide the section". Mirrors the
+    repo's ``get_latest_for_conversation`` directly without going through
+    ChatService since this is a pure read with no side effects.
+    """
+    from allhands.persistence.sql_repos import SqlAgentPlanRepo
+
+    repo = SqlAgentPlanRepo(session)
+    plan = await repo.get_latest_for_conversation(conversation_id)
+    if plan is None:
+        return None
+    return {
+        "plan_id": plan.id,
+        "title": plan.title,
+        "owner_employee_id": plan.owner_employee_id,
+        "created_at": plan.created_at.isoformat(),
+        "updated_at": plan.updated_at.isoformat(),
+        "steps": [
+            {
+                "index": s.index,
+                "title": s.title,
+                "status": s.status.value,
+                "note": s.note,
+            }
+            for s in plan.steps
+        ],
+    }
+
+
 @router.post("/{conversation_id}/branch", response_model=ConversationResponse)
 async def branch_conversation(
     conversation_id: str,
