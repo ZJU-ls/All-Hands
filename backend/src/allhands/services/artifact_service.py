@@ -55,6 +55,7 @@ _KIND_EXT: dict[ArtifactKind, str] = {
     ArtifactKind.IMAGE: "bin",
     ArtifactKind.DATA: "json",
     ArtifactKind.MERMAID: "mmd",
+    ArtifactKind.DRAWIO: "drawio",
 }
 
 _DEFAULT_MIME: dict[ArtifactKind, str] = {
@@ -64,6 +65,7 @@ _DEFAULT_MIME: dict[ArtifactKind, str] = {
     ArtifactKind.IMAGE: "application/octet-stream",
     ArtifactKind.DATA: "application/json",
     ArtifactKind.MERMAID: "text/vnd.mermaid",
+    ArtifactKind.DRAWIO: "application/vnd.jgraph.mxfile",
 }
 
 
@@ -162,6 +164,14 @@ class ArtifactService:
         pinned_only: bool = False,
         include_deleted: bool = False,
         limit: int = 100,
+        conversation_id: str | None = None,
+        employee_id: str | None = None,
+        status: str | None = None,
+        tag: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        q: str | None = None,
+        sort: str = "updated_at_desc",
     ) -> list[Artifact]:
         return await self._repo.list_for_workspace(
             workspace_id,
@@ -170,6 +180,14 @@ class ArtifactService:
             pinned_only=pinned_only,
             include_deleted=include_deleted,
             limit=limit,
+            conversation_id=conversation_id,
+            employee_id=employee_id,
+            status=status,
+            tag=tag,
+            created_after=created_after,
+            created_before=created_before,
+            q=q,
+            sort=sort,
         )
 
     async def search(

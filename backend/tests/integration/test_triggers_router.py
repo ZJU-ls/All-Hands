@@ -25,7 +25,7 @@ def client() -> TestClient:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     async def _trigger_service(session: AsyncSession = Depends(_session)) -> TriggerService:

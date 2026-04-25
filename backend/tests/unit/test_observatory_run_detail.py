@@ -159,7 +159,7 @@ async def _seed(
     conversation: Conversation | None = None,
     employees: list[Employee] | None = None,
 ) -> None:
-    async with maker() as s, s.begin():
+    async with maker() as s:
         emp_repo = SqlEmployeeRepo(s)
         evt_repo = SqlEventRepo(s)
         conv_repo = SqlConversationRepo(s)
@@ -207,7 +207,7 @@ async def test_returns_none_when_unknown_run(
     maker: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed(maker)
-    async with maker() as s, s.begin():
+    async with maker() as s:
         assert await _svc(s).get_run_detail("run_does_not_exist") is None
 
 
@@ -233,7 +233,7 @@ async def test_user_plus_plain_assistant_answer(
             _run_completed(run, ts=now + timedelta(seconds=2), duration_s=2.0),
         ],
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         detail = await _svc(s).get_run_detail(run)
 
     assert detail is not None
@@ -269,7 +269,7 @@ async def test_assistant_with_reasoning_emits_thinking_before_message(
         ],
         events=[_run_completed(run, ts=now + timedelta(seconds=2))],
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         detail = await _svc(s).get_run_detail(run)
 
     assert detail is not None
@@ -318,7 +318,7 @@ async def test_tool_call_pairs_with_following_tool_result(
         ],
         events=[_run_completed(run, ts=now + timedelta(seconds=4))],
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         detail = await _svc(s).get_run_detail(run)
 
     assert detail is not None
@@ -358,7 +358,7 @@ async def test_tool_call_without_result_stays_unreturned(
         ],
         events=[_run_started(run, ts=now)],
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         detail = await _svc(s).get_run_detail(run)
 
     assert detail is not None
@@ -382,7 +382,7 @@ async def test_failed_run_surfaces_error_and_status(
         ],
         events=[_run_failed(run, ts=now + timedelta(seconds=1), error="401 Unauthorized")],
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         detail = await _svc(s).get_run_detail(run)
 
     assert detail is not None
@@ -427,7 +427,7 @@ async def test_task_id_is_resolved_from_task_run_ids(
         events=[_run_completed(run, ts=now + timedelta(seconds=2))],
         tasks=[task],
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         detail = await _svc(s).get_run_detail(run)
 
     assert detail is not None
@@ -454,7 +454,7 @@ async def test_system_messages_are_skipped(
         ],
         events=[_run_completed(run, ts=now + timedelta(seconds=3))],
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         detail = await _svc(s).get_run_detail(run)
 
     assert detail is not None

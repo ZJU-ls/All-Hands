@@ -61,11 +61,11 @@ def maker() -> async_sessionmaker[AsyncSession]:
 @pytest.fixture
 def client(maker: async_sessionmaker[AsyncSession]) -> TestClient:
     async def _session() -> AsyncIterator[AsyncSession]:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     async def _svc() -> AsyncIterator[ObservatoryService]:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield ObservatoryService(
                 event_repo=SqlEventRepo(s),
                 employee_repo=SqlEmployeeRepo(s),
@@ -85,7 +85,7 @@ def _seed(maker: async_sessionmaker[AsyncSession]) -> str:
     now = datetime.now(UTC)
 
     async def _go() -> None:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             emp_repo = SqlEmployeeRepo(s)
             conv_repo = SqlConversationRepo(s)
             evt_repo = SqlEventRepo(s)

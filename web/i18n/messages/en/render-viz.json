@@ -1,0 +1,107 @@
+{
+  "viz": {
+    "barChart": {
+      "sortDesc": "Sort · descending (click to flip)",
+      "sortAsc": "Sort · ascending (click to reset)",
+      "sortDefault": "Sort · default order (click to flip)",
+      "muted": "Hidden · click to restore",
+      "activeTooltip": "{value} · {pct}% share · click to hide",
+      "empty": "No bars"
+    },
+    "callout": {
+      "copyLabel": "Copy content",
+      "dismiss": "Dismiss"
+    },
+    "cards": {
+      "sortAToZ": "Title A→Z (click again to flip)",
+      "sortZToA": "Title Z→A (click again to reset)",
+      "sortDefault": "Sort by title (default · click to flip)",
+      "searchPlaceholder": "Search cards…",
+      "empty": "No matching cards",
+      "emptyAll": "No cards"
+    },
+    "code": {
+      "wrapOn": "Enable wrap · long lines stop scrolling horizontally",
+      "wrapOff": "Disable wrap",
+      "wrap": "Wrap",
+      "wrapped": "Wrapped",
+      "copyLabel": "Copy code"
+    },
+    "diff": {
+      "expandUnchanged": "Click to expand unchanged lines",
+      "unchangedRow": "⋯ {count} unchanged lines · L{startLine}",
+      "copyBefore": "Copy Before",
+      "copyAfter": "Copy After"
+    },
+    "kv": {
+      "searchPlaceholder": "Filter keys…",
+      "empty": "No items",
+      "noMatch": "No matching items",
+      "copyLabel": "Copy {label}"
+    },
+    "lineChart": {
+      "allHidden": "All series hidden · click a legend to restore",
+      "empty": "No series",
+      "legendHidden": "Hidden · click to restore",
+      "legendVisible": "Click to hide"
+    },
+    "linkCard": {
+      "copyLabel": "Copy link"
+    },
+    "pieChart": {
+      "empty": "No slices",
+      "isolated": "Focused · click to release",
+      "tooltip": "{value} · {pct}% · click to focus"
+    },
+    "stat": {
+      "copyLabel": "Copy metric",
+      "directionUp": "Up",
+      "directionDown": "Down",
+      "directionFlat": "Flat"
+    },
+    "steps": {
+      "empty": "No steps",
+      "progress": "{done}/{total} · {pct}% done",
+      "showDone": "Show completed steps",
+      "hideDone": "Hide completed steps",
+      "folded": "Completed folded",
+      "fold": "Fold completed",
+      "foldedSummary": "⋯ {count} completed · click to expand"
+    },
+    "table": {
+      "searchPlaceholder": "Filter rows…",
+      "densityCozy": "Cozy",
+      "densityCompact": "Compact",
+      "copyCsv": "Copy as CSV",
+      "noMatch": "No matching rows",
+      "empty": "No rows",
+      "sortBy": "Sort by {label}"
+    },
+    "timeline": {
+      "statusPending": "Pending",
+      "statusInProgress": "In progress",
+      "statusDone": "Done",
+      "statusFailed": "Failed",
+      "filterAll": "All",
+      "empty": "No matching events"
+    }
+  },
+  "renderShared": {
+    "copyButton": {
+      "label": "Copy",
+      "copied": "Copied"
+    },
+    "searchInput": {
+      "placeholder": "Search…",
+      "clear": "Clear"
+    }
+  },
+  "modelTestMetrics": {
+    "latency": "Latency",
+    "ttft": "TTFT",
+    "ttftThinking": "TTFT · thinking",
+    "ttftAnswer": "TTFT · answer",
+    "tokIO": "Tokens in/out/total",
+    "tokPerSec": "Tokens/sec"
+  }
+}

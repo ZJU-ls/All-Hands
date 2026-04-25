@@ -156,7 +156,7 @@ async def _seed(
     events: list[EventEnvelope] = (),  # type: ignore[assignment]
     confirmations: list[Confirmation] = (),  # type: ignore[assignment]
 ) -> None:
-    async with maker() as s, s.begin():
+    async with maker() as s:
         emp_repo = SqlEmployeeRepo(s)
         conv_repo = SqlConversationRepo(s)
         trig_repo = SqlTriggerRepo(s)
@@ -380,7 +380,7 @@ async def test_tasks_kpis_populate_from_task_service(
     """
     from allhands.core import TaskSource
 
-    async with maker() as s, s.begin():
+    async with maker() as s:
         tsvc = TaskService(SqlTaskRepo(s))
         t1 = await tsvc.create(
             title="queued-task",

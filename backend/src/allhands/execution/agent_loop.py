@@ -206,6 +206,7 @@ class AgentLoop:
         user_input_signal: DeferredSignal | None = None,
         plan_repo: Any = None,
         conversation_id: str = "",
+        run_id: str | None = None,
         **_unused: Any,
     ) -> None:
         self._employee = employee
@@ -223,6 +224,12 @@ class AgentLoop:
         # registry stubs (return empty / ignore).
         self._plan_repo = plan_repo
         self._conversation_id = conversation_id
+        # 2026-04-25 · run_id is the per-turn identifier minted by chat_service.
+        # Tools that produce persistent artefacts (artifact_create / update /
+        # rollback) need it for provenance ("which run made this version") so
+        # the audit trail and /artifacts page filters can answer "what came
+        # out of run X".
+        self._run_id = run_id
         # Deferred suspend primitive used by _permission_check to gate
         # WRITE+ / requires_confirmation tool execution. None = legacy
         # auto-approve behaviour (matches old AutoApproveGate path);
@@ -486,6 +493,38 @@ class AgentLoop:
                     repo=self._plan_repo,
                     conversation_id=self._conversation_id,
                 )
+
+        # 2026-04-25 v2 · artifact provenance binding. Artifact create/update/
+        # rollback executors carry conversation_id / employee_id / run_id so
+        # the produced artifact / version row points back at the chat turn
+        # that produced it. The /artifacts page filters on these. Without
+        # substitution they fall back to the registry's bare-bones executor
+        # (workspace-scoped, no provenance) — still works, just orphaned.
+        if tool_id in (
+            "allhands.artifacts.create",
+            "allhands.artifacts.update",
+            "allhands.artifacts.rollback",
+        ):
+            from allhands.execution.tools.meta.executors import (
+                make_artifact_create_executor,
+                make_artifact_rollback_executor,
+                make_artifact_update_executor,
+            )
+            from allhands.persistence.db import get_sessionmaker
+
+            maker = get_sessionmaker()
+            kwargs = {
+                "conversation_id": self._conversation_id or None,
+                "employee_id": self._employee.id,
+                "run_id": self._run_id,
+            }
+            if tool_id == "allhands.artifacts.create":
+                return make_artifact_create_executor(maker, **kwargs)
+            if tool_id == "allhands.artifacts.update":
+                return make_artifact_update_executor(maker, **kwargs)
+            if tool_id == "allhands.artifacts.rollback":
+                return make_artifact_rollback_executor(maker, **kwargs)
+
         return default
 
     def _build_dispatch_executor(self) -> Any:

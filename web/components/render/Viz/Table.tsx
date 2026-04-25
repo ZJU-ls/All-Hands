@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -29,6 +30,7 @@ type Row = Record<string, unknown>;
  *   - auto-right-align numeric columns (sampled from first 8 rows)
  */
 export function Table({ props }: RenderProps) {
+  const t = useTranslations("viz.table");
   const rawColumns = props.columns;
   const columns = useMemo<Column[]>(() => {
     if (!Array.isArray(rawColumns)) return [];
@@ -134,10 +136,10 @@ export function Table({ props }: RenderProps) {
         <SearchInput
           value={query}
           onChange={setQuery}
-          placeholder="筛选行…"
+          placeholder={t("searchPlaceholder")}
           hint={filteredHint}
         />
-        <CopyButton value={csv} label="复制为 CSV" />
+        <CopyButton value={csv} label={t("copyCsv")} />
       </Toolbar>
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-separate border-spacing-0">
@@ -157,7 +159,7 @@ export function Table({ props }: RenderProps) {
                         isSorted ? "text-primary" : ""
                       }`}
                       onClick={() => toggleSort(c.key)}
-                      aria-label={`Sort by ${c.label}`}
+                      aria-label={t("sortBy", { label: c.label })}
                     >
                       <span>{c.label}</span>
                       <Icon
@@ -213,7 +215,7 @@ export function Table({ props }: RenderProps) {
                   colSpan={columns.length}
                   className="px-3 py-6 text-center text-caption text-text-muted"
                 >
-                  {query ? "没有匹配的行" : "No rows"}
+                  {query ? t("noMatch") : t("empty")}
                 </td>
               </tr>
             )}

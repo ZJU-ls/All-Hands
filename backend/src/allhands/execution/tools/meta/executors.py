@@ -306,6 +306,7 @@ _ARTIFACT_DEFAULT_MIME: dict[ArtifactKind, str] = {
     ArtifactKind.IMAGE: "application/octet-stream",
     ArtifactKind.DATA: "application/json",
     ArtifactKind.MERMAID: "text/vnd.mermaid",
+    ArtifactKind.DRAWIO: "application/vnd.jgraph.mxfile",
 }
 
 _ARTIFACT_EXT: dict[ArtifactKind, str] = {
@@ -315,6 +316,7 @@ _ARTIFACT_EXT: dict[ArtifactKind, str] = {
     ArtifactKind.IMAGE: "bin",
     ArtifactKind.DATA: "json",
     ArtifactKind.MERMAID: "mmd",
+    ArtifactKind.DRAWIO: "drawio",
 }
 
 
@@ -386,13 +388,28 @@ def _artifact_diff(prev: str, curr: str) -> str:
 
 def make_artifact_create_executor(
     maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
 ) -> ToolExecutor:
+    """Build the artifact_create executor, optionally bound to chat-turn
+    context. AgentLoop calls this with conversation_id / employee_id /
+    run_id so the produced artifact carries provenance — that's how the
+    /artifacts page can filter by 「这条对话产的」 / 「这个员工产的」.
+    Triggers / cron / one-off code paths pass nothing → produce orphan
+    artifacts at workspace root, still discoverable in the global view.
+    """
+
     async def _exec(
         name: str,
         kind: str,
         content: str | None = None,
         content_base64: str | None = None,
         mime_type: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
         **_: Any,
     ) -> dict[str, Any]:
         try:
@@ -400,7 +417,7 @@ def make_artifact_create_executor(
         except ValueError:
             return {
                 "error": f"unknown kind {kind!r}; expected one of "
-                "markdown/code/html/image/data/mermaid",
+                "markdown/code/html/image/data/mermaid/drawio",
             }
         try:
             _validate_artifact_name(name)
@@ -444,6 +461,12 @@ def make_artifact_create_executor(
                 version=1,
                 created_at=now,
                 updated_at=now,
+                # 2026-04-25 v2 · provenance + metadata bound at create time
+                conversation_id=conversation_id,
+                created_by_employee_id=employee_id,
+                created_by_run_id=run_id,
+                description=description,
+                tags=list(tags) if tags else [],
             )
             async with _session_context(maker) as session:
                 repo = SqlArtifactRepo(session)
@@ -456,6 +479,11 @@ def make_artifact_create_executor(
                         file_path=artifact.file_path,
                         diff_from_prev=None,
                         created_at=now,
+                        change_message=change_message or "initial",
+                        parent_version=None,
+                        created_by_employee_id=employee_id,
+                        created_by_run_id=run_id,
+                        size_bytes=size,
                     )
                 )
         except _ArtifactExecutorError as exc:
@@ -600,6 +628,10 @@ def make_artifact_read_executor(
 
 def make_artifact_update_executor(
     maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
 ) -> ToolExecutor:
     async def _exec(
         artifact_id: str,
@@ -607,6 +639,7 @@ def make_artifact_update_executor(
         content: str | None = None,
         content_base64: str | None = None,
         patch: str | None = None,
+        change_message: str | None = None,
         **_: Any,
     ) -> dict[str, Any]:
         if mode not in ("overwrite", "patch"):
@@ -667,6 +700,7 @@ def make_artifact_update_executor(
                         "size_bytes": size,
                         "version": next_version,
                         "updated_at": now,
+                        "edit_count": existing.edit_count + 1,
                     }
                 )
                 await repo.upsert(updated)
@@ -678,6 +712,11 @@ def make_artifact_update_executor(
                         file_path=rel,
                         diff_from_prev=diff,
                         created_at=now,
+                        change_message=change_message or f"v{next_version}",
+                        parent_version=existing.version,
+                        created_by_employee_id=employee_id,
+                        created_by_run_id=run_id,
+                        size_bytes=size,
                     )
                 )
                 return {"artifact_id": updated.id, "version": updated.version}
@@ -707,10 +746,15 @@ def make_artifact_delete_executor(
 
 def make_artifact_rollback_executor(
     maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
 ) -> ToolExecutor:
     async def _exec(
         artifact_id: str,
         to_version: int,
+        change_message: str | None = None,
         **_: Any,
     ) -> dict[str, Any]:
         try:
@@ -754,6 +798,7 @@ def make_artifact_rollback_executor(
                         "size_bytes": len(old_blob),
                         "version": next_version,
                         "updated_at": now,
+                        "edit_count": existing.edit_count + 1,
                     }
                 )
                 await repo.upsert(updated)
@@ -765,6 +810,11 @@ def make_artifact_rollback_executor(
                         file_path=rel,
                         diff_from_prev=diff,
                         created_at=now,
+                        change_message=change_message or f"回退到 v{to_version}",
+                        parent_version=to_version,
+                        created_by_employee_id=employee_id,
+                        created_by_run_id=run_id,
+                        size_bytes=len(old_blob),
                     )
                 )
                 return {

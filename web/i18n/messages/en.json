@@ -54,6 +54,7 @@
       "chat": "Chat",
       "tasks": "Tasks",
       "conversations": "History",
+      "artifacts": "Artifacts",
       "employees": "Employees",
       "employeeDesign": "Employee Designer",
       "skills": "Skills",
@@ -72,6 +73,11 @@
     "zh-CN": "简体中文",
     "en": "English",
     "label": "Language"
+  },
+  "healthBadge": {
+    "ok": "backend ok · {version}",
+    "error": "backend unreachable",
+    "pinging": "pinging backend…"
   },
   "welcome": {
     "skip": "Maybe later →",

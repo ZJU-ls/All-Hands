@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { CopyButton } from "@/components/render/_shared/CopyButton";
 import { SegmentedControl } from "@/components/render/_shared/Toolbar";
@@ -310,6 +311,7 @@ function FoldBar({
   startLine: number;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("viz.diff");
   const [open, setOpen] = useState(false);
   if (open) return <div>{children}</div>;
   return (
@@ -317,9 +319,9 @@ function FoldBar({
       type="button"
       onClick={() => setOpen(true)}
       className="block w-full px-3 py-1.5 text-left text-caption font-mono text-text-subtle bg-surface-2/40 hover:bg-surface-2 hover:text-text-muted transition-colors duration-fast border-y border-border"
-      title="点击展开未变更的行"
+      title={t("expandUnchanged")}
     >
-      ⋯ 折叠 {count} 行未变更 · L{startLine}
+      {t("unchangedRow", { count, startLine })}
     </button>
   );
 }
@@ -378,6 +380,7 @@ function Header({
   before: string;
   after: string;
 }) {
+  const t = useTranslations("viz.diff");
   return (
     <div className="flex items-center gap-2 border-b border-border bg-surface-2/60 px-3 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -402,11 +405,11 @@ function Header({
           { key: "split", label: "Split" },
         ]}
       />
-      {/* Tooltip is descriptive Chinese; visible chip text uses the
-          conventional Before / After labels developers already recognize
-          from GitHub diffs — cleaner than awkward 旧版/新版 or 原/改. */}
-      <CopyButton value={before} label="复制 Before" short="Before" variant="button" />
-      <CopyButton value={after} label="复制 After" short="After" variant="button" />
+      {/* Visible chip text stays as Before / After (developer convention from
+          GitHub diffs); the tooltip uses the localized "copy original / copy
+          new" wording. */}
+      <CopyButton value={before} label={t("copyBefore")} short="Before" variant="button" />
+      <CopyButton value={after} label={t("copyAfter")} short="After" variant="button" />
     </div>
   );
 }

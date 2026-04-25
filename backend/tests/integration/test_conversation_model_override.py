@@ -72,7 +72,7 @@ async def _seed(engine: AsyncEngine, conv_override: str | None) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session, session.begin():
+    async with maker() as session:
         await SqlEmployeeRepo(session).upsert(_make_emp())
         conv_repo = SqlConversationRepo(session)
         await conv_repo.create(_make_conv(model_ref_override=conv_override))
@@ -90,7 +90,7 @@ def make_client():
 
         async def _session() -> AsyncIterator[AsyncSession]:
             maker = async_sessionmaker(engine, expire_on_commit=False)
-            async with maker() as s, s.begin():
+            async with maker() as s:
                 yield s
 
         app = create_app()

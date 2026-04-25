@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 
 const SERIES_COLORS = [
@@ -67,6 +68,7 @@ function normalizeSeriesItem(item: Record<string, unknown>): NormalizedSeries {
  *   - clickable legend · toggles a series' visibility
  */
 export function LineChart({ props }: RenderProps) {
+  const t = useTranslations("viz.lineChart");
   const rawX = Array.isArray(props.x) ? (props.x as (string | number)[]) : undefined;
   const rawSeries = Array.isArray(props.series)
     ? (props.series as unknown[])
@@ -167,7 +169,7 @@ export function LineChart({ props }: RenderProps) {
   if (data.paths.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-surface p-3 text-caption text-text-muted">
-        {data.series.length > 0 ? "全部系列已隐藏 · 点底部图例恢复" : "No series"}
+        {data.series.length > 0 ? t("allHidden") : t("empty")}
       </div>
     );
   }
@@ -330,7 +332,7 @@ export function LineChart({ props }: RenderProps) {
                 key={`${i}-${s.label}`}
                 type="button"
                 onClick={() => toggleSeries(i)}
-                title={isHidden ? "已隐藏 · 点击恢复" : "点击隐藏"}
+                title={isHidden ? t("legendHidden") : t("legendVisible")}
                 className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors duration-fast hover:bg-surface-2 ${
                   isHidden ? "text-text-subtle" : "text-text-muted"
                 }`}

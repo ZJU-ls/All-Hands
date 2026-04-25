@@ -74,7 +74,7 @@ async def test_lead_flow_lists_and_dispatches(
       - list_employees sees Lead + worker
       - dispatch_employee tool is resolvable for the worker id
     """
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         svc = EmployeeService(SqlEmployeeRepo(session))
 
         lead = await svc.create(
@@ -121,7 +121,7 @@ async def test_lead_flow_rejects_sub_lead_without_coordination(
     employee without list + detail tools raises (agent-design § 7)."""
     from allhands.core import InvariantViolation
 
-    async with session_maker() as session, session.begin():
+    async with session_maker() as session:
         svc = EmployeeService(SqlEmployeeRepo(session))
 
         with pytest.raises(InvariantViolation, match="coordination tool"):

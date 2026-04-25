@@ -99,9 +99,35 @@ def get_confirmation_queue() -> asyncio.Queue[dict[str, object]]:
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
+    """Yield a session WITHOUT pre-opening a transaction.
+
+    2026-04-25 lock-fix: previously this did ``async with maker() as session,
+    session.begin():`` — which acquires SQLite's writer-lock on the first
+    write inside the request and holds it until the response body finishes
+    streaming. For SSE chat handlers (~30s), that meant any concurrent
+    write (artifact_create from a tool executor) timed out waiting on the
+    3000ms busy_timeout, surfacing as ``database is locked``.
+
+    The fix is structural: each repo write method now wraps its own short
+    ``async with session.begin():`` block and commits immediately. The
+    writer-lock is held for milliseconds per write, then released — other
+    sessions get their turn. The handler holds NO transaction during the
+    streaming gaps where nothing's being written.
+    """
     maker = get_sessionmaker()
-    async with maker() as session, session.begin():
-        yield session
+    async with maker() as session:
+        try:
+            yield session
+            # Drain any uncommitted state at the end of the request. Repos
+            # should have committed via their own short transactions, but
+            # belt-and-braces for legacy paths still using ``session.add()``
+            # without an explicit begin/commit.
+            if session.in_transaction():
+                await session.commit()
+        except Exception:
+            if session.in_transaction():
+                await session.rollback()
+            raise
 
 
 async def get_employee_service(session: AsyncSession) -> EmployeeService:
