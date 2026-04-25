@@ -107,7 +107,7 @@
     "usageChip": {
       "compacting": "Compacting…",
       "compact": "Compact",
-      "tooltip": "{used} / {total} tokens (estimated)"
+      "tooltip": "Estimated input {used} tokens / model context window {total} tokens · we'll suggest compacting as you approach the cap"
     }
   }
 }

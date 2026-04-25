@@ -1,56 +1,110 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+/**
+ * DrawioView · embed diagrams.net iframe.
+ *
+ * - editable=false (default): full-screen viewer, no chrome
+ * - editable=true: chrome on, save events round-trip through updateArtifact
+ *
+ * The save flow:
+ *   iframe → {event: "save", xml, exit}
+ *     → POST /api/artifacts/{id} with {content: xml}
+ *     → server bumps version + emits SSE artifact_changed
+ *     → ArtifactPanel auto-refreshes via existing handler
+ *
+ * Uses diagrams.net embed protocol:
+ *   https://www.drawio.com/doc/faq/embed-mode
+ */
 
-const EMBED_URL = "https://embed.diagrams.net/?embed=1&proto=json&spin=1&ui=atlas&saveAndExit=0";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { updateArtifact } from "@/lib/artifacts-api";
+
+const EMBED_BASE =
+  "https://embed.diagrams.net/?embed=1&proto=json&spin=1&ui=atlas&saveAndExit=0";
 
 export function DrawioView({
   content,
   height = 480,
   editable = false,
+  artifactId,
 }: {
   content: string;
   height?: number;
+  /** When true, allow editing + auto-save to server. Requires artifactId. */
   editable?: boolean;
+  /** Required when editable=true so save can call PATCH. */
+  artifactId?: string;
 }) {
   const t = useTranslations("artifacts.drawio");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "ok" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Keep latest content in a ref so the message handler doesn't re-bind on
+  // every prop change — we only want to load once per init.
+  const contentRef = useRef(content);
+  contentRef.current = content;
+
+  const persist = useCallback(
+    async (xml: string) => {
+      if (!editable || !artifactId) return;
+      setSaveStatus("saving");
+      setErrorMsg(null);
+      try {
+        await updateArtifact(artifactId, { content: xml, mode: "overwrite" });
+        setSaveStatus("ok");
+        setTimeout(() => setSaveStatus("idle"), 1800);
+      } catch (e) {
+        setSaveStatus("error");
+        setErrorMsg(String(e));
+      }
+    },
+    [editable, artifactId],
+  );
 
   useEffect(() => {
     function onMessage(ev: MessageEvent) {
       if (!iframeRef.current || ev.source !== iframeRef.current.contentWindow) return;
-      let data: { event?: string } | null = null;
+      let data: { event?: string; xml?: string } | null = null;
       try {
         data = typeof ev.data === "string" ? JSON.parse(ev.data) : null;
       } catch {
         return;
       }
       if (!data) return;
+
       if (data.event === "init") {
         iframeRef.current?.contentWindow?.postMessage(
           JSON.stringify({
             action: "load",
-            xml: content,
-            autosave: 0,
+            xml: contentRef.current,
+            // autosave fires the save event without a save button click
+            autosave: editable ? 1 : 0,
             modified: "unsaved",
           }),
           "*",
         );
         setReady(true);
+      } else if (data.event === "save" && typeof data.xml === "string") {
+        void persist(data.xml);
+      } else if (data.event === "autosave" && typeof data.xml === "string") {
+        void persist(data.xml);
       }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [content]);
+  }, [editable, persist]);
+
+  const src = editable ? EMBED_BASE : `${EMBED_BASE}&chrome=0`;
 
   return (
     <div className="relative">
       <iframe
         ref={iframeRef}
         title={t("title")}
-        src={editable ? EMBED_URL : `${EMBED_URL}&chrome=0`}
+        src={src}
         sandbox="allow-scripts allow-same-origin allow-popups"
         className="w-full border-0 bg-surface"
         style={{ height }}
@@ -58,6 +112,23 @@ export function DrawioView({
       {!ready && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-xs text-text-muted">
           {t("loading")}
+        </div>
+      )}
+      {editable && saveStatus !== "idle" && (
+        <div
+          className={
+            "absolute right-3 top-3 rounded-full border px-2.5 py-1 font-mono text-[10px] " +
+            (saveStatus === "saving"
+              ? "border-primary/40 bg-primary-muted text-primary"
+              : saveStatus === "ok"
+                ? "border-success/40 bg-success-soft text-success"
+                : "border-danger/40 bg-danger-soft text-danger")
+          }
+          title={errorMsg ?? undefined}
+        >
+          {saveStatus === "saving" && t("saving")}
+          {saveStatus === "ok" && t("saved")}
+          {saveStatus === "error" && t("saveFailed")}
         </div>
       )}
     </div>

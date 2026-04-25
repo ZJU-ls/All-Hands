@@ -26,6 +26,11 @@ import { ImageView } from "@/components/artifacts/kinds/ImageView";
 import { DataView } from "@/components/artifacts/kinds/DataView";
 import { MermaidView } from "@/components/artifacts/kinds/MermaidView";
 import { DrawioView } from "@/components/artifacts/kinds/DrawioView";
+import { PdfView } from "@/components/artifacts/kinds/PdfView";
+import { CsvView } from "@/components/artifacts/kinds/CsvView";
+import { XlsxView } from "@/components/artifacts/kinds/XlsxView";
+import { DocxView } from "@/components/artifacts/kinds/DocxView";
+import { PptxView } from "@/components/artifacts/kinds/PptxView";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -37,6 +42,10 @@ const KIND_ICON: Record<string, IconName> = {
   data: "database",
   mermaid: "activity",
   drawio: "activity",
+  pdf: "file",
+  xlsx: "database",
+  csv: "database",
+  docx: "book-open",
   pptx: "file",
   video: "play-circle",
 };
@@ -126,6 +135,14 @@ export function ArtifactPreview({ props }: RenderProps) {
   let body: React.ReactNode = null;
   if (meta.kind === "image") {
     body = <ImageView src={`${BASE}/api/artifacts/${meta.id}/content`} alt={meta.name} />;
+  } else if (meta.kind === "pdf") {
+    body = <PdfView artifactId={meta.id} height={520} />;
+  } else if (meta.kind === "xlsx") {
+    body = <XlsxView artifactId={meta.id} />;
+  } else if (meta.kind === "docx") {
+    body = <DocxView artifactId={meta.id} />;
+  } else if (meta.kind === "pptx") {
+    body = <PptxView artifactId={meta.id} artifactName={meta.name} />;
   } else if (text != null) {
     const mime = meta.mime_type;
     const language = mime.startsWith("text/") ? mime.slice(5).split(";")[0]?.trim() : undefined;
@@ -147,6 +164,9 @@ export function ArtifactPreview({ props }: RenderProps) {
         break;
       case "drawio":
         body = <DrawioView content={text} />;
+        break;
+      case "csv":
+        body = <CsvView content={text} />;
         break;
       default:
         body = (

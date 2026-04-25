@@ -6,6 +6,11 @@ builtin: true
 
 tool_ids:
   - allhands.artifacts.create
+  - allhands.artifacts.create_pdf
+  - allhands.artifacts.create_xlsx
+  - allhands.artifacts.create_csv
+  - allhands.artifacts.create_docx
+  - allhands.artifacts.create_pptx
   - allhands.artifacts.list
   - allhands.artifacts.read
   - allhands.artifacts.render

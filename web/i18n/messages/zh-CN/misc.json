@@ -73,14 +73,6 @@
       },
       "refreshing": "刷新中…",
       "refresh": "刷新",
-      "bootstrap": {
-        "headlinePrefix": "Langfuse",
-        "headlineSuffix": "· 追踪未连上",
-        "body": "Agent 运行照常,但每次 run 的 trace 会被丢弃。下方 Trace 列表读的是本地 events 表的 run.* 事件,不是 Langfuse。",
-        "lastPrefix": "last ·",
-        "retrying": "重试中…",
-        "retry": "重试 bootstrap"
-      },
       "loadFailed": {
         "title": "加载失败",
         "fallback": "无法拉取观测数据,点右侧重试。",
@@ -98,20 +90,23 @@
         "tokensDelta": "{count} total traces"
       },
       "panels": {
-        "langfuse": "Langfuse · 追踪后端",
+        "telemetry": "自建埋点 · 24h",
         "topEmployees": "Top employees · 24h",
         "byModel": "按模型 · 24h",
         "noData": "还没有数据",
         "moreLabel": "{title} more",
         "rows": {
-          "bootstrap": "Bootstrap status",
-          "observability": "Observability",
-          "host": "Host",
+          "observability": "埋点状态",
+          "latencyP50": "Latency p50",
+          "latencyP95": "Latency p95",
+          "latencyP99": "Latency p99",
+          "estimatedCost": "成本估算 · 24h",
           "totalTraces": "Total traces"
         },
         "values": {
           "enabled": "enabled",
           "disabled": "disabled",
+          "selfInstrumented": "self-instrumented",
           "runs": "{count} runs"
         }
       },
@@ -122,6 +117,7 @@
       },
       "traces": {
         "title": "近 50 条 trace",
+        "selfInstrumentedNote": "self-instrumented · 本地 events.run.*",
         "empty": {
           "title": "还没有 run 事件",
           "description": "和 Lead 对话发起第一条任务,这里会出现 trace 摘要。"
@@ -166,6 +162,7 @@
       "loadFailed": "制品加载失败:{error}",
       "loadingMeta": "读取中…",
       "loadingContent": "读取内容…",
+      "contentMissing": "这份制品的内容文件已不在磁盘上(元数据仍在)· 可能因清理 / 工作区切换造成,可以重新生成或删除元数据。",
       "download": "下载",
       "unsupportedKind": "kind {kind} 暂不支持在面板内预览。",
       "copyFailed": "复制失败:{error}",
@@ -224,7 +221,35 @@
     },
     "drawio": {
       "title": "drawio 流程图",
-      "loading": "正在加载 drawio 编辑器…"
+      "loading": "正在加载 drawio 编辑器…",
+      "saving": "保存中…",
+      "saved": "已保存",
+      "saveFailed": "保存失败"
+    },
+    "pdf": {
+      "loading": "加载 PDF…",
+      "loadFailed": "PDF 加载失败:{error}"
+    },
+    "csv": {
+      "empty": "(无数据)",
+      "loadFailed": "CSV 解析失败:{error}"
+    },
+    "xlsx": {
+      "loading": "加载 Excel…",
+      "empty": "(空表)",
+      "loadFailed": "xlsx 解析失败:{error}"
+    },
+    "docx": {
+      "loading": "渲染 Word 文档…",
+      "loadFailed": "docx 渲染失败:{error}"
+    },
+    "pptx": {
+      "loading": "解析 PowerPoint…",
+      "loadFailed": "pptx 解析失败:{error}",
+      "empty": "(没有可解析的幻灯片文本 · 请下载查看)",
+      "untitledSlide": "(无标题)",
+      "count": "{n} 张幻灯片",
+      "download": "下载 .pptx"
     },
     "page": {
       "title": "制品库",
@@ -241,8 +266,32 @@
         "size_desc": "尺寸大→小"
       },
       "empty": "当前筛选下没有制品。",
+      "emptyAll": "工作区里还没有任何制品",
+      "emptyAllHint": "让员工产出一份文档、代码或图,制品就会出现在这里。",
       "loadFailed": "制品列表加载失败:{error}",
-      "count": "{n} 个制品"
+      "count": "{n} 个制品",
+      "selectHint": "从左侧选一个制品查看详情",
+      "filters": {
+        "pinnedOnly": "仅置顶",
+        "dateAll": "全部时间",
+        "date7d": "近 7 天",
+        "date30d": "近 30 天",
+        "clearAll": "清空筛选",
+        "activeChip": "已选: {label}",
+        "removeChipAria": "移除筛选 {label}"
+      },
+      "stats": {
+        "total": "总数",
+        "totalHint": "全部制品",
+        "size": "占用空间",
+        "sizeHint": "所有版本累计",
+        "pinned": "已置顶",
+        "pinnedHint": "团队收藏",
+        "last7d": "近 7 天",
+        "last7dHint": "新增制品",
+        "byKind": "按类型分布",
+        "topKindHint": "最多类型 · {kind}"
+      }
     }
   },
   "brand": {

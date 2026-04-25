@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  ArtifactContentMissingError,
   getArtifact,
   getArtifactTextContent,
   getArtifactVersionContent,
@@ -21,6 +22,12 @@ import { HtmlView } from "./kinds/HtmlView";
 import { ImageView } from "./kinds/ImageView";
 import { DataView } from "./kinds/DataView";
 import { MermaidView } from "./kinds/MermaidView";
+import { DrawioView } from "./kinds/DrawioView";
+import { PdfView } from "./kinds/PdfView";
+import { CsvView } from "./kinds/CsvView";
+import { XlsxView } from "./kinds/XlsxView";
+import { DocxView } from "./kinds/DocxView";
+import { PptxView } from "./kinds/PptxView";
 import { ArtifactVersionSwitcher } from "./ArtifactVersionSwitcher";
 import { ArtifactEditor, pickEditorLanguage } from "./ArtifactEditor";
 
@@ -29,7 +36,8 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 type LoadedContent =
   | { kind: "text"; content: string }
   | { kind: "base64"; mime: string; base64: string }
-  | { kind: "binary-src"; src: string };
+  | { kind: "binary-src"; src: string }
+  | { kind: "missing" };
 
 function extractLanguage(mime: string): string | undefined {
   if (!mime.startsWith("text/")) return undefined;
@@ -48,7 +56,21 @@ function renderBody(
   artifact: ArtifactDto,
   loaded: LoadedContent,
   unsupportedMsg: string,
+  missingMsg: string,
 ): React.ReactNode {
+  // Workspace drift / disk wipe can leave the metadata row in place while the
+  // backing file is gone. Render a calm placeholder rather than letting each
+  // kind render `null` (blank) or hit `loaded.content` and crash.
+  if (loaded.kind === "missing") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-surface-2 text-text-muted">
+          <Icon name="alert-circle" size={18} />
+        </span>
+        <p className="text-sm text-text-muted">{missingMsg}</p>
+      </div>
+    );
+  }
   switch (artifact.kind) {
     case "markdown":
       return loaded.kind === "text" ? <MarkdownView content={loaded.content} /> : null;
@@ -62,6 +84,12 @@ function renderBody(
       return loaded.kind === "text" ? <DataView content={loaded.content} /> : null;
     case "mermaid":
       return loaded.kind === "text" ? <MermaidView content={loaded.content} /> : null;
+    case "drawio":
+      return loaded.kind === "text" ? (
+        <DrawioView content={loaded.content} editable artifactId={artifact.id} height={560} />
+      ) : null;
+    case "csv":
+      return loaded.kind === "text" ? <CsvView content={loaded.content} /> : null;
     case "image": {
       const src =
         loaded.kind === "base64"
@@ -71,6 +99,14 @@ function renderBody(
             : "";
       return <ImageView src={src} alt={artifact.name} />;
     }
+    case "pdf":
+      return <PdfView artifactId={artifact.id} height={640} />;
+    case "xlsx":
+      return <XlsxView artifactId={artifact.id} />;
+    case "docx":
+      return <DocxView artifactId={artifact.id} />;
+    case "pptx":
+      return <PptxView artifactId={artifact.id} artifactName={artifact.name} />;
     default:
       return (
         <div className="px-4 py-3 text-xs text-text-muted">
@@ -147,7 +183,17 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
         const dto = await getArtifactVersionContent(meta.id, currentVersion!);
         if (!cancelled) setContent(contentFromDto(dto));
       } catch (e) {
-        if (!cancelled) setError(String(e));
+        if (cancelled) return;
+        // Distinguish "content gone" from real fetch errors so we render
+        // a friendly placeholder instead of a red banner. Workspace data
+        // can drift across worktrees / restored snapshots — the metadata
+        // row stays, the file disappears, and the user shouldn't see a
+        // 404/500 error chip for an artifact whose card is right there.
+        if (e instanceof ArtifactContentMissingError) {
+          setContent({ kind: "missing" });
+          return;
+        }
+        setError(String(e));
       }
     }
     void load();
@@ -357,7 +403,12 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
           />
         ) : content ? (
           <div className="h-full overflow-y-auto">
-            {renderBody(meta, content, t("unsupportedKind", { kind: meta.kind }))}
+            {renderBody(
+              meta,
+              content,
+              t("unsupportedKind", { kind: meta.kind }),
+              t("contentMissing"),
+            )}
           </div>
         ) : (
           <div className="px-4 py-3 text-[12px] text-text-muted">{t("loadingContent")}</div>

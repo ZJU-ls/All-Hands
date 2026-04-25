@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>allhands 沙箱调研报告</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --bg-elev: #131a32;
+    --bg-card: #161e3a;
+    --border: #232c52;
+    --text: #e7ecff;
+    --text-muted: #9aa6d3;
+    --primary: #4f7dff;
+    --primary-soft: #6e94ff;
+    --accent: #8ab4ff;
+    --good: #3ec28f;
+    --warn: #f0b94f;
+    --bad: #ef6f6c;
+    --code-bg: #0e1530;
+  }
+  html[data-theme="light"] {
+    --bg: #f6f8ff;
+    --bg-elev: #ffffff;
+    --bg-card: #ffffff;
+    --border: #dbe2f5;
+    --text: #15203d;
+    --text-muted: #5a6691;
+    --primary: #2a59e6;
+    --primary-soft: #4f7dff;
+    --accent: #2a59e6;
+    --code-bg: #eef2ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); }
+  body {
+    margin: 0;
+    font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 56px 28px 96px; }
+  header.hero {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 24px; margin-bottom: 40px;
+  }
+  .hero h1 {
+    margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .meta { color: var(--text-muted); font-size: 13px; margin-top: 6px; }
+  .theme-toggle {
+    border: 1px solid var(--border); background: var(--bg-elev);
+    color: var(--text); padding: 8px 14px; border-radius: 8px;
+    font-size: 13px; cursor: pointer;
+  }
+  .theme-toggle:hover { border-color: var(--primary); }
+  .toc {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 22px; margin-bottom: 32px;
+  }
+  .toc h3 { margin: 0 0 10px; font-size: 13px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 28px; }
+  .toc a { color: var(--text); text-decoration: none; }
+  .toc a:hover { color: var(--primary); }
+  h2 {
+    font-size: 22px; margin: 48px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); position: relative;
+  }
+  h2::before {
+    content: ""; position: absolute; left: 0; bottom: -1px; width: 48px; height: 2px;
+    background: linear-gradient(90deg, var(--primary), transparent);
+  }
+  h3 { font-size: 17px; margin: 28px 0 10px; }
+  h4 { font-size: 15px; margin: 20px 0 8px; color: var(--accent); }
+  p, li { color: var(--text); }
+  blockquote {
+    border-left: 3px solid var(--primary); margin: 16px 0; padding: 8px 16px;
+    background: var(--bg-card); border-radius: 0 8px 8px 0; color: var(--text-muted);
+  }
+  code {
+    background: var(--code-bg); padding: 2px 6px; border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
+    font-size: 13px; color: var(--accent);
+  }
+  pre {
+    background: var(--code-bg); padding: 16px 18px; border-radius: 10px;
+    border: 1px solid var(--border); overflow: auto; line-height: 1.5;
+  }
+  pre code { background: transparent; padding: 0; color: var(--text); font-size: 13px; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px;
+    background: var(--bg-card); border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--bg-elev); font-weight: 600; color: var(--text-muted);
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  tr:last-child td { border-bottom: 0; }
+  tr:hover td { background: rgba(79,125,255,0.06); }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    background: rgba(79,125,255,0.15); color: var(--primary-soft);
+    border: 1px solid rgba(79,125,255,0.3);
+  }
+  .tag.good { background: rgba(62,194,143,0.13); color: var(--good); border-color: rgba(62,194,143,0.3); }
+  .tag.warn { background: rgba(240,185,79,0.13); color: var(--warn); border-color: rgba(240,185,79,0.3); }
+  .tag.bad  { background: rgba(239,111,108,0.13); color: var(--bad);  border-color: rgba(239,111,108,0.3); }
+  .callout {
+    background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.05));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 12px;
+    padding: 18px 22px; margin: 20px 0;
+  }
+  .callout strong { color: var(--primary-soft); }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 48px 0; }
+  .footer { color: var(--text-muted); font-size: 12px; margin-top: 64px; text-align: center; }
+  a { color: var(--primary-soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <h1>allhands 沙箱调研报告</h1>
+    <div class="meta">2026-04-25 · v0 调研稿 · branch: research/sandbox</div>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">切换主题</button>
+</header>
+
+<div class="toc">
+  <h3>目录</h3>
+  <ol>
+    <li><a href="#s0">TL;DR</a></li>
+    <li><a href="#s1">目标与非目标</a></li>
+    <li><a href="#s2">开源 / 商业方案横评</a></li>
+    <li><a href="#s3">我们要具备的能力</a></li>
+    <li><a href="#s4">实现方案(Docker 主线)</a></li>
+    <li><a href="#s5">技术选型 · 依赖明细</a></li>
+    <li><a href="#s6">落地路线</a></li>
+    <li><a href="#s7">风险与未决问题</a></li>
+    <li><a href="#s8">参考资料</a></li>
+    <li><a href="#s9">给评审者的问题</a></li>
+  </ol>
+</div>
+
+<h2 id="s0">0 · TL;DR</h2>
+<ul>
+  <li><strong>目标场景</strong>:写代码 / 整理文件 / 清理无用文件 / 操作 Excel 数据核对 + 类似批量本地任务。</li>
+  <li><strong>核心结论</strong>:这类场景需要的不是"语言级沙箱"(Pyodide / WASI),而是 <strong>带持久化工作区的 OS 级容器隔离</strong> —— 文件系统、网络、进程、资源都要可控,且能挂载用户给定目录。</li>
+  <li><strong>推荐路线</strong>:<span class="tag good">主线</span> Docker(rootless 优先)+ 工作区 bind-mount + seccomp/apparmor + 网络策略;<span class="tag">云上备选</span> E2B;<span class="tag warn">长远观察</span> Firecracker / microVM。</li>
+  <li><strong>MVP 工作量</strong>:~ 1.5 - 2 周(单 worker 起 docker、池化、Tool 接口、Excel 工具链镜像、超时/限额、审计日志)。</li>
+  <li><strong>必须先决策</strong>:① 每会话长生命周期容器 vs 每 Tool 一次性容器 ② 工作区在宿主目录 vs 仅容器内 + 文件下载 ③ 网络默认 deny 还是 allow。</li>
+</ul>
+
+<h2 id="s1">1 · 目标与非目标</h2>
+
+<h3>1.1 目标(必须)</h3>
+<table>
+  <tr><th>#</th><th>能力</th><th>说明</th></tr>
+  <tr><td>C1</td><td>文件读写</td><td>限定到一个"工作区"路径下 · 不能逃逸</td></tr>
+  <tr><td>C2</td><td>代码执行</td><td>Python / Node / Shell · 装常见库(pandas / openpyxl / numpy / requests)</td></tr>
+  <tr><td>C3</td><td>Office 操作</td><td>xlsx / docx / pdf 读写 · 至少 openpyxl + LibreOffice headless</td></tr>
+  <tr><td>C4</td><td>网络可控</td><td>默认按白/黑名单 · 可针对会话开/关</td></tr>
+  <tr><td>C5</td><td>资源配额</td><td>CPU / 内存 / 磁盘 / 单次执行时长</td></tr>
+  <tr><td>C6</td><td>持久化</td><td>同会话跨多次 Tool 调用复用 · uvicorn reload / 崩溃后能恢复</td></tr>
+  <tr><td>C7</td><td>可观测</td><td>每次执行有 stdout/stderr/exit/耗时 · 进 LangFuse trace</td></tr>
+  <tr><td>C8</td><td>多租户</td><td>不同会话 / 不同用户的工作区严格隔离</td></tr>
+</table>
+
+<h3>1.2 非目标(本期不做)</h3>
+<ul>
+  <li>完全防御内核 0day(Docker default 已经够 v0)</li>
+  <li>GPU 工作负载</li>
+  <li>浏览器自动化(已有 chrome-devtools MCP)</li>
+  <li>Windows 容器</li>
+</ul>
+
+<h3>1.3 隐含约束(来自 CLAUDE.md)</h3>
+<ul>
+  <li><strong>Tool First</strong>:沙箱能力以 Meta Tool / Backend Tool 出现 · 同时 REST 给 UI 用</li>
+  <li><strong>Pure-Function Loop</strong>:执行结果走 <code>InternalEvent</code> · 不能在 AgentLoop 里藏状态</li>
+  <li><strong>Layer Isolation</strong>:<code>execution/</code> 调 <code>services/sandbox/</code>,<code>core/</code> 不许 import docker SDK</li>
+  <li><strong>Confirmation Gate</strong>:写文件 / 删除 / 执行 shell 这种 IRREVERSIBLE 必须走 <code>DeferredSignal</code></li>
+</ul>
+
+<h2 id="s2">2 · 开源 / 商业方案横评</h2>
+
+<h3>2.1 OS 级容器(主流推荐)</h3>
+<table>
+  <tr><th>方案</th><th>隔离强度</th><th>启动</th><th>挂载</th><th>运维</th><th>备注</th></tr>
+  <tr><td><strong>Docker / Podman</strong></td><td>中</td><td>100ms-1s</td><td>bind-mount 直接</td><td>低</td><td>生态最成熟 · rootless 可接受</td></tr>
+  <tr><td>gVisor (runsc)</td><td>高</td><td>1-2s · 损耗 10-30%</td><td>OK</td><td>中</td><td>Google · 防御力远超 docker default</td></tr>
+  <tr><td>Firecracker</td><td>极高</td><td>100-300ms</td><td>virtio-fs / vsock</td><td>高</td><td>AWS Lambda / Fly.io 底座</td></tr>
+  <tr><td>Kata Containers</td><td>极高</td><td>1-3s</td><td>OK</td><td>高</td><td>OCI 兼容 · 多租户 SaaS</td></tr>
+</table>
+<div class="callout">
+  <strong>判断:</strong> v0 用 Docker rootless + seccomp + AppArmor 已经覆盖 95% 风险面。gVisor 是最划算的下一步升级(只换 runtime,代码不改)。Firecracker 留给"我们做 SaaS 多租户"那一天。
+</div>
+
+<h3>2.2 AI Agent 专用沙箱(直接对标我们)</h3>
+<table>
+  <tr><th>方案</th><th>形态</th><th>主要卖点</th><th>自托管</th><th>适合我们?</th></tr>
+  <tr><td><strong>E2B</strong> (e2b.dev)</td><td>云 SaaS · Firecracker</td><td>启动 ~150ms · FS / 终端 / 端口 / 桌面 / 浏览器一站</td><td><span class="tag warn">部分</span></td><td><strong>云上强候选</strong>;自托管要拼 control plane</td></tr>
+  <tr><td>Daytona</td><td>自托管 dev env</td><td>复用 DevContainer 镜像</td><td><span class="tag good">Apache-2</span></td><td>偏 dev workspace · 做 agent 一次性沙箱稍重</td></tr>
+  <tr><td>microsandbox</td><td>OCI + microVM · 单二进制</td><td>"cargo run 就跑"超轻</td><td><span class="tag good">Apache-2</span></td><td>关注但暂不押(还不够稳)</td></tr>
+  <tr><td>Modal Sandbox</td><td>SaaS · 按秒计费</td><td>Python 友好 · GPU 现成</td><td><span class="tag bad">否</span></td><td>备选(GPU 任务)</td></tr>
+  <tr><td>Runloop / Codesandbox SDK</td><td>SaaS</td><td>起步快</td><td><span class="tag bad">否</span></td><td>备选</td></tr>
+  <tr><td>OpenHands runtime</td><td>自托管 docker-in-docker</td><td>同行实现 · 可读源码学结构</td><td><span class="tag good">MIT</span></td><td>借鉴架构 · 不直接拿来用</td></tr>
+</table>
+<div class="callout">
+  <strong>判断:</strong> 自托管主线 = Docker 自己拼。E2B 作为 Tool Provider 之一注册进 ToolRegistry(scope=IRREVERSIBLE · 用户对话里能选)。
+</div>
+
+<h3>2.3 进程级 / 语言级(轻量但够不到我们的场景)</h3>
+<table>
+  <tr><th>方案</th><th>适用</th><th>为什么不够</th></tr>
+  <tr><td>Pyodide / WASI / WebContainer</td><td>浏览器 / 边缘跑 Python/JS</td><td>不能跑 LibreOffice · 不能动宿主文件</td></tr>
+  <tr><td>nsjail / bubblewrap / firejail</td><td>单命令快速套个 namespace</td><td>没工作区生命周期管理 · 没池化</td></tr>
+  <tr><td>macOS sandbox-exec / Linux Landlock</td><td>进程级文件系统白名单</td><td>不够防御 · 但适合本地 dev mode 先跑通</td></tr>
+  <tr><td>chroot / FreeBSD jail</td><td>老派隔离</td><td>不阻拦 root 逃逸 · 不限网络/cgroup</td></tr>
+</table>
+
+<h3>2.4 Claude Code 是怎么做的</h3>
+<div class="callout">
+  <strong>结论:Claude Code 本身不"沙箱化"</strong> —— 它信任本地用户,靠 <strong>权限提示 + 显式工具白名单</strong> 把控。
+</div>
+<ul>
+  <li><strong>Permission system</strong>:每个 Bash / Edit / Write 调用按 <code>settings.json</code> 的 <code>permissions.allow / ask / deny</code> 三态决定是否弹确认。</li>
+  <li><strong>Sandbox 模式(较新)</strong>:macOS 用 <code>sandbox-exec</code> profile,Linux 用 Landlock + seccomp,默认拒网络 + 限文件写域 ⇒ 这就是 <code>Bash</code> 工具上 <code>dangerouslyDisableSandbox</code> 的由来。<strong>进程级、单命令的轻沙箱</strong>,不是容器。</li>
+  <li><strong>Hooks</strong>:<code>PreToolUse</code> / <code>PostToolUse</code> / <code>SessionStart</code> 钩子让用户自己拦截 / 改写工具调用。</li>
+  <li><strong>没有持久化工作区抽象</strong>:CWD = 用户启动 CLI 时的目录,不分租户(单用户 CLI)。</li>
+  <li><strong>MCP 工具走自己的进程</strong>:server 跑在用户机 / 远端,Claude Code 不接管隔离。</li>
+</ul>
+<p><strong>对我们的启发:</strong></p>
+<ol>
+  <li>进程级沙箱(sandbox-exec / Landlock)适合"本地 dev 模式" + "Tool 默认更严"的双层防御。</li>
+  <li>Permission / Hook 模型直接抄 —— 我们已有 ConfirmationGate + DeferredSignal · pre/post hook 接到 sandbox 入口即可。</li>
+  <li>Claude Code 没解决多租户/持久化 —— 因为它是单用户 CLI;allhands 是组织平台,必须自己设计 workspace 抽象,这部分没现成可抄。</li>
+</ol>
+
+<h2 id="s3">3 · 我们要具备的能力(往 Tool 上落)</h2>
+<p>按 CLAUDE.md §3.1 / §3.6,每个能力都要 ① 后端 service 一份实现 ② Backend Tool 让 Agent 调 ③ 必要时 REST 给 UI 直调。Scope 标注 = ConfirmationGate 依据。</p>
+
+<h3>3.1 必备 Tool 集(MVP)</h3>
+<table>
+  <tr><th>Tool ID</th><th>scope</th><th>入参</th><th>备注</th></tr>
+  <tr><td><code>allhands.sandbox.create_workspace</code></td><td><span class="tag warn">WRITE</span></td><td>name, template?</td><td>一个会话/任务一个 ws · 返回 workspace_id</td></tr>
+  <tr><td><code>allhands.sandbox.list_workspaces</code></td><td><span class="tag good">READ</span></td><td>—</td><td></td></tr>
+  <tr><td><code>allhands.sandbox.delete_workspace</code></td><td><span class="tag bad">IRREVERSIBLE</span></td><td>workspace_id</td><td>走 ConfirmationGate</td></tr>
+  <tr><td><code>allhands.sandbox.exec</code></td><td><span class="tag bad">IRREVERSIBLE</span></td><td>workspace_id, cmd, timeout, env?</td><td>shell 执行 · 流式 stdout</td></tr>
+  <tr><td><code>allhands.sandbox.read_file</code></td><td><span class="tag good">READ</span></td><td>workspace_id, path</td><td>≤ 10MB</td></tr>
+  <tr><td><code>allhands.sandbox.write_file</code></td><td><span class="tag warn">WRITE</span></td><td>workspace_id, path, content</td><td>已存在文件 → 需 confirmation</td></tr>
+  <tr><td><code>allhands.sandbox.list_dir</code></td><td><span class="tag good">READ</span></td><td>workspace_id, path</td><td></td></tr>
+  <tr><td><code>allhands.sandbox.delete_path</code></td><td><span class="tag bad">IRREVERSIBLE</span></td><td>workspace_id, path</td><td></td></tr>
+  <tr><td><code>allhands.sandbox.move_path</code></td><td><span class="tag warn">WRITE</span></td><td>workspace_id, src, dst</td><td></td></tr>
+  <tr><td><code>allhands.sandbox.upload</code></td><td><span class="tag warn">WRITE</span></td><td>workspace_id, dst, bytes</td><td>UI 拖拽</td></tr>
+  <tr><td><code>allhands.sandbox.download</code></td><td><span class="tag good">READ</span></td><td>workspace_id, path</td><td>UI 下载</td></tr>
+  <tr><td><code>allhands.sandbox.run_python</code></td><td><span class="tag bad">IRREVERSIBLE</span></td><td>workspace_id, code, timeout</td><td>exec 的封装</td></tr>
+  <tr><td><code>allhands.sandbox.snapshot</code></td><td><span class="tag warn">WRITE</span></td><td>workspace_id, label</td><td>rollback 基础(可选)</td></tr>
+</table>
+<blockquote>13 个 tool 看起来多 · 实际后端只有 ~ 5 个 service 方法(workspace 生命周期 · exec · fs · upload/download · snapshot)。Tool 是薄壳。</blockquote>
+
+<h3>3.2 后续可加(按场景)</h3>
+<ul>
+  <li><code>sandbox.excel.read_sheet</code> / <code>write_sheet</code> / <code>compare</code>(openpyxl 特化 · 比 agent 自写 Python 省 token)</li>
+  <li><code>sandbox.pdf.extract_text</code></li>
+  <li><code>sandbox.git.clone</code> / <code>commit</code> / <code>diff</code>(代码场景)</li>
+  <li><code>sandbox.diagnose</code>(返回容器状态 / 资源 / 最近日志)</li>
+</ul>
+
+<h3>3.3 渲染端(L09 / L10)</h3>
+<ul>
+  <li><code>RenderEnvelope</code> 的 <code>WorkspaceTree</code>(目录树)、<code>FilePreview</code>(图/表/文)、<code>ExecLog</code>(stdout 流)三个组件</li>
+  <li>跟 plan tool / sub-agent trace 一样,在 ToolCallCard 展开区里渲染</li>
+</ul>
+
+<h2 id="s4">4 · 实现方案(主线 · Docker 自托管)</h2>
+
+<h3>4.1 架构分层</h3>
+<pre><code>L05 execution/sandbox/
+  ├── runtime.py          # SandboxRuntime ABC(create / exec / fs / destroy)
+  ├── docker_runtime.py   # 默认实现:docker SDK
+  ├── e2b_runtime.py      # 备选实现:e2b-sdk(后期)
+  └── tools/              # 13 个 Tool 的 executor(薄壳 · 调 service)
+
+L06 services/sandbox_service.py
+  ├── 池化(预热 N 个 idle 容器)
+  ├── 工作区注册(WorkspaceRepo · 持久化到 DB)
+  ├── 配额(用户/会话级)
+  └── 审计(每次 exec → LangFuse + DB)
+
+L03 persistence/
+  ├── models/workspace.py        # id, owner, status, image, created_at, last_used_at, quota_*
+  └── models/sandbox_audit.py    # exec 记录
+
+L08/L07 api/
+  └── routers/sandbox.py         # REST:列表 / 详情 / 文件浏览 / 下载流(UI 直用)
+</code></pre>
+<p><strong>Layer 检查:</strong> <code>core/</code> 没有 docker import;<code>execution/sandbox/</code> 不直接把 <code>docker</code> 类型暴露给 <code>services</code> —— 用自定义的 <code>ExecResult</code> / <code>WorkspaceHandle</code> Pydantic DTO。</p>
+
+<h3>4.2 容器配置(默认 image)</h3>
+<pre><code># allhands/sandbox-base:0.1
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-calc libreoffice-writer \
+    poppler-utils \
+    git curl jq ripgrep fd-find \
+    nodejs npm \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir \
+    pandas openpyxl xlsxwriter \
+    numpy requests httpx beautifulsoup4 lxml \
+    pypdf python-docx \
+    pillow
+
+RUN useradd -m -u 1000 sandbox
+USER sandbox
+WORKDIR /workspace
+</code></pre>
+<p>启动参数:</p>
+<pre><code>client.containers.run(
+    image="allhands/sandbox-base:0.1",
+    name=f"ws-{workspace_id}",
+    user="1000:1000",
+    read_only=True,
+    tmpfs={"/tmp": "size=256m"},
+    volumes={host_workspace_dir: {"bind": "/workspace", "mode": "rw"}},
+    network_mode="sandbox-egress",
+    mem_limit="2g",
+    nano_cpus=2_000_000_000,
+    pids_limit=512,
+    cap_drop=["ALL"],
+    security_opt=["no-new-privileges:true",
+                  "seccomp=/etc/allhands/seccomp.json",
+                  "apparmor=allhands-sandbox"],
+    detach=True, init=True,
+)
+</code></pre>
+
+<h3>4.3 池化 / 生命周期</h3>
+<ul>
+  <li><strong>每会话一个长生命周期容器</strong>(默认):exec 进 docker exec · 文件累积 · 30 分钟空闲 → stop · 24h → 镜像化 + 删容器 · 7d → 询问归档</li>
+  <li><strong>快速池</strong>:预热 3-5 个 idle 容器,新会话直接绑(摊薄启动)</li>
+  <li>容器死 / 宿主重启 → <code>WorkspaceRepo</code> 是 SoT,服务起来按需 re-create container 挂回原 host dir</li>
+</ul>
+
+<h3>4.4 工作区落盘策略(关键决策)</h3>
+<table>
+  <tr><th>选项</th><th>方式</th><th>优</th><th>劣</th></tr>
+  <tr><td><strong>A · 推荐</strong></td><td><code>${ALLHANDS_DATA}/workspaces/&lt;id&gt;/</code> bind-mount</td><td>崩溃不丢 · 备份简单 · UI REST 直读</td><td>宿主有真实文件 · 要清理</td></tr>
+  <tr><td>B</td><td>容器内 named volume · 仅 Tool 取出</td><td>更隔离 · 没"宿主残留"</td><td>UI 文件浏览要代理 · 容器删 = 数据没</td></tr>
+</table>
+<p>→ <strong>选 A</strong>(allhands 自部署 · 用户本就拥有宿主)。<code>ALLHANDS_DATA</code> 走环境变量,默认 <code>~/.allhands/data</code>。</p>
+
+<h3>4.5 网络策略</h3>
+<ul>
+  <li>自建 docker bridge <code>sandbox-egress</code></li>
+  <li>iptables 默认 DROP · ALLOW 列表通过 <code>WorkspaceQuota.allowed_domains</code>(默认含 pypi / npmjs / github)</li>
+  <li>DNS 走自托管 dnsmasq + ipset 解析白名单 → 自动放行 IP</li>
+  <li>UI 切换"开放公网"开关 → Meta Tool 改 quota,<strong>WRITE + Confirmation</strong></li>
+</ul>
+
+<h3>4.6 与 AgentLoop 的对接(ADR 0018 兼容)</h3>
+<ul>
+  <li>Tool executor <code>async def</code>,调 <code>services.sandbox_service.exec(...)</code></li>
+  <li>长 exec(&gt; 5s)走 <code>ToolCallProgress</code> 内部事件流 stdout 给前端</li>
+  <li>exec 失败 / 超时 → tool 返回 <code>{ok: false, exit, stdout, stderr, killed_reason}</code>,<strong>不抛异常进 loop</strong></li>
+  <li>IRREVERSIBLE 走 ConfirmationGate · 审批 payload 含命令 + 工作区 ID + 预估资源</li>
+</ul>
+
+<h3>4.7 测试矩阵</h3>
+<pre><code>tests/unit/sandbox/
+  test_workspace_repo.py
+  test_runtime_protocol.py        # ABC 契约
+  test_docker_runtime.py           # 起真 docker · 标 @integration
+  test_tools_registration.py       # L01 回归:13 个 tool 都注册 · scope 正确
+tests/integration/sandbox/
+  test_workspace_lifecycle.py      # create → exec → reload service → exec 仍能用
+  test_seccomp_blocks_mount.py     # 沙箱内 mount /etc 应失败
+  test_egress_default_deny.py
+  test_excel_roundtrip.py          # fixture xlsx · openpyxl 改 · 读出来对账
+</code></pre>
+
+<h2 id="s5">5 · 技术选型 · 依赖明细</h2>
+
+<h3>5.1 Python 端</h3>
+<table>
+  <tr><th>依赖</th><th>用途</th><th>备注</th></tr>
+  <tr><td><code>docker</code> (SDK)</td><td>起容器 / exec</td><td>主线 ✅</td></tr>
+  <tr><td><code>aiodocker</code></td><td>async 版</td><td>可选 · <code>docker</code> 也能在线程池里跑</td></tr>
+  <tr><td><code>aiofiles</code></td><td>工作区文件流式读写</td><td>加</td></tr>
+  <tr><td><code>e2b</code></td><td>备选 runtime</td><td>后期</td></tr>
+</table>
+
+<h3>5.2 镜像里的工具栈</h3>
+<ul>
+  <li>必装:python3.12 · node20 · git · ripgrep · jq · curl · libreoffice · poppler · pandas/openpyxl/numpy/requests/httpx/pypdf/python-docx/pillow</li>
+  <li>可选(动态 image variant):tex-live · ffmpeg · playwright · postgres-client</li>
+</ul>
+
+<h3>5.3 隔离层</h3>
+<ul>
+  <li><strong>MVP</strong>:Docker rootless + seccomp default + AppArmor + cap_drop=ALL + read_only rootfs + tmpfs</li>
+  <li><strong>升级位</strong>:把 docker runtime 换成 <code>runsc</code>(gVisor),一行 daemon.json,代码零改</li>
+  <li><strong>极端模式</strong>:同一 SandboxRuntime ABC 实现一份 firecracker driver(借鉴 microsandbox / firecracker-containerd)</li>
+</ul>
+
+<h3>5.4 不引入</h3>
+<ul>
+  <li>❌ Kubernetes(单机起步 · k8s 是包袱)</li>
+  <li>❌ docker-compose 来管 sandbox 容器(要程序化生命周期 · 直接用 SDK)</li>
+  <li>❌ E2B 作为唯一方案(自部署哲学冲突)</li>
+  <li>❌ 自己写 namespace/cgroup wrapper(轮子已经够好)</li>
+</ul>
+
+<h2 id="s6">6 · 落地路线(分阶段)</h2>
+
+<h3>Phase 0 · 决策窗(本周内)</h3>
+<p>写 ADR <code>00NN-sandbox-foundation.md</code>,定:</p>
+<ul>
+  <li>Runtime = Docker rootless(SandboxRuntime ABC 留口)</li>
+  <li>工作区 = 选项 A(宿主 bind-mount)</li>
+  <li>网络 = 默认 deny + 白名单</li>
+  <li>沙箱 / 会话 = 1:1 长生命周期 + 池化预热</li>
+</ul>
+
+<h3>Phase 1 · MVP(1.5 周)</h3>
+<ol>
+  <li><code>services/sandbox_service.py</code> + <code>WorkspaceRepo</code> + alembic migration</li>
+  <li><code>execution/sandbox/runtime.py</code> ABC + <code>docker_runtime.py</code></li>
+  <li>5 个核心 tool:create/exec/read/write/list_dir</li>
+  <li>镜像 <code>allhands/sandbox-base:0.1</code> + <code>Dockerfile.sandbox</code>(进 repo)</li>
+  <li>单元 + 集成测试 · L01 注册回归</li>
+  <li>UI:ChatPanel Tool 调用展开渲染 stdout · 文件浏览先用 list/read 凑</li>
+</ol>
+
+<h3>Phase 2 · 体验(1 周)</h3>
+<ol start="7">
+  <li>完整 13 个 Tool · delete / move / upload / download / snapshot / run_python</li>
+  <li>REST <code>routers/sandbox.py</code> + 独立 <code>/workspaces/&lt;id&gt;</code> UI 页面(Tool First 双入口)</li>
+  <li>Excel 特化 Tool · PDF 文本抽取 Tool</li>
+  <li>配额 / 审计 / 网络白名单 UI</li>
+</ol>
+
+<h3>Phase 3 · 加固(按需)</h3>
+<ul>
+  <li>gVisor runtime · 网络出口 mTLS proxy · workspace 备份 / 归档</li>
+  <li>E2B runtime adapter</li>
+  <li>Firecracker / microsandbox 评估</li>
+</ul>
+
+<h2 id="s7">7 · 风险与未决问题</h2>
+<table>
+  <tr><th>#</th><th>风险</th><th>缓解</th></tr>
+  <tr><td>R1</td><td>rootless docker 在某些 Linux(老内核 / 缺 cgroup v2)起不来</td><td>文档给最低内核 5.13 + <code>docker-rootful</code> 兜底脚本</td></tr>
+  <tr><td>R2</td><td>LibreOffice headless 并发偶发卡死</td><td>单 ws 串行 · 60s 超时 · 严重时切 <code>gnumeric</code></td></tr>
+  <tr><td>R3</td><td>工作区膨胀 / 用户传入大文件</td><td>默认 quota 5GB · 上传 &gt; 100MB 走 confirmation</td></tr>
+  <tr><td>R4</td><td>容器 escape 0day</td><td>升级路径在 §5.3 第二档 · v0 接受残余风险并文档明示</td></tr>
+  <tr><td>R5</td><td>多用户并发资源争抢</td><td><code>services</code> 层加全局并发 semaphore + per-user quota</td></tr>
+  <tr><td>R6</td><td>macOS / Windows 开发机怎么跑?</td><td>macOS 用 Docker Desktop · 本地 dev 也支持 <code>sandbox-exec</code> adapter 跑无 docker 模式 · CI 全套只在 Linux</td></tr>
+</table>
+
+<h2 id="s8">8 · 参考资料</h2>
+<ul>
+  <li>Claude Code 文档:permission system / hooks / sandbox-exec(macOS)/ Landlock(Linux)</li>
+  <li>E2B docs · firecracker-task-driver(开源部分)</li>
+  <li><a href="https://gvisor.dev/docs/" target="_blank">gVisor</a></li>
+  <li><a href="https://firecracker-microvm.github.io/" target="_blank">Firecracker</a></li>
+  <li><a href="https://docs.docker.com/engine/security/rootless/" target="_blank">Docker rootless</a></li>
+  <li><a href="https://github.com/All-Hands-AI/OpenHands" target="_blank">OpenHands runtime</a>(关注 <code>openhands/runtime/impl/docker/</code>)</li>
+  <li><a href="https://github.com/microsandbox/microsandbox" target="_blank">microsandbox</a></li>
+  <li><a href="https://www.daytona.io/" target="_blank">Daytona</a></li>
+</ul>
+
+<h2 id="s9">9 · 给评审者的 3 个问题</h2>
+<ol>
+  <li>自部署哲学下,<strong>E2B 这种 SaaS runtime 是否作为可选项接进来</strong>(允许用户在 UI 里切到"云沙箱")?还是禁掉只走自托管?</li>
+  <li><strong>沙箱默认网络策略 = deny + 白名单</strong> 是否激进?写代码场景里 pip / npm 必须默认放行,这个白名单要不要做"包管理器一键"?</li>
+  <li>工作区是否需要"可分享 / 多 agent 共用"?如果要,写隔离要不要做(比如同时只一个 agent 写)?</li>
+</ol>
+
+<div class="footer">
+  allhands · research/sandbox · 2026-04-25 · 报告对应 MD 见 <code>product/research/sandbox/REPORT.md</code>
+</div>
+
+</div>
+
+<script>
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+</script>
+</body>
+</html>

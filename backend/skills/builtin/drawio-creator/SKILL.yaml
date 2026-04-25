@@ -1,0 +1,11 @@
+id: allhands.drawio-creator
+name: drawio 制图助手
+description: 用 mxfile XML 模板产出可在 draw.io 中渲染的合规图表
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.artifacts.create
+  - allhands.meta.read_skill_file
+
+prompt_fragment_file: prompts/guidance.md

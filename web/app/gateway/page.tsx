@@ -96,6 +96,9 @@ function GatewayPageInner() {
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [modelFormFor, setModelFormFor] = useState<GatewayProvider | null>(null);
   const [modelForm, setModelForm] = useState<typeof EMPTY_MODEL_FORM>(EMPTY_MODEL_FORM);
+  // 编辑模型(2026-04-25):display_name / context_window 可改;name 不可改
+  // (改 API name 等同于换模型 → 应该新建 + 删旧,而不是 in-place rename)。
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [deleteProviderTarget, setDeleteProviderTarget] =
@@ -425,6 +428,29 @@ function GatewayPageInner() {
     }
   }
 
+  async function handleEditModel() {
+    if (!editingModelId) return;
+    setSaving(true);
+    try {
+      // PATCH 只发可变字段(display_name + context_window)。name(API 名)
+      // 故意不允许 in-place 改 — 改 API 名等同换模型,应该新建 + 删旧。
+      await fetch(`/api/models/${editingModelId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          display_name: modelForm.display_name,
+          context_window: modelForm.context_window,
+        }),
+      });
+      setEditingModelId(null);
+      setModelFormFor(null);
+      setModelForm(EMPTY_MODEL_FORM);
+      await load();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDeleteModelConfirmed() {
     if (!deleteModelTarget) return;
     setDeleting(true);
@@ -554,6 +580,19 @@ function GatewayPageInner() {
                       }}
                       onChatTestModel={(m) => setChatModel(m)}
                       onDeleteModel={(m) => setDeleteModelTarget(m)}
+                      onEditModel={(m) => {
+                        // 复用 ModelFormDialog,但绑定到 editingModelId 上 ——
+                        // 标识 "PATCH" 而非 "POST"。name 字段在 dialog 里
+                        // 仍可见,但保存时不会 PATCH(handleEditModel 只发
+                        // display_name + context_window)。
+                        setModelFormFor(p);
+                        setEditingModelId(m.id);
+                        setModelForm({
+                          name: m.name,
+                          display_name: m.display_name,
+                          context_window: m.context_window,
+                        });
+                      }}
                     />
                   );
                 })}
@@ -585,8 +624,15 @@ function GatewayPageInner() {
           form={modelForm}
           onChange={setModelForm}
           saving={saving}
-          onCancel={() => setModelFormFor(null)}
-          onSave={() => void handleCreateModel()}
+          editing={editingModelId !== null}
+          onCancel={() => {
+            setModelFormFor(null);
+            setEditingModelId(null);
+            setModelForm(EMPTY_MODEL_FORM);
+          }}
+          onSave={() =>
+            void (editingModelId ? handleEditModel() : handleCreateModel())
+          }
         />
       )}
       {chatModel && (
@@ -1104,6 +1150,7 @@ function ModelFormDialog({
   form,
   onChange,
   saving,
+  editing = false,
   onCancel,
   onSave,
 }: {
@@ -1111,6 +1158,9 @@ function ModelFormDialog({
   form: typeof EMPTY_MODEL_FORM;
   onChange: (f: typeof EMPTY_MODEL_FORM) => void;
   saving: boolean;
+  /** True when editing an existing model — name field becomes read-only,
+   *  title says 编辑 instead of 注册. */
+  editing?: boolean;
   onCancel: () => void;
   onSave: () => void;
 }) {
@@ -1118,7 +1168,7 @@ function ModelFormDialog({
   return (
     <Modal
       onClose={onCancel}
-      title={t("registerModelTitle")}
+      title={editing ? t("editModelTitle") : t("registerModelTitle")}
       subtitle={
         <>
           {t("registerModelOwner")}
@@ -1135,6 +1185,11 @@ function ModelFormDialog({
           value={form.name}
           onChange={(v) => onChange({ ...form, name: v })}
           icon="terminal"
+          /* API name is part of the model's identity — changing it is
+             semantically a different model, not a rename. Lock it in
+             edit mode; user can delete + re-create if they really need a
+             different API name. */
+          disabled={editing}
         />
         <LabeledInput
           label={t("fieldDisplayName")}
@@ -1150,6 +1205,7 @@ function ModelFormDialog({
           value={String(form.context_window || "")}
           onChange={(v) => onChange({ ...form, context_window: Number(v) || 0 })}
           icon="database"
+          hint={t("fieldContextWindowHint")}
         />
       </FormSection>
       <DialogFooter
@@ -1323,6 +1379,8 @@ function LabeledInput({
   type = "text",
   mono = false,
   icon,
+  disabled = false,
+  hint,
 }: {
   label: string;
   value: string;
@@ -1331,6 +1389,8 @@ function LabeledInput({
   type?: string;
   mono?: boolean;
   icon?: Parameters<typeof Icon>[0]["name"];
+  disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <div>
@@ -1349,12 +1409,16 @@ function LabeledInput({
           type={type}
           placeholder={placeholder}
           value={value}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
-          className={`w-full h-9 rounded-md bg-surface border border-border focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary text-[13px] text-text placeholder:text-text-subtle transition duration-base ${
+          className={`w-full h-9 rounded-md bg-surface border border-border focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary text-[13px] text-text placeholder:text-text-subtle transition duration-base disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-surface-2 ${
             icon ? "pl-8 pr-3" : "px-3"
           } ${mono ? "font-mono text-[12.5px]" : ""}`}
         />
       </div>
+      {hint && (
+        <p className="mt-1 text-[11px] leading-snug text-text-subtle">{hint}</p>
+      )}
     </div>
   );
 }

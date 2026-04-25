@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -184,6 +185,9 @@ def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
 
 
 # --- AgentLoop --------------------------------------------------------------
+
+
+_log = logging.getLogger(__name__)
 
 
 class AgentLoop:
@@ -360,7 +364,25 @@ class AgentLoop:
 
                 tool_use_blocks = [b for b in blocks if isinstance(b, ToolUseBlock)]
                 if not tool_use_blocks:
-                    yield LoopExited(reason="completed")
+                    # Distinguish "model finished cleanly with a reply" from
+                    # "model emitted nothing at all". The latter usually means
+                    # the model tried to call a tool that doesn't exist (e.g.
+                    # a stale skill referencing a de-registered tool id) and
+                    # had its phantom tool_call dropped — leaving it with no
+                    # text and no valid tool. Surfacing it as `empty_response`
+                    # lets the UI show an error instead of going silent.
+                    if not text_full.strip():
+                        yield LoopExited(
+                            reason="empty_response",
+                            detail=(
+                                "model produced no text and no tool calls — "
+                                "this typically means a tool referenced by a "
+                                "skill / prompt is not registered for this "
+                                "employee, or the model ran out of ideas mid-turn"
+                            ),
+                        )
+                    else:
+                        yield LoopExited(reason="completed")
                     return
 
                 # Append assistant message (with tool_uses) to lc history
@@ -442,6 +464,16 @@ class AgentLoop:
             try:
                 tool, executor = self._tool_registry.get(tool_id)
             except KeyError:
+                # A skill / employee config referenced a tool that is no
+                # longer registered (e.g. deprecated render_plan). Log so
+                # the operator can spot the stale reference instead of
+                # debugging "agent goes silent" at the model layer.
+                _log.warning(
+                    "active tool_id %r is not registered; skipping. "
+                    "If this came from a builtin skill, update its "
+                    "tool_ids list.",
+                    tool_id,
+                )
                 continue
             executor = self._maybe_substitute_executor(tool_id, executor)
             out[tool.name] = ToolBinding(tool=tool, executor=executor)
@@ -523,11 +555,21 @@ class AgentLoop:
         # (workspace-scoped, no provenance) — still works, just orphaned.
         if tool_id in (
             "allhands.artifacts.create",
+            "allhands.artifacts.create_pdf",
+            "allhands.artifacts.create_xlsx",
+            "allhands.artifacts.create_csv",
+            "allhands.artifacts.create_docx",
+            "allhands.artifacts.create_pptx",
             "allhands.artifacts.update",
             "allhands.artifacts.rollback",
         ):
             from allhands.execution.tools.meta.executors import (
+                make_artifact_create_csv_executor,
+                make_artifact_create_docx_executor,
                 make_artifact_create_executor,
+                make_artifact_create_pdf_executor,
+                make_artifact_create_pptx_executor,
+                make_artifact_create_xlsx_executor,
                 make_artifact_rollback_executor,
                 make_artifact_update_executor,
             )
@@ -539,12 +581,19 @@ class AgentLoop:
                 "employee_id": self._employee.id,
                 "run_id": self._run_id,
             }
-            if tool_id == "allhands.artifacts.create":
-                return make_artifact_create_executor(maker, **kwargs)
-            if tool_id == "allhands.artifacts.update":
-                return make_artifact_update_executor(maker, **kwargs)
-            if tool_id == "allhands.artifacts.rollback":
-                return make_artifact_rollback_executor(maker, **kwargs)
+            office_factories = {
+                "allhands.artifacts.create": make_artifact_create_executor,
+                "allhands.artifacts.create_pdf": make_artifact_create_pdf_executor,
+                "allhands.artifacts.create_xlsx": make_artifact_create_xlsx_executor,
+                "allhands.artifacts.create_csv": make_artifact_create_csv_executor,
+                "allhands.artifacts.create_docx": make_artifact_create_docx_executor,
+                "allhands.artifacts.create_pptx": make_artifact_create_pptx_executor,
+                "allhands.artifacts.update": make_artifact_update_executor,
+                "allhands.artifacts.rollback": make_artifact_rollback_executor,
+            }
+            factory = office_factories.get(tool_id)
+            if factory is not None:
+                return factory(maker, **kwargs)
 
         return default
 

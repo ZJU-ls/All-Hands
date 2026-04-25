@@ -9,7 +9,7 @@
 | 加一个 provider(OpenAI / Anthropic / 阿里百炼 / OpenRouter...) | `list_provider_presets` → `create_provider` |
 | 改 provider(换 URL / 改 key / 改 default_model) | `update_provider` |
 | 删 provider(连同其 Model 一起删) | `delete_provider`(IRREVERSIBLE · 需确认) |
-| 设默认 provider(未指定 model_ref 的员工都用它) | `set_default_provider` |
+| 设默认模型(未指定 model_ref 的员工都用它,会一并打开 provider 的默认开关) | `set_default_model` |
 | 验证 provider 是否联通(/models 端点) | `test_provider_connection` |
 | 在一个 provider 下注册具体的 model | `create_model` |
 | 改 / 删 model | `update_model` · `delete_model` |

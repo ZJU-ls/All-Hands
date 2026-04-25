@@ -127,9 +127,18 @@ const ERROR_KEYS: Record<ErrorCategory, string> = {
   unknown: "errorUnknown",
 };
 
+type Warning = {
+  message: string;
+  category: string;
+};
+
 type LastRun = {
   metrics?: TestMetrics;
   error?: { category: ErrorCategory; message: string };
+  /** Per-turn upstream warnings — e.g. "thinking field auto-stripped after
+   *  upstream 400" so the user knows why a model thinks despite their
+   *  toggle being off (or vice-versa). Visible above the metrics card. */
+  warnings?: Warning[];
   streaming: boolean;
 };
 
@@ -253,6 +262,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
 
     let acc = "";
     let accReasoning = "";
+    const warnings: Warning[] = [];
     let errored = false;
 
     const handle = openStream(
@@ -274,6 +284,20 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
           setPhase("thinking");
         },
         onCustom: (name, value) => {
+          if (name === "allhands.model_test_warning") {
+            // 上游协议异常的透明告知 — 比如 "thinking 字段被某些模型拒绝,
+            // 已自动剥离重试"。累积到 warnings,在 metrics 卡片上方渲染,
+            // 避免用户看到模型行为异常(关了思考还在思考 / 等)却找不到
+            // 原因。
+            const data = (value ?? {}) as { message?: string; category?: string };
+            if (data.message) {
+              warnings.push({
+                message: data.message,
+                category: data.category ?? "unknown",
+              });
+            }
+            return;
+          }
           if (name === "allhands.model_test_metrics") {
             const data = (value ?? {}) as {
               response?: string;
@@ -313,6 +337,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 outputTokens: usage.output_tokens ?? 0,
                 totalTokens: usage.total_tokens ?? 0,
               },
+              warnings: warnings.length > 0 ? [...warnings] : undefined,
             });
           } else if (name === "allhands.model_test_error") {
             errored = true;
@@ -545,22 +570,49 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                   role={m.role}
                   content={m.content}
                   reasoning={m.reasoning}
+                  modelLabel={modelTitle}
                 />
               ))}
               {isLoading &&
                 phase === "thinking" &&
                 !streamContent &&
-                !streamReasoning && <ThinkingPlaceholder elapsedMs={elapsedMs} />}
+                !streamReasoning && (
+                  <ThinkingPlaceholder elapsedMs={elapsedMs} modelLabel={modelTitle} />
+                )}
               {(streamContent || streamReasoning) && (
                 <MessageRow
                   role="assistant"
                   content={streamContent}
                   reasoning={streamReasoning}
+                  modelLabel={modelTitle}
                   streaming
                   phase={phase}
                 />
               )}
             </div>
+
+            {/* Vendor-specific protocol fallback notice — surfaces things like
+                "thinking field auto-stripped after upstream 400" so the user
+                sees why a model thought when toggle was off (or vice-versa).
+                Yellow band, not red — request still succeeded, just with a
+                different effective config. */}
+            {lastRun?.warnings && lastRun.warnings.length > 0 && (
+              <div
+                data-testid="model-test-warnings"
+                className="mt-3 rounded-xl border border-warning/25 bg-warning-soft p-3 text-[12px] flex items-start gap-2.5"
+              >
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-warning/15 text-warning shrink-0">
+                  <Icon name="alert-triangle" size={12} strokeWidth={2} />
+                </span>
+                <div className="flex-1 min-w-0 space-y-1">
+                  {lastRun.warnings.map((w, i) => (
+                    <p key={i} className="text-[12px] leading-relaxed text-text">
+                      {w.message}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {lastRun?.metrics && !lastRun.error && (
               <MetricsRow metrics={lastRun.metrics} />
@@ -694,7 +746,13 @@ function EmptyTranscript() {
   );
 }
 
-function ThinkingPlaceholder({ elapsedMs }: { elapsedMs: number }) {
+function ThinkingPlaceholder({
+  elapsedMs,
+  modelLabel,
+}: {
+  elapsedMs: number;
+  modelLabel?: string;
+}) {
   const t = useTranslations("gateway.modelTest");
   return (
     <div
@@ -714,8 +772,10 @@ function ThinkingPlaceholder({ elapsedMs }: { elapsedMs: number }) {
         <Icon name="sparkles" size={12} strokeWidth={2} />
       </div>
       <div className="flex-1 rounded-2xl rounded-tl-md border border-border bg-surface px-3.5 py-2.5 shadow-soft-sm">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle block mb-1">
-          {t("assistantThinking")}
+        <span className="font-mono text-[10px] tracking-wider text-text-subtle block mb-1 truncate">
+          {modelLabel ?? t("assistant")}
+          <span aria-hidden="true"> · </span>
+          <span className="text-text-muted">{t("statusThinking")}</span>
         </span>
         <span className="inline-flex items-center gap-2 text-[12.5px] text-text-muted">
           <span
@@ -740,12 +800,16 @@ function MessageRow({
   reasoning,
   streaming,
   phase,
+  modelLabel,
 }: {
   role: "user" | "assistant";
   content: string;
   reasoning?: string;
   streaming?: boolean;
   phase?: "idle" | "thinking" | "answering";
+  /** Model name shown in place of the generic "ASSISTANT" header so users
+   * know exactly which model is replying inside this test dialog. */
+  modelLabel?: string;
 }) {
   const t = useTranslations("gateway.modelTest");
   const isUser = role === "user";
@@ -782,12 +846,19 @@ function MessageRow({
         <Icon name="sparkles" size={12} strokeWidth={2} />
       </div>
       <div className="flex-1 min-w-0 rounded-2xl rounded-tl-md border border-border bg-surface px-3.5 py-2.5 text-[13px] leading-[1.6] text-text shadow-soft-sm">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle block mb-1">
-          {streaming
-            ? phase === "thinking"
-              ? t("assistantThinking")
-              : t("assistantStreaming")
-            : t("assistant")}
+        <span className="font-mono text-[10px] tracking-wider text-text-subtle block mb-1 truncate">
+          {/* 用模型名替代通用的 ASSISTANT 字面 — 这是模型测试 dialog,
+              用户每行的核心好奇心是"哪个模型在回复"。状态(思考中/流式)
+              作为后缀点缀,不再是主标识。 */}
+          {modelLabel ?? t("assistant")}
+          {streaming && (
+            <>
+              <span aria-hidden="true"> · </span>
+              <span className="text-text-muted">
+                {phase === "thinking" ? t("statusThinking") : t("statusStreaming")}
+              </span>
+            </>
+          )}
         </span>
         {hasReasoning && (
           <ReasoningBlock text={reasoning!} isStreaming={reasoningStreaming} />
@@ -907,12 +978,13 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
   const t = useTranslations("modelTestMetrics");
   const showReasoningMetric =
     metrics.reasoningFirstMs !== undefined && metrics.reasoningFirstMs > 0;
-  // tok i/o/t 三个数都走 fmtCount,但格式串本身要紧凑(占 1 个 chip 宽),
-  // 所以小数据保留原始数字,k/M 截断只在 ≥ 10000 时启动。
-  const tokIO =
-    metrics.inputTokens !== undefined
-      ? `${fmtCount(metrics.inputTokens)} / ${fmtCount(metrics.outputTokens ?? 0)} / ${fmtCount(metrics.totalTokens ?? 0)}`
-      : "—";
+  // 把 tok i/o/t 拆成三个独立 chip ——
+  // 旧设计把 "28 / 568 / 596" 塞进单个 chip,4 列 grid 下宽度不够就被
+  // truncate 截成 "28 / 568 / 5..."。每个数据点单独一个 chip 后,任何一
+  // 列宽都装得下单个数字,truncate 不会触发。
+  const tokIn = metrics.inputTokens !== undefined ? fmtCount(metrics.inputTokens) : "—";
+  const tokOut = metrics.inputTokens !== undefined ? fmtCount(metrics.outputTokens ?? 0) : "—";
+  const tokTot = metrics.inputTokens !== undefined ? fmtCount(metrics.totalTokens ?? 0) : "—";
   return (
     <div
       data-testid="model-test-metrics"
@@ -930,14 +1002,12 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
           showReasoningMetric ? metrics.reasoningFirstMs : metrics.ttftMs,
         )}
       />
-      {showReasoningMetric ? (
+      {showReasoningMetric && (
         <MetricChip
           icon="zap"
           label={t("ttftAnswer")}
           value={fmtDuration(metrics.ttftMs)}
         />
-      ) : (
-        <MetricChip icon="database" label={t("tokIO")} value={tokIO} />
       )}
       <MetricChip
         icon="activity"
@@ -948,9 +1018,9 @@ function MetricsRow({ metrics }: { metrics: TestMetrics }) {
             : "—"
         }
       />
-      {showReasoningMetric && (
-        <MetricChip icon="database" label={t("tokIO")} value={tokIO} />
-      )}
+      <MetricChip icon="arrow-down" label={t("tokInput")} value={tokIn} />
+      <MetricChip icon="arrow-up" label={t("tokOutput")} value={tokOut} />
+      <MetricChip icon="database" label={t("tokTotal")} value={tokTot} />
     </div>
   );
 }

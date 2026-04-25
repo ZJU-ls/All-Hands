@@ -8,7 +8,7 @@ tool_ids:
   - allhands.meta.create_provider
   - allhands.meta.update_provider
   - allhands.meta.delete_provider
-  - allhands.meta.set_default_provider
+  - allhands.meta.set_default_model
   - allhands.meta.test_provider_connection
   - allhands.meta.list_provider_presets
   - allhands.meta.create_model

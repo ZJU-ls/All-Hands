@@ -73,14 +73,6 @@
       },
       "refreshing": "Refreshing…",
       "refresh": "Refresh",
-      "bootstrap": {
-        "headlinePrefix": "Langfuse",
-        "headlineSuffix": "· tracing not connected",
-        "body": "Agents keep running, but every run's trace is dropped. The trace list below reads run.* events from the local events table, not Langfuse.",
-        "lastPrefix": "last ·",
-        "retrying": "Retrying…",
-        "retry": "Retry bootstrap"
-      },
       "loadFailed": {
         "title": "Failed to load",
         "fallback": "Couldn't fetch observability data. Tap retry on the right.",
@@ -98,20 +90,23 @@
         "tokensDelta": "{count} total traces"
       },
       "panels": {
-        "langfuse": "Langfuse · tracing backend",
+        "telemetry": "Self-instrumented · 24h",
         "topEmployees": "Top employees · 24h",
         "byModel": "By model · 24h",
         "noData": "No data yet",
         "moreLabel": "{title} more",
         "rows": {
-          "bootstrap": "Bootstrap status",
-          "observability": "Observability",
-          "host": "Host",
+          "observability": "Telemetry",
+          "latencyP50": "Latency p50",
+          "latencyP95": "Latency p95",
+          "latencyP99": "Latency p99",
+          "estimatedCost": "Est. cost · 24h",
           "totalTraces": "Total traces"
         },
         "values": {
           "enabled": "enabled",
           "disabled": "disabled",
+          "selfInstrumented": "self-instrumented",
           "runs": "{count} runs"
         }
       },
@@ -122,6 +117,7 @@
       },
       "traces": {
         "title": "Latest 50 traces",
+        "selfInstrumentedNote": "self-instrumented · local events.run.*",
         "empty": {
           "title": "No run events yet",
           "description": "Chat with Lead and kick off the first task — trace summaries will appear here."
@@ -166,6 +162,7 @@
       "loadFailed": "Failed to load artifact: {error}",
       "loadingMeta": "Loading…",
       "loadingContent": "Loading content…",
+      "contentMissing": "The artifact's content file is no longer on disk (the metadata row stayed). Likely cleaned up or the workspace was swapped — regenerate or delete the metadata.",
       "download": "Download",
       "unsupportedKind": "Kind {kind} can't be previewed in the panel.",
       "copyFailed": "Copy failed: {error}",
@@ -222,7 +219,35 @@
     },
     "drawio": {
       "title": "drawio diagram",
-      "loading": "Loading drawio editor…"
+      "loading": "Loading drawio editor…",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "saveFailed": "Save failed"
+    },
+    "pdf": {
+      "loading": "Loading PDF…",
+      "loadFailed": "PDF load failed: {error}"
+    },
+    "csv": {
+      "empty": "(no data)",
+      "loadFailed": "CSV parse failed: {error}"
+    },
+    "xlsx": {
+      "loading": "Loading Excel…",
+      "empty": "(empty sheet)",
+      "loadFailed": "xlsx parse failed: {error}"
+    },
+    "docx": {
+      "loading": "Rendering Word document…",
+      "loadFailed": "docx render failed: {error}"
+    },
+    "pptx": {
+      "loading": "Parsing PowerPoint…",
+      "loadFailed": "pptx parse failed: {error}",
+      "empty": "(no slide text could be extracted · please download)",
+      "untitledSlide": "(untitled)",
+      "count": "{n} slides",
+      "download": "Download .pptx"
     },
     "page": {
       "title": "Artifacts",
@@ -239,8 +264,32 @@
         "size_desc": "Size large→small"
       },
       "empty": "No artifacts match the current filter.",
+      "emptyAll": "No artifacts in this workspace yet",
+      "emptyAllHint": "Once an employee produces a doc, code or diagram, it shows up here.",
       "loadFailed": "Failed to load artifacts: {error}",
-      "count": "{n} artifacts"
+      "count": "{n} artifacts",
+      "selectHint": "Pick an artifact on the left to see its detail",
+      "filters": {
+        "pinnedOnly": "Pinned only",
+        "dateAll": "All time",
+        "date7d": "Last 7d",
+        "date30d": "Last 30d",
+        "clearAll": "Clear filters",
+        "activeChip": "Filter: {label}",
+        "removeChipAria": "Remove filter {label}"
+      },
+      "stats": {
+        "total": "Total",
+        "totalHint": "All artifacts",
+        "size": "Disk usage",
+        "sizeHint": "Sum across versions",
+        "pinned": "Pinned",
+        "pinnedHint": "Team favourites",
+        "last7d": "Last 7d",
+        "last7dHint": "Recently created",
+        "byKind": "By kind",
+        "topKindHint": "Largest kind · {kind}"
+      }
     }
   },
   "brand": {
@@ -321,7 +370,7 @@
         "triggers": "scheduled + webhook",
         "channels": "slack email webhook",
         "confirmations": "pending approvals",
-        "traces": "langfuse traces",
+        "traces": "run traces",
         "observatory": "platform observability",
         "stockAssistant": "market anomaly demo",
         "review": "agent review",

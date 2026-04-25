@@ -67,7 +67,6 @@ def _default_health() -> HealthSnapshot:
     return HealthSnapshot(
         gateway=ComponentStatus(name="gateway", status="ok"),
         mcp_servers=ComponentStatus(name="mcp", status="ok"),
-        langfuse=ComponentStatus(name="langfuse", status="ok"),
         db=ComponentStatus(name="db", status="ok"),
         triggers=ComponentStatus(name="triggers", status="ok"),
     )
