@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { Icon } from "@/components/ui/icon";
 import { CopyButton } from "@/components/render/_shared/CopyButton";
@@ -13,6 +14,7 @@ import { CopyButton } from "@/components/render/_shared/CopyButton";
  *   - tile remains a real anchor for keyboard / accessibility
  */
 export function LinkCard({ props }: RenderProps) {
+  const t = useTranslations("viz.linkCard");
   const url = typeof props.url === "string" && props.url ? props.url : "#";
   const title = typeof props.title === "string" ? props.title : "";
   const description =
@@ -70,7 +72,7 @@ export function LinkCard({ props }: RenderProps) {
         className="absolute right-3 top-3 opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-within:opacity-100"
         onClick={(e) => e.preventDefault()}
       >
-        <CopyButton value={url} label="复制链接" />
+        <CopyButton value={url} label={t("copyLabel")} />
       </span>
     </a>
   );

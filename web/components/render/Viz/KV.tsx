@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { CopyButton } from "@/components/render/_shared/CopyButton";
 import {
@@ -18,6 +19,7 @@ type Item = { label: string; value: string; hint?: string };
  *   - per-row copy · copies the value to clipboard, hover-revealed
  */
 export function KV({ props }: RenderProps) {
+  const t = useTranslations("viz.kv");
   const rawItems = props.items;
   const items: Item[] = useMemo(
     () =>
@@ -59,7 +61,7 @@ export function KV({ props }: RenderProps) {
             <SearchInput
               value={query}
               onChange={setQuery}
-              placeholder="筛选键…"
+              placeholder={t("searchPlaceholder")}
               hint={query && visible.length !== items.length ? `${visible.length}/${items.length}` : undefined}
             />
           ) : null}
@@ -67,10 +69,10 @@ export function KV({ props }: RenderProps) {
       )}
       <dl className="divide-y divide-border">
         {items.length === 0 && (
-          <div className="px-4 py-3 text-caption text-text-muted">No items</div>
+          <div className="px-4 py-3 text-caption text-text-muted">{t("empty")}</div>
         )}
         {visible.length === 0 && items.length > 0 && (
-          <div className="px-4 py-3 text-caption text-text-muted">没有匹配的项</div>
+          <div className="px-4 py-3 text-caption text-text-muted">{t("noMatch")}</div>
         )}
         {visible.map((item, i) => (
           <div
@@ -94,7 +96,7 @@ export function KV({ props }: RenderProps) {
             </dd>
             {item.value != null ? (
               <span className="opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-within:opacity-100">
-                <CopyButton value={String(item.value)} label={`复制 ${item.label}`} />
+                <CopyButton value={String(item.value)} label={t("copyLabel", { label: item.label })} />
               </span>
             ) : (
               <span aria-hidden className="h-6 w-6" />

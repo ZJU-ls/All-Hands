@@ -51,7 +51,7 @@ describe("Viz.Table", () => {
     expect(screen.getByText("Bob")).toBeDefined();
     expect(screen.getByText("Team scores")).toBeDefined();
     // Sortable affordance
-    expect(screen.getByLabelText(/Sort by Name/)).toBeDefined();
+    expect(screen.getByLabelText(/按 Name 排序/)).toBeDefined();
   });
 
   it("shows empty state when rows missing", () => {
@@ -61,7 +61,7 @@ describe("Viz.Table", () => {
         interactions={NO_INTERACTIONS}
       />,
     );
-    expect(screen.getByText(/No rows/)).toBeDefined();
+    expect(screen.getByText(/暂无数据/)).toBeDefined();
   });
 });
 
@@ -358,7 +358,7 @@ describe("Viz.BarChart", () => {
     render(
       <BarChart props={{ bars: [] }} interactions={NO_INTERACTIONS} />,
     );
-    expect(screen.getByText(/No bars/)).toBeDefined();
+    expect(screen.getByText(/无数据/)).toBeDefined();
   });
 });
 
@@ -460,6 +460,6 @@ describe("Viz.PieChart", () => {
         interactions={NO_INTERACTIONS}
       />,
     );
-    expect(screen.getByText(/No slices/)).toBeDefined();
+    expect(screen.getByText(/暂无数据/)).toBeDefined();
   });
 });

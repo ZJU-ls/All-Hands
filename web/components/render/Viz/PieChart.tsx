@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 
 type Slice = { label: string; value: number };
@@ -49,6 +50,7 @@ function arcPath(startAngle: number, endAngle: number, variant: Variant): string
  *   - donut center   · shows currently focused slice (hover > isolated > biggest)
  */
 export function PieChart({ props }: RenderProps) {
+  const t = useTranslations("viz.pieChart");
   const rawSlicesIn = props.slices;
   const rawSlices = useMemo<Slice[]>(() => {
     if (!Array.isArray(rawSlicesIn)) return [];
@@ -97,7 +99,7 @@ export function PieChart({ props }: RenderProps) {
   if (total === 0) {
     return (
       <div className="rounded-xl border border-border bg-surface p-3 text-caption text-text-muted">
-        No slices
+        {t("empty")}
       </div>
     );
   }
@@ -182,8 +184,8 @@ export function PieChart({ props }: RenderProps) {
                   onMouseLeave={() => setHoverIdx((c) => (c === i ? null : c))}
                   title={
                     isolatedIdx === i
-                      ? "已聚焦 · 点击恢复"
-                      : `${slice.value} · ${(pct * 100).toFixed(1)}% · 点击聚焦`
+                      ? t("isolated")
+                      : t("tooltip", { value: slice.value, pct: (pct * 100).toFixed(1) })
                   }
                   className={`flex w-full items-center gap-2 min-w-0 rounded-sm px-1 py-0.5 text-left transition-colors duration-fast hover:bg-surface-2/60 ${
                     isFaded ? "opacity-50" : ""

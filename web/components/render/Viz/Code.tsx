@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { Icon } from "@/components/ui/icon";
 import { CopyButton } from "@/components/render/_shared/CopyButton";
@@ -15,6 +16,7 @@ import { CopyButton } from "@/components/render/_shared/CopyButton";
  *   - highlight lines   · driven by props.highlightLines
  */
 export function Code({ props, interactions }: RenderProps) {
+  const t = useTranslations("viz.code");
   const code = typeof props.code === "string" ? props.code : "";
   const language = typeof props.language === "string" ? props.language : "";
   const filename = typeof props.filename === "string" ? props.filename : undefined;
@@ -48,7 +50,7 @@ export function Code({ props, interactions }: RenderProps) {
             type="button"
             onClick={() => setWrap((v) => !v)}
             aria-pressed={wrap}
-            title={wrap ? "关闭自动换行" : "开启自动换行"}
+            title={wrap ? t("wrapOff") : t("wrapOn")}
             className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors duration-fast ${
               wrap
                 ? "bg-primary-muted text-primary"
@@ -57,7 +59,7 @@ export function Code({ props, interactions }: RenderProps) {
           >
             <Icon name="list" size={12} />
           </button>
-          <CopyButton value={copyText} label="复制代码" />
+          <CopyButton value={copyText} label={t("copyLabel")} />
         </div>
       </div>
       <pre className={`overflow-x-auto py-3 text-caption font-mono leading-relaxed ${wrap ? "whitespace-pre-wrap" : ""}`}>

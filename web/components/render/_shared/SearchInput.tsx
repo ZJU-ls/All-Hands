@@ -6,6 +6,7 @@
  * search glyph and a clear button when non-empty.
  */
 
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 
@@ -23,11 +24,13 @@ type Props = {
 export function SearchInput({
   value,
   onChange,
-  placeholder = "搜索…",
+  placeholder,
   hint,
   className,
   autoFocus,
 }: Props) {
+  const t = useTranslations("renderShared.searchInput");
+  const effectivePlaceholder = placeholder ?? t("placeholder");
   return (
     <label
       className={cn(
@@ -40,7 +43,7 @@ export function SearchInput({
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={effectivePlaceholder}
         autoFocus={autoFocus}
         className="w-32 min-w-0 bg-transparent outline-none placeholder:text-text-subtle"
       />
@@ -48,7 +51,7 @@ export function SearchInput({
         <button
           type="button"
           onClick={() => onChange("")}
-          aria-label="清空"
+          aria-label={t("clear")}
           className="inline-flex h-4 w-4 items-center justify-center rounded text-text-subtle hover:text-text-muted"
         >
           <Icon name="x" size={10} />

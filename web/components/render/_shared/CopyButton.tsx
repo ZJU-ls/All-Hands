@@ -8,12 +8,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 
 type Props = {
   value: string;
-  /** Visible label · accessibility + tooltip. Default: "复制". */
+  /** Visible label · accessibility + tooltip. Defaults to translated "Copy". */
   label?: string;
   /** Pixel size of the icon (button is icon + padding). Default: 12. */
   size?: number;
@@ -24,11 +25,13 @@ type Props = {
 
 export function CopyButton({
   value,
-  label = "复制",
+  label,
   size = 12,
   className,
   variant = "inline",
 }: Props) {
+  const t = useTranslations("renderShared.copyButton");
+  const effectiveLabel = label ?? t("label");
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -59,8 +62,8 @@ export function CopyButton({
     <button
       type="button"
       onClick={handle}
-      aria-label={label}
-      title={copied ? "已复制" : label}
+      aria-label={effectiveLabel}
+      title={copied ? t("copied") : effectiveLabel}
       className={cn(
         base,
         variant === "inline" ? "h-6 w-6" : "h-6",
@@ -70,7 +73,7 @@ export function CopyButton({
     >
       <Icon name={copied ? "check" : "copy"} size={size} />
       {variant === "button" ? (
-        <span>{copied ? "已复制" : label}</span>
+        <span>{copied ? t("copied") : effectiveLabel}</span>
       ) : null}
     </button>
   );
