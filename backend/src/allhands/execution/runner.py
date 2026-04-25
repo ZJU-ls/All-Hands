@@ -51,8 +51,6 @@ from allhands.execution.skills import (
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from langgraph.checkpoint.base import BaseCheckpointSaver
-
     from allhands.core import Employee
     from allhands.execution.dispatch import DispatchService
     from allhands.execution.gate import BaseGate
@@ -494,7 +492,7 @@ class AgentRunner:
         runtime: SkillRuntime | None = None,
         spawn_subagent_service: SpawnSubagentService | None = None,
         model_ref_override: str | None = None,
-        checkpointer: BaseCheckpointSaver[Any] | None = None,
+        checkpointer: Any | None = None,  # accepted for back-compat; unused
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry

@@ -44,20 +44,16 @@ forbidden_modules =
     langgraph
     langchain
 
-[importlinter:contract:langgraph-only-in-execution]
-# ADR 0014 R1 + ADR 0011 principle 3 · LangGraph types must stay behind the
-# allhands.execution boundary. Only the runner + checkpointer factory in
-# execution/ may directly touch langgraph.*; api/services/core reach it via
-# AgentEvent types or Any-typed ports (ChatService.checkpointer: Any | None).
-# `allow_indirect_imports` = True keeps the services → execution → langgraph
-# transitive path legal (the whole point of layering), while flagging any
-# direct ``from langgraph import ...`` added to a service / api / core file.
-name = langgraph direct imports only in allhands.execution (ADR 0014 R1)
+[importlinter:contract:no-langgraph-anywhere]
+# ADR 0018 · LangGraph fully removed from the orchestration layer. Custom
+# AgentLoop in execution/agent_loop.py drives the agent; all suspend/resume
+# flows through DeferredSignal in tool_pipeline. langgraph and
+# langgraph-checkpoint-sqlite are also removed from project deps. This
+# contract prevents accidental reintroduction.
+name = no langgraph imports anywhere (ADR 0018)
 type = forbidden
 source_modules =
-    allhands.services
-    allhands.api
-    allhands.core
+    allhands
 forbidden_modules =
     langgraph
-allow_indirect_imports = True
+    langgraph_checkpoint_sqlite
