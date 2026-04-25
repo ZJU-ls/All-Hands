@@ -195,7 +195,12 @@ export default function ArtifactsGlobalPage() {
           onPickKind={(k) => setKind(k === kind ? "" : k)}
         />
 
-        {/* Filter row · search + Select + range pills + pinned toggle + count */}
+        {/* Sticky toolbar · filter row + active-chip strip in one band that
+            sticks at top while scrolling so search/filters stay reachable
+            after the hero scrolls away. The `-mx-6 px-6` extends the band
+            edge-to-edge under the page padding; backdrop-blur softens the
+            content scrolling underneath. z-10 keeps it above chart fills. */}
+        <div className="sticky top-0 z-10 -mx-6 border-y border-border bg-bg/80 px-6 py-2 backdrop-blur-md">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[240px]">
             <Icon
@@ -297,21 +302,26 @@ export default function ArtifactsGlobalPage() {
         </div>
 
         {/* Active filter chip strip · removable individual chips + clear-all
-            button. Only renders when at least one filter is active. */}
+            button. Only renders when at least one filter is active. Lives
+            inside the sticky toolbar so chips stay glued under the filter
+            row even after scrolling. */}
         {hasActiveFilters ? (
-          <ActiveFilterChips
-            t={t}
-            q={q}
-            kind={kind}
-            pinnedOnly={pinnedOnly}
-            dateRange={dateRange}
-            onClearQ={() => setQ("")}
-            onClearKind={() => setKind("")}
-            onClearPinned={() => setPinnedOnly(false)}
-            onClearDate={() => setDateRange("all")}
-            onClearAll={clearAllFilters}
-          />
+          <div className="mt-2">
+            <ActiveFilterChips
+              t={t}
+              q={q}
+              kind={kind}
+              pinnedOnly={pinnedOnly}
+              dateRange={dateRange}
+              onClearQ={() => setQ("")}
+              onClearKind={() => setKind("")}
+              onClearPinned={() => setPinnedOnly(false)}
+              onClearDate={() => setDateRange("all")}
+              onClearAll={clearAllFilters}
+            />
+          </div>
         ) : null}
+        </div>
 
         {/* List + detail · proportions vary by view mode:
               · list  · sidebar 4/12  · detail 8/12   (dense)
