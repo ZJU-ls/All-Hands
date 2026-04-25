@@ -94,6 +94,12 @@
         "telemetry": "Self-instrumented · 24h",
         "topEmployees": "Top employees · 24h",
         "byModel": "By model · 24h",
+        "byTool": "Top tools · 24h",
+        "byToolHint": "{n} tools · {invocations} calls",
+        "byToolEmpty": "No tool invocations in the window.",
+        "topErrors": "Top errors · 24h",
+        "topErrorsHint": "{n} kinds · {count} failures",
+        "topErrorsEmpty": "Quiet — no failures in the last 24h.",
         "noData": "No data yet",
         "moreLabel": "More {title}",
         "rows": {
@@ -116,6 +122,7 @@
           "in": "in",
           "out": "out",
           "total": "total",
+          "cost": "cost",
           "modelsCount": "{n} models · {calls} calls"
         }
       },

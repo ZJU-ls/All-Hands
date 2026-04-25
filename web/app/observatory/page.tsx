@@ -275,6 +275,129 @@ function HealthPanel({
   );
 }
 
+// ── Tools panel · top tool invocations + failure rate ─────────────────────
+
+function ToolsPanel({
+  rows,
+}: {
+  rows: import("@/lib/observatory-api").ObservatoryToolBreakdownDto[];
+}) {
+  const t = useTranslations("pages.observatory.panels");
+  const totalInv = rows.reduce((acc, r) => acc + r.invocations, 0);
+  const top = rows.slice(0, 8);
+  return (
+    <div className="rounded-xl bg-surface border border-border shadow-soft-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 h-11 border-b border-border">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded-md bg-primary/10 text-primary grid place-items-center">
+            <Icon name="plug" size={13} />
+          </div>
+          <span className="text-[13px] font-semibold text-text">
+            {t("byTool")}
+          </span>
+        </div>
+        <span className="text-[11px] font-mono text-text-subtle">
+          {t("byToolHint", { n: rows.length, invocations: totalInv })}
+        </span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-5 py-6 text-[12px] text-text-muted">
+          {t("byToolEmpty")}
+        </div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {top.map((r) => {
+            const failTone =
+              r.failure_rate >= 0.2
+                ? "text-danger"
+                : r.failure_rate >= 0.05
+                  ? "text-warning"
+                  : "text-text-muted";
+            return (
+              <li
+                key={r.tool_id}
+                className="flex items-center gap-3 px-5 h-11 hover:bg-surface-2 transition-colors duration-fast"
+              >
+                <code className="font-mono text-[11.5px] text-text truncate flex-1">
+                  {r.tool_id}
+                </code>
+                <span className="font-mono text-[11px] text-text-muted tabular-nums shrink-0">
+                  {r.invocations}
+                </span>
+                <span
+                  className={`font-mono text-[11px] tabular-nums shrink-0 w-12 text-right ${failTone}`}
+                >
+                  {(r.failure_rate * 100).toFixed(1)}%
+                </span>
+                <span className="font-mono text-[11px] text-text-subtle tabular-nums shrink-0 w-14 text-right">
+                  {r.avg_duration_s > 0
+                    ? r.avg_duration_s < 1
+                      ? `${(r.avg_duration_s * 1000).toFixed(0)}ms`
+                      : `${r.avg_duration_s.toFixed(2)}s`
+                    : "—"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ── Errors panel · top failure kinds ──────────────────────────────────────
+
+function ErrorsPanel({
+  rows,
+}: {
+  rows: import("@/lib/observatory-api").ObservatoryErrorBreakdownDto[];
+}) {
+  const t = useTranslations("pages.observatory.panels");
+  const totalCount = rows.reduce((acc, r) => acc + r.count, 0);
+  return (
+    <div className="rounded-xl bg-surface border border-border shadow-soft-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 h-11 border-b border-border">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded-md bg-danger-soft text-danger grid place-items-center">
+            <Icon name="alert-triangle" size={13} />
+          </div>
+          <span className="text-[13px] font-semibold text-text">
+            {t("topErrors")}
+          </span>
+        </div>
+        <span className="text-[11px] font-mono text-text-subtle">
+          {t("topErrorsHint", { n: rows.length, count: totalCount })}
+        </span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-5 py-6 text-[12px] text-text-muted">
+          {t("topErrorsEmpty")}
+        </div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {rows.slice(0, 6).map((r) => (
+            <li key={r.error_kind} className="px-5 py-2.5">
+              <div className="flex items-center gap-2">
+                <code className="font-mono text-[11.5px] text-danger">
+                  {r.error_kind}
+                </code>
+                <span className="ml-auto font-mono text-[11px] text-text-muted tabular-nums">
+                  × {r.count}
+                </span>
+              </div>
+              {r.last_message ? (
+                <div className="mt-1 text-[11.5px] text-text-muted line-clamp-2">
+                  {r.last_message}
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function KpiSkeleton() {
   return (
     <div className="relative overflow-hidden rounded-xl bg-surface border border-border p-5 shadow-soft-sm">
@@ -638,6 +761,9 @@ export default function ObservatoryPage() {
                           <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
                             total
                           </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            {t("panels.modelTable.cost")}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -661,11 +787,24 @@ export default function ObservatoryPage() {
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
                               {formatTokens(row.total_tokens)}
                             </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {row.estimated_cost_usd > 0
+                                ? `$${row.estimated_cost_usd.toFixed(4)}`
+                                : "—"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                </section>
+              ) : null}
+
+              {/* TOOLS + ERRORS · two-column row */}
+              {summary.by_tool.length > 0 || summary.top_errors.length > 0 ? (
+                <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <ToolsPanel rows={summary.by_tool} />
+                  <ErrorsPanel rows={summary.top_errors} />
                 </section>
               ) : null}
 

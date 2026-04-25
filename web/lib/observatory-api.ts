@@ -19,6 +19,21 @@ export type ObservatoryModelBreakdownDto = {
   estimated_cost_usd: number;
 };
 
+export type ObservatoryToolBreakdownDto = {
+  tool_id: string;
+  invocations: number;
+  failures: number;
+  failure_rate: number;
+  avg_duration_s: number;
+};
+
+export type ObservatoryErrorBreakdownDto = {
+  error_kind: string;
+  count: number;
+  last_message: string;
+  last_seen_at: string | null;
+};
+
 export type ObservatorySummaryDto = {
   traces_total: number;
   failure_rate_24h: number;
@@ -33,6 +48,8 @@ export type ObservatorySummaryDto = {
   estimated_cost_usd: number;
   by_employee: ObservatoryEmployeeBreakdownDto[];
   by_model: ObservatoryModelBreakdownDto[];
+  by_tool: ObservatoryToolBreakdownDto[];
+  top_errors: ObservatoryErrorBreakdownDto[];
 };
 
 export type RunTokenUsageDto = {

@@ -20,8 +20,10 @@ from allhands.core import (
     Message,
     ObservabilityConfig,
     ObservatoryEmployeeBreakdown,
+    ObservatoryErrorBreakdown,
     ObservatoryModelBreakdown,
     ObservatorySummary,
+    ObservatoryToolBreakdown,
     RunDetail,
     RunError,
     RunStatus,
@@ -234,6 +236,86 @@ class ObservatoryService:
         # but we still load() the row to surface the flush of any flag mutation.
         _ = cfg
 
+        # by_tool aggregation · sourced from tool.invoked + tool.returned
+        # events. tool.invoked counts invocations; tool.returned with
+        # status="failed" / non-empty error counts failures. Avg duration
+        # is derived from the gap between matching invoked / returned by
+        # tool_call_id within the same window.
+        tool_events = await self._events.list_recent(
+            limit=5000,
+            workspace_id=self._ws,
+            kind_prefixes=["tool."],
+            since=day_start,
+        )
+        tool_invocations: dict[str, int] = {}
+        tool_failures: dict[str, int] = {}
+        tool_invoked_at: dict[str, tuple[str, datetime]] = {}  # tool_call_id → (tool_id, ts)
+        tool_durations: dict[str, list[float]] = {}
+        for e in tool_events:
+            payload = e.payload
+            tid = payload.get("tool_id")
+            if not isinstance(tid, str) or not tid:
+                continue
+            tcid = payload.get("tool_call_id")
+            if e.kind == "tool.invoked":
+                tool_invocations[tid] = tool_invocations.get(tid, 0) + 1
+                if isinstance(tcid, str):
+                    tool_invoked_at[tcid] = (tid, e.published_at)
+            elif e.kind == "tool.returned":
+                status_v = payload.get("status")
+                err = payload.get("error")
+                failed = (status_v == "failed") or (err is not None and err != "")
+                if failed:
+                    tool_failures[tid] = tool_failures.get(tid, 0) + 1
+                if isinstance(tcid, str) and tcid in tool_invoked_at:
+                    started_tid, started_at = tool_invoked_at.pop(tcid)
+                    if started_tid == tid:
+                        delta = (e.published_at - started_at).total_seconds()
+                        if 0 <= delta < 600:
+                            tool_durations.setdefault(tid, []).append(delta)
+        by_tool = []
+        for tid, inv in sorted(
+            tool_invocations.items(), key=lambda kv: -kv[1]
+        ):
+            fails = tool_failures.get(tid, 0)
+            durs = tool_durations.get(tid, [])
+            avg_dur = round(sum(durs) / len(durs), 3) if durs else 0.0
+            by_tool.append(
+                ObservatoryToolBreakdown(
+                    tool_id=tid,
+                    invocations=inv,
+                    failures=fails,
+                    failure_rate=round(fails / inv, 4) if inv else 0.0,
+                    avg_duration_s=avg_dur,
+                )
+            )
+
+        # top_errors aggregation · group failed runs by ``error_kind``.
+        err_counts: dict[str, int] = {}
+        err_last_msg: dict[str, str] = {}
+        err_last_seen: dict[str, datetime] = {}
+        for e in recent:
+            if e.kind != "run.failed":
+                continue
+            kind = e.payload.get("error_kind") or "unknown"
+            kind_str = str(kind)
+            err_counts[kind_str] = err_counts.get(kind_str, 0) + 1
+            msg = e.payload.get("error")
+            if isinstance(msg, str) and msg:
+                err_last_msg[kind_str] = msg
+            prev = err_last_seen.get(kind_str)
+            if prev is None or e.published_at > prev:
+                err_last_seen[kind_str] = e.published_at
+        top_errors = [
+            ObservatoryErrorBreakdown(
+                error_kind=k,
+                count=err_counts[k],
+                last_message=err_last_msg.get(k, "")[:200],
+                last_seen_at=err_last_seen.get(k),
+            )
+            for k in sorted(err_counts, key=lambda k: -err_counts[k])
+        ]
+
         return ObservatorySummary(
             traces_total=runs_total,
             failure_rate_24h=round(failure_rate, 4),
@@ -248,6 +330,8 @@ class ObservatoryService:
             estimated_cost_usd=round(cost_total, 6),
             by_employee=by_employee,
             by_model=by_model,
+            by_tool=by_tool,
+            top_errors=top_errors,
         )
 
     async def list_traces(

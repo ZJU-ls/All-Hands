@@ -65,6 +65,36 @@ class ObservatoryModelBreakdown(BaseModel):
     model_config = {"frozen": True}
 
 
+class ObservatoryToolBreakdown(BaseModel):
+    """Per-tool rollup · keyed on ``tool_id`` from tool.invoked /
+    tool.returned events. Counts every invocation, surfaces the failure
+    rate and avg duration so the observatory can highlight unreliable or
+    slow tools (Honeycomb / Datadog parity).
+    """
+
+    tool_id: str
+    invocations: int = 0
+    failures: int = 0
+    failure_rate: float = 0.0
+    avg_duration_s: float = 0.0
+
+    model_config = {"frozen": True}
+
+
+class ObservatoryErrorBreakdown(BaseModel):
+    """Top error categories · groups failed runs by ``error_kind`` so
+    the observatory can show "the X kinds of failure happening right now"
+    the way Sentry does for exceptions.
+    """
+
+    error_kind: str
+    count: int = 0
+    last_message: str = ""
+    last_seen_at: datetime | None = None
+
+    model_config = {"frozen": True}
+
+
 class ObservatorySummary(BaseModel):
     """Left-pane summary rendered on `/observatory` (spec § 6.2).
 
@@ -86,6 +116,8 @@ class ObservatorySummary(BaseModel):
     estimated_cost_usd: float = 0.0
     by_employee: list[ObservatoryEmployeeBreakdown] = Field(default_factory=list)
     by_model: list[ObservatoryModelBreakdown] = Field(default_factory=list)
+    by_tool: list[ObservatoryToolBreakdown] = Field(default_factory=list)
+    top_errors: list[ObservatoryErrorBreakdown] = Field(default_factory=list)
 
 
 class TimeSeriesPoint(BaseModel):
@@ -292,8 +324,10 @@ __all__ = [
     "ArtifactSummary",
     "ObservabilityConfig",
     "ObservatoryEmployeeBreakdown",
+    "ObservatoryErrorBreakdown",
     "ObservatoryModelBreakdown",
     "ObservatorySummary",
+    "ObservatoryToolBreakdown",
     "RunDetail",
     "RunError",
     "RunStatus",
