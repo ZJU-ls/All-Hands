@@ -46,6 +46,10 @@ export type ObservatorySummaryDto = {
   total_tokens_total: number;
   llm_calls_total: number;
   estimated_cost_usd: number;
+  runs_delta_pct: number | null;
+  failure_rate_delta_pct: number | null;
+  latency_p50_delta_pct: number | null;
+  cost_delta_pct: number | null;
   by_employee: ObservatoryEmployeeBreakdownDto[];
   by_model: ObservatoryModelBreakdownDto[];
   by_tool: ObservatoryToolBreakdownDto[];

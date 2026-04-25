@@ -114,6 +114,15 @@ class ObservatorySummary(BaseModel):
     total_tokens_total: int = 0
     llm_calls_total: int = 0
     estimated_cost_usd: float = 0.0
+    # Previous-period (yesterday's same window) deltas · used to render
+    # "+18% vs yesterday" stats with real data instead of placeholder text.
+    # Honeycomb / Datadog parity. Values are absolute differences from the
+    # previous period; ``*_pct`` is the relative change (None when the
+    # previous period had zero baseline to avoid div-by-zero).
+    runs_delta_pct: float | None = None
+    failure_rate_delta_pct: float | None = None
+    latency_p50_delta_pct: float | None = None
+    cost_delta_pct: float | None = None
     by_employee: list[ObservatoryEmployeeBreakdown] = Field(default_factory=list)
     by_model: list[ObservatoryModelBreakdown] = Field(default_factory=list)
     by_tool: list[ObservatoryToolBreakdown] = Field(default_factory=list)

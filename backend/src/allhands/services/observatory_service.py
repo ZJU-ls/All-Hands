@@ -316,6 +316,50 @@ class ObservatoryService:
             for k in sorted(err_counts, key=lambda k: -err_counts[k])
         ]
 
+        # Previous-period comparison: same 24h window starting 48h ago →
+        # ending 24h ago. Lets the UI render a real "vs yesterday" delta.
+        prev_start = ts_now - timedelta(hours=48)
+        prev_end = day_start
+        prev_recent = await self._events.list_recent(
+            limit=1000,
+            workspace_id=self._ws,
+            kind_prefixes=list(_RUN_KINDS),
+            since=prev_start,
+        )
+        prev_recent = [e for e in prev_recent if e.published_at < prev_end]
+        prev_runs = sum(
+            1 for e in prev_recent if e.kind in ("run.completed", "run.failed")
+        )
+        prev_failed = sum(1 for e in prev_recent if e.kind == "run.failed")
+        prev_failure_rate = (prev_failed / prev_runs) if prev_runs else 0.0
+        prev_durations = [
+            float(e.payload["duration_s"])
+            for e in prev_recent
+            if isinstance(e.payload.get("duration_s"), (int, float))
+        ]
+        prev_p50 = _percentile(prev_durations, 0.5) if prev_durations else 0.0
+        prev_cost = 0.0
+        for e in prev_recent:
+            tok = e.payload.get("tokens")
+            ti = to = 0
+            if isinstance(tok, dict):
+                ti = int(tok.get("input", 0) or 0)
+                to = int(tok.get("output", 0) or 0)
+            mr = e.payload.get("model_ref")
+            prev_cost += estimate_cost_usd(
+                mr if isinstance(mr, str) else None, ti, to
+            )
+
+        def _pct(curr: float, prev: float) -> float | None:
+            if prev <= 0:
+                return None
+            return round((curr - prev) / prev, 4)
+
+        runs_delta = _pct(float(runs_24h), float(prev_runs))
+        failure_delta = _pct(failure_rate, prev_failure_rate)
+        p50_delta = _pct(p50, prev_p50)
+        cost_delta = _pct(cost_total, prev_cost)
+
         return ObservatorySummary(
             traces_total=runs_total,
             failure_rate_24h=round(failure_rate, 4),
@@ -328,6 +372,10 @@ class ObservatoryService:
             total_tokens_total=total_total,
             llm_calls_total=llm_calls_total,
             estimated_cost_usd=round(cost_total, 6),
+            runs_delta_pct=runs_delta,
+            failure_rate_delta_pct=failure_delta,
+            latency_p50_delta_pct=p50_delta,
+            cost_delta_pct=cost_delta,
             by_employee=by_employee,
             by_model=by_model,
             by_tool=by_tool,

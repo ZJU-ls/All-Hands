@@ -88,6 +88,7 @@
         "failureStable": "Stable",
         "tokens": "Avg tokens / run",
         "tokensDelta": "{count} total traces",
+        "vsYesterday": "vs yesterday",
         "clickHint": "Click for consumption curve →"
       },
       "panels": {

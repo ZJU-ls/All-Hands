@@ -18,6 +18,23 @@ import {
 type LoadState = "idle" | "loading" | "ok" | "error";
 type TimeRange = "1h" | "24h" | "7d";
 
+/** Format a fractional delta as "+12.3%" / "−4.1%" or "持平" if near zero. */
+function formatDeltaPct(d: number | null | undefined): {
+  text: string;
+  icon: IconName;
+  tone: "success" | "warning" | "danger" | "muted";
+} {
+  if (d === null || d === undefined) {
+    return { text: "—", icon: "trending-up", tone: "muted" };
+  }
+  const pct = d * 100;
+  const abs = Math.abs(pct);
+  const sign = pct > 0 ? "+" : pct < 0 ? "−" : "";
+  const text = abs < 0.5 ? "≈ 0%" : `${sign}${abs.toFixed(1)}%`;
+  const icon: IconName = pct >= 0 ? "trending-up" : "trending-down";
+  return { text, icon, tone: "muted" };
+}
+
 function formatTokens(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return "0";
   if (n < 1000) return n.toString();
@@ -569,62 +586,97 @@ export default function ObservatoryPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {summary ? (
                 <>
-                  <KpiCard
-                    hero
-                    icon="activity"
-                    label={t("kpi.uptime")}
-                    value={formatPct(1 - summary.failure_rate_24h)}
-                    delta={{
-                      icon: "trending-up",
-                      text: t("kpi.uptimeDelta"),
-                      tone: "muted",
-                    }}
-                    sparkSeed={11}
-                    onClick={() => openDrawer("failure_rate", t("kpi.uptime"))}
-                    clickHint={t("kpi.clickHint")}
-                  />
-                  <KpiCard
-                    icon="zap"
-                    label={t("kpi.latency")}
-                    value={formatDuration(summary.latency_p50_s)}
-                    delta={{
-                      icon: "trending-down",
-                      text: t("kpi.latencyDelta"),
-                      tone: "success",
-                    }}
-                    sparkSeed={23}
-                    sparkTone="primary"
-                    onClick={() => openDrawer("latency_p50", t("kpi.latency"))}
-                    clickHint={t("kpi.clickHint")}
-                  />
-                  <KpiCard
-                    icon="alert-circle"
-                    label={t("kpi.failure")}
-                    value={formatPct(summary.failure_rate_24h)}
-                    delta={{
-                      icon:
-                        summary.failure_rate_24h > 0.02
-                          ? "trending-up"
-                          : "trending-down",
-                      text: summary.failure_rate_24h > 0.02 ? t("kpi.failureWarn") : t("kpi.failureStable"),
-                      tone:
-                        summary.failure_rate_24h > 0.05
-                          ? "danger"
-                          : summary.failure_rate_24h > 0.02
+                  {(() => {
+                    // Uptime card uses an inverted "failure_rate_delta_pct" —
+                    // a fall in failure rate is an *uptime improvement* so we
+                    // flip the sign before formatting.
+                    const uptimeDelta = formatDeltaPct(
+                      summary.failure_rate_delta_pct === null
+                        ? null
+                        : -summary.failure_rate_delta_pct,
+                    );
+                    return (
+                      <KpiCard
+                        hero
+                        icon="activity"
+                        label={t("kpi.uptime")}
+                        value={formatPct(1 - summary.failure_rate_24h)}
+                        delta={{
+                          icon: uptimeDelta.icon,
+                          text: `${uptimeDelta.text} ${t("kpi.vsYesterday")}`,
+                          tone: uptimeDelta.tone,
+                        }}
+                        sparkSeed={11}
+                        onClick={() => openDrawer("failure_rate", t("kpi.uptime"))}
+                        clickHint={t("kpi.clickHint")}
+                      />
+                    );
+                  })()}
+                  {(() => {
+                    const latDelta = formatDeltaPct(summary.latency_p50_delta_pct);
+                    // For latency, going down is good; flip tone semantics.
+                    const tone: "success" | "warning" | "danger" | "muted" =
+                      summary.latency_p50_delta_pct === null
+                        ? "muted"
+                        : summary.latency_p50_delta_pct < -0.05
+                          ? "success"
+                          : summary.latency_p50_delta_pct > 0.20
                             ? "warning"
-                            : "success",
-                    }}
-                    sparkSeed={37}
-                    sparkTone={
+                            : "muted";
+                    return (
+                      <KpiCard
+                        icon="zap"
+                        label={t("kpi.latency")}
+                        value={formatDuration(summary.latency_p50_s)}
+                        delta={{
+                          icon: latDelta.icon,
+                          text: `${latDelta.text} ${t("kpi.vsYesterday")}`,
+                          tone,
+                        }}
+                        sparkSeed={23}
+                        sparkTone="primary"
+                        onClick={() => openDrawer("latency_p50", t("kpi.latency"))}
+                        clickHint={t("kpi.clickHint")}
+                      />
+                    );
+                  })()}
+                  {(() => {
+                    const fd = formatDeltaPct(summary.failure_rate_delta_pct);
+                    const stableLabel =
                       summary.failure_rate_24h > 0.05
-                        ? "danger"
-                        : summary.failure_rate_24h > 0.02
-                          ? "warning"
-                          : "success"
-                    }
-                    onClick={() => openDrawer("failure_rate", t("kpi.failure"))}
-                    clickHint={t("kpi.clickHint")}
-                  />
+                        ? t("kpi.failureWarn")
+                        : t("kpi.failureStable");
+                    const composedDelta = `${fd.text} · ${stableLabel}`;
+                    return (
+                      <KpiCard
+                        icon="alert-circle"
+                        label={t("kpi.failure")}
+                        value={formatPct(summary.failure_rate_24h)}
+                        delta={{
+                          icon: fd.icon,
+                          text: composedDelta,
+                          tone:
+                            summary.failure_rate_24h > 0.05
+                              ? "danger"
+                              : summary.failure_rate_24h > 0.02
+                                ? "warning"
+                                : "success",
+                        }}
+                        sparkSeed={37}
+                        sparkTone={
+                          summary.failure_rate_24h > 0.05
+                            ? "danger"
+                            : summary.failure_rate_24h > 0.02
+                              ? "warning"
+                              : "success"
+                        }
+                        onClick={() =>
+                          openDrawer("failure_rate", t("kpi.failure"))
+                        }
+                        clickHint={t("kpi.clickHint")}
+                      />
+                    );
+                  })()}
                   <KpiCard
                     icon="database"
                     label={t("kpi.tokens")}
