@@ -14,6 +14,7 @@ import { useChatStore } from "@/lib/store";
 import type { Message } from "@/lib/protocol";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
+import { formatTokens } from "@/lib/format";
 
 /**
  * UsageChip · context accounting for the chat composer (Track ε).
@@ -59,11 +60,6 @@ function estimateTokens(messages: Message[]): number {
     }
   }
   return Math.round(chars / CHARS_PER_TOKEN);
-}
-
-function formatK(n: number): string {
-  if (n < 1000) return `${n}`;
-  return `${(n / 1000).toFixed(1)}k`;
 }
 
 function resolveContextWindow(
@@ -198,7 +194,7 @@ export function UsageChip({ conversationId, employeeModelRef, disabled }: Props)
         <Icon name="activity" size={10} />
       </span>
       <span className={tierTextClass}>
-        {formatK(usedTokens)}/{formatK(window)}
+        {formatTokens(usedTokens)}/{formatTokens(window)}
       </span>
       {showCompact && (
         <button
