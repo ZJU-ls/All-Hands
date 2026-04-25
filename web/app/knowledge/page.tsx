@@ -413,7 +413,7 @@ export default function KnowledgePage() {
                 onUpload={() => {
                   // Trigger the toolbar upload — fastest path is to focus the
                   // hidden input, but simpler: surface a hint.
-                  setError("点右上角"上传"按钮添加文档");
+                  setError("点右上角「上传」按钮添加文档");
                   setTimeout(() => setError(null), 2500);
                 }}
               />
