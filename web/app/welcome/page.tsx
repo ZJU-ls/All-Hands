@@ -124,7 +124,7 @@ export default function WelcomePage() {
       {/* ─── Top-right skip · low-emphasis but always reachable. ─── */}
       <div className="relative z-10 flex items-center justify-between px-6 pt-6 sm:px-10">
         <div className="inline-flex items-center gap-2.5">
-          <AllhandsLogo size={36} className="shadow-glow-sm rounded-lg" animateIn />
+          <AllhandsLogo size={36} className="shadow-glow-sm rounded-lg" />
           <AllhandsWordmark size={16} />
         </div>
         <button
@@ -149,6 +149,21 @@ export default function WelcomePage() {
             <span className="text-caption font-mono uppercase tracking-wider text-text-muted">
               v0 · Open Source · Self-hosted
             </span>
+          </div>
+
+          {/* Hero brand mark · the origami fold-in animation lives here so
+              first-time visitors actually catch it. ~112px is large enough
+              to read the seam draw + face slide + disc pop sequence. */}
+          <div className="relative mt-9">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-6 rounded-3xl bg-primary-glow/20 blur-2xl"
+            />
+            <AllhandsLogo
+              size={112}
+              animateIn
+              className="relative rounded-2xl shadow-glow-lg"
+            />
           </div>
 
           {/* Massive h1 · gradient on the second line */}
