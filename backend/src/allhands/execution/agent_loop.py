@@ -17,25 +17,54 @@ assistant message contains tool_use blocks. Each iteration:
 NO LangGraph. State = messages list + repos. Suspension = deferred
 tools awaiting their signal.
 
-Task 6 (this commit): text-only turns only. Task 7 will add the
-tool execution branch.
+Task 6: text-only turn.
+Task 7 (this commit): while-true with tool execution + phantom defense.
+Task 8: deferred (confirmation) flow.
+Tasks 9-12: concurrency observable, max_iterations, skill/dispatch wiring.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    HumanMessage,
+    SystemMessage,
+)
+from langchain_core.messages import (
+    ToolMessage as LCToolMessage,
+)
 
-from allhands.core.conversation import Message, ReasoningBlock, TextBlock
+from allhands.core import Tool
+from allhands.core.conversation import (
+    Message,
+    ReasoningBlock,
+    TextBlock,
+    ToolUseBlock,
+)
 from allhands.execution.internal_events import (
     AssistantMessageCommitted,
     AssistantMessagePartial,
     InternalEvent,
     LoopExited,
+    ToolMessageCommitted,
+)
+from allhands.execution.tool_pipeline import (
+    Allow,
+    Defer,
+    Deny,
+    PermissionDecision,
+    ToolBinding,
+    execute_tool_use_concurrent,
+    execute_tool_use_iter,
+    partition_tool_uses,
 )
 
 if TYPE_CHECKING:
@@ -74,7 +103,7 @@ def _split_content_blocks(content: Any) -> tuple[str, str]:
     chat transcript. We route ``text`` to user-visible stream and
     ``thinking`` / ``reasoning`` to the dedicated reasoning channel.
     Unknown / tool_use / image_url blocks are ignored — those surface
-    via accumulated.tool_calls (Task 7) or aren't user-facing chat.
+    via accumulated.tool_calls or aren't user-facing chat.
     """
     if isinstance(content, str):
         return content, ""
@@ -103,6 +132,46 @@ def _split_content_blocks(content: Any) -> tuple[str, str]:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _serialize_for_lc_tool_message(content: Any) -> str:
+    """LangChain ToolMessage requires content as str. Structured payloads
+    (success dict, error envelope) JSON-encode here for the wire."""
+    if isinstance(content, str):
+        return content
+    try:
+        return json.dumps(content, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(content)
+
+
+def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
+    """A tool_call entry from accumulated.tool_calls is valid iff:
+
+    1. id is non-empty (LangChain assigns ids per tool_call_chunk; a
+       missing id signals an incomplete merge).
+    2. name is non-empty AND present in ``known_names`` (i.e. exists in
+       the active tool bindings for this turn).
+
+    Phantom defense (multi-layer):
+      * Test scenario `name="x"` not registered → dropped here.
+      * gpt-4o-mini emits tool_call_chunks for a tool the model later
+        abandons → accumulated.tool_calls may surface an entry with a
+        real name but stale args → still passes; tool_pipeline's
+        executor then receives the stale args, returns its own error
+        envelope (no permanent pending — phantom becomes a recorded
+        FAILED tool_message instead).
+      * Hallucinated tool names → dropped here. The assistant turn
+        commits without that tool_use; the LLM sees its own message in
+        next-turn replay (no tool_use, no orphan).
+
+    The ToolUseBlock in the committed AssistantMessage is the SOLE
+    place a tool_use exists in our system — nothing committed = nothing
+    to phantom-pending in the UI.
+    """
+    tid = tc.get("id")
+    tname = tc.get("name")
+    return bool(tid) and bool(tname) and tname in known_names
 
 
 # --- AgentLoop --------------------------------------------------------------
@@ -137,6 +206,8 @@ class AgentLoop:
         self._spawn_subagent_service = spawn_subagent_service
         self._model_ref_override = model_ref_override
 
+    # --- public stream ----------------------------------------------------
+
     async def stream(
         self,
         messages: list[dict[str, Any]],
@@ -145,53 +216,119 @@ class AgentLoop:
         overrides: Any = None,
     ) -> AsyncIterator[InternalEvent]:
         """Run one chat turn. Yields preview + terminal events; the
-        last event is always a LoopExited.
-
-        Task 6 scope: text-only turns. Task 7 extends this method
-        with the while-true tool execution branch.
-        """
+        last event is always a LoopExited."""
         try:
             effective_model_ref = self._model_ref_override or self._employee.model_ref
-            model = _build_model(effective_model_ref, self._provider, overrides)
+            base_model = _build_model(effective_model_ref, self._provider, overrides)
+            bindings = self._build_bindings()
+            lc_tools = self._build_lc_tools(bindings)
+            model = (
+                base_model.bind_tools(lc_tools)
+                if lc_tools and hasattr(base_model, "bind_tools")
+                else base_model
+            )
             lc_messages = self._build_lc_messages(messages)
 
-            message_id = str(uuid.uuid4())
-            accumulated: AIMessageChunk | None = None
+            iteration = 0
+            while True:
+                iteration += 1
+                if iteration > max_iterations:
+                    yield LoopExited(reason="max_iterations")
+                    return
 
-            async for chunk in model.astream(lc_messages):
-                if not isinstance(chunk, AIMessageChunk):
-                    continue
-                accumulated = chunk if accumulated is None else accumulated + chunk
-                text_delta, reasoning_delta = _split_content_blocks(chunk.content)
-                if text_delta or reasoning_delta:
-                    yield AssistantMessagePartial(
-                        message_id=message_id,
-                        text_delta=text_delta,
-                        reasoning_delta=reasoning_delta,
+                message_id = str(uuid.uuid4())
+                accumulated: AIMessageChunk | None = None
+
+                async for chunk in model.astream(lc_messages):
+                    if not isinstance(chunk, AIMessageChunk):
+                        continue
+                    accumulated = chunk if accumulated is None else accumulated + chunk
+                    text_delta, reasoning_delta = _split_content_blocks(chunk.content)
+                    if text_delta or reasoning_delta:
+                        yield AssistantMessagePartial(
+                            message_id=message_id,
+                            text_delta=text_delta,
+                            reasoning_delta=reasoning_delta,
+                        )
+
+                # Build terminal AssistantMessage from accumulated. This
+                # is the protocol-level phantom defense: only valid
+                # tool_calls (with id + name) become ToolUseBlocks.
+                text_full, reasoning_full = (
+                    _split_content_blocks(accumulated.content) if accumulated else ("", "")
+                )
+                # accumulated.tool_calls is list[ToolCall TypedDict]; coerce
+                # to plain dicts so our filter signature stays stable across
+                # LangChain version bumps.
+                raw_tool_calls: list[dict[str, Any]] = (
+                    [dict(tc) for tc in accumulated.tool_calls] if accumulated else []
+                )
+                known_names = set(bindings.keys())
+                valid_tool_calls = [
+                    tc for tc in raw_tool_calls if _is_valid_tool_call(tc, known_names)
+                ]
+
+                blocks: list[Any] = []
+                if reasoning_full:
+                    blocks.append(ReasoningBlock(text=reasoning_full))
+                if text_full:
+                    blocks.append(TextBlock(text=text_full))
+                for tc in valid_tool_calls:
+                    blocks.append(
+                        ToolUseBlock(
+                            id=str(tc["id"]),
+                            name=str(tc["name"]),
+                            input=dict(tc.get("args") or {}),
+                        )
                     )
 
-            # Build terminal AssistantMessage. Task 6 only handles text +
-            # reasoning blocks; Task 7 adds tool_use blocks from
-            # accumulated.tool_calls.
-            text_full, reasoning_full = (
-                _split_content_blocks(accumulated.content) if accumulated else ("", "")
-            )
-            blocks: list[Any] = []
-            if reasoning_full:
-                blocks.append(ReasoningBlock(text=reasoning_full))
-            if text_full:
-                blocks.append(TextBlock(text=text_full))
+                assistant_msg = Message(
+                    id=message_id,
+                    conversation_id="",  # filled by chat_service tap
+                    role="assistant",
+                    content=text_full,
+                    content_blocks=blocks,
+                    created_at=_now(),
+                )
+                yield AssistantMessageCommitted(message=assistant_msg)
 
-            msg = Message(
-                id=message_id,
-                conversation_id="",  # filled by chat_service tap on persistence
-                role="assistant",
-                content=text_full,
-                content_blocks=blocks,
-                created_at=_now(),
-            )
-            yield AssistantMessageCommitted(message=msg)
-            yield LoopExited(reason="completed")
+                tool_use_blocks = [b for b in blocks if isinstance(b, ToolUseBlock)]
+                if not tool_use_blocks:
+                    yield LoopExited(reason="completed")
+                    return
+
+                # Append assistant message (with tool_uses) to lc history
+                # so the next LLM turn sees its own previous turn.
+                lc_messages.append(self._to_lc_assistant_message(assistant_msg))
+
+                # Execute tool_uses through the pipeline. Partition into
+                # batches; each batch is either concurrent (read-only)
+                # or serial (write/deferred). Within concurrent batches
+                # we asyncio.gather; serial batches yield events during
+                # execution (deferred path emits ConfirmationRequested).
+                batches = partition_tool_uses(tool_use_blocks, bindings)
+                for batch in batches:
+                    if batch.is_concurrent_safe and len(batch.blocks) > 1:
+                        # asyncio.gather — concurrent reads. Order the
+                        # results by input position so transcript stays
+                        # deterministic regardless of completion order.
+                        results = await asyncio.gather(
+                            *[execute_tool_use_concurrent(b, bindings) for b in batch.blocks]
+                        )
+                        for tool_msg in results:
+                            yield ToolMessageCommitted(message=tool_msg)
+                            lc_messages.append(self._to_lc_tool_message(tool_msg))
+                    else:
+                        # Serial — may yield ConfirmationRequested mid-flight
+                        for block in batch.blocks:
+                            async for ev in execute_tool_use_iter(
+                                block, bindings, self._permission_check
+                            ):
+                                yield ev
+                                if isinstance(ev, ToolMessageCommitted):
+                                    lc_messages.append(self._to_lc_tool_message(ev.message))
+
+                # Loop back to next LLM turn
         except GeneratorExit:
             raise
         except Exception as exc:
@@ -200,11 +337,77 @@ class AgentLoop:
                 detail=f"{type(exc).__name__}: {exc}",
             )
 
+    # --- helpers ----------------------------------------------------------
+
+    def _active_tool_ids(self) -> list[str]:
+        """Active tool ids for THIS turn. Mirrors runner.py:367-376.
+        Task 11 will overlay skill-resolved tool ids; for Task 7 we
+        use just the employee's base list."""
+        active: list[str] = list(self._employee.tool_ids)
+        if self._runtime is not None:
+            for tids in getattr(self._runtime, "resolved_skills", {}).values():
+                for tid in tids:
+                    if tid not in active:
+                        active.append(tid)
+        return active
+
+    def _build_bindings(self) -> dict[str, ToolBinding]:
+        """Build name → ToolBinding map for tool_pipeline.
+
+        Looks up each active tool_id in the registry; tools that
+        aren't registered are silently dropped (the registry is the
+        SoT for what executors exist)."""
+        out: dict[str, ToolBinding] = {}
+        for tool_id in self._active_tool_ids():
+            try:
+                tool, executor = self._tool_registry.get(tool_id)
+            except KeyError:
+                continue
+            out[tool.name] = ToolBinding(tool=tool, executor=executor)
+        return out
+
+    def _build_lc_tools(self, bindings: dict[str, ToolBinding]) -> list[Any]:
+        """Build LangChain StructuredTool wrappers for `model.bind_tools`.
+
+        These wrappers carry the schema the LLM sees · execution still
+        flows through tool_pipeline (binding.executor), NOT through
+        LangChain's tool node. Tests with fake models can pass empty
+        because their bind_tools() is a no-op.
+
+        Skill / dispatch / subagent specials land in Task 11 — for now
+        the wrappers are direct executor passthroughs.
+        """
+        try:
+            from langchain_core.tools import StructuredTool
+        except ImportError:
+            return []
+
+        out: list[Any] = []
+        for binding in bindings.values():
+            try:
+                lc = StructuredTool.from_function(
+                    coroutine=binding.executor,
+                    name=binding.tool.name,
+                    description=binding.tool.description,
+                )
+            except Exception:
+                # Schema derivation can fail for executors with `**kwargs`
+                # signatures; skip — the bindings dict still has the
+                # entry so the pipeline can execute, just not via LLM
+                # auto-call.
+                continue
+            out.append(lc)
+        return out
+
     def _build_lc_messages(self, messages: list[dict[str, Any]]) -> list[Any]:
-        """Project chat history dicts (user / assistant / tool / system
-        roles) into LangChain message instances. Task 7 adds AIMessage
-        + ToolMessage handling for multi-turn replay; Task 6 handles
-        only system + user."""
+        """Project chat history dicts into LangChain message instances.
+
+        Faithful reconstruction matters for multi-turn tool replay:
+        Anthropic rejects a transcript with `assistant(tool_use)` not
+        followed by `tool_result`. We rebuild AIMessage(tool_calls=[...])
+        when the history dict has tool_calls, and ToolMessage when the
+        role is 'tool'.
+        """
         lc_messages: list[Any] = []
         if self._employee.system_prompt:
             lc_messages.append(SystemMessage(content=self._employee.system_prompt))
@@ -213,8 +416,53 @@ class AgentLoop:
             content = m.get("content", "")
             if role == "user":
                 lc_messages.append(HumanMessage(content=content))
-            # assistant / tool branches added in Task 7
+            elif role == "assistant":
+                tool_calls = m.get("tool_calls") or []
+                # Pass through structured tool_calls if present
+                if tool_calls:
+                    lc_messages.append(AIMessage(content=content, tool_calls=tool_calls))
+                else:
+                    lc_messages.append(AIMessage(content=content))
+            elif role == "tool":
+                tc_id = m.get("tool_call_id") or ""
+                lc_messages.append(LCToolMessage(content=str(content), tool_call_id=str(tc_id)))
+            # 'system' role from history is rare — system prompt comes
+            # from employee.system_prompt at the top of the list
         return lc_messages
+
+    def _to_lc_assistant_message(self, msg: Message) -> AIMessage:
+        """Project our AssistantMessage onto LangChain AIMessage for the
+        next-turn replay. tool_use blocks become tool_calls dicts."""
+        tool_calls = []
+        for block in msg.content_blocks:
+            if isinstance(block, ToolUseBlock):
+                tool_calls.append({"id": block.id, "name": block.name, "args": block.input})
+        return AIMessage(content=msg.content, tool_calls=tool_calls)
+
+    def _to_lc_tool_message(self, msg: Message) -> LCToolMessage:
+        return LCToolMessage(
+            content=_serialize_for_lc_tool_message(msg.content),
+            tool_call_id=msg.tool_call_id or "",
+        )
+
+    def _permission_check(
+        self,
+        block: ToolUseBlock,
+        tool: Tool,
+    ) -> PermissionDecision:
+        """Default permission policy.
+
+        Task 7: everything Allowed (the gate is wired up in Task 8).
+        Future plan-mode support: return Deny() when conversation_mode
+        forbids the tool's scope. This method is the SINGLE place that
+        decision lives — tools never check permissions themselves.
+        """
+        # Task 8 will replace this stub with: WRITE+ or requires_confirmation
+        # → Defer(ConfirmationDeferred, summary=..., rationale=...).
+        # For Task 7 we keep everything Allow so the loop logic itself
+        # is testable without gate plumbing.
+        _ = (block, tool, Defer, Deny)  # silence unused-import linter
+        return Allow()
 
 
 __all__ = ["AgentLoop"]
