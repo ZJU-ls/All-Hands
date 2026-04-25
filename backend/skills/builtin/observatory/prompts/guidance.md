@@ -7,9 +7,8 @@
 ## 典型工作流
 
 1. **健康检查** — `observatory.get_status()` · 看 langfuse 是否 connected · 总 trace 数 / 失败率 / 最近 host
-2. **如果 langfuse 未连**:`observatory.bootstrap_now()` 重连一次 · 再看 status
-3. **批量查 trace**:`observatory.query_traces(employee_id?, status="ok|failed", since="24h", limit=50)` · 返回 trace 列表
-4. **看一条详情**:`observatory.get_trace(trace_id)` · 完整 step / token / 耗时 / 错误栈
+2. **批量查 trace**:`observatory.query_traces(employee_id?, status="ok|failed", since="24h", limit=50)` · 返回 trace 列表
+3. **看一条详情**:`observatory.get_trace(trace_id)` · 完整 step / token / 耗时 / 错误栈
 
 ## 常见坑
 
