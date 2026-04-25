@@ -76,7 +76,9 @@
       "internalHint": "Likely a model credential issue or upstream rejection. Check the provider's API Key and base_url at /gateway.",
       "streamProcessing": "Processing",
       "streamStalled": "Waiting for response",
-      "streamSilent": "No response for {s}s"
+      "streamSilent": "No response for {s}s",
+      "streamAbort": "Stop",
+      "streamAbortTitle": "Stop this stream (idle too long · aborts SSE and unlocks the input)"
     },
     "modelOverride": {
       "defaultModel": "Default model",

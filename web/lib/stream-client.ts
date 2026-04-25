@@ -92,6 +92,7 @@ export function openStream(
 
   const done = (async () => {
     let settled = false;
+    let watchdogTripped = false;
     const finish = (err?: Error) => {
       if (settled) return;
       settled = true;
@@ -113,10 +114,32 @@ export function openStream(
       const decoder = new TextDecoder();
       let buffer = "";
 
+      // 2026-04-25 · transport watchdog. The server pumps a CUSTOM
+      // ``allhands.heartbeat`` every 10s of agent-side silence; if the TCP
+      // stays open but no frame arrives for 60s, both sides have
+      // effectively disconnected (proxy / browser / network). Abort the
+      // fetch so isStreaming flips false and the UI escapes the永远转圈.
+      // Reset on every reader.read() that returns bytes.
+      const SILENT_TIMEOUT_MS = 60_000;
+      let watchdog: ReturnType<typeof setTimeout> | null = null;
+      const armWatchdog = () => {
+        if (watchdog) clearTimeout(watchdog);
+        watchdog = setTimeout(() => {
+          // Mark the abort as watchdog-originated so the outer catch
+          // raises onError instead of silently completing the run. User-
+          // initiated aborts (the stop button) leave watchdogTripped=false
+          // and still finish cleanly.
+          watchdogTripped = true;
+          internal.abort();
+        }, SILENT_TIMEOUT_MS);
+      };
+      armWatchdog();
+
       try {
         while (true) {
           const { value, done: streamDone } = await reader.read();
           if (streamDone) break;
+          armWatchdog();
           buffer += decoder.decode(value, { stream: true });
 
           let sepIdx: number;
@@ -140,6 +163,7 @@ export function openStream(
           }
         }
       } finally {
+        if (watchdog) clearTimeout(watchdog);
         reader.releaseLock();
       }
 
@@ -147,7 +171,11 @@ export function openStream(
     } catch (err) {
       const e = err as Error;
       if (e?.name === "AbortError") {
-        finish();
+        if (watchdogTripped) {
+          finish(new Error("stream-client: idle for 60s · server not responding"));
+        } else {
+          finish();
+        }
         return;
       }
       finish(e instanceof Error ? e : new Error(String(e)));
