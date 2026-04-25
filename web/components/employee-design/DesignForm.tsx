@@ -273,13 +273,13 @@ export function DesignForm({
 
       <Section
         title="迭代上限"
-        subtitle="Agent 单次会话的最大工具调用轮次(1-50)"
+        subtitle="Agent 单次会话的最大工具调用轮次(1-10000)"
       >
         <div className="flex items-center gap-3">
           <input
             type="number"
             min={1}
-            max={50}
+            max={10000}
             data-testid="field-max-iterations"
             value={String(maxIterations)}
             onChange={(e) => {

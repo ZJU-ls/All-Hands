@@ -11,7 +11,7 @@ import {
   RunNotFoundError,
   type RunDetailDto,
 } from "@/lib/observatory-api";
-import { LoadingState, ErrorState } from "@/components/state";
+import { LoadingState, ErrorState, EmptyState } from "@/components/state";
 import { RunHeader } from "./RunHeader";
 import { RunTurnList } from "./RunTurnList";
 import { RunError } from "./RunError";
@@ -67,12 +67,27 @@ export function RunTracePanel(props: Props) {
   }
 
   if (state.status === "error") {
+    // Not-found is not an *error* — the run just isn't around anymore (TTL,
+    // cleanup, or never persisted). Use a neutral EmptyState so the drawer
+    // doesn't scream red at the user. Reserve ErrorState for real failures
+    // (network drop, parse error) where retry makes sense.
+    if (state.notFound) {
+      return (
+        <div data-testid="run-trace-panel" data-state="error">
+          <EmptyState
+            icon="clock"
+            title="这次执行的 trace 已不在"
+            description="可能已过期、被清理,或这次 run 没产生 trace。打开一条更近期的 run 试试。"
+          />
+        </div>
+      );
+    }
     return (
       <div data-testid="run-trace-panel" data-state="error">
         <ErrorState
-          title={state.notFound ? "trace 取不到" : "trace 加载失败"}
-          description={state.notFound ? "这条 run 已经过期或不存在" : undefined}
-          detail={state.notFound ? undefined : state.message}
+          title="加载 trace 失败"
+          description="网络抖动或服务暂时不可达 · 可以稍后重试。"
+          detail={state.message}
         />
       </div>
     );
