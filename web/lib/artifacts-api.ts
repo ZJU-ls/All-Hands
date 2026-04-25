@@ -129,3 +129,43 @@ export async function getArtifactVersionContent(
   if (!res.ok) throw new Error(`getArtifactVersionContent failed: ${res.status}`);
   return res.json() as Promise<ArtifactContentDto>;
 }
+
+/**
+ * Edit an artifact's content (P1 panel edit). Returns the updated artifact
+ * (new version). Server bumps version and writes a new file on disk.
+ */
+export async function updateArtifact(
+  id: string,
+  body: { content?: string; content_base64?: string; mode?: "overwrite" | "patch"; patch?: string },
+): Promise<ArtifactDto> {
+  const res = await fetch(`${BASE}/api/artifacts/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode: "overwrite", ...body }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`updateArtifact failed: ${res.status} ${detail}`);
+  }
+  return res.json() as Promise<ArtifactDto>;
+}
+
+/**
+ * Roll back to an older version. Creates a new v{N+1} carrying the older
+ * version's content; original history is preserved.
+ */
+export async function rollbackArtifact(
+  id: string,
+  to_version: number,
+): Promise<ArtifactDto> {
+  const res = await fetch(`${BASE}/api/artifacts/${id}/rollback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ to_version }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`rollbackArtifact failed: ${res.status} ${detail}`);
+  }
+  return res.json() as Promise<ArtifactDto>;
+}

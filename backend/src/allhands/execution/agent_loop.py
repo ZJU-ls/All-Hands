@@ -235,13 +235,6 @@ class AgentLoop:
         try:
             effective_model_ref = self._model_ref_override or self._employee.model_ref
             base_model = _build_model(effective_model_ref, self._provider, overrides)
-            bindings = self._build_bindings()
-            lc_tools = self._build_lc_tools(bindings)
-            model = (
-                base_model.bind_tools(lc_tools)
-                if lc_tools and hasattr(base_model, "bind_tools")
-                else base_model
-            )
             lc_messages = self._build_lc_messages(messages, overrides)
 
             iteration = 0
@@ -250,6 +243,23 @@ class AgentLoop:
                 if iteration > max_iterations:
                     yield LoopExited(reason="max_iterations")
                     return
+
+                # 2026-04-25 (P2): rebuild bindings + tool list every
+                # iteration. SkillRuntime can mutate during a turn (a
+                # successful `resolve_skill` adds tool_ids to
+                # ``runtime.resolved_skills``); the next iteration's
+                # ``model.astream`` then sees the freshly-unlocked tools.
+                # This is the Claude Code while-true contract — tool list
+                # is a function of current state, not a build-time
+                # constant. Cost: ~6ms per iteration (binding map + LangChain
+                # bind_tools), invisible next to the LLM round-trip.
+                bindings = self._build_bindings()
+                lc_tools = self._build_lc_tools(bindings)
+                model = (
+                    base_model.bind_tools(lc_tools)
+                    if lc_tools and hasattr(base_model, "bind_tools")
+                    else base_model
+                )
 
                 message_id = str(uuid.uuid4())
                 accumulated: AIMessageChunk | None = None

@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   getArtifact,
   getArtifactTextContent,
   getArtifactVersionContent,
   isBinaryKind,
   listArtifactVersions,
+  rollbackArtifact,
+  updateArtifact,
   type ArtifactContentDto,
   type ArtifactDto,
   type ArtifactVersionDto,
 } from "@/lib/artifacts-api";
+import { Icon } from "@/components/ui/icon";
 import { MarkdownView } from "./kinds/MarkdownView";
 import { CodeView } from "./kinds/CodeView";
 import { HtmlView } from "./kinds/HtmlView";
@@ -18,6 +21,7 @@ import { ImageView } from "./kinds/ImageView";
 import { DataView } from "./kinds/DataView";
 import { MermaidView } from "./kinds/MermaidView";
 import { ArtifactVersionSwitcher } from "./ArtifactVersionSwitcher";
+import { ArtifactEditor, pickEditorLanguage } from "./ArtifactEditor";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -74,12 +78,23 @@ function renderBody(
   }
 }
 
+type ToolbarMode = "view" | "edit";
+
 export function ArtifactDetail({ artifactId }: { artifactId: string }) {
   const [meta, setMeta] = useState<ArtifactDto | null>(null);
   const [versions, setVersions] = useState<ArtifactVersionDto[]>([]);
   const [currentVersion, setCurrentVersion] = useState<number | null>(null);
   const [content, setContent] = useState<LoadedContent | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // P1 · edit mode + transient toolbar feedback. Edit only makes sense
+  // for text kinds; binary kinds hide the chip entirely. Saving the
+  // edit calls PATCH /artifacts/{id}, which bumps version on the server
+  // and SSE-pushes the change back so the panel auto-refreshes.
+  const [mode, setMode] = useState<ToolbarMode>("view");
+  const [draft, setDraft] = useState<string>("");
+  const [busy, setBusy] = useState<null | "save" | "rollback">(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +103,7 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
     setCurrentVersion(null);
     setContent(null);
     setError(null);
+    setMode("view");
 
     async function run() {
       try {
@@ -137,7 +153,73 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
     };
   }, [meta, currentVersion]);
 
-  if (error) {
+  const handleCopy = useCallback(async () => {
+    if (!content || content.kind !== "text") return;
+    try {
+      await navigator.clipboard.writeText(content.content);
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 1600);
+    } catch (e) {
+      setError(`复制失败:${e}`);
+    }
+  }, [content]);
+
+  const handleStartEdit = useCallback(() => {
+    if (!content || content.kind !== "text") return;
+    setDraft(content.content);
+    setMode("edit");
+  }, [content]);
+
+  const handleCancelEdit = useCallback(() => {
+    setMode("view");
+    setDraft("");
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!meta) return;
+    setBusy("save");
+    setError(null);
+    try {
+      const next = await updateArtifact(meta.id, { content: draft });
+      const nextVersions = await listArtifactVersions(meta.id);
+      setMeta(next);
+      setVersions(nextVersions);
+      setCurrentVersion(next.version);
+      setContent({ kind: "text", content: draft });
+      setMode("view");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(null);
+    }
+  }, [meta, draft]);
+
+  const handleRollback = useCallback(
+    async (target: number) => {
+      if (!meta) return;
+      if (!window.confirm(`确认把当前版本回退到 v${target}?\n会创建一个新版本 v${meta.version + 1},内容来自 v${target}。`)) {
+        return;
+      }
+      setBusy("rollback");
+      setError(null);
+      try {
+        const next = await rollbackArtifact(meta.id, target);
+        const nextVersions = await listArtifactVersions(meta.id);
+        setMeta(next);
+        setVersions(nextVersions);
+        setCurrentVersion(next.version);
+        // Force re-fetch via the version effect by clearing local content
+        setContent(null);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [meta],
+  );
+
+  if (error && !meta) {
     return (
       <div className="px-4 py-3 text-[12px] text-danger">制品加载失败:{error}</div>
     );
@@ -146,8 +228,14 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
     return <div className="px-4 py-3 text-[12px] text-text-muted">读取中…</div>;
   }
 
+  const isText = !isBinaryKind(meta.kind);
+  const canCopy = isText && content?.kind === "text";
+  const canEdit = isText && currentVersion === meta.version; // only on latest
+  const canOpenNew = ["html", "image", "data"].includes(meta.kind);
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* Header: name + meta */}
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-semibold text-text">{meta.name}</div>
@@ -155,23 +243,154 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
             {meta.kind} · v{meta.version} · {meta.mime_type} · {meta.size_bytes} B
           </div>
         </div>
-        <a
-          href={`${BASE}/api/artifacts/${meta.id}/content?download=true`}
-          className="inline-flex h-7 items-center rounded-md border border-border px-3 text-[11px] text-text-muted transition-colors duration-base hover:text-text hover:border-border-strong"
-        >
-          下载
-        </a>
       </div>
+
+      {/* Toolbar */}
+      <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-3 py-1.5">
+        {mode === "view" ? (
+          <>
+            {canCopy && (
+              <ToolButton
+                onClick={handleCopy}
+                title="复制内容到剪贴板"
+                data-testid="artifact-copy"
+                accent={copyState === "copied"}
+              >
+                <Icon name={copyState === "copied" ? "check" : "copy"} size={11} />
+                {copyState === "copied" ? "已复制" : "复制"}
+              </ToolButton>
+            )}
+            {canEdit && (
+              <ToolButton
+                onClick={handleStartEdit}
+                title="切到编辑模式"
+                data-testid="artifact-edit"
+              >
+                <Icon name="edit" size={11} />
+                编辑
+              </ToolButton>
+            )}
+            {canOpenNew && (
+              <ToolButton
+                as="a"
+                href={`${BASE}/api/artifacts/${meta.id}/content`}
+                target="_blank"
+                rel="noreferrer"
+                title="在新窗口打开 — 看全屏渲染"
+                data-testid="artifact-open-new"
+              >
+                <Icon name="external-link" size={11} />
+                新窗口
+              </ToolButton>
+            )}
+            <div className="ml-auto" />
+            <ToolButton
+              as="a"
+              href={`${BASE}/api/artifacts/${meta.id}/content?download=true`}
+              accent
+              title="下载到本地"
+              data-testid="artifact-download"
+            >
+              <Icon name="download" size={11} />
+              下载
+            </ToolButton>
+          </>
+        ) : (
+          <>
+            <span className="text-[11px] text-primary font-mono">编辑模式</span>
+            <span className="text-[10px] text-text-subtle font-mono">
+              ⌘S 保存 · Esc 取消
+            </span>
+            <div className="ml-auto" />
+            <ToolButton
+              onClick={handleCancelEdit}
+              disabled={busy != null}
+              title="不保存"
+              data-testid="artifact-edit-cancel"
+            >
+              取消
+            </ToolButton>
+            <ToolButton
+              onClick={() => void handleSave()}
+              disabled={busy != null}
+              accent
+              title="保存为新版本"
+              data-testid="artifact-edit-save"
+            >
+              <Icon name={busy === "save" ? "loader" : "check"} size={11}
+                className={busy === "save" ? "animate-spin-slow" : ""} />
+              {busy === "save" ? "保存中…" : "保存"}
+            </ToolButton>
+          </>
+        )}
+      </div>
+
+      {/* Version switcher with rollback affordance per row */}
       <ArtifactVersionSwitcher
         versions={versions}
         current={currentVersion ?? meta.version}
         onSelect={(v) => setCurrentVersion(v)}
+        latestVersion={meta.version}
+        onRollback={isText ? handleRollback : undefined}
+        rollbackBusy={busy === "rollback"}
       />
-      <div className="flex-1 overflow-y-auto">
-        {content ? renderBody(meta, content) : (
+
+      {/* Body */}
+      <div className="flex-1 overflow-hidden">
+        {error && (
+          <div className="border-b border-danger/30 bg-danger/5 px-4 py-1.5 text-[11px] text-danger">
+            {error}
+          </div>
+        )}
+        {mode === "edit" && meta ? (
+          <ArtifactEditor
+            value={draft}
+            onChange={setDraft}
+            language={pickEditorLanguage(meta.kind, meta.mime_type)}
+            onSubmit={() => void handleSave()}
+            disabled={busy != null}
+          />
+        ) : content ? (
+          <div className="h-full overflow-y-auto">{renderBody(meta, content)}</div>
+        ) : (
           <div className="px-4 py-3 text-[12px] text-text-muted">读取内容…</div>
         )}
       </div>
     </div>
+  );
+}
+
+type ToolButtonProps = {
+  children: React.ReactNode;
+  accent?: boolean;
+  disabled?: boolean;
+  title?: string;
+  onClick?: () => void;
+  as?: "button" | "a";
+  href?: string;
+  target?: string;
+  rel?: string;
+  "data-testid"?: string;
+};
+
+function ToolButton(props: ToolButtonProps) {
+  const { children, accent, disabled, title, onClick, as = "button", href, target, rel, ...rest } = props;
+  const cls =
+    "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11px] font-medium transition-colors duration-fast " +
+    (accent
+      ? "border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+      : "border border-border bg-surface text-text-muted hover:text-text hover:border-border-strong") +
+    (disabled ? " opacity-50 pointer-events-none" : "");
+  if (as === "a") {
+    return (
+      <a className={cls} href={href} target={target} rel={rel} title={title} {...rest}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <button type="button" className={cls} onClick={onClick} disabled={disabled} title={title} {...rest}>
+      {children}
+    </button>
   );
 }
