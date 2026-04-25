@@ -123,7 +123,7 @@ export default function KnowledgePage() {
     "loading",
   );
   const [showCreate, setShowCreate] = useState(false);
-  const [showTune, setShowTune] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [openDoc, setOpenDoc] = useState<DocumentDto | null>(null);
 
   async function refreshKbs(preserve?: KBDto | null) {
@@ -239,7 +239,7 @@ export default function KnowledgePage() {
       <div className="flex h-full flex-col gap-4 p-6">
         <PageHeader
           title="知识库"
-          subtitle="工作区级文档库 · Hybrid 检索 (BM25 + 向量 + RRF) · Tool-First 写入"
+          subtitle="把资料存进来 · 自己搜得到 · 员工也能引用回答"
           count={kbs?.length ?? 0}
         />
 
@@ -299,7 +299,7 @@ export default function KnowledgePage() {
                 }}
                 placeholder={
                   activeKb
-                    ? `检索 ${activeKb.name}…  (BM25 + 向量 + RRF)`
+                    ? `搜 ${activeKb.name} 里的内容…`
                     : "选个 KB 再搜"
                 }
                 disabled={!activeKb}
@@ -369,7 +369,10 @@ export default function KnowledgePage() {
             )}
             {pageState === "ok" && activeKb && (
               <>
-                <KBInfoCard kb={activeKb} onTune={() => setShowTune(true)} />
+                <KBInfoCard
+                  kb={activeKb}
+                  onOpenSettings={() => setShowSettings(true)}
+                />
                 <TagsCard docs={docs ?? []} />
                 <ToolsCard />
               </>
@@ -443,14 +446,26 @@ export default function KnowledgePage() {
           />
         )}
 
-        {/* ─ Modal: Retrieval Tune */}
-        {showTune && activeKb && (
-          <TuneModal
+        {/* ─ Modal: KB settings (basic + advanced + danger) */}
+        {showSettings && activeKb && (
+          <KBSettingsModal
             kb={activeKb}
-            onClose={() => setShowTune(false)}
+            models={models}
+            onClose={() => setShowSettings(false)}
             onSaved={async (next) => {
-              setShowTune(false);
+              setShowSettings(false);
               await refreshKbs(next);
+            }}
+            onDelete={async () => {
+              setShowSettings(false);
+              try {
+                const { deleteKB } = await import("@/lib/kb-api");
+                await deleteKB(activeKb.id);
+                setActiveKb(null);
+                await refreshKbs();
+              } catch (e) {
+                setError(String(e));
+              }
             }}
             onError={setError}
           />
@@ -464,12 +479,27 @@ export default function KnowledgePage() {
 // Sidebar cards
 // ─────────────────────────────────────────────────────────────────────────────
 
-function KBInfoCard({ kb, onTune }: { kb: KBDto; onTune: () => void }) {
-  const cfg = kb.retrieval_config;
+/**
+ * KB info card · 用户视角 · 不暴露 BM25/RRF/dim/cosine 等术语。
+ *
+ * 三个层次:
+ *   1. 名字 + 简介 + ⚙ 设置入口
+ *   2. 一句话能力简述 (e.g. "✓ 启用了语义检索" / "演示模式 · 检索只能匹配关键词")
+ *   3. 数字: "5 段内容 · 来自 2 份资料"
+ *
+ * 检索权重 / embedder 维度等技术细节都收进 ⚙ 设置弹窗的"高级"分组。
+ */
+function KBInfoCard({
+  kb,
+  onOpenSettings,
+}: {
+  kb: KBDto;
+  onOpenSettings: () => void;
+}) {
+  const isMock = kb.embedding_model_ref.startsWith("mock:");
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <div className={SECTION_LABEL}>Knowledge Base</div>
-      <div className="mt-1 flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-semibold text-text">
             {kb.name}
@@ -480,65 +510,52 @@ function KBInfoCard({ kb, onTune }: { kb: KBDto; onTune: () => void }) {
             </div>
           )}
         </div>
-      </div>
-
-      <dl className="mt-3 grid grid-cols-2 gap-y-2 gap-x-3">
-        <div>
-          <dt className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-            Documents
-          </dt>
-          <dd className="text-[15px] font-semibold text-text">
-            {kb.document_count}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-            Chunks
-          </dt>
-          <dd className="text-[15px] font-semibold text-text">{kb.chunk_count}</dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-            Embedder
-          </dt>
-          <dd className="truncate font-mono text-[11px] text-text">
-            {kb.embedding_model_ref}
-          </dd>
-          <dd className="font-mono text-[10px] text-text-subtle">
-            {kb.embedding_dim}d · cosine
-          </dd>
-        </div>
-      </dl>
-
-      <div className="mt-3 border-t border-border pt-3">
-        <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-          Retrieval
-        </div>
-        <div className="flex flex-wrap gap-1.5 text-[11px]">
-          <span className="inline-flex items-center rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-text-muted">
-            BM25 ×{cfg.bm25_weight}
-          </span>
-          <span className="inline-flex items-center rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-text-muted">
-            vec ×{cfg.vector_weight}
-          </span>
-          <span className="inline-flex items-center rounded-md border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-text-muted">
-            top {cfg.top_k}
-          </span>
-          {cfg.reranker !== "none" && (
-            <span className="inline-flex items-center rounded-md border border-primary/30 bg-primary-muted px-1.5 py-0.5 font-mono text-primary">
-              {cfg.reranker}
-            </span>
-          )}
-        </div>
         <button
           type="button"
-          onClick={onTune}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
+          onClick={onOpenSettings}
+          aria-label="知识库设置"
+          title="设置"
+          className="grid h-7 w-7 place-items-center rounded-lg border border-border bg-surface text-text-subtle hover:border-border-strong hover:text-text transition duration-fast"
         >
           <Icon name="settings" size={12} />
-          调参
         </button>
       </div>
+
+      {/* 内容统计 — 友好语言,不用 documents/chunks 的英文术语 */}
+      <div className="mt-3 flex items-baseline gap-3 text-[13px] text-text">
+        <span>
+          <span className="font-semibold">{kb.document_count}</span>
+          <span className="ml-1 text-text-muted">份资料</span>
+        </span>
+        <span className="text-text-subtle">·</span>
+        <span>
+          <span className="font-semibold">{kb.chunk_count}</span>
+          <span className="ml-1 text-text-muted">段内容</span>
+        </span>
+      </div>
+
+      {/* 能力提示 — mock 高亮警示;真实 provider 静默 ✓ */}
+      {isMock ? (
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="mt-3 block w-full rounded-lg border border-warning/40 bg-warning-soft p-3 text-left text-[12px] text-warning hover:bg-warning/10 transition duration-fast"
+        >
+          <div className="flex items-center gap-1.5 font-medium">
+            <Icon name="alert-triangle" size={12} />
+            <span>当前是演示模式</span>
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed">
+            检索只能匹配关键词,不懂语义近义词。
+            <span className="underline">点这里换成真实模型 →</span>
+          </p>
+        </button>
+      ) : (
+        <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-success/30 bg-success-soft px-3 py-2 text-[12px] text-success">
+          <Icon name="check" size={12} />
+          <span>已启用语义检索</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -573,27 +590,14 @@ function TagsCard({ docs }: { docs: DocumentDto[] }) {
 function ToolsCard() {
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <div className={SECTION_LABEL}>Agent 用法</div>
-      <div className="mt-2 space-y-2 text-[12px] leading-relaxed text-text-muted">
-        <p>
-          给 employee 挂上{" "}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-text">
-            allhands.skills.kb_researcher
-          </code>{" "}
-          skill。
-        </p>
-        <p>
-          它会通过{" "}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-text">
-            kb_search
-          </code>{" "}
-          /{" "}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-text">
-            kb_read_document
-          </code>{" "}
-          主动检索并引用回答。
-        </p>
+      <div className="flex items-center gap-1.5 text-[12px] font-semibold text-text">
+        <Icon name="users" size={13} className="text-primary" />
+        让员工帮你查
       </div>
+      <p className="mt-1.5 text-[12px] leading-relaxed text-text-muted">
+        在「员工」页给某个员工加上「<span className="text-text">知识库研究员</span>」技能,
+        TA 在对话里就能搜这个 KB 并引用原文回答你。
+      </p>
     </div>
   );
 }
@@ -727,7 +731,7 @@ function SearchResultsView({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
         {searching && (
           <div className="flex h-full items-center justify-center">
-            <LoadingState title="检索中" description="BM25 + 向量并发 · RRF 融合" />
+            <LoadingState title="检索中…" description="正在并发匹配关键词和语义" />
           </div>
         )}
         {!searching && results && results.length === 0 && (
@@ -931,17 +935,32 @@ function CreateKBModal({
   );
 }
 
-function TuneModal({
+/**
+ * KBSettingsModal — 知识库设置(基础 / 高级 / 危险三 tab)。
+ *
+ * 设计目标:把所有跟 KB 相关的"调整"都收拢到这里 · 不要散落在 sidebar /
+ * KB 卡上。基础 tab 用大白话讲清"我现在的智能水平靠什么";高级 tab 才暴
+ * 露 BM25 / 向量 / top_k 等真正的调参旋钮;危险 tab 单独放删除。
+ */
+function KBSettingsModal({
   kb,
+  models,
   onClose,
   onSaved,
+  onDelete,
   onError,
 }: {
   kb: KBDto;
+  models: EmbeddingModelOption[];
   onClose: () => void;
   onSaved: (next: KBDto) => void;
+  onDelete: () => void;
   onError: (msg: string) => void;
 }) {
+  type Tab = "basic" | "advanced" | "danger";
+  const [tab, setTab] = useState<Tab>("basic");
+
+  // Advanced state
   const [bm25, setBm25] = useState(kb.retrieval_config.bm25_weight);
   const [vec, setVec] = useState(kb.retrieval_config.vector_weight);
   const [topK, setTopK] = useState(kb.retrieval_config.top_k);
@@ -949,12 +968,12 @@ function TuneModal({
   const [saving, setSaving] = useState(false);
 
   const rerankerOptions = [
-    { value: "none", label: "none — RRF only" },
-    { value: "bge-base", label: "bge-base (M3)", disabled: true },
-    { value: "cohere", label: "Cohere rerank (M3)", disabled: true },
+    { value: "none", label: "标准融合(默认)" },
+    { value: "bge-base", label: "bge-base — 二次排序", disabled: true, hint: "M3" },
+    { value: "cohere", label: "Cohere rerank", disabled: true, hint: "M3" },
   ];
 
-  async function save() {
+  async function saveAdvanced() {
     setSaving(true);
     try {
       const next = await updateRetrievalConfig(kb.id, {
@@ -971,76 +990,258 @@ function TuneModal({
     }
   }
 
+  const tabs: { id: Tab; label: string; icon: "info" | "settings" | "trash-2" }[] =
+    [
+      { id: "basic", label: "基础", icon: "info" },
+      { id: "advanced", label: "高级", icon: "settings" },
+      { id: "danger", label: "危险", icon: "trash-2" },
+    ];
+
   return (
     <ModalShell
-      title="调检索"
+      title={`${kb.name} · 设置`}
       onClose={onClose}
       footer={
-        <>
+        tab === "advanced" ? (
+          <>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={saveAdvanced}
+              disabled={saving}
+              className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
+            >
+              {saving ? "保存中…" : "保存"}
+            </button>
+          </>
+        ) : (
           <button
             type="button"
             onClick={onClose}
             className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
           >
-            取消
+            关闭
           </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
-          >
-            {saving ? "保存中…" : "保存"}
-          </button>
-        </>
+        )
       }
     >
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="BM25 weight">
-          <input
-            type="number"
-            min={0}
-            step={0.1}
-            value={bm25}
-            onChange={(e) => setBm25(Number(e.target.value))}
-            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
-          />
-        </Field>
-        <Field label="Vector weight">
-          <input
-            type="number"
-            min={0}
-            step={0.1}
-            value={vec}
-            onChange={(e) => setVec(Number(e.target.value))}
-            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
-          />
-        </Field>
-        <Field label="Top K">
-          <input
-            type="number"
-            min={1}
-            max={100}
-            value={topK}
-            onChange={(e) => setTopK(Number(e.target.value))}
-            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
-          />
-        </Field>
-        <Field label="Reranker">
-          <Select
-            value={reranker}
-            onChange={(v) => setReranker(v as "none" | "bge-base" | "cohere")}
-            options={rerankerOptions}
-            className="w-full"
-            triggerClassName="h-9 rounded-xl"
-            ariaLabel="Reranker"
-          />
-        </Field>
+      {/* Tabs */}
+      <div className="-mt-2 mb-4 flex gap-1 border-b border-border">
+        {tabs.map((t) => {
+          const active = t.id === tab;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-[13px] transition duration-fast ${
+                active
+                  ? "border-primary text-text"
+                  : "border-transparent text-text-muted hover:text-text"
+              }`}
+            >
+              <Icon name={t.icon} size={13} />
+              {t.label}
+            </button>
+          );
+        })}
       </div>
-      <p className="mt-4 font-mono text-[10px] text-text-subtle">
-        提示:把 BM25 设 0 试试纯向量召回;调小 top_k 提升召回精度但牺牲覆盖。
-      </p>
+
+      {/* Basic tab — embedder picker + plain-language explanation */}
+      {tab === "basic" && (
+        <BasicTab kb={kb} models={models} />
+      )}
+
+      {/* Advanced tab — retrieval tune */}
+      {tab === "advanced" && (
+        <div className="space-y-4">
+          <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] text-text-muted">
+            一般不用动。两个权重控制"关键词命中"和"语义匹配"哪个更重要;<br />
+            <span className="font-mono text-[11px]">top k</span> 是每次检索返回的最大段数。
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="关键词命中(BM25)">
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                value={bm25}
+                onChange={(e) => setBm25(Number(e.target.value))}
+                className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
+              />
+            </Field>
+            <Field label="语义匹配(向量)">
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                value={vec}
+                onChange={(e) => setVec(Number(e.target.value))}
+                className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
+              />
+            </Field>
+            <Field label="返回多少段">
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={topK}
+                onChange={(e) => setTopK(Number(e.target.value))}
+                className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
+              />
+            </Field>
+            <Field label="二次排序">
+              <Select
+                value={reranker}
+                onChange={(v) => setReranker(v as "none" | "bge-base" | "cohere")}
+                options={rerankerOptions}
+                className="w-full"
+                triggerClassName="h-9 rounded-xl"
+                ariaLabel="二次排序"
+              />
+            </Field>
+          </div>
+        </div>
+      )}
+
+      {/* Danger tab — delete */}
+      {tab === "danger" && <DangerTab kb={kb} onDelete={onDelete} />}
     </ModalShell>
+  );
+}
+
+function BasicTab({
+  kb,
+  models,
+}: {
+  kb: KBDto;
+  models: EmbeddingModelOption[];
+}) {
+  const isMock = kb.embedding_model_ref.startsWith("mock:");
+  // Group models by family for display
+  const realModels = models.filter((m) => !m.ref.startsWith("mock:"));
+  const realAvailable = realModels.filter((m) => m.available);
+
+  return (
+    <div className="space-y-4">
+      {/* Current state — friendly */}
+      <div
+        className={`rounded-xl border p-4 ${
+          isMock
+            ? "border-warning/40 bg-warning-soft"
+            : "border-success/30 bg-success-soft"
+        }`}
+      >
+        <div
+          className={`flex items-center gap-2 text-[13px] font-semibold ${
+            isMock ? "text-warning" : "text-success"
+          }`}
+        >
+          <Icon name={isMock ? "alert-triangle" : "check"} size={14} />
+          {isMock ? "演示模式 · 检索靠关键词匹配" : "已启用语义检索"}
+        </div>
+        <p
+          className={`mt-1.5 text-[12px] leading-relaxed ${
+            isMock ? "text-warning/90" : "text-success/90"
+          }`}
+        >
+          {isMock
+            ? "搜“相机”不会命中“摄像机”。配一个真实的 embedding 模型才能理解语义近义词。"
+            : "搜“相机”能命中“摄像机”等近义表达。"}
+        </p>
+        <div className="mt-2 font-mono text-[10px] text-text-subtle">
+          当前模型 · {kb.embedding_model_ref}
+        </div>
+      </div>
+
+      {/* Available real models */}
+      <div>
+        <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
+          可用的真实模型
+        </div>
+        {realAvailable.length === 0 ? (
+          <div className="rounded-lg border border-border bg-surface-2 p-3 text-[12px] text-text-muted">
+            <p>当前 workspace 没配 embedding API key。在 <code className="rounded bg-surface px-1 font-mono text-[11px] text-text">.env</code> 里加一个,重启后这里就会出现:</p>
+            <ul className="mt-2 space-y-1 font-mono text-[11px] text-text">
+              <li>· <span className="text-success">ALLHANDS_DASHSCOPE_API_KEY</span>=<span className="text-text-subtle">…</span> · 启用百炼</li>
+              <li>· <span className="text-success">ALLHANDS_OPENAI_API_KEY</span>=<span className="text-text-subtle">…</span> · 启用 OpenAI</li>
+            </ul>
+            <p className="mt-2">然后把 <code className="rounded bg-surface px-1 font-mono text-[11px] text-text">ALLHANDS_KB_DEFAULT_EMBEDDING_MODEL_REF</code> 设为想要的模型名,新建的 KB 就会默认用它。</p>
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {realAvailable.map((m) => (
+              <li
+                key={m.ref}
+                className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px]"
+              >
+                <span className="text-text">{m.label}</span>
+                <span className="font-mono text-[10px] text-text-subtle">
+                  {m.dim}d
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[11px] text-text-muted">
+          <Icon name="info" size={11} className="-mt-px mr-1 inline-block" />
+          切换模型需要重新计算所有内容的"语义指纹"(reindex),v0 暂不支持热切换。如要使用真实模型,
+          建议:<span className="text-text">删掉这个 KB · 配好 .env · 重新建一个 KB</span>。
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DangerTab({
+  kb,
+  onDelete,
+}: {
+  kb: KBDto;
+  onDelete: () => void;
+}) {
+  const [confirm, setConfirm] = useState("");
+  const enabled = confirm === kb.name;
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-danger/30 bg-danger-soft p-4">
+        <div className="flex items-center gap-2 text-[13px] font-semibold text-danger">
+          <Icon name="alert-triangle" size={14} />
+          删除知识库
+        </div>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-danger/90">
+          软删除 · 30 天内可联系管理员恢复;之后所有文档 / 向量数据物理移除。
+          原始上传文件留在磁盘上(<code className="font-mono text-[11px]">data/kb/{kb.id.slice(0, 8)}…</code>),
+          需要手动清理。
+        </p>
+      </div>
+
+      <Field label={`输入 KB 名称「${kb.name}」以确认`}>
+        <input
+          type="text"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          placeholder={kb.name}
+          className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-danger focus:outline-none"
+        />
+      </Field>
+
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={!enabled}
+        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-danger px-3 text-[13px] font-medium text-white shadow-soft-sm hover:bg-danger/90 disabled:opacity-30 disabled:cursor-not-allowed transition duration-fast"
+      >
+        <Icon name="trash-2" size={13} />
+        永久删除
+      </button>
+    </div>
   );
 }
 
