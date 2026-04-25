@@ -2,6 +2,7 @@
   "runs": {
     "header": {
       "employee": "Employee",
+      "model": "Model",
       "duration": "Duration",
       "tokens": "Tokens",
       "startedAt": "Started",
@@ -36,6 +37,8 @@
       "args": "args",
       "result": "result",
       "error": "error",
+      "llmCall": "LLM call #{index}",
+      "llmTokens": "in {input} · out {output} · total {total}",
       "status": {
         "done": "done",
         "failed": "failed",
@@ -44,6 +47,13 @@
     },
     "traceChip": {
       "label": "trace"
+    },
+    "artifacts": {
+      "title": "Artifacts · {count}",
+      "subtitle": "Files written or updated by this run · click to open details",
+      "version": "v{version}",
+      "new": "new",
+      "open": "Open"
     }
   },
   "traces": {
@@ -87,6 +97,7 @@
       "sortStartedAt": "Sort by start time",
       "ok": "Succeeded",
       "failed": "Failed",
+      "running": "Running",
       "fallback": "—"
     }
   },

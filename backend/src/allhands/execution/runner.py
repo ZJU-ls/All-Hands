@@ -420,16 +420,30 @@ class _LegacyProjector:
 
     def project(self, ev: Any) -> list[AgentEvent]:
         from allhands.core.conversation import ToolUseBlock
+        from allhands.execution.events import LLMCallEvent
         from allhands.execution.internal_events import (
             AssistantMessageCommitted,
             AssistantMessagePartial,
             ConfirmationRequested,
+            LLMCallFinished,
             LoopExited,
             ToolMessageCommitted,
             UserInputRequested,
         )
 
         out: list[AgentEvent] = []
+        if isinstance(ev, LLMCallFinished):
+            out.append(
+                LLMCallEvent(
+                    message_id=ev.message_id,
+                    model_ref=ev.model_ref,
+                    duration_s=ev.duration_s,
+                    input_tokens=ev.input_tokens,
+                    output_tokens=ev.output_tokens,
+                    total_tokens=ev.total_tokens,
+                )
+            )
+            return out
         if isinstance(ev, AssistantMessagePartial):
             if ev.text_delta:
                 out.append(TokenEvent(message_id=self.run_message_id, delta=ev.text_delta))

@@ -29,10 +29,12 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from allhands.core import (
+    ArtifactSummary,
     BootstrapStatus,
     Message,
     ObservabilityConfig,
     ObservatoryEmployeeBreakdown,
+    ObservatoryModelBreakdown,
     ObservatorySummary,
     RunDetail,
     RunError,
@@ -40,6 +42,7 @@ from allhands.core import (
     RunTokenUsage,
     TraceSummary,
     Turn,
+    TurnLLMCall,
     TurnMessage,
     TurnThinking,
     TurnToolCall,
@@ -49,6 +52,7 @@ from allhands.core import (
 if TYPE_CHECKING:
     from allhands.core import EventEnvelope
     from allhands.persistence.repositories import (
+        ArtifactRepo,
         ConversationRepo,
         EmployeeRepo,
         EventRepo,
@@ -77,6 +81,7 @@ class ObservatoryService:
         config_repo: ObservabilityConfigRepo,
         conversation_repo: ConversationRepo | None = None,
         task_repo: TaskRepo | None = None,
+        artifact_repo: ArtifactRepo | None = None,
         workspace_id: str = "default",
     ) -> None:
         self._events = event_repo
@@ -87,6 +92,9 @@ class ObservatoryService:
         # will raise a clear error if either is missing.
         self._conversations = conversation_repo
         self._tasks = task_repo
+        # Optional artifact repo · enables the "产出制品" panel on RunDetail.
+        # When None the field stays empty; the drawer just hides the section.
+        self._artifacts = artifact_repo
         self._ws = workspace_id
 
     async def get_status(self) -> ObservabilityConfig:
@@ -129,25 +137,96 @@ class ObservatoryService:
         ]
         p50 = _percentile(durations, 0.5) if durations else 0.0
 
-        tokens = [
-            int(e.payload["tokens"]) for e in recent if isinstance(e.payload.get("tokens"), int)
-        ]
-        avg_tokens = int(sum(tokens) / len(tokens)) if tokens else 0
+        # Token aggregation. We accept three payload shapes for back-compat:
+        #   - new: payload.tokens = {"input":N,"output":N,"total":N}
+        #   - mid: payload.tokens = N (legacy single-int)
+        #   - old: missing entirely → contributes nothing
+        # ``call_total`` is the sum of every run's ``total`` count;
+        # ``avg_tokens_per_run`` is over runs that actually reported tokens
+        # (so a single tokenless run doesn't drag the average to zero).
+        input_total = 0
+        output_total = 0
+        total_total = 0
+        runs_with_tokens = 0
+        run_total_tokens: list[int] = []
+        for e in recent:
+            tok = e.payload.get("tokens")
+            if isinstance(tok, dict):
+                ti = int(tok.get("input", 0) or 0)
+                to = int(tok.get("output", 0) or 0)
+                tt = int(tok.get("total", 0) or 0) or (ti + to)
+            elif isinstance(tok, int):
+                ti = to = 0
+                tt = int(tok)
+            else:
+                continue
+            input_total += ti
+            output_total += to
+            total_total += tt
+            if tt > 0:
+                runs_with_tokens += 1
+                run_total_tokens.append(tt)
+        avg_tokens = int(sum(run_total_tokens) / runs_with_tokens) if runs_with_tokens else 0
+
+        # LLM calls: payload.llm_calls (per-run count from finalize_run).
+        llm_calls_total = sum(
+            int(e.payload.get("llm_calls", 0) or 0)
+            for e in recent
+            if isinstance(e.payload.get("llm_calls"), int)
+        )
 
         employees = await self._employees.list_all()
         name_by_id = {e.id: e.name for e in employees}
-        by_emp_counts: dict[str, int] = {}
+        emp_stats: dict[str, dict[str, int]] = {}
+        model_stats: dict[str, dict[str, int]] = {}
         for e in recent:
+            tok = e.payload.get("tokens")
+            ti = to = tt = 0
+            if isinstance(tok, dict):
+                ti = int(tok.get("input", 0) or 0)
+                to = int(tok.get("output", 0) or 0)
+                tt = int(tok.get("total", 0) or 0) or (ti + to)
+            elif isinstance(tok, int):
+                tt = int(tok)
             emp_id = e.payload.get("employee_id") or e.actor
             if isinstance(emp_id, str):
-                by_emp_counts[emp_id] = by_emp_counts.get(emp_id, 0) + 1
+                slot = emp_stats.setdefault(
+                    emp_id, {"runs": 0, "input": 0, "output": 0, "total": 0}
+                )
+                slot["runs"] += 1
+                slot["input"] += ti
+                slot["output"] += to
+                slot["total"] += tt
+            model_ref = e.payload.get("model_ref")
+            if isinstance(model_ref, str) and model_ref:
+                m = model_stats.setdefault(
+                    model_ref, {"runs": 0, "input": 0, "output": 0, "total": 0}
+                )
+                m["runs"] += 1
+                m["input"] += ti
+                m["output"] += to
+                m["total"] += tt
+
         by_employee = [
             ObservatoryEmployeeBreakdown(
                 employee_id=eid,
                 employee_name=name_by_id.get(eid, eid),
-                runs_count=count,
+                runs_count=stats["runs"],
+                input_tokens=stats["input"],
+                output_tokens=stats["output"],
+                total_tokens=stats["total"],
             )
-            for eid, count in sorted(by_emp_counts.items(), key=lambda kv: -kv[1])
+            for eid, stats in sorted(emp_stats.items(), key=lambda kv: -kv[1]["runs"])
+        ]
+        by_model = [
+            ObservatoryModelBreakdown(
+                model_ref=ref,
+                runs_count=stats["runs"],
+                input_tokens=stats["input"],
+                output_tokens=stats["output"],
+                total_tokens=stats["total"],
+            )
+            for ref, stats in sorted(model_stats.items(), key=lambda kv: -kv[1]["runs"])
         ]
 
         return ObservatorySummary(
@@ -155,7 +234,12 @@ class ObservatoryService:
             failure_rate_24h=round(failure_rate, 4),
             latency_p50_s=round(p50, 3),
             avg_tokens_per_run=avg_tokens,
+            input_tokens_total=input_total,
+            output_tokens_total=output_total,
+            total_tokens_total=total_total,
+            llm_calls_total=llm_calls_total,
             by_employee=by_employee,
+            by_model=by_model,
             observability_enabled=cfg.observability_enabled,
             bootstrap_status=cfg.bootstrap_status,
             bootstrap_error=cfg.bootstrap_error,
@@ -209,12 +293,21 @@ class ObservatoryService:
                 if isinstance(duration, (int, float)):
                     slot["duration_s"] = float(duration)
                 tokens = e.payload.get("tokens")
-                if isinstance(tokens, int):
-                    slot["tokens"] = tokens
-                elif isinstance(tokens, dict):
-                    total = tokens.get("total")
-                    if isinstance(total, int):
-                        slot["tokens"] = total
+                if isinstance(tokens, dict):
+                    ti = int(tokens.get("input", 0) or 0)
+                    to = int(tokens.get("output", 0) or 0)
+                    tt = int(tokens.get("total", 0) or 0) or (ti + to)
+                    slot["input_tokens"] = ti
+                    slot["output_tokens"] = to
+                    slot["total_tokens"] = tt
+                elif isinstance(tokens, int):
+                    slot["total_tokens"] = int(tokens)
+                model_ref = e.payload.get("model_ref")
+                if isinstance(model_ref, str) and model_ref:
+                    slot["model_ref"] = model_ref
+                llm_calls = e.payload.get("llm_calls")
+                if isinstance(llm_calls, int):
+                    slot["llm_calls"] = llm_calls
                 slot.setdefault("started_at", e.published_at)
             else:
                 slot.setdefault("started_at", e.published_at)
@@ -225,24 +318,46 @@ class ObservatoryService:
             eid: str | None = eid_obj if isinstance(eid_obj, str) else None
             if employee_id and eid != employee_id:
                 continue
-            trace_status = "failed" if slot.get("terminator_kind") == "run.failed" else "ok"
+            # Three-state status:
+            #   - run.failed terminator → "failed"
+            #   - run.completed terminator → "ok"
+            #   - run.started seen but no terminator → "running"
+            terminator = slot.get("terminator_kind")
+            if terminator == "run.failed":
+                trace_status = "failed"
+            elif terminator is not None:
+                trace_status = "ok"
+            else:
+                trace_status = "running"
             if status and trace_status != status:
                 continue
             started_at_obj = slot.get("started_at")
             if not isinstance(started_at_obj, datetime):
                 continue
             duration_obj = slot.get("duration_s")
-            tokens_obj = slot.get("tokens")
+            input_tok = slot.get("input_tokens")
+            output_tok = slot.get("output_tokens")
+            total_tok = slot.get("total_tokens")
+            mr_raw = slot.get("model_ref")
+            model_ref_obj: str | None = mr_raw if isinstance(mr_raw, str) else None
+            llm_calls_obj = slot.get("llm_calls")
+            tokens_summary = RunTokenUsage(
+                prompt=int(input_tok) if isinstance(input_tok, int) else 0,
+                completion=int(output_tok) if isinstance(output_tok, int) else 0,
+                total=int(total_tok) if isinstance(total_tok, int) else 0,
+            )
             out.append(
                 TraceSummary(
                     trace_id=run_id,
                     employee_id=eid,
                     employee_name=name_by_id.get(eid) if eid else None,
+                    model_ref=model_ref_obj,
                     status=trace_status,
                     duration_s=float(duration_obj)
                     if isinstance(duration_obj, (int, float))
                     else None,
-                    tokens=int(tokens_obj) if isinstance(tokens_obj, int) else 0,
+                    tokens=tokens_summary,
+                    llm_calls=int(llm_calls_obj) if isinstance(llm_calls_obj, int) else 0,
                     started_at=started_at_obj,
                 )
             )
@@ -341,18 +456,63 @@ class ObservatoryService:
             status = RunStatus.RUNNING
 
         tokens = RunTokenUsage()
+        model_ref: str | None = None
+        llm_calls_count = 0
         if terminator is not None:
             tok = terminator.payload.get("tokens")
+            # New shape uses {input,output,total}; legacy single-int and
+            # legacy {prompt,completion,total} both still appear in old
+            # rows on disk, so we accept all three.
             if isinstance(tok, int):
-                tokens = RunTokenUsage(prompt=0, completion=0, total=tok)
+                tokens = RunTokenUsage(prompt=0, completion=0, total=int(tok))
             elif isinstance(tok, dict):
-                tokens = RunTokenUsage(
-                    prompt=int(tok.get("prompt", 0) or 0),
-                    completion=int(tok.get("completion", 0) or 0),
-                    total=int(tok.get("total", 0) or 0),
-                )
+                prompt = int(tok.get("input", tok.get("prompt", 0)) or 0)
+                completion = int(tok.get("output", tok.get("completion", 0)) or 0)
+                total = int(tok.get("total", 0) or 0) or (prompt + completion)
+                tokens = RunTokenUsage(prompt=prompt, completion=completion, total=total)
+            mr = terminator.payload.get("model_ref")
+            if isinstance(mr, str) and mr:
+                model_ref = mr
+            lc = terminator.payload.get("llm_calls")
+            if isinstance(lc, int):
+                llm_calls_count = lc
 
-        turns = _compose_turns(messages)
+        # Per-call telemetry · llm.call events emitted by chat_service for
+        # each ``model.astream`` round-trip. We weave them into the turn
+        # timeline using their wall-clock timestamp so the trace viewer can
+        # show "LLM call #N · gpt-4o-mini · 3.2s · in 1.2k / out 420".
+        llm_call_events = await self._load_run_kind_events(run_id, "llm.call")
+        turns = _compose_turns(messages, llm_call_events)
+        if model_ref is None:
+            for ev in llm_call_events:
+                ref = ev.payload.get("model_ref")
+                if isinstance(ref, str) and ref:
+                    model_ref = ref
+                    break
+        if llm_calls_count == 0 and llm_call_events:
+            llm_calls_count = len(llm_call_events)
+
+        # Artifacts created by this run · empty list when the artifact_repo
+        # isn't wired (legacy callers / unit tests).
+        artifacts: list[ArtifactSummary] = []
+        if self._artifacts is not None:
+            try:
+                rows = await self._artifacts.list_by_run(run_id)
+            except Exception:
+                rows = []
+            for a in rows:
+                artifacts.append(
+                    ArtifactSummary(
+                        id=a.id,
+                        name=a.name,
+                        kind=a.kind.value if hasattr(a.kind, "value") else str(a.kind),
+                        mime_type=a.mime_type,
+                        version=a.version,
+                        size_bytes=a.size_bytes,
+                        pinned=a.pinned,
+                        created_at=a.created_at,
+                    )
+                )
 
         return RunDetail(
             run_id=run_id,
@@ -365,8 +525,11 @@ class ObservatoryService:
             finished_at=finished_at,
             duration_s=duration_s,
             tokens=tokens,
+            llm_calls=llm_calls_count,
+            model_ref=model_ref,
             error=error,
             turns=turns,
+            artifacts=artifacts,
         )
 
     async def _load_run_events(self, run_id: str) -> list[EventEnvelope]:
@@ -375,6 +538,17 @@ class ObservatoryService:
             limit=500,
             workspace_id=self._ws,
             kind_prefixes=list(_RUN_KINDS),
+        )
+        matched = [e for e in recent if e.payload.get("run_id") == run_id]
+        matched.sort(key=lambda e: e.published_at)
+        return matched
+
+    async def _load_run_kind_events(self, run_id: str, kind_prefix: str) -> list[EventEnvelope]:
+        """Events of ``kind_prefix`` whose payload.run_id == run_id."""
+        recent = await self._events.list_recent(
+            limit=500,
+            workspace_id=self._ws,
+            kind_prefixes=[kind_prefix],
         )
         matched = [e for e in recent if e.payload.get("run_id") == run_id]
         matched.sort(key=lambda e: e.published_at)
@@ -407,7 +581,10 @@ class ObservatoryService:
         return await self._config.load()
 
 
-def _compose_turns(messages: list[Message]) -> list[Turn]:
+def _compose_turns(
+    messages: list[Message],
+    llm_call_events: list[EventEnvelope] | None = None,
+) -> list[Turn]:
     """Project persisted ``messages`` into the Turn union the UI renders.
 
     Rules (spec 2026-04-21 §3.2):
@@ -418,6 +595,10 @@ def _compose_turns(messages: list[Message]) -> list[Turn]:
       ``tool_call_id`` matches)
     - ``role=assistant`` with plain content → ``message``
     - ``role=system`` → skipped (summary markers, bootstrap notes)
+
+    Plus: every ``llm.call`` event becomes a ``TurnLLMCall`` placed by
+    timestamp (so the timeline shows "LLM call #1 → tools → LLM call #2 →
+    assistant text" in the order the agent actually executed).
 
     Any parsing hiccup falls through to a plain ``message`` turn so the
     viewer always shows *something*.
@@ -471,7 +652,45 @@ def _compose_turns(messages: list[Message]) -> list[Turn]:
                 turns.append(TurnMessage(content=msg.content, ts=msg.created_at))
             continue
 
+    # Weave llm.call events in by timestamp so they sort naturally next to
+    # the assistant / tool turns they generated. We append them all and
+    # re-sort the whole list — Turn instances expose ``ts`` consistently
+    # (the ``.ts`` field on every variant), and a stable sort keeps tool
+    # call/result pairs adjacent when timestamps tie.
+    if llm_call_events:
+        for idx, ev in enumerate(llm_call_events, start=1):
+            payload = ev.payload
+            tok = payload.get("tokens") if isinstance(payload, dict) else None
+            ti = to = tt = 0
+            if isinstance(tok, dict):
+                ti = int(tok.get("input", 0) or 0)
+                to = int(tok.get("output", 0) or 0)
+                tt = int(tok.get("total", 0) or 0) or (ti + to)
+            call_index = payload.get("call_index") if isinstance(payload, dict) else None
+            duration = payload.get("duration_s") if isinstance(payload, dict) else None
+            model_ref = payload.get("model_ref") if isinstance(payload, dict) else None
+            turns.append(
+                TurnLLMCall(
+                    call_index=int(call_index) if isinstance(call_index, int) else idx,
+                    model_ref=str(model_ref) if isinstance(model_ref, str) else None,
+                    duration_s=float(duration) if isinstance(duration, (int, float)) else 0.0,
+                    input_tokens=ti,
+                    output_tokens=to,
+                    total_tokens=tt,
+                    ts=ev.published_at,
+                )
+            )
+        turns.sort(key=_turn_sort_key)
+
     return turns
+
+
+def _turn_sort_key(turn: Turn) -> datetime:
+    """``Turn.ts`` for everything except ``TurnToolCall`` which uses
+    ``ts_called`` instead — the union doesn't share a single field name."""
+    if isinstance(turn, TurnToolCall):
+        return turn.ts_called
+    return turn.ts
 
 
 def _percentile(values: list[float], pct: float) -> float:

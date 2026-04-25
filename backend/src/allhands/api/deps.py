@@ -297,6 +297,7 @@ async def get_observatory_service(
         config_repo=SqlObservabilityConfigRepo(session),
         conversation_repo=SqlConversationRepo(session),
         task_repo=SqlTaskRepo(session),
+        artifact_repo=SqlArtifactRepo(session),
     )
 
 
