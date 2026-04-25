@@ -75,6 +75,9 @@
     "en": "English",
     "label": "Language"
   },
+  "metadata": {
+    "description": "One for All — an open-source, self-hosted digital workforce platform"
+  },
   "healthBadge": {
     "ok": "backend ok · {version}",
     "error": "backend unreachable",

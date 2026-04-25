@@ -77,3 +77,30 @@ SubagentProgressSection / PlanProgressSection / ModelRow / DesignForm 残留
 - live Chinese chars 从 116 → 远小,大头剩余 5-9 个 file 的微量
 
 **commits**:待提交
+
+## Round 4 · 2026-04-26 01:50
+
+**主题**:metadata locale-aware + ArtifactGrid relativeTime + 实战 HTML 抽查
+
+**碰到**:之前没人查 `<head>` metadata 的 description · 跑 prod server
+对比 EN/ZH HTML 输出发现 `<meta name="description">` 在两个 locale 下都
+是同一份英文(layout.tsx 里 export const metadata 静态值)。
+
+**做的事**:
+- app/layout.tsx 把静态 `metadata` 改成 `generateMetadata()` async ·
+  调用 `getTranslations("metadata")` 拿当前 locale 的描述
+- 新增 metadata.description 到根 catalog · zh "开源自部署的数字员工组织
+  平台" · en "an open-source, self-hosted digital workforce platform"
+- ArtifactGrid 的 relativeTime helper 沿用 ArtifactPeek 的同名 keys
+  (复用 artifacts.peek.justNow,而不是再造一份 · DRY)
+- pnpm build + next start -p 4001 跑两个 locale 抓 HTML 实测,确认 meta
+  description 现在按请求 locale 切换(EN: "an open-source, self-hosted..."
+  · ZH: "开源自部署的数字员工组织平台")
+
+**结果**:
+- live chars 12 → 6(剩下 6 全是 BrandMark / PlanCard 的 regex 模式
+  匹配中文品牌名,必须保留)
+- 1881 tests passed · typecheck/lint/build 全绿
+- meta description 实测两 locale 切换正确
+
+**commits**:待提交
