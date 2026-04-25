@@ -135,6 +135,10 @@
         "dependentsEmpty": "尚无员工引用该技能。",
         "leadBadge": "lead"
       },
+      "references": {
+        "section": "参考资料 · {count} 个",
+        "hint": "Agent 可以通过 read_skill_file(skill_id, relative_path) 按需拉取这些文件,作为模板 / 速查 / 排障线索。"
+      },
       "prompt": {
         "section": "系统提示片段",
         "empty": "该技能没有附带提示片段,仅通过工具注入能力。",
