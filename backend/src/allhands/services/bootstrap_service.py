@@ -369,30 +369,41 @@ async def ensure_gateway_demo_seeds(
     Idempotent: fires only when the provider table is empty. Once the user
     has added *any* provider (or deleted all seeded rows), subsequent calls
     are no-ops. Returns True if seeds were written, False otherwise.
+
+    The first preset's canonical model (preset.default_model) is also marked
+    as the workspace default via `model_repo.set_default()`. The preset's
+    `default_model` field is kept here as a static "what's this kind's
+    canonical model" hint — it is NOT persisted to a provider row anymore
+    (the provider has no default_model column post-2026-04-25).
     """
     existing = await provider_repo.list_all()
     if existing:
         return False
 
-    for preset in GATEWAY_SEED_PRESETS:
+    canonical_default_id: str | None = None
+    for preset_idx, preset in enumerate(GATEWAY_SEED_PRESETS):
         provider = LLMProvider(
             id=str(uuid.uuid4()),
             name=preset.name,
             kind=preset.kind,  # type: ignore[arg-type]
             base_url=preset.base_url,
             api_key="",
-            default_model=preset.default_model,
-            is_default=False,
         )
         saved = await provider_repo.upsert(provider)
         for m in preset.models:
+            model_id = str(uuid.uuid4())
             await model_repo.upsert(
                 LLMModel(
-                    id=str(uuid.uuid4()),
+                    id=model_id,
                     provider_id=saved.id,
                     name=m.name,
                     display_name=m.display_name,
                     context_window=m.context_window,
                 )
             )
+            if preset_idx == 0 and m.name == preset.default_model and canonical_default_id is None:
+                canonical_default_id = model_id
+
+    if canonical_default_id is not None:
+        await model_repo.set_default(canonical_default_id)
     return True

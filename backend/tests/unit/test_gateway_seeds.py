@@ -27,12 +27,6 @@ class InMemoryProviderRepo:
     async def get(self, provider_id: str) -> LLMProvider | None:
         return self._items.get(provider_id)
 
-    async def get_default(self) -> LLMProvider | None:
-        for p in self._items.values():
-            if p.is_default:
-                return p
-        return None
-
     async def list_all(self) -> list[LLMProvider]:
         return list(self._items.values())
 
@@ -43,10 +37,6 @@ class InMemoryProviderRepo:
     async def delete(self, provider_id: str) -> None:
         self._items.pop(provider_id, None)
 
-    async def set_default(self, provider_id: str) -> None:
-        for pid, prov in self._items.items():
-            self._items[pid] = prov.model_copy(update={"is_default": pid == provider_id})
-
 
 class InMemoryModelRepo:
     def __init__(self) -> None:
@@ -54,6 +44,12 @@ class InMemoryModelRepo:
 
     async def get(self, model_id: str) -> LLMModel | None:
         return self._items.get(model_id)
+
+    async def get_default(self) -> LLMModel | None:
+        for m in self._items.values():
+            if m.is_default and m.enabled:
+                return m
+        return None
 
     async def list_all(self) -> list[LLMModel]:
         return list(self._items.values())
@@ -67,6 +63,14 @@ class InMemoryModelRepo:
 
     async def delete(self, model_id: str) -> None:
         self._items.pop(model_id, None)
+
+    async def set_default(self, model_id: str) -> LLMModel | None:
+        target = self._items.get(model_id)
+        if target is None:
+            return None
+        for k, v in self._items.items():
+            self._items[k] = v.model_copy(update={"is_default": k == model_id})
+        return self._items[model_id]
 
 
 @pytest.mark.asyncio
@@ -91,7 +95,6 @@ async def test_gateway_seeds_noop_if_providers_exist() -> None:
         name="MyCustom",
         base_url="https://example.com/v1",
         api_key="",
-        default_model="x",
     )
     prov_repo = InMemoryProviderRepo([existing])
     model_repo = InMemoryModelRepo()

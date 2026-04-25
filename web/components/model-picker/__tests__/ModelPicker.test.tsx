@@ -16,14 +16,16 @@ import { act, cleanup, fireEvent, render, screen } from "@/tests/test-utils/i18n
 
 import { ModelPicker, invalidateModelPickerCache } from "../ModelPicker";
 
+// Post-2026-04-25: provider has no default_* fields; the workspace
+// default lives on a specific model row's `is_default` flag (singleton
+// across the table).
 const providers = [
   {
     id: "p1",
     name: "OpenRouter",
     kind: "openai" as const,
     base_url: "https://openrouter.ai",
-    default_model: "gpt-4o-mini",
-    is_default: true,
+    api_key_set: true,
     enabled: true,
   },
   {
@@ -31,8 +33,7 @@ const providers = [
     name: "Bailian",
     kind: "aliyun" as const,
     base_url: "https://dashscope.aliyuncs.com",
-    default_model: "qwen-plus",
-    is_default: false,
+    api_key_set: true,
     enabled: true,
   },
 ];
@@ -45,6 +46,7 @@ const models = [
     display_name: "GPT 4o Mini",
     context_window: 128000,
     enabled: true,
+    is_default: true,
   },
   {
     id: "m2",
@@ -53,6 +55,7 @@ const models = [
     display_name: "Qwen Plus",
     context_window: 128000,
     enabled: true,
+    is_default: false,
   },
 ];
 

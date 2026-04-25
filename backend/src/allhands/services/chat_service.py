@@ -209,17 +209,37 @@ class ChatService:
         lines: list[str] = []
 
         # Providers (+ which one is the default / its kind / model)
+        # 2026-04-25: "default" lives on `LLMModel.is_default` now (a singleton
+        # FK pointer), not on the provider. Resolve via the model repo and
+        # derive the provider from the model's `provider_id`.
         if self._providers is not None:
             try:
                 provs = await self._providers.list_all()
-                if provs:
-                    default = next((p for p in provs if p.is_default), None) or provs[0]
-                    lines.append(
-                        f"- providers: {len(provs)} configured · default = "
-                        f"{default.name} (kind={default.kind}, model={default.default_model})"
-                    )
-                else:
+                if not provs:
                     lines.append("- providers: 0 — none configured yet")
+                else:
+                    default_model = None
+                    if self._models is not None:
+                        try:
+                            default_model = await self._models.get_default()
+                        except Exception:  # pragma: no cover — defensive
+                            log.exception("snapshot · models.get_default failed")
+                    if default_model is not None:
+                        default_provider = next(
+                            (p for p in provs if p.id == default_model.provider_id),
+                            provs[0],
+                        )
+                        lines.append(
+                            f"- providers: {len(provs)} configured · default = "
+                            f"{default_provider.name} (kind={default_provider.kind}, "
+                            f"model={default_model.name})"
+                        )
+                    else:
+                        first = provs[0]
+                        lines.append(
+                            f"- providers: {len(provs)} configured · default = "
+                            f"{first.name} (kind={first.kind}, model=未指定)"
+                        )
             except Exception:
                 log.exception("snapshot · providers.list_all failed")
 

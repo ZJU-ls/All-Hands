@@ -4,18 +4,22 @@ Three-stage priority chain decided at chat-turn dispatch time:
 
   1. ``conversation.model_ref_override`` — user picked a model for this thread.
   2. ``employee.model_ref`` — employee's pinned default.
-  3. **Workspace default** — the provider with ``is_default=True`` and its
-     ``default_model``. Single source of truth for "what runs when nothing
-     else is specified."
+  3. **Workspace default** — the unique ``LLMModel`` row with
+     ``is_default=True``. Its ``provider_id`` gives us the provider. This is
+     the singleton "what runs when nothing else is specified" pointer.
 
 For (1) and (2) we don't blindly trust the ref string. The user can leave
 ``employee.model_ref = "openai/gpt-4o-mini"`` while the only configured
 provider is ``CODINGPLAN`` (kind=aliyun). The previous code path silently
-fell back to CODINGPLAN's ``default_model`` inside ``llm_factory`` while
+fell back to a hardcoded model name string inside ``llm_factory`` while
 the UI kept showing ``openai/gpt-4o-mini`` — chip lying to the user. We
 validate the ref against the registered provider+model registry and only
 accept it when there's a real binding; otherwise we drop straight to the
 workspace default and the caller can surface the truthful name to the UI.
+
+Pre-2026-04-25 the default was stored as ``provider.is_default`` plus a
+``provider.default_model: str``. The pair could desync. The current shape
+(``LLMModel.is_default`` singleton) makes the default a real FK chain.
 """
 
 from __future__ import annotations
@@ -79,6 +83,42 @@ def _try_resolve(
     return None
 
 
+def _workspace_default(
+    providers: list[LLMProvider], models: list[LLMModel]
+) -> tuple[LLMProvider, str] | None:
+    """Resolve "the workspace default" as a (provider, model_name) pair.
+
+    Priority:
+      1. The unique enabled ``LLMModel`` with ``is_default=True``,
+         and its provider must also be enabled. This is the user's
+         explicit choice — set via the Gateway "设为默认" button on a
+         specific model row.
+      2. Fallback for fresh installs / first-run: the first enabled model
+         under the first enabled provider. Lets the system bootstrap
+         before the user has explicitly picked a default.
+    """
+    enabled_providers = {p.id: p for p in providers if p.enabled}
+    enabled_models = [m for m in models if m.enabled and m.provider_id in enabled_providers]
+    explicit = next((m for m in enabled_models if m.is_default), None)
+    if explicit is not None:
+        return enabled_providers[explicit.provider_id], explicit.name
+    if not enabled_providers:
+        return None
+    # No explicit default — pick the first enabled (provider, model) pair.
+    # Provider order is whatever the repo returns (creation order on most
+    # backends); model order likewise. Stable enough for bootstrap UX.
+    for provider in providers:
+        if not provider.enabled:
+            continue
+        for model in enabled_models:
+            if model.provider_id == provider.id:
+                return provider, model.name
+        # Provider exists but has no models registered yet — caller's
+        # _try_resolve still has a chance for openai-kind pass-through.
+        return provider, ""
+    return None
+
+
 def resolve_effective_model(
     *,
     conv_override: str | None,
@@ -94,10 +134,8 @@ def resolve_effective_model(
     rewritten in place). Raises ``DomainError`` when no enabled provider
     is configured at all.
     """
-    enabled = [p for p in providers if p.enabled]
-    default_provider = next((p for p in enabled if p.is_default), None) or (
-        enabled[0] if enabled else None
-    )
+    workspace = _workspace_default(providers, models)
+    default_provider = workspace[0] if workspace else None
 
     for ref, source in ((conv_override, "override"), (employee_ref, "employee")):
         result = _try_resolve(ref, providers, models, default_provider)
@@ -105,13 +143,10 @@ def resolve_effective_model(
             provider, name = result
             return ResolvedModel(provider=provider, model_name=name, source=source)  # type: ignore[arg-type]
 
-    if default_provider is None:
+    if workspace is None:
         raise DomainError(
             "No enabled LLM provider configured. Add one in Providers settings "
             "before sending messages."
         )
-    return ResolvedModel(
-        provider=default_provider,
-        model_name=default_provider.default_model,
-        source="global_default",
-    )
+    provider, name = workspace
+    return ResolvedModel(provider=provider, model_name=name, source="global_default")

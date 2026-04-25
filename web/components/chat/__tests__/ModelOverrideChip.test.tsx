@@ -24,8 +24,7 @@ const providers = [
     name: "OpenRouter",
     kind: "openai" as const,
     base_url: "https://openrouter.ai",
-    default_model: "gpt-4o-mini",
-    is_default: true,
+    api_key_set: true,
     enabled: true,
   },
   {
@@ -33,8 +32,7 @@ const providers = [
     name: "Anthropic",
     kind: "anthropic" as const,
     base_url: "https://api.anthropic.com",
-    default_model: "claude-opus-4-7",
-    is_default: false,
+    api_key_set: true,
     enabled: true,
   },
 ];
@@ -47,6 +45,7 @@ const models = [
     display_name: "GPT 4o Mini",
     context_window: 128000,
     enabled: true,
+    is_default: true,
   },
   {
     id: "m2",
@@ -55,6 +54,7 @@ const models = [
     display_name: "Claude Opus 4.7",
     context_window: 200000,
     enabled: true,
+    is_default: false,
   },
 ];
 

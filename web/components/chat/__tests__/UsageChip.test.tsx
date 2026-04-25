@@ -22,8 +22,7 @@ const providers = [
     name: "OpenRouter",
     kind: "openai" as const,
     base_url: "https://openrouter.ai",
-    default_model: "gpt-4o-mini",
-    is_default: true,
+    api_key_set: true,
     enabled: true,
   },
 ];
@@ -36,6 +35,7 @@ const models = [
     display_name: "GPT 4o Mini",
     context_window: 100,
     enabled: true,
+    is_default: true,
   },
 ];
 

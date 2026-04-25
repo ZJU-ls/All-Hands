@@ -21,7 +21,7 @@ from allhands.api.deps import get_session, get_skill_service, get_tool_registry
 from allhands.core import Skill
 from allhands.core.errors import DomainError
 from allhands.i18n import t
-from allhands.persistence.sql_repos import SqlLLMProviderRepo
+from allhands.persistence.sql_repos import SqlLLMModelRepo, SqlLLMProviderRepo
 from allhands.services import ai_explainer
 from allhands.services.github_market import GithubMarketEntry, GithubMarketPreview
 from allhands.services.skill_service import SkillInstallError, SkillService
@@ -217,6 +217,7 @@ async def explain_market_skill(
                 source_url=preview.source_url,
                 skill_md=preview.skill_md,
                 provider_repo=SqlLLMProviderRepo(session),
+                model_repo=SqlLLMModelRepo(session),
             ):
                 if chunk:
                     yield chunk.encode("utf-8")
@@ -253,6 +254,7 @@ async def explain_skill(
             async for chunk in ai_explainer.explain_skill_stream(
                 skill,
                 provider_repo=SqlLLMProviderRepo(session),
+                model_repo=SqlLLMModelRepo(session),
                 tool_registry=get_tool_registry(),
             ):
                 if chunk:

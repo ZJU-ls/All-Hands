@@ -685,8 +685,6 @@ def _row_to_provider(row: LLMProviderRow) -> LLMProvider:
         kind=kind,  # type: ignore[arg-type]
         base_url=row.base_url,
         api_key=row.api_key,
-        default_model=row.default_model,
-        is_default=row.is_default,
         enabled=row.enabled,
     )
 
@@ -697,15 +695,6 @@ class SqlLLMProviderRepo:
 
     async def get(self, provider_id: str) -> LLMProvider | None:
         row = await self._s.get(LLMProviderRow, provider_id)
-        return _row_to_provider(row) if row else None
-
-    async def get_default(self) -> LLMProvider | None:
-        result = await self._s.execute(
-            select(LLMProviderRow).where(
-                LLMProviderRow.is_default.is_(True), LLMProviderRow.enabled.is_(True)
-            )
-        )
-        row = result.scalar_one_or_none()
         return _row_to_provider(row) if row else None
 
     async def list_all(self) -> list[LLMProvider]:
@@ -719,8 +708,6 @@ class SqlLLMProviderRepo:
             existing.kind = provider.kind
             existing.base_url = provider.base_url
             existing.api_key = provider.api_key
-            existing.default_model = provider.default_model
-            existing.is_default = provider.is_default
             existing.enabled = provider.enabled
         else:
             self._s.add(
@@ -730,8 +717,6 @@ class SqlLLMProviderRepo:
                     kind=provider.kind,
                     base_url=provider.base_url,
                     api_key=provider.api_key,
-                    default_model=provider.default_model,
-                    is_default=provider.is_default,
                     enabled=provider.enabled,
                 )
             )
@@ -744,13 +729,6 @@ class SqlLLMProviderRepo:
             await self._s.delete(row)
             await self._s.flush()
 
-    async def set_default(self, provider_id: str) -> None:
-        await self._s.execute(update(LLMProviderRow).values(is_default=False))
-        row = await self._s.get(LLMProviderRow, provider_id)
-        if row:
-            row.is_default = True
-        await self._s.flush()
-
 
 def _row_to_model(row: LLMModelRow) -> LLMModel:
     return LLMModel(
@@ -760,6 +738,7 @@ def _row_to_model(row: LLMModelRow) -> LLMModel:
         display_name=row.display_name,
         context_window=row.context_window,
         enabled=row.enabled,
+        is_default=row.is_default,
     )
 
 
@@ -769,6 +748,16 @@ class SqlLLMModelRepo:
 
     async def get(self, model_id: str) -> LLMModel | None:
         row = await self._s.get(LLMModelRow, model_id)
+        return _row_to_model(row) if row else None
+
+    async def get_default(self) -> LLMModel | None:
+        """Singleton lookup — at most one row across the table has is_default=True."""
+        result = await self._s.execute(
+            select(LLMModelRow).where(
+                LLMModelRow.is_default.is_(True), LLMModelRow.enabled.is_(True)
+            )
+        )
+        row = result.scalar_one_or_none()
         return _row_to_model(row) if row else None
 
     async def list_all(self) -> list[LLMModel]:
@@ -789,6 +778,7 @@ class SqlLLMModelRepo:
             existing.display_name = model.display_name
             existing.context_window = model.context_window
             existing.enabled = model.enabled
+            existing.is_default = model.is_default
         else:
             self._s.add(
                 LLMModelRow(
@@ -798,6 +788,7 @@ class SqlLLMModelRepo:
                     display_name=model.display_name,
                     context_window=model.context_window,
                     enabled=model.enabled,
+                    is_default=model.is_default,
                 )
             )
         await self._s.flush()
@@ -808,6 +799,26 @@ class SqlLLMModelRepo:
         if row:
             await self._s.delete(row)
             await self._s.flush()
+
+    async def set_default(self, model_id: str) -> LLMModel | None:
+        """Atomically promote one model to "the workspace default".
+
+        Two-step transaction:
+          1. Clear is_default on every other row (preserves the singleton
+             invariant — the service layer guarantees no two rows are ever
+             True simultaneously).
+          2. Set is_default=True on the target row.
+
+        Returns the updated model, or None if the id doesn't exist (caller
+        translates to a 404 / NotFound).
+        """
+        target = await self._s.get(LLMModelRow, model_id)
+        if target is None:
+            return None
+        await self._s.execute(update(LLMModelRow).values(is_default=False))
+        target.is_default = True
+        await self._s.flush()
+        return _row_to_model(target)
 
 
 # ---- Trigger repos (Wave B.3) ----

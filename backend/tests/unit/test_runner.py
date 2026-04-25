@@ -377,8 +377,6 @@ def test_build_model_plumbs_thinking_to_anthropic_ctor() -> None:
         kind="anthropic",
         base_url="https://coding.dashscope.aliyuncs.com/apps/anthropic",
         api_key="sk-fake",
-        default_model="qwen3.6-plus",
-        is_default=True,
     )
     model = _build_model(
         "qwen3.6-plus",

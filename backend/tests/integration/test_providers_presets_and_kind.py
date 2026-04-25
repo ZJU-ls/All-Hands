@@ -59,8 +59,6 @@ def client_with_providers() -> tuple[TestClient, dict[str, str]]:
                     kind="openai",
                     base_url="https://api.openai.com/v1",
                     api_key="sk-fake-openai",
-                    default_model="gpt-4o-mini",
-                    is_default=True,
                 )
             )
             await repo.upsert(
@@ -70,8 +68,6 @@ def client_with_providers() -> tuple[TestClient, dict[str, str]]:
                     kind="anthropic",
                     base_url="https://api.anthropic.com",
                     api_key="sk-ant-fake",
-                    default_model="claude-3-5-sonnet-latest",
-                    is_default=False,
                 )
             )
             await repo.upsert(
@@ -81,8 +77,6 @@ def client_with_providers() -> tuple[TestClient, dict[str, str]]:
                     kind="aliyun",
                     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
                     api_key="sk-fake-aliyun",
-                    default_model="qwen-plus",
-                    is_default=False,
                 )
             )
 
@@ -135,8 +129,6 @@ def test_create_provider_with_anthropic_kind_round_trips() -> None:
             "kind": "anthropic",
             "base_url": "https://api.anthropic.com",
             "api_key": "sk-ant-roundtrip",
-            "default_model": "claude-3-5-sonnet-latest",
-            "set_as_default": False,
         },
     )
     assert r.status_code in (200, 201), r.text
@@ -152,10 +144,15 @@ def test_create_provider_with_anthropic_kind_round_trips() -> None:
     assert match["base_url"] == "https://api.anthropic.com"
 
 
-def test_test_endpoint_probes_anthropic_with_x_api_key(
+def test_ping_endpoint_probes_anthropic_with_x_api_key(
     client_with_providers: tuple[TestClient, dict[str, str]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The (formerly-named) `/test` route was removed in favour of `/ping`,
+    which uses the structured EndpointProbe contract. Same wire-level
+    requirement: anthropic-kind provider must speak `x-api-key` +
+    `anthropic-version`, not Bearer.
+    """
     client, ids = client_with_providers
 
     captured: dict[str, Any] = {}
@@ -167,7 +164,6 @@ def test_test_endpoint_probes_anthropic_with_x_api_key(
 
     transport = httpx.MockTransport(_handler)
 
-    # The route instantiates httpx.AsyncClient() with no args — inject transport.
     import httpx as _httpx_module
 
     class _PatchedAsyncClient(_httpx_module.AsyncClient):
@@ -177,12 +173,12 @@ def test_test_endpoint_probes_anthropic_with_x_api_key(
 
     monkeypatch.setattr("httpx.AsyncClient", _PatchedAsyncClient)
 
-    r = client.post(f"/api/providers/{ids['anthropic']}/test")
+    r = client.post(f"/api/providers/{ids['anthropic']}/ping")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["ok"] is True
+    assert body["reachable"] is True
+    assert body["auth_ok"] is True
 
-    # Anthropic probe must hit /v1/models with x-api-key + anthropic-version.
     assert captured["url"] == "https://api.anthropic.com/v1/models"
     assert captured["headers"]["x-api-key"] == "sk-ant-fake"
     assert captured["headers"]["anthropic-version"] == "2023-06-01"
@@ -190,7 +186,7 @@ def test_test_endpoint_probes_anthropic_with_x_api_key(
     assert "authorization" not in {k.lower() for k in captured["headers"]}
 
 
-def test_test_endpoint_probes_aliyun_as_openai_compat(
+def test_ping_endpoint_probes_aliyun_as_openai_compat(
     client_with_providers: tuple[TestClient, dict[str, str]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -214,7 +210,7 @@ def test_test_endpoint_probes_aliyun_as_openai_compat(
 
     monkeypatch.setattr("httpx.AsyncClient", _PatchedAsyncClient)
 
-    r = client.post(f"/api/providers/{ids['aliyun']}/test")
+    r = client.post(f"/api/providers/{ids['aliyun']}/ping")
     assert r.status_code == 200, r.text
 
     # DashScope compatible-mode is OpenAI-wire under the hood.

@@ -39,6 +39,21 @@ class ModelResponse(BaseModel):
     display_name: str
     context_window: int
     enabled: bool
+    is_default: bool
+
+
+class SetDefaultModelResponse(BaseModel):
+    """Composite response for `POST /models/{id}/set-default`.
+
+    Returns the freshly-promoted model AND its provider in one round-trip
+    so the UI can render "default = X (provider Y)" without a follow-up
+    fetch. Mirrors the singleton invariant: callers can be confident no
+    other model still carries `is_default=True` after this returns 200.
+    """
+
+    model: ModelResponse
+    provider_id: str
+    provider_name: str
 
 
 class CreateModelRequest(BaseModel):
@@ -87,6 +102,7 @@ def _to_response(m: LLMModel) -> ModelResponse:
         display_name=m.display_name,
         context_window=m.context_window,
         enabled=m.enabled,
+        is_default=m.is_default,
     )
 
 
@@ -159,6 +175,36 @@ async def delete_model(
 ) -> None:
     svc = await get_model_service(session)
     await svc.delete(model_id)
+
+
+@router.post("/{model_id}/set-default", response_model=SetDefaultModelResponse)
+async def set_default_model(
+    model_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> SetDefaultModelResponse:
+    """Promote this (provider, model) pair to the workspace default.
+
+    First-principles default: a singleton FK to a real model row. One call
+    atomically:
+      - clears `is_default` on every other model (preserves singleton),
+      - sets it True on this one,
+      - returns the (model, provider_name) pair so the UI can render
+        "已切到 X · Y" without a follow-up fetch.
+
+    Replaces the legacy `POST /providers/{id}/set-default` +
+    `PATCH /providers/{id}` (default_model=...) two-step. Forcing both
+    flags to update at the same row removes the desync class entirely.
+    """
+    svc = await get_model_service(session)
+    pair = await svc.set_as_default(model_id)
+    if pair is None:
+        raise HTTPException(status_code=404, detail=t("errors.not_found.model"))
+    model, provider = pair
+    return SetDefaultModelResponse(
+        model=_to_response(model),
+        provider_id=provider.id,
+        provider_name=provider.name,
+    )
 
 
 @router.post("/{model_id}/ping", response_model=dict)

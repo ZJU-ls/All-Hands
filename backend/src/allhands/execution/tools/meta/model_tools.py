@@ -95,6 +95,23 @@ DELETE_MODEL_TOOL = Tool(
     requires_confirmation=True,
 )
 
+SET_DEFAULT_MODEL_TOOL = Tool(
+    id="allhands.meta.set_default_model",
+    kind=ToolKind.META,
+    name="set_default_model",
+    description=(
+        "Promote one model to the workspace default — Lead Agent + AI explainer "
+        "use this (provider, model) when nothing more specific is pinned. "
+        "Atomic: clears the prior default and sets this one in a single "
+        "transaction. Replaces the legacy set_default_provider + "
+        "update_provider(default_model=...) two-step."
+    ),
+    input_schema=_MODEL_ID_REQUIRED,
+    output_schema={"type": "object"},
+    scope=ToolScope.WRITE,
+    requires_confirmation=True,
+)
+
 PING_MODEL_TOOL = Tool(
     id="allhands.meta.ping_model",
     kind=ToolKind.META,
@@ -172,6 +189,7 @@ ALL_MODEL_META_TOOLS: list[Tool] = [
     CREATE_MODEL_TOOL,
     UPDATE_MODEL_TOOL,
     DELETE_MODEL_TOOL,
+    SET_DEFAULT_MODEL_TOOL,
     PING_MODEL_TOOL,
     CHAT_TEST_MODEL_TOOL,
 ]
