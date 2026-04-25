@@ -402,11 +402,11 @@ function Header({
           { key: "split", label: "Split" },
         ]}
       />
-      {/* Tooltip stays descriptive ("复制原文" / "复制改动后"), visible chip
-          text trims to a single 原/改 char so the toolbar stays compact and
-          the awkward 复制旧版/复制新版 phrasing is gone. */}
-      <CopyButton value={before} label="复制原文" short="原" variant="button" />
-      <CopyButton value={after} label="复制改动后" short="改" variant="button" />
+      {/* Tooltip is descriptive Chinese; visible chip text uses the
+          conventional Before / After labels developers already recognize
+          from GitHub diffs — cleaner than awkward 旧版/新版 or 原/改. */}
+      <CopyButton value={before} label="复制 Before" short="Before" variant="button" />
+      <CopyButton value={after} label="复制 After" short="After" variant="button" />
     </div>
   );
 }
