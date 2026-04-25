@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from allhands.api.deps import get_session, get_skill_service, get_tool_registry
 from allhands.core import Skill
 from allhands.core.errors import DomainError
+from allhands.i18n import t
 from allhands.persistence.sql_repos import SqlLLMProviderRepo
 from allhands.services import ai_explainer
 from allhands.services.github_market import GithubMarketEntry, GithubMarketPreview
@@ -156,7 +157,7 @@ async def get_skill(
 ) -> SkillResponse:
     skill = await svc.get(skill_id)
     if skill is None:
-        raise HTTPException(status_code=404, detail="Skill not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.skill"))
     return _to_response(skill)
 
 
@@ -172,7 +173,7 @@ async def update_skill(
         prompt_fragment=body.prompt_fragment,
     )
     if skill is None:
-        raise HTTPException(status_code=404, detail="Skill not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.skill"))
     ai_explainer.invalidate_skill_explanation(skill_id)
     return _to_response(skill)
 
@@ -220,7 +221,7 @@ async def explain_market_skill(
                 if chunk:
                     yield chunk.encode("utf-8")
         except DomainError as exc:
-            yield f"\n\n[错误] {exc}".encode()
+            yield f"\n\n{t('errors.stream.error_prefix')} {exc}".encode()
 
     return StreamingResponse(
         _gen(),
@@ -245,7 +246,7 @@ async def explain_skill(
     """
     skill = await svc.get(skill_id)
     if skill is None:
-        raise HTTPException(status_code=404, detail="Skill not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.skill"))
 
     async def _gen() -> AsyncIterator[bytes]:
         try:
@@ -257,7 +258,7 @@ async def explain_skill(
                 if chunk:
                     yield chunk.encode("utf-8")
         except DomainError as exc:
-            yield f"\n\n[错误] {exc}".encode()
+            yield f"\n\n{t('errors.stream.error_prefix')} {exc}".encode()
 
     # text/plain so a fetch().getReader() in the browser hands chunks back
     # as the stream lands. Not text/event-stream because we don't need the

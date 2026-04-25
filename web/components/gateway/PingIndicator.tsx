@@ -3,14 +3,16 @@
 /**
  * PingIndicator · /gateway model row connectivity state (ADR 0016 · V2 polish).
  *
- * A compact `h-6 px-2 rounded-full text-caption font-mono` pill with four
- * states. Uses the design-system token palette (no raw tailwind colors) and
- * a Lucide icon glyph through the `<Icon>` wrapper.
- *
- *   idle     → surface-2 pill · subtle dot
+ * Four states:
+ *   idle     → quiet 6px neutral dot, no pill chrome (the row's activity
+ *              icon already implies "click to test"; a "待测" placeholder
+ *              pill on every row was visual noise).
  *   running  → primary-soft pill · `animate-pulse-ring` dot · "测试中"
  *   ok       → success-soft pill · check-circle-2 · "{latency}ms"
  *   fail     → danger-soft pill · alert-circle · "{category}" · hover=full err
+ *
+ * The idle wrapper keeps the same h-6 height as the live pills so the row
+ * doesn't reflow when state transitions.
  */
 
 import { Icon } from "@/components/ui/icon";
@@ -40,14 +42,14 @@ export function PingIndicator({ state }: { state: PingState }) {
     return (
       <span
         data-ping-state="idle"
-        aria-label="未测试"
-        className={`${BASE_PILL} border-border bg-surface-2 text-text-subtle`}
+        aria-label="未测试 · 点右侧测试按钮"
+        title="未测试"
+        className="inline-flex h-6 w-6 items-center justify-center"
       >
         <span
           aria-hidden="true"
-          className="inline-block w-[6px] h-[6px] rounded-full bg-text-subtle/60"
+          className="inline-block h-1.5 w-1.5 rounded-full bg-text-subtle/50"
         />
-        <span>待测</span>
       </span>
     );
   }

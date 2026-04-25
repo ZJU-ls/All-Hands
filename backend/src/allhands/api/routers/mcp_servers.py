@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from allhands.api.deps import get_mcp_service
 from allhands.core import MCPServer, MCPTransport
+from allhands.i18n import t
 from allhands.services.mcp_service import MCPService, MCPServiceError
 
 router = APIRouter(prefix="/mcp-servers", tags=["mcp-servers"])
@@ -90,7 +91,7 @@ async def get_server(
 ) -> MCPServerResponse:
     server = await svc.get(server_id)
     if server is None:
-        raise HTTPException(status_code=404, detail="MCP server not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.mcp_server"))
     return _to_response(server)
 
 
@@ -128,7 +129,7 @@ async def update_server(
     except MCPServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if updated is None:
-        raise HTTPException(status_code=404, detail="MCP server not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.mcp_server"))
     return _to_response(updated)
 
 
@@ -147,7 +148,7 @@ async def test_connection(
 ) -> MCPServerResponse:
     result = await svc.test_connection(server_id)
     if result is None:
-        raise HTTPException(status_code=404, detail="MCP server not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.mcp_server"))
     return _to_response(result)
 
 
