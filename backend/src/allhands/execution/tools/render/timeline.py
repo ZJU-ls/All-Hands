@@ -64,8 +64,6 @@ async def execute(
     # so the user sees the gap instead of a ghost row.
     normalized: list[dict[str, Any]] = []
     for it in items:
-        if not isinstance(it, dict):
-            continue
         title = it.get("title")
         if not isinstance(title, str) or not title.strip():
             note = it.get("note")

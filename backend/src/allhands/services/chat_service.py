@@ -811,6 +811,15 @@ class ChatService:
         persisted = False
         run_finalized = False
         error_payload: dict[str, object] | None = None
+        # Per-run telemetry · accumulated across every LLMCallEvent so the
+        # ``run.completed`` payload carries authoritative totals for the
+        # observatory KPIs / trace drawer. Each individual call also gets
+        # written to the events ledger as ``llm.call`` for the timeline view.
+        run_input_tokens = 0
+        run_output_tokens = 0
+        run_total_tokens = 0
+        run_llm_calls = 0
+        run_model_ref: str | None = None
         # 2026-04-25 · Claude-Code-style interrupt preservation. The tap
         # records partial bytes always; the interrupted flag distinguishes
         # "we made it to a clean done" from "the stream was cut" so:
@@ -925,6 +934,13 @@ class ChatService:
                     "conversation_id": conversation_id,
                     "duration_s": duration_s,
                     "error": error_payload.get("message") if error_payload else None,
+                    "model_ref": run_model_ref,
+                    "llm_calls": run_llm_calls,
+                    "tokens": {
+                        "input": run_input_tokens,
+                        "output": run_output_tokens,
+                        "total": run_total_tokens,
+                    },
                 },
             )
 
@@ -960,6 +976,22 @@ class ChatService:
                     # turn without duplicating rows.
                     tc = event.tool_call
                     tool_calls_by_id[tc.id] = tc
+                    # Phase D · ledger event for the observatory timeline.
+                    if self._bus is not None and run_id is not None:
+                        self._bus.publish_best_effort(
+                            kind="tool.returned",
+                            payload={
+                                "run_id": run_id,
+                                "conversation_id": conversation_id,
+                                "employee_id": employee.id if employee else None,
+                                "tool_call_id": tc.id,
+                                "tool_id": tc.tool_id,
+                                "status": tc.status.value
+                                if hasattr(tc.status, "value")
+                                else str(tc.status),
+                                "error": tc.error,
+                            },
+                        )
                     # ADR 0017 · P2.C — fine-grained tool events. Write a
                     # TOOL_CALL_EXECUTED (or _FAILED) event so
                     # build_llm_context can pair it with the assistant's
@@ -1002,6 +1034,53 @@ class ChatService:
                                     "tool_call_id": tc.id,
                                 },
                             )
+                elif event.kind == "llm_call":
+                    # Phase A · per-turn LLM telemetry. Accumulate into the
+                    # run-level totals (consumed by ``finalize_run``) and
+                    # publish a per-call ``llm.call`` event so the trace
+                    # timeline can render "LLM call #N · model · tokens · Δt".
+                    run_llm_calls += 1
+                    run_input_tokens += int(event.input_tokens or 0)
+                    run_output_tokens += int(event.output_tokens or 0)
+                    run_total_tokens += int(event.total_tokens or 0)
+                    if event.model_ref:
+                        run_model_ref = event.model_ref
+                    if self._bus is not None and run_id is not None:
+                        self._bus.publish_best_effort(
+                            kind="llm.call",
+                            payload={
+                                "run_id": run_id,
+                                "conversation_id": conversation_id,
+                                "employee_id": employee.id if employee else None,
+                                "message_id": event.message_id,
+                                "model_ref": event.model_ref,
+                                "duration_s": event.duration_s,
+                                "tokens": {
+                                    "input": event.input_tokens,
+                                    "output": event.output_tokens,
+                                    "total": event.total_tokens,
+                                },
+                                "call_index": run_llm_calls,
+                            },
+                        )
+                elif event.kind == "tool_call_start":
+                    # Phase D · tool.invoked event for the observatory ledger.
+                    # Lets the trace timeline anchor "started" timestamps for
+                    # tools whose result lands in a later round-trip and lets
+                    # /traces filter "runs that called tool X".
+                    tc = event.tool_call
+                    if self._bus is not None and run_id is not None:
+                        self._bus.publish_best_effort(
+                            kind="tool.invoked",
+                            payload={
+                                "run_id": run_id,
+                                "conversation_id": conversation_id,
+                                "employee_id": employee.id if employee else None,
+                                "tool_call_id": tc.id,
+                                "tool_id": tc.tool_id,
+                                "args": tc.args,
+                            },
+                        )
                 elif event.kind == "interrupt_required":
                     # ADR 0014 Phase 4d · write a PENDING Confirmation row
                     # so /confirmations/pending can see what's waiting and

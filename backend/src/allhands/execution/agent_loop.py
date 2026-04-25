@@ -54,6 +54,7 @@ from allhands.execution.internal_events import (
     AssistantMessageCommitted,
     AssistantMessagePartial,
     InternalEvent,
+    LLMCallFinished,
     LoopExited,
     ToolMessageCommitted,
 )
@@ -276,6 +277,7 @@ class AgentLoop:
 
                 message_id = str(uuid.uuid4())
                 accumulated: AIMessageChunk | None = None
+                llm_call_started_at = _now()
 
                 async for chunk in model.astream(lc_messages):
                     if not isinstance(chunk, AIMessageChunk):
@@ -288,6 +290,25 @@ class AgentLoop:
                             text_delta=text_delta,
                             reasoning_delta=reasoning_delta,
                         )
+
+                # Per-turn LLM telemetry. ``usage_metadata`` is populated by
+                # LangChain when the provider returns it (OpenAI / Anthropic
+                # / DashScope all do); we surface zeros for any provider that
+                # doesn't, which the consumer treats as "unknown" rather than
+                # a literal zero.
+                _llm_duration_s = (_now() - llm_call_started_at).total_seconds()
+                _usage = getattr(accumulated, "usage_metadata", None) or {}
+                _input_tok = int(_usage.get("input_tokens", 0) or 0)
+                _output_tok = int(_usage.get("output_tokens", 0) or 0)
+                _total_tok = int(_usage.get("total_tokens", 0) or 0) or (_input_tok + _output_tok)
+                yield LLMCallFinished(
+                    message_id=message_id,
+                    model_ref=effective_model_ref,
+                    duration_s=_llm_duration_s,
+                    input_tokens=_input_tok,
+                    output_tokens=_output_tok,
+                    total_tokens=_total_tok,
+                )
 
                 # Build terminal AssistantMessage from accumulated. This
                 # is the protocol-level phantom defense: only valid

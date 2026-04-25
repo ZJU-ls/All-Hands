@@ -1052,6 +1052,21 @@ class SqlArtifactRepo:
         result = await self._s.execute(stmt)
         return [_row_to_artifact(r) for r in result.scalars().all()]
 
+    async def list_by_run(self, run_id: str) -> list[Artifact]:
+        """All artifacts created by ``run_id`` (latest version only).
+
+        Used by the trace drawer's "产出制品" panel — at most a handful of
+        rows per run, no pagination, ordered by creation time.
+        """
+        stmt = (
+            select(ArtifactRow)
+            .where(ArtifactRow.created_by_run_id == run_id)
+            .where(ArtifactRow.deleted_at.is_(None))
+            .order_by(ArtifactRow.created_at.asc())
+        )
+        result = await self._s.execute(stmt)
+        return [_row_to_artifact(r) for r in result.scalars().all()]
+
     async def upsert(self, artifact: Artifact) -> Artifact:
         existing = await self._s.get(ArtifactRow, artifact.id)
         if existing:

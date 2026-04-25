@@ -54,9 +54,11 @@ from allhands.core.errors import (
 from allhands.core.mcp import MCPHealth, MCPServer, MCPTransport
 from allhands.core.model import LLMModel
 from allhands.core.observability import (
+    ArtifactSummary,
     BootstrapStatus,
     ObservabilityConfig,
     ObservatoryEmployeeBreakdown,
+    ObservatoryModelBreakdown,
     ObservatorySummary,
     RunDetail,
     RunError,
@@ -64,6 +66,7 @@ from allhands.core.observability import (
     RunTokenUsage,
     TraceSummary,
     Turn,
+    TurnLLMCall,
     TurnMessage,
     TurnThinking,
     TurnToolCall,
@@ -125,6 +128,7 @@ __all__ = [
     "AgentPlan",
     "Artifact",
     "ArtifactKind",
+    "ArtifactSummary",
     "ArtifactVersion",
     "BootstrapStatus",
     "ComponentStatus",
@@ -159,6 +163,7 @@ __all__ = [
     "MessageRole",
     "ObservabilityConfig",
     "ObservatoryEmployeeBreakdown",
+    "ObservatoryModelBreakdown",
     "ObservatorySummary",
     "PlanStep",
     "RenderPayload",
@@ -193,6 +198,7 @@ __all__ = [
     "TriggerKind",
     "Turn",
     "TurnAbortReason",
+    "TurnLLMCall",
     "TurnMessage",
     "TurnThinking",
     "TurnToolCall",

@@ -100,6 +100,7 @@
       "panels": {
         "langfuse": "Langfuse · 追踪后端",
         "topEmployees": "Top employees · 24h",
+        "byModel": "按模型 · 24h",
         "noData": "还没有数据",
         "moreLabel": "{title} more",
         "rows": {
@@ -135,7 +136,8 @@
         },
         "status": {
           "ok": "ok",
-          "failed": "failed"
+          "failed": "failed",
+          "running": "运行中"
         }
       }
     },
