@@ -95,6 +95,10 @@ class ChatMessageResponse(BaseModel):
     # this turn. Populated on finalize for Anthropic Extended Thinking /
     # Qwen3 enable_thinking / DeepSeek-R1 reasoning_content.
     reasoning: str | None = None
+    # 2026-04-25 · True when the producing turn didn't reach a clean
+    # done (user 中止 / network drop / mid-stream error). UI uses this
+    # to render an 「已中止」 tail. See core.Message.interrupted.
+    interrupted: bool = False
 
 
 class CompactConversationRequest(BaseModel):

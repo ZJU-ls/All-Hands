@@ -98,6 +98,22 @@ class Message(BaseModel):
     # reasoning channel for past runs; live chat still streams via
     # ReasoningEvent / AG-UI REASONING_MESSAGE_CHUNK.
     reasoning: str | None = None
+    # 2026-04-25 · interrupt-preserving turn (Claude Code parity).
+    #
+    # True when the producer (the LLM stream) didn't reach a clean
+    # ``done`` event — either the user clicked 中止, the SSE transport
+    # broke, or the backend raised mid-stream. Whatever was already
+    # streamed is still on this row (we never discard partial); this
+    # flag tells the UI to render an 「已中止」 tail and the next
+    # build_llm_context to synthesize a "Interrupted by user"
+    # tool_result for any tool_use blocks the model emitted before the
+    # break (so the next LLM call's wire shape stays valid).
+    #
+    # Three states a Message can be in:
+    #   interrupted=False, content non-empty   → normal completed turn
+    #   interrupted=True,  content non-empty   → partial preserved
+    #   interrupted=True,  content empty       → started + cancelled before any token
+    interrupted: bool = False
     created_at: datetime
 
     @model_validator(mode="after")

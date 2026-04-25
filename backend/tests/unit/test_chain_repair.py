@@ -96,6 +96,51 @@ def test_fill_orphan_tool_results_inserts_placeholder() -> None:
     assert "missing" in synthetic["content"].lower()
 
 
+def test_fill_orphan_uses_interrupted_placeholder_when_parent_marked() -> None:
+    """2026-04-25 · interrupt parity. When the parent assistant carries
+    ``_interrupted=True`` (set by context_builder._project_assistant from
+    an interrupted ASSISTANT event), the synthetic tool_result content
+    should be 'Interrupted by user' — not the generic crash placeholder.
+    Mirrors Claude Code's yieldMissingToolResultBlocks path.
+    """
+    messages = [
+        {"role": "user", "content": "do X"},
+        {
+            "role": "assistant",
+            "_interrupted": True,
+            "content": [
+                {"type": "text", "text": "ok, calling tool"},
+                {"type": "tool_use", "id": "tu1", "name": "x", "input": {}},
+            ],
+        },
+    ]
+    out = fill_orphan_tool_results(messages)
+    assert len(out) == 3
+    assert out[2]["role"] == "tool"
+    assert out[2]["tool_call_id"] == "tu1"
+    assert out[2]["content"] == "Interrupted by user"
+
+
+def test_fill_orphan_uses_crash_placeholder_when_parent_not_interrupted() -> None:
+    """The legacy crash-recovery path stays intact: a non-interrupted
+    parent assistant gets the generic placeholder. Distinguishes
+    'we cut you off' from 'we crashed' on the next LLM call."""
+    messages = [
+        {"role": "user", "content": "do X"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "tool_use", "id": "tu1", "name": "x", "input": {}},
+            ],
+        },
+    ]
+    out = fill_orphan_tool_results(messages)
+    assert out[1]["content"][0]["type"] == "tool_use"
+    assert out[2]["role"] == "tool"
+    assert "missing" in out[2]["content"]
+    assert "Interrupted" not in out[2]["content"]
+
+
 def test_fill_orphan_preserves_original_order() -> None:
     """Synthetic results are inserted, not appended — order matters
     for Anthropic's strict alternation."""

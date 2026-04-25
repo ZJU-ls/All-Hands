@@ -105,6 +105,7 @@ def _to_message_response(m: Message) -> ChatMessageResponse:
         render_payloads=[rp.model_dump(mode="json") for rp in m.render_payloads],
         tool_calls=[tc.model_dump(mode="json") for tc in m.tool_calls],
         reasoning=m.reasoning,
+        interrupted=m.interrupted,
     )
 
 

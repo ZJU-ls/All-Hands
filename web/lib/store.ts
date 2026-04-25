@@ -250,7 +250,67 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
 
   cancelStreaming: () =>
-    set({ isStreaming: false, streamingMessage: null }),
+    set((state) => {
+      // 2026-04-25 · interrupt-preserving turn (Claude Code parity).
+      //
+      // Original behaviour: set `streamingMessage: null` and lose the
+      // partial. The bubble vanished from chat the moment the user
+      // clicked 中止 or the SSE dropped — even though backend's
+      // _persist_assistant_reply.flush() saved the bytes. Reload was
+      // the only way to see what came back; live UX was broken.
+      //
+      // New behaviour: same finalize path as `finalizeStreaming`, but
+      // mark the resulting Message `interrupted: true`. MessageBubble
+      // renders an 「已中止」 tail. Pending tool calls get sealed as
+      // `failed` with `error: "interrupted"` so cards don't spin
+      // forever. Empty buffer (no tokens streamed yet) → no bubble
+      // committed; just clear isStreaming.
+      if (!state.streamingMessage) {
+        return { isStreaming: false };
+      }
+      const sealedToolCalls = state.streamingMessage.tool_calls.map((tc) =>
+        tc.status === "pending" || tc.status === "running"
+          ? { ...tc, status: "failed" as const, error: tc.error ?? "interrupted" }
+          : tc,
+      );
+      const finalized: Message = {
+        id: state.streamingMessage.id,
+        conversation_id: state.conversationId ?? "",
+        role: "assistant",
+        content: state.streamingMessage.content,
+        reasoning: state.streamingMessage.reasoning || undefined,
+        tool_calls: sealedToolCalls,
+        render_payloads: state.streamingMessage.render_payloads,
+        segments:
+          state.streamingMessage.segments.length > 0
+            ? state.streamingMessage.segments
+            : undefined,
+        created_at: state.streamingMessage.created_at,
+        tool_call_id: null,
+        trace_ref: null,
+        parent_run_id: null,
+        interrupted: true,
+      };
+      // Edge case: no content + no reasoning + no tool_calls + no
+      // renders. The model never produced anything before the cut —
+      // committing an empty bubble is just visual noise. Drop it.
+      if (
+        !finalized.content &&
+        !finalized.reasoning &&
+        finalized.tool_calls.length === 0 &&
+        finalized.render_payloads.length === 0
+      ) {
+        return {
+          isStreaming: false,
+          streamingMessage: null,
+        };
+      }
+      return {
+        messages: [...state.messages, finalized],
+        streamingMessage: null,
+        isStreaming: false,
+      };
+    }),
 
   updateToolCall: (toolCall) =>
     set((state) => {

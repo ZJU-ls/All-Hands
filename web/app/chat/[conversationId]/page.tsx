@@ -144,6 +144,10 @@ export default function ConversationPage() {
           tool_calls: m.tool_calls ?? [],
           render_payloads: m.render_payloads ?? [],
           reasoning: m.reasoning ?? undefined,
+          // 2026-04-25 · interrupt flag round-trips through DB so reload
+          // shows the 「已中止」 tail on past partial turns, not just on
+          // the live one we just cancelled.
+          interrupted: m.interrupted ?? false,
           created_at: m.created_at,
         }));
         setConv(c);
