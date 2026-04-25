@@ -164,6 +164,35 @@ KB_CREATE_DOCUMENT_TOOL = Tool(
 )
 
 
+KB_SET_RETRIEVAL_CONFIG_TOOL = Tool(
+    id="allhands.kb.set_retrieval_config",
+    kind=ToolKind.META,
+    name="kb_set_retrieval_config",
+    description=(
+        "Update a KB's retrieval tuning (BM25 / vector weights, top_k, "
+        "min_score, reranker hook, rerank_top_in). All fields optional — "
+        "omitted ones keep their current value. Returns the merged config. "
+        "Pops a confirmation: tuning affects every subsequent kb_search."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "kb_id": {"type": "string"},
+            "bm25_weight": {"type": "number", "minimum": 0},
+            "vector_weight": {"type": "number", "minimum": 0},
+            "top_k": {"type": "integer", "minimum": 1, "maximum": 100},
+            "min_score": {"type": "number", "minimum": 0},
+            "rerank_top_in": {"type": "integer", "minimum": 1, "maximum": 200},
+            "reranker": {"type": "string", "enum": ["none", "bge-base", "cohere"]},
+        },
+        "required": ["kb_id"],
+    },
+    output_schema={"type": "object"},
+    scope=ToolScope.WRITE,
+    requires_confirmation=True,
+)
+
+
 KB_GRANT_PERMISSION_TOOL = Tool(
     id="allhands.kb.grant_permission",
     kind=ToolKind.META,
@@ -201,6 +230,7 @@ ALL_KB_META_TOOLS = [
     KB_READ_DOCUMENT_TOOL,
     KB_CREATE_DOCUMENT_TOOL,
     KB_GRANT_PERMISSION_TOOL,
+    KB_SET_RETRIEVAL_CONFIG_TOOL,
 ]
 
 
@@ -213,4 +243,5 @@ __all__ = [
     "KB_LIST_TOOL",
     "KB_READ_DOCUMENT_TOOL",
     "KB_SEARCH_TOOL",
+    "KB_SET_RETRIEVAL_CONFIG_TOOL",
 ]

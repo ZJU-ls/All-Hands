@@ -98,6 +98,8 @@ def detect_mime(filename: str) -> str:
 
 
 # ── built-in parsers (eager registration on import)
+from allhands.execution.knowledge.parsers.docx import DocxParser  # noqa: E402
+from allhands.execution.knowledge.parsers.html import HtmlParser  # noqa: E402
 from allhands.execution.knowledge.parsers.markdown import MarkdownParser  # noqa: E402
 from allhands.execution.knowledge.parsers.pdf import PdfParser  # noqa: E402
 from allhands.execution.knowledge.parsers.text import TextParser  # noqa: E402
@@ -105,6 +107,8 @@ from allhands.execution.knowledge.parsers.text import TextParser  # noqa: E402
 register_parser(MarkdownParser())
 register_parser(TextParser())
 register_parser(PdfParser())
+register_parser(HtmlParser())
+register_parser(DocxParser())
 
 
 __all__ = [

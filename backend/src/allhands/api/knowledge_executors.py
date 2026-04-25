@@ -182,6 +182,22 @@ def kb_executors_for(svc: KnowledgeService) -> dict[str, ToolExecutor]:
             "expires_at": grant.expires_at.isoformat() if grant.expires_at else None,
         }
 
+    async def _set_cfg(kb_id: str, **kwargs: Any) -> dict[str, Any]:
+        from allhands.core import RetrievalConfig
+
+        kb = await svc.get_kb(kb_id)
+        merged = kb.retrieval_config.model_dump()
+        for k, v in kwargs.items():
+            if k.startswith("_"):  # injected agent context
+                continue
+            if v is None:
+                continue
+            if k in merged:
+                merged[k] = v
+        new_cfg = RetrievalConfig.model_validate(merged)
+        out = await svc.update_retrieval_config(kb_id, new_cfg)
+        return {"kb_id": kb_id, "retrieval_config": out.retrieval_config.model_dump()}
+
     async def _list_models(**_: Any) -> dict[str, Any]:
         return {
             "models": [
@@ -205,6 +221,7 @@ def kb_executors_for(svc: KnowledgeService) -> dict[str, ToolExecutor]:
         "allhands.kb.read_document": _read,
         "allhands.kb.create_document": _create_document,
         "allhands.kb.grant_permission": _grant,
+        "allhands.kb.set_retrieval_config": _set_cfg,
     }
 
 

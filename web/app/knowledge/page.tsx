@@ -14,6 +14,7 @@ import {
   listEmbeddingModels,
   listKBs,
   searchKB,
+  updateRetrievalConfig,
   uploadDocument,
 } from "@/lib/kb-api";
 
@@ -44,6 +45,7 @@ export default function KnowledgePage() {
   const [results, setResults] = useState<ScoredChunkDto[] | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCfg, setShowCfg] = useState(false);
 
   async function refreshKbs() {
     try {
@@ -224,19 +226,40 @@ export default function KnowledgePage() {
                     {activeKb.embedding_model_ref}
                   </div>
                 </div>
-                <label className="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong cursor-pointer">
-                  {uploading ? "Uploading…" : "+ 上传文档"}
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) handleUpload(f);
-                      e.currentTarget.value = "";
-                    }}
-                  />
-                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCfg((s) => !s)}
+                    className="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong"
+                  >
+                    {showCfg ? "Close ⚙" : "⚙ Tune"}
+                  </button>
+                  <label className="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong cursor-pointer">
+                    {uploading ? "Uploading…" : "+ 上传文档"}
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleUpload(f);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
+
+              {showCfg && (
+                <RetrievalConfigEditor
+                  kb={activeKb}
+                  onSaved={async (next) => {
+                    setActiveKb(next);
+                    setShowCfg(false);
+                    await refreshKbs();
+                  }}
+                  onError={setError}
+                />
+              )}
 
               <div className="flex gap-2">
                 <input
@@ -357,5 +380,108 @@ export default function KnowledgePage() {
         </aside>
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * Inline retrieval-config editor. Patches via the REST endpoint
+ * which mirrors the kb_set_retrieval_config Meta Tool. Sliders are
+ * intentionally raw <input type="number"> so the page has no extra
+ * dep; styling stays token-only (P8 brand-blue).
+ */
+function RetrievalConfigEditor({
+  kb,
+  onSaved,
+  onError,
+}: {
+  kb: KBDto;
+  onSaved: (next: KBDto) => void;
+  onError: (msg: string) => void;
+}) {
+  const [bm25, setBm25] = useState(kb.retrieval_config.bm25_weight);
+  const [vec, setVec] = useState(kb.retrieval_config.vector_weight);
+  const [topK, setTopK] = useState(kb.retrieval_config.top_k);
+  const [reranker, setReranker] = useState(kb.retrieval_config.reranker);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const next = await updateRetrievalConfig(kb.id, {
+        bm25_weight: bm25,
+        vector_weight: vec,
+        top_k: topK,
+        reranker,
+      });
+      onSaved(next);
+    } catch (e) {
+      onError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card-elev p-3 grid grid-cols-2 gap-3 text-xs">
+      <label className="flex flex-col gap-1">
+        <span className="text-faint">BM25 weight</span>
+        <input
+          type="number"
+          min={0}
+          step={0.1}
+          value={bm25}
+          onChange={(e) => setBm25(Number(e.target.value))}
+          className="px-2 py-1 rounded border border-hairline bg-soft text-default"
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-faint">Vector weight</span>
+        <input
+          type="number"
+          min={0}
+          step={0.1}
+          value={vec}
+          onChange={(e) => setVec(Number(e.target.value))}
+          className="px-2 py-1 rounded border border-hairline bg-soft text-default"
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-faint">Top K</span>
+        <input
+          type="number"
+          min={1}
+          max={100}
+          value={topK}
+          onChange={(e) => setTopK(Number(e.target.value))}
+          className="px-2 py-1 rounded border border-hairline bg-soft text-default"
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-faint">Reranker (M3)</span>
+        <select
+          value={reranker}
+          onChange={(e) =>
+            setReranker(e.target.value as "none" | "bge-base" | "cohere")
+          }
+          className="px-2 py-1 rounded border border-hairline bg-soft text-default"
+        >
+          <option value="none">none</option>
+          <option value="bge-base" disabled>
+            bge-base (M3)
+          </option>
+          <option value="cohere" disabled>
+            cohere (M3)
+          </option>
+        </select>
+      </label>
+      <button
+        type="button"
+        onClick={save}
+        disabled={saving}
+        className="col-span-2 py-1.5 rounded bg-primary text-white disabled:opacity-40"
+      >
+        {saving ? "Saving…" : "保存"}
+      </button>
+    </div>
   );
 }

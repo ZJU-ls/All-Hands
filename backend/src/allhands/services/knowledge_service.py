@@ -303,6 +303,20 @@ class KnowledgeService:
         async with self._session_maker() as s:
             return await SqlKnowledgeBaseRepo(s).list_for_workspace(workspace_id)
 
+    async def update_retrieval_config(self, kb_id: str, cfg: RetrievalConfig) -> KnowledgeBase:
+        """Replace this KB's retrieval config wholesale.
+
+        We keep the API "replace" rather than "patch" so callers can't end
+        up with a half-mutated frozen pydantic model — the wire payload
+        carries the full config, and we validate at the boundary.
+        """
+        kb = await self.get_kb(kb_id)
+        updated = kb.model_copy(update={"retrieval_config": cfg, "updated_at": datetime.now(UTC)})
+        async with self._session_maker() as s:
+            await SqlKnowledgeBaseRepo(s).upsert(updated)
+            await s.commit()
+        return updated
+
     async def soft_delete_kb(self, kb_id: str) -> None:
         async with self._session_maker() as s:
             await SqlKnowledgeBaseRepo(s).soft_delete(kb_id)

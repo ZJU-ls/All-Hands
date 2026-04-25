@@ -273,6 +273,32 @@ async def delete_kb(kb_id: str) -> None:
     await _service().soft_delete_kb(kb_id)
 
 
+class UpdateConfigPayload(BaseModel):
+    bm25_weight: float | None = None
+    vector_weight: float | None = None
+    top_k: int | None = None
+    min_score: float | None = None
+    rerank_top_in: int | None = None
+    reranker: str | None = None
+
+
+@router.patch("/{kb_id}/retrieval-config")
+async def update_retrieval_config(kb_id: str, payload: UpdateConfigPayload) -> KBOut:
+    """Patch the KB's retrieval config; only fields present in the payload
+    overwrite. Returns the full KB with the merged config so the UI can
+    render the new state without an extra round-trip."""
+    try:
+        kb = await _service().get_kb(kb_id)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    merged = kb.retrieval_config.model_dump()
+    for k, v in payload.model_dump(exclude_none=True).items():
+        merged[k] = v
+    new_cfg = RetrievalConfig.model_validate(merged)
+    out = await _service().update_retrieval_config(kb_id, new_cfg)
+    return _kb_out(out)
+
+
 # ----------------------------------------------------------------------
 # Documents
 # ----------------------------------------------------------------------

@@ -18,6 +18,7 @@ export interface KBDto {
   embedding_dim: number;
   document_count: number;
   chunk_count: number;
+  retrieval_config: RetrievalConfig;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +52,29 @@ export interface ScoredChunkDto {
   citation: string;
   bm25_rank: number | null;
   vector_rank: number | null;
+}
+
+export interface RetrievalConfig {
+  bm25_weight: number;
+  vector_weight: number;
+  top_k: number;
+  min_score: number;
+  rerank_top_in: number;
+  reranker: "none" | "bge-base" | "cohere";
+}
+
+export async function updateRetrievalConfig(
+  kbId: string,
+  patch: Partial<RetrievalConfig>,
+): Promise<KBDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/retrieval-config`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
+    "updateRetrievalConfig",
+  );
 }
 
 export interface EmbeddingModelOption {
