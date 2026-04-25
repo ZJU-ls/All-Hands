@@ -4,9 +4,13 @@
  * ModelRow · one model inside a ProviderSection (ADR 0016 · V2 polish).
  *
  * Compact row: mono API name + optional display name · context-window badge ·
- * inline ping pill · icon-only actions (ping / chat / delete) with a trailing
- * arrow-right that slides in on hover. `hover:bg-surface-2/40` softens the
- * row without shouting.
+ * inline ping pill · icon-only actions (ping / chat / delete).
+ * `hover:bg-surface-2/40` softens the row without shouting.
+ *
+ * No trailing decorative arrow — the V2 design draft included a slide-in
+ * `→` chevron to suggest interactivity, but the row's action set is already
+ * fully exposed via icon buttons. The arrow had no click handler, confused
+ * users into thinking the row was clickable, and was removed 2026-04-25.
  */
 
 import { useTranslations } from "next-intl";
@@ -32,6 +36,7 @@ export function ModelRow({
   onChatTest,
   onDelete,
   onSetDefault,
+  onEdit,
 }: {
   model: GatewayModel;
   pingState: PingState;
@@ -40,6 +45,9 @@ export function ModelRow({
   onDelete: () => void;
   /** Promote this model — atomically clears any prior default + sets this row. */
   onSetDefault: () => void;
+  /** Open the edit dialog for this model — allows changing display_name +
+   *  context_window (the API name is immutable; rename = create new + delete). */
+  onEdit: () => void;
 }) {
   const t = useTranslations("gateway.modelRow");
   const running = pingState.status === "running";
@@ -140,19 +148,18 @@ export function ModelRow({
           onClick={onChatTest}
         />
         <RowIconButton
+          icon="edit"
+          label={t("edit")}
+          testId={`gateway-edit-${model.id}`}
+          onClick={onEdit}
+        />
+        <RowIconButton
           icon="trash-2"
           label={t("delete")}
           onClick={onDelete}
           tone="danger"
         />
       </div>
-
-      <Icon
-        name="arrow-right"
-        size={12}
-        aria-hidden="true"
-        className="shrink-0 text-text-subtle opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition duration-base"
-      />
     </div>
   );
 }

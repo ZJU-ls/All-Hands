@@ -51,6 +51,7 @@ export function ProviderSection({
   onAddModel,
   onChatTestModel,
   onDeleteModel,
+  onEditModel,
 }: {
   provider: GatewayProvider;
   models: GatewayModel[];
@@ -69,6 +70,8 @@ export function ProviderSection({
   onAddModel: () => void;
   onChatTestModel: (m: GatewayModel) => void;
   onDeleteModel: (m: GatewayModel) => void;
+  /** Open edit dialog for a specific model — display_name + context_window. */
+  onEditModel: (m: GatewayModel) => void;
 }) {
   const t = useTranslations("gateway.providerSection");
   const bulkRunning = bulkPingInProgress !== null;
@@ -240,6 +243,7 @@ export function ProviderSection({
                   onChatTest={() => onChatTestModel(m)}
                   onDelete={() => onDeleteModel(m)}
                   onSetDefault={() => onSetDefaultModel(m)}
+                  onEdit={() => onEditModel(m)}
                 />
               ))}
               <div className="ml-6 border-l border-border pl-4 pt-2 pr-3">
