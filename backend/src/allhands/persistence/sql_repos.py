@@ -417,18 +417,46 @@ class SqlConfirmationRepo:
         return [_row_to_confirmation(r) for r in result.scalars().all()]
 
     async def save(self, confirmation: Confirmation) -> None:
-        row = ConfirmationRow(
-            id=confirmation.id,
-            tool_call_id=confirmation.tool_call_id,
-            rationale=confirmation.rationale,
-            summary=confirmation.summary,
-            diff=confirmation.diff,
-            status=confirmation.status.value,
-            created_at=_naive(confirmation.created_at),
-            resolved_at=_naive(confirmation.resolved_at) if confirmation.resolved_at else None,
-            expires_at=_naive(confirmation.expires_at),
-        )
-        self._s.add(row)
+        # Idempotent upsert: agents occasionally re-emit the same tool_call_id
+        # (retry after a failed flush, polling deferred re-publishing on
+        # reconnect, etc). The UNIQUE(tool_call_id) constraint then explodes
+        # with IntegrityError → SSE dies → 「助手没能完成这次回复」 in the UI.
+        # Match-by-id first, then by tool_call_id; create only if neither hits.
+        existing = await self._s.get(ConfirmationRow, confirmation.id)
+        if existing is None:
+            result = await self._s.execute(
+                select(ConfirmationRow).where(
+                    ConfirmationRow.tool_call_id == confirmation.tool_call_id
+                )
+            )
+            existing = result.scalar_one_or_none()
+        if existing is not None:
+            existing.tool_call_id = confirmation.tool_call_id
+            existing.rationale = confirmation.rationale
+            existing.summary = confirmation.summary
+            existing.diff = confirmation.diff
+            existing.status = confirmation.status.value
+            existing.created_at = _naive(confirmation.created_at)
+            existing.resolved_at = (
+                _naive(confirmation.resolved_at) if confirmation.resolved_at else None
+            )
+            existing.expires_at = _naive(confirmation.expires_at)
+        else:
+            self._s.add(
+                ConfirmationRow(
+                    id=confirmation.id,
+                    tool_call_id=confirmation.tool_call_id,
+                    rationale=confirmation.rationale,
+                    summary=confirmation.summary,
+                    diff=confirmation.diff,
+                    status=confirmation.status.value,
+                    created_at=_naive(confirmation.created_at),
+                    resolved_at=(
+                        _naive(confirmation.resolved_at) if confirmation.resolved_at else None
+                    ),
+                    expires_at=_naive(confirmation.expires_at),
+                )
+            )
         await self._s.commit()
 
     async def update_status(self, confirmation_id: str, status: ConfirmationStatus) -> None:

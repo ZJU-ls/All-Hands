@@ -154,9 +154,11 @@ class ConfirmationRow(Base):
     __tablename__ = "confirmations"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    tool_call_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("tool_calls.id"), unique=True, index=True
-    )
+    # 2026-04-25 · ADR 0018 后 tool_calls 数据迁到 messages.tool_calls JSON,
+    # 这个 FK 指向一个实际为空的旧表 · 每次 confirmation INSERT 都会触发
+    # IntegrityError("FOREIGN KEY constraint failed")。FK 直接干掉,字段保
+    # 留(语义层面 tool_call_id 仍然是一对一的关联键,只是不再走 DB 外键)。
+    tool_call_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     rationale: Mapped[str] = mapped_column(String(4000))
     summary: Mapped[str] = mapped_column(String(4000))
     diff: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
