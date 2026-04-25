@@ -107,7 +107,7 @@ export function ConfirmDialog({
             ref={cancelRef}
             onClick={onCancel}
             disabled={busy}
-            className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-text-muted hover:bg-surface-2 hover:text-text transition duration-fast disabled:opacity-40"
+            className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-text-muted hover:bg-surface-2 hover:text-text transition duration-fast disabled:opacity-40 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:bg-surface-2 focus-visible:text-text"
           >
             {resolvedCancel}
             <span className="rounded border border-border bg-surface px-1 py-0.5 font-mono text-[10px] text-text-subtle">
@@ -119,8 +119,8 @@ export function ConfirmDialog({
             disabled={busy}
             className={
               danger
-                ? "inline-flex h-9 items-center gap-2 rounded-lg bg-danger px-4 text-sm font-semibold text-primary-fg shadow-soft-sm hover:shadow-soft hover:-translate-y-px transition duration-fast disabled:opacity-40 disabled:translate-y-0 disabled:shadow-none"
-                : "inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-fg shadow-soft-sm hover:shadow-glow-sm hover:-translate-y-px transition duration-fast disabled:opacity-40 disabled:translate-y-0 disabled:shadow-none"
+                ? "inline-flex h-9 items-center gap-2 rounded-lg bg-danger px-4 text-sm font-semibold text-primary-fg shadow-soft-sm hover:shadow-soft hover:-translate-y-px transition duration-fast disabled:opacity-40 disabled:translate-y-0 disabled:shadow-none focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-danger/40"
+                : "inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-fg shadow-soft-sm hover:shadow-glow-sm hover:-translate-y-px transition duration-fast disabled:opacity-40 disabled:translate-y-0 disabled:shadow-none focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/40"
             }
           >
             {busy && (

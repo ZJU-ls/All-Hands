@@ -105,7 +105,7 @@ export function DrawerRail({ summary }: { summary: WorkspaceSummaryDto }) {
                   aria-label={it.label}
                   title={it.label}
                   data-testid={`rail-${it.panel}`}
-                  className={`relative inline-flex h-9 w-9 items-center justify-center rounded-lg transition duration-base ${
+                  className={`relative inline-flex h-9 w-9 items-center justify-center rounded-lg transition duration-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
                     active
                       ? "bg-primary-muted text-primary shadow-soft-sm"
                       : "text-text-muted hover:text-text hover:bg-surface-2"
