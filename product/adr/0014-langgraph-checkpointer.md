@@ -1,6 +1,12 @@
 # ADR 0014 · 引入 LangGraph Checkpointer · 把 thread_id 接成真正的 resume 载体
 
-**日期:** 2026-04-23  **状态:** Accepted, impl in progress(Phase 1 + 2 落地 · Phase 3 / 4 待做)
+> **Superseded by [ADR 0018 · Claude Code Loop](0018-claude-code-loop.md)** (2026-04-25)
+>
+> AsyncSqliteSaver checkpointer + LangGraph `interrupt()` 已被 `AgentLoop` + `DeferredSignal` 取代。
+> 状态 SoT 收回到 `MessageRepo` + `ConfirmationRepo` + `SkillRuntimeRepo`。
+> 实施计划:`docs/superpowers/plans/2026-04-25-claude-code-loop-alignment.md`。
+
+**日期:** 2026-04-23  **状态:** Superseded by ADR 0018 (2026-04-25)
 
 ## Context
 
