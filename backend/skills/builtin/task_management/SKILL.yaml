@@ -1,6 +1,6 @@
 id: allhands.task_management
 name: 任务管理
-description: 创建 / 跟进 / 验收异步任务 · 长流程不靠对话堆叠 · 跨会话也能续做
+description: 异步任务 长流程跟进 · 列表 详情 取消 批准 答用户输入 挂制品
 version: 1.0.0
 builtin: true
 

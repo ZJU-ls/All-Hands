@@ -90,6 +90,8 @@ export type ArtifactListFilter = {
   createdBefore?: string;
 };
 
+export type ContributorEntry = { key: string; count: number };
+
 export type ArtifactStatsDto = {
   total: number;
   pinned: number;
@@ -98,6 +100,10 @@ export type ArtifactStatsDto = {
   by_kind: Record<string, number>;
   largest_kind: string | null;
   latest_updated_at: string | null;
+  /** 14-day daily creation histogram, oldest → newest. */
+  daily_counts: number[];
+  /** Top 5 employees by artifact count. */
+  top_employees: ContributorEntry[];
 };
 
 export async function getArtifactStats(): Promise<ArtifactStatsDto> {

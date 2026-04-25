@@ -81,6 +81,15 @@ class ArtifactContentResponse(BaseModel):
     truncated: bool = False
 
 
+class ContributorEntry(BaseModel):
+    """One row of the top-contributors leaderboard. `key` is whatever was
+    populated on the artifacts (employee_id) — the page resolves it to a
+    display name from its own employee cache. `count` is the artifact tally."""
+
+    key: str
+    count: int
+
+
 class ArtifactStatsResponse(BaseModel):
     """Workspace-wide artifact aggregations for the /artifacts dashboard.
 
@@ -89,6 +98,13 @@ class ArtifactStatsResponse(BaseModel):
     keystroke. If we ever cross the ~10k-rows mark we'll move to a SQL
     GROUP BY in the repo, but at that point the global page should also
     paginate; for v0 the catalog is well under that.
+
+    iter 6 additions:
+      daily_counts · last 14 days, oldest → newest, count of artifacts
+                     created on that day (UTC). Drives the activity
+                     sparkline.
+      top_employees · employee_id keyed leaderboard (top 5) of who
+                      authored the most. UI resolves to display names.
     """
 
     total: int
@@ -98,6 +114,8 @@ class ArtifactStatsResponse(BaseModel):
     by_kind: dict[str, int]
     largest_kind: str | None
     latest_updated_at: str | None
+    daily_counts: list[int]
+    top_employees: list[ContributorEntry]
 
 
 def _to_response(art: Artifact) -> ArtifactResponse:
@@ -186,17 +204,34 @@ async def artifact_stats(
     pinned = 0
     last_7d = 0
     latest_updated: datetime | None = None
-    cutoff = datetime.now(UTC).timestamp() - 7 * 24 * 3600
+    now = datetime.now(UTC)
+    cutoff_7d = now.timestamp() - 7 * 24 * 3600
+    # 14-day daily histogram · index 0 = 13 days ago, index 13 = today
+    daily_counts = [0] * 14
+    by_employee: dict[str, int] = {}
+    today_midnight = datetime(now.year, now.month, now.day, tzinfo=UTC)
     for a in items:
         by_kind[a.kind.value] = by_kind.get(a.kind.value, 0) + 1
         total_bytes += a.size_bytes
         if a.pinned:
             pinned += 1
-        if a.created_at.timestamp() >= cutoff:
+        if a.created_at.timestamp() >= cutoff_7d:
             last_7d += 1
         if latest_updated is None or a.updated_at > latest_updated:
             latest_updated = a.updated_at
+        # Slot creation into the 14-day bucket (UTC days). Older artifacts
+        # silently fall outside; the histogram is short on purpose for a
+        # peek-not-deep-dive sparkline.
+        delta_days = int((today_midnight - a.created_at).total_seconds() // (24 * 3600))
+        if 0 <= delta_days < 14:
+            daily_counts[13 - delta_days] += 1
+        if a.created_by_employee_id:
+            by_employee[a.created_by_employee_id] = by_employee.get(a.created_by_employee_id, 0) + 1
     largest_kind = max(by_kind.items(), key=lambda kv: kv[1])[0] if by_kind else None
+    top_employees = [
+        ContributorEntry(key=k, count=v)
+        for k, v in sorted(by_employee.items(), key=lambda kv: -kv[1])[:5]
+    ]
     return ArtifactStatsResponse(
         total=len(items),
         pinned=pinned,
@@ -205,6 +240,8 @@ async def artifact_stats(
         by_kind=by_kind,
         largest_kind=largest_kind,
         latest_updated_at=latest_updated.isoformat() if latest_updated else None,
+        daily_counts=daily_counts,
+        top_employees=top_employees,
     )
 
 

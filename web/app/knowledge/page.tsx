@@ -27,13 +27,14 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
+import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import {
+  type AskResponse,
   type DiagnoseDto,
   type DocumentChunkDto,
   type DocumentDto,
@@ -41,10 +42,13 @@ import {
   type KBDto,
   type KBStatsDto,
   type ScoredChunkDto,
+  askKB,
   diagnoseSearch,
   getDocumentText,
   getKBStats,
+  ingestUrl,
   listDocumentChunks,
+  reindexDocument,
   createKB,
   deleteDocument,
   listDocuments,
@@ -54,6 +58,13 @@ import {
   updateRetrievalConfig,
   uploadDocument,
 } from "@/lib/kb-api";
+
+const STATE_FILTERS = [
+  { value: "", label: "全部状态" },
+  { value: "ready", label: "Ready" },
+  { value: "indexing", label: "Indexing" },
+  { value: "failed", label: "Failed" },
+];
 
 const SECTION_LABEL =
   "font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle";
@@ -92,6 +103,13 @@ const MIME_ICON: Record<string, { tone: string; label: string }> = {
   },
 };
 
+function isMarkdownLikely(mime: string): boolean {
+  const sub = mime.split("/").pop() ?? "";
+  // markdown / x-markdown / md / mdx — and we treat plain as markdown
+  // because most things people upload as .txt are still markdown-ish.
+  return /(markdown|^md$|^mdx$|plain|html)/.test(sub);
+}
+
 function MimeBadge({ mime }: { mime: string }) {
   const subtype = mime.split("/").pop() || mime;
   const meta = MIME_ICON[subtype] ?? { tone: "text-text-muted", label: subtype.slice(0, 4).toUpperCase() };
@@ -109,11 +127,6 @@ function MimeBadge({ mime }: { mime: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function KnowledgePage() {
-  const t = useTranslations("knowledge");
-  const tToolbar = useTranslations("knowledge.toolbar");
-  const tSidebar = useTranslations("knowledge.sidebar");
-  const tDelete = useTranslations("knowledge.delete");
-
   const [kbs, setKbs] = useState<KBDto[] | null>(null);
   const [activeKb, setActiveKb] = useState<KBDto | null>(null);
   const [docs, setDocs] = useState<DocumentDto[] | null>(null);
@@ -122,7 +135,14 @@ export default function KnowledgePage() {
   const [committedQuery, setCommittedQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<ScoredChunkDto[] | null>(null);
+  // Ask mode (RAG QA) lives in the same query bar as search; toggle picks
+  // which path to fire on Enter.
+  const [mode, setMode] = useState<"search" | "ask">("search");
+  const [asking, setAsking] = useState(false);
+  const [askResult, setAskResult] = useState<AskResponse | null>(null);
   const [stateFilter, setStateFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pageState, setPageState] = useState<"loading" | "ok" | "error">(
@@ -130,17 +150,8 @@ export default function KnowledgePage() {
   );
   const [showCreate, setShowCreate] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showUrlIngest, setShowUrlIngest] = useState(false);
   const [openDoc, setOpenDoc] = useState<DocumentDto | null>(null);
-
-  const stateFilters = useMemo(
-    () => [
-      { value: "", label: tToolbar("stateAll") },
-      { value: "ready", label: tToolbar("stateReady") },
-      { value: "indexing", label: tToolbar("stateIndexing") },
-      { value: "failed", label: tToolbar("stateFailed") },
-    ],
-    [tToolbar],
-  );
 
   async function refreshKbs(preserve?: KBDto | null) {
     try {
@@ -169,7 +180,6 @@ export default function KnowledgePage() {
     listEmbeddingModels()
       .then(setModels)
       .catch((e) => setError(String(e)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -180,21 +190,91 @@ export default function KnowledgePage() {
       setCommittedQuery("");
       setResults(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKb?.id]);
 
-  async function handleUpload(file: File) {
+  // Bulk upload — single file calls go through this too. Tracks per-file
+  // status so the user can see N/M progress instead of one opaque spinner.
+  type UploadEntry = {
+    id: string;
+    name: string;
+    state: "queued" | "uploading" | "done" | "failed";
+    error?: string;
+  };
+  const [uploads, setUploads] = useState<UploadEntry[]>([]);
+
+  async function handleUploadFiles(files: FileList | File[]) {
     if (!activeKb) return;
+    const list = Array.from(files);
+    if (list.length === 0) return;
+    const entries: UploadEntry[] = list.map((f, i) => ({
+      id: `${Date.now()}-${i}-${f.name}`,
+      name: f.name,
+      state: "queued",
+    }));
+    setUploads((prev) => [...entries, ...prev].slice(0, 20));
     setUploading(true);
     try {
-      await uploadDocument(activeKb.id, file, { title: file.name });
+      // Sequential upload — concurrent would race the SQLite writer lock
+      // and embedder rate limits; one-at-a-time keeps the UI honest about
+      // what's happening too.
+      for (const e of entries) {
+        const file = list.find((f) => `${e.id.split("-")[2] ?? ""}` === e.name) || list[entries.indexOf(e)];
+        if (!file) continue;
+        setUploads((prev) =>
+          prev.map((p) => (p.id === e.id ? { ...p, state: "uploading" } : p)),
+        );
+        try {
+          await uploadDocument(activeKb.id, file, { title: file.name });
+          setUploads((prev) =>
+            prev.map((p) => (p.id === e.id ? { ...p, state: "done" } : p)),
+          );
+        } catch (err) {
+          setUploads((prev) =>
+            prev.map((p) =>
+              p.id === e.id ? { ...p, state: "failed", error: String(err) } : p,
+            ),
+          );
+        }
+      }
       await refreshDocs(activeKb.id);
       await refreshKbs(activeKb);
-    } catch (e) {
-      setError(String(e));
     } finally {
       setUploading(false);
+      // Clear done entries after 4s so panel doesn't accrete
+      setTimeout(() => {
+        setUploads((prev) => prev.filter((p) => p.state !== "done"));
+      }, 4000);
     }
+  }
+
+  async function handleUpload(file: File) {
+    await handleUploadFiles([file]);
+  }
+
+  // Page-level drag-drop receiver
+  const [dragOver, setDragOver] = useState(false);
+  function onDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (!activeKb) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragOver) setDragOver(true);
+  }
+  function onDragLeave(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      e.currentTarget === e.target ||
+      !e.currentTarget.contains(e.relatedTarget as Node)
+    ) {
+      setDragOver(false);
+    }
+  }
+  async function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (!activeKb || !e.dataTransfer.files.length) return;
+    await handleUploadFiles(e.dataTransfer.files);
   }
 
   async function handleSearch() {
@@ -202,6 +282,7 @@ export default function KnowledgePage() {
     setSearching(true);
     setCommittedQuery(searchQuery.trim());
     setResults(null);
+    setAskResult(null);
     try {
       setResults(await searchKB(activeKb.id, searchQuery.trim()));
     } catch (e) {
@@ -211,18 +292,45 @@ export default function KnowledgePage() {
     }
   }
 
+  async function handleAsk() {
+    if (!activeKb || !searchQuery.trim()) return;
+    setAsking(true);
+    setCommittedQuery(searchQuery.trim());
+    setAskResult(null);
+    setResults(null);
+    try {
+      setAskResult(await askKB(activeKb.id, searchQuery.trim(), { topK: 5 }));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setAsking(false);
+    }
+  }
+
   async function handleClearSearch() {
     setSearchQuery("");
     setCommittedQuery("");
     setResults(null);
+    setAskResult(null);
   }
 
   async function handleDeleteDoc(d: DocumentDto) {
     if (!activeKb) return;
-    if (!confirm(tDelete("confirm", { title: d.title }))) return;
+    if (!confirm(`确认删除 "${d.title}"?(软删,30 天可恢复)`)) return;
     try {
       await deleteDocument(activeKb.id, d.id);
       setOpenDoc(null);
+      await refreshDocs(activeKb.id);
+      await refreshKbs(activeKb);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleReindexDoc(d: DocumentDto) {
+    if (!activeKb) return;
+    try {
+      await reindexDocument(activeKb.id, d.id);
       await refreshDocs(activeKb.id);
       await refreshKbs(activeKb);
     } catch (e) {
@@ -236,17 +344,47 @@ export default function KnowledgePage() {
       (kbs ?? []).map((k) => ({
         value: k.id,
         label: k.name,
-        hint: tToolbar("kbCount", { count: k.document_count }),
+        hint: `${k.document_count} docs`,
       })),
-    [kbs, tToolbar],
+    [kbs],
   );
 
-  // Document filter (state)
+  // Document filter (state + tag)
   const filteredDocs = useMemo(() => {
     if (!docs) return [];
-    if (!stateFilter) return docs;
-    return docs.filter((d) => d.state === stateFilter);
-  }, [docs, stateFilter]);
+    return docs.filter((d) => {
+      if (stateFilter && d.state !== stateFilter) return false;
+      if (tagFilter && !d.tags.includes(tagFilter)) return false;
+      return true;
+    });
+  }, [docs, stateFilter, tagFilter]);
+
+  // Selection helpers
+  function toggleSelect(id: string) {
+    setSelectedDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelectedDocs(new Set());
+  }
+  async function bulkDelete() {
+    if (!activeKb || selectedDocs.size === 0) return;
+    if (!confirm(`软删除 ${selectedDocs.size} 个文档?`)) return;
+    try {
+      for (const id of selectedDocs) {
+        await deleteDocument(activeKb.id, id);
+      }
+      clearSelection();
+      await refreshDocs(activeKb.id);
+      await refreshKbs(activeKb);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -254,10 +392,19 @@ export default function KnowledgePage() {
 
   return (
     <AppShell>
-      <div className="flex h-full flex-col gap-4 p-6">
+      <div
+        className={`relative flex h-full flex-col gap-4 p-6 ${
+          dragOver
+            ? "outline-dashed outline-2 outline-primary outline-offset-[-12px]"
+            : ""
+        }`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
         <PageHeader
-          title={t("title")}
-          subtitle={t("subtitle")}
+          title="知识库"
+          subtitle="把资料存进来 · 自己搜得到 · 员工也能引用回答"
           count={kbs?.length ?? 0}
         />
 
@@ -268,7 +415,7 @@ export default function KnowledgePage() {
               type="button"
               onClick={() => setError(null)}
               className="ml-3 text-text-subtle hover:text-text"
-              aria-label={t("dismiss")}
+              aria-label="dismiss"
             >
               ✕
             </button>
@@ -285,72 +432,113 @@ export default function KnowledgePage() {
                 if (k) setActiveKb(k);
               }}
               options={kbSelectOptions}
-              placeholder={tToolbar("kbSelectPlaceholder")}
+              placeholder="选择 KB"
               className="min-w-[200px]"
               triggerClassName="h-9 rounded-xl"
-              ariaLabel={tToolbar("kbSelectAria")}
+              ariaLabel="选择知识库"
             />
             <button
               type="button"
               onClick={() => setShowCreate(true)}
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
-              aria-label={tToolbar("newKbAria")}
+              aria-label="新建 KB"
             >
               <Icon name="plus" size={13} />
-              <span>{tToolbar("newKb")}</span>
+              <span>新建 KB</span>
             </button>
 
-            {/* Search bar */}
-            <div className="relative ml-auto flex min-w-[300px] flex-1 max-w-[640px]">
-              <Icon
-                name="search"
-                size={14}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
-              />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleSearch();
-                  if (e.key === "Escape") void handleClearSearch();
-                }}
-                placeholder={
-                  activeKb
-                    ? tToolbar("searchPlaceholder", { kb: activeKb.name })
-                    : tToolbar("searchPlaceholderEmpty")
-                }
-                disabled={!activeKb}
-                className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-20 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
-              />
-              {committedQuery && (
+            {/* Search / Ask bar */}
+            <div className="relative ml-auto flex min-w-[340px] flex-1 max-w-[720px] items-center gap-2">
+              {/* Mode toggle (segmented) */}
+              <div className="inline-flex h-9 items-center rounded-xl border border-border bg-surface p-0.5">
+                {(["search", "ask"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMode(m)}
+                    className={`inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[11px] font-medium transition duration-fast ${
+                      mode === m
+                        ? "bg-primary text-primary-fg shadow-soft-sm"
+                        : "text-text-muted hover:text-text"
+                    }`}
+                    title={m === "search" ? "搜索 · 列出片段" : "提问 · LLM 用片段回答"}
+                  >
+                    <Icon name={m === "search" ? "search" : "sparkles"} size={11} />
+                    {m === "search" ? "搜" : "问"}
+                  </button>
+                ))}
+              </div>
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      void (mode === "ask" ? handleAsk() : handleSearch());
+                    }
+                    if (e.key === "Escape") void handleClearSearch();
+                  }}
+                  placeholder={
+                    !activeKb
+                      ? "选个 KB 再操作"
+                      : mode === "ask"
+                        ? `问 ${activeKb.name}…  (LLM 用召回的片段回答)`
+                        : `搜 ${activeKb.name} 里的内容…`
+                  }
+                  disabled={!activeKb}
+                  className="h-9 w-full rounded-xl border border-border bg-surface pl-3 pr-20 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
+                />
+                {committedQuery && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="absolute right-14 top-1/2 -translate-y-1/2 text-[11px] text-text-subtle hover:text-text"
+                    aria-label="清除"
+                  >
+                    ✕
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleClearSearch}
-                  className="absolute right-12 top-1/2 -translate-y-1/2 text-[11px] text-text-subtle hover:text-text"
-                  aria-label={tToolbar("clearSearch")}
+                  onClick={() =>
+                    mode === "ask" ? void handleAsk() : void handleSearch()
+                  }
+                  disabled={
+                    (mode === "ask" ? asking : searching) ||
+                    !searchQuery.trim() ||
+                    !activeKb
+                  }
+                  className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
                 >
-                  ✕
+                  {(mode === "ask" ? asking : searching)
+                    ? "…"
+                    : mode === "ask"
+                      ? "问"
+                      : "搜"}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={handleSearch}
-                disabled={searching || !searchQuery.trim() || !activeKb}
-                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
-              >
-                {searching ? tToolbar("searchEllipsis") : tToolbar("search")}
-              </button>
+              </div>
             </div>
 
             <Select
               value={stateFilter}
               onChange={setStateFilter}
-              options={stateFilters}
+              options={STATE_FILTERS}
               className="min-w-[120px]"
               triggerClassName="h-9 rounded-xl"
-              ariaLabel={tToolbar("stateFilterAria")}
+              ariaLabel="状态过滤"
             />
+
+            <button
+              type="button"
+              onClick={() => activeKb && setShowUrlIngest(true)}
+              disabled={!activeKb || uploading}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text disabled:opacity-40 disabled:cursor-not-allowed transition duration-fast"
+              title="抓 URL 入库"
+            >
+              <Icon name="link" size={13} />
+              抓 URL
+            </button>
 
             <label
               className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm transition duration-fast cursor-pointer ${
@@ -360,18 +548,51 @@ export default function KnowledgePage() {
               }`}
             >
               <Icon name="upload" size={13} />
-              {uploading ? tToolbar("uploading") : tToolbar("upload")}
+              {uploading ? "Uploading…" : "上传"}
               <input
                 type="file"
+                multiple
                 disabled={!activeKb || uploading}
                 className="hidden"
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void handleUpload(f);
+                  if (e.target.files?.length) {
+                    void handleUploadFiles(e.target.files);
+                  }
                   e.currentTarget.value = "";
                 }}
               />
             </label>
+          </div>
+        )}
+
+        {/* Upload progress strip — pin under toolbar so user sees what's
+            happening with bulk drops */}
+        {uploads.length > 0 && (
+          <UploadProgressStrip
+            uploads={uploads}
+            onClear={() => setUploads([])}
+          />
+        )}
+
+        {/* Drag-drop hint overlay — only when dragging files in */}
+        {dragOver && activeKb && (
+          <div
+            className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center"
+            aria-hidden="true"
+          >
+            <div className="rounded-2xl border border-primary bg-surface px-8 py-6 text-center shadow-soft-lg">
+              <Icon
+                name="upload"
+                size={28}
+                className="mx-auto mb-2 text-primary"
+              />
+              <div className="text-[14px] font-semibold text-text">
+                松手即添加到 {activeKb.name}
+              </div>
+              <div className="font-mono text-[11px] text-text-subtle">
+                支持 markdown / pdf / docx / html / txt / csv …
+              </div>
+            </div>
           </div>
         )}
 
@@ -380,13 +601,10 @@ export default function KnowledgePage() {
           {/* ─ Left aside */}
           <aside className="col-span-12 flex min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3">
             {pageState === "loading" && (
-              <LoadingState
-                title={tSidebar("loadingTitle")}
-                description={tSidebar("loadingDesc")}
-              />
+              <LoadingState title="加载中" description="读取 KB 列表 · embedder 信息" />
             )}
             {pageState === "error" && (
-              <ErrorState title={error || t("loadFailed")} />
+              <ErrorState title={error || "加载失败"} />
             )}
             {pageState === "ok" && activeKb && (
               <>
@@ -394,31 +612,46 @@ export default function KnowledgePage() {
                   kb={activeKb}
                   onOpenSettings={() => setShowSettings(true)}
                 />
-                <TagsCard docs={docs ?? []} />
+                <TagsCard
+                  docs={docs ?? []}
+                  active={tagFilter}
+                  onPick={setTagFilter}
+                />
                 <ToolsCard />
               </>
             )}
             {pageState === "ok" && !activeKb && kbs && kbs.length === 0 && (
-              <EmptyState
-                title={tSidebar("emptyTitle")}
-                description={tSidebar("emptyDesc")}
-                action={{
-                  label: tSidebar("emptyAction"),
-                  onClick: () => setShowCreate(true),
-                  icon: "plus",
-                }}
-                icon="book-open"
-              />
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <div className={SECTION_LABEL}>开始</div>
+                <p className="mt-2 text-[12px] leading-relaxed text-text-muted">
+                  右边是首次设置向导 · 跟着两步就能用。
+                </p>
+              </div>
             )}
           </aside>
 
           {/* ─ Main canvas */}
           <main className="col-span-12 flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:col-span-9">
-            {pageState === "ok" && !activeKb ? (
+            {pageState === "ok" && !activeKb && kbs && kbs.length === 0 ? (
+              <OnboardingWizard
+                models={models}
+                onCreate={() => setShowCreate(true)}
+              />
+            ) : pageState === "ok" && !activeKb ? (
               <div className="flex h-full items-center justify-center px-6 py-12 text-[12px] text-text-muted">
-                {tSidebar("pickKbHint")}
+                先在工具栏左侧选择一个知识库
               </div>
-            ) : pageState !== "ok" ? null : committedQuery ? (
+            ) : pageState !== "ok" ? null : askResult || asking ? (
+              <AskAnswerView
+                question={committedQuery}
+                result={askResult}
+                asking={asking}
+                onChunkClick={(docId) => {
+                  const d = docs?.find((x) => x.id === docId);
+                  if (d) setOpenDoc(d);
+                }}
+              />
+            ) : committedQuery ? (
               <SearchResultsView
                 query={committedQuery}
                 results={results}
@@ -432,14 +665,19 @@ export default function KnowledgePage() {
               <DocumentsView
                 docs={filteredDocs}
                 allDocsCount={docs?.length ?? 0}
-                hasFilter={!!stateFilter}
+                hasFilter={!!stateFilter || !!tagFilter}
                 onClickDoc={setOpenDoc}
                 onUpload={() => {
-                  // Trigger the toolbar upload — fastest path is to focus the
-                  // hidden input, but simpler: surface a hint.
-                  setError(t("uploadHint"));
+                  setError("点右上角「上传」按钮添加文档");
                   setTimeout(() => setError(null), 2500);
                 }}
+                onReindex={handleReindexDoc}
+                selected={selectedDocs}
+                onToggleSelect={toggleSelect}
+                onClearSelection={clearSelection}
+                onBulkDelete={bulkDelete}
+                tagFilter={tagFilter}
+                onClearTagFilter={() => setTagFilter(null)}
               />
             )}
           </main>
@@ -456,6 +694,18 @@ export default function KnowledgePage() {
         )}
 
         {/* ─ Modal: Create KB */}
+        {showUrlIngest && activeKb && (
+          <UrlIngestModal
+            kb={activeKb}
+            onClose={() => setShowUrlIngest(false)}
+            onIngested={async () => {
+              setShowUrlIngest(false);
+              await refreshDocs(activeKb.id);
+              await refreshKbs(activeKb);
+            }}
+            onError={setError}
+          />
+        )}
         {showCreate && (
           <CreateKBModal
             models={models}
@@ -505,11 +755,11 @@ export default function KnowledgePage() {
  * KB info card · 用户视角 · 不暴露 BM25/RRF/dim/cosine 等术语。
  *
  * 三个层次:
- *   1. 名字 + 简介 + 设置入口
+ *   1. 名字 + 简介 + ⚙ 设置入口
  *   2. 一句话能力简述 (e.g. "✓ 启用了语义检索" / "演示模式 · 检索只能匹配关键词")
  *   3. 数字: "5 段内容 · 来自 2 份资料"
  *
- * 检索权重 / embedder 维度等技术细节都收进 设置弹窗的"高级"分组。
+ * 检索权重 / embedder 维度等技术细节都收进 ⚙ 设置弹窗的"高级"分组。
  */
 function KBInfoCard({
   kb,
@@ -518,7 +768,6 @@ function KBInfoCard({
   kb: KBDto;
   onOpenSettings: () => void;
 }) {
-  const t = useTranslations("knowledge.kb");
   const isMock = kb.embedding_model_ref.startsWith("mock:");
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
@@ -536,8 +785,8 @@ function KBInfoCard({
         <button
           type="button"
           onClick={onOpenSettings}
-          aria-label={t("settingsAria")}
-          title={t("settingsTitle")}
+          aria-label="知识库设置"
+          title="设置"
           className="grid h-7 w-7 place-items-center rounded-lg border border-border bg-surface text-text-subtle hover:border-border-strong hover:text-text transition duration-fast"
         >
           <Icon name="settings" size={12} />
@@ -548,12 +797,12 @@ function KBInfoCard({
       <div className="mt-3 flex items-baseline gap-3 text-[13px] text-text">
         <span>
           <span className="font-semibold">{kb.document_count}</span>
-          <span className="ml-1 text-text-muted">{t("docCountUnit")}</span>
+          <span className="ml-1 text-text-muted">份资料</span>
         </span>
         <span className="text-text-subtle">·</span>
         <span>
           <span className="font-semibold">{kb.chunk_count}</span>
-          <span className="ml-1 text-text-muted">{t("chunkCountUnit")}</span>
+          <span className="ml-1 text-text-muted">段内容</span>
         </span>
       </div>
 
@@ -566,43 +815,82 @@ function KBInfoCard({
         >
           <div className="flex items-center gap-1.5 font-medium">
             <Icon name="alert-triangle" size={12} />
-            <span>{t("demoMode")}</span>
+            <span>当前是演示模式</span>
           </div>
           <p className="mt-1 text-[11px] leading-relaxed">
-            {t("demoModeDetail")}
-            <span className="underline">{t("demoModeCta")}</span>
+            检索只能匹配关键词,不懂语义近义词。
+            <span className="underline">点这里换成真实模型 →</span>
           </p>
         </button>
       ) : (
         <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-success/30 bg-success-soft px-3 py-2 text-[12px] text-success">
           <Icon name="check" size={12} />
-          <span>{t("semanticEnabled")}</span>
+          <span>已启用语义检索</span>
         </div>
       )}
     </div>
   );
 }
 
-function TagsCard({ docs }: { docs: DocumentDto[] }) {
-  const t = useTranslations("knowledge.tags");
+function TagsCard({
+  docs,
+  active,
+  onPick,
+}: {
+  docs: DocumentDto[];
+  active: string | null;
+  onPick: (t: string | null) => void;
+}) {
   const tags = useMemo(() => {
     const counts = new Map<string, number>();
     for (const d of docs) {
-      for (const tag of d.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      for (const t of d.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
     }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [docs]);
   if (tags.length === 0) return null;
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {tags.map(([tag, n]) => (
+      <div className="mb-2 flex items-center justify-between">
+        <span className={SECTION_LABEL}>Tags</span>
+        {active && (
+          <button
+            type="button"
+            onClick={() => onPick(null)}
+            className="text-[11px] text-text-subtle hover:text-text"
+          >
+            清除
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {tags.map(([t, n]) => {
+          const isActive = active === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onPick(isActive ? null : t)}
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition duration-fast ${
+                isActive
+                  ? "border-primary bg-primary-muted text-primary"
+                  : "border-border bg-surface-2 text-text-muted hover:border-border-strong hover:text-text"
+              }`}
+            >
+              <span>#{t}</span>
+              <span className="font-mono text-[10px] text-text-subtle">{n}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Suppress the original span loop — replaced with the buttons above */}
+      <div className="hidden">
+        {tags.map(([t, n]) => (
           <span
-            key={tag}
+            key={t}
             className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted"
           >
-            <span>#{tag}</span>
+            <span>#{t}</span>
             <span className="font-mono text-[10px] text-text-subtle">{n}</span>
           </span>
         ))}
@@ -612,20 +900,149 @@ function TagsCard({ docs }: { docs: DocumentDto[] }) {
 }
 
 function ToolsCard() {
-  const t = useTranslations("knowledge.tools");
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
       <div className="flex items-center gap-1.5 text-[12px] font-semibold text-text">
         <Icon name="users" size={13} className="text-primary" />
-        {t("title")}
+        让员工帮你查
       </div>
       <p className="mt-1.5 text-[12px] leading-relaxed text-text-muted">
-        {t.rich("body", {
-          skill: () => (
-            <span className="text-text">{t("skillName")}</span>
-          ),
-        })}
+        在「员工」页给某个员工加上「<span className="text-text">知识库研究员</span>」技能,
+        TA 在对话里就能搜这个 KB 并引用原文回答你。
       </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Onboarding wizard (zero-KB state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Full-page first-run experience. Notion / ChatGPT custom-GPT do this:
+ * give the user a numbered "here's how to start" guide plus the primary
+ * action prominent. Avoids the "blank canvas where do I click" anxiety.
+ */
+function OnboardingWizard({
+  models,
+  onCreate,
+}: {
+  models: EmbeddingModelOption[];
+  onCreate: () => void;
+}) {
+  const realAvailable = models.filter(
+    (m) => !m.ref.startsWith("mock:") && m.available,
+  ).length;
+  const steps = [
+    {
+      n: 1,
+      title: "(可选)配置语义检索模型",
+      done: realAvailable > 0,
+      cta: realAvailable > 0
+        ? `已找到 ${realAvailable} 个可用模型`
+        : "没配也能用 mock(只匹配关键词)",
+      action: realAvailable === 0
+        ? { href: "/gateway", label: "去模型网关" }
+        : undefined,
+      desc: "在「模型网关」加一个 OpenAI 或阿里云百炼 provider · KB 才能理解语义。不配的话演示模式也能跑通流程。",
+    },
+    {
+      n: 2,
+      title: "新建第一个知识库",
+      done: false,
+      cta: undefined,
+      action: { onClick: onCreate, label: "新建知识库" },
+      desc: "起个名字 · 选 embedder · 创建。建好后拖几个 md / pdf / docx 进来就能搜。",
+    },
+    {
+      n: 3,
+      title: "上传 / 抓 URL · 然后搜或问",
+      done: false,
+      cta: undefined,
+      action: undefined,
+      desc: "顶部工具栏:文件按钮 / 抓 URL · 多文件直接拖到页面。「搜/问」分段里切「问」就是 RAG 问答。",
+    },
+    {
+      n: 4,
+      title: "(可选)让员工帮你查",
+      done: false,
+      cta: undefined,
+      action: { href: "/employees", label: "去员工页" },
+      desc: "给某个员工挂上「知识库研究员」技能,他在 /chat 里就能搜这个 KB 并引用回答。",
+    },
+  ];
+  return (
+    <div className="flex h-full flex-col overflow-y-auto px-8 py-10">
+      <div className="mx-auto w-full max-w-2xl">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary-muted">
+            <Icon name="book-open" size={26} className="text-primary" />
+          </div>
+          <h2 className="text-[20px] font-semibold text-text">第一次来 · 4 步搭好</h2>
+          <p className="mt-1 text-[13px] text-text-muted">
+            把零散的笔记 / 文档存进来 · 自己搜得到 · 员工也能引用回答你
+          </p>
+        </div>
+        <ol className="space-y-3">
+          {steps.map((s) => (
+            <li
+              key={s.n}
+              className="flex gap-3 rounded-xl border border-border bg-surface-2 p-4"
+            >
+              <div
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg font-mono text-[12px] ${
+                  s.done
+                    ? "bg-success-soft text-success"
+                    : "bg-primary-muted text-primary"
+                }`}
+              >
+                {s.done ? <Icon name="check" size={14} /> : s.n}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-[13px] font-semibold text-text">
+                  {s.title}
+                  {s.cta && (
+                    <span className="font-mono text-[10px] text-text-subtle">
+                      · {s.cta}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[12px] leading-relaxed text-text-muted">
+                  {s.desc}
+                </p>
+                {s.action && "href" in s.action ? (
+                  <a
+                    href={s.action.href}
+                    className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted hover:border-border-strong hover:text-text"
+                  >
+                    {s.action.label}
+                    <Icon name="external-link" size={11} />
+                  </a>
+                ) : s.action ? (
+                  <button
+                    type="button"
+                    onClick={s.action.onClick}
+                    className="mt-2 inline-flex h-7 items-center gap-1.5 rounded-md bg-primary px-2.5 text-[11px] font-medium text-primary-fg hover:bg-primary-hover"
+                  >
+                    <Icon name="plus" size={11} />
+                    {s.action.label}
+                  </button>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-6 flex justify-center">
+          <button
+            type="button"
+            onClick={onCreate}
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-5 text-[13px] font-semibold text-primary-fg shadow-soft-sm hover:bg-primary-hover transition duration-fast"
+          >
+            <Icon name="plus" size={14} />
+            现在新建第一个知识库
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -640,22 +1057,35 @@ function DocumentsView({
   hasFilter,
   onClickDoc,
   onUpload,
+  onReindex,
+  selected,
+  onToggleSelect,
+  onClearSelection,
+  onBulkDelete,
+  tagFilter,
+  onClearTagFilter,
 }: {
   docs: DocumentDto[];
   allDocsCount: number;
   hasFilter: boolean;
   onClickDoc: (d: DocumentDto) => void;
   onUpload: () => void;
+  onReindex: (d: DocumentDto) => Promise<void>;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onClearSelection: () => void;
+  onBulkDelete: () => Promise<void>;
+  tagFilter: string | null;
+  onClearTagFilter: () => void;
 }) {
-  const t = useTranslations("knowledge.docs");
   if (allDocsCount === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-12">
         <EmptyState
-          title={t("emptyTitle")}
-          description={t("emptyDesc")}
+          title="知识库为空"
+          description="上传第一份文档(支持 md / pdf / docx / html / txt)。Agent 会自动解析、切片、嵌入,数秒内可检索。"
           action={{
-            label: t("emptyAction"),
+            label: "上传文档",
             onClick: onUpload,
             icon: "upload",
           }}
@@ -667,26 +1097,80 @@ function DocumentsView({
   if (docs.length === 0 && hasFilter) {
     return (
       <div className="flex h-full items-center justify-center px-6 py-12 text-[12px] text-text-muted">
-        {t("noFilterMatch")}
+        当前过滤器没有命中任何文档
       </div>
     );
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
-        <span className="font-mono text-[10px] text-text-subtle">
-          {t("countOf", { visible: docs.length, total: allDocsCount })}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          <div className={SECTION_LABEL}>Documents</div>
+          <span className="font-mono text-[10px] text-text-subtle">
+            {docs.length} / {allDocsCount}
+          </span>
+          {tagFilter && (
+            <button
+              type="button"
+              onClick={onClearTagFilter}
+              className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary-muted px-2 py-0.5 text-[11px] text-primary"
+              title="移除标签筛选"
+            >
+              #{tagFilter} ✕
+            </button>
+          )}
+        </div>
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-text-muted">
+              选中 {selected.size}
+            </span>
+            <button
+              type="button"
+              onClick={onClearSelection}
+              className="inline-flex h-7 items-center rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted hover:text-text"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => void onBulkDelete()}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-danger/40 bg-danger-soft px-2 text-[11px] text-danger hover:bg-danger/10"
+            >
+              <Icon name="trash-2" size={11} />
+              批量删除
+            </button>
+          </div>
+        )}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-5 sm:grid-cols-2 xl:grid-cols-3">
-        {docs.map((d) => (
-          <button
+        {docs.map((d) => {
+          const isSelected = selected.has(d.id);
+          return (
+          <div
             key={d.id}
-            type="button"
+            className={`group relative flex cursor-pointer flex-col gap-2 rounded-xl border bg-surface-2 p-3 text-left transition duration-fast hover:-translate-y-px hover:shadow-soft-sm ${
+              isSelected
+                ? "border-primary ring-1 ring-primary/30"
+                : "border-border hover:border-border-strong"
+            }`}
             onClick={() => onClickDoc(d)}
-            className="group flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-3 text-left transition duration-fast hover:-translate-y-px hover:border-border-strong hover:shadow-soft-sm"
           >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect(d.id);
+              }}
+              className={`absolute left-2 top-2 grid h-5 w-5 place-items-center rounded border transition duration-fast ${
+                isSelected
+                  ? "border-primary bg-primary text-primary-fg opacity-100"
+                  : "border-border bg-surface text-transparent opacity-0 group-hover:opacity-100 hover:border-border-strong"
+              }`}
+              aria-label="选择"
+            >
+              <Icon name="check" size={12} />
+            </button>
             <div className="flex items-start justify-between gap-2">
               <MimeBadge mime={d.mime_type} />
               <StatePill state={d.state} />
@@ -697,12 +1181,12 @@ function DocumentsView({
               </div>
               {d.tags.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {d.tags.slice(0, 3).map((tag) => (
+                  {d.tags.slice(0, 3).map((t) => (
                     <span
-                      key={tag}
+                      key={t}
                       className="rounded-full bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle"
                     >
-                      #{tag}
+                      #{t}
                     </span>
                   ))}
                 </div>
@@ -710,25 +1194,288 @@ function DocumentsView({
             </div>
             <div className="flex items-center justify-between font-mono text-[10px] text-text-subtle">
               <span>
-                {t("chunkSummary", {
-                  chunks: d.chunk_count,
-                  version: d.version,
-                })}
+                🧩 {d.chunk_count} chunks · v{d.version}
               </span>
-              <span>
-                {t("sizeKb", { kb: (d.size_bytes / 1024).toFixed(1) })}
-              </span>
+              <span>{(d.size_bytes / 1024).toFixed(1)} KB</span>
             </div>
             {d.state_error && (
               <div className="rounded-md border border-danger/30 bg-danger-soft px-2 py-1 text-[10px] text-danger">
                 {d.state_error}
               </div>
             )}
-          </button>
-        ))}
+            {d.state === "failed" && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onReindex(d);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void onReindex(d);
+                  }
+                }}
+                className="inline-flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-warning/40 bg-warning-soft px-2 text-[11px] text-warning hover:bg-warning/10 transition duration-fast"
+              >
+                <Icon name="refresh" size={11} />
+                重试入库
+              </span>
+            )}
+          </div>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Upload progress strip
+// ─────────────────────────────────────────────────────────────────────────────
+
+function UploadProgressStrip({
+  uploads,
+  onClear,
+}: {
+  uploads: Array<{
+    id: string;
+    name: string;
+    state: "queued" | "uploading" | "done" | "failed";
+    error?: string;
+  }>;
+  onClear: () => void;
+}) {
+  const done = uploads.filter((u) => u.state === "done").length;
+  const failed = uploads.filter((u) => u.state === "failed").length;
+  const inflight = uploads.filter(
+    (u) => u.state === "queued" || u.state === "uploading",
+  ).length;
+
+  return (
+    <div className="rounded-xl border border-border bg-surface px-4 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[12px]">
+          <Icon name="upload" size={12} className="text-primary" />
+          <span className="text-text">
+            上传 · 完成 {done}/{uploads.length}
+            {failed > 0 && (
+              <span className="ml-2 text-danger">{failed} 失败</span>
+            )}
+            {inflight > 0 && (
+              <span className="ml-2 text-warning">{inflight} 进行中</span>
+            )}
+          </span>
+        </div>
+        {inflight === 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[11px] text-text-subtle hover:text-text"
+          >
+            清除
+          </button>
+        )}
+      </div>
+      <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
+        {uploads.slice(0, 6).map((u) => {
+          const tone =
+            u.state === "done"
+              ? "text-success"
+              : u.state === "failed"
+                ? "text-danger"
+                : "text-warning";
+          const icon =
+            u.state === "done"
+              ? "check"
+              : u.state === "failed"
+                ? "alert-triangle"
+                : "loader";
+          return (
+            <li
+              key={u.id}
+              className="flex items-center gap-1.5 truncate font-mono text-[10px] text-text-muted"
+              title={u.error || u.name}
+            >
+              <Icon
+                name={icon}
+                size={10}
+                className={`${tone} ${u.state === "uploading" ? "animate-spin" : ""}`}
+              />
+              <span className="truncate">{u.name}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ask (RAG) answer view — Glean / Perplexity style
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Renders the LLM answer with inline cite chips. The model output uses
+ * "[1]", "[2]" markers; we replace them with clickable buttons that open
+ * the referenced source card. The full sources list sits below the answer
+ * (Perplexity's "sources strip" + Cohere Coral's footnote pattern).
+ */
+function AskAnswerView({
+  question,
+  result,
+  asking,
+  onChunkClick,
+}: {
+  question: string;
+  result: AskResponse | null;
+  asking: boolean;
+  onChunkClick: (docId: string) => void;
+}) {
+  if (asking || !result) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+          <Icon name="sparkles" size={13} className="text-primary" />
+          <div className={SECTION_LABEL}>提问</div>
+          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
+            “{question}”
+          </span>
+        </div>
+        <div className="flex flex-1 items-center justify-center p-8">
+          <LoadingState
+            title="正在思考…"
+            description="检索片段 → 拼上下文 → LLM 答复"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Inline cite renderer: split on [N] markers; numbers that match a
+  // source row become buttons, others stay as text.
+  const parts = renderAnswerWithCites(result.answer, result.sources, onChunkClick);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          <Icon name="sparkles" size={13} className="text-primary" />
+          <div className={SECTION_LABEL}>回答</div>
+          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
+            “{question}”
+          </span>
+        </div>
+        <div className="flex items-center gap-2 font-mono text-[10px] text-text-subtle">
+          {result.used_model && <span>{result.used_model}</span>}
+          <span>·</span>
+          <span>{result.latency_ms.toFixed(0)} ms</span>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        {/* Answer */}
+        <div className="rounded-xl border border-border bg-surface-2 p-5">
+          <p className="whitespace-pre-wrap text-[14px] leading-[1.7] text-text">
+            {parts}
+          </p>
+        </div>
+
+        {/* Sources list */}
+        {result.sources.length > 0 && (
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between">
+              <span className={SECTION_LABEL}>来源</span>
+              <span className="font-mono text-[10px] text-text-subtle">
+                {result.sources.length} 条
+              </span>
+            </div>
+            <ul className="space-y-2">
+              {result.sources.map((s) => (
+                <li
+                  key={s.chunk_id}
+                  id={`src-${s.n}`}
+                  className="rounded-xl border border-border bg-surface-2 p-3"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onChunkClick(s.doc_id)}
+                    className="flex w-full items-start justify-between gap-3 text-left"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
+                        [{s.n}]
+                      </span>
+                      <span className="font-mono text-[11px] text-text-muted">
+                        {s.citation}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px] text-text-subtle">
+                      {s.score.toFixed(4)}
+                    </span>
+                  </button>
+                  {s.section_path && (
+                    <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+                      {s.section_path}
+                    </div>
+                  )}
+                  <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[12px] leading-relaxed text-text">
+                    {s.text}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function renderAnswerWithCites(
+  answer: string,
+  sources: AskResponse["sources"],
+  onClickSource: (docId: string) => void,
+): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const re = /\[(\d+)\]/g;
+  const known = new Map(sources.map((s) => [s.n, s] as const));
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  while ((m = re.exec(answer)) !== null) {
+    if (m.index > last) {
+      out.push(<span key={`t${key++}`}>{answer.slice(last, m.index)}</span>);
+    }
+    const n = Number(m[1]);
+    const src = known.get(n);
+    if (src) {
+      out.push(
+        <button
+          key={`c${key++}`}
+          type="button"
+          onClick={() => {
+            const el = document.getElementById(`src-${n}`);
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            onClickSource(src.doc_id);
+          }}
+          className="mx-0.5 inline-flex items-center rounded-md bg-primary-muted px-1.5 align-baseline font-mono text-[11px] text-primary hover:bg-primary/20 transition duration-fast"
+          title={src.citation}
+        >
+          [{n}]
+        </button>,
+      );
+    } else {
+      out.push(<span key={`t${key++}`}>{m[0]}</span>);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < answer.length) {
+    out.push(<span key={`t${key++}`}>{answer.slice(last)}</span>);
+  }
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -746,37 +1493,31 @@ function SearchResultsView({
   searching: boolean;
   onChunkClick: (docId: string) => void;
 }) {
-  const t = useTranslations("knowledge.search");
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <Icon name="search" size={13} className="text-text-subtle" />
-          <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
+          <div className={SECTION_LABEL}>Search Results</div>
           <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
             “{query}”
           </span>
         </div>
         {results && (
           <span className="font-mono text-[10px] text-text-subtle">
-            {results.length === 1
-              ? t("hits", { count: results.length })
-              : t("hitsPlural", { count: results.length })}
+            {results.length} hit{results.length !== 1 ? "s" : ""}
           </span>
         )}
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
         {searching && (
           <div className="flex h-full items-center justify-center">
-            <LoadingState
-              title={t("loadingTitle")}
-              description={t("loadingDesc")}
-            />
+            <LoadingState title="检索中…" description="正在并发匹配关键词和语义" />
           </div>
         )}
         {!searching && results && results.length === 0 && (
           <div className="flex h-full items-center justify-center text-[12px] text-text-muted">
-            {t("noResults")}
+            没有命中 · 试试更具体的关键词,或把 BM25 / vector 权重调一下
           </div>
         )}
         {!searching &&
@@ -797,17 +1538,17 @@ function SearchResultsView({
                   </span>
                   {r.bm25_rank != null && (
                     <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      {t("bm25Rank", { rank: r.bm25_rank })}
+                      BM25 #{r.bm25_rank}
                     </span>
                   )}
                   {r.vector_rank != null && (
                     <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      {t("vecRank", { rank: r.vector_rank })}
+                      vec #{r.vector_rank}
                     </span>
                   )}
                 </div>
                 <div className="flex flex-col items-end font-mono text-[10px] text-text-subtle">
-                  <span>{t("scoreLabel")}</span>
+                  <span>score</span>
                   <span className="text-[12px] text-text">
                     {r.score.toFixed(4)}
                   </span>
@@ -843,7 +1584,6 @@ function ModalShell({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
-  const t = useTranslations("knowledge.modal");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/60 backdrop-blur-sm">
       <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-lg">
@@ -853,7 +1593,7 @@ function ModalShell({
             type="button"
             onClick={onClose}
             className="text-text-subtle hover:text-text"
-            aria-label={t("closeAria")}
+            aria-label="关闭"
           >
             ✕
           </button>
@@ -869,6 +1609,101 @@ function ModalShell({
   );
 }
 
+function UrlIngestModal({
+  kb,
+  onClose,
+  onIngested,
+  onError,
+}: {
+  kb: KBDto;
+  onClose: () => void;
+  onIngested: () => void;
+  onError: (msg: string) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [tagsRaw, setTagsRaw] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (!url.trim()) return;
+    setSubmitting(true);
+    try {
+      await ingestUrl(kb.id, url.trim(), {
+        title: title.trim() || undefined,
+        tags: tagsRaw
+          ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
+          : undefined,
+      });
+      onIngested();
+    } catch (e) {
+      onError(String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ModalShell
+      title={`抓 URL 到「${kb.name}」`}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!url.trim() || submitting}
+            className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
+          >
+            {submitting ? "抓取中…" : "抓取"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="URL">
+          <input
+            type="url"
+            autoFocus
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.com/some-article"
+            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+          <p className="mt-1 font-mono text-[10px] text-text-subtle">
+            v0 只支持服务端渲染好的 HTML 页面 · JS-only SPA 抓不到内容
+          </p>
+        </Field>
+        <Field label="标题(可选)">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="留空 = 用 URL 末段自动生成"
+            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+        </Field>
+        <Field label="标签(可选 · 逗号分隔)">
+          <input
+            type="text"
+            value={tagsRaw}
+            onChange={(e) => setTagsRaw(e.target.value)}
+            placeholder="article, blog, must-read"
+            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+        </Field>
+      </div>
+    </ModalShell>
+  );
+}
+
 function CreateKBModal({
   models,
   onClose,
@@ -880,7 +1715,6 @@ function CreateKBModal({
   onCreated: (kb: KBDto) => void;
   onError: (msg: string) => void;
 }) {
-  const t = useTranslations("knowledge.create");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [modelRef, setModelRef] = useState(
@@ -893,7 +1727,7 @@ function CreateKBModal({
   const modelOptions = models.map((m) => ({
     value: m.ref,
     label: m.label,
-    hint: t("embeddingHintDim", { dim: m.dim }),
+    hint: `${m.dim}d`,
     disabled: !m.available,
   }));
 
@@ -916,7 +1750,7 @@ function CreateKBModal({
 
   return (
     <ModalShell
-      title={t("title")}
+      title="新建知识库"
       onClose={onClose}
       footer={
         <>
@@ -925,7 +1759,7 @@ function CreateKBModal({
             onClick={onClose}
             className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
           >
-            {t("cancel")}
+            取消
           </button>
           <button
             type="button"
@@ -933,43 +1767,43 @@ function CreateKBModal({
             disabled={!name.trim() || submitting}
             className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
           >
-            {submitting ? t("submitting") : t("submit")}
+            {submitting ? "创建中…" : "创建"}
           </button>
         </>
       }
     >
       <div className="space-y-4">
-        <Field label={t("fieldName")}>
+        <Field label="名称">
           <input
             type="text"
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={t("namePlaceholder")}
+            placeholder="Personal Brain"
             className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
           />
         </Field>
-        <Field label={t("fieldDescription")}>
+        <Field label="描述(可选)">
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            placeholder={t("descriptionPlaceholder")}
+            placeholder="存什么 · 给谁看 · 任何对未来你有用的备注"
             className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none resize-none"
           />
         </Field>
-        <Field label={t("fieldEmbedding")}>
+        <Field label="Embedding model">
           <Select
             value={modelRef}
             onChange={setModelRef}
             options={modelOptions}
-            placeholder={t("embeddingPlaceholder")}
+            placeholder="选择 embedder"
             className="w-full"
             triggerClassName="h-9 rounded-xl"
-            ariaLabel={t("embeddingAria")}
+            ariaLabel="Embedding model"
           />
           <p className="mt-1 font-mono text-[10px] text-text-subtle">
-            {t("embeddingHelp")}
+            灰色项缺少 API key · 在 .env 配置后启用 · 切换需 reindex
           </p>
         </Field>
       </div>
@@ -1000,9 +1834,6 @@ function KBSettingsModal({
   onError: (msg: string) => void;
 }) {
   type Tab = "basic" | "advanced" | "diagnose" | "danger";
-  const t = useTranslations("knowledge.settings");
-  const tTabs = useTranslations("knowledge.settings.tabs");
-  const tAdv = useTranslations("knowledge.advanced");
   const [tab, setTab] = useState<Tab>("basic");
 
   // Advanced state
@@ -1013,19 +1844,9 @@ function KBSettingsModal({
   const [saving, setSaving] = useState(false);
 
   const rerankerOptions = [
-    { value: "none", label: tAdv("rerankerNone") },
-    {
-      value: "bge-base",
-      label: tAdv("rerankerBge"),
-      disabled: true,
-      hint: tAdv("rerankerHintM3"),
-    },
-    {
-      value: "cohere",
-      label: tAdv("rerankerCohere"),
-      disabled: true,
-      hint: tAdv("rerankerHintM3"),
-    },
+    { value: "none", label: "标准融合(默认)" },
+    { value: "bge-base", label: "bge-base — 二次排序", disabled: true, hint: "M3" },
+    { value: "cohere", label: "Cohere rerank", disabled: true, hint: "M3" },
   ];
 
   async function saveAdvanced() {
@@ -1050,15 +1871,15 @@ function KBSettingsModal({
     label: string;
     icon: "info" | "settings" | "search" | "trash-2";
   }[] = [
-    { id: "basic", label: tTabs("basic"), icon: "info" },
-    { id: "diagnose", label: tTabs("diagnose"), icon: "search" },
-    { id: "advanced", label: tTabs("advanced"), icon: "settings" },
-    { id: "danger", label: tTabs("danger"), icon: "trash-2" },
+    { id: "basic", label: "基础", icon: "info" },
+    { id: "diagnose", label: "调试检索", icon: "search" },
+    { id: "advanced", label: "高级", icon: "settings" },
+    { id: "danger", label: "危险", icon: "trash-2" },
   ];
 
   return (
     <ModalShell
-      title={t("titleSuffix", { name: kb.name })}
+      title={`${kb.name} · 设置`}
       onClose={onClose}
       footer={
         tab === "advanced" ? (
@@ -1068,7 +1889,7 @@ function KBSettingsModal({
               onClick={onClose}
               className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
             >
-              {t("cancel")}
+              取消
             </button>
             <button
               type="button"
@@ -1076,7 +1897,7 @@ function KBSettingsModal({
               disabled={saving}
               className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
             >
-              {saving ? t("saving") : t("save")}
+              {saving ? "保存中…" : "保存"}
             </button>
           </>
         ) : (
@@ -1085,50 +1906,47 @@ function KBSettingsModal({
             onClick={onClose}
             className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
           >
-            {t("close")}
+            关闭
           </button>
         )
       }
     >
       {/* Tabs */}
       <div className="-mt-2 mb-4 flex gap-1 border-b border-border">
-        {tabs.map((tabItem) => {
-          const active = tabItem.id === tab;
+        {tabs.map((t) => {
+          const active = t.id === tab;
           return (
             <button
-              key={tabItem.id}
+              key={t.id}
               type="button"
-              onClick={() => setTab(tabItem.id)}
+              onClick={() => setTab(t.id)}
               className={`-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-[13px] transition duration-fast ${
                 active
                   ? "border-primary text-text"
                   : "border-transparent text-text-muted hover:text-text"
               }`}
             >
-              <Icon name={tabItem.icon} size={13} />
-              {tabItem.label}
+              <Icon name={t.icon} size={13} />
+              {t.label}
             </button>
           );
         })}
       </div>
 
       {/* Basic tab — embedder picker + plain-language explanation */}
-      {tab === "basic" && <BasicTab kb={kb} models={models} />}
+      {tab === "basic" && (
+        <BasicTab kb={kb} models={models} />
+      )}
 
       {/* Advanced tab — retrieval tune */}
       {tab === "advanced" && (
         <div className="space-y-4">
           <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] text-text-muted">
-            {tAdv("intro")}
-            <br />
-            {tAdv.rich("introTopK", {
-              topK: () => (
-                <span className="font-mono text-[11px]">top k</span>
-              ),
-            })}
+            一般不用动。两个权重控制"关键词命中"和"语义匹配"哪个更重要;<br />
+            <span className="font-mono text-[11px]">top k</span> 是每次检索返回的最大段数。
           </p>
           <div className="grid grid-cols-2 gap-4">
-            <Field label={tAdv("fieldBm25")}>
+            <Field label="关键词命中(BM25)">
               <input
                 type="number"
                 min={0}
@@ -1138,7 +1956,7 @@ function KBSettingsModal({
                 className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
               />
             </Field>
-            <Field label={tAdv("fieldVec")}>
+            <Field label="语义匹配(向量)">
               <input
                 type="number"
                 min={0}
@@ -1148,7 +1966,7 @@ function KBSettingsModal({
                 className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
               />
             </Field>
-            <Field label={tAdv("fieldTopK")}>
+            <Field label="返回多少段">
               <input
                 type="number"
                 min={1}
@@ -1158,14 +1976,14 @@ function KBSettingsModal({
                 className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
               />
             </Field>
-            <Field label={tAdv("fieldReranker")}>
+            <Field label="二次排序">
               <Select
                 value={reranker}
                 onChange={(v) => setReranker(v as "none" | "bge-base" | "cohere")}
                 options={rerankerOptions}
                 className="w-full"
                 triggerClassName="h-9 rounded-xl"
-                ariaLabel={tAdv("rerankerAria")}
+                ariaLabel="二次排序"
               />
             </Field>
           </div>
@@ -1188,7 +2006,6 @@ function KBSettingsModal({
  * of magic.
  */
 function DiagnoseTab({ kb }: { kb: KBDto }) {
-  const t = useTranslations("knowledge.diagnose");
   const [query, setQuery] = useState("");
   const [running, setRunning] = useState(false);
   const [out, setOut] = useState<DiagnoseDto | null>(null);
@@ -1222,7 +2039,7 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && run()}
-          placeholder={t("queryPlaceholder")}
+          placeholder="输一个 query 看三种召回的对比…"
           className="h-9 flex-1 rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
         />
         <button
@@ -1231,7 +2048,7 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
           disabled={running || !query.trim()}
           className="inline-flex h-9 items-center rounded-xl bg-primary px-4 text-[12px] font-medium text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
         >
-          {running ? t("running") : t("compare")}
+          {running ? "…" : "对比"}
         </button>
       </div>
 
@@ -1244,42 +2061,37 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
       {out ? (
         <div className="grid grid-cols-3 gap-3">
           <DiagnoseColumn
-            title={t("colKeywordTitle")}
-            subtitle={t("colKeywordSubtitle")}
+            title="只看关键词"
+            subtitle="BM25"
             tone="warning"
             results={out.bm25_only}
-            noHits={t("noHits")}
           />
           <DiagnoseColumn
-            title={t("colVectorTitle")}
-            subtitle={t("colVectorSubtitle")}
+            title="只看语义"
+            subtitle="Vector"
             tone="primary"
             results={out.vector_only}
-            noHits={t("noHits")}
           />
           <DiagnoseColumn
-            title={t("colHybridTitle")}
-            subtitle={t("colHybridSubtitle")}
+            title="融合(默认)"
+            subtitle="Hybrid · RRF"
             tone="success"
             results={out.hybrid}
-            noHits={t("noHits")}
           />
         </div>
       ) : (
         <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] text-text-muted">
-          {t("intro")}
+          输个 query,左边是只看关键词的命中,中间是只看语义的命中,右边是融合后的最终顺序。
+          相同段在三栏的位次差异能告诉你 BM25 和向量哪个更"懂"这个查询。
         </p>
       )}
 
       {stats && stats.count > 0 && (
         <div className="rounded-xl border border-border bg-surface-2 p-3">
           <div className="mb-2 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
-            <span>{t("statsTitle")}</span>
+            <span>本进程检索统计</span>
             <span>
-              {t("statsSummary", {
-                count: stats.count,
-                avg: stats.avg_latency_ms?.toFixed(0) ?? "0",
-              })}
+              {stats.count} 次 · 均 {stats.avg_latency_ms?.toFixed(0)} ms
             </span>
           </div>
           <ul className="space-y-1 text-[11px]">
@@ -1290,10 +2102,7 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
               >
                 <span className="truncate text-text">{r.query}</span>
                 <span className="font-mono text-text-subtle">
-                  {t("statsRow", {
-                    hits: r.hits,
-                    ms: r.latency_ms.toFixed(0),
-                  })}
+                  {r.hits} 命中 · {r.latency_ms.toFixed(0)} ms
                 </span>
               </li>
             ))}
@@ -1309,13 +2118,11 @@ function DiagnoseColumn({
   subtitle,
   tone,
   results,
-  noHits,
 }: {
   title: string;
   subtitle: string;
   tone: "warning" | "primary" | "success";
   results: ScoredChunkDto[];
-  noHits: string;
 }) {
   const toneCls =
     tone === "warning"
@@ -1332,7 +2139,7 @@ function DiagnoseColumn({
       <ul className="space-y-1.5 p-2">
         {results.length === 0 && (
           <li className="px-2 py-3 text-center text-[11px] text-text-subtle">
-            {noHits}
+            没命中
           </li>
         )}
         {results.map((r, i) => (
@@ -1365,7 +2172,6 @@ function BasicTab({
   kb: KBDto;
   models: EmbeddingModelOption[];
 }) {
-  const t = useTranslations("knowledge.basic");
   const isMock = kb.embedding_model_ref.startsWith("mock:");
   const realAvailable = models.filter(
     (m) => !m.ref.startsWith("mock:") && m.available,
@@ -1387,17 +2193,19 @@ function BasicTab({
           }`}
         >
           <Icon name={isMock ? "alert-triangle" : "check"} size={14} />
-          {isMock ? t("demoStatus") : t("semanticStatus")}
+          {isMock ? "演示模式 · 检索靠关键词匹配" : "已启用语义检索"}
         </div>
         <p
           className={`mt-1.5 text-[12px] leading-relaxed ${
             isMock ? "text-warning/90" : "text-success/90"
           }`}
         >
-          {isMock ? t("demoBody") : t("semanticBody")}
+          {isMock
+            ? "搜「相机」不会命中「摄像机」。要理解语义近义词,需要绑一个真实的 embedding 模型。"
+            : "搜「相机」能命中「摄像机」等近义表达。"}
         </p>
         <div className="mt-2 font-mono text-[10px] text-text-subtle">
-          {t("currentModel", { model: kb.embedding_model_ref })}
+          当前 · {kb.embedding_model_ref}
         </div>
       </div>
 
@@ -1405,13 +2213,13 @@ function BasicTab({
       <div>
         <div className="mb-2 flex items-center justify-between">
           <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
-            {t("availableHeading")}
+            可用的真实模型
           </span>
           <a
             href="/gateway"
             className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
           >
-            {t("manageProvider")}
+            管理 provider
             <Icon name="external-link" size={11} />
           </a>
         </div>
@@ -1420,21 +2228,18 @@ function BasicTab({
           <div className="rounded-lg border border-border bg-surface-2 p-4 text-[12px] text-text-muted">
             <div className="mb-2 flex items-center gap-2 font-medium text-text">
               <Icon name="info" size={13} className="text-primary" />
-              {t("noModelsTitle")}
+              还没有可用的 embedding 模型
             </div>
             <p className="leading-relaxed">
-              {t("noModelsBodyPrefix")}
-              <a href="/gateway" className="text-primary underline">
-                {t("noModelsLink")}
-              </a>
-              {t("noModelsBodySuffix")}
+              去「<a href="/gateway" className="text-primary underline">模型网关</a>」
+              添加一个 OpenAI 或阿里云百炼 provider · 填上 API key,这里就会出现可用模型列表。
             </p>
             <a
               href="/gateway"
               className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover transition duration-fast"
             >
               <Icon name="plus" size={12} />
-              {t("goConfigure")}
+              去配置
             </a>
           </div>
         ) : (
@@ -1447,14 +2252,15 @@ function BasicTab({
                 >
                   <span className="text-text">{m.label}</span>
                   <span className="font-mono text-[10px] text-text-subtle">
-                    {t("modelDimHint", { dim: m.dim })}
+                    {m.dim}d
                   </span>
                 </li>
               ))}
             </ul>
             <p className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[11px] text-text-muted">
               <Icon name="info" size={11} className="-mt-px mr-1 inline-block" />
-              {t("switchModelHint")}
+              切换 KB 的 embedding 模型需要重算所有"语义指纹"(reindex)·
+              v0 暂不支持热切换。要换模型,先删了这个 KB,再用新模型新建。
             </p>
           </>
         )}
@@ -1470,30 +2276,27 @@ function DangerTab({
   kb: KBDto;
   onDelete: () => void;
 }) {
-  const t = useTranslations("knowledge.danger");
-  const [confirmText, setConfirmText] = useState("");
-  const enabled = confirmText === kb.name;
+  const [confirm, setConfirm] = useState("");
+  const enabled = confirm === kb.name;
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-danger/30 bg-danger-soft p-4">
         <div className="flex items-center gap-2 text-[13px] font-semibold text-danger">
           <Icon name="alert-triangle" size={14} />
-          {t("heading")}
+          删除知识库
         </div>
         <p className="mt-1.5 text-[12px] leading-relaxed text-danger/90">
-          {t("warningPrefix")}
-          <code className="font-mono text-[11px]">
-            {t("warningPath", { prefix: kb.id.slice(0, 8) })}
-          </code>
-          {t("warningSuffix")}
+          软删除 · 30 天内可联系管理员恢复;之后所有文档 / 向量数据物理移除。
+          原始上传文件留在磁盘上(<code className="font-mono text-[11px]">data/kb/{kb.id.slice(0, 8)}…</code>),
+          需要手动清理。
         </p>
       </div>
 
-      <Field label={t("confirmFieldLabel", { name: kb.name })}>
+      <Field label={`输入 KB 名称「${kb.name}」以确认`}>
         <input
           type="text"
-          value={confirmText}
-          onChange={(e) => setConfirmText(e.target.value)}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
           placeholder={kb.name}
           className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-danger focus:outline-none"
         />
@@ -1506,7 +2309,7 @@ function DangerTab({
         className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-danger px-3 text-[13px] font-medium text-white shadow-soft-sm hover:bg-danger/90 disabled:opacity-30 disabled:cursor-not-allowed transition duration-fast"
       >
         <Icon name="trash-2" size={13} />
-        {t("deleteAction")}
+        永久删除
       </button>
     </div>
   );
@@ -1524,7 +2327,6 @@ function DocDrawer({
   onDelete: (d: DocumentDto) => void;
 }) {
   type Tab = "info" | "text" | "chunks";
-  const t = useTranslations("knowledge.detail");
   const [tab, setTab] = useState<Tab>("info");
   const [text, setText] = useState<string | null>(null);
   const [chunks, setChunks] = useState<DocumentChunkDto[] | null>(null);
@@ -1551,11 +2353,11 @@ function DocDrawer({
   }, [tab, kbId, doc.id, text, chunks, loading]);
 
   const tabs: { id: Tab; label: string; icon: "info" | "file" | "list" }[] = [
-    { id: "info", label: t("tabInfo"), icon: "info" },
-    { id: "text", label: t("tabText"), icon: "file" },
+    { id: "info", label: "概览", icon: "info" },
+    { id: "text", label: "原文", icon: "file" },
     {
       id: "chunks",
-      label: t("tabChunks", { count: doc.chunk_count }),
+      label: `分片 (${doc.chunk_count})`,
       icon: "list",
     },
   ];
@@ -1574,18 +2376,15 @@ function DocDrawer({
               {doc.title}
             </h2>
             <div className="mt-1 font-mono text-[10px] text-text-subtle">
-              {t("headerMeta", {
-                version: doc.version,
-                kb: (doc.size_bytes / 1024).toFixed(1),
-                chunks: doc.chunk_count,
-              })}
+              v{doc.version} · {(doc.size_bytes / 1024).toFixed(1)} KB ·{" "}
+              {doc.chunk_count} 段
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="text-text-subtle hover:text-text"
-            aria-label={t("closeAria")}
+            aria-label="关闭"
           >
             ✕
           </button>
@@ -1593,21 +2392,21 @@ function DocDrawer({
 
         {/* Tabs */}
         <div className="flex gap-1 border-b border-border px-5">
-          {tabs.map((tabItem) => {
-            const active = tabItem.id === tab;
+          {tabs.map((t) => {
+            const active = t.id === tab;
             return (
               <button
-                key={tabItem.id}
+                key={t.id}
                 type="button"
-                onClick={() => setTab(tabItem.id)}
+                onClick={() => setTab(t.id)}
                 className={`-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-[12px] transition duration-fast ${
                   active
                     ? "border-primary text-text"
                     : "border-transparent text-text-muted hover:text-text"
                 }`}
               >
-                <Icon name={tabItem.icon} size={12} />
-                {tabItem.label}
+                <Icon name={t.icon} size={12} />
+                {t.label}
               </button>
             );
           })}
@@ -1621,31 +2420,31 @@ function DocDrawer({
                   {doc.state_error}
                 </div>
               )}
-              <DocMetaSection title={t("infoSectionBasic")}>
-                <MetaRow label={t("metaId")} value={doc.id} mono />
-                <MetaRow label={t("metaMime")} value={doc.mime_type} mono />
-                <MetaRow label={t("metaSource")} value={doc.source_type} mono />
+              <DocMetaSection title="基本信息">
+                <MetaRow label="ID" value={doc.id} mono />
+                <MetaRow label="Mime" value={doc.mime_type} mono />
+                <MetaRow label="来源" value={doc.source_type} mono />
                 {doc.source_uri && (
-                  <MetaRow label={t("metaUri")} value={doc.source_uri} mono />
+                  <MetaRow label="URI" value={doc.source_uri} mono />
                 )}
                 <MetaRow
-                  label={t("metaCreated")}
+                  label="创建"
                   value={new Date(doc.created_at).toLocaleString()}
                 />
                 <MetaRow
-                  label={t("metaUpdated")}
+                  label="更新"
                   value={new Date(doc.updated_at).toLocaleString()}
                 />
               </DocMetaSection>
               {doc.tags.length > 0 && (
-                <DocMetaSection title={t("infoSectionTags")}>
+                <DocMetaSection title="标签">
                   <div className="flex flex-wrap gap-1.5">
-                    {doc.tags.map((tag) => (
+                    {doc.tags.map((t) => (
                       <span
-                        key={tag}
+                        key={t}
                         className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text-muted"
                       >
-                        #{tag}
+                        #{t}
                       </span>
                     ))}
                   </div>
@@ -1655,15 +2454,20 @@ function DocDrawer({
           )}
 
           {tab === "text" && (
-            <div className="p-5">
+            <div className="p-5" id="doc-text-pane">
               {loading && text === null ? (
-                <LoadingState title={t("loadingText")} />
+                <LoadingState title="加载原文…" />
               ) : textErr ? (
                 <ErrorState title={textErr} />
               ) : text === null || text.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[12px] text-text-muted">
-                  {t("emptyText")}
+                  文件为空或不可读
                 </div>
+              ) : isMarkdownLikely(doc.mime_type) ? (
+                <AgentMarkdown
+                  content={text}
+                  className="rounded-xl border border-border bg-surface-2 px-5 py-4 text-[13px] leading-relaxed"
+                />
               ) : (
                 <pre className="whitespace-pre-wrap break-words rounded-xl border border-border bg-surface-2 p-4 text-[12px] leading-relaxed text-text">
                   {text}
@@ -1676,12 +2480,12 @@ function DocDrawer({
             <div className="p-5">
               {loading && chunks === null ? (
                 <LoadingState
-                  title={t("loadingChunks")}
-                  description={t("loadingChunksDesc")}
+                  title="加载分片…"
+                  description="读取每段的位置 / section / 页码"
                 />
               ) : chunks === null || chunks.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[12px] text-text-muted">
-                  {t("emptyChunks")}
+                  这个文档没有分片(可能解析为空)
                 </div>
               ) : (
                 <ul className="space-y-3">
@@ -1701,12 +2505,52 @@ function DocDrawer({
                           </span>
                         )}
                         <span className="ml-auto">
-                          {t("chunkRange", {
-                            start: c.span_start,
-                            end: c.span_end,
-                            tokens: c.token_count,
-                          })}
+                          {c.span_start}–{c.span_end} · ~{c.token_count} tokens
                         </span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            // Switch to text tab + scroll to span. AgentMarkdown
+                            // renders async, so wait one frame then locate by
+                            // searching the rendered text for a unique-enough
+                            // prefix of the chunk.
+                            setTab("text");
+                            await new Promise((r) => setTimeout(r, 80));
+                            const root = document.getElementById("doc-text-pane");
+                            if (!root) return;
+                            const needle = c.text.slice(0, 40);
+                            const walker = document.createTreeWalker(
+                              root,
+                              NodeFilter.SHOW_TEXT,
+                            );
+                            let n: Node | null = walker.nextNode();
+                            while (n) {
+                              if ((n.textContent ?? "").includes(needle)) {
+                                (n.parentElement as HTMLElement)?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "center",
+                                });
+                                (n.parentElement as HTMLElement)?.classList.add(
+                                  "kb-highlight",
+                                );
+                                setTimeout(
+                                  () =>
+                                    (n!.parentElement as HTMLElement)?.classList.remove(
+                                      "kb-highlight",
+                                    ),
+                                  1800,
+                                );
+                                return;
+                              }
+                              n = walker.nextNode();
+                            }
+                          }}
+                          className="inline-flex h-5 items-center gap-1 rounded border border-border bg-surface px-1.5 text-[10px] text-text-muted hover:text-text hover:border-border-strong transition duration-fast"
+                          title="跳到原文位置"
+                        >
+                          <Icon name="external-link" size={10} />
+                          跳原文
+                        </button>
                       </div>
                       <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-text">
                         {c.text}
@@ -1726,14 +2570,14 @@ function DocDrawer({
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-danger/40 bg-danger-soft px-3 text-[12px] text-danger hover:bg-danger/10 transition duration-fast"
           >
             <Icon name="trash-2" size={12} />
-            {t("softDelete")}
+            软删除
           </button>
           <button
             type="button"
             onClick={onClose}
             className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
           >
-            {t("close")}
+            关闭
           </button>
         </footer>
       </aside>

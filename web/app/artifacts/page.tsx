@@ -13,7 +13,7 @@ import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Select } from "@/components/ui/Select";
-import { LoadingState, ErrorState } from "@/components/state";
+import { ErrorState } from "@/components/state";
 import { ArtifactList } from "@/components/artifacts/ArtifactList";
 import { ArtifactGrid } from "@/components/artifacts/ArtifactGrid";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
@@ -419,6 +419,9 @@ export default function ArtifactsGlobalPage() {
             </button>
           </div>
 
+          <span className="hidden font-mono text-[11px] text-text-subtle md:inline">
+            {t("kbd.navHint")}
+          </span>
           <span className="font-mono text-[11px] text-text-subtle">
             {t("count", { n: items.length })}
           </span>
@@ -461,11 +464,15 @@ export default function ArtifactsGlobalPage() {
             }
           >
             {state === "loading" ? (
-              <LoadingState title={t("title")} description={t("subtitle")} />
+              // Skeleton matches the view mode so the layout doesn't pop
+              // when results land — list rows for list view, card grid
+              // for grid view. Reference: Vercel deployments / GitHub
+              // Files use shape-of-final-content skeletons.
+              <SkeletonList viewMode={viewMode} />
             ) : state === "error" && error ? (
               <ErrorState title={t("loadFailed", { error })} />
             ) : items.length === 0 ? (
-              <EmptyList q={q} kind={kind} t={t} />
+              <EmptyList q={q} kind={kind} hasActiveFilters={hasActiveFilters} onClearAll={clearAllFilters} t={t} />
             ) : viewMode === "grid" ? (
               <ArtifactGrid
                 artifacts={items}
@@ -636,14 +643,116 @@ function Hero({
       </div>
 
       {stats && stats.total > 0 ? (
-        <ByKindStrip
-          stats={stats}
-          t={t}
-          activeKind={activeKind}
-          onPickKind={onPickKind}
-        />
+        <div className="grid gap-3 lg:grid-cols-2">
+          <ByKindStrip
+            stats={stats}
+            t={t}
+            activeKind={activeKind}
+            onPickKind={onPickKind}
+          />
+          <ActivityCard stats={stats} t={t} />
+        </div>
       ) : null}
     </header>
+  );
+}
+
+function ActivityCard({
+  stats,
+  t,
+}: {
+  stats: ArtifactStatsDto;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const max = Math.max(1, ...stats.daily_counts);
+  // Plain SVG sparkline · same primitive used in cockpit but inlined here
+  // since we want a slightly different visual treatment (filled-area under
+  // the line, end-of-line dot to anchor today). 14 buckets · 200×40 vbox.
+  const w = 200;
+  const h = 40;
+  const stepX = stats.daily_counts.length > 1 ? w / (stats.daily_counts.length - 1) : 0;
+  const points = stats.daily_counts.map((v, i) => {
+    const x = i * stepX;
+    const y = h - (v / max) * (h - 6) - 3;
+    return { x, y };
+  });
+  const linePath = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .join(" ");
+  const areaPath = `${linePath} L${w},${h} L0,${h} Z`;
+  const last = points[points.length - 1];
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm">
+      <div className="mb-3 flex items-baseline justify-between">
+        <div>
+          <div className="text-caption font-mono uppercase tracking-wider text-text-muted">
+            {t("stats.activity")}
+          </div>
+          <div className="text-caption text-text-subtle">{t("stats.activityHint")}</div>
+        </div>
+        <div className="font-mono text-2xl font-semibold tabular-nums text-text">
+          {stats.last_7d}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-10 w-full">
+        <path d={areaPath} fill="var(--color-primary)" fillOpacity={0.12} />
+        <path
+          d={linePath}
+          stroke="var(--color-primary)"
+          strokeWidth="1.5"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {last ? (
+          <circle cx={last.x} cy={last.y} r={2.4} fill="var(--color-primary)" />
+        ) : null}
+      </svg>
+
+      {stats.top_employees.length > 0 ? (
+        <div className="mt-4 border-t border-border pt-3">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-caption font-mono uppercase tracking-wider text-text-muted">
+              {t("stats.contributors")}
+            </span>
+            <span className="text-caption text-text-subtle">{t("stats.contributorsHint")}</span>
+          </div>
+          <ul className="space-y-1.5">
+            {stats.top_employees.map((row) => {
+              const pct =
+                stats.top_employees[0]?.count
+                  ? (row.count / stats.top_employees[0].count) * 100
+                  : 0;
+              const shortKey = row.key.slice(0, 8);
+              return (
+                <li key={row.key} className="flex items-center gap-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 text-text-muted">
+                    <Icon name="users" size={11} />
+                  </span>
+                  <span
+                    className="font-mono text-caption text-text"
+                    title={row.key}
+                  >
+                    {shortKey}
+                  </span>
+                  <div className="relative ml-2 h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                      style={{ width: `${pct}%`, opacity: 0.85 }}
+                    />
+                  </div>
+                  <span className="font-mono text-caption tabular-nums text-text-muted">
+                    {row.count}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -863,17 +972,23 @@ function ActiveFilterChips({
 function EmptyList({
   q,
   kind,
+  hasActiveFilters,
+  onClearAll,
   t,
 }: {
   q: string;
   kind: string;
+  hasActiveFilters: boolean;
+  onClearAll: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
   // Differentiate "no artifacts at all" vs "filtered to nothing" so the
-  // user knows whether to clear filters or seed work.
-  const isFiltered = q.trim().length > 0 || kind !== "";
+  // user knows whether to clear filters or seed work. The "filtered →
+  // nothing" branch gets a CTA reset button; the "fresh workspace"
+  // branch gets a quiet hint pointing at the chat.
+  const isFiltered = q.trim().length > 0 || kind !== "" || hasActiveFilters;
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-10 text-center">
       <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-muted text-primary">
         <Icon name="folder" size={20} />
       </span>
@@ -882,8 +997,64 @@ function EmptyList({
       </p>
       {!isFiltered ? (
         <p className="max-w-xs text-caption text-text-muted">{t("emptyAllHint")}</p>
-      ) : null}
+      ) : (
+        <button
+          type="button"
+          onClick={onClearAll}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-caption text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text"
+        >
+          <Icon name="x" size={11} />
+          {t("filters.clearAll")}
+        </button>
+      )}
     </div>
+  );
+}
+
+/**
+ * SkeletonList · shape-of-final-content placeholder while the list is
+ * loading. Reference: Vercel deployments + GitHub Files. Reduces perceived
+ * latency vs a centered spinner because the user can already see "rows
+ * are coming" and the surrounding chrome stays put when data lands.
+ */
+function SkeletonList({ viewMode }: { viewMode: "list" | "grid" }) {
+  // 6 skeleton rows for list, 6 cards for grid · enough to fill the
+  // typical viewport without thrashing the DOM if content lands fast.
+  const count = 6;
+  if (viewMode === "grid") {
+    return (
+      <ul aria-busy className="grid grid-cols-1 gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: count }, (_, i) => (
+          <li key={i} className="rounded-xl border border-border bg-surface p-3">
+            <div className="flex items-center gap-2">
+              <span className="h-9 w-9 rounded-lg bg-surface-2 animate-pulse-soft" />
+              <div className="flex-1 space-y-2">
+                <span className="block h-3 w-[70%] rounded bg-surface-2 animate-pulse-soft" />
+                <span className="block h-2 w-[35%] rounded bg-surface-2 animate-pulse-soft" />
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="h-2 w-8 rounded bg-surface-2 animate-pulse-soft" />
+              <span className="h-2 w-12 rounded bg-surface-2 animate-pulse-soft" />
+              <span className="h-2 w-8 rounded bg-surface-2 animate-pulse-soft" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <ul aria-busy className="flex flex-col gap-1 p-2">
+      {Array.from({ length: count }, (_, i) => (
+        <li key={i} className="flex items-center gap-2 rounded-md px-2 py-2">
+          <span className="h-7 w-7 rounded-md bg-surface-2 animate-pulse-soft" />
+          <div className="flex-1 space-y-1.5">
+            <span className="block h-3 w-[60%] rounded bg-surface-2 animate-pulse-soft" />
+            <span className="block h-2 w-[35%] rounded bg-surface-2 animate-pulse-soft" />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
