@@ -1,36 +1,39 @@
 "use client";
 
 /**
- * AllhandsLogo · primary brand mark — 5 concept variants for review.
+ * AllhandsLogo · primary brand mark — premium concept exploration.
  *
- * Concepts:
- *   - "constellation"  · 1 lead + 4 satellites with hairline connectors.
- *                         Story: Lead Agent orchestrates a team.
- *   - "spark"          · 4-armed gradient starburst + center disc.
- *                         Story: agent intelligence radiating outward.
- *   - "cluster"        · honeycomb of 7 nodes (1 big + 6 small).
- *                         Story: a collective, not just a node.
- *   - "halo"           · minimal outer ring + center dot, premium-quiet.
- *                         Story: focused, deliberate, calm operator.
- *   - "pulse"          · concentric broadcast rings around a center node.
- *                         Story: signal, dispatch, real-time orchestration.
+ * Concepts (premium tier · v2):
+ *   - "aperture"   · 6-blade camera aperture rotating around a pinhole.
+ *                     Story: focus, lens, precision under load.
+ *   - "origami"    · single diagonal fold on a brand-gradient tile —
+ *                     two "faces" of one platform.
+ *                     Story: depth, reveal, paper-fold craft.
+ *   - "bracket"    · two angle brackets embracing a center node.
+ *                     Story: structured + protected (護欄/编排隐喻).
+ *   - "stack"      · 3 isometric tiles forming a layered platform.
+ *                     Story: 10-layer architecture, depth, foundation.
+ *   - "orbit"      · a tilted orbital ring with a satellite + lead node.
+ *                     Story: orchestration, system motion, hierarchy.
  *
  * Brand-identity glyphs are exempted from §3.8 colour discipline (same
  * exception as provider/model marks). Tile variants use the brand
  * gradient (primary → accent) directly via `var()`-resolved stops.
  *
- * Sizing: pass `size` (px). 32-unit viewBox internally so all proportions
- * scale linearly; favicon ships at 32, sidebar at 32, hero at 36-44.
+ * Sizing: 32-unit viewBox internally. Favicon 32 · sidebar 32 · hero 36-44.
  */
 
 import { cn } from "@/lib/cn";
 
 export type LogoConcept =
-  | "constellation"
-  | "spark"
-  | "cluster"
-  | "halo"
-  | "pulse";
+  | "aperture"
+  | "origami"
+  | "bracket"
+  | "stack"
+  | "orbit"
+  // legacy alias kept so existing constellation refs don't crash; renders
+  // the closest premium replacement (`orbit`).
+  | "constellation";
 
 type Props = {
   size?: number;
@@ -41,14 +44,16 @@ type Props = {
 
 const TILE_GRAD_ID = "ahg-tile";
 const TILE_GLOW_ID = "ahg-glow";
+const FOLD_GRAD_ID = "ahg-fold";
 
 export function AllhandsLogo({
   size = 28,
   className,
   variant = "tile",
-  concept = "constellation",
+  concept = "aperture",
 }: Props) {
-  const renderInner = INNER_RENDERERS[concept];
+  const resolved = concept === "constellation" ? "orbit" : concept;
+  const renderInner = INNER_RENDERERS[resolved];
   return (
     <svg
       viewBox="0 0 32 32"
@@ -75,13 +80,25 @@ export function AllhandsLogo({
         <radialGradient
           id={TILE_GLOW_ID}
           cx="16"
-          cy="13"
-          r="15"
+          cy="11"
+          r="16"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0%" stopColor="white" stopOpacity="0.32" />
+          <stop offset="0%" stopColor="white" stopOpacity="0.34" />
           <stop offset="65%" stopColor="white" stopOpacity="0" />
         </radialGradient>
+        {/* Used by origami fold to darken the bottom-right face */}
+        <linearGradient
+          id={FOLD_GRAD_ID}
+          x1="0"
+          y1="0"
+          x2="32"
+          y2="32"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0%" stopColor="black" stopOpacity="0" />
+          <stop offset="100%" stopColor="black" stopOpacity="0.22" />
+        </linearGradient>
       </defs>
 
       {variant === "tile" ? (
@@ -97,9 +114,7 @@ export function AllhandsLogo({
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Inner renderers — one per concept. Each receives `tile` (true if drawing
-// on top of the gradient tile, white inks) so mono outline mode can swap to
-// currentColor for dense / dark surfaces without duplicating geometry.
+// Inner renderers — each receives `tile` (drawing on top of gradient).
 // ───────────────────────────────────────────────────────────────────────────
 
 type InnerRenderer = (tile: boolean) => React.ReactNode;
@@ -107,128 +122,227 @@ type InnerRenderer = (tile: boolean) => React.ReactNode;
 const ink = (tile: boolean, opacity = 1) =>
   tile ? `rgba(255,255,255,${opacity})` : "currentColor";
 
-const constellation: InnerRenderer = (tile) => (
-  <>
-    <g
-      stroke={ink(tile, 0.32)}
-      strokeWidth={tile ? 0.6 : 0.8}
-      strokeLinecap="round"
-    >
-      <line x1="16" y1="16" x2="16" y2="8" />
-      <line x1="16" y1="16" x2="24" y2="16" />
-      <line x1="16" y1="16" x2="16" y2="24" />
-      <line x1="16" y1="16" x2="8" y2="16" />
-    </g>
-    <g fill={ink(tile, 0.78)}>
-      <circle cx="16" cy="8" r="1.7" />
-      <circle cx="24" cy="16" r="1.7" />
-      <circle cx="16" cy="24" r="1.7" />
-      <circle cx="8" cy="16" r="1.7" />
-    </g>
-    <circle cx="16" cy="16" r="4" fill={ink(tile)} />
-  </>
-);
+// ─── 1. APERTURE · 6-blade radial geometry ────────────────────────────────
+//
+// 6 wedges meeting around a central pinhole. Each wedge is a quadrilateral
+// computed parametrically: outer arc + inner offset gives the classic
+// aperture-blade slant (not just simple triangles — that would read as a
+// pinwheel). Subtle alpha variation across blades gives a sense of depth.
 
-const spark: InnerRenderer = (tile) => (
-  <>
-    {/* 4 diamond rays */}
-    <g fill={ink(tile, 0.85)}>
-      <path d="M16 4 L18 14 L16 16 L14 14 Z" />
-      <path d="M28 16 L18 18 L16 16 L18 14 Z" />
-      <path d="M16 28 L14 18 L16 16 L18 18 Z" />
-      <path d="M4 16 L14 14 L16 16 L14 18 Z" />
-    </g>
-    <circle cx="16" cy="16" r="2.6" fill={ink(tile)} />
-  </>
-);
-
-const cluster: InnerRenderer = (tile) => {
-  // Honeycomb-ish cluster: one big in the middle, 6 small around at hex angles.
-  const R = 6.6; // satellite radius from center
-  const small = 1.55;
-  const angles = [0, 60, 120, 180, 240, 300]; // degrees
+const aperture: InnerRenderer = (tile) => {
+  const cx = 16;
+  const cy = 16;
+  const outerR = 12;
+  const innerR = 4.4;
+  const blades: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (i * 60 * Math.PI) / 180;
+    // Each blade spans a 60° arc, with an offset so blades overlap subtly.
+    const a1 = a - Math.PI / 6;
+    const a2 = a + Math.PI / 6;
+    const a3 = a + Math.PI / 3.4;
+    // Outer arc points + inner pivot · forms the blade wedge.
+    const p = (r: number, ang: number) =>
+      `${(cx + r * Math.cos(ang)).toFixed(2)},${(cy + r * Math.sin(ang)).toFixed(2)}`;
+    blades.push(
+      `M ${p(innerR, a1)} L ${p(outerR, a1)} L ${p(outerR, a2)} L ${p(outerR * 0.92, a3)} Z`,
+    );
+  }
   return (
     <>
-      <g fill={ink(tile, 0.7)}>
-        {angles.map((a) => {
-          const rad = ((a - 90) * Math.PI) / 180;
-          const cx = 16 + R * Math.cos(rad);
-          const cy = 16 + R * Math.sin(rad);
-          return <circle key={a} cx={cx} cy={cy} r={small} />;
-        })}
-      </g>
-      <circle cx="16" cy="16" r="3.4" fill={ink(tile)} />
+      {blades.map((d, i) => (
+        <path
+          key={i}
+          d={d}
+          fill={ink(tile, 0.55 + ((i % 3) * 0.12))}
+        />
+      ))}
+      {/* Pinhole · slightly recessed, with a faint inner ring */}
+      <circle cx="16" cy="16" r="3.4" fill={ink(tile, tile ? 1 : 0.96)} />
+      <circle
+        cx="16"
+        cy="16"
+        r="3.4"
+        fill="none"
+        stroke={ink(tile, 0.18)}
+        strokeWidth="0.6"
+      />
     </>
   );
 };
 
-const halo: InnerRenderer = (tile) => (
-  <>
-    {/* Outer dashed ring · slow rhythm, premium-quiet */}
-    <circle
-      cx="16"
-      cy="16"
-      r="10"
-      fill="none"
-      stroke={ink(tile, 0.55)}
-      strokeWidth={tile ? 1.2 : 1.4}
-      strokeDasharray="2 3.4"
-      strokeLinecap="round"
-    />
-    {/* Inner soft ring */}
-    <circle
-      cx="16"
-      cy="16"
-      r="6.2"
-      fill="none"
-      stroke={ink(tile, 0.28)}
-      strokeWidth={tile ? 0.8 : 1}
-    />
-    <circle cx="16" cy="16" r="3.2" fill={ink(tile)} />
-  </>
-);
+// ─── 2. ORIGAMI · single diagonal fold ────────────────────────────────────
+//
+// A clean fold from upper-left toward lower-right. The bottom-right face
+// is darkened with a black-stop overlay (FOLD_GRAD_ID) so the tile reads
+// as paper, not a flat gradient. Mono variant shows just the seam line +
+// subtle face shading via stroke.
 
-const pulse: InnerRenderer = (tile) => (
-  <>
-    <circle
-      cx="16"
-      cy="16"
-      r="12"
-      fill="none"
-      stroke={ink(tile, 0.16)}
-      strokeWidth={tile ? 1 : 1.2}
-    />
-    <circle
-      cx="16"
-      cy="16"
-      r="8"
-      fill="none"
-      stroke={ink(tile, 0.34)}
-      strokeWidth={tile ? 1 : 1.2}
-    />
-    <circle
-      cx="16"
-      cy="16"
-      r="4.2"
-      fill="none"
-      stroke={ink(tile, 0.6)}
-      strokeWidth={tile ? 1 : 1.2}
-    />
-    <circle cx="16" cy="16" r="2.2" fill={ink(tile)} />
-  </>
-);
-
-const INNER_RENDERERS: Record<LogoConcept, InnerRenderer> = {
-  constellation,
-  spark,
-  cluster,
-  halo,
-  pulse,
+const origami: InnerRenderer = (tile) => {
+  if (!tile) {
+    // Mono: outline of square + diagonal seam · minimal but recognisable.
+    return (
+      <>
+        <rect
+          x="3"
+          y="3"
+          width="26"
+          height="26"
+          rx="6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+        />
+        <line
+          x1="7"
+          y1="11"
+          x2="25"
+          y2="29"
+          stroke="currentColor"
+          strokeOpacity="0.6"
+          strokeWidth="1.2"
+        />
+        <circle cx="13" cy="20" r="1.5" fill="currentColor" />
+      </>
+    );
+  }
+  return (
+    <>
+      {/* Bottom-right face · darkened triangle, clipped to the tile */}
+      <path
+        d="M 7 11 L 25 29 L 32 32 L 32 0 Z"
+        fill={`url(#${FOLD_GRAD_ID})`}
+      />
+      {/* Fold seam · soft white hairline */}
+      <line
+        x1="7"
+        y1="11"
+        x2="25"
+        y2="29"
+        stroke="white"
+        strokeOpacity="0.45"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      {/* Wordless mark in the larger face — a single bright disc — gives the
+          tile a focal point so it reads as deliberate at any size. */}
+      <circle cx="12.5" cy="19.5" r="2.2" fill="white" fillOpacity="0.92" />
+    </>
+  );
 };
 
-/**
- * AllhandsWordmark — companion typographic mark.
- */
+// ─── 3. BRACKET · code-bracket embrace ────────────────────────────────────
+//
+// Two angled brackets `〈 • 〉` flanking a center disc. Code/structure
+// vibe. The brackets are stroked (round caps) for a confident weight that
+// holds at small sizes.
+
+const bracket: InnerRenderer = (tile) => (
+  <>
+    <g
+      stroke={ink(tile, 0.92)}
+      strokeWidth={tile ? 2 : 2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    >
+      {/* Left bracket */}
+      <polyline points="11,7 6,16 11,25" />
+      {/* Right bracket */}
+      <polyline points="21,7 26,16 21,25" />
+    </g>
+    {/* Center node · bold disc, slightly larger than the bracket vertices */}
+    <circle cx="16" cy="16" r="2.6" fill={ink(tile)} />
+  </>
+);
+
+// ─── 4. STACK · isometric layered tiles ───────────────────────────────────
+//
+// 3 stacked rounded squares at slight offsets, decreasing opacity from
+// front to back · reads as "platform with depth, layered architecture".
+// Strictly 2D (no projection) so the mark scales cleanly to 16px.
+
+const stack: InnerRenderer = (tile) => (
+  <>
+    {/* Back tile */}
+    <rect
+      x="9"
+      y="5"
+      width="14"
+      height="14"
+      rx="3"
+      fill={ink(tile, 0.32)}
+    />
+    {/* Middle tile */}
+    <rect
+      x="6"
+      y="9"
+      width="14"
+      height="14"
+      rx="3"
+      fill={ink(tile, 0.55)}
+    />
+    {/* Front tile */}
+    <rect
+      x="3"
+      y="13"
+      width="14"
+      height="14"
+      rx="3"
+      fill={ink(tile)}
+    />
+    {/* Subtle separator hairlines · only on tile variant where contrast helps */}
+    {tile ? (
+      <g stroke="white" strokeOpacity="0.22" strokeWidth="0.5">
+        <rect x="9" y="5" width="14" height="14" rx="3" fill="none" />
+        <rect x="6" y="9" width="14" height="14" rx="3" fill="none" />
+      </g>
+    ) : null}
+  </>
+);
+
+// ─── 5. ORBIT · tilted ring + satellite + lead node ───────────────────────
+//
+// A 30°-rotated ellipse with a single satellite riding on it and a lead
+// node at the center. Orchestration as gravitational system. The tilted
+// ellipse is what makes this read as motion rather than a static circle.
+
+const orbit: InnerRenderer = (tile) => (
+  <>
+    <ellipse
+      cx="16"
+      cy="16"
+      rx="11"
+      ry="4.5"
+      fill="none"
+      stroke={ink(tile, 0.7)}
+      strokeWidth={tile ? 1.2 : 1.4}
+      transform="rotate(-28 16 16)"
+    />
+    {/* Satellite · positioned on the orbital path (precomputed) */}
+    <circle cx="24.5" cy="11.6" r="1.7" fill={ink(tile, 0.92)} />
+    {/* Lead node · bright center disc with a subtle ring for hierarchy */}
+    <circle cx="16" cy="16" r="3.6" fill={ink(tile)} />
+    <circle
+      cx="16"
+      cy="16"
+      r="3.6"
+      fill="none"
+      stroke={ink(tile, 0.22)}
+      strokeWidth="0.6"
+    />
+  </>
+);
+
+const INNER_RENDERERS: Record<Exclude<LogoConcept, "constellation">, InnerRenderer> = {
+  aperture,
+  origami,
+  bracket,
+  stack,
+  orbit,
+};
+
+/** Companion typographic mark. */
 export function AllhandsWordmark({
   className,
   size = 14,
@@ -255,33 +369,33 @@ export function AllhandsWordmark({
 
 /** Concept metadata for the gallery page. */
 export const LOGO_CONCEPTS: Array<{
-  id: LogoConcept;
+  id: Exclude<LogoConcept, "constellation">;
   name: string;
   story: string;
 }> = [
   {
-    id: "constellation",
-    name: "Constellation · 星座",
-    story: "Lead 居中 · 4 名员工环绕 · hairline 暗示编排关系。",
+    id: "aperture",
+    name: "Aperture · 光圈",
+    story: "六叶光圈 + 中心针孔 · 像相机镜头 · 暗示「聚焦」与「精确调度」。",
   },
   {
-    id: "spark",
-    name: "Spark · 光芒",
-    story: "4 道菱形光束从中心发散 · 智能向外辐射。",
+    id: "origami",
+    name: "Origami · 折纸",
+    story: "对角线一折 · 两个面对照 · 平台「展开」的瞬间 · 有纸感的高级。",
   },
   {
-    id: "cluster",
-    name: "Cluster · 集群",
-    story: "蜂窝 7 节点 · 强调「群体」,而非「枢纽」。",
+    id: "bracket",
+    name: "Bracket · 括号",
+    story: "两侧尖括号拥抱中心节点 · 代码 / 护栏 / 编排的视觉同构。",
   },
   {
-    id: "halo",
-    name: "Halo · 光环",
-    story: "外环虚线 + 中心点 · 极简、克制、像 watch face。",
+    id: "stack",
+    name: "Stack · 层叠",
+    story: "三块圆角瓦片错位叠放 · 10 层架构的几何隐喻 · 平台感强。",
   },
   {
-    id: "pulse",
-    name: "Pulse · 脉冲",
-    story: "三层同心环 · 信号广播 · 实时调度的视觉隐喻。",
+    id: "orbit",
+    name: "Orbit · 轨道",
+    story: "倾斜椭圆 + 中心 lead + 一颗卫星 · 编排即引力系统。",
   },
 ];
