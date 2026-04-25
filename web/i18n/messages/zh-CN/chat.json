@@ -31,8 +31,8 @@
       "stop": "停止",
       "send": "发送",
       "thinking": "深度思考",
-      "thinkingTooltipOn": "已开启 · 强制要求模型思考(发送 thinking 启用信号)",
-      "thinkingTooltipOff": "已关闭 · 使用模型默认行为。若需无思考输出,请选非思考变体的模型"
+      "thinkingTooltipOn": "已开启 · 让模型思考(发送 thinking: enabled)",
+      "thinkingTooltipOff": "已关闭 · 让模型不思考(发送 thinking: disabled)。若上游反代不识别该字段,会返回空响应并提示换 provider"
     },
     "header": {
       "loading": "加载中…",

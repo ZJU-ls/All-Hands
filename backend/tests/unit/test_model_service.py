@@ -684,28 +684,20 @@ async def test_astream_chat_test_anthropic_thinking_populates_reasoning_and_timi
 
 
 @pytest.mark.asyncio
-async def test_astream_chat_test_anthropic_enable_thinking_false_omits_field() -> None:
-    """2026-04-25 (IDEALAB regression): `enable_thinking=False` MUST result in
-    NO thinking-related field in the body — neither `enable_thinking: false`
-    nor `thinking: disabled`.
+async def test_astream_chat_test_anthropic_enable_thinking_false_sends_disabled() -> None:
+    """B02 final: when user explicitly toggles thinking OFF on a non-native
+    anthropic-kind provider (DashScope coding-plan, etc.), we MUST send
+    `thinking: {"type": "disabled"}` so the upstream actually stops
+    reasoning. The user's explicit decision wins over vendor preferences.
 
-    Why this is the right contract (was the OPPOSITE pre-2026-04-25):
-
-    - Old contract sent both fields to "speak to every vendor at once". Worked
-      for DashScope coding-plan, broke IDEALAB / OpenRouter / random
-      anthropic-compat reverse-proxies that don't recognise the field and
-      return empty SSE streams (zero content_block_delta events). User saw
-      `response="" · output_tokens=0 · tok/s 0.0` and was confused.
-
-    - New contract:default OFF == "use server default". Don't send anything.
-      Most thinking-capable models default to thinking=off anyway, so the
-      observable behaviour is the same. Users who must force OFF on a
-      thinking-by-default model can pick the non-thinking variant of the
-      model instead. This trade-off (lose explicit-off for one provider
-      family) is far cheaper than losing entire compat-proxy ecosystems.
-
-    - Mirrors Claude Code's `ChatAnthropic.thinking` policy: `thinking` field
-      is `undefined` unless the call explicitly opts in (ref-src-claude/V02).
+    Anti-regression context:
+    - Models like qwen3.6-plus / glm-5 default to thinking=ON server-side.
+    - If we omit the field on explicit user-off, the model still thinks and
+      the user sees a "思考过程" panel they didn't ask for (real bug
+      reported 2026-04-25 with screenshot).
+    - Half-anthropic-compat proxies (IDEALAB) that choke on `disabled` are
+      caught by the empty-response detector in `_astream_anthropic_chat`,
+      which yields a clear error instead of silent zero-token success.
     """
     captured: dict[str, Any] = {}
 
@@ -744,15 +736,12 @@ async def test_astream_chat_test_anthropic_enable_thinking_false_omits_field() -
         ]
 
     body = captured["body"]
-    # Neither field — that's the whole point. Omission means "use server
-    # default", which is cross-vendor safe.
-    assert "enable_thinking" not in body, (
-        "enable_thinking=False must NOT inject the bool root field — "
-        "vendor compat proxies (IDEALAB) don't recognise it"
-    )
-    assert "thinking" not in body, (
-        "enable_thinking=False must NOT inject `thinking: disabled` — "
-        "IDEALAB returns empty SSE when this field is present"
+    # Bool root field stays out — that's an OpenAI/Qwen quirk, not anthropic spec.
+    assert "enable_thinking" not in body
+    # Structured thinking field MUST carry the user's explicit disable.
+    assert body.get("thinking") == {"type": "disabled"}, (
+        "user's explicit OFF must reach the upstream as thinking.type=disabled "
+        "so thinking-by-default models (qwen3.6-plus, glm-5, etc.) actually stop"
     )
     reasoning_events = [e for e in events if e["type"] == "reasoning"]
     assert reasoning_events == []
@@ -864,8 +853,13 @@ async def test_astream_chat_test_native_anthropic_suppresses_thinking_disabled()
     assert "enable_thinking" not in body, (
         "post-2026-04-25: bool root field is no longer mirrored on anthropic body"
     )
+    # Native exception:Anthropic's official API 400s on thinking.type=disabled.
+    # Their default is no-thinking, so omission == user's intent. This is the
+    # ONLY case where the toggle's OFF state is implemented as omission;
+    # everywhere else we send `thinking: disabled` per the user's wish.
     assert "thinking" not in body, (
-        "enable_thinking=False = use server default = omit thinking field"
+        "Native Anthropic rejects thinking.type=disabled; omit instead "
+        "(default is already no-thinking, so omission honours user intent)"
     )
 
 
@@ -922,6 +916,48 @@ async def test_astream_chat_test_anthropic_does_not_hide_gateway_leaked_thinking
         "gateway-leaked thinking_delta must surface as reasoning events so a "
         "gateway bug is observable, not hidden by client-side filtering"
     )
+
+
+@pytest.mark.asyncio
+async def test_astream_chat_test_anthropic_empty_stream_yields_error() -> None:
+    """IDEALAB regression contract: a "successfully ended" stream with zero
+    content_block_delta + zero thinking + zero output_tokens is almost
+    certainly an upstream proxy that ate the thinking field. Translate to
+    an actionable error event instead of a misleading silent done.
+    """
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        # Empty stream — no content_block_delta, no thinking_delta. Mimics
+        # IDEALAB's behaviour when it doesn't recognise the thinking field.
+        frames = _anthropic_sse_bytes(
+            [
+                ("message_start", {"message": {"usage": {"input_tokens": 5, "output_tokens": 0}}}),
+                ("message_stop", {}),
+            ]
+        )
+        return httpx.Response(200, content=frames, headers={"Content-Type": "text/event-stream"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        events = [
+            e
+            async for e in astream_chat_test(
+                _anthropic_provider(base_url="https://idealab.alibaba-inc.com/api/anthropic"),
+                "claude-3-5-sonnet",
+                prompt="hi",
+                enable_thinking=False,
+                http_client=client,
+            )
+        ]
+    types = [e["type"] for e in events]
+    assert "error" in types, (
+        "empty SSE stream must surface as an error event, not a silent done "
+        "with empty response (was the IDEALAB user-confusion bug)"
+    )
+    err_event = next(e for e in events if e["type"] == "error")
+    assert err_event["error_category"] == "provider_error"
+    # Done event must NOT be emitted — error is terminal.
+    assert "done" not in types
 
 
 @pytest.mark.asyncio

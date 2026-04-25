@@ -396,26 +396,27 @@ def _build_anthropic_body(
         body["top_p"] = top_p
     if stop:
         body["stop_sequences"] = stop
-    # 第一性原理 (2026-04-25 IDEALAB regression):
-    # - thinking 是 opt-in 字段,默认 OFF 就 omitted entirely。不发 enable_thinking
-    #   bool root,不发 thinking: disabled,什么都不发。
-    # - 只在用户显式 opt-in (enable_thinking is True) 时才发 thinking: enabled。
-    # - `enable_thinking is False` ≡ `enable_thinking is None`,因为对 Anthropic
-    #   家族来说"不发 = 默认关"。
-    # - Why: IDEALAB / OpenRouter / 自建反代等"半 anthropic-compat"不识别
-    #   thinking: disabled,会返回空 SSE stream(用户看到空响应 + 0 tokens)。
-    #   Claude Code 同款:omit by default,只在 hasThinking 时才注入 thinking
-    #   字段(ref-src-claude/V02 § ChatAnthropic.thinking)。
+    # Toggle 语义(2026-04-25 final):用户的显式决策必须被执行,不能因为
+    # vendor 默认行为不一致就把 toggle 变成"建议性"。
+    #
+    # - True  → 发 thinking: enabled  (强制思考)
+    # - False → 发 thinking: disabled (强制不思考 — 用户点 off 就该 off)
+    # - None  → 不发 thinking 字段     (没指定,用 server default)
+    #
+    # 唯一例外:Native api.anthropic.com 协议层面拒绝 "disabled"(400),
+    # 它的 server default 本来就是 no-thinking,所以 False 时 omit 即可。
+    # 这是协议事实,不是 vendor 偏好。
+    #
+    # 半 anthropic-compat 反代(IDEALAB / 自建网关)不识别 thinking 字段 →
+    # 上游返回空 SSE → 由 _astream_anthropic_chat 的空响应检测兜底报错。
+    # 报错路径,不是默认路径 —— 用户偏好 > 上游兼容性。
     if enable_thinking is True:
         body["thinking"] = {
             "type": "enabled",
             "budget_tokens": ANTHROPIC_DEFAULT_MAX_TOKENS // 2,
         }
-    # `native_anthropic` is no longer consulted — the omission policy above
-    # already does the right thing for native (omit = use server default,
-    # which is no thinking) AND for compat proxies (omit = avoid IDEALAB-style
-    # silent breakage). Kept in the signature for backward-compat callers.
-    _ = native_anthropic
+    elif enable_thinking is False and not native_anthropic:
+        body["thinking"] = {"type": "disabled"}
     return body
 
 
@@ -746,17 +747,17 @@ async def _astream_anthropic_chat(
     else:
         tok_per_sec = 0.0
 
-    # IDEALAB / 半 anthropic-compat 反代回归防御:
+    # IDEALAB / 半 anthropic-compat 反代防御:
     # 流"成功结束"(无 HTTP error · 无 exception)但 content + reasoning
-    # 都是空字符串,几乎一定是代理把 thinking 字段吞了或者协议不兼容。
-    # 旧行为:返回 done event 带 response: "" — 用户看到一个空响应 + tok/s 0,
-    # 困惑且无法 actionable。新行为:翻成 error event,告诉用户怎么办。
+    # 都是空字符串,几乎一定是代理不识别 thinking 字段把整个流吞了。
+    # 翻成 error event,告诉用户上游兼容性问题(而不是默默给 0 tokens)。
     if not response and not reasoning_text and output_tokens == 0:
         yield {
             "type": "error",
             "error": (
-                "上游返回了空响应流 — 多见于 anthropic-compat 反代不支持 thinking "
-                "参数或协议异常。建议关闭「深度思考」开关,或换一个原生支持的模型。"
+                "上游返回了空响应流 — 该 anthropic-compat 反代可能不支持 "
+                "thinking 字段(无论开关状态)。换一个 provider 或换非思考的"
+                "模型变体试试。"
             ),
             "error_category": "provider_error",
             "latency_ms": latency_ms,

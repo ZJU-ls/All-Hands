@@ -31,8 +31,8 @@
       "stop": "Stop",
       "send": "Send",
       "thinking": "Deep thinking",
-      "thinkingTooltipOn": "On · force the model to think (sends the thinking-enabled signal)",
-      "thinkingTooltipOff": "Off · use the model's default. For guaranteed no-thinking, pick a non-thinking variant of the model"
+      "thinkingTooltipOn": "On · model thinks (sends thinking: enabled)",
+      "thinkingTooltipOff": "Off · model does not think (sends thinking: disabled). If the upstream proxy does not recognise the field, it returns an empty response and the dialog will suggest switching providers"
     },
     "header": {
       "loading": "Loading…",
