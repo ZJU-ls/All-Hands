@@ -373,7 +373,10 @@ export function DesignForm({
             className="w-full min-h-[180px] max-h-[400px] overflow-y-auto rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text"
           >
             {systemPrompt ? (
-              <AgentMarkdown content={systemPrompt} />
+              <AgentMarkdown
+                content={systemPrompt}
+                className="ah-prose ah-prose-sm max-w-none"
+              />
             ) : composeState === "loading" ? (
               <p className="text-[11px] text-text-muted">等待第一段输出…</p>
             ) : (
