@@ -111,6 +111,10 @@ class DocumentNotFound(KBError):
     pass
 
 
+class _NoChatProvider(Exception):
+    """Internal marker — no usable LLMProvider for the Ask path."""
+
+
 class GrantDenied(KBError):
     """Raised when an agent-initiated write hits no matching grant.
 
@@ -498,6 +502,94 @@ class KnowledgeService:
         latency_ms = (time.monotonic() - t0) * 1000.0
         _record_search_stat(kb_id, query, latency_ms, len(results))
         return results
+
+    async def ask(
+        self,
+        kb_id: str,
+        question: str,
+        *,
+        top_k: int = 5,
+        model_ref: str | None = None,
+    ) -> dict[str, object]:
+        """RAG QA: search → assemble context → LLM with citation prompt."""
+        kb = await self.get_kb(kb_id)
+        cfg = RetrievalConfig.model_validate({**kb.retrieval_config.model_dump(), "top_k": top_k})
+
+        import time
+
+        t0 = time.monotonic()
+        hits = await self._retriever.search(kb_id, question, cfg)
+        if not hits:
+            return {
+                "answer": "知识库里没有跟这个问题相关的内容。换个说法,或者补一份资料试试。",
+                "sources": [],
+                "used_model": None,
+                "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+            }
+
+        context_block = "\n\n".join(f"[{i + 1}] {r.chunk.text}" for i, r in enumerate(hits))
+        system = (
+            "你是一个严谨的知识库助手。只用下面给出的上下文片段回答用户的问题。"
+            "在每个引用了上下文事实的句尾,标注片段编号,如 [1]、[2]。"
+            "如果上下文里没有答案,直接说不知道,不要编造。回答用中文。"
+        )
+        user = f"上下文:\n\n{context_block}\n\n问题:{question}"
+
+        try:
+            answer_text, used_model = await self._call_chat_llm(system, user, model_ref=model_ref)
+        except _NoChatProvider:
+            raise KBError(
+                "还没有可用的对话模型 · 去 /gateway 添加一个 OpenAI / 阿里云 / Anthropic provider"
+            ) from None
+
+        return {
+            "answer": answer_text,
+            "sources": [
+                {
+                    "n": i + 1,
+                    "chunk_id": r.chunk.id,
+                    "doc_id": r.chunk.document_id,
+                    "section_path": r.chunk.section_path,
+                    "page": r.chunk.page,
+                    "citation": r.citation,
+                    "text": r.chunk.text,
+                    "score": round(r.score, 4),
+                }
+                for i, r in enumerate(hits)
+            ],
+            "used_model": used_model,
+            "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+        }
+
+    async def _call_chat_llm(
+        self, system: str, user: str, *, model_ref: str | None = None
+    ) -> tuple[str, str]:
+        """Pick first usable LLMProvider, build LangChain chat model, invoke."""
+        from allhands.persistence.sql_repos import SqlLLMProviderRepo
+
+        async with self._session_maker() as s:
+            providers = await SqlLLMProviderRepo(s).list_all()
+        usable = [p for p in providers if p.enabled and p.api_key]
+        if not usable:
+            raise _NoChatProvider()
+        provider = usable[0]
+
+        ref = model_ref or get_settings().default_model_ref
+        if not ref:
+            from allhands.core.provider_presets import preset_for
+
+            ref = preset_for(provider.kind).default_model
+
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        from allhands.execution.llm_factory import build_llm
+
+        llm = build_llm(provider, ref)
+        result = await llm.ainvoke([SystemMessage(content=system), HumanMessage(content=user)])
+        text = getattr(result, "content", "") or ""
+        if isinstance(text, list):
+            text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
+        return str(text), ref
 
     async def diagnose_search(
         self, kb_id: str, query: str, *, top_k: int = 8

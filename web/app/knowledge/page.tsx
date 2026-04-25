@@ -33,6 +33,7 @@ import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import {
+  type AskResponse,
   type DiagnoseDto,
   type DocumentChunkDto,
   type DocumentDto,
@@ -40,6 +41,7 @@ import {
   type KBDto,
   type KBStatsDto,
   type ScoredChunkDto,
+  askKB,
   diagnoseSearch,
   getDocumentText,
   getKBStats,
@@ -123,6 +125,11 @@ export default function KnowledgePage() {
   const [committedQuery, setCommittedQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<ScoredChunkDto[] | null>(null);
+  // Ask mode (RAG QA) lives in the same query bar as search; toggle picks
+  // which path to fire on Enter.
+  const [mode, setMode] = useState<"search" | "ask">("search");
+  const [asking, setAsking] = useState(false);
+  const [askResult, setAskResult] = useState<AskResponse | null>(null);
   const [stateFilter, setStateFilter] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,6 +198,7 @@ export default function KnowledgePage() {
     setSearching(true);
     setCommittedQuery(searchQuery.trim());
     setResults(null);
+    setAskResult(null);
     try {
       setResults(await searchKB(activeKb.id, searchQuery.trim()));
     } catch (e) {
@@ -200,10 +208,26 @@ export default function KnowledgePage() {
     }
   }
 
+  async function handleAsk() {
+    if (!activeKb || !searchQuery.trim()) return;
+    setAsking(true);
+    setCommittedQuery(searchQuery.trim());
+    setAskResult(null);
+    setResults(null);
+    try {
+      setAskResult(await askKB(activeKb.id, searchQuery.trim(), { topK: 5 }));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setAsking(false);
+    }
+  }
+
   async function handleClearSearch() {
     setSearchQuery("");
     setCommittedQuery("");
     setResults(null);
+    setAskResult(null);
   }
 
   async function handleDeleteDoc(d: DocumentDto) {
@@ -289,47 +313,77 @@ export default function KnowledgePage() {
               <span>新建 KB</span>
             </button>
 
-            {/* Search bar */}
-            <div className="relative ml-auto flex min-w-[300px] flex-1 max-w-[640px]">
-              <Icon
-                name="search"
-                size={14}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
-              />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleSearch();
-                  if (e.key === "Escape") void handleClearSearch();
-                }}
-                placeholder={
-                  activeKb
-                    ? `搜 ${activeKb.name} 里的内容…`
-                    : "选个 KB 再搜"
-                }
-                disabled={!activeKb}
-                className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-20 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
-              />
-              {committedQuery && (
+            {/* Search / Ask bar */}
+            <div className="relative ml-auto flex min-w-[340px] flex-1 max-w-[720px] items-center gap-2">
+              {/* Mode toggle (segmented) */}
+              <div className="inline-flex h-9 items-center rounded-xl border border-border bg-surface p-0.5">
+                {(["search", "ask"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMode(m)}
+                    className={`inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[11px] font-medium transition duration-fast ${
+                      mode === m
+                        ? "bg-primary text-primary-fg shadow-soft-sm"
+                        : "text-text-muted hover:text-text"
+                    }`}
+                    title={m === "search" ? "搜索 · 列出片段" : "提问 · LLM 用片段回答"}
+                  >
+                    <Icon name={m === "search" ? "search" : "sparkles"} size={11} />
+                    {m === "search" ? "搜" : "问"}
+                  </button>
+                ))}
+              </div>
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      void (mode === "ask" ? handleAsk() : handleSearch());
+                    }
+                    if (e.key === "Escape") void handleClearSearch();
+                  }}
+                  placeholder={
+                    !activeKb
+                      ? "选个 KB 再操作"
+                      : mode === "ask"
+                        ? `问 ${activeKb.name}…  (LLM 用召回的片段回答)`
+                        : `搜 ${activeKb.name} 里的内容…`
+                  }
+                  disabled={!activeKb}
+                  className="h-9 w-full rounded-xl border border-border bg-surface pl-3 pr-20 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
+                />
+                {committedQuery && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="absolute right-14 top-1/2 -translate-y-1/2 text-[11px] text-text-subtle hover:text-text"
+                    aria-label="清除"
+                  >
+                    ✕
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleClearSearch}
-                  className="absolute right-12 top-1/2 -translate-y-1/2 text-[11px] text-text-subtle hover:text-text"
-                  aria-label="清除"
+                  onClick={() =>
+                    mode === "ask" ? void handleAsk() : void handleSearch()
+                  }
+                  disabled={
+                    (mode === "ask" ? asking : searching) ||
+                    !searchQuery.trim() ||
+                    !activeKb
+                  }
+                  className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
                 >
-                  ✕
+                  {(mode === "ask" ? asking : searching)
+                    ? "…"
+                    : mode === "ask"
+                      ? "问"
+                      : "搜"}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={handleSearch}
-                disabled={searching || !searchQuery.trim() || !activeKb}
-                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
-              >
-                {searching ? "…" : "Search"}
-              </button>
+              </div>
             </div>
 
             <Select
@@ -404,7 +458,17 @@ export default function KnowledgePage() {
               <div className="flex h-full items-center justify-center px-6 py-12 text-[12px] text-text-muted">
                 先在工具栏左侧选择一个知识库
               </div>
-            ) : pageState !== "ok" ? null : committedQuery ? (
+            ) : pageState !== "ok" ? null : askResult || asking ? (
+              <AskAnswerView
+                question={committedQuery}
+                result={askResult}
+                asking={asking}
+                onChunkClick={(docId) => {
+                  const d = docs?.find((x) => x.id === docId);
+                  if (d) setOpenDoc(d);
+                }}
+              />
+            ) : committedQuery ? (
               <SearchResultsView
                 query={committedQuery}
                 results={results}
@@ -703,6 +767,171 @@ function DocumentsView({
       </div>
     </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ask (RAG) answer view — Glean / Perplexity style
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Renders the LLM answer with inline cite chips. The model output uses
+ * "[1]", "[2]" markers; we replace them with clickable buttons that open
+ * the referenced source card. The full sources list sits below the answer
+ * (Perplexity's "sources strip" + Cohere Coral's footnote pattern).
+ */
+function AskAnswerView({
+  question,
+  result,
+  asking,
+  onChunkClick,
+}: {
+  question: string;
+  result: AskResponse | null;
+  asking: boolean;
+  onChunkClick: (docId: string) => void;
+}) {
+  if (asking || !result) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+          <Icon name="sparkles" size={13} className="text-primary" />
+          <div className={SECTION_LABEL}>提问</div>
+          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
+            “{question}”
+          </span>
+        </div>
+        <div className="flex flex-1 items-center justify-center p-8">
+          <LoadingState
+            title="正在思考…"
+            description="检索片段 → 拼上下文 → LLM 答复"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Inline cite renderer: split on [N] markers; numbers that match a
+  // source row become buttons, others stay as text.
+  const parts = renderAnswerWithCites(result.answer, result.sources, onChunkClick);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          <Icon name="sparkles" size={13} className="text-primary" />
+          <div className={SECTION_LABEL}>回答</div>
+          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
+            “{question}”
+          </span>
+        </div>
+        <div className="flex items-center gap-2 font-mono text-[10px] text-text-subtle">
+          {result.used_model && <span>{result.used_model}</span>}
+          <span>·</span>
+          <span>{result.latency_ms.toFixed(0)} ms</span>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        {/* Answer */}
+        <div className="rounded-xl border border-border bg-surface-2 p-5">
+          <p className="whitespace-pre-wrap text-[14px] leading-[1.7] text-text">
+            {parts}
+          </p>
+        </div>
+
+        {/* Sources list */}
+        {result.sources.length > 0 && (
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between">
+              <span className={SECTION_LABEL}>来源</span>
+              <span className="font-mono text-[10px] text-text-subtle">
+                {result.sources.length} 条
+              </span>
+            </div>
+            <ul className="space-y-2">
+              {result.sources.map((s) => (
+                <li
+                  key={s.chunk_id}
+                  id={`src-${s.n}`}
+                  className="rounded-xl border border-border bg-surface-2 p-3"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onChunkClick(s.doc_id)}
+                    className="flex w-full items-start justify-between gap-3 text-left"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
+                        [{s.n}]
+                      </span>
+                      <span className="font-mono text-[11px] text-text-muted">
+                        {s.citation}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px] text-text-subtle">
+                      {s.score.toFixed(4)}
+                    </span>
+                  </button>
+                  {s.section_path && (
+                    <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+                      {s.section_path}
+                    </div>
+                  )}
+                  <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[12px] leading-relaxed text-text">
+                    {s.text}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function renderAnswerWithCites(
+  answer: string,
+  sources: AskResponse["sources"],
+  onClickSource: (docId: string) => void,
+): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const re = /\[(\d+)\]/g;
+  const known = new Map(sources.map((s) => [s.n, s] as const));
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  while ((m = re.exec(answer)) !== null) {
+    if (m.index > last) {
+      out.push(<span key={`t${key++}`}>{answer.slice(last, m.index)}</span>);
+    }
+    const n = Number(m[1]);
+    const src = known.get(n);
+    if (src) {
+      out.push(
+        <button
+          key={`c${key++}`}
+          type="button"
+          onClick={() => {
+            const el = document.getElementById(`src-${n}`);
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            onClickSource(src.doc_id);
+          }}
+          className="mx-0.5 inline-flex items-center rounded-md bg-primary-muted px-1.5 align-baseline font-mono text-[11px] text-primary hover:bg-primary/20 transition duration-fast"
+          title={src.citation}
+        >
+          [{n}]
+        </button>,
+      );
+    } else {
+      out.push(<span key={`t${key++}`}>{m[0]}</span>);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < answer.length) {
+    out.push(<span key={`t${key++}`}>{answer.slice(last)}</span>);
+  }
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

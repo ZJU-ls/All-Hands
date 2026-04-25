@@ -42,6 +42,43 @@ export interface DocumentDto {
   updated_at: string;
 }
 
+export interface AskSource {
+  n: number;
+  chunk_id: number;
+  doc_id: string;
+  section_path: string | null;
+  page: number | null;
+  citation: string;
+  text: string;
+  score: number;
+}
+
+export interface AskResponse {
+  answer: string;
+  sources: AskSource[];
+  used_model: string | null;
+  latency_ms: number;
+}
+
+export async function askKB(
+  kbId: string,
+  question: string,
+  opts: { topK?: number; modelRef?: string } = {},
+): Promise<AskResponse> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/ask`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        question,
+        top_k: opts.topK ?? 5,
+        model_ref: opts.modelRef,
+      }),
+    }),
+    "askKB",
+  );
+}
+
 export interface DiagnoseDto {
   bm25_only: ScoredChunkDto[];
   vector_only: ScoredChunkDto[];

@@ -419,6 +419,59 @@ async def search_kb(kb_id: str, payload: SearchPayload = Body(...)) -> list[Scor
     return [_scored_out(r) for r in results]
 
 
+class AskPayload(BaseModel):
+    question: str
+    top_k: int | None = 5
+    model_ref: str | None = None
+
+
+class AskSourceOut(BaseModel):
+    n: int
+    chunk_id: int
+    doc_id: str
+    section_path: str | None
+    page: int | None
+    citation: str
+    text: str
+    score: float
+
+
+class AskOut(BaseModel):
+    answer: str
+    sources: list[AskSourceOut]
+    used_model: str | None
+    latency_ms: float
+
+
+@router.post("/{kb_id}/ask")
+async def ask_kb(kb_id: str, payload: AskPayload) -> AskOut:
+    """RAG QA over a KB. Search → context → LLM → answer with [N] cites
+    pointing into the returned `sources` list."""
+    try:
+        out = await _service().ask(
+            kb_id,
+            payload.question,
+            top_k=payload.top_k or 5,
+            model_ref=payload.model_ref,
+        )
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KBError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    raw_sources = out["sources"]
+    sources_list: list[AskSourceOut] = []
+    if isinstance(raw_sources, list):
+        for s in raw_sources:
+            if isinstance(s, dict):
+                sources_list.append(AskSourceOut(**s))
+    return AskOut(
+        answer=str(out["answer"]),
+        sources=sources_list,
+        used_model=out["used_model"] if isinstance(out["used_model"], str) else None,
+        latency_ms=float(out["latency_ms"]) if isinstance(out["latency_ms"], (int, float)) else 0.0,
+    )
+
+
 class DiagnoseOut(BaseModel):
     bm25_only: list[ScoredChunkOut]
     vector_only: list[ScoredChunkOut]
