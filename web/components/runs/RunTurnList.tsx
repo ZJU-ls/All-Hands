@@ -46,7 +46,7 @@ function TurnIcon({
   tone,
 }: {
   name: IconName;
-  tone: "user" | "worker" | "tool" | "think";
+  tone: "user" | "worker" | "tool" | "think" | "primary";
 }) {
   const toneClass =
     tone === "user"
@@ -55,7 +55,9 @@ function TurnIcon({
         ? "bg-primary-muted text-primary"
         : tone === "tool"
           ? "bg-accent/15 text-accent"
-          : "bg-surface-2 text-text-muted";
+          : tone === "primary"
+            ? "bg-primary text-primary-fg"
+            : "bg-surface-2 text-text-muted";
   return (
     <span
       aria-hidden="true"
@@ -100,7 +102,43 @@ function TurnRow({ turn }: { turn: TurnDto }) {
           />
         </div>
       );
+    case "llm_call":
+      return <LLMCallTurn turn={turn} />;
   }
+}
+
+function LLMCallTurn({ turn }: { turn: Extract<TurnDto, { kind: "llm_call" }> }) {
+  const t = useTranslations("runs.turnList");
+  const total = turn.total_tokens || turn.input_tokens + turn.output_tokens;
+  return (
+    <div
+      className="rounded-lg border border-primary/20 bg-primary-muted/40 px-3 py-2"
+      data-testid="run-turn-llm-call"
+    >
+      <div className="flex items-center gap-2">
+        <TurnIcon name="zap" tone="primary" />
+        <p className="font-mono text-[10px] uppercase tracking-wider text-primary">
+          {t("llmCall", { index: turn.call_index })}
+        </p>
+        {turn.model_ref ? (
+          <code className="truncate text-[11px] text-text-muted">{turn.model_ref}</code>
+        ) : null}
+        <span className="ml-auto font-mono text-[10px] tabular-nums text-text-subtle">
+          {turn.duration_s > 0 ? `${turn.duration_s.toFixed(1)}s` : "—"}
+          {total > 0 ? (
+            <>
+              {" · "}
+              {t("llmTokens", {
+                input: turn.input_tokens.toLocaleString(),
+                output: turn.output_tokens.toLocaleString(),
+                total: total.toLocaleString(),
+              })}
+            </>
+          ) : null}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function ThinkingTurn({ content }: { content: string }) {

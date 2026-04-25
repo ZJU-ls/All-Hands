@@ -15,6 +15,7 @@ import {
 import { LoadingState, ErrorState, EmptyState } from "@/components/state";
 import { RunHeader } from "./RunHeader";
 import { RunTurnList } from "./RunTurnList";
+import { RunArtifacts } from "./RunArtifacts";
 import { RunError } from "./RunError";
 
 type Props =
@@ -106,6 +107,7 @@ export function RunTracePanel(props: Props) {
       <RunHeader run={run} />
       {run.error && <RunError error={run.error} />}
       <RunTurnList turns={run.turns} />
+      <RunArtifacts artifacts={run.artifacts} />
     </section>
   );
 }

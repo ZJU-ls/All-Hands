@@ -2,6 +2,7 @@
   "runs": {
     "header": {
       "employee": "员工",
+      "model": "模型",
       "duration": "耗时",
       "tokens": "tokens",
       "startedAt": "开始",
@@ -36,6 +37,8 @@
       "args": "args",
       "result": "result",
       "error": "error",
+      "llmCall": "LLM call #{index}",
+      "llmTokens": "in {input} · out {output} · total {total}",
       "status": {
         "done": "done",
         "failed": "failed",
@@ -44,6 +47,13 @@
     },
     "traceChip": {
       "label": "追踪"
+    },
+    "artifacts": {
+      "title": "产出制品 · {count}",
+      "subtitle": "本次 run 写入或更新的文件 · 点击进入详情",
+      "version": "v{version}",
+      "new": "新建",
+      "open": "打开"
     }
   },
   "traces": {
@@ -87,6 +97,7 @@
       "sortStartedAt": "按开始时间排序",
       "ok": "成功",
       "failed": "失败",
+      "running": "运行中",
       "fallback": "—"
     }
   },

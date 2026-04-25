@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import secrets
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -237,6 +238,43 @@ async def list_messages(
     return [_to_message_response(m) for m in messages]
 
 
+@router.get("/{conversation_id}/plans/latest")
+async def get_latest_plan(
+    conversation_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object] | None:
+    """Latest agent-authored plan for this conversation · ADR 0019 C1.
+
+    Powers the ProgressPanel's plan section. Returns ``None`` (200 status,
+    null body) when the agent hasn't called plan_create yet — the
+    frontend treats null as "no plan, hide the section". Mirrors the
+    repo's ``get_latest_for_conversation`` directly without going through
+    ChatService since this is a pure read with no side effects.
+    """
+    from allhands.persistence.sql_repos import SqlAgentPlanRepo
+
+    repo = SqlAgentPlanRepo(session)
+    plan = await repo.get_latest_for_conversation(conversation_id)
+    if plan is None:
+        return None
+    return {
+        "plan_id": plan.id,
+        "title": plan.title,
+        "owner_employee_id": plan.owner_employee_id,
+        "created_at": plan.created_at.isoformat(),
+        "updated_at": plan.updated_at.isoformat(),
+        "steps": [
+            {
+                "index": s.index,
+                "title": s.title,
+                "status": s.status.value,
+                "note": s.note,
+            }
+            for s in plan.steps
+        ],
+    }
+
+
 @router.post("/{conversation_id}/branch", response_model=ConversationResponse)
 async def branch_conversation(
     conversation_id: str,
@@ -408,6 +446,15 @@ async def _encode_chat_sse(
         current_reasoning_id = None
         return closing
 
+    # 2026-04-25 · server-side keepalive. Without it, a long-running tool
+    # (skill_file read on a slow disk · LLM provider buffering · cron-paced
+    # work) leaves the SSE silent for minutes. Browsers/proxies don't kill
+    # the TCP, so the client thinks "still streaming" forever — the
+    # 「等待响应 502s 无响应 478s」 bug. Emit a heartbeat custom every 10s of
+    # silence; the AG-UI client treats unknown CUSTOM names as no-ops, so
+    # this is contract-safe.
+    heartbeat_interval = 10.0
+
     try:
         stream = await open_stream()
         stream_iter = stream.__aiter__()
@@ -419,9 +466,24 @@ async def _encode_chat_sse(
                 )
                 break
             try:
-                event = await stream_iter.__anext__()
+                event = await asyncio.wait_for(
+                    stream_iter.__anext__(),
+                    timeout=heartbeat_interval,
+                )
             except StopAsyncIteration:
                 break
+            except TimeoutError:
+                # No agent event in the last 10s → tell the client we're
+                # still alive. ts is plain ISO so the client can compute
+                # silence locally; payload is intentionally tiny to keep
+                # idle-conversation cost negligible.
+                yield agui.encode_sse(
+                    agui.custom(
+                        "allhands.heartbeat",
+                        {"ts": datetime.now(UTC).isoformat()},
+                    )
+                )
+                continue
             if event.kind == "token":
                 # Seeing user-visible text closes any still-open reasoning
                 # block — thinking always precedes the final answer in

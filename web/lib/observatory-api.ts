@@ -6,6 +6,17 @@ export type ObservatoryEmployeeBreakdownDto = {
   employee_id: string;
   employee_name: string;
   runs_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+};
+
+export type ObservatoryModelBreakdownDto = {
+  model_ref: string;
+  runs_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
 };
 
 export type ObservatorySummaryDto = {
@@ -13,20 +24,33 @@ export type ObservatorySummaryDto = {
   failure_rate_24h: number;
   latency_p50_s: number;
   avg_tokens_per_run: number;
+  input_tokens_total: number;
+  output_tokens_total: number;
+  total_tokens_total: number;
+  llm_calls_total: number;
   by_employee: ObservatoryEmployeeBreakdownDto[];
+  by_model: ObservatoryModelBreakdownDto[];
   observability_enabled: boolean;
   bootstrap_status: BootstrapStatus;
   bootstrap_error: string | null;
   host: string | null;
 };
 
+export type RunTokenUsageDto = {
+  prompt: number;
+  completion: number;
+  total: number;
+};
+
 export type TraceSummaryDto = {
   trace_id: string;
   employee_id: string | null;
   employee_name: string | null;
-  status: "ok" | "failed";
+  model_ref: string | null;
+  status: "ok" | "failed" | "running";
   duration_s: number | null;
-  tokens: number;
+  tokens: RunTokenUsageDto;
+  llm_calls: number;
   started_at: string;
 };
 
@@ -110,23 +134,40 @@ export type TurnMessageDto = {
   ts: string;
 };
 
+export type TurnLLMCallDto = {
+  kind: "llm_call";
+  call_index: number;
+  model_ref: string | null;
+  duration_s: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  ts: string;
+};
+
 export type TurnDto =
   | TurnUserInputDto
   | TurnThinkingDto
   | TurnToolCallDto
-  | TurnMessageDto;
+  | TurnMessageDto
+  | TurnLLMCallDto;
 
 export type RunStatusDto = "running" | "succeeded" | "failed" | "cancelled";
-
-export type RunTokenUsageDto = {
-  prompt: number;
-  completion: number;
-  total: number;
-};
 
 export type RunErrorDto = {
   message: string;
   kind: string;
+};
+
+export type ArtifactSummaryDto = {
+  id: string;
+  name: string;
+  kind: string;
+  mime_type: string;
+  version: number;
+  size_bytes: number;
+  pinned: boolean;
+  created_at: string;
 };
 
 export type RunDetailDto = {
@@ -140,8 +181,11 @@ export type RunDetailDto = {
   finished_at: string | null;
   duration_s: number | null;
   tokens: RunTokenUsageDto;
+  llm_calls: number;
+  model_ref: string | null;
   error: RunErrorDto | null;
   turns: TurnDto[];
+  artifacts: ArtifactSummaryDto[];
 };
 
 export async function fetchRunDetail(runId: string): Promise<RunDetailDto> {
@@ -167,7 +211,7 @@ export class RunNotFoundError extends Error {
 
 export async function fetchTraces(params?: {
   employee_id?: string;
-  status?: "ok" | "failed";
+  status?: "ok" | "failed" | "running";
   since?: string;
   until?: string;
   limit?: number;
