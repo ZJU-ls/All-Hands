@@ -23,12 +23,19 @@ from pathlib import Path
 import pytest
 
 NEW_PACKS = (
+    # 2026-04-25 round-2 spec 新增的 6 个
     "triggers_management",
     "channels_management",
     "task_management",
     "market_data",
     "observatory",
     "review_gates",
+    # 2026-04-26 round-17 升格的 5 个老 admin 包(原本格式不统一)
+    "team_management",
+    "model_management",
+    "skill_management",
+    "mcp_management",
+    "cockpit_admin",
 )
 
 SKILLS_ROOT = Path(__file__).resolve().parents[2] / "skills" / "builtin"

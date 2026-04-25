@@ -464,6 +464,8 @@ function Overview({
         )}
       </Section>
 
+      <SkillReferencesSection skillId={skill.id} />
+
       <Section
         title={t("dependents", { count: dependents.length })}
         icon="users"
@@ -517,6 +519,72 @@ function Overview({
       </Section>
     </div>
   );
+}
+
+type SkillFileEntry = { relative_path: string; size_bytes: number };
+
+/**
+ * SkillReferencesSection · 2026-04-26 · 显示这个 skill 的 references /
+ * templates 子文件 · 拉自 GET /api/skills/{id}/files。
+ *
+ * 没文件时整个 section 不渲染(避免给用户「这是错」的感觉)。
+ */
+function SkillReferencesSection({ skillId }: { skillId: string }) {
+  const t = useTranslations("skills.detail.references");
+  const [files, setFiles] = useState<SkillFileEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/skills/${encodeURIComponent(skillId)}/files`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { files: SkillFileEntry[] };
+        if (!cancelled) setFiles(body.files);
+      } catch (e) {
+        if (!cancelled) setError(String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [skillId]);
+
+  if (error) return null;
+  if (!files || files.length === 0) return null;
+
+  return (
+    <Section title={t("section", { count: files.length })} icon="book-open">
+      <ul className="flex flex-col gap-1.5">
+        {files.map((f) => (
+          <li
+            key={f.relative_path}
+            className="inline-flex items-center justify-between gap-3 h-9 px-3 rounded-lg bg-surface-2 border border-border"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Icon name="file" size={11} className="text-text-muted shrink-0" />
+              <span className="font-mono text-[12px] text-text truncate">
+                {f.relative_path}
+              </span>
+            </div>
+            <span className="font-mono text-[10px] text-text-subtle shrink-0">
+              {formatBytes(f.size_bytes)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[11px] leading-relaxed text-text-subtle">
+        {t("hint")}
+      </p>
+    </Section>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
 
 function PromptTab({ skill }: { skill: Skill }) {

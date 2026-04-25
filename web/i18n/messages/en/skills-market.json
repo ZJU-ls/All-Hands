@@ -135,6 +135,10 @@
         "dependentsEmpty": "No employees reference this skill yet.",
         "leadBadge": "lead"
       },
+      "references": {
+        "section": "References · {count} files",
+        "hint": "The agent can pull these on demand with read_skill_file(skill_id, relative_path) — templates, cheat sheets, troubleshooting matrices."
+      },
       "prompt": {
         "section": "System prompt fragment",
         "empty": "This skill has no prompt fragment — capability is provided through tools only.",
