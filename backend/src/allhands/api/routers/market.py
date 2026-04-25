@@ -13,9 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,  # noqa: TC002 — FastAPI runtime dependency resolution
-)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from allhands.api.deps import get_session
 from allhands.core.market import (
@@ -573,9 +571,24 @@ async def poller_start(
             publisher = _noop
 
         svc = await _market_service_for(session, request)
+        # Capture the engine, NOT the request's session — the request session
+        # is closed the moment poller_start returns, so any later poller tick
+        # that re-uses it raises PendingRollbackError. Build a fresh session
+        # per tick from the same engine the request was bound to (works for
+        # tests too, since dependency_overrides keeps the override engine
+        # accessible via the session.bind reference).
+        poller_maker = async_sessionmaker(bind=session.bind, expire_on_commit=False)
 
         async def _sources() -> list[str]:
-            return await svc.poll_symbols()
+            async with poller_maker() as s:
+                watched = await SqlWatchedSymbolRepo(s).list_all()
+                holdings = await SqlHoldingRepo(s).list_all()
+                symbols: dict[str, None] = {}
+                for w in watched:
+                    symbols[w.symbol] = None
+                for h in holdings:
+                    symbols[h.symbol] = None
+                return list(symbols)
 
         state["poller"] = MarketPoller(
             router=state["router"],
