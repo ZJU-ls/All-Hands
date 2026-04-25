@@ -62,8 +62,13 @@ async def execute(
     # title is empty, or fall back to `time` so something readable shows up
     # instead of a blank chip. If even those are missing, surface "(no title)"
     # so the user sees the gap instead of a ghost row.
+    # Re-type the input as list[Any] for runtime defense against tools that
+    # hand us non-dict items despite the type signature — the upstream
+    # `items: list[dict]` is a permissive façade and LLMs do return
+    # `[null, ...]` at runtime when they get the schema wrong.
+    raw_items: list[Any] = list(items)
     normalized: list[dict[str, Any]] = []
-    for it in items:
+    for it in raw_items:
         if not isinstance(it, dict):
             continue
         title = it.get("title")
