@@ -105,8 +105,20 @@ const BASE_PILL =
 
 const SLOW_THRESHOLD_MS = 5_000;
 
-function endpointTone(e: EndpointPart): "success" | "warning" | "danger" {
+function endpointTone(
+  e: EndpointPart,
+  m: ModelPart,
+): "success" | "warning" | "danger" {
+  // 第一性原理:model probe 成功了 = 端点必然能触达 + 凭证必然 OK,
+  // 即便 GET /v1/models 返回 404 也只是"该 provider 不暴露 list 路由"
+  // (anthropic-compat / 自建反代 / coding-plan 都这样)。这种情况下
+  // 端点的客观状态就是健康的,不该报 warning。
+  if (m.usable && m.classification === "ok") return "success";
   if (e.errorKind === "ok") return "success";
+  // not_found 单独处理:model probe 不一定 ok,但 not_found 本身只代表
+  // "list-models 路径不存在",不是连通问题。视为信息性 success 而不是
+  // warning,跟 ok 同色。真正的 warning 留给 server_error(5xx)。
+  if (e.errorKind === "not_found") return "success";
   if (e.errorKind === "auth") return "danger";
   if (
     e.errorKind === "network" ||
@@ -114,6 +126,7 @@ function endpointTone(e: EndpointPart): "success" | "warning" | "danger" {
     e.errorKind === "unknown"
   )
     return "danger";
+  // server_error
   return "warning";
 }
 
@@ -214,7 +227,7 @@ export function PingIndicator({ state }: { state: PingState }) {
   }
 
   // status === "done" — two pills
-  const eTone = endpointTone(state.endpoint);
+  const eTone = endpointTone(state.endpoint, state.model);
   const mTone = modelTone(state.model);
   const eLabel = t(ENDPOINT_KEYS[state.endpoint.errorKind]);
   const mLabel = t(MODEL_KEYS[state.model.classification]);
@@ -247,9 +260,11 @@ export function PingIndicator({ state }: { state: PingState }) {
         <Icon name={TONE_ICON[eTone]} size={11} strokeWidth={2} />
         <span className="opacity-60">EP</span>
         <span>
-          {state.endpoint.errorKind === "ok"
-            ? fmt(state.endpoint.latencyMs)
-            : eLabel}
+          {/* Show latency when the endpoint pill is green (ok / not_found
+              when model is ok / model_ok-implies-endpoint-ok) — the
+              probe round-tripped, the number is real. Show the textual
+              error label only when the pill is yellow/red. */}
+          {eTone === "success" ? fmt(state.endpoint.latencyMs) : eLabel}
         </span>
       </span>
       <span

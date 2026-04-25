@@ -87,7 +87,13 @@ export function ModelRow({
           </span>
         )}
 
-        {model.is_default && (
+        {/* 默认徽标 / 设为默认按钮互斥占同一槽位:
+            - is_default → 蓝色「★ 默认」chip(状态标识)
+            - else        → 灰色「设为默认」按钮(单击切默认)
+            放在模型名称区右侧、操作按钮组之外,这样右边的
+            ping / chat / delete 三个 icon 在所有行上水平对齐,不会因
+            "这一行有没有默认按钮"而漂移。 */}
+        {model.is_default ? (
           <span
             data-testid={`gateway-default-badge-${model.id}`}
             className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm bg-primary/10 border border-primary/25 text-primary text-[10px] font-semibold"
@@ -96,6 +102,19 @@ export function ModelRow({
             <Icon name="star" size={10} strokeWidth={2} />
             默认
           </span>
+        ) : (
+          model.enabled && (
+            <button
+              type="button"
+              onClick={onSetDefault}
+              data-testid={`gateway-set-default-${model.id}`}
+              title="设为工作区默认 (provider + model 一起切)"
+              className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm border border-dashed border-border bg-transparent text-text-subtle text-[10px] font-medium hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors duration-fast opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <Icon name="star" size={10} strokeWidth={2} />
+              设为默认
+            </button>
+          )
         )}
       </div>
 
@@ -107,22 +126,6 @@ export function ModelRow({
       </span>
 
       <div className="shrink-0 flex items-center gap-0.5">
-        {/* "设为默认" 是这次重构的第一性入口 —— 一键同时切供应商 + 模型,
-            后端在一个事务里清掉旧默认并设这一行。当前已经是默认的话,
-            按钮收成只读徽标(is_default 已经在标题旁的 ⭐ chip 显示),
-            不再渲染冗余按钮。 */}
-        {!model.is_default && model.enabled && (
-          <button
-            type="button"
-            onClick={onSetDefault}
-            data-testid={`gateway-set-default-${model.id}`}
-            title="设为工作区默认 (provider + model 一起切)"
-            className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-medium text-text-subtle hover:text-primary hover:bg-primary/10 transition-colors duration-fast"
-          >
-            <Icon name="star" size={11} />
-            设为默认
-          </button>
-        )}
         <RowIconButton
           icon="activity"
           label={t("ping")}

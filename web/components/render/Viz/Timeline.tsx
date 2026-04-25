@@ -155,7 +155,7 @@ export function Timeline({ props }: RenderProps) {
                   className={`relative z-10 h-2.5 w-2.5 rounded-full ${DOT_COLOR[item.status]} ${DOT_RING[item.status]}`}
                   aria-label={item.status}
                 />
-                <div className={`text-sm font-semibold ${TITLE_COLOR[item.status]}`}>{item.title}</div>
+                <div className={`text-sm font-semibold ${TITLE_COLOR[item.status]}`}>{item.title || <span className="text-text-subtle">—</span>}</div>
                 {item.time && (
                   <div className="text-caption text-text-subtle font-mono uppercase tracking-wider">
                     {item.time}
@@ -188,7 +188,7 @@ export function Timeline({ props }: RenderProps) {
               />
               <div className="flex-1 min-w-0 rounded-lg border border-border bg-surface p-3 shadow-soft-sm">
                 <div className="flex items-baseline justify-between gap-2">
-                  <div className={`text-sm font-semibold ${TITLE_COLOR[item.status]}`}>{item.title}</div>
+                  <div className={`text-sm font-semibold ${TITLE_COLOR[item.status]}`}>{item.title || <span className="text-text-subtle">—</span>}</div>
                   {item.time && (
                     <div className="text-caption text-text-subtle font-mono uppercase tracking-wider">
                       {item.time}

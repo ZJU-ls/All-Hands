@@ -1,7 +1,7 @@
 """Move "default" from LLMProvider (two-field state) to LLMModel (singleton).
 
-Revision ID: 0022
-Revises: 0021
+Revision ID: 0023
+Revises: 0022
 Create Date: 2026-04-25
 
 第一性原理重构 (2026-04-25):
@@ -33,8 +33,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0022"
-down_revision = "0021_auto_title"
+revision = "0023"
+down_revision = "0022"
 branch_labels = None
 depends_on = None
 
