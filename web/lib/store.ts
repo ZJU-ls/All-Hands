@@ -229,13 +229,26 @@ export const useChatStore = create<ChatState>((set) => ({
       if (!state.streamingMessage) {
         return { isStreaming: false };
       }
+      // Backend should close every started tool_call with TOOL_CALL_END, but
+      // a dropped SSE / provider quirk can leave a tool_call stuck on
+      // "pending" / "running". Stamp those as failed at finalize so the
+      // ToolCallCard renders a terminal state instead of spinning forever.
+      const sealedToolCalls = state.streamingMessage.tool_calls.map((tc) =>
+        tc.status === "pending" || tc.status === "running"
+          ? {
+              ...tc,
+              status: "failed" as const,
+              error: tc.error ?? "tool_call_dropped",
+            }
+          : tc,
+      );
       const finalized: Message = {
         id: state.streamingMessage.id,
         conversation_id: conversationId,
         role: "assistant",
         content: state.streamingMessage.content,
         reasoning: state.streamingMessage.reasoning || undefined,
-        tool_calls: state.streamingMessage.tool_calls,
+        tool_calls: sealedToolCalls,
         render_payloads: state.streamingMessage.render_payloads,
         segments:
           state.streamingMessage.segments.length > 0

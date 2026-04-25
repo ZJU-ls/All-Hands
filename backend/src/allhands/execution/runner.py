@@ -590,6 +590,7 @@ class AgentRunner:
         #   envelope, also yield a RenderEvent so the frontend's
         #   component registry renders the Viz.* component inline.
         seen_tool_call_ids: set[str] = set()
+        ended_tool_call_ids: set[str] = set()
         tool_call_by_id: dict[str, dict[str, Any]] = {}
         try:
             # ADR 0014 · checkpointer is None in v0-compat mode (MessageRepo is
@@ -718,6 +719,7 @@ class AgentRunner:
                     meta_tc = tool_call_by_id.get(tc_id, {})
                     tool_name = meta_tc.get("name") or getattr(msg, "name", "") or ""
                     tool_args = meta_tc.get("args") or {}
+                    ended_tool_call_ids.add(tc_id)
                     yield ToolCallEndEvent(
                         tool_call=ToolCall(
                             id=tc_id,
@@ -734,6 +736,26 @@ class AgentRunner:
                             payload=RenderPayload(**envelope),
                         )
                     continue
+            # Some providers (notably gpt-4o-mini) emit a tool_call in the
+            # agent stream but never produce executable args, so the tools
+            # node never fires and no ToolMessage closes the pair. Without
+            # this fallback the UI sticks at "pending" forever (the frontend
+            # only flips status on TOOL_CALL_END / TOOL_CALL_RESULT). Emit a
+            # synthetic FAILED end-event for any started-but-unended id so
+            # both backend persistence and SSE consumers see a terminal
+            # state.
+            for tc_id in seen_tool_call_ids - ended_tool_call_ids:
+                meta_tc = tool_call_by_id.get(tc_id, {})
+                yield ToolCallEndEvent(
+                    tool_call=ToolCall(
+                        id=tc_id,
+                        tool_id=meta_tc.get("name") or "",
+                        args=meta_tc.get("args") or {},
+                        status=ToolCallStatus.FAILED,
+                        result=None,
+                        error="tool_call_dropped",
+                    )
+                )
             yield DoneEvent(message_id=message_id, reason="done")
         except Exception as exc:
             yield ErrorEvent(code="INTERNAL", message=str(exc))

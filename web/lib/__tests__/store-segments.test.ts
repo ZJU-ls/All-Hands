@@ -107,6 +107,31 @@ describe("chat store · segments order", () => {
     expect(finalized.render_payloads.length).toBe(1);
   });
 
+  it("seals dangling pending/running tool_calls as failed on finalize", () => {
+    // Regression: when the SSE stream ends without a TOOL_CALL_END for a
+    // started tool_call (e.g. provider drops args mid-stream), the message
+    // would persist with status='pending' forever and the UI would show a
+    // permanent "pending" pill. finalizeStreaming must seal them as failed.
+    const s = useChatStore.getState();
+    s.startStreaming("msg_1");
+    s.updateToolCall({ ...mkTool("c1", "artifact_create"), status: "pending" });
+    s.updateToolCall({ ...mkTool("c2", "other_tool"), status: "running" });
+    s.updateToolCall({
+      ...mkTool("c3", "done_tool"),
+      status: "succeeded",
+      result: { ok: true },
+    });
+    s.finalizeStreaming("conv_1");
+
+    const finalized = useChatStore.getState().messages[0]!;
+    const byId = Object.fromEntries(finalized.tool_calls.map((tc) => [tc.id, tc]));
+    expect(byId.c1!.status).toBe("failed");
+    expect(byId.c1!.error).toBe("tool_call_dropped");
+    expect(byId.c2!.status).toBe("failed");
+    expect(byId.c2!.error).toBe("tool_call_dropped");
+    expect(byId.c3!.status).toBe("succeeded");
+  });
+
   it("omits segments on finalized message when nothing streamed", () => {
     // Edge case: turn ended with zero events — the legacy layout path
     // should remain active for the rendered bubble.

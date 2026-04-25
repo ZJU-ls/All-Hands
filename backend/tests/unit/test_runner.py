@@ -250,6 +250,69 @@ async def test_runner_emits_render_event_when_tool_returns_envelope() -> None:
     assert "Here is the table." in tokens_text
 
 
+@pytest.mark.asyncio
+async def test_runner_emits_failed_end_when_tool_call_never_executes() -> None:
+    """Regression: gpt-4o-mini sometimes streams a tool_call in the agent
+    node but the tools node never fires (e.g. dropped/empty args). Without
+    a synthetic ToolCallEnd the frontend leaves the card pinned at
+    'pending' forever and the persisted message has no terminal state for
+    that tool_call. The runner must close every started tool_call before
+    DoneEvent — failed if no ToolMessage ever arrived.
+    """
+    from langchain_core.messages import AIMessageChunk
+
+    class _DropAgent:
+        async def astream(self, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+            yield (
+                "messages",
+                (
+                    AIMessageChunk(content="creating it now"),
+                    {"langgraph_node": "agent"},
+                ),
+            )
+            yield (
+                "messages",
+                (
+                    AIMessageChunk(
+                        content="",
+                        tool_calls=[
+                            {"id": "call_dropped_1", "name": "artifact_create", "args": {}}
+                        ],
+                    ),
+                    {"langgraph_node": "agent"},
+                ),
+            )
+            # No tools-node ToolMessage. Stream just ends.
+
+    model = GenericFakeChatModel(messages=iter([AIMessage(content="unused")]))
+    with (
+        patch("allhands.execution.runner._build_model", return_value=model),
+        patch("langgraph.prebuilt.create_react_agent", return_value=_DropAgent()),
+    ):
+        runner = AgentRunner(
+            employee=_make_employee(),
+            tool_registry=ToolRegistry(),
+            gate=AutoApproveGate(),
+        )
+        events = [
+            e
+            async for e in runner.stream(
+                messages=[{"role": "user", "content": "make an artifact"}],
+                thread_id="t-drop-1",
+            )
+        ]
+
+    starts = [e for e in events if isinstance(e, ToolCallStartEvent)]
+    ends = [e for e in events if isinstance(e, ToolCallEndEvent)]
+    assert len(starts) == 1
+    assert len(ends) == 1, f"expected synthetic end, got events: {[e.kind for e in events]}"
+    assert ends[0].tool_call.id == "call_dropped_1"
+    assert ends[0].tool_call.status.value == "failed"
+    assert ends[0].tool_call.error == "tool_call_dropped"
+    # DoneEvent still closes the stream after the synthetic end.
+    assert events[-1].kind == "done"
+
+
 # --- E18 regression · _bind_thinking + _build_model provider-kind dispatch ---
 
 
