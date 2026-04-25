@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Icon } from "@/components/ui/icon";
@@ -18,6 +19,7 @@ type Group = {
 };
 
 export default function ConversationsPage() {
+  const t = useTranslations("pages.conversations");
   const [conversations, setConversations] = useState<ConversationDto[] | null>(null);
   const [employees, setEmployees] = useState<EmployeeDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,20 +69,20 @@ export default function ConversationsPage() {
   const loading = conversations === null || employees === null;
 
   return (
-    <AppShell title="历史会话">
+    <AppShell title={t("title")}>
       <div className="h-full overflow-y-auto">
         <div className="mx-auto max-w-5xl space-y-8 p-8">
           <PageHeader
-            title="历史会话"
+            title={t("title")}
             count={conversations?.length}
-            subtitle="按员工分组 · 最新对话在顶部 · 点击进入对话记录"
+            subtitle={t("subtitle")}
           />
 
           {error && (
             <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger-soft p-4 animate-fade-up">
               <Icon name="alert-circle" size={18} className="mt-0.5 shrink-0 text-danger" />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-danger">加载失败</div>
+                <div className="text-sm font-semibold text-danger">{t("loadFailed")}</div>
                 <div className="mt-1 font-mono text-caption text-danger/80">{error}</div>
               </div>
             </div>
@@ -121,16 +123,16 @@ export default function ConversationsPage() {
                             </Link>
                           ) : (
                             <span className="text-base font-semibold text-text-muted">
-                              未知员工
+                              {t("unknownEmployee")}
                             </span>
                           )}
                           {isLead && (
                             <span className="inline-flex h-5 items-center gap-1 rounded-full bg-primary px-2 text-[10px] font-medium text-primary-fg shadow-soft-sm">
-                              <Icon name="sparkles" size={10} /> Lead
+                              <Icon name="sparkles" size={10} /> {t("leadBadge")}
                             </span>
                           )}
                           <span className="font-mono text-caption text-text-subtle">
-                            · {g.conversations.length} 条对话
+                            {t("conversationCount", { count: g.conversations.length })}
                           </span>
                         </div>
                         {g.employee?.description && (
@@ -154,7 +156,7 @@ export default function ConversationsPage() {
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-sm font-medium text-text">
-                                {c.title ?? "(无标题)"}
+                                {c.title ?? t("untitled")}
                               </div>
                               <div className="mt-0.5 flex items-center gap-2 font-mono text-caption text-text-subtle">
                                 <span>{c.id.slice(0, 8)}</span>
@@ -209,6 +211,7 @@ function SkeletonGroups() {
 }
 
 function EmptyConversations() {
+  const t = useTranslations("pages.conversations.empty");
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border bg-surface p-14 shadow-soft-sm animate-fade-up">
       {/* Mesh hero backdrop */}
@@ -241,23 +244,23 @@ function EmptyConversations() {
           <Icon name="message-square" size={28} />
         </div>
         <h3 className="mt-6 text-lg font-semibold tracking-tight">
-          还没有任何对话
+          {t("title")}
         </h3>
         <p className="mt-2 text-sm leading-relaxed text-text-muted">
-          打开一个员工主页 · 创建新对话开始。所有与数字员工的交流都会记录在这里。
+          {t("description")}
         </p>
         <div className="mt-6 flex items-center justify-center gap-2">
           <Link
             href="/employees"
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-glow-sm"
           >
-            <Icon name="users" size={14} /> 打开员工列表
+            <Icon name="users" size={14} /> {t("openEmployees")}
           </Link>
           <Link
             href="/chat"
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border-strong bg-surface px-5 text-sm font-medium text-text shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
           >
-            <Icon name="sparkles" size={14} className="text-primary" /> 直接开对话
+            <Icon name="sparkles" size={14} className="text-primary" /> {t("openChat")}
           </Link>
         </div>
       </div>

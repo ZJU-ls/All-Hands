@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
@@ -51,6 +52,7 @@ type ConnectionState = "connecting" | "open" | "error";
 const MAX_RECENT_EVENTS = 50;
 
 export function Cockpit() {
+  const t = useTranslations("cockpit.shell");
   const [summary, setSummary] = useState<WorkspaceSummaryDto | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
@@ -159,7 +161,7 @@ export function Cockpit() {
 
     source.addEventListener("RUN_ERROR", (evt) => {
       if (cancelledRef.current) return;
-      let msg = "实时流终止";
+      let msg = t("streamEnded");
       try {
         const data = JSON.parse((evt as MessageEvent).data) as { message?: string };
         if (data.message) msg = data.message;
@@ -173,7 +175,7 @@ export function Cockpit() {
     source.addEventListener("error", () => {
       if (cancelledRef.current) return;
       setConnection("error");
-      setStreamError("实时流暂时中断 · 自动重连中");
+      setStreamError(t("streamReconnecting"));
     });
 
     return () => {
@@ -190,7 +192,7 @@ export function Cockpit() {
   const onPauseConfirm = useCallback(async () => {
     setPauseBusy(true);
     try {
-      await pauseAllRuns("Cockpit 急停", `ui-${Date.now()}`);
+      await pauseAllRuns(t("estopReason"), `ui-${Date.now()}`);
       scheduleRefresh();
       setConfirmOpen(false);
     } catch (e) {
@@ -198,7 +200,7 @@ export function Cockpit() {
     } finally {
       setPauseBusy(false);
     }
-  }, [scheduleRefresh]);
+  }, [scheduleRefresh, t]);
 
   const onResume = useCallback(async () => {
     try {
@@ -218,7 +220,7 @@ export function Cockpit() {
   const isLoading = summary === null && connection !== "error";
 
   return (
-    <AppShell title="驾驶舱">
+    <AppShell title={t("title")}>
       <div className="relative h-full flex overflow-hidden">
         {/* Soft primary wash + dot grid to echo V2's Azure Live hero. The
          *  gradient is pure CSS variables so theme pack swap re-colours it. */}
@@ -237,28 +239,28 @@ export function Cockpit() {
           <div className="p-6 space-y-5 min-h-full flex flex-col">
             {actionError && (
               <ErrorState
-                title="操作失败"
+                title={t("actionFailed")}
                 detail={actionError}
-                action={{ label: "关闭", onClick: () => setActionError(null) }}
+                action={{ label: t("closeAction"), onClick: () => setActionError(null) }}
               />
             )}
             {streamError && (
               <ErrorState
-                title="实时连接中断"
+                title={t("streamErrorTitle")}
                 description={streamError}
-                action={{ label: "立即重试", onClick: onRetryConnection }}
+                action={{ label: t("retryNow"), onClick: onRetryConnection }}
               />
             )}
             {isLoading ? (
               <LoadingState
-                title="装载驾驶舱"
-                description="建立实时连接 · 首帧快照应在 1 秒内到达"
+                title={t("loadingTitle")}
+                description={t("loadingDescription")}
               />
             ) : summary === null ? (
               <ErrorState
-                title="驾驶舱加载失败"
-                description="后端暂不可达 · 连接恢复后会自动加载"
-                action={{ label: "重试", onClick: onRetryConnection }}
+                title={t("loadFailTitle")}
+                description={t("loadFailDescription")}
+                action={{ label: t("retry"), onClick: onRetryConnection }}
               />
             ) : (
               <>
@@ -275,8 +277,8 @@ export function Cockpit() {
                     <DotGridBackdrop opacity={0.22} />
                     <div className="relative mx-auto max-w-md">
                       <EmptyState
-                        title="系统待命 · 零活动"
-                        description="发起一次对话或触发任务,飞行记录会实时出现在这里"
+                        title={t("emptyTitle")}
+                        description={t("emptyDescription")}
                       />
                     </div>
                   </div>
@@ -284,8 +286,8 @@ export function Cockpit() {
                   <>
                     <Coachmark
                       id="cockpit-activity"
-                      title="飞行记录 · 实时"
-                      description="tool 调用、run 状态变化按时间倒序排。点事件跳到对应 trace。右侧 rail 的健康 / 消耗 / 对话抽屉提供次级观测。"
+                      title={t("coachmarkTitle")}
+                      description={t("coachmarkDescription")}
                     />
                     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 flex-1 min-h-[55vh]">
                       <ActivityFeed events={summary.recent_events} />
@@ -303,15 +305,11 @@ export function Cockpit() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="急停所有 run"
-        message={
-          "这会取消当前所有正在执行的 run,并暂停 trigger executor。" +
-          "\n\n已在进行中的 tool call 可能无法回滚。只有在确实需要" +
-          "刹停整个 workspace 时才继续。"
-        }
+        title={t("estopTitle")}
+        message={t("estopMessage")}
         danger
         busy={pauseBusy}
-        confirmLabel="确认急停"
+        confirmLabel={t("estopConfirm")}
         onConfirm={() => void onPauseConfirm()}
         onCancel={() => setConfirmOpen(false)}
       />

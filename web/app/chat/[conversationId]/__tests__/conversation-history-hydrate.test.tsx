@@ -21,7 +21,7 @@ import {
   vi,
   type MockInstance,
 } from "vitest";
-import { render, cleanup, waitFor } from "@testing-library/react";
+import { render, cleanup, waitFor } from "@/tests/test-utils/i18n-render";
 import type { Message } from "@/lib/protocol";
 
 const paramsMock = { conversationId: "conv-with-render" };

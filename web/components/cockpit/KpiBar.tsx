@@ -14,6 +14,7 @@
  */
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { WorkspaceSummaryDto } from "@/lib/cockpit-api";
 
@@ -35,7 +36,9 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-function buildKpis(s: WorkspaceSummaryDto): { hero: Kpi; cards: Kpi[] } {
+type KpiTranslate = (key: string, values?: Record<string, string | number>) => string;
+
+function buildKpis(s: WorkspaceSummaryDto, t: KpiTranslate): { hero: Kpi; cards: Kpi[] } {
   const tasksTone: Tone = s.tasks_needs_user > 0 ? "warn" : "neutral";
   const runsTone: Tone = s.runs_failing_recently > 0 ? "warn" : "neutral";
 
@@ -44,56 +47,56 @@ function buildKpis(s: WorkspaceSummaryDto): { hero: Kpi; cards: Kpi[] } {
   // card is never empty-looking on a quiet workspace.
   const hero: Kpi = s.runs_active > 0
     ? {
-        label: "Active",
+        label: t("active"),
         value: String(s.runs_active),
         hint:
           s.runs_failing_recently > 0
-            ? `${s.runs_failing_recently} 失败 / 1h`
-            : "执行中",
+            ? t("failedRecent", { n: s.runs_failing_recently })
+            : t("running"),
         icon: "zap",
-        trend: { direction: "up", label: "live", tone: "success" },
+        trend: { direction: "up", label: t("live"), tone: "success" },
       }
     : {
-        label: "员工",
+        label: t("employees"),
         value: String(s.employees_total),
-        hint: `${s.conversations_today} 对话 / 24h`,
+        hint: t("convsHint", { n: s.conversations_today }),
         icon: "users",
         href: "/employees",
-        trend: { direction: "flat", label: "idle", tone: "muted" },
+        trend: { direction: "flat", label: t("idle"), tone: "muted" },
       };
 
   const cards: Kpi[] = [
     {
-      label: "任务",
+      label: t("tasks"),
       value: String(s.tasks_active),
       hint:
         s.tasks_needs_user > 0
-          ? `${s.tasks_needs_user} 等你处理`
+          ? t("tasksWaiting", { n: s.tasks_needs_user })
           : s.tasks_active > 0
-            ? "执行中"
-            : "—",
+            ? t("running")
+            : t("dash"),
       icon: "list",
       href: "/tasks",
       tone: tasksTone,
     },
     {
-      label: "进行中 · Run",
+      label: t("runsActive"),
       value: String(s.runs_active),
-      hint: s.runs_failing_recently > 0 ? `${s.runs_failing_recently} 失败 / 1h` : "稳定",
+      hint: s.runs_failing_recently > 0 ? t("failedRecent", { n: s.runs_failing_recently }) : t("stable"),
       icon: "play-circle",
       tone: runsTone,
     },
     {
-      label: "触发器",
+      label: t("triggers"),
       value: String(s.triggers_active),
-      hint: "已启用",
+      hint: t("triggersHint"),
       icon: "zap",
       href: "/triggers",
     },
     {
-      label: "制品",
+      label: t("artifacts"),
       value: String(s.artifacts_total),
-      hint: `+${s.artifacts_this_week_delta} 本周`,
+      hint: t("artifactsHint", { n: s.artifacts_this_week_delta }),
       icon: "file",
       trend:
         s.artifacts_this_week_delta > 0
@@ -101,23 +104,24 @@ function buildKpis(s: WorkspaceSummaryDto): { hero: Kpi; cards: Kpi[] } {
           : undefined,
     },
     {
-      label: "Tokens / 24h",
+      label: t("tokens24h"),
       value: formatTokens(s.tokens_today_total),
-      hint: `in ${formatTokens(s.tokens_today_prompt)} · out ${formatTokens(
-        s.tokens_today_completion,
-      )}`,
+      hint: t("tokensSplit", {
+        prompt: formatTokens(s.tokens_today_prompt),
+        completion: formatTokens(s.tokens_today_completion),
+      }),
       icon: "brain",
     },
     {
-      label: "成本 / 24h",
+      label: t("cost24h"),
       value: `$${s.estimated_cost_today_usd.toFixed(2)}`,
-      hint: s.tokens_today_total > 0 ? "估算" : "—",
+      hint: s.tokens_today_total > 0 ? t("estimated") : t("dash"),
       icon: "database",
     },
     {
-      label: "对话 / 24h",
+      label: t("convs24h"),
       value: String(s.conversations_today),
-      hint: "近 24 小时",
+      hint: t("last24h"),
       icon: "message-square",
     },
   ];
@@ -269,7 +273,8 @@ function StatCard({ k }: { k: Kpi }) {
 }
 
 export function KpiBar({ summary }: { summary: WorkspaceSummaryDto }) {
-  const { hero, cards } = buildKpis(summary);
+  const t = useTranslations("cockpit.kpi");
+  const { hero, cards } = buildKpis(summary, t);
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       <HeroCard k={hero} />

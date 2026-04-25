@@ -3,25 +3,18 @@
 /**
  * PingIndicator · /gateway connectivity state (ADR 0016 · V2 · 2-layer rewrite).
  *
- * 第一性原理: "连通" 不是单一布尔。把它拆成两个独立维度,独立显示 ——
+ * Two-axis "connectivity":
+ *   endpoint → can the (key + base_url) reach the provider (GET /v1/models)
+ *   model    → can the (provider, model) run a minimal chat (max_tokens=1)
  *
- *   端点 (Endpoint)  → 这把 key + base_url 能不能触达 provider
- *                       (GET /v1/models · 不调推理)
- *   模型 (Model)     → 这条 (provider, model) 能不能跑一次最小 chat
- *                       (max_tokens=1 · 白名单分类)
- *
- * 视觉契约:
- *   idle    → 6px neutral dot 占位(行尾活动图标已暗示"点击测试",一颗
- *             "待测" 占位 pill 在每行重复是视觉噪音)
- *   running → "测试中" 单 pill (primary-soft + animate-pulse-ring)
- *   ok/fail → 两个 pill 并排 · `EP {状态}` + `M {状态}`
- *             颜色独立:每层各自 success / warning / danger,所以一眼就能
- *             区分 "端点挂了" / "认证错" / "模型不在" / "连通但慢"。
- *   legacy  → 旧 ok/fail 单 pill 形态保留兼容(e2e mock 仍发旧格式)。
- *
- * 所有 wrapper 高度对齐 h-6,行不会因状态切换发生 reflow。
+ * Visual contract:
+ *   idle    → 6px neutral dot placeholder
+ *   running → "testing" pill with pulse-ring
+ *   ok/fail → legacy single pill (e2e mock still emits this shape)
+ *   done    → endpoint pill + model pill side by side, independent tone
  */
 
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 
 export type EndpointPart = {
@@ -62,8 +55,6 @@ export type PingState =
   | { status: "running" }
   | {
       status: "done";
-      // Overall server-side status: ok | degraded | endpoint_unreachable |
-      //   auth_failed | model_unavailable
       overall:
         | "ok"
         | "degraded"
@@ -73,41 +64,40 @@ export type PingState =
       endpoint: EndpointPart;
       model: ModelPart;
     }
-  // Legacy 单态 (`fail` / `ok`) — 兼容旧调用点;新 ping 接口走 `done`.
   | { status: "ok"; latencyMs: number }
   | { status: "fail"; category: string; error: string; latencyMs: number };
 
-const ENDPOINT_LABEL: Record<EndpointPart["errorKind"], string> = {
-  ok: "端点 OK",
-  network: "端点不通",
-  timeout: "端点超时",
-  auth: "认证失败",
-  not_found: "端点路径错",
-  server_error: "供应商故障",
-  unknown: "端点异常",
+const ENDPOINT_KEYS: Record<EndpointPart["errorKind"], string> = {
+  ok: "endpointOk",
+  network: "endpointNetwork",
+  timeout: "endpointTimeout",
+  auth: "endpointAuth",
+  not_found: "endpointNotFound",
+  server_error: "endpointServerError",
+  unknown: "endpointUnknown",
 };
 
-const MODEL_LABEL: Record<ModelPart["classification"], string> = {
-  ok: "模型 OK",
-  auth: "认证失败",
-  model_not_found: "模型不存在",
-  network: "网络不通",
-  timeout: "模型超时",
-  rate_limit: "限流",
-  provider_error: "供应商错",
-  param_error: "参数错",
-  unknown: "模型异常",
+const MODEL_KEYS: Record<ModelPart["classification"], string> = {
+  ok: "modelOk",
+  auth: "modelAuth",
+  model_not_found: "modelNotFound",
+  network: "modelNetwork",
+  timeout: "modelTimeout",
+  rate_limit: "modelRateLimit",
+  provider_error: "modelProviderError",
+  param_error: "modelParamError",
+  unknown: "modelUnknown",
 };
 
-const LEGACY_CATEGORY_LABEL: Record<string, string> = {
-  timeout: "超时",
-  auth: "认证失败",
-  rate_limit: "限流",
-  model_not_found: "模型不存在",
-  connection: "网络不通",
-  context_length: "上下文超限",
-  provider_error: "供应商错误",
-  unknown: "失败",
+const LEGACY_CATEGORY_KEYS: Record<string, string> = {
+  timeout: "categoryTimeout",
+  auth: "categoryAuth",
+  rate_limit: "categoryRateLimit",
+  model_not_found: "categoryModelNotFound",
+  connection: "categoryConnection",
+  context_length: "categoryContextLength",
+  provider_error: "categoryProviderError",
+  unknown: "categoryUnknown",
 };
 
 const BASE_PILL =
@@ -124,7 +114,6 @@ function endpointTone(e: EndpointPart): "success" | "warning" | "danger" {
     e.errorKind === "unknown"
   )
     return "danger";
-  // server_error / not_found → reachable but odd
   return "warning";
 }
 
@@ -159,12 +148,14 @@ function fmt(ms: number): string {
 }
 
 export function PingIndicator({ state }: { state: PingState }) {
+  const t = useTranslations("gateway.ping");
+
   if (state.status === "idle") {
     return (
       <span
         data-ping-state="idle"
-        aria-label="未测试 · 点右侧测试按钮"
-        title="未测试"
+        aria-label={t("ariaUntested")}
+        title={t("labelUntested")}
         className="inline-flex h-6 w-6 items-center justify-center"
       >
         <span
@@ -187,7 +178,7 @@ export function PingIndicator({ state }: { state: PingState }) {
           aria-hidden="true"
           className="inline-block w-[6px] h-[6px] rounded-full bg-primary animate-pulse-ring"
         />
-        <span>测试中</span>
+        <span>{t("labelRunning")}</span>
       </span>
     );
   }
@@ -196,7 +187,7 @@ export function PingIndicator({ state }: { state: PingState }) {
     return (
       <span
         data-ping-state="ok"
-        aria-label={`连通 · ${state.latencyMs}ms`}
+        aria-label={t("ariaOk", { ms: state.latencyMs })}
         className={`${BASE_PILL} border-success/25 bg-success-soft text-success`}
       >
         <Icon name="check-circle-2" size={11} strokeWidth={2} />
@@ -206,13 +197,14 @@ export function PingIndicator({ state }: { state: PingState }) {
   }
 
   if (state.status === "fail") {
-    const label =
-      LEGACY_CATEGORY_LABEL[state.category] ?? LEGACY_CATEGORY_LABEL.unknown;
+    const labelKey =
+      LEGACY_CATEGORY_KEYS[state.category] ?? LEGACY_CATEGORY_KEYS.unknown ?? "categoryUnknown";
+    const label = t(labelKey);
     return (
       <span
         data-ping-state="fail"
         title={state.error}
-        aria-label={`失败 · ${label} · ${state.error}`}
+        aria-label={t("ariaFail", { label, error: state.error })}
         className={`${BASE_PILL} border-danger/30 bg-danger-soft text-danger`}
       >
         <Icon name="alert-circle" size={11} strokeWidth={2} />
@@ -221,29 +213,31 @@ export function PingIndicator({ state }: { state: PingState }) {
     );
   }
 
-  // status === "done" — 双 pill 渲染
+  // status === "done" — two pills
   const eTone = endpointTone(state.endpoint);
   const mTone = modelTone(state.model);
-  const eLabel = ENDPOINT_LABEL[state.endpoint.errorKind];
-  const mLabel = MODEL_LABEL[state.model.classification];
+  const eLabel = t(ENDPOINT_KEYS[state.endpoint.errorKind]);
+  const mLabel = t(MODEL_KEYS[state.model.classification]);
 
-  // Tooltip 把整段诊断信息塞进去 — 用户 hover 任意 pill 都能看到
-  const tooltip =
-    `端点: ${eLabel}` +
-    (state.endpoint.statusCode != null ? ` (HTTP ${state.endpoint.statusCode})` : "") +
-    ` · ${fmt(state.endpoint.latencyMs)}` +
-    (state.endpoint.error ? `\n${state.endpoint.error}` : "") +
-    `\n模型: ${mLabel}` +
-    (state.model.statusCode != null ? ` (HTTP ${state.model.statusCode})` : "") +
-    ` · ${fmt(state.model.latencyMs)}` +
-    (state.model.error ? `\n${state.model.error}` : "");
+  const tooltip = t("doneTooltip", {
+    endpoint: eLabel,
+    endpointStatus:
+      state.endpoint.statusCode != null ? ` (HTTP ${state.endpoint.statusCode})` : "",
+    endpointLatency: fmt(state.endpoint.latencyMs),
+    endpointError: state.endpoint.error ? `\n${state.endpoint.error}` : "",
+    model: mLabel,
+    modelStatus:
+      state.model.statusCode != null ? ` (HTTP ${state.model.statusCode})` : "",
+    modelLatency: fmt(state.model.latencyMs),
+    modelError: state.model.error ? `\n${state.model.error}` : "",
+  });
 
   return (
     <span
       data-ping-state="done"
       data-ping-overall={state.overall}
       title={tooltip}
-      aria-label={`${eLabel} · ${mLabel}`}
+      aria-label={t("doneAria", { endpoint: eLabel, model: mLabel })}
       className="inline-flex items-center gap-1.5"
     >
       <span

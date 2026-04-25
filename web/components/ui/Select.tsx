@@ -39,6 +39,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 import {
@@ -117,10 +118,11 @@ function nextEnabledIndex(
 }
 
 export function Select(props: SelectProps) {
+  const t = useTranslations("ui.select");
   const {
     value,
     onChange,
-    placeholder = "选择…",
+    placeholder = t("placeholder"),
     disabled = false,
     size = "md",
     popoverAlign = "left",
@@ -449,7 +451,7 @@ export function Select(props: SelectProps) {
               role="presentation"
               className="px-3 py-3 text-center text-[12px] text-text-subtle"
             >
-              没有可选项
+              {t("empty")}
             </li>
           )}
         </ul>

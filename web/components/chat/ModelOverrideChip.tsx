@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ModelPicker } from "@/components/model-picker/ModelPicker";
 import {
   updateConversation,
@@ -35,13 +36,16 @@ type Props = {
   onConversationChange: (next: ConversationDto) => void;
 };
 
-function splitRef(ref: string | null | undefined): { provider: string; name: string } {
+function splitRef(
+  ref: string | null | undefined,
+  defaultLabel: string,
+): { provider: string; name: string } {
   // Employees seeded without a pinned model (model_ref = "") inherit the
   // bound provider's default at runtime. The chip has no cheap way to reach
-  // that default synchronously, so we surface it as "默认模型" — same label
-  // the /employees card uses — rather than showing an em dash that reads
-  // like a broken state.
-  if (!ref) return { provider: "", name: "默认模型" };
+  // that default synchronously, so we surface it as the localized "default
+  // model" string — same label the /employees card uses — rather than
+  // showing an em dash that reads like a broken state.
+  if (!ref) return { provider: "", name: defaultLabel };
   const slash = ref.indexOf("/");
   if (slash < 0) return { provider: "", name: ref };
   return { provider: ref.slice(0, slash), name: ref.slice(slash + 1) };
@@ -52,6 +56,7 @@ export function ModelOverrideChip({
   employee,
   onConversationChange,
 }: Props) {
+  const t = useTranslations("chat.modelOverride");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +71,7 @@ export function ModelOverrideChip({
   const isOverridden = conversation.effective_model_source === "override"
     || (conversation.effective_model_source === null && conversation.model_ref_override !== null);
   const fellBackToGlobal = conversation.effective_model_source === "global_default";
-  const { name: effModel } = splitRef(effectiveRef);
+  const { name: effModel } = splitRef(effectiveRef, t("defaultModel"));
 
   async function handleChange(next: string) {
     setSaving(true);
@@ -86,12 +91,12 @@ export function ModelOverrideChip({
   }
 
   const title = error
-    ? `切换失败 · ${error}`
+    ? t("switchFailed", { error })
     : isOverridden
-      ? `本对话覆盖为 ${effectiveRef} · 员工默认 ${employee.model_ref}`
+      ? t("overrideTitle", { effective: effectiveRef ?? "", employee: employee.model_ref ?? "" })
       : fellBackToGlobal
-        ? `员工配置 ${employee.model_ref} 在当前供应商未找到 · 已落到全局默认 ${effectiveRef}`
-        : `跟随员工默认 · ${effectiveRef}`;
+        ? t("fallbackToGlobalTitle", { employee: employee.model_ref ?? "", effective: effectiveRef ?? "" })
+        : t("inheritTitle", { effective: effectiveRef ?? "" });
 
   // Chip styling lives here so the Select trigger visually inherits the
   // prior look. `border-primary` when overridden keeps the original signal;
@@ -115,8 +120,8 @@ export function ModelOverrideChip({
       disabled={saving}
       inheritLabel={
         fellBackToGlobal
-          ? `跟随默认 · ${effectiveRef}（员工 ${employee.model_ref} 未配置)`
-          : `跟随员工默认 · ${effectiveRef}`
+          ? t("inheritFallbackLabel", { effective: effectiveRef ?? "", employee: employee.model_ref ?? "" })
+          : t("inheritLabel", { effective: effectiveRef ?? "" })
       }
       testId="model-override-chip"
       size="sm"

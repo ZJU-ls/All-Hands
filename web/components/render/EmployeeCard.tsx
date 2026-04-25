@@ -15,6 +15,7 @@
  * registry keep working (see `web/tests/employee-card.test.tsx`).
  */
 
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import type { RenderInteraction, RenderProps } from "@/lib/component-registry";
 
@@ -36,12 +37,6 @@ type EmployeeCardPayload = {
   model?: ModelRef;
   status?: Status;
   is_lead?: boolean;
-};
-
-const STATUS_LABEL: Record<Status, string> = {
-  draft: "draft",
-  active: "active",
-  paused: "paused",
 };
 
 const STATUS_DOT_CLASS: Record<Status, string> = {
@@ -68,8 +63,9 @@ function chatInteraction(
 }
 
 export function EmployeeCard({ props, interactions }: RenderProps) {
+  const t = useTranslations("render.employeeCard");
   const p = props as Partial<EmployeeCardPayload>;
-  const name = typeof p.name === "string" && p.name ? p.name : "(未命名员工)";
+  const name = typeof p.name === "string" && p.name ? p.name : t("untitled");
   const role = typeof p.role === "string" ? p.role : "";
   const preview =
     typeof p.system_prompt_preview === "string" ? p.system_prompt_preview : "";
@@ -123,7 +119,7 @@ export function EmployeeCard({ props, interactions }: RenderProps) {
                 aria-hidden="true"
                 className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLASS[status]}`}
               />
-              {STATUS_LABEL[status]}
+              {t(`status.${status}`)}
             </span>
           </div>
           {role && (
@@ -159,7 +155,7 @@ export function EmployeeCard({ props, interactions }: RenderProps) {
             className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-[12px] font-semibold text-primary-fg shadow-soft-sm transition-[background-color,box-shadow] duration-fast ease-out hover:bg-primary-hover hover:shadow-soft"
           >
             <Icon name="message-square" size={14} strokeWidth={2} />
-            {cta.label || "Chat"}
+            {cta.label || t("chat")}
           </button>
         </footer>
       )}

@@ -8,13 +8,13 @@
  * chip. Underneath, a dense token/time metadata row.
  */
 
+import { useTranslations } from "next-intl";
 import type { RunDetailDto, RunStatusDto } from "@/lib/observatory-api";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { TraceChip } from "./TraceChip";
 
 type StatusVisual = {
-  label: string;
   chipClass: string;
   dotClass: string;
   icon: IconName;
@@ -22,25 +22,21 @@ type StatusVisual = {
 
 const STATUS: Record<RunStatusDto, StatusVisual> = {
   running: {
-    label: "运行中",
     chipClass: "border-warning/30 bg-warning-soft text-warning",
     dotClass: "bg-warning animate-pulse-soft",
     icon: "loader",
   },
   succeeded: {
-    label: "已完成",
     chipClass: "border-success/30 bg-success-soft text-success",
     dotClass: "bg-success",
     icon: "check-circle-2",
   },
   failed: {
-    label: "失败",
     chipClass: "border-danger/30 bg-danger-soft text-danger",
     dotClass: "bg-danger",
     icon: "alert-circle",
   },
   cancelled: {
-    label: "已取消",
     chipClass: "border-border bg-surface-2 text-text-muted",
     dotClass: "bg-text-muted",
     icon: "x",
@@ -77,8 +73,10 @@ function initial(name: string | null | undefined): string {
 }
 
 export function RunHeader({ run }: { run: RunDetailDto }) {
+  const t = useTranslations("runs.header");
   const status = STATUS[run.status];
   const spin = run.status === "running";
+  const fallback = t("fallback");
 
   return (
     <header
@@ -95,7 +93,7 @@ export function RunHeader({ run }: { run: RunDetailDto }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium text-text">
-              {run.employee_name ?? "—"}
+              {run.employee_name ?? fallback}
             </span>
             <span
               className={cn(
@@ -112,7 +110,7 @@ export function RunHeader({ run }: { run: RunDetailDto }) {
                 size={10}
                 className={spin ? "animate-spin-slow" : undefined}
               />
-              {status.label}
+              {t(`status.${run.status}`)}
             </span>
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-text-subtle">
@@ -129,19 +127,19 @@ export function RunHeader({ run }: { run: RunDetailDto }) {
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-3 text-caption sm:grid-cols-4">
         <div>
-          <dt className="text-text-muted">员工</dt>
-          <dd className="text-text">{run.employee_name ?? "—"}</dd>
+          <dt className="text-text-muted">{t("employee")}</dt>
+          <dd className="text-text">{run.employee_name ?? fallback}</dd>
         </div>
         <div>
-          <dt className="text-text-muted">耗时</dt>
+          <dt className="text-text-muted">{t("duration")}</dt>
           <dd className="font-mono text-text">{formatDuration(run.duration_s)}</dd>
         </div>
         <div>
-          <dt className="text-text-muted">tokens</dt>
+          <dt className="text-text-muted">{t("tokens")}</dt>
           <dd className="font-mono text-text">{run.tokens.total || 0}</dd>
         </div>
         <div>
-          <dt className="text-text-muted">开始</dt>
+          <dt className="text-text-muted">{t("startedAt")}</dt>
           <dd className="font-mono text-text">{formatTime(run.started_at)}</dd>
         </div>
       </dl>

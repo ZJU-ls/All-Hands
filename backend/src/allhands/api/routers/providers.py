@@ -88,7 +88,16 @@ async def list_presets() -> list[ProviderPresetResponse]:
     supplies the preset base_url / default_model / doc hint so the form can
     auto-fill on format change without the user needing to look up URLs.
     """
-    return [ProviderPresetResponse(**asdict(p)) for p in PROVIDER_PRESETS.values()]
+    out: list[ProviderPresetResponse] = []
+    for p in PROVIDER_PRESETS.values():
+        data = asdict(p)
+        # Localize the human-readable label per request locale; fall back to
+        # the original Chinese baked into the dataclass when a key is missing.
+        localized = t(f"providers.label.{p.kind}")
+        if localized != f"providers.label.{p.kind}":
+            data["label"] = localized
+        out.append(ProviderPresetResponse(**data))
+    return out
 
 
 @router.get("", response_model=list[ProviderResponse])

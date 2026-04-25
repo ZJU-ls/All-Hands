@@ -18,10 +18,33 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { DotGridBackdrop } from "./DotGridBackdrop";
 
+type EntryKey =
+  | "cockpit"
+  | "chat"
+  | "conversations"
+  | "tasks"
+  | "employees"
+  | "employeeDesign"
+  | "skills"
+  | "mcp"
+  | "gateway"
+  | "market"
+  | "triggers"
+  | "channels"
+  | "confirmations"
+  | "traces"
+  | "observatory"
+  | "stockAssistant"
+  | "review"
+  | "settings"
+  | "about";
+
 type Entry = {
+  key: EntryKey;
   label: string;
   href: string;
   hint: string;
@@ -29,28 +52,30 @@ type Entry = {
   keywords?: string;
 };
 
+type EntryDef = Omit<Entry, "label">;
+
 // Icons mirror the AppShell sidebar mapping (ADR 0016 §D1 · all business
 // icons route through <Icon name="...">).
-const ENTRIES: Entry[] = [
-  { label: "驾驶舱", href: "/", hint: "workspace snapshot", icon: "layout-grid", keywords: "home dashboard cockpit" },
-  { label: "对话", href: "/chat", hint: "chat with lead", icon: "message-square", keywords: "chat lead" },
-  { label: "历史会话", href: "/conversations", hint: "past conversations", icon: "clock", keywords: "history conversations" },
-  { label: "任务", href: "/tasks", hint: "async tasks", icon: "check-circle-2", keywords: "tasks jobs async" },
-  { label: "员工", href: "/employees", hint: "digital employees", icon: "users", keywords: "employees agents team" },
-  { label: "员工设计", href: "/employees/design", hint: "design new employee", icon: "user-plus", keywords: "employee design new" },
-  { label: "技能", href: "/skills", hint: "skill packs", icon: "wand-2", keywords: "skills abilities prompts" },
-  { label: "MCP 服务器", href: "/mcp-servers", hint: "external mcp", icon: "plug", keywords: "mcp plugins servers" },
-  { label: "供应商与模型", href: "/gateway", hint: "provider + model gateway", icon: "server", keywords: "gateway llm provider model openai anthropic" },
-  { label: "技能市场", href: "/market", hint: "browse skill market", icon: "store", keywords: "market skills browse install" },
-  { label: "触发器", href: "/triggers", hint: "scheduled + webhook", icon: "zap", keywords: "triggers cron webhook schedule" },
-  { label: "通知渠道", href: "/channels", hint: "slack email webhook", icon: "bell", keywords: "channels notifications slack email webhook" },
-  { label: "审批", href: "/confirmations", hint: "pending approvals", icon: "shield-check", keywords: "confirmations approvals gate" },
-  { label: "追踪", href: "/traces", hint: "langfuse traces", icon: "activity", keywords: "traces observability langfuse" },
-  { label: "观测中心", href: "/observatory", hint: "platform observability", icon: "brain", keywords: "observatory metrics dashboard" },
-  { label: "股票助手", href: "/stock-assistant", hint: "market anomaly demo", icon: "trending-up", keywords: "stock market demo" },
-  { label: "Review", href: "/review", hint: "agent review", icon: "check", keywords: "review approvals" },
-  { label: "设置", href: "/settings", hint: "system settings", icon: "settings", keywords: "settings config" },
-  { label: "关于", href: "/about", hint: "about allhands", icon: "info", keywords: "about version" },
+const ENTRY_DEFS: EntryDef[] = [
+  { key: "cockpit", href: "/", hint: "workspace snapshot", icon: "layout-grid", keywords: "home dashboard cockpit" },
+  { key: "chat", href: "/chat", hint: "chat with lead", icon: "message-square", keywords: "chat lead" },
+  { key: "conversations", href: "/conversations", hint: "past conversations", icon: "clock", keywords: "history conversations" },
+  { key: "tasks", href: "/tasks", hint: "async tasks", icon: "check-circle-2", keywords: "tasks jobs async" },
+  { key: "employees", href: "/employees", hint: "digital employees", icon: "users", keywords: "employees agents team" },
+  { key: "employeeDesign", href: "/employees/design", hint: "design new employee", icon: "user-plus", keywords: "employee design new" },
+  { key: "skills", href: "/skills", hint: "skill packs", icon: "wand-2", keywords: "skills abilities prompts" },
+  { key: "mcp", href: "/mcp-servers", hint: "external mcp", icon: "plug", keywords: "mcp plugins servers" },
+  { key: "gateway", href: "/gateway", hint: "provider + model gateway", icon: "server", keywords: "gateway llm provider model openai anthropic" },
+  { key: "market", href: "/market", hint: "browse skill market", icon: "store", keywords: "market skills browse install" },
+  { key: "triggers", href: "/triggers", hint: "scheduled + webhook", icon: "zap", keywords: "triggers cron webhook schedule" },
+  { key: "channels", href: "/channels", hint: "slack email webhook", icon: "bell", keywords: "channels notifications slack email webhook" },
+  { key: "confirmations", href: "/confirmations", hint: "pending approvals", icon: "shield-check", keywords: "confirmations approvals gate" },
+  { key: "traces", href: "/traces", hint: "langfuse traces", icon: "activity", keywords: "traces observability langfuse" },
+  { key: "observatory", href: "/observatory", hint: "platform observability", icon: "brain", keywords: "observatory metrics dashboard" },
+  { key: "stockAssistant", href: "/stock-assistant", hint: "market anomaly demo", icon: "trending-up", keywords: "stock market demo" },
+  { key: "review", href: "/review", hint: "agent review", icon: "check", keywords: "review approvals" },
+  { key: "settings", href: "/settings", hint: "system settings", icon: "settings", keywords: "settings config" },
+  { key: "about", href: "/about", hint: "about allhands", icon: "info", keywords: "about version" },
 ];
 
 function fuzzyMatch(q: string, e: Entry): number {
@@ -84,6 +109,11 @@ export function CommandPalette({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 } = {}) {
+  const t = useTranslations("ui.commandPalette");
+  const ENTRIES = useMemo<Entry[]>(
+    () => ENTRY_DEFS.map((e) => ({ ...e, label: t(`entries.${e.key}`) })),
+    [t],
+  );
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;
@@ -114,7 +144,7 @@ export function CommandPalette({
       .sort((a, b) => b.score - a.score)
       .map(({ e }) => e);
     return scored;
-  }, [query]);
+  }, [query, ENTRIES]);
 
   // ⌘K is owned by AppShell so the palette module can stay lazy-loaded until
   // first open; this effect only handles Escape-to-close while mounted-and-open.
@@ -174,7 +204,7 @@ export function CommandPalette({
   return (
     <div
       role="dialog"
-      aria-label="命令面板"
+      aria-label={t("ariaLabel")}
       className="fixed inset-0 z-[60] flex items-start justify-center bg-black/60 px-4 pt-[15vh] backdrop-blur-sm"
       onClick={() => setOpen(false)}
     >
@@ -195,7 +225,7 @@ export function CommandPalette({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onListKey}
-            placeholder="跳转到页面 · 搜索员工 · 技能 · 模型"
+            placeholder={t("placeholder")}
             className="flex-1 bg-transparent text-sm text-text placeholder:text-text-subtle outline-none"
           />
           <Kbd>Esc</Kbd>
@@ -208,13 +238,13 @@ export function CommandPalette({
               <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-surface-2 text-text-subtle">
                 <Icon name="search" size={18} />
               </div>
-              没有匹配的入口 · 试试别的关键词
+              {t("noMatch")}
             </div>
           ) : (
             <>
               {!query && (
                 <div className="px-3 pb-1.5 pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
-                  Suggestions · {filtered.length}
+                  {t("suggestions", { count: filtered.length })}
                 </div>
               )}
               <ul className="max-h-[50vh] space-y-0.5 overflow-y-auto">
@@ -269,14 +299,14 @@ export function CommandPalette({
         <div className="relative flex items-center justify-between gap-4 border-t border-border bg-surface-2/40 px-4 py-2 font-mono text-[10px] text-text-subtle">
           <span className="flex items-center gap-1.5">
             <Kbd>↑↓</Kbd>
-            <span>navigate</span>
+            <span>{t("footer.navigate")}</span>
             <span className="mx-1.5">·</span>
             <Kbd>↵</Kbd>
-            <span>open</span>
+            <span>{t("footer.open")}</span>
           </span>
           <span className="flex items-center gap-1.5">
             <Kbd>⌘K</Kbd>
-            <span>toggle</span>
+            <span>{t("footer.toggle")}</span>
           </span>
         </div>
       </div>

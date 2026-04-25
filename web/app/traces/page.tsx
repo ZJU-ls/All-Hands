@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import { Icon } from "@/components/ui/icon";
@@ -55,12 +56,13 @@ export default function TracesPage() {
   // Next.js 15 requires every `useSearchParams` consumer to sit inside a
   // Suspense boundary (E03). Wrap the inner body so SSR can fall back to the
   // list skeleton while the client hydrates the URL state.
+  const t = useTranslations("traces.page");
   return (
     <Suspense
       fallback={
-        <AppShell title="追踪">
+        <AppShell title={t("title")}>
           <div className="flex-1 px-6 py-4">
-            <LoadingState title="加载追踪列表" />
+            <LoadingState title={t("loadingList")} />
           </div>
         </AppShell>
       }
@@ -71,6 +73,8 @@ export default function TracesPage() {
 }
 
 function TracesPageInner() {
+  const t = useTranslations("traces.page");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -159,7 +163,7 @@ function TracesPageInner() {
   );
 
   return (
-    <AppShell title="追踪">
+    <AppShell title={t("title")}>
       <div className="flex h-full min-h-0">
         <div className="flex flex-1 flex-col min-w-0">
           <TraceFilters
@@ -174,21 +178,21 @@ function TracesPageInner() {
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {state === "loading" && traces.length === 0 ? (
               <LoadingState
-                title="加载追踪列表"
-                description="正在拉取最近的 trace 摘要"
+                title={t("loadingList")}
+                description={t("loadingDescription")}
               />
             ) : state === "error" && traces.length === 0 ? (
               <ErrorState
-                title="追踪列表加载失败"
+                title={t("errorTitle")}
                 detail={error ?? undefined}
-                action={{ label: "重试", onClick: () => void load(filters) }}
+                action={{ label: tCommon("retry"), onClick: () => void load(filters) }}
               />
             ) : visible.length === 0 ? (
               <EmptyState
-                title="当前过滤下没有 trace"
-                description="调整时间范围或关键词,或先和员工开一次对话生成 run 事件。"
+                title={t("emptyTitle")}
+                description={t("emptyDescription")}
                 action={{
-                  label: "重置过滤",
+                  label: t("resetFilters"),
                   onClick: () => setFilters(DEFAULT_FILTERS),
                 }}
               />
@@ -216,12 +220,12 @@ function TracesPageInner() {
                         size={12}
                         className={loadingMore ? "animate-spin-slow" : ""}
                       />
-                      <span>{loadingMore ? "加载中…" : "加载更多"}</span>
+                      <span>{loadingMore ? t("loading") : t("loadMore")}</span>
                     </button>
                   ) : (
                     <span className="inline-flex items-center gap-1.5">
                       <Icon name="check" size={11} className="text-success" />
-                      已到末尾 · 共 {traces.length} 条
+                      {t("endReached", { count: traces.length })}
                     </span>
                   )}
                 </div>

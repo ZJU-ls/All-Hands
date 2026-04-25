@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, act, fireEvent } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@/tests/test-utils/i18n-render";
 import { Coachmark } from "../components/ui/Coachmark";
 import { markCoachmarkSeen } from "../lib/first-run";
 

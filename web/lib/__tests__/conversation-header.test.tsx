@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { render, cleanup, screen } from "@testing-library/react";
+import { render, cleanup, screen } from "@/tests/test-utils/i18n-render";
 import { ConversationHeader } from "@/components/chat/ConversationHeader";
 
 afterEach(cleanup);

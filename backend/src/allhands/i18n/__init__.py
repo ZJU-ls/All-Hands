@@ -88,6 +88,10 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "errors.not_found.version_blob": "该版本没有可下载的内容",
         "errors.conflict.task_state": "任务状态冲突",
         "errors.stream.error_prefix": "[错误]",
+        "errors.no_default_provider": "尚未配置默认 LLM 供应商 — 请先到「模型网关」选一家供应商并标记为默认。",
+        "providers.label.openai": "OpenAI 兼容",
+        "providers.label.anthropic": "Anthropic",
+        "providers.label.aliyun": "阿里云 百炼",
     },
     "en": {
         "errors.unknown": "Unknown error",
@@ -108,6 +112,10 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "errors.not_found.version_blob": "version has no stored blob",
         "errors.conflict.task_state": "Task state conflict",
         "errors.stream.error_prefix": "[error]",
+        "errors.no_default_provider": 'No default LLM provider is configured — pick a provider in "Model Gateway" and mark it as default first.',
+        "providers.label.openai": "OpenAI-compatible",
+        "providers.label.anthropic": "Anthropic",
+        "providers.label.aliyun": "Aliyun Bailian",
     },
 }
 

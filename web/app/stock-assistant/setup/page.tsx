@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -20,9 +21,9 @@ type StepStatus = "pending" | "done";
 type StepDef = {
   key: string;
   order: number;
-  title: string;
-  description: string;
-  cta: string;
+  titleKey: string;
+  descKey: string;
+  ctaKey: string;
   href: string;
   icon: IconName;
   check: (ctx: SetupContext) => boolean;
@@ -48,10 +49,9 @@ const STEPS: StepDef[] = [
   {
     key: "channel",
     order: 1,
-    title: "注册通知渠道",
-    description:
-      "至少一个启用的渠道(Telegram 双向推荐 · 或 Bark 单向)。之后 briefing / 异动提醒都走这里。",
-    cta: "去注册",
+    titleKey: "channelTitle",
+    descKey: "channelDesc",
+    ctaKey: "channelCta",
     href: "/channels",
     icon: "bell",
     check: (c) => c.channelCount > 0,
@@ -59,9 +59,9 @@ const STEPS: StepDef[] = [
   {
     key: "watch",
     order: 2,
-    title: "添加自选 / 持仓",
-    description: "至少加一只自选或持仓。poller 订阅的就是 watched ∪ holdings。",
-    cta: "去添加",
+    titleKey: "watchTitle",
+    descKey: "watchDesc",
+    ctaKey: "watchCta",
     href: "/market",
     icon: "eye",
     check: (c) => c.watchedCount + c.holdingsCount > 0,
@@ -69,10 +69,9 @@ const STEPS: StepDef[] = [
   {
     key: "skill",
     order: 3,
-    title: "启用『老张』员工",
-    description:
-      "在 /employees 里给员工挂上 allhands.skills.stock_assistant · 或直接用内置 persona。",
-    cta: "去启用",
+    titleKey: "skillTitle",
+    descKey: "skillDesc",
+    ctaKey: "skillCta",
     href: "/employees",
     icon: "users",
     check: (c) => c.skillEnabled,
@@ -80,10 +79,9 @@ const STEPS: StepDef[] = [
   {
     key: "triggers",
     order: 4,
-    title: "启用 3 个预设 trigger",
-    description:
-      "在 /triggers 里导入 anomaly_to_telegram · opening_briefing_cron · closing_journal_cron。",
-    cta: "去启用",
+    titleKey: "triggersTitle",
+    descKey: "triggersDesc",
+    ctaKey: "triggersCta",
     href: "/triggers",
     icon: "zap",
     check: (c) => c.triggerCount >= 3,
@@ -91,10 +89,9 @@ const STEPS: StepDef[] = [
   {
     key: "poller",
     order: 5,
-    title: "启动 market-ticker-poller",
-    description:
-      "在 /market 顶部按 ▶ 启动 poller,让它开始 3 秒级的异动检测。",
-    cta: "去启动",
+    titleKey: "pollerTitle",
+    descKey: "pollerDesc",
+    ctaKey: "pollerCta",
     href: "/market",
     icon: "activity",
     check: () => false, // 状态由 /market 顶部实时显示,这里永远可操作
@@ -102,6 +99,7 @@ const STEPS: StepDef[] = [
 ];
 
 export default function StockAssistantSetupPage() {
+  const t = useTranslations("stockAssistant.setup");
   const [ctx, setCtx] = useState<SetupContext>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -156,7 +154,7 @@ export default function StockAssistantSetupPage() {
 
   return (
     <AppShell
-      title="Stock Assistant · Setup"
+      title={t("appShellTitle")}
       actions={
         <button
           onClick={load}
@@ -169,21 +167,21 @@ export default function StockAssistantSetupPage() {
             size={12}
             className={loading ? "animate-spin" : ""}
           />
-          刷新
+          {t("refresh")}
         </button>
       }
     >
       <div className="h-full overflow-y-auto">
         <div className="max-w-3xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
           <PageHeader
-            title="5 步就绪"
+            title={t("pageTitle")}
             subtitle={
               <>
-                目标:10 分钟内让&ldquo;老张&rdquo;能发出第一条 briefing。
+                {t("subtitlePrefix")}
                 <span className="ml-1 font-mono text-text">
-                  {doneCount} / {totalCount} 已完成
+                  {t("subtitleProgress", { done: doneCount, total: totalCount })}
                 </span>
-                。
+                {t("subtitleSuffix")}
               </>
             }
           />
@@ -236,6 +234,7 @@ function ProgressHero({
   doneCount: number;
   totalCount: number;
 }) {
+  const t = useTranslations("stockAssistant.setup");
   return (
     <section
       data-testid="setup-progress"
@@ -264,10 +263,10 @@ function ProgressHero({
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
             <h2 className="text-[20px] font-semibold tracking-tight text-text">
-              配置进度
+              {t("progressTitle")}
             </h2>
             <span className="font-mono text-caption uppercase tracking-wider text-text-subtle">
-              {doneCount} / {totalCount} 步完成 · {pct}%
+              {t("progressMeta", { done: doneCount, total: totalCount, pct })}
             </span>
           </div>
           <div className="mt-3 relative h-2 rounded-full bg-surface-3 overflow-hidden">
@@ -281,7 +280,7 @@ function ProgressHero({
             />
           </div>
           <p className="mt-3 text-caption text-text-muted">
-            按顺序完成即可 · 完成后再次访问本页可查看状态快照。
+            {t("progressFooter")}
           </p>
         </div>
       </div>
@@ -302,6 +301,8 @@ function StepCard({
   status: StepStatus;
   current: boolean;
 }) {
+  const t = useTranslations("stockAssistant.setup");
+  const tSteps = useTranslations("stockAssistant.setup.steps");
   const done = status === "done";
   return (
     <li
@@ -329,7 +330,7 @@ function StepCard({
               <Icon name={step.icon} size={12} strokeWidth={2} />
             </span>
             <h3 className="text-[14px] font-semibold text-text truncate">
-              {step.title}
+              {tSteps(step.titleKey)}
             </h3>
             <span
               className={`inline-flex items-center gap-1 h-5 px-2 rounded-full text-caption font-mono font-semibold uppercase tracking-wider ${
@@ -349,11 +350,11 @@ function StepCard({
                       : "bg-text-subtle"
                 }`}
               />
-              {done ? "已完成" : current ? "进行中" : "待完成"}
+              {done ? t("stepDone") : current ? t("stepCurrent") : t("stepPending")}
             </span>
           </div>
           <p className="mt-1.5 text-[13px] text-text-muted leading-relaxed">
-            {step.description}
+            {tSteps(step.descKey)}
           </p>
         </div>
         <Link
@@ -370,11 +371,11 @@ function StepCard({
           {done ? (
             <>
               <Icon name="eye" size={12} />
-              重看
+              {t("review")}
             </>
           ) : (
             <>
-              {step.cta}
+              {tSteps(step.ctaKey)}
               <Icon name="arrow-right" size={12} />
             </>
           )}
@@ -435,6 +436,7 @@ function StepMarker({
 // ---------------------------------------------------------------------------
 
 function ReadyPanel() {
+  const t = useTranslations("stockAssistant.setup.ready");
   return (
     <section
       data-testid="setup-ready"
@@ -462,11 +464,10 @@ function ReadyPanel() {
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold tracking-tight text-text">
-            已就绪 · 老张上岗
+            {t("title")}
           </h2>
           <p className="mt-2 text-[13px] text-text-muted leading-relaxed">
-            下一笔异动会自动走 channel 推到你的手机。打开 /chat 跟&ldquo;老张&rdquo;说
-            &ldquo;看看今天&rdquo; 验证一下。
+            {t("description")}
           </p>
           <div className="mt-4 flex items-center gap-2 flex-wrap">
             <Link
@@ -474,14 +475,14 @@ function ReadyPanel() {
               className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary hover:bg-primary-hover text-primary-fg text-[13px] font-semibold shadow-soft hover:-translate-y-px transition duration-base"
             >
               <Icon name="send" size={14} />
-              打开对话
+              {t("openChat")}
             </Link>
             <Link
               href="/market"
               className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
             >
               <Icon name="activity" size={14} />
-              看行情
+              {t("viewMarket")}
             </Link>
           </div>
         </div>

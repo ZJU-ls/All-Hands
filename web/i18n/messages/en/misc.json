@@ -1,0 +1,401 @@
+{
+  "pages": {
+    "about": {
+      "title": "About",
+      "tagline": "One for All — an open-source, self-hosted digital workforce platform.",
+      "description": "Design, dispatch, and observe a team of digital employees by chatting with the Lead Agent. Every capability is registered as a Tool; the front-end menus are just entry points, and the backend follows the Tool First principle.",
+      "version": "v0 · mvp",
+      "facts": {
+        "principles": {
+          "label": "Core principles",
+          "body": "Tool First · Unified React Agent · Pure Query Loop · Skill progressive loading · Subagent composition · L4 guardrails"
+        },
+        "employees": {
+          "label": "Digital employees",
+          "body": "Every agent is just configuration (model · skills · tools · system prompt) — no mode field"
+        },
+        "guardrails": {
+          "label": "Guardrails",
+          "body": "Tools must declare scope · WRITE requires confirmation by default · IRREVERSIBLE goes through double confirmation"
+        }
+      }
+    },
+    "review": {
+      "title": "Review",
+      "headerTitle": "Review · 3-stage delivery gates",
+      "headerSubtitle": "These three gates push a spec from “it's written” to “it can ship to users.” Each has its own persona, artifacts, and exit conditions. Click a Meta Tool name below to have Lead trigger it from chat (with confirmation).",
+      "orderNote": "Once every feature spec is delivered, run them in order: self-review → walkthrough-acceptance → harness-review. If any earlier stage is incomplete, the later evidence is junk.",
+      "footer": {
+        "gateNote": "Triggering a Meta Tool goes through the Confirmation Gate · every WRITE tool needs explicit user approval.",
+        "lintRulesPrefix": "Rule engine (Round 1 mechanical checks) ·",
+        "harnessAuditPrefix": "Harness Step 1 docs drift draft ·"
+      },
+      "fields": {
+        "persona": "Persona",
+        "rounds": "Rounds",
+        "metaTool": "Meta Tool"
+      },
+      "docs": {
+        "spec": "spec",
+        "artifacts": "artifacts",
+        "history": "history"
+      },
+      "gates": {
+        "selfReview": {
+          "title": "Self-Review",
+          "persona": "3 personas · non-overlapping · pretty / usable / lovable",
+          "rounds": "Round 1 · 2 · 3",
+          "duration": "~ 1-2h wall clock"
+        },
+        "walkthroughAcceptance": {
+          "title": "Walkthrough Acceptance",
+          "persona": "First-time user opens the app · fix-and-rate loop",
+          "rounds": "W1 → W7 · fix-rate loop (≤ 5 iterations)",
+          "duration": "~ 2-4h wall clock"
+        },
+        "harnessReview": {
+          "title": "Harness Review",
+          "persona": "Look back after ≥ 7-day cooldown · stranger who's never used it",
+          "rounds": "Step 1 (docs drift) · Step 2 (fix) · Step 3 (fresh eyes)",
+          "duration": "~ 30min-2h · plus 7-day cooldown"
+        }
+      }
+    },
+    "observatory": {
+      "title": "Observatory",
+      "eyebrow": "Observatory",
+      "heading": "Platform health at a glance",
+      "subtitle": "Aggregated traces · runs · latency · cost — see every employee's runtime status in one screen.",
+      "range": {
+        "lastHour": "Last hour",
+        "h24": "24h",
+        "d7": "7d"
+      },
+      "refreshing": "Refreshing…",
+      "refresh": "Refresh",
+      "bootstrap": {
+        "headlinePrefix": "Langfuse",
+        "headlineSuffix": "· tracing not connected",
+        "body": "Agents keep running, but every run's trace is dropped. The trace list below reads run.* events from the local events table, not Langfuse.",
+        "lastPrefix": "last ·",
+        "retrying": "Retrying…",
+        "retry": "Retry bootstrap"
+      },
+      "loadFailed": {
+        "title": "Failed to load",
+        "fallback": "Couldn't fetch observability data. Tap retry on the right.",
+        "action": "Retry"
+      },
+      "kpi": {
+        "uptime": "Uptime · 24h",
+        "uptimeDelta": "+0.2% vs yesterday",
+        "latency": "Latency p50",
+        "latencyDelta": "Faster than last week",
+        "failure": "Failure rate",
+        "failureWarn": "Watch",
+        "failureStable": "Stable",
+        "tokens": "Avg tokens · run",
+        "tokensDelta": "{count} total traces"
+      },
+      "panels": {
+        "langfuse": "Langfuse · tracing backend",
+        "topEmployees": "Top employees · 24h",
+        "noData": "No data yet",
+        "moreLabel": "{title} more",
+        "rows": {
+          "bootstrap": "Bootstrap status",
+          "observability": "Observability",
+          "host": "Host",
+          "totalTraces": "Total traces"
+        },
+        "values": {
+          "enabled": "enabled",
+          "disabled": "disabled",
+          "runs": "{count} runs"
+        }
+      },
+      "incidents": {
+        "title": "Recent incidents",
+        "count": "{count} failed",
+        "tokensSuffix": "tok"
+      },
+      "traces": {
+        "title": "Latest 50 traces",
+        "empty": {
+          "title": "No run events yet",
+          "description": "Chat with Lead and kick off the first task — trace summaries will appear here."
+        },
+        "headers": {
+          "trace": "trace",
+          "employee": "employee",
+          "status": "status",
+          "duration": "duration",
+          "tokens": "tokens",
+          "started": "started"
+        },
+        "status": {
+          "ok": "ok",
+          "failed": "failed"
+        }
+      }
+    },
+    "conversations": {
+      "title": "Conversations",
+      "subtitle": "Grouped by employee · newest on top · click to open the transcript",
+      "loadFailed": "Failed to load",
+      "unknownEmployee": "Unknown employee",
+      "leadBadge": "Lead",
+      "conversationCount": "· {count} conversations",
+      "untitled": "(Untitled)",
+      "empty": {
+        "title": "No conversations yet",
+        "description": "Open an employee page and start a new conversation. Every chat with a digital employee shows up here.",
+        "openEmployees": "Open employee list",
+        "openChat": "Start a chat"
+      }
+    },
+    "confirmations": {
+      "title": "Approvals",
+      "description": "Review and act on pending L4 tool calls."
+    }
+  },
+  "artifacts": {
+    "detail": {
+      "loadFailed": "Failed to load artifact: {error}",
+      "loadingMeta": "Loading…",
+      "loadingContent": "Loading content…",
+      "download": "Download",
+      "unsupportedKind": "Kind {kind} can't be previewed in the panel."
+    },
+    "list": {
+      "pinned": "Pinned",
+      "empty": "No artifacts yet. Have an employee produce a doc, code, or diagram."
+    },
+    "panel": {
+      "title": "Artifacts",
+      "ariaLabel": "Artifacts panel",
+      "offlineTitle": "Live stream interrupted · the browser will reconnect automatically",
+      "offline": "offline",
+      "closeAria": "Close artifacts panel",
+      "closeTitle": "Close · Cmd/Ctrl+J",
+      "back": "Back to list",
+      "loading": {
+        "title": "Loading artifacts",
+        "description": "Fetching the workspace artifact list"
+      },
+      "error": {
+        "title": "Failed to load artifacts",
+        "retry": "Retry"
+      },
+      "empty": {
+        "title": "No artifacts yet",
+        "description": "Have an employee produce a doc, code, or diagram and it'll show up here in real time."
+      }
+    },
+    "versionSwitcher": {
+      "ariaLabel": "Switch version"
+    },
+    "mermaid": {
+      "renderFailed": "Mermaid render failed: {error}"
+    }
+  },
+  "brand": {
+    "mark": {}
+  },
+  "render": {
+    "preview": {
+      "missingId": "Artifact.Preview is missing artifact_id",
+      "loadFailed": "Failed to load artifact: {error}",
+      "loading": "Loading artifact…",
+      "unsupportedKind": "Kind {kind} can't be previewed"
+    },
+    "employeeCard": {
+      "untitled": "(Unnamed employee)",
+      "chat": "Chat",
+      "status": {
+        "draft": "draft",
+        "active": "active",
+        "paused": "paused"
+      }
+    },
+    "planCard": {
+      "untitled": "(Unnamed plan)",
+      "noSteps": "(no steps)",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      }
+    },
+    "planTimeline": {
+      "title": "Plan",
+      "noSteps": "(no steps)",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "done": "Done",
+        "skipped": "Skipped",
+        "failed": "Failed"
+      }
+    }
+  },
+  "state": {
+    "firstRun": {
+      "ariaLabel": "First-run guide",
+      "eyebrow": "first-run · welcome"
+    },
+    "loading": {
+      "defaultTitle": "Loading"
+    }
+  },
+  "ui": {
+    "coachmark": {
+      "dismissDefault": "Got it",
+      "closeAria": "Dismiss tip"
+    },
+    "commandPalette": {
+      "ariaLabel": "Command palette",
+      "placeholder": "Jump to a page · search employees · skills · models",
+      "noMatch": "No matches · try a different keyword",
+      "suggestions": "Suggestions · {count}",
+      "footer": {
+        "navigate": "navigate",
+        "open": "open",
+        "toggle": "toggle"
+      },
+      "entries": {
+        "cockpit": "Cockpit",
+        "chat": "Chat",
+        "conversations": "Conversations",
+        "tasks": "Tasks",
+        "employees": "Employees",
+        "employeeDesign": "Employee design",
+        "skills": "Skills",
+        "mcp": "MCP servers",
+        "gateway": "Providers & models",
+        "market": "Skill market",
+        "triggers": "Triggers",
+        "channels": "Notification channels",
+        "confirmations": "Approvals",
+        "traces": "Traces",
+        "observatory": "Observatory",
+        "stockAssistant": "Stock assistant",
+        "review": "Review",
+        "settings": "Settings",
+        "about": "About"
+      }
+    },
+    "confirmDialog": {
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "processing": "Working…",
+      "closeAria": "Close"
+    },
+    "dotGridAvatar": {},
+    "dotGridBackdrop": {},
+    "select": {
+      "placeholder": "Select…",
+      "empty": "No options"
+    }
+  },
+  "shellExtras": {
+    "placeholder": {
+      "defaultNote": "This module is under construction. It will be managed via the Lead Agent or this page in the future."
+    }
+  },
+  "welcomeExtras": {
+    "workspacePreview": {
+      "browser": {
+        "host": "allhands.local / {scene}",
+        "hint": "Click the sidebar to switch · auto-rotating"
+      },
+      "sidebar": {
+        "chat": "Chat",
+        "skills": "Skills",
+        "gateway": "Gateway",
+        "traces": "Traces"
+      },
+      "scenes": {
+        "chat": {
+          "modelTag": "gpt-4o-mini",
+          "online": "Online",
+          "userMessage": "Hire me a researcher who reads the top 5 Hacker News headlines every day.",
+          "agentReplyPrefix": "Created the employee",
+          "agentReplySuffix": " and wired up the fetch_url + summarize tools.",
+          "toolName": "create_employee",
+          "toolDuration": "320ms",
+          "toolStatus": "ok · {duration}"
+        },
+        "skills": {
+          "eyebrow": "Skills",
+          "title": "Skills",
+          "count": "· 24",
+          "subtitle": "capability packs",
+          "kpi": {
+            "totalLabel": "Total",
+            "totalValue": "24",
+            "totalHint": "6 user · 18 builtin",
+            "installedLabel": "Installed",
+            "installedValue": "6",
+            "installedHint": "User-installed",
+            "builtinLabel": "Builtin",
+            "builtinValue": "18",
+            "builtinHint": "Platform builtin",
+            "latestLabel": "Latest",
+            "latestValue": "2h",
+            "latestHint": "hn-digest"
+          },
+          "items": {
+            "webFetch": {
+              "name": "web-fetch",
+              "tag": "READ",
+              "desc": "Fetch any URL · text / JSON"
+            },
+            "hnDigest": {
+              "name": "hn-digest",
+              "tag": "READ",
+              "desc": "Hacker News headline digest"
+            },
+            "slackNotify": {
+              "name": "slack-notify",
+              "tag": "WRITE",
+              "desc": "Slack channel · needs confirm"
+            }
+          }
+        },
+        "gateway": {
+          "eyebrow": "Gateway",
+          "title": "Gateway",
+          "status": "5 connected",
+          "kpi": {
+            "providersLabel": "Providers",
+            "providersValue": "5",
+            "providersHint": "OpenAI · Anthropic · …",
+            "modelsLabel": "Models",
+            "modelsValue": "23",
+            "modelsHint": "across all providers",
+            "defaultLabel": "Default",
+            "defaultValue": "gpt-4o-mini"
+          },
+          "modelsSuffix": "models"
+        },
+        "traces": {
+          "eyebrow": "Traces",
+          "title": "Run traces",
+          "summary": "last 24h · 214 runs",
+          "headers": {
+            "trace": "trace",
+            "employee": "employee",
+            "tool": "tool",
+            "ms": "ms",
+            "status": "status"
+          },
+          "status": {
+            "ok": "ok",
+            "err": "err"
+          }
+        }
+      }
+    }
+  }
+}

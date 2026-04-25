@@ -8,7 +8,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@/tests/test-utils/i18n-render";
 
 import { AgentMarkdown } from "../AgentMarkdown";
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
@@ -48,14 +49,15 @@ type Tab = "overview" | "tools" | "logs" | "health";
 
 type LoadStatus = "loading" | "ready" | "notfound" | "error";
 
-const TABS: ReadonlyArray<readonly [Tab, string, IconName]> = [
-  ["overview", "概览", "layout-grid"],
-  ["tools", "工具", "zap"],
-  ["logs", "日志", "terminal"],
-  ["health", "健康时间线", "activity"],
+const TABS: ReadonlyArray<readonly [Tab, IconName]> = [
+  ["overview", "layout-grid"],
+  ["tools", "zap"],
+  ["logs", "terminal"],
+  ["health", "activity"],
 ];
 
 export default function McpServerDetailPage() {
+  const t = useTranslations("mcp.detail");
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
 
@@ -172,29 +174,29 @@ export default function McpServerDetailPage() {
     : [];
 
   return (
-    <AppShell title={server?.name ?? "MCP 服务器"}>
+    <AppShell title={server?.name ?? t("appShellFallback")}>
       <div className="h-full overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
           <Breadcrumb name={server?.name} />
 
           {status === "loading" && (
             <div data-testid="mcp-detail-loading">
-              <LoadingState title="加载 MCP 服务器详情" />
+              <LoadingState title={t("loadingTitle")} />
             </div>
           )}
 
           {status === "notfound" && (
             <div data-testid="mcp-detail-notfound">
               <EmptyState
-                title={`MCP 服务器 ${id} 不存在`}
-                description="可能已被删除,或 URL 拼写有误。"
+                title={t("notFoundTitle", { id })}
+                description={t("notFoundDescription")}
               >
                 <Link
                   href="/mcp-servers"
                   className="inline-flex items-center gap-1.5 mt-2 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
                 >
                   <Icon name="arrow-left" size={12} />
-                  回到列表
+                  {t("backToList")}
                 </Link>
               </EmptyState>
             </div>
@@ -203,9 +205,9 @@ export default function McpServerDetailPage() {
           {status === "error" && (
             <div data-testid="mcp-detail-error">
               <ErrorState
-                title="加载 MCP 服务器失败"
+                title={t("loadErrorTitle")}
                 detail={error}
-                action={{ label: "重试", onClick: () => void load() }}
+                action={{ label: t("retry"), onClick: () => void load() }}
               />
             </div>
           )}
@@ -222,10 +224,10 @@ export default function McpServerDetailPage() {
 
               <div
                 role="tablist"
-                aria-label="MCP 服务器视图"
+                aria-label={t("tabsLabel")}
                 className="inline-flex items-center gap-1 rounded-xl bg-surface-2 p-1 border border-border"
               >
-                {TABS.map(([key, label, icon]) => {
+                {TABS.map(([key, icon]) => {
                   const active = tab === key;
                   return (
                     <button
@@ -241,7 +243,7 @@ export default function McpServerDetailPage() {
                       }`}
                     >
                       <Icon name={icon} size={12} strokeWidth={2} />
-                      {label}
+                      {t(`tabs.${key}`)}
                     </button>
                   );
                 })}
@@ -274,9 +276,9 @@ export default function McpServerDetailPage() {
 
       <ConfirmDialog
         open={confirmDelete}
-        title={`删除 MCP 服务器 ${server?.name ?? ""}?`}
-        message="此操作会永久移除注册记录,不影响外部服务本身。"
-        confirmLabel="删除"
+        title={t("deleteTitle", { name: server?.name ?? "" })}
+        message={t("deleteMessage")}
+        confirmLabel={t("deleteConfirm")}
         danger
         busy={deleting}
         onConfirm={() => void handleDelete()}
@@ -287,6 +289,7 @@ export default function McpServerDetailPage() {
 }
 
 function Breadcrumb({ name }: { name?: string }) {
+  const t = useTranslations("mcp.detail");
   return (
     <div className="flex items-center gap-1.5 font-mono text-caption uppercase tracking-wider text-text-subtle">
       <Link
@@ -294,7 +297,7 @@ function Breadcrumb({ name }: { name?: string }) {
         className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md text-text-muted hover:text-primary hover:bg-primary-muted transition duration-base"
       >
         <Icon name="arrow-left" size={11} strokeWidth={2} />
-        MCP Servers
+        {t("breadcrumbRoot")}
       </Link>
       <Icon name="chevron-right" size={11} className="text-text-subtle" />
       <span className="text-text truncate max-w-[30ch]">{name ?? "…"}</span>
@@ -302,7 +305,9 @@ function Breadcrumb({ name }: { name?: string }) {
   );
 }
 
-function healthMeta(h: Health): {
+type Translator = ReturnType<typeof useTranslations>;
+
+function healthMeta(h: Health, t: Translator): {
   label: string;
   dot: string;
   chip: string;
@@ -310,27 +315,27 @@ function healthMeta(h: Health): {
 } {
   if (h === "ok")
     return {
-      label: "健康",
+      label: t("health.ok"),
       dot: "bg-success",
       chip: "text-success border-success/30 bg-success-soft",
       icon: "check-circle-2",
     };
   if (h === "unreachable")
     return {
-      label: "不可达",
+      label: t("health.unreachable"),
       dot: "bg-danger",
       chip: "text-danger border-danger/30 bg-danger-soft",
       icon: "alert-circle",
     };
   if (h === "auth_failed")
     return {
-      label: "鉴权失败",
+      label: t("health.authFailed"),
       dot: "bg-danger",
       chip: "text-danger border-danger/30 bg-danger-soft",
       icon: "lock",
     };
   return {
-    label: "未知",
+    label: t("health.unknown"),
     dot: "bg-text-subtle",
     chip: "text-text-muted border-border bg-surface-2",
     icon: "circle-help",
@@ -356,8 +361,10 @@ function Hero({
   onReconnect: () => void;
   onDelete: () => void;
 }) {
-  const h = healthMeta(server.health);
-  const t = transportMeta(server.transport);
+  const tr = useTranslations("mcp.detail");
+  const trHero = useTranslations("mcp.detail.hero");
+  const h = healthMeta(server.health, tr);
+  const tp = transportMeta(server.transport);
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-sm p-6">
       <div
@@ -398,8 +405,8 @@ function Hero({
                 data-testid="mcp-transport"
                 className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono"
               >
-                <Icon name={t.icon} size={10} strokeWidth={2.25} />
-                {t.label}
+                <Icon name={tp.icon} size={10} strokeWidth={2.25} />
+                {tp.label}
               </span>
               <span
                 data-testid="mcp-health-label"
@@ -414,15 +421,15 @@ function Hero({
                   size={10}
                   strokeWidth={2.25}
                 />
-                {server.enabled ? "已启用" : "已停用"}
+                {server.enabled ? trHero("enabled") : trHero("disabled")}
               </span>
               <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
                 <Icon name="zap" size={10} strokeWidth={2.25} />
-                {server.exposed_tool_ids.length} tools
+                {trHero("tools", { count: server.exposed_tool_ids.length })}
               </span>
               <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
                 <Icon name="users" size={10} strokeWidth={2.25} />
-                {dependentCount} 引用
+                {trHero("dependents", { count: dependentCount })}
               </span>
             </div>
             <p className="font-mono text-caption text-text-subtle truncate">
@@ -440,12 +447,12 @@ function Hero({
             {busy === "reconnect" ? (
               <>
                 <Icon name="loader" size={12} className="animate-spin-slow" />
-                重连中
+                {trHero("reconnecting")}
               </>
             ) : (
               <>
                 <Icon name="refresh" size={12} />
-                重连
+                {trHero("reconnect")}
               </>
             )}
           </button>
@@ -455,7 +462,7 @@ function Hero({
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/30 bg-danger-soft text-[12px] font-semibold text-danger hover:bg-danger/15 transition duration-base"
           >
             <Icon name="trash-2" size={12} />
-            删除
+            {trHero("delete")}
           </button>
         </div>
       </div>
@@ -532,27 +539,28 @@ function Overview({
   server: Server;
   dependents: Employee[];
 }) {
+  const t = useTranslations("mcp.detail.overview");
   return (
     <div data-testid="tab-panel-overview" className="space-y-5">
-      <Section title="配置" icon="settings">
+      <Section title={t("config")} icon="settings">
         <MetaGrid
           items={[
-            { k: "transport", v: server.transport, mono: true },
-            { k: "health", v: server.health, mono: true },
+            { k: t("transport"), v: server.transport, mono: true },
+            { k: t("health"), v: server.health, mono: true },
             {
-              k: "enabled",
+              k: t("enabled"),
               v: server.enabled ? "true" : "false",
               mono: true,
             },
             {
-              k: "last handshake",
+              k: t("lastHandshake"),
               v: server.last_handshake_at
                 ? formatTime(server.last_handshake_at)
-                : "尚未握手",
+                : t("neverHandshake"),
               mono: true,
             },
             {
-              k: "exposed tools",
+              k: t("exposedTools"),
               v: String(server.exposed_tool_ids.length),
               mono: true,
             },
@@ -560,7 +568,7 @@ function Overview({
         />
       </Section>
 
-      <Section title="原始 config" icon="code">
+      <Section title={t("rawConfig")} icon="code">
         <pre
           data-testid="mcp-config-pre"
           className="text-[11px] font-mono text-text bg-surface-2 border border-border rounded-lg p-4 whitespace-pre-wrap break-words leading-relaxed"
@@ -570,7 +578,7 @@ function Overview({
       </Section>
 
       <Section
-        title={`使用该服务器的员工 · ${dependents.length}`}
+        title={t("dependents", { count: dependents.length })}
         icon="users"
       >
         {dependents.length === 0 ? (
@@ -578,7 +586,7 @@ function Overview({
             data-testid="dependents-empty"
             className="text-sm text-text-muted leading-relaxed"
           >
-            尚无员工引用该服务器暴露的工具。
+            {t("dependentsEmpty")}
           </p>
         ) : (
           <div
@@ -602,7 +610,7 @@ function Overview({
                     </span>
                     {e.is_lead_agent && (
                       <span className="inline-flex items-center h-4 px-1.5 rounded-sm bg-primary-muted text-primary text-caption font-mono font-semibold uppercase tracking-wider shrink-0">
-                        lead
+                        {t("leadBadge")}
                       </span>
                     )}
                   </div>
@@ -639,10 +647,11 @@ function ToolsTab({
   onToggleExpand: (name: string) => void;
   onRefresh: () => void;
 }) {
+  const tr = useTranslations("mcp.detail.tools");
   return (
     <div data-testid="tab-panel-tools" className="space-y-5">
       <Section
-        title="暴露的工具"
+        title={tr("section")}
         icon="zap"
         action={
           <button
@@ -654,34 +663,35 @@ function ToolsTab({
             {loading ? (
               <>
                 <Icon name="loader" size={12} className="animate-spin-slow" />
-                拉取中
+                {tr("fetching")}
               </>
             ) : (
               <>
                 <Icon name="refresh" size={12} />
-                刷新
+                {tr("refresh")}
               </>
             )}
           </button>
         }
       >
         <p className="text-sm text-text-muted leading-relaxed mb-4">
-          点击一行查看{" "}
-          <span className="font-mono text-text">input_schema</span>。
+          {tr.rich("intro", {
+            mono: (chunks) => <span className="font-mono text-text">{chunks}</span>,
+          })}
         </p>
 
         {loading && (
           <div data-testid="tools-loading">
-            <LoadingState title="拉取工具清单" />
+            <LoadingState title={tr("loading")} />
           </div>
         )}
 
         {!loading && error && (
           <div data-testid="tools-error">
             <ErrorState
-              title="获取工具失败"
+              title={tr("errorTitle")}
               detail={error}
-              action={{ label: "重试", onClick: onRefresh }}
+              action={{ label: tr("retry"), onClick: onRefresh }}
             />
           </div>
         )}
@@ -689,24 +699,24 @@ function ToolsTab({
         {!loading && !error && tools && tools.length === 0 && (
           <div data-testid="tools-empty">
             <EmptyState
-              title="该服务器未声明工具"
-              description="握手成功但工具清单为空。"
+              title={tr("emptyTitle")}
+              description={tr("emptyDescription")}
             />
           </div>
         )}
 
         {!loading && !error && tools && tools.length > 0 && (
           <div data-testid="tools-table" className="flex flex-col gap-2">
-            {tools.map((t) => {
-              const expanded = expandedTool === t.name;
+            {tools.map((tool) => {
+              const expanded = expandedTool === tool.name;
               return (
                 <div
-                  key={t.name}
-                  data-testid={`tool-row-${t.name}`}
+                  key={tool.name}
+                  data-testid={`tool-row-${tool.name}`}
                   className="rounded-lg border border-border bg-surface-2 overflow-hidden"
                 >
                   <button
-                    onClick={() => onToggleExpand(t.name)}
+                    onClick={() => onToggleExpand(tool.name)}
                     className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-surface-3 transition duration-base"
                   >
                     <Icon
@@ -715,11 +725,11 @@ function ToolsTab({
                       className="text-primary shrink-0 mt-0.5"
                     />
                     <span className="font-mono text-[12px] font-semibold text-text shrink-0">
-                      {t.name}
+                      {tool.name}
                     </span>
-                    {t.description && (
+                    {tool.description && (
                       <span className="text-[12px] text-text-muted flex-1 truncate">
-                        {t.description}
+                        {tool.description}
                       </span>
                     )}
                     <Icon
@@ -730,14 +740,14 @@ function ToolsTab({
                   </button>
                   {expanded && (
                     <div
-                      data-testid={`tool-schema-${t.name}`}
+                      data-testid={`tool-schema-${tool.name}`}
                       className="border-t border-border px-3 py-3 bg-bg"
                     >
                       <p className="text-caption uppercase tracking-wider font-mono text-text-subtle font-semibold mb-2">
-                        input schema
+                        {tr("inputSchema")}
                       </p>
                       <pre className="text-[11px] font-mono text-text whitespace-pre-wrap break-words leading-relaxed">
-                        {JSON.stringify(t.input_schema, null, 2)}
+                        {JSON.stringify(tool.input_schema, null, 2)}
                       </pre>
                     </div>
                   )}
@@ -752,13 +762,14 @@ function ToolsTab({
 }
 
 function LogsTab() {
+  const t = useTranslations("mcp.detail.logs");
   return (
     <div data-testid="tab-panel-logs" className="space-y-5">
-      <Section title="MCP 通信日志" icon="terminal">
+      <Section title={t("section")} icon="terminal">
         <div data-testid="logs-empty">
           <EmptyState
-            title="暂无日志流"
-            description="后端尚未暴露 MCP 通信日志接口。请关注 TRACK-F-FOLLOWUP 中记录的 logs endpoint。"
+            title={t("emptyTitle")}
+            description={t("emptyDescription")}
           />
         </div>
       </Section>
@@ -767,6 +778,8 @@ function LogsTab() {
 }
 
 function HealthTab({ server }: { server: Server }) {
+  const tr = useTranslations("mcp.detail");
+  const trH = useTranslations("mcp.detail.healthTab");
   const rows: {
     at: string | null;
     state: Health;
@@ -777,32 +790,32 @@ function HealthTab({ server }: { server: Server }) {
       state: server.health,
       note: server.last_handshake_at
         ? server.health === "ok"
-          ? "最近一次握手成功"
-          : "最近握手出现异常"
-        : "尚未握手,首次连接前状态为 unknown",
+          ? trH("noteOk")
+          : trH("noteFail")
+        : trH("noteNever"),
     },
   ];
   return (
     <div data-testid="tab-panel-health" className="space-y-5">
-      <Section title="当前状态" icon="activity">
+      <Section title={trH("section")} icon="activity">
         <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-surface-2">
                 <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
-                  时间
+                  {trH("thTime")}
                 </th>
                 <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
-                  状态
+                  {trH("thState")}
                 </th>
                 <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
-                  备注
+                  {trH("thNote")}
                 </th>
               </tr>
             </thead>
             <tbody data-testid="health-table-body">
               {rows.map((r, idx) => {
-                const m = healthMeta(r.state);
+                const m = healthMeta(r.state, tr);
                 return (
                   <tr key={idx} className="border-t border-border">
                     <td className="py-2 px-3 font-mono text-[12px] text-text-muted">
@@ -828,8 +841,8 @@ function HealthTab({ server }: { server: Server }) {
       </Section>
       <div data-testid="health-timeline-placeholder">
         <EmptyState
-          title="历史时间线待落地"
-          description="当前后端仅保留最近一次握手时间。完整时间线已记入 TRACK-F-FOLLOWUP。"
+          title={trH("timelineTitle")}
+          description={trH("timelineDescription")}
         />
       </div>
     </div>

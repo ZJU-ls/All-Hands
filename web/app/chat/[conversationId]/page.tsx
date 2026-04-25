@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { MessageList } from "@/components/chat/MessageList";
 import { InputBar } from "@/components/chat/InputBar";
 import { ConfirmationDialog } from "@/components/chat/ConfirmationDialog";
@@ -60,6 +61,7 @@ function BackendOfflineBanner({
   attempt: number;
   onRetry: () => void;
 }) {
+  const t = useTranslations("chat.conversation");
   return (
     <div
       role="status"
@@ -75,8 +77,8 @@ function BackendOfflineBanner({
         />
       </span>
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="font-medium text-text">后端未就绪 · 正在自动重连</span>
-        <span className="font-mono text-[11px] text-text-muted">尝试 {attempt}</span>
+        <span className="font-medium text-text">{t("backendOffline")}</span>
+        <span className="font-mono text-[11px] text-text-muted">{t("attempt", { n: attempt })}</span>
       </div>
       <span className="hidden font-mono text-[11px] text-text-subtle md:inline">
         backend · :8000
@@ -87,7 +89,7 @@ function BackendOfflineBanner({
         className="inline-flex h-7 items-center gap-1.5 rounded-md border border-warning/40 bg-surface px-2.5 font-medium text-[11px] text-warning transition-colors duration-base hover:bg-warning/10"
       >
         <Icon name="refresh" size={11} />
-        立即重试
+        {t("retryNow")}
       </button>
     </div>
   );
@@ -96,6 +98,7 @@ function BackendOfflineBanner({
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const router = useRouter();
+  const t = useTranslations("chat.conversation");
   const [conv, setConv] = useState<ConversationDto | null>(null);
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
@@ -207,7 +210,7 @@ export default function ConversationPage() {
   const headerEmployee = employee ? toHeaderEmployee(employee) : null;
 
   return (
-    <AppShell title="One for All · 一个 Lead Agent 搞定一切">
+    <AppShell title={t("shellTitle")}>
       <div className="flex h-full min-h-0 min-w-0">
         <div className="flex h-full min-h-0 flex-1 flex-col min-w-0">
           {loadState.kind === "unreachable" && (
@@ -219,10 +222,10 @@ export default function ConversationPage() {
           {loadState.kind === "error" && (
             <div className="px-3 pt-3">
               <ErrorState
-                title="对话加载失败"
-                description="可能是 backend 还在重启,或会话状态损坏。"
+                title={t("loadFailedTitle")}
+                description={t("loadFailedDescription")}
                 detail={loadState.message}
-                action={{ label: "重试", onClick: () => manualRetryRef.current() }}
+                action={{ label: t("retry"), onClick: () => manualRetryRef.current() }}
               />
             </div>
           )}
@@ -245,8 +248,8 @@ export default function ConversationPage() {
             <button
               onClick={() => setPanelOpen((v) => !v)}
               aria-pressed={panelOpen}
-              aria-label="切换制品区"
-              title="制品区 · Cmd/Ctrl+J"
+              aria-label={t("toggleArtifacts")}
+              title={t("artifactsTooltip")}
               className={
                 panelOpen
                   ? "inline-flex h-7 items-center gap-1.5 rounded-md border border-primary/40 bg-primary-muted px-2 text-[11px] font-medium text-primary transition-colors duration-base"
@@ -254,7 +257,7 @@ export default function ConversationPage() {
               }
             >
               <Icon name="panel-right" size={12} />
-              <span>制品</span>
+              <span>{t("artifacts")}</span>
               <span
                 aria-hidden="true"
                 className={

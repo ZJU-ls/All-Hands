@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { Message, MessageSegment, ToolCall } from "@/lib/protocol";
 import { ToolCallCard } from "./ToolCallCard";
 import { SystemToolLine } from "./SystemToolLine";
@@ -257,6 +258,7 @@ function LegacyAgentBody({
  * mono-typed meta. Matches the "reasoning row" language in V2 §3.19.
  */
 function ReasoningBlock({ text, isStreaming }: { text: string; isStreaming: boolean }) {
+  const t = useTranslations("chat.messageBubble");
   const [open, setOpen] = useState(isStreaming);
   const userTouched = useRef(false);
   const prevStreamingRef = useRef(isStreaming);
@@ -307,7 +309,7 @@ function ReasoningBlock({ text, isStreaming }: { text: string; isStreaming: bool
       >
         <span className="inline-flex items-center gap-1.5">
           <Icon name="brain" size={12} />
-          <span className="font-medium">思考过程{isStreaming ? "…" : ""}</span>
+          <span className="font-medium">{isStreaming ? t("thinkingProcessLive") : t("thinkingProcess")}</span>
         </span>
         <span className="inline-flex items-center gap-1 font-mono text-[10px] text-primary/80">
           {text.length} tokens

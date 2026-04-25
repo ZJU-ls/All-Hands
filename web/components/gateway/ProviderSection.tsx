@@ -13,6 +13,7 @@
  * one divider-separated block inside it (no double rounding).
  */
 
+import { useTranslations } from "next-intl";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { Icon } from "@/components/ui/icon";
 import { ModelRow, type GatewayModel } from "./ModelRow";
@@ -68,10 +69,11 @@ export function ProviderSection({
   onChatTestModel: (m: GatewayModel) => void;
   onDeleteModel: (m: GatewayModel) => void;
 }) {
+  const t = useTranslations("gateway.providerSection");
   const bulkRunning = bulkPingInProgress !== null;
   const bulkLabel = bulkRunning
-    ? `测试中 ${bulkPingInProgress.done}/${bulkPingInProgress.total}`
-    : "连通性测试";
+    ? t("bulkRunning", { done: bulkPingInProgress.done, total: bulkPingInProgress.total })
+    : t("bulkLabel");
 
   return (
     <section
@@ -87,7 +89,7 @@ export function ProviderSection({
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          aria-label={open ? "折叠" : "展开"}
+          aria-label={open ? t("collapse") : t("expand")}
           data-testid={`gateway-provider-toggle-${provider.name}`}
           className="flex items-center gap-3 min-w-0 flex-1 text-left"
         >
@@ -113,12 +115,12 @@ export function ProviderSection({
               {provider.is_default && (
                 <span className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm bg-primary/10 border border-primary/25 text-primary text-[10px] font-semibold">
                   <Icon name="star" size={10} strokeWidth={2} />
-                  默认
+                  {t("default")}
                 </span>
               )}
               {!provider.enabled && (
                 <span className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border text-[10px] text-text-muted">
-                  已禁用
+                  {t("disabled")}
                 </span>
               )}
               <span
@@ -135,7 +137,7 @@ export function ProviderSection({
                   size={11}
                   className="text-text-subtle"
                 />
-                {models.length} 模型
+                {t("modelsCount", { n: models.length })}
               </span>
               <span aria-hidden="true" className="text-text-subtle">
                 ·
@@ -178,13 +180,13 @@ export function ProviderSection({
               className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-surface border border-border text-[11px] font-medium text-text-muted hover:border-primary/40 hover:text-primary transition-colors duration-fast"
             >
               <Icon name="star" size={11} />
-              设为默认
+              {t("setAsDefault")}
             </button>
           )}
-          <IconOnlyButton icon="edit" label="编辑" onClick={onEdit} />
+          <IconOnlyButton icon="edit" label={t("edit")} onClick={onEdit} />
           <IconOnlyButton
             icon="trash-2"
-            label="删除"
+            label={t("delete")}
             onClick={onDelete}
             tone="danger"
           />
@@ -212,9 +214,9 @@ export function ProviderSection({
                 <Icon name="brain" size={14} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[12.5px] text-text">尚未注册模型</p>
+                <p className="text-[12.5px] text-text">{t("noModelsTitle")}</p>
                 <p className="text-[11px] text-text-muted">
-                  给 {provider.name} 加第一个模型来启用
+                  {t("noModelsHint", { name: provider.name })}
                 </p>
               </div>
               <button
@@ -223,7 +225,7 @@ export function ProviderSection({
                 className="shrink-0 inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-primary text-primary-fg text-[11px] font-semibold shadow-soft-sm hover:bg-primary-hover hover:-translate-y-px transition duration-base"
               >
                 <Icon name="plus" size={11} />
-                注册模型
+                {t("registerModel")}
               </button>
             </div>
           ) : (
@@ -245,7 +247,7 @@ export function ProviderSection({
                   className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-dashed border-border bg-transparent hover:bg-surface-2/50 hover:border-primary/40 hover:text-primary text-[11px] font-medium text-text-muted transition-colors duration-fast"
                 >
                   <Icon name="plus" size={11} />
-                  注册模型
+                  {t("registerModel")}
                 </button>
               </div>
             </div>

@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@/tests/test-utils/i18n-render";
 import type { WorkspaceSummaryDto } from "@/lib/cockpit-api";
 import { DrawerRail } from "../DrawerRail";
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 
@@ -29,11 +30,11 @@ const STATUS_COLOR: Record<NestedRunStatus, string> = {
   unknown: "text-text-muted",
 };
 
-const STATUS_LABEL: Record<NestedRunStatus, string> = {
-  running: "运行中",
-  done: "已完成",
-  error: "失败",
-  unknown: "—",
+const STATUS_LABEL_KEY: Record<NestedRunStatus, "running" | "done" | "error" | "unknown"> = {
+  running: "running",
+  done: "done",
+  error: "error",
+  unknown: "unknown",
 };
 
 export function NestedRunBlock({
@@ -42,9 +43,10 @@ export function NestedRunBlock({
   children,
   defaultCollapsed = true,
 }: Props) {
+  const t = useTranslations("chat.nestedRun");
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const color = STATUS_COLOR[status];
-  const label = STATUS_LABEL[status];
+  const label = t(STATUS_LABEL_KEY[status]);
   const dot = STATUS_DOT[status];
 
   return (
