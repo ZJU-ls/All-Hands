@@ -30,7 +30,11 @@ from pydantic import BaseModel
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_artifact_service
 from allhands.core import BINARY_KINDS, Artifact, ArtifactKind, ArtifactVersion
-from allhands.services.artifact_service import ArtifactNotFound, ArtifactService
+from allhands.services.artifact_service import (
+    ArtifactContentMissing,
+    ArtifactNotFound,
+    ArtifactService,
+)
 
 if TYPE_CHECKING:
     from allhands.core import EventEnvelope
@@ -309,7 +313,13 @@ async def get_artifact_content(
     except ArtifactNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    blob = svc.read_bytes(art)
+    try:
+        blob = svc.read_bytes(art)
+    except ArtifactContentMissing as exc:
+        # 404 is the right status here · the DB row exists but the file is
+        # gone (worktree drift / disk wipe). The UI maps 404 to a friendly
+        # "content missing" empty state, much better than 500.
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     headers: dict[str, str] = {}
     if download:
         headers["Content-Disposition"] = f'attachment; filename="{art.name}"'
@@ -407,7 +417,10 @@ async def get_artifact_version_content(
     except ArtifactNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    blob = svc.read_version_bytes(v)
+    try:
+        blob = svc.read_version_bytes(v)
+    except ArtifactContentMissing as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     if art.kind in BINARY_KINDS:
         return ArtifactContentResponse(
             id=art.id,

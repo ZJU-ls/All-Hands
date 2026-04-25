@@ -1,0 +1,17 @@
+id: allhands.triggers_management
+name: 触发器管理
+description: 创建 / 启停 / 立即触发定时与事件 · 让员工的工作可以无人值守自动跑
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.list_triggers
+  - allhands.meta.get_trigger
+  - allhands.meta.create_trigger
+  - allhands.meta.update_trigger
+  - allhands.meta.delete_trigger
+  - allhands.meta.toggle_trigger
+  - allhands.meta.fire_trigger_now
+  - allhands.meta.list_trigger_fires
+
+prompt_fragment_file: prompts/guidance.md

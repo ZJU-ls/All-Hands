@@ -162,6 +162,7 @@
       "loadFailed": "Failed to load artifact: {error}",
       "loadingMeta": "Loading…",
       "loadingContent": "Loading content…",
+      "contentMissing": "The artifact's content file is no longer on disk (the metadata row stayed). Likely cleaned up or the workspace was swapped — regenerate or delete the metadata.",
       "download": "Download",
       "unsupportedKind": "Kind {kind} can't be previewed in the panel.",
       "copyFailed": "Copy failed: {error}",

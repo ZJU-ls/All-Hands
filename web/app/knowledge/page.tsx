@@ -491,11 +491,11 @@ export default function KnowledgePage() {
  * KB info card · 用户视角 · 不暴露 BM25/RRF/dim/cosine 等术语。
  *
  * 三个层次:
- *   1. 名字 + 简介 + 设置 设置入口
- *   2. 一句话能力简述 (e.g. "✓ 启用了语义检索" / "演示模式 · 检索只能匹配关键词")
+ *   1. 名字 + 简介 + 设置入口
+ *   2. 一句话能力简述 (e.g. "已启用语义检索" / "演示模式 · 检索只能匹配关键词")
  *   3. 数字: "5 段内容 · 来自 2 份资料"
  *
- * 检索权重 / embedder 维度等技术细节都收进 设置 设置弹窗的"高级"分组。
+ * 检索权重 / embedder 维度等技术细节都收进设置弹窗的"高级"分组。
  */
 function KBInfoCard({
   kb,
@@ -542,7 +542,7 @@ function KBInfoCard({
         </span>
       </div>
 
-      {/* 能力提示 — mock 高亮警示;真实 provider 静默 ✓ */}
+      {/* 能力提示 — mock 高亮警示;真实 provider 静默通过 */}
       {isMock ? (
         <button
           type="button"
