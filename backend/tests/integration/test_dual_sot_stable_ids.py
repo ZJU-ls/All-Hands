@@ -1,4 +1,11 @@
+# ruff: noqa: E402
 """ADR 0014 R3 regression: dual-SoT delta-send + stable message ids.
+
+> **SUPERSEDED by ADR 0018.** AgentRunner now delegates to AgentLoop;
+> there is no checkpointer / dual-SoT model anymore (MessageRepo is the
+> sole SoT). These tests will be deleted in B5 along with the checkpointer
+> machinery they exercise. Skipped at module load for now.
+
 
 Guards three behaviors:
 
@@ -23,6 +30,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="ADR 0018: dual-SoT + checkpointer model superseded; deleted in B5"
+)
+
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver

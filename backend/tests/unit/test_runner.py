@@ -81,6 +81,11 @@ async def test_runner_streams_tokens_from_real_graph() -> None:
     assert dones and dones[-1].reason == "done"
 
 
+@pytest.mark.skip(
+    reason="ADR 0018: legacy LangGraph mock pattern. AgentRunner now delegates to "
+    "AgentLoop; equivalent coverage in test_agent_loop.py "
+    "test_loop_yields_loop_exited_aborted_on_internal_exception."
+)
 @pytest.mark.asyncio
 async def test_runner_yields_error_event_on_model_failure() -> None:
     """If the graph raises mid-stream (e.g. upstream 401), the runner must
@@ -119,6 +124,10 @@ async def test_runner_yields_error_event_on_model_failure() -> None:
     assert kinds[-1] == "done"
 
 
+@pytest.mark.skip(
+    reason="ADR 0018: legacy LangGraph mock pattern. AgentRunner now delegates to "
+    "AgentLoop; render envelope detection covered by tool_pipeline + ag_ui_translator tests."
+)
 @pytest.mark.asyncio
 async def test_runner_emits_render_event_when_tool_returns_envelope() -> None:
     """A Render Tool's `{component, props, interactions}` result must surface
@@ -250,6 +259,12 @@ async def test_runner_emits_render_event_when_tool_returns_envelope() -> None:
     assert "Here is the table." in tokens_text
 
 
+@pytest.mark.skip(
+    reason="ADR 0018: superseded by protocol-level phantom defense. AgentLoop's "
+    "_is_valid_tool_call drops phantoms BEFORE they become ToolUseBlocks — there is "
+    "no synthetic FAILED end because there is no start. See "
+    "test_agent_loop.test_loop_phantom_tool_call_in_chunks_does_not_become_tool_use_block."
+)
 @pytest.mark.asyncio
 async def test_runner_emits_failed_end_when_tool_call_never_executes() -> None:
     """Regression: gpt-4o-mini sometimes streams a tool_call in the agent

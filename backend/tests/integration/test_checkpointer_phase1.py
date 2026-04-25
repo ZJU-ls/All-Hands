@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """ADR 0014 · Phase 1 — AsyncSqliteSaver integration smoke tests.
 
 Two narrow guarantees for this phase:
@@ -25,6 +26,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skip(reason="ADR 0018: checkpointer removed · deleted in B5")
+
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from allhands.core import Employee
