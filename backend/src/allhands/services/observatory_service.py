@@ -421,6 +421,15 @@ class ObservatoryService:
             top_errors=top_errors,
             latency_heatmap=latency_heatmap,
             latency_heatmap_buckets_s=latency_heatmap_buckets_s,
+            anomalies=_compute_anomalies(
+                p50,
+                prev_p50,
+                failure_rate,
+                prev_failure_rate,
+                runs_24h,
+                prev_runs,
+                top_errors,
+            ),
         )
 
     async def list_traces(
@@ -1011,6 +1020,50 @@ def _percentile(values: list[float], pct: float) -> float:
     if idx >= len(s):
         idx = len(s) - 1
     return s[idx]
+
+
+def _compute_anomalies(
+    p50_now: float,
+    p50_prev: float,
+    failure_rate_now: float,
+    failure_rate_prev: float,
+    runs_now: int,
+    runs_prev: int,
+    top_errors: list[ObservatoryErrorBreakdown],
+) -> list[str]:
+    """Small explainable rule set for "things look off" callouts.
+
+    No ML, no black box — each rule is one comparison the user can audit
+    in the dashboard themselves. The strings are i18n-keys-not-yet so the
+    UI just renders them as informational chips for now.
+    """
+    out: list[str] = []
+    if p50_prev > 0 and p50_now > p50_prev * 2 and p50_now > 1.0:
+        out.append(
+            f"latency.p50 {p50_now:.2f}s vs {p50_prev:.2f}s yesterday "
+            f"(+{((p50_now - p50_prev) / p50_prev) * 100:.0f}%)"
+        )
+    if failure_rate_now > 0.10 and failure_rate_now > failure_rate_prev + 0.05:
+        out.append(
+            f"failure_rate {failure_rate_now * 100:.1f}% vs "
+            f"{failure_rate_prev * 100:.1f}% yesterday"
+        )
+    if runs_prev > 5 and runs_now < runs_prev * 0.5:
+        out.append(
+            f"runs/24h {runs_now} vs {runs_prev} yesterday "
+            f"(-{((runs_prev - runs_now) / runs_prev) * 100:.0f}%) — "
+            f"traffic dropped"
+        )
+    # Surface the top failure category if it dominates.
+    if top_errors:
+        top = top_errors[0]
+        total_err = sum(e.count for e in top_errors)
+        if total_err >= 5 and top.count / total_err > 0.6:
+            out.append(
+                f"top error '{top.error_kind}' = {top.count}/{total_err} "
+                f"failures (>60% concentration)"
+            )
+    return out
 
 
 __all__ = [

@@ -604,6 +604,33 @@ export default function ObservatoryPage() {
             </div>
           </header>
 
+          {/* ANOMALY CALLOUTS · explainable rules · only when present */}
+          {summary && summary.anomalies.length > 0 ? (
+            <section
+              role="alert"
+              className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3"
+            >
+              <div className="flex items-start gap-3">
+                <Icon name="alert-triangle" size={16} className="mt-0.5 text-warning" />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="text-[12.5px] font-semibold text-text">
+                    {t("anomalies.title", { n: summary.anomalies.length })}
+                  </div>
+                  <ul className="space-y-1">
+                    {summary.anomalies.map((line, i) => (
+                      <li
+                        key={i}
+                        className="font-mono text-[11.5px] text-text-muted"
+                      >
+                        · {line}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           {/* ERROR BANNER */}
           {state === "error" && !summary ? (
             <div

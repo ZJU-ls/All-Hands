@@ -130,9 +130,14 @@ class ObservatorySummary(BaseModel):
     # 24xN latency heatmap (24 hourly columns x N latency buckets) for the
     # Honeycomb-style "where do my long tails live" panel. cells[h][b] is
     # the count of runs that landed in hour h with duration < buckets[b]
-    # (last bucket = ≥ buckets[-1]).
+    # (last bucket = >= buckets[-1]).
     latency_heatmap: list[list[int]] = Field(default_factory=list)
     latency_heatmap_buckets_s: list[float] = Field(default_factory=list)
+    # Anomaly callouts · short messages the UI surfaces above the dashboard
+    # ("p95 jumped 3x in last hour" · "12 failed runs from emp-coder").
+    # Computed by the service from the same recent events; the rule set is
+    # intentionally small + explainable — no ML.
+    anomalies: list[str] = Field(default_factory=list)
 
 
 class TimeSeriesPoint(BaseModel):

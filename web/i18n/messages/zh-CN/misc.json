@@ -127,6 +127,9 @@
           "modelsCount": "{n} 个模型 · 共 {calls} 次 LLM 调用"
         }
       },
+      "anomalies": {
+        "title": "{n} 项异常需关注 · 自动判定 · 不是 ML"
+      },
       "costPanel": {
         "title": "成本面板 · 24h",
         "today": "今日累计",

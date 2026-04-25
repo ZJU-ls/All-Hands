@@ -56,6 +56,7 @@ export type ObservatorySummaryDto = {
   top_errors: ObservatoryErrorBreakdownDto[];
   latency_heatmap: number[][];
   latency_heatmap_buckets_s: number[];
+  anomalies: string[];
 };
 
 export type RunTokenUsageDto = {

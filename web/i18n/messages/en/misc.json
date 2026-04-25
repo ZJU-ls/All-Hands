@@ -127,6 +127,9 @@
           "modelsCount": "{n} models · {calls} calls"
         }
       },
+      "anomalies": {
+        "title": "{n} anomaly callouts · rule-based, no ML"
+      },
       "costPanel": {
         "title": "Cost panel · 24h",
         "today": "Today",
