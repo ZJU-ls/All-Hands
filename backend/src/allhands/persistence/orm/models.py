@@ -163,6 +163,20 @@ class ConfirmationRow(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
 
+class UserInputRow(Base):
+    """ADR 0019 C3 · clarification request persistence (ask_user_question)."""
+
+    __tablename__ = "user_inputs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tool_call_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    questions_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    answers_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
 class LLMProviderRow(Base):
     __tablename__ = "llm_providers"
 
@@ -171,8 +185,6 @@ class LLMProviderRow(Base):
     kind: Mapped[str] = mapped_column(String(32), default="openai")
     base_url: Mapped[str] = mapped_column(String(512))
     api_key: Mapped[str] = mapped_column(String(512), default="")
-    default_model: Mapped[str] = mapped_column(String(128), default="gpt-4o-mini")
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -187,6 +199,11 @@ class LLMModelRow(Base):
     display_name: Mapped[str] = mapped_column(String(128), default="")
     context_window: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # System-wide singleton: at most one row has is_default=True. Service
+    # layer enforces — see LLMModelRepo.set_default(). Indexed because
+    # `model_resolution.resolve()` runs every Lead Agent turn and needs a
+    # fast lookup of "the unique default model".
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
 
 class TriggerRow(Base):

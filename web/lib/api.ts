@@ -251,6 +251,21 @@ export async function resolveConfirmation(
   throw new Error(`resolveConfirmation failed: ${res.status}`);
 }
 
+export async function answerUserInput(
+  userInputId: string,
+  answers: Record<string, string>,
+): Promise<void> {
+  const res = await fetch(`${BASE}/api/user-input/${userInputId}/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  });
+  if (res.ok || res.status === 204 || res.status === 404) {
+    return;
+  }
+  throw new Error(`answerUserInput failed: ${res.status}`);
+}
+
 export async function getPendingConfirmations(): Promise<unknown[]> {
   const res = await fetch(`${BASE}/api/confirmations/pending`);
   if (!res.ok) return [];
@@ -310,8 +325,7 @@ export type ProviderDto = {
   name: string;
   kind: "openai" | "anthropic" | "aliyun";
   base_url: string;
-  default_model: string;
-  is_default: boolean;
+  api_key_set: boolean;
   enabled: boolean;
 };
 
@@ -322,6 +336,11 @@ export type ModelDto = {
   display_name: string;
   context_window: number;
   enabled: boolean;
+  // Singleton across the whole table — at most one model has is_default=true.
+  // Indicates the workspace-wide default for Lead Agent + ai_explainer when
+  // nothing more specific is pinned. Backend enforces uniqueness inside one
+  // transaction (see services/model_service.set_as_default).
+  is_default: boolean;
 };
 
 export async function listProviders(): Promise<ProviderDto[]> {
@@ -337,6 +356,25 @@ export async function listModels(): Promise<ModelDto[]> {
 }
 
 /**
+ * Promote a (provider, model) pair to the workspace default. Atomic on the
+ * backend — clears any prior default and sets this one in a single
+ * transaction. Returns the freshly-promoted model + provider so the caller
+ * can render "已切到 X · Y" without a re-fetch.
+ */
+export type SetDefaultModelResponse = {
+  model: ModelDto;
+  provider_id: string;
+  provider_name: string;
+};
+export async function setDefaultModel(modelId: string): Promise<SetDefaultModelResponse> {
+  const res = await fetch(`${BASE}/api/models/${modelId}/set-default`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(`setDefaultModel failed: ${res.status}`);
+  return res.json() as Promise<SetDefaultModelResponse>;
+}
+
+/**
  * model_ref in EmployeeDto is "provider_name/model_name" (e.g. "OpenRouter/gpt-4o-mini").
  * Returns the reference string for a model, using its provider's name as the prefix.
  */
@@ -345,14 +383,20 @@ export function buildModelRef(provider: ProviderDto, model: ModelDto): string {
 }
 
 /**
- * Platform-default model ref: read the default provider (`is_default`) and its
- * `default_model`. Returns null if nothing is configured — caller should fall
- * back to leaving the field blank so the backend uses its own default.
+ * Workspace-default model ref: pick the model marked is_default=true and
+ * stitch its provider's name + own name into the canonical "{provider}/{model}"
+ * form. Returns null if nothing is configured — caller should leave the field
+ * blank so the backend can apply its own first-enabled fallback.
  */
-export function defaultModelRef(providers: ProviderDto[]): string | null {
-  const dp = providers.find((p) => p.is_default && p.enabled) ?? providers.find((p) => p.enabled);
-  if (!dp || !dp.default_model) return null;
-  return `${dp.name}/${dp.default_model}`;
+export function defaultModelRef(
+  providers: ProviderDto[],
+  models: ModelDto[],
+): string | null {
+  const dm = models.find((m) => m.is_default && m.enabled);
+  if (!dm) return null;
+  const provider = providers.find((p) => p.id === dm.provider_id && p.enabled);
+  if (!provider) return null;
+  return `${provider.name}/${dm.name}`;
 }
 
 export type EmployeePreset = "execute" | "plan" | "plan_with_subagent";

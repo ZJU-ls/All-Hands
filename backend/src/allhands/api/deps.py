@@ -21,6 +21,7 @@ from allhands.execution.mcp.adapter import RealMCPAdapter
 from allhands.execution.registry import ToolRegistry
 from allhands.execution.skills import SkillRegistry, seed_skills
 from allhands.execution.tools import discover_builtin_tools
+from allhands.execution.user_input_deferred import UserInputDeferred
 from allhands.persistence.db import get_sessionmaker
 from allhands.persistence.sql_repos import (
     SqlAgentPlanRepo,
@@ -39,6 +40,7 @@ from allhands.persistence.sql_repos import (
     SqlTaskRepo,
     SqlTriggerFireRepo,
     SqlTriggerRepo,
+    SqlUserInputRepo,
 )
 from allhands.services.artifact_service import ArtifactService
 from allhands.services.chat_service import ChatService
@@ -152,6 +154,10 @@ async def get_chat_service(
     # not LangGraph interrupt().
     gate = await get_gate(session)
 
+    # ADR 0019 C3 · clarification (ask_user_question) signal — polled by
+    # AgentLoop via tool_pipeline's Defer branch.
+    user_input_signal = UserInputDeferred(SqlUserInputRepo(session))
+
     return ChatService(
         employee_repo=SqlEmployeeRepo(session),
         conversation_repo=SqlConversationRepo(session),
@@ -172,6 +178,7 @@ async def get_chat_service(
         # ADR 0019 C1 · per-conversation plan persistence so plan_create
         # / plan_view / plan_update_step actually save & render.
         plan_repo=SqlAgentPlanRepo(session),
+        user_input_signal=user_input_signal,
     )
 
 

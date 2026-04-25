@@ -65,6 +65,22 @@ class ConfirmationRequested:
     diff: dict[str, object] | None = None
 
 
+@dataclass
+class UserInputRequested:
+    """ADR 0019 C3 · A deferred ``ask_user_question`` tool has published
+    a clarification request and is now awaiting the user's answers.
+
+    Mirrors ConfirmationRequested but carries a list of multiple-choice
+    questions instead of a single approve/reject summary. Frontend renders
+    a structured dialog; on submit POSTs to /api/user-input/{id}/answer
+    which flips the row to ANSWERED and unblocks the polling signal.
+    """
+
+    user_input_id: str
+    tool_use_id: str
+    questions: list[dict[str, object]]
+
+
 LoopExitReason = Literal[
     "completed",
     "max_iterations",
@@ -120,6 +136,7 @@ InternalEvent = (
     AssistantMessageCommitted
     | ToolMessageCommitted
     | ConfirmationRequested
+    | UserInputRequested
     | LoopExited
     | AssistantMessagePartial
     | ToolCallProgress
@@ -135,6 +152,7 @@ __all__ = [
     "LoopExited",
     "ToolCallProgress",
     "ToolMessageCommitted",
+    "UserInputRequested",
 ]
 
 

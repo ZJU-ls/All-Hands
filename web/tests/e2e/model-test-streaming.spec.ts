@@ -26,13 +26,13 @@ const MOCK_SCRIPT = `
 
     if (/\\/api\\/providers(?:\\?.*)?$/.test(url) && (!init || init.method === undefined || init.method === 'GET')) {
       return new Response(JSON.stringify([
-        { id: 'prov-mock', name: 'mock', base_url: 'https://mock', api_key_set: true, default_model: 'mock-model', is_default: true, enabled: true },
+        { id: 'prov-mock', name: 'mock', kind: 'openai', base_url: 'https://mock', api_key_set: true, enabled: true },
       ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (/\\/api\\/models(?:\\?.*)?$/.test(url) && (!init || init.method === undefined || init.method === 'GET')) {
       return new Response(JSON.stringify([
-        { id: 'mdl-mock', provider_id: 'prov-mock', name: 'mock-model', display_name: 'Mock Model', context_window: 8192, enabled: true },
+        { id: 'mdl-mock', provider_id: 'prov-mock', name: 'mock-model', display_name: 'Mock Model', context_window: 8192, enabled: true, is_default: true },
       ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 

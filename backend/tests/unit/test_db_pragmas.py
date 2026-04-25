@@ -118,8 +118,6 @@ async def test_delete_provider_cascades_to_models(tmp_path: Path) -> None:
                     kind="openai",
                     base_url="http://x",
                     api_key="",
-                    default_model="m1",
-                    is_default=True,
                     enabled=True,
                 )
             )

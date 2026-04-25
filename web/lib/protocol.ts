@@ -39,6 +39,22 @@ export type RenderPayload = {
 };
 
 /**
+ * ADR 0019 C3 · clarification request from ``ask_user_question``.
+ * Mirrors the backend ``UserInputRequiredEvent`` payload shape.
+ */
+export type PendingUserInputQuestion = {
+  label: string;
+  description: string;
+  preview?: string | null;
+};
+
+export type PendingUserInput = {
+  userInputId: string;
+  toolCallId: string;
+  questions: PendingUserInputQuestion[];
+};
+
+/**
  * EmployeeCardProps — mirrors backend EmployeeCardProps in protocol.py.
  * Target component is `EmployeeCard` (registered in component-registry).
  */

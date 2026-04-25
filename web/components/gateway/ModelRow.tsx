@@ -21,6 +21,8 @@ export type GatewayModel = {
   display_name: string;
   context_window: number;
   enabled: boolean;
+  /** Singleton flag — at most one row across the whole table is_default=true. */
+  is_default: boolean;
 };
 
 export function ModelRow({
@@ -29,12 +31,15 @@ export function ModelRow({
   onPing,
   onChatTest,
   onDelete,
+  onSetDefault,
 }: {
   model: GatewayModel;
   pingState: PingState;
   onPing: () => void;
   onChatTest: () => void;
   onDelete: () => void;
+  /** Promote this model — atomically clears any prior default + sets this row. */
+  onSetDefault: () => void;
 }) {
   const t = useTranslations("gateway.modelRow");
   const running = pingState.status === "running";
@@ -81,6 +86,17 @@ export function ModelRow({
             {t("disabled")}
           </span>
         )}
+
+        {model.is_default && (
+          <span
+            data-testid={`gateway-default-badge-${model.id}`}
+            className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm bg-primary/10 border border-primary/25 text-primary text-[10px] font-semibold"
+            title="工作区默认模型 · Lead Agent 与 AI 解读默认走这一对 (provider, model)"
+          >
+            <Icon name="star" size={10} strokeWidth={2} />
+            默认
+          </span>
+        )}
       </div>
 
       <span
@@ -91,6 +107,22 @@ export function ModelRow({
       </span>
 
       <div className="shrink-0 flex items-center gap-0.5">
+        {/* "设为默认" 是这次重构的第一性入口 —— 一键同时切供应商 + 模型,
+            后端在一个事务里清掉旧默认并设这一行。当前已经是默认的话,
+            按钮收成只读徽标(is_default 已经在标题旁的 ⭐ chip 显示),
+            不再渲染冗余按钮。 */}
+        {!model.is_default && model.enabled && (
+          <button
+            type="button"
+            onClick={onSetDefault}
+            data-testid={`gateway-set-default-${model.id}`}
+            title="设为工作区默认 (provider + model 一起切)"
+            className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-medium text-text-subtle hover:text-primary hover:bg-primary/10 transition-colors duration-fast"
+          >
+            <Icon name="star" size={11} />
+            设为默认
+          </button>
+        )}
         <RowIconButton
           icon="activity"
           label={t("ping")}

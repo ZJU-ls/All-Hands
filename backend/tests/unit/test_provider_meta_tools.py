@@ -18,8 +18,12 @@ def test_all_provider_meta_tools_exported() -> None:
     assert "allhands.meta.create_provider" in ids
     assert "allhands.meta.update_provider" in ids
     assert "allhands.meta.delete_provider" in ids
-    assert "allhands.meta.set_default_provider" in ids
     assert "allhands.meta.test_provider_connection" in ids
+    # `set_default_provider` was retired with the 2026-04-25 default-pointer
+    # refactor — the workspace default is now a model-level singleton, set
+    # via `allhands.meta.set_default_model`. Regression-pin the absence so
+    # the tool isn't accidentally re-added under the wrong layer.
+    assert "allhands.meta.set_default_provider" not in ids
 
 
 def test_provider_meta_tools_kind_is_meta() -> None:

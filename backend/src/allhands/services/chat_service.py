@@ -120,6 +120,7 @@ class ChatService:
         confirmation_repo: ConfirmationRepo | None = None,
         event_repo: ConversationEventRepo | None = None,
         plan_repo: Any = None,
+        user_input_signal: Any = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -166,6 +167,9 @@ class ChatService:
         # ADR 0019 C1 · per-conversation plan persistence. Optional so
         # legacy test constructions (no plan tools exercised) keep working.
         self._plan_repo = plan_repo
+        # ADR 0019 C3 · clarification signal forwarded to AgentRunner
+        # so ask_user_question tool defers via the polling UserInputDeferred.
+        self._user_input_signal = user_input_signal
         # ADR 0017 · append-only event log. The authoritative SoT for
         # conversation history; ``messages`` table becomes a projection
         # cache. None keeps pre-ADR-0017 tests compiling — when unset the
@@ -205,17 +209,37 @@ class ChatService:
         lines: list[str] = []
 
         # Providers (+ which one is the default / its kind / model)
+        # 2026-04-25: "default" lives on `LLMModel.is_default` now (a singleton
+        # FK pointer), not on the provider. Resolve via the model repo and
+        # derive the provider from the model's `provider_id`.
         if self._providers is not None:
             try:
                 provs = await self._providers.list_all()
-                if provs:
-                    default = next((p for p in provs if p.is_default), None) or provs[0]
-                    lines.append(
-                        f"- providers: {len(provs)} configured · default = "
-                        f"{default.name} (kind={default.kind}, model={default.default_model})"
-                    )
-                else:
+                if not provs:
                     lines.append("- providers: 0 — none configured yet")
+                else:
+                    default_model = None
+                    if self._models is not None:
+                        try:
+                            default_model = await self._models.get_default()
+                        except Exception:  # pragma: no cover — defensive
+                            log.exception("snapshot · models.get_default failed")
+                    if default_model is not None:
+                        default_provider = next(
+                            (p for p in provs if p.id == default_model.provider_id),
+                            provs[0],
+                        )
+                        lines.append(
+                            f"- providers: {len(provs)} configured · default = "
+                            f"{default_provider.name} (kind={default_provider.kind}, "
+                            f"model={default_model.name})"
+                        )
+                    else:
+                        first = provs[0]
+                        lines.append(
+                            f"- providers: {len(provs)} configured · default = "
+                            f"{first.name} (kind={first.kind}, model=未指定)"
+                        )
             except Exception:
                 log.exception("snapshot · providers.list_all failed")
 
@@ -610,6 +634,7 @@ class ChatService:
             model_ref_override=effective_model_ref,
             plan_repo=self._plan_repo,
             conversation_id=conversation_id,
+            user_input_signal=self._user_input_signal,
         )
         # ADR 0017 · per-turn thread_id. Claude Code invariant (V02 § 1.3):
         # each query() gets a fresh in-memory messages array; there's no
@@ -1141,6 +1166,7 @@ class ChatService:
                 # service knows the conversation it's targeting and can
                 # supply it through the runner kwargs path if needed.
                 plan_repo=self._plan_repo,
+                user_input_signal=self._user_input_signal,
             )
 
         return factory

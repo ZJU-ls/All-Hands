@@ -41,6 +41,7 @@ from allhands.execution.events import (
     TokenEvent,
     ToolCallEndEvent,
     ToolCallStartEvent,
+    UserInputRequiredEvent,
 )
 from allhands.execution.skills import (
     SkillRegistry,
@@ -347,6 +348,7 @@ def _facade_stream(
     overrides: RunOverrides | None,
     plan_repo: Any = None,
     conversation_id: str = "",
+    user_input_signal: Any = None,
 ) -> AsyncIterator[AgentEvent]:
     """Run the new AgentLoop, translate its InternalEvent stream into the
     legacy AgentEvent surface, yield. Async generator factory.
@@ -378,6 +380,7 @@ def _facade_stream(
         spawn_subagent_service=spawn_subagent_service,
         model_ref_override=model_ref_override,
         confirmation_signal=confirmation_signal,
+        user_input_signal=user_input_signal,
         plan_repo=plan_repo,
         conversation_id=conversation_id,
     )
@@ -421,6 +424,7 @@ class _LegacyProjector:
             ConfirmationRequested,
             LoopExited,
             ToolMessageCommitted,
+            UserInputRequested,
         )
 
         out: list[AgentEvent] = []
@@ -478,6 +482,15 @@ class _LegacyProjector:
                     )
                 )
             return out
+        if isinstance(ev, UserInputRequested):
+            out.append(
+                UserInputRequiredEvent(
+                    user_input_id=ev.user_input_id,
+                    tool_call_id=ev.tool_use_id,
+                    questions=ev.questions,
+                )
+            )
+            return out
         if isinstance(ev, ConfirmationRequested):
             out.append(
                 InterruptEvent(
@@ -522,6 +535,7 @@ class AgentRunner:
         checkpointer: Any | None = None,  # accepted for back-compat; unused
         plan_repo: Any = None,
         conversation_id: str = "",
+        user_input_signal: Any = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
@@ -549,6 +563,9 @@ class AgentRunner:
         # ADR 0019 C1 · plan tools · per-conversation AgentPlanRepo binding
         self._plan_repo = plan_repo
         self._conversation_id = conversation_id
+        # ADR 0019 C3 · clarification signal forwarded to AgentLoop. None
+        # = ask_user_question tool falls through Allow (no defer).
+        self._user_input_signal = user_input_signal
 
     def _active_tool_ids(self) -> list[str]:
         """Contract § 8.2 · base + flatten(resolved_skills.values())."""
@@ -608,6 +625,7 @@ class AgentRunner:
             overrides=overrides,
             plan_repo=self._plan_repo,
             conversation_id=self._conversation_id,
+            user_input_signal=self._user_input_signal,
         ):
             yield legacy_event
         return

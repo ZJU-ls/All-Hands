@@ -44,8 +44,10 @@ CREATE_PROVIDER_TOOL = Tool(
     name="create_provider",
     description=(
         "Register a new LLM provider. Provide name, base_url, optional api_key, "
-        "default_model, and kind (openai / anthropic / aliyun — defaults to openai). "
-        "Set set_as_default=true to make it the platform default."
+        "and kind (openai / anthropic / aliyun — defaults to openai). "
+        "After creating the provider, register specific models under it with "
+        "create_model, then call set_default_model on whichever model should be "
+        "the workspace default."
     ),
     input_schema={
         "type": "object",
@@ -58,8 +60,6 @@ CREATE_PROVIDER_TOOL = Tool(
             },
             "base_url": {"type": "string"},
             "api_key": {"type": "string", "default": ""},
-            "default_model": {"type": "string", "default": "gpt-4o-mini"},
-            "set_as_default": {"type": "boolean", "default": False},
         },
         "required": ["name", "base_url"],
     },
@@ -84,7 +84,6 @@ UPDATE_PROVIDER_TOOL = Tool(
             },
             "base_url": {"type": "string"},
             "api_key": {"type": "string"},
-            "default_model": {"type": "string"},
             "enabled": {"type": "boolean"},
         },
         "required": ["provider_id"],
@@ -120,17 +119,6 @@ DELETE_PROVIDER_TOOL = Tool(
     requires_confirmation=True,
 )
 
-SET_DEFAULT_PROVIDER_TOOL = Tool(
-    id="allhands.meta.set_default_provider",
-    kind=ToolKind.META,
-    name="set_default_provider",
-    description="Mark a provider as the platform default (used when employees don't pin a model).",
-    input_schema=_PROVIDER_ID_REQUIRED,
-    output_schema={"type": "object"},
-    scope=ToolScope.WRITE,
-    requires_confirmation=True,
-)
-
 TEST_PROVIDER_CONNECTION_TOOL = Tool(
     id="allhands.meta.test_provider_connection",
     kind=ToolKind.META,
@@ -152,7 +140,6 @@ ALL_PROVIDER_META_TOOLS: list[Tool] = [
     CREATE_PROVIDER_TOOL,
     UPDATE_PROVIDER_TOOL,
     DELETE_PROVIDER_TOOL,
-    SET_DEFAULT_PROVIDER_TOOL,
     TEST_PROVIDER_CONNECTION_TOOL,
     LIST_PROVIDER_PRESETS_TOOL,
 ]
