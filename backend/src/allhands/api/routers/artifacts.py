@@ -436,3 +436,39 @@ async def get_artifact_version_content(
         mime_type=art.mime_type,
         content=blob.decode("utf-8"),
     )
+
+
+# ─── Pin / delete · REST mirrors of the Meta Tool side (CLAUDE.md §3.1)
+# Agent-managed resources are allowed REST CRUD as long as a same-name
+# Meta Tool exists; both already do (artifact_pin · artifact_delete).
+# These endpoints power the UI's bulk-action toolbar without forcing
+# every action through the chat surface.
+
+
+class PinArtifactRequest(BaseModel):
+    pinned: bool
+
+
+@router.post("/{artifact_id}/pin", response_model=ArtifactResponse)
+async def pin_artifact(
+    artifact_id: str,
+    body: PinArtifactRequest,
+    svc: ArtifactService = Depends(get_artifact_service),
+) -> ArtifactResponse:
+    try:
+        updated = await svc.set_pinned(artifact_id, body.pinned)
+    except ArtifactNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _to_response(updated)
+
+
+@router.delete("/{artifact_id}", status_code=204)
+async def delete_artifact(
+    artifact_id: str,
+    svc: ArtifactService = Depends(get_artifact_service),
+) -> Response:
+    try:
+        await svc.delete(artifact_id)
+    except ArtifactNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(status_code=204)
