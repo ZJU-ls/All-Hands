@@ -396,23 +396,26 @@ def _build_anthropic_body(
         body["top_p"] = top_p
     if stop:
         body["stop_sequences"] = stop
-    if enable_thinking is not None:
-        # Multi-vendor reasoning switch. Different gateways honor different
-        # field names, so we speak all of them at once:
-        #   - Qwen / DashScope: `enable_thinking: bool` at body root
-        #   - Zhipu GLM / DashScope coding-plan (Anthropic-compat) / Anthropic
-        #     native: `thinking: {"type": "enabled"|"disabled"}`
-        # Native Anthropic rejects `"disabled"`, so we suppress that variant
-        # when we know we're talking to api.anthropic.com directly (its
-        # default is already off when the field is omitted).
-        body["enable_thinking"] = enable_thinking
-        if enable_thinking:
-            body["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": ANTHROPIC_DEFAULT_MAX_TOKENS // 2,
-            }
-        elif not native_anthropic:
-            body["thinking"] = {"type": "disabled"}
+    # 第一性原理 (2026-04-25 IDEALAB regression):
+    # - thinking 是 opt-in 字段,默认 OFF 就 omitted entirely。不发 enable_thinking
+    #   bool root,不发 thinking: disabled,什么都不发。
+    # - 只在用户显式 opt-in (enable_thinking is True) 时才发 thinking: enabled。
+    # - `enable_thinking is False` ≡ `enable_thinking is None`,因为对 Anthropic
+    #   家族来说"不发 = 默认关"。
+    # - Why: IDEALAB / OpenRouter / 自建反代等"半 anthropic-compat"不识别
+    #   thinking: disabled,会返回空 SSE stream(用户看到空响应 + 0 tokens)。
+    #   Claude Code 同款:omit by default,只在 hasThinking 时才注入 thinking
+    #   字段(ref-src-claude/V02 § ChatAnthropic.thinking)。
+    if enable_thinking is True:
+        body["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": ANTHROPIC_DEFAULT_MAX_TOKENS // 2,
+        }
+    # `native_anthropic` is no longer consulted — the omission policy above
+    # already does the right thing for native (omit = use server default,
+    # which is no thinking) AND for compat proxies (omit = avoid IDEALAB-style
+    # silent breakage). Kept in the signature for backward-compat callers.
+    _ = native_anthropic
     return body
 
 
@@ -742,6 +745,23 @@ async def _astream_anthropic_chat(
         tok_per_sec = round(output_tokens / elapsed_s, 2)
     else:
         tok_per_sec = 0.0
+
+    # IDEALAB / 半 anthropic-compat 反代回归防御:
+    # 流"成功结束"(无 HTTP error · 无 exception)但 content + reasoning
+    # 都是空字符串,几乎一定是代理把 thinking 字段吞了或者协议不兼容。
+    # 旧行为:返回 done event 带 response: "" — 用户看到一个空响应 + tok/s 0,
+    # 困惑且无法 actionable。新行为:翻成 error event,告诉用户怎么办。
+    if not response and not reasoning_text and output_tokens == 0:
+        yield {
+            "type": "error",
+            "error": (
+                "上游返回了空响应流 — 多见于 anthropic-compat 反代不支持 thinking "
+                "参数或协议异常。建议关闭「深度思考」开关,或换一个原生支持的模型。"
+            ),
+            "error_category": "provider_error",
+            "latency_ms": latency_ms,
+        }
+        return
 
     yield {
         "type": "done",
