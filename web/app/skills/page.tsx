@@ -7,6 +7,7 @@ import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Icon } from "@/components/ui/icon";
+import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 
 /**
  * Skills page · ADR 0016 V2 Azure Live polish.
@@ -983,6 +984,80 @@ function PreviewModal({
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [err, setErr] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+  // AI 解读 / 原文 tab. The explanation streams the moment the modal
+  // opens — for a market browser the "what does this thing do" question
+  // is the whole point, so we don't make the user click another button.
+  const [view, setView] = useState<"ai" | "raw">("ai");
+  const [aiText, setAiText] = useState("");
+  const [aiState, setAiState] = useState<"idle" | "loading" | "done" | "error">(
+    "idle",
+  );
+  const [aiError, setAiError] = useState<string | null>(null);
+  const aiBodyRef = useRef<HTMLDivElement>(null);
+  const aiAbortRef = useRef<AbortController | null>(null);
+
+  // Reset every time the modal target changes.
+  useEffect(() => {
+    if (!slug) {
+      aiAbortRef.current?.abort();
+      setAiText("");
+      setAiState("idle");
+      setAiError(null);
+      setView("ai");
+      return;
+    }
+  }, [slug]);
+
+  // Auto-stream AI explanation when the modal opens on the AI tab. We
+  // kick this off once per slug + when the user clicks "重新解读"; raw
+  // SKILL.md fetch is independent and keeps the existing path.
+  const startAi = useCallback(async () => {
+    if (!slug) return;
+    aiAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    aiAbortRef.current = ctrl;
+    setAiState("loading");
+    setAiText("");
+    setAiError(null);
+    try {
+      const res = await fetch(
+        `/api/skills/market/${encodeURIComponent(slug)}/explain`,
+        { method: "POST", signal: ctrl.signal },
+      );
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`${res.status} ${body || res.statusText}`);
+      }
+      if (!res.body) throw new Error("解读失败:响应没有 body");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let acc = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setAiText(acc);
+      }
+      acc += decoder.decode();
+      setAiText(acc);
+      setAiState("done");
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      setAiError(e instanceof Error ? e.message : String(e));
+      setAiState("error");
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    if (slug && aiState === "idle") void startAi();
+  }, [slug, aiState, startAi]);
+
+  // Pin the AI panel to bottom while streaming so new chunks stay in
+  // view — same trick as SkillExplainer / DesignForm preview.
+  useEffect(() => {
+    if (aiState !== "loading" || !aiBodyRef.current) return;
+    aiBodyRef.current.scrollTop = aiBodyRef.current.scrollHeight;
+  }, [aiText, aiState]);
 
   useEffect(() => {
     if (!slug) {
@@ -1084,50 +1159,156 @@ function PreviewModal({
           </button>
         </div>
 
+        {/* Tabs row — AI 解读 default, 原文 for raw SKILL.md aficionados.
+            Both tabs render in the same flex-1 container so the modal
+            doesn't reflow when toggling. */}
+        <div
+          role="tablist"
+          aria-label="解读视图"
+          className="flex items-center gap-1 px-5 pt-3 border-b border-border"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "ai"}
+            onClick={() => setView("ai")}
+            data-testid="preview-view-ai"
+            className={
+              "inline-flex items-center gap-1.5 h-8 px-3 text-[12px] font-medium border-b-2 -mb-px transition-colors duration-fast " +
+              (view === "ai"
+                ? "border-primary text-primary"
+                : "border-transparent text-text-muted hover:text-text")
+            }
+          >
+            <Icon name="sparkles" size={12} />
+            AI 解读
+            {aiState === "loading" && (
+              <Icon
+                name="loader"
+                size={11}
+                className="animate-spin-slow text-primary/70"
+              />
+            )}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "raw"}
+            onClick={() => setView("raw")}
+            data-testid="preview-view-raw"
+            className={
+              "inline-flex items-center gap-1.5 h-8 px-3 text-[12px] font-medium border-b-2 -mb-px transition-colors duration-fast " +
+              (view === "raw"
+                ? "border-primary text-primary"
+                : "border-transparent text-text-muted hover:text-text")
+            }
+          >
+            <Icon name="file-code-2" size={12} />
+            原文 SKILL.md
+          </button>
+        </div>
+
         <div className="flex-1 overflow-y-auto p-5">
-          {status === "loading" && (
-            <p
-              className="inline-flex items-center gap-1.5 text-xs text-text-muted"
-              data-testid="preview-loading"
-            >
-              <Icon name="loader" size={12} className="animate-spin-slow" />
-              读取 SKILL.md…
-            </p>
-          )}
-          {status === "error" && (
-            <p className="text-xs font-mono text-danger" data-testid="preview-error">
-              {err}
-            </p>
-          )}
-          {preview && (
-            <>
-              <p className="text-[11px] font-mono text-text-subtle mb-3 break-all">
-                {preview.source_url}
-              </p>
-              <div className="mb-4">
-                <h4 className="text-[11px] uppercase tracking-wider text-text-subtle mb-1.5 font-mono font-semibold">
-                  文件({preview.files.length})
-                </h4>
-                <div className="flex flex-wrap gap-1">
-                  {preview.files.map((f) => (
-                    <span
-                      key={f}
-                      className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-2 text-text-muted border border-border"
-                    >
-                      {f}
-                    </span>
-                  ))}
+          {view === "ai" ? (
+            <div ref={aiBodyRef} className="h-full">
+              {status === "loading" && !aiText && (
+                <p
+                  className="inline-flex items-center gap-1.5 text-xs text-text-muted"
+                  data-testid="preview-loading"
+                >
+                  <Icon name="loader" size={12} className="animate-spin-slow" />
+                  读取技能元信息…
+                </p>
+              )}
+              {aiState === "error" ? (
+                <div data-testid="ai-explain-error">
+                  <p className="text-[12px] text-danger mb-3">{aiError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void startAi()}
+                    className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border bg-surface text-[11px] text-text-muted hover:border-primary/40 hover:text-primary transition-colors duration-fast"
+                  >
+                    <Icon name="refresh" size={11} />
+                    重新解读
+                  </button>
                 </div>
-              </div>
-              <h4 className="text-[11px] uppercase tracking-wider text-text-subtle mb-1.5 font-mono font-semibold">
-                SKILL.md
-              </h4>
-              <pre
-                data-testid="preview-skill-md"
-                className="text-[11px] font-mono text-text bg-surface-2 border border-border rounded-md p-3 whitespace-pre-wrap break-words"
-              >
-                {preview.skill_md}
-              </pre>
+              ) : aiText ? (
+                <div>
+                  <AgentMarkdown
+                    content={aiText}
+                    className="ah-prose ah-prose-sm max-w-none"
+                  />
+                  {aiState === "done" && (
+                    <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+                      <span className="text-[11px] text-text-subtle">
+                        AI 解读基于 SKILL.md · 仅供决策参考
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void startAi()}
+                        data-testid="ai-explain-regen"
+                        className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border bg-surface text-[11px] text-text-muted hover:border-primary/40 hover:text-primary transition-colors duration-fast"
+                      >
+                        <Icon name="refresh" size={11} />
+                        重新解读
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : aiState === "loading" ? (
+                <p className="inline-flex items-center gap-1.5 text-xs text-text-muted">
+                  <Icon name="sparkles" size={12} className="text-primary" />
+                  AI 正在阅读 SKILL.md,稍等几秒…
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              {status === "loading" && (
+                <p
+                  className="inline-flex items-center gap-1.5 text-xs text-text-muted"
+                  data-testid="preview-loading"
+                >
+                  <Icon name="loader" size={12} className="animate-spin-slow" />
+                  读取 SKILL.md…
+                </p>
+              )}
+              {status === "error" && (
+                <p className="text-xs font-mono text-danger" data-testid="preview-error">
+                  {err}
+                </p>
+              )}
+              {preview && (
+                <>
+                  <p className="text-[11px] font-mono text-text-subtle mb-3 break-all">
+                    {preview.source_url}
+                  </p>
+                  <div className="mb-4">
+                    <h4 className="text-[11px] uppercase tracking-wider text-text-subtle mb-1.5 font-mono font-semibold">
+                      文件({preview.files.length})
+                    </h4>
+                    <div className="flex flex-wrap gap-1">
+                      {preview.files.map((f) => (
+                        <span
+                          key={f}
+                          className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-2 text-text-muted border border-border"
+                        >
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <h4 className="text-[11px] uppercase tracking-wider text-text-subtle mb-1.5 font-mono font-semibold">
+                    SKILL.md
+                  </h4>
+                  <pre
+                    data-testid="preview-skill-md"
+                    className="text-[11px] font-mono text-text bg-surface-2 border border-border rounded-md p-3 whitespace-pre-wrap break-words"
+                  >
+                    {preview.skill_md}
+                  </pre>
+                </>
+              )}
             </>
           )}
         </div>

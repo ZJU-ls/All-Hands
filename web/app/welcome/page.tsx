@@ -17,6 +17,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { AllhandsLogo, AllhandsWordmark } from "@/components/brand/AllhandsLogo";
 import { WorkspacePreview } from "@/components/welcome/WorkspacePreview";
+import { CountUp, Tilt } from "@/components/welcome/effects";
 import { markFirstRunCompleted } from "@/lib/first-run";
 
 export const FIRST_RUN_SCOPE = "welcome";
@@ -53,9 +54,11 @@ const HIGHLIGHTS: Highlight[] = [
   },
 ];
 
-const STATS: Array<{ value: string; label: string }> = [
-  { value: "10", label: "层架构 · 单向依赖" },
-  { value: "8", label: "条核心设计原则" },
+type Stat = { value: number | string; label: string };
+
+const STATS: Stat[] = [
+  { value: 10, label: "层架构 · 单向依赖" },
+  { value: 8, label: "条核心设计原则" },
   { value: "∞", label: "可注册 Tool / Skill" },
 ];
 
@@ -121,7 +124,7 @@ export default function WelcomePage() {
       {/* ─── Top-right skip · low-emphasis but always reachable. ─── */}
       <div className="relative z-10 flex items-center justify-between px-6 pt-6 sm:px-10">
         <div className="inline-flex items-center gap-2.5">
-          <AllhandsLogo size={36} className="shadow-glow-sm rounded-lg" />
+          <AllhandsLogo size={36} className="shadow-glow-sm rounded-lg" animateIn />
           <AllhandsWordmark size={16} />
         </div>
         <button
@@ -188,12 +191,16 @@ export default function WelcomePage() {
             </Link>
           </div>
 
-          {/* Mini stat strip */}
+          {/* Mini stat strip · numbers count up on first paint */}
           <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3">
             {STATS.map((s, i) => (
               <div key={s.label} className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold tracking-tight text-text">
-                  {s.value}
+                <span className="text-2xl font-bold tracking-tight text-text tabular-nums">
+                  {typeof s.value === "number" ? (
+                    <CountUp value={s.value} />
+                  ) : (
+                    s.value
+                  )}
                 </span>
                 <span className="text-caption text-text-muted">{s.label}</span>
                 {i < STATS.length - 1 ? (
@@ -206,12 +213,14 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* ─── Workspace preview · auto-cycles through chat / skills / gateway / traces. ─── */}
+        {/* ─── Workspace preview · auto-cycles + 3D mouse-tilt. ─── */}
         <section
           className="relative mt-16 animate-fade-up"
           style={{ animationDelay: "120ms" }}
         >
-          <WorkspacePreview />
+          <Tilt>
+            <WorkspacePreview />
+          </Tilt>
         </section>
 
         {/* ─── Highlights ─── */}

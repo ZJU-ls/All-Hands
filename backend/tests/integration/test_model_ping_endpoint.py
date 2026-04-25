@@ -160,13 +160,14 @@ def test_ping_applies_fast_budget_via_kwargs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ping is supposed to fail fast. The route must instruct run_chat_test
-    with a max_tokens=4 budget, a strict timeout, and `enable_thinking=False`
-    so a slow / thinking provider doesn't hold the UI for 120s (the default
-    chat_test timeout).
+    with a max_tokens=4 budget and a strict timeout so a slow provider
+    doesn't hold the UI for 120s (the default chat_test timeout).
 
-    `enable_thinking=False` is what unsticks Qwen3-thinking / GLM-4.5-thinking:
-    a 4-token budget cannot cover a reasoning pass, so the call would time
-    out even though the model itself is reachable.
+    The route must NOT pass `enable_thinking` — letting the model default
+    apply keeps multi-tenant Anthropic-compat gateways (DashScope
+    coding-plan routing MiniMax / Kimi) from rejecting an unknown root
+    field. Cold-start coverage comes from the 15s timeout, not from
+    forcing thinking off.
     """
     client, _pid, mid = seeded_client
     seen: dict[str, Any] = {}
@@ -183,8 +184,9 @@ def test_ping_applies_fast_budget_via_kwargs(
 
     # The route is responsible for imposing the fast-ping budget.
     assert seen.get("max_tokens") == 4
-    # Reasoning models must be pinged in non-thinking mode.
-    assert seen.get("enable_thinking") is False
+    # The route must NOT inject enable_thinking — let the model's default
+    # apply. DashScope coding-plan rejects this bool for MiniMax/Kimi routes.
+    assert "enable_thinking" not in seen
     # The helper may or may not take `timeout` directly — but it MUST receive
     # a dedicated short-lived httpx client. We assert the contract at the
     # max_tokens level here; the route is free to pass an http_client.

@@ -186,6 +186,49 @@ async def delete_skill(
     await svc.delete(skill_id)
 
 
+@router.post("/market/{slug}/explain")
+async def explain_market_skill(
+    slug: str,
+    svc: SkillService = Depends(get_skill_service),
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    """Stream a Markdown explanation for a market skill (uninstalled).
+
+    Hits the same GitHub-backed market preview endpoint that the
+    `/skills` page uses, then feeds name + description + SKILL.md into
+    the AI explainer so the user can decide whether to install. Cached
+    in-process under ``market:<slug>`` for the process lifetime —
+    market preview itself is already cached upstream (5min) so an edit
+    surfaces on restart, matching the user's mental model.
+    """
+    try:
+        preview = await svc.preview_market_skill(slug)
+    except SkillInstallError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    async def _gen() -> AsyncIterator[bytes]:
+        try:
+            async for chunk in ai_explainer.explain_market_skill_stream(
+                slug=slug,
+                name=preview.name,
+                description=preview.description,
+                version=preview.version,
+                source_url=preview.source_url,
+                skill_md=preview.skill_md,
+                provider_repo=SqlLLMProviderRepo(session),
+            ):
+                if chunk:
+                    yield chunk.encode("utf-8")
+        except DomainError as exc:
+            yield f"\n\n[错误] {exc}".encode()
+
+    return StreamingResponse(
+        _gen(),
+        media_type="text/plain; charset=utf-8",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
+
 @router.post("/{skill_id}/explain")
 async def explain_skill(
     skill_id: str,

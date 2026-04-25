@@ -1,54 +1,43 @@
 "use client";
 
 /**
- * AllhandsLogo · primary brand mark — 5 concept variants for review.
+ * AllhandsLogo · primary brand mark · "origami" concept (locked v2).
  *
- * Concepts:
- *   - "constellation"  · 1 lead + 4 satellites with hairline connectors.
- *                         Story: Lead Agent orchestrates a team.
- *   - "spark"          · 4-armed gradient starburst + center disc.
- *                         Story: agent intelligence radiating outward.
- *   - "cluster"        · honeycomb of 7 nodes (1 big + 6 small).
- *                         Story: a collective, not just a node.
- *   - "halo"           · minimal outer ring + center dot, premium-quiet.
- *                         Story: focused, deliberate, calm operator.
- *   - "pulse"          · concentric broadcast rings around a center node.
- *                         Story: signal, dispatch, real-time orchestration.
+ * A single diagonal fold across a brand-gradient tile. The bottom-right
+ * face is darkened by an overlay, the seam is a soft white hairline, and
+ * a small bright disc anchors the larger face. The mark reads as paper —
+ * deliberate, tactile — at any size from 16px favicon to 80px hero.
  *
  * Brand-identity glyphs are exempted from §3.8 colour discipline (same
- * exception as provider/model marks). Tile variants use the brand
- * gradient (primary → accent) directly via `var()`-resolved stops.
+ * exception as provider/model marks). The tile gradient resolves
+ * `var(--color-primary|accent)` so light/dark themes follow the pack.
  *
- * Sizing: pass `size` (px). 32-unit viewBox internally so all proportions
- * scale linearly; favicon ships at 32, sidebar at 32, hero at 36-44.
+ * Optional `animateIn` plays a fold-in entrance: the seam draws across,
+ * the dark face slides in behind it, the disc fades up. Once. Used on
+ * the welcome hero — opt-in elsewhere via prop.
  */
 
 import { cn } from "@/lib/cn";
 
-export type LogoConcept =
-  | "constellation"
-  | "spark"
-  | "cluster"
-  | "halo"
-  | "pulse";
-
 type Props = {
   size?: number;
   className?: string;
+  /** Tile = brand gradient with white inks · mono = currentColor outline. */
   variant?: "tile" | "mono";
-  concept?: LogoConcept;
+  /** Plays a one-shot fold-in entrance animation on mount. */
+  animateIn?: boolean;
 };
 
 const TILE_GRAD_ID = "ahg-tile";
 const TILE_GLOW_ID = "ahg-glow";
+const FOLD_GRAD_ID = "ahg-fold";
 
 export function AllhandsLogo({
   size = 28,
   className,
   variant = "tile",
-  concept = "constellation",
+  animateIn = false,
 }: Props) {
-  const renderInner = INNER_RENDERERS[concept];
   return (
     <svg
       viewBox="0 0 32 32"
@@ -75,160 +64,134 @@ export function AllhandsLogo({
         <radialGradient
           id={TILE_GLOW_ID}
           cx="16"
-          cy="13"
-          r="15"
+          cy="11"
+          r="16"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0%" stopColor="white" stopOpacity="0.32" />
+          <stop offset="0%" stopColor="white" stopOpacity="0.34" />
           <stop offset="65%" stopColor="white" stopOpacity="0" />
         </radialGradient>
+        <linearGradient
+          id={FOLD_GRAD_ID}
+          x1="0"
+          y1="0"
+          x2="32"
+          y2="32"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0%" stopColor="black" stopOpacity="0" />
+          <stop offset="100%" stopColor="black" stopOpacity="0.22" />
+        </linearGradient>
       </defs>
 
       {variant === "tile" ? (
         <>
           <rect width="32" height="32" rx="8" fill={`url(#${TILE_GRAD_ID})`} />
           <rect width="32" height="32" rx="8" fill={`url(#${TILE_GLOW_ID})`} />
+          {/* Bottom-right darker face · clipped to tile by rx=8 */}
+          <path
+            d="M 7 11 L 25 29 L 32 32 L 32 0 Z"
+            fill={`url(#${FOLD_GRAD_ID})`}
+            className={animateIn ? "ah-fold-face" : undefined}
+            style={
+              animateIn
+                ? { transformOrigin: "16px 16px", transformBox: "fill-box" }
+                : undefined
+            }
+          />
+          {/* Fold seam · soft white hairline */}
+          <line
+            x1="7"
+            y1="11"
+            x2="25"
+            y2="29"
+            stroke="white"
+            strokeOpacity="0.45"
+            strokeWidth="1"
+            strokeLinecap="round"
+            className={animateIn ? "ah-fold-seam" : undefined}
+            pathLength={1}
+          />
+          {/* Focal disc on the larger face */}
+          <circle
+            cx="12.5"
+            cy="19.5"
+            r="2.2"
+            fill="white"
+            fillOpacity="0.92"
+            className={animateIn ? "ah-fold-disc" : undefined}
+          />
         </>
-      ) : null}
+      ) : (
+        // Mono · outline + seam · for dense / dark surfaces.
+        <>
+          <rect
+            x="3"
+            y="3"
+            width="26"
+            height="26"
+            rx="6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+          <line
+            x1="7"
+            y1="11"
+            x2="25"
+            y2="29"
+            stroke="currentColor"
+            strokeOpacity="0.6"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+          />
+          <circle cx="13" cy="20" r="1.5" fill="currentColor" />
+        </>
+      )}
 
-      {renderInner(variant === "tile")}
+      {animateIn ? (
+        <style>{`
+          @keyframes ah-fold-seam-draw {
+            from { stroke-dasharray: 0 1; }
+            to   { stroke-dasharray: 1 0; }
+          }
+          @keyframes ah-fold-face-in {
+            from { opacity: 0; transform: translateX(6px); }
+            to   { opacity: 1; transform: translateX(0); }
+          }
+          @keyframes ah-fold-disc-in {
+            from { opacity: 0; transform: scale(0.6); }
+            to   { opacity: 0.92; transform: scale(1); }
+          }
+          .ah-fold-seam {
+            stroke-dasharray: 0 1;
+            animation: ah-fold-seam-draw 720ms cubic-bezier(.2,.8,.2,1) 80ms forwards;
+          }
+          .ah-fold-face {
+            opacity: 0;
+            animation: ah-fold-face-in 560ms cubic-bezier(.2,.8,.2,1) 480ms forwards;
+          }
+          .ah-fold-disc {
+            opacity: 0;
+            transform-origin: 12.5px 19.5px;
+            transform-box: fill-box;
+            animation: ah-fold-disc-in 420ms cubic-bezier(.2,.8,.2,1) 800ms forwards;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .ah-fold-seam, .ah-fold-face, .ah-fold-disc {
+              animation: none;
+              opacity: 1;
+              stroke-dasharray: none;
+              transform: none;
+            }
+          }
+        `}</style>
+      ) : null}
     </svg>
   );
 }
 
-// ───────────────────────────────────────────────────────────────────────────
-// Inner renderers — one per concept. Each receives `tile` (true if drawing
-// on top of the gradient tile, white inks) so mono outline mode can swap to
-// currentColor for dense / dark surfaces without duplicating geometry.
-// ───────────────────────────────────────────────────────────────────────────
-
-type InnerRenderer = (tile: boolean) => React.ReactNode;
-
-const ink = (tile: boolean, opacity = 1) =>
-  tile ? `rgba(255,255,255,${opacity})` : "currentColor";
-
-const constellation: InnerRenderer = (tile) => (
-  <>
-    <g
-      stroke={ink(tile, 0.32)}
-      strokeWidth={tile ? 0.6 : 0.8}
-      strokeLinecap="round"
-    >
-      <line x1="16" y1="16" x2="16" y2="8" />
-      <line x1="16" y1="16" x2="24" y2="16" />
-      <line x1="16" y1="16" x2="16" y2="24" />
-      <line x1="16" y1="16" x2="8" y2="16" />
-    </g>
-    <g fill={ink(tile, 0.78)}>
-      <circle cx="16" cy="8" r="1.7" />
-      <circle cx="24" cy="16" r="1.7" />
-      <circle cx="16" cy="24" r="1.7" />
-      <circle cx="8" cy="16" r="1.7" />
-    </g>
-    <circle cx="16" cy="16" r="4" fill={ink(tile)} />
-  </>
-);
-
-const spark: InnerRenderer = (tile) => (
-  <>
-    {/* 4 diamond rays */}
-    <g fill={ink(tile, 0.85)}>
-      <path d="M16 4 L18 14 L16 16 L14 14 Z" />
-      <path d="M28 16 L18 18 L16 16 L18 14 Z" />
-      <path d="M16 28 L14 18 L16 16 L18 18 Z" />
-      <path d="M4 16 L14 14 L16 16 L14 18 Z" />
-    </g>
-    <circle cx="16" cy="16" r="2.6" fill={ink(tile)} />
-  </>
-);
-
-const cluster: InnerRenderer = (tile) => {
-  // Honeycomb-ish cluster: one big in the middle, 6 small around at hex angles.
-  const R = 6.6; // satellite radius from center
-  const small = 1.55;
-  const angles = [0, 60, 120, 180, 240, 300]; // degrees
-  return (
-    <>
-      <g fill={ink(tile, 0.7)}>
-        {angles.map((a) => {
-          const rad = ((a - 90) * Math.PI) / 180;
-          const cx = 16 + R * Math.cos(rad);
-          const cy = 16 + R * Math.sin(rad);
-          return <circle key={a} cx={cx} cy={cy} r={small} />;
-        })}
-      </g>
-      <circle cx="16" cy="16" r="3.4" fill={ink(tile)} />
-    </>
-  );
-};
-
-const halo: InnerRenderer = (tile) => (
-  <>
-    {/* Outer dashed ring · slow rhythm, premium-quiet */}
-    <circle
-      cx="16"
-      cy="16"
-      r="10"
-      fill="none"
-      stroke={ink(tile, 0.55)}
-      strokeWidth={tile ? 1.2 : 1.4}
-      strokeDasharray="2 3.4"
-      strokeLinecap="round"
-    />
-    {/* Inner soft ring */}
-    <circle
-      cx="16"
-      cy="16"
-      r="6.2"
-      fill="none"
-      stroke={ink(tile, 0.28)}
-      strokeWidth={tile ? 0.8 : 1}
-    />
-    <circle cx="16" cy="16" r="3.2" fill={ink(tile)} />
-  </>
-);
-
-const pulse: InnerRenderer = (tile) => (
-  <>
-    <circle
-      cx="16"
-      cy="16"
-      r="12"
-      fill="none"
-      stroke={ink(tile, 0.16)}
-      strokeWidth={tile ? 1 : 1.2}
-    />
-    <circle
-      cx="16"
-      cy="16"
-      r="8"
-      fill="none"
-      stroke={ink(tile, 0.34)}
-      strokeWidth={tile ? 1 : 1.2}
-    />
-    <circle
-      cx="16"
-      cy="16"
-      r="4.2"
-      fill="none"
-      stroke={ink(tile, 0.6)}
-      strokeWidth={tile ? 1 : 1.2}
-    />
-    <circle cx="16" cy="16" r="2.2" fill={ink(tile)} />
-  </>
-);
-
-const INNER_RENDERERS: Record<LogoConcept, InnerRenderer> = {
-  constellation,
-  spark,
-  cluster,
-  halo,
-  pulse,
-};
-
-/**
- * AllhandsWordmark — companion typographic mark.
- */
+/** Companion typographic mark. */
 export function AllhandsWordmark({
   className,
   size = 14,
@@ -252,36 +215,3 @@ export function AllhandsWordmark({
     </span>
   );
 }
-
-/** Concept metadata for the gallery page. */
-export const LOGO_CONCEPTS: Array<{
-  id: LogoConcept;
-  name: string;
-  story: string;
-}> = [
-  {
-    id: "constellation",
-    name: "Constellation · 星座",
-    story: "Lead 居中 · 4 名员工环绕 · hairline 暗示编排关系。",
-  },
-  {
-    id: "spark",
-    name: "Spark · 光芒",
-    story: "4 道菱形光束从中心发散 · 智能向外辐射。",
-  },
-  {
-    id: "cluster",
-    name: "Cluster · 集群",
-    story: "蜂窝 7 节点 · 强调「群体」,而非「枢纽」。",
-  },
-  {
-    id: "halo",
-    name: "Halo · 光环",
-    story: "外环虚线 + 中心点 · 极简、克制、像 watch face。",
-  },
-  {
-    id: "pulse",
-    name: "Pulse · 脉冲",
-    story: "三层同心环 · 信号广播 · 实时调度的视觉隐喻。",
-  },
-];
