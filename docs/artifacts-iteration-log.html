@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>/artifacts · 8 轮迭代记录</title>
+<style>
+  :root {
+    --bg: #f7f8fb;
+    --surface: #ffffff;
+    --surface-2: #f1f3f8;
+    --border: #e3e6ee;
+    --border-strong: #d2d6e1;
+    --text: #0c1130;
+    --text-muted: #4d5575;
+    --text-subtle: #8c93ab;
+    --primary: #0a5bff;
+    --primary-soft: #e2ecff;
+    --primary-muted: #eef3ff;
+    --primary-glow: #38bdf8;
+    --accent: #38bdf8;
+    --success: #15803d;
+    --success-soft: #dcfce7;
+    --warning: #b45309;
+    --warning-soft: #fef3c7;
+    --danger: #b91c1c;
+    --danger-soft: #fee2e2;
+    --shadow-soft: 0 4px 12px -2px rgba(10, 43, 120, 0.06), 0 2px 4px rgba(10, 43, 120, 0.04);
+    --shadow-soft-lg: 0 24px 64px -24px rgba(10, 91, 255, 0.18), 0 8px 24px -8px rgba(10, 43, 120, 0.08);
+    --shadow-glow: 0 0 0 4px rgba(10, 91, 255, 0.18);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", "PingFang SC", sans-serif;
+  }
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 56px 32px 80px;
+  }
+  h1 {
+    font-size: 40px;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin: 0 0 8px;
+    background: linear-gradient(120deg, var(--text), var(--primary) 60%, var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede {
+    font-size: 17px;
+    color: var(--text-muted);
+    margin: 0 0 12px;
+    max-width: 720px;
+  }
+  .meta {
+    display: inline-flex; gap: 8px; align-items: center;
+    font: 600 11px/1 ui-monospace, SFMono-Regular, "JetBrains Mono", monospace;
+    text-transform: uppercase; letter-spacing: 0.16em;
+    color: var(--primary);
+    background: var(--primary-muted);
+    padding: 4px 10px; border-radius: 999px;
+  }
+  .kpis {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px; margin: 28px 0 36px;
+  }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 14px 12px;
+    box-shadow: var(--shadow-soft);
+  }
+  .kpi-label {
+    font: 600 10px/1 ui-monospace, monospace; text-transform: uppercase;
+    letter-spacing: 0.16em; color: var(--text-muted);
+  }
+  .kpi-val {
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 26px; font-weight: 600; margin-top: 6px;
+  }
+  .kpi-hint { font-size: 11px; color: var(--text-subtle); margin-top: 2px; }
+
+  section.iter {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; box-shadow: var(--shadow-soft);
+    margin-bottom: 18px; overflow: hidden;
+  }
+  section.iter > header {
+    padding: 16px 20px; display: flex; align-items: baseline; gap: 14px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--surface), var(--bg) 200%);
+  }
+  .iter-no {
+    font: 700 12px/1 ui-monospace, monospace; color: var(--primary);
+    background: var(--primary-muted); padding: 5px 10px; border-radius: 8px;
+    letter-spacing: 0.06em;
+  }
+  .iter-title {
+    font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 0;
+  }
+  .iter-tag {
+    margin-left: auto;
+    font: 500 11px/1 ui-monospace, monospace; color: var(--text-subtle);
+  }
+  .iter-body { padding: 18px 20px 20px; }
+
+  .row { display: grid; grid-template-columns: 200px 1fr; gap: 18px; padding: 8px 0; }
+  .row + .row { border-top: 1px dashed var(--border); }
+  .row > .label {
+    font: 600 11px/1.4 ui-monospace, monospace; text-transform: uppercase;
+    letter-spacing: 0.14em; color: var(--text-subtle); padding-top: 2px;
+  }
+  .row > .body { color: var(--text); font-size: 14px; }
+  .row > .body code {
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", monospace;
+    font-size: 12px; background: var(--surface-2); padding: 1px 6px;
+    border-radius: 5px; border: 1px solid var(--border);
+  }
+  .row > .body ul {
+    margin: 0; padding-left: 18px;
+  }
+  .row > .body li { margin-bottom: 4px; }
+
+  .refs {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .refs .ref {
+    font: 500 11px/1 ui-monospace, monospace;
+    background: var(--surface-2); border: 1px solid var(--border);
+    padding: 5px 9px; border-radius: 999px; color: var(--text-muted);
+  }
+
+  .commits {
+    display: flex; flex-direction: column; gap: 4px;
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", monospace;
+    font-size: 12px; color: var(--text-muted);
+  }
+  .commits .sha { color: var(--primary); }
+
+  footer {
+    margin-top: 48px; padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--text-subtle); font-size: 12px;
+  }
+  footer code {
+    font-family: ui-monospace, monospace; background: var(--surface-2);
+    padding: 1px 6px; border-radius: 5px;
+  }
+
+  /* Visual demo strip */
+  .demo {
+    margin-top: 12px; border: 1px dashed var(--border); border-radius: 10px;
+    padding: 10px; background: var(--surface-2);
+    font: 500 11px ui-monospace, monospace; color: var(--text-muted);
+  }
+
+  @media (max-width: 720px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .row { grid-template-columns: 1fr; }
+    .row > .label { padding-top: 0; }
+    .iter-tag { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="meta">·  /artifacts · iteration log</span>
+  <h1>制品库 · 8 轮迭代记录</h1>
+  <p class="lede">
+    一夜之间从「能用」推到「好用」 — 8 轮迭代，每轮一个明确目标，commit + push 后再走下一个。
+    所有改动都参考了真实业界产品，每条都标了出处和落点。
+  </p>
+  <div class="lede" style="font-size:14px;color:var(--text-subtle)">
+    Branch <code style="font:11px ui-monospace,monospace;background:var(--surface-2);padding:1px 6px;border-radius:5px;">feat/ux-polish</code>
+    · 8 commits · backend stats v2 + 5 new components · 0 test regressions
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-label">迭代轮次</div><div class="kpi-val">8</div><div class="kpi-hint">每轮独立 commit</div></div>
+    <div class="kpi"><div class="kpi-label">新组件</div><div class="kpi-val">5</div><div class="kpi-hint">Grid · Peek · Skeleton · BulkBar · Activity</div></div>
+    <div class="kpi"><div class="kpi-label">后端端点</div><div class="kpi-val">3</div><div class="kpi-hint">stats v2 · pin · delete</div></div>
+    <div class="kpi"><div class="kpi-label">参考产品</div><div class="kpi-val">12</div><div class="kpi-hint">Linear · Notion · Figma …</div></div>
+  </div>
+
+  <!-- ITER 1 -->
+  <section class="iter">
+    <header>
+      <span class="iter-no">01</span>
+      <h2 class="iter-title">列表 / 网格视图切换</h2>
+      <span class="iter-tag">component · view-mode</span>
+    </header>
+    <div class="iter-body">
+      <div class="row">
+        <div class="label">Why</div>
+        <div class="body">不同任务需要不同密度。「找一个旧产物快速点开」适合密集列表；「浏览审视团队最近的输出」适合带类型图标的画廊卡片。一个视图喂不饱两类心智模型。</div>
+      </div>
+      <div class="row">
+        <div class="label">参考</div>
+        <div class="body">
+          <div class="refs">
+            <span class="ref">Notion · gallery view</span>
+            <span class="ref">Figma Community · cards</span>
+            <span class="ref">Anthropic Files</span>
+            <span class="ref">GitHub Files</span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">实现</div>
+        <div class="body">
+          <ul>
+            <li>新组件 <code>ArtifactGrid</code> · 1/2/3 列响应式 · kind-tinted icon tile（markdown/code → primary, html → warning, image/csv/xlsx → success, pdf → danger）+ name + meta（version · size · 相对时间）+ 置顶角标</li>
+            <li>页面 <code>localStorage</code>-backed view mode · 用户的密度偏好跨访问保留</li>
+            <li>布局自适应：<strong>list</strong> → 侧栏 4/12 + 详情 8/12 · <strong>grid</strong> → 画廊 8/12 + 详情 4/12 · 没选中时画廊吃满 12 列</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">commit</div>
+        <div class="body commits"><span><span class="sha">236ae89</span> feat(artifacts): iter 1 · list / grid view toggle</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ITER 2 -->
+  <section class="iter">
+    <header>
+      <span class="iter-no">02</span>
+      <h2 class="iter-title">粘性筛选栏</h2>
+      <span class="iter-tag">layout · sticky toolbar</span>
+    </header>
+    <div class="iter-body">
+      <div class="row">
+        <div class="label">Why</div>
+        <div class="body">长目录滚动几屏就让搜索 + 筛选离开视野。Hero 是参考信息（KPI），Filter 是动作面（搜 / 筛 / 排序），把动作面钉住才能保持 always-actionable。</div>
+      </div>
+      <div class="row">
+        <div class="label">参考</div>
+        <div class="body">
+          <div class="refs">
+            <span class="ref">Linear · sticky issue toolbar</span>
+            <span class="ref">Glean · persistent search</span>
+            <span class="ref">GitHub · Files breadcrumb sticky</span>
+            <span class="ref">macOS · materials</span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">实现</div>
+        <div class="body">
+          <ul>
+            <li><code>position: sticky; top: 0</code> · <code>bg-bg/80 backdrop-blur-md</code> — 内容滚动时形成 macOS 风格的玻璃质感</li>
+            <li><code>-mx-6 + px-6</code> 让 band 跨满到页面 padding 边缘 · <code>border-y</code> 标出滚动边界</li>
+            <li>active filter chip strip 也搬进 sticky 容器 · chips 永远贴在 filter 行下面</li>
+            <li>z-10 在内容之上 · 但低于 AppShell topbar (z-30)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">commit</div>
+        <div class="body commits"><span><span class="sha">c4edc51</span> feat(artifacts): iter 2 · sticky filter toolbar</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ITER 3 -->
+  <section class="iter">
+    <header>
+      <span class="iter-no">03</span>
+      <h2 class="iter-title">键盘导航</h2>
+      <span class="iter-tag">a11y · power-user</span>
+    </header>
+    <div class="iter-body">
+      <div class="row">
+        <div class="label">Why</div>
+        <div class="body">几百个产物的目录，鼠标点是工伤。键盘党需要全覆盖。</div>
+      </div>
+      <div class="row">
+        <div class="label">参考</div>
+        <div class="body">
+          <div class="refs">
+            <span class="ref">Linear · j/k 列表导航</span>
+            <span class="ref">Superhuman · keyboard-first</span>
+            <span class="ref">Gmail · / 搜索</span>
+            <span class="ref">GitHub · t / .</span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">绑定</div>
+        <div class="body">
+          <ul>
+            <li><code>j</code> / <code>↓</code> · 下一项</li>
+            <li><code>k</code> / <code>↑</code> · 上一项</li>
+            <li><code>/</code> · focus 搜索框（全局）</li>
+            <li><code>Esc</code> · 搜索框中：清空 / 失焦；其它：取消选中</li>
+            <li>搜索框右侧带 <code>/</code> kbd 提示 · 仅在为空时出现，发现性 ↑ 又不喧宾夺主</li>
+            <li><code>isTypingTarget</code> guard 确保正在打字时 j/k 不会乱跳</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">commit</div>
+        <div class="body commits"><span><span class="sha">93dc75e</span> feat(artifacts): iter 3 · keyboard navigation</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ITER 4 -->
+  <section class="iter">
+    <header>
+      <span class="iter-no">04</span>
+      <h2 class="iter-title">Hover 浮窗预览（Peek）</h2>
+      <span class="iter-tag">component · interaction</span>
+    </header>
+    <div class="iter-body">
+      <div class="row">
+        <div class="label">Why</div>
+        <div class="body">扫一眼想知道详情，但不想为每张卡都点开右侧详情面板。Quick Look 心智 — hover 短停看一眼，确认要的再点。</div>
+      </div>
+      <div class="row">
+        <div class="label">参考</div>
+        <div class="body">
+          <div class="refs">
+            <span class="ref">macOS Finder · Quick Look</span>
+            <span class="ref">GitHub · linked-issue hover-card</span>
+            <span class="ref">Notion · mention preview</span>
+            <span class="ref">Vercel · deployments popover</span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">实现</div>
+        <div class="body">
+          <ul>
+            <li><code>ArtifactPeek</code> render-prop wrapper · 220ms intent delay（更短会闪、更长会滞）</li>
+            <li>位置算一次（rect.right + 12px），右边不够时 flip 到左边 · 不会 mid-hover 抖动</li>
+            <li>展示：kind icon + name + version + size + updated/created relative time + conversation 关联</li>
+            <li>触屏（pointer: coarse）自动跳过 — 触屏没有真正的 hover 概念，强制弹会让用户摸不着头脑</li>
+            <li>挂载在 ArtifactGrid（视觉浏览场景最受益），List 视图本身已有足够 meta</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">commit</div>
+        <div class="body commits"><span><span class="sha">19864c6</span> feat(artifacts): iter 4 · hover peek</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ITER 5 -->
+  <section class="iter">
+    <header>
+      <span class="iter-no">05</span>
+      <h2 class="iter-title">批量选择 + 批量动作</h2>
+      <span class="iter-tag">backend · ui</span>
+    </header>
+    <div class="iter-body">
+      <div class="row">
+        <div class="label">Why</div>
+        <div class="body">收拾一堆旧产物，一个一个找 Lead Agent 操作太蠢。直接 Cmd-click 多选，下方 toolbar 一次 Pin / Delete。</div>
+      </div>
+      <div class="row">
+        <div class="label">参考</div>
+        <div class="body">
+          <div class="refs">
+            <span class="ref">Linear · issue list bulk</span>
+            <span class="ref">Gmail · selection bar</span>
+            <span class="ref">GitHub · PR multi-select</span>
+            <span class="ref">macOS Finder · cmd-click</span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">Backend</div>
+        <div class="body">
+          <ul>
+            <li>新增 REST 端点（CLAUDE.md §3.1 允许 · Meta Tool 已存在）：
+              <code>POST /api/artifacts/{id}/pin</code> ·
+              <code>DELETE /api/artifacts/{id}</code>（204）
+            </li>
+            <li>service 层不动 · 复用现有 set_pinned / soft delete</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">Frontend</div>
+        <div class="body">
+          <ul>
+            <li><code>bulkSelected: Set&lt;string&gt;</code> 与 selectedId（详情聚焦）正交</li>
+            <li>Cmd/Ctrl-click → toggle 批量；普通 click → 切换详情</li>
+            <li>选中态：primary border + 角标圆点</li>
+            <li>浮动 <code>BulkActionBar</code>（fixed bottom-6 居中 · animate-fade-up）：N selected · Pin/Unpin（标签自动反向 — 全已置顶时显示 Unpin）· Delete（danger 色 + window confirm）· ✕ 清空</li>
+            <li>串行 loop · 借 SSE 自动 refresh，不需手动 refetch</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">commit</div>
+        <div class="body commits"><span><span class="sha">8e65c9d</span> feat(artifacts): iter 5 · bulk select + pin/delete bar</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ITER 6 -->
+  <section class="iter">
+    <header>
+      <span class="iter-no">06</span>
+      <h2 class="iter-title">活跃度 sparkline + Top 创作者</h2>
+      <span class="iter-tag">backend · stats v2 · insights</span>
+    </header>
+    <div class="iter-body">
+      <div class="row">
+        <div class="label">Why</div>
+        <div class="body">单一计数告诉你"有多少"，但说不清"产出节奏" — 是稳定输出？最近爆发？还是停滞？这是工作区的脉搏。</div>
+      </div>
+      <div class="row">
+        <div class="label">参考</div>
+        <div class="body">
+          <div class="refs">
+            <span class="ref">GitHub · repo activity graph</span>
+            <span class="ref">Vercel · deployments timeline</span>
+            <span class="ref">Linear · this-week sidebar</span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">Backend · stats v2</div>
+        <div class="body">
+          <ul>
+            <li><code>daily_counts: list[14]</code> · 近 14 天每天创建的产物数（UTC 日）</li>
+            <li><code>top_employees: list[5]</code> · 按 employee_id 排出的 leaderboard</li>
+            <li>仍走 list_all(limit=500) · 不查重，没有额外的 SQL group by 开销</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">Frontend · ActivityCard</div>
+        <div class="body">
+          <ul>
+            <li>inline SVG sparkline（200×40 · primary 色填充 + 1.5px 描边 + 末尾点锚定"今天"）· 自动按峰值 rescale</li>
+            <li>contributors 列表：8 字符 ID 前缀 · 比重条 · 计数</li>
+            <li>Hero 现在是 ByKindStrip + ActivityCard 的两栏（lg 断点） — "里面有什么" 配 "正在发生什么"</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">commit</div>
+        <div class="body commits"><span><span class="sha">f9fc723</span> feat(artifacts): iter 6 · activity sparkline + top contributors</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ITER 7 -->
+  <section class="iter">
+    <header>
+      <span class="iter-no">07</span>
+      <h2 class="iter-title">骨架屏 + 可操作的空态</h2>
+      <span class="iter-tag">perceived perf · empty states</span>
+    </header>
+    <div class="iter-body">
+      <div class="row">
+        <div class="label">Why</div>
+        <div class="body">居中转圈让用户每次切筛选都要等到结果"砰"地出现 — 加上 shape-aware 骨架屏，chrome 不动，结果就位。空态分两种心智，CTA 也得分两种。</div>
+      </div>
+      <div class="row">
+        <div class="label">参考</div>
+        <div class="body">
+          <div class="refs">
+            <span class="ref">Vercel · deployments skeleton</span>
+            <span class="ref">GitHub · Files skeleton</span>
+            <span class="ref">Linear · empty list CTA</span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">实现</div>
+        <div class="body">
+          <ul>
+            <li>新组件 <code>SkeletonList</code> · 跟随 viewMode：list 模式 6 行；grid 模式 6 卡片。形状跟最终内容一致，结果落位时 chrome 不抖</li>
+            <li>EmptyList 分 2 路：<strong>filtered → 0</strong> 显示 "Clear filters" CTA · <strong>workspace empty</strong> 显示静态指引文案</li>
+            <li>"Clear filters" 复用 chip-strip 的同一个 handler — 单一 source of truth</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">commit</div>
+        <div class="body commits"><span><span class="sha">98074d0</span> feat(artifacts): iter 7 · skeleton list + actionable empty state</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ITER 8 -->
+  <section class="iter">
+    <header>
+      <span class="iter-no">08</span>
+      <h2 class="iter-title">最终视觉 / 可达性扫尾 + HTML 总结</h2>
+      <span class="iter-tag">polish · a11y</span>
+    </header>
+    <div class="iter-body">
+      <div class="row">
+        <div class="label">实现</div>
+        <div class="body">
+          <ul>
+            <li>ArtifactPeek · <code>(pointer: coarse)</code> media query 检测，触屏设备整体跳过 peek 逻辑</li>
+            <li>键盘提示 chip · 工具栏右侧加一行 "j / k navigate · / search · Esc clear"，仅在 md+ 出现，发现性 ↑</li>
+            <li>视图切换、Pin、Delete 等按钮全部 <code>aria-pressed</code> / <code>aria-label</code> 齐备</li>
+            <li>本 HTML 文件 — 文档化 8 轮迭代 + 出处 + commit · 在 <code>docs/artifacts-iteration-log.html</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Branch <code>feat/ux-polish</code> · 全程跑 <code>pnpm typecheck</code> + <code>pnpm test</code> + 后端 <code>pytest</code>，零回归 · 所有 commit 已推到 <code>origin/main</code>。
+    </p>
+    <p>
+      要回滚单轮，<code>git log feat/ux-polish</code> 找对应 SHA <code>git revert</code> 即可。
+    </p>
+  </footer>
+</div>
+</body>
+</html>
