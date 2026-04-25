@@ -222,7 +222,7 @@ export default function ConversationPage() {
           )}
           <div
             data-testid="conversation-toolbar"
-            className="flex h-11 items-center gap-2 border-b border-border bg-surface/60 px-3 min-w-0 backdrop-blur-sm"
+            className="relative z-20 flex h-11 items-center gap-2 border-b border-border bg-surface/60 px-3 min-w-0 backdrop-blur-sm"
           >
             <div className="min-w-0 flex-1">
               <ConversationHeader
