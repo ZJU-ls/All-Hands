@@ -56,6 +56,11 @@ _KIND_EXT: dict[ArtifactKind, str] = {
     ArtifactKind.DATA: "json",
     ArtifactKind.MERMAID: "mmd",
     ArtifactKind.DRAWIO: "drawio",
+    ArtifactKind.PDF: "pdf",
+    ArtifactKind.XLSX: "xlsx",
+    ArtifactKind.CSV: "csv",
+    ArtifactKind.DOCX: "docx",
+    ArtifactKind.PPTX: "pptx",
 }
 
 _DEFAULT_MIME: dict[ArtifactKind, str] = {
@@ -66,6 +71,11 @@ _DEFAULT_MIME: dict[ArtifactKind, str] = {
     ArtifactKind.DATA: "application/json",
     ArtifactKind.MERMAID: "text/vnd.mermaid",
     ArtifactKind.DRAWIO: "application/vnd.jgraph.mxfile",
+    ArtifactKind.PDF: "application/pdf",
+    ArtifactKind.XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ArtifactKind.CSV: "text/csv",
+    ArtifactKind.DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ArtifactKind.PPTX: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
 

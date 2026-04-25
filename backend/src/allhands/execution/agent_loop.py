@@ -555,11 +555,21 @@ class AgentLoop:
         # (workspace-scoped, no provenance) — still works, just orphaned.
         if tool_id in (
             "allhands.artifacts.create",
+            "allhands.artifacts.create_pdf",
+            "allhands.artifacts.create_xlsx",
+            "allhands.artifacts.create_csv",
+            "allhands.artifacts.create_docx",
+            "allhands.artifacts.create_pptx",
             "allhands.artifacts.update",
             "allhands.artifacts.rollback",
         ):
             from allhands.execution.tools.meta.executors import (
+                make_artifact_create_csv_executor,
+                make_artifact_create_docx_executor,
                 make_artifact_create_executor,
+                make_artifact_create_pdf_executor,
+                make_artifact_create_pptx_executor,
+                make_artifact_create_xlsx_executor,
                 make_artifact_rollback_executor,
                 make_artifact_update_executor,
             )
@@ -571,12 +581,19 @@ class AgentLoop:
                 "employee_id": self._employee.id,
                 "run_id": self._run_id,
             }
-            if tool_id == "allhands.artifacts.create":
-                return make_artifact_create_executor(maker, **kwargs)
-            if tool_id == "allhands.artifacts.update":
-                return make_artifact_update_executor(maker, **kwargs)
-            if tool_id == "allhands.artifacts.rollback":
-                return make_artifact_rollback_executor(maker, **kwargs)
+            office_factories = {
+                "allhands.artifacts.create": make_artifact_create_executor,
+                "allhands.artifacts.create_pdf": make_artifact_create_pdf_executor,
+                "allhands.artifacts.create_xlsx": make_artifact_create_xlsx_executor,
+                "allhands.artifacts.create_csv": make_artifact_create_csv_executor,
+                "allhands.artifacts.create_docx": make_artifact_create_docx_executor,
+                "allhands.artifacts.create_pptx": make_artifact_create_pptx_executor,
+                "allhands.artifacts.update": make_artifact_update_executor,
+                "allhands.artifacts.rollback": make_artifact_rollback_executor,
+            }
+            factory = office_factories.get(tool_id)
+            if factory is not None:
+                return factory(maker, **kwargs)
 
         return default
 

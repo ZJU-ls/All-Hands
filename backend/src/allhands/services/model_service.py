@@ -621,6 +621,26 @@ def _parse_sse_data(line: str) -> dict[str, Any] | None:
         return None
 
 
+def _is_thinking_field_rejection(http_status: int, body_text: str) -> bool:
+    """Detect 400 errors specifically about the `thinking` field.
+
+    Triggered by upstream gateways that route to models with vendor-specific
+    thinking constraints, e.g.:
+      - MiniMax-M2.5 via DashScope coding-plan: rejects `thinking: disabled`
+        with "The value of the enable_thinking parameter is restricted to True"
+      - Native Anthropic on Claude 3 (non-thinking): rejects `thinking:enabled`
+      - Hypothetical proxy: any 400 mentioning the thinking field
+
+    Returns True only on 400 + textual evidence the thinking field is the
+    culprit. This is the trigger for an automatic retry without the field —
+    we don't blanket-retry every 400 because that would mask real bugs.
+    """
+    if http_status != 400:
+        return False
+    text = body_text.lower()
+    return "thinking" in text or "enable_thinking" in text
+
+
 async def _astream_anthropic_chat(
     provider: LLMProvider,
     model_name: str,
@@ -642,6 +662,15 @@ async def _astream_anthropic_chat(
     `message_delta`, `message_stop`) — we translate them into unified events
     so upstream consumers (the AG-UI encoder, the Gateway UI) don't have to
     care which wire format a given provider speaks.
+
+    Thinking-field auto-retry (2026-04-25):
+      Some upstream model routes have hard constraints on the `thinking`
+      field (MiniMax-M2.5 only accepts True; certain Anthropic models reject
+      enabled; etc.). If the FIRST attempt 400s with a thinking-related error
+      message, we transparently retry once with the thinking field stripped.
+      The user gets a clean response without needing to know which models
+      have which protocol quirks. A `warning` event is emitted so the
+      observability layer can still see what happened.
     """
     sys_text, msgs = _split_system_and_messages(system=system, messages=messages, prompt=prompt)
     body = _build_anthropic_body(
@@ -661,6 +690,57 @@ async def _astream_anthropic_chat(
 
     yield {"type": "meta", "model": model_name, "started_at_ms": int(started * 1000)}
 
+    client = http_client or httpx.AsyncClient(timeout=120)
+    owns_client = http_client is None
+    try:
+        async for evt in _anthropic_stream_attempt(client, url, provider, body, started):
+            # First attempt failed with a thinking-related 400 AND we still
+            # carry a `thinking` field → strip it and retry once.
+            if (
+                evt.get("type") == "error"
+                and "thinking" in body
+                and isinstance(evt.get("_http_status"), int)
+                and _is_thinking_field_rejection(evt["_http_status"], evt.get("_body_text") or "")
+            ):
+                yield {
+                    "type": "warning",
+                    "message": ("上游模型不接受 thinking 参数 — 已自动去掉该字段重试一次。"),
+                    "category": "thinking_unsupported",
+                }
+                body_retry = {k: v for k, v in body.items() if k != "thinking"}
+                async for retry_evt in _anthropic_stream_attempt(
+                    client, url, provider, body_retry, started
+                ):
+                    # Strip the internal hints before yielding to consumers.
+                    cleaned = {
+                        k: v
+                        for k, v in retry_evt.items()
+                        if k not in ("_http_status", "_body_text")
+                    }
+                    yield cleaned
+                return
+            # Strip internal hint fields before passing through.
+            cleaned = {k: v for k, v in evt.items() if k not in ("_http_status", "_body_text")}
+            yield cleaned
+    finally:
+        if owns_client:
+            await client.aclose()
+
+
+async def _anthropic_stream_attempt(
+    client: httpx.AsyncClient,
+    url: str,
+    provider: LLMProvider,
+    body: dict[str, Any],
+    started: float,
+) -> AsyncIterator[dict[str, Any]]:
+    """Single anthropic POST + SSE stream → unified events.
+
+    Returns the same event shapes `_astream_anthropic_chat` yields, but
+    additionally tags the error event (when HTTP-level) with `_http_status`
+    and `_body_text` so the caller can decide whether to retry. The outer
+    function strips those before yielding to its consumers.
+    """
     first_content_at: float | None = None
     first_reasoning_at: float | None = None
     content_buf: list[str] = []
@@ -668,73 +748,73 @@ async def _astream_anthropic_chat(
     input_tokens = 0
     output_tokens = 0
 
-    client = http_client or httpx.AsyncClient(timeout=120)
-    owns_client = http_client is None
     try:
-        try:
-            async with client.stream(
-                "POST", url, headers=_anthropic_headers(provider), json=body
-            ) as resp:
-                if resp.status_code >= 400:
-                    raw = await resp.aread()
-                    yield {
-                        "type": "error",
-                        "error": f"HTTP {resp.status_code}: {raw.decode('utf-8', errors='replace')[:500]}",
-                        "error_category": categorize_http_status(resp.status_code),
-                        "latency_ms": int((time.perf_counter() - started) * 1000),
-                    }
-                    return
-                async for line in resp.aiter_lines():
-                    if not line or not line.startswith("data:"):
-                        continue
-                    payload = line[5:].strip()
-                    if not payload or payload == "[DONE]":
-                        continue
-                    try:
-                        data = json.loads(payload)
-                    except json.JSONDecodeError:
-                        continue
-                    etype = data.get("type")
-                    if etype == "message_start":
-                        u = (data.get("message") or {}).get("usage") or {}
-                        input_tokens = int(u.get("input_tokens") or input_tokens)
-                        output_tokens = int(u.get("output_tokens") or output_tokens)
-                    elif etype == "content_block_delta":
-                        delta = data.get("delta") or {}
-                        # Visible text deltas. Extended thinking models emit
-                        # `thinking_delta` separately — treat it as reasoning
-                        # so the UI's reasoning panel populates, mirroring
-                        # OpenAI-compat reasoning_content behaviour.
-                        if delta.get("type") == "text_delta":
-                            text = str(delta.get("text") or "")
-                            if text:
-                                if first_content_at is None:
-                                    first_content_at = time.perf_counter()
-                                content_buf.append(text)
-                                yield {"type": "delta", "text": text}
-                        elif delta.get("type") == "thinking_delta":
-                            text = str(delta.get("thinking") or "")
-                            if text:
-                                if first_reasoning_at is None:
-                                    first_reasoning_at = time.perf_counter()
-                                reasoning_buf.append(text)
-                                yield {"type": "reasoning", "text": text}
-                    elif etype == "message_delta":
-                        u = data.get("usage") or {}
-                        # message_delta emits the cumulative output_tokens.
-                        if "output_tokens" in u:
-                            output_tokens = int(u["output_tokens"])
-        except Exception as exc:
-            yield {
-                "type": "error",
-                "error": str(exc),
-                "error_category": categorize_error(exc),
-                "latency_ms": int((time.perf_counter() - started) * 1000),
-            }
-            return
-    finally:
-        if owns_client:
-            await client.aclose()
+        async with client.stream(
+            "POST", url, headers=_anthropic_headers(provider), json=body
+        ) as resp:
+            if resp.status_code >= 400:
+                raw = await resp.aread()
+                body_text = raw.decode("utf-8", errors="replace")
+                yield {
+                    "type": "error",
+                    "error": f"HTTP {resp.status_code}: {body_text[:500]}",
+                    "error_category": categorize_http_status(resp.status_code),
+                    "latency_ms": int((time.perf_counter() - started) * 1000),
+                    "_http_status": resp.status_code,
+                    "_body_text": body_text,
+                }
+                return
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if not payload or payload == "[DONE]":
+                    continue
+                try:
+                    data = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                etype = data.get("type")
+                if etype == "message_start":
+                    u = (data.get("message") or {}).get("usage") or {}
+                    input_tokens = int(u.get("input_tokens") or input_tokens)
+                    output_tokens = int(u.get("output_tokens") or output_tokens)
+                elif etype == "content_block_delta":
+                    delta = data.get("delta") or {}
+                    # Visible text deltas. Extended thinking models emit
+                    # `thinking_delta` separately — treat it as reasoning
+                    # so the UI's reasoning panel populates, mirroring
+                    # OpenAI-compat reasoning_content behaviour.
+                    if delta.get("type") == "text_delta":
+                        text = str(delta.get("text") or "")
+                        if text:
+                            if first_content_at is None:
+                                first_content_at = time.perf_counter()
+                            content_buf.append(text)
+                            yield {"type": "delta", "text": text}
+                    elif delta.get("type") == "thinking_delta":
+                        text = str(delta.get("thinking") or "")
+                        if text:
+                            if first_reasoning_at is None:
+                                first_reasoning_at = time.perf_counter()
+                            reasoning_buf.append(text)
+                            yield {"type": "reasoning", "text": text}
+                elif etype == "message_delta":
+                    u = data.get("usage") or {}
+                    # message_delta emits the cumulative output_tokens.
+                    if "output_tokens" in u:
+                        output_tokens = int(u["output_tokens"])
+    except Exception as exc:
+        yield {
+            "type": "error",
+            "error": str(exc),
+            "error_category": categorize_error(exc),
+            "latency_ms": int((time.perf_counter() - started) * 1000),
+        }
+        return
+    # Note: this helper does NOT own the http client — the outer
+    # _astream_anthropic_chat creates and closes it (so retries reuse the
+    # same connection pool).
 
     latency_ms = int((time.perf_counter() - started) * 1000)
     ttft_ms = int((first_content_at - started) * 1000) if first_content_at else latency_ms
