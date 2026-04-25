@@ -127,6 +127,13 @@
           "modelsCount": "{n} 个模型 · 共 {calls} 次 LLM 调用"
         }
       },
+      "heatmap": {
+        "title": "延迟热力图 · 24h",
+        "hint": "{runs} 次 run · 颜色越深表示该桶 run 越多",
+        "empty": "本时段没有完成的 run · 暂无热力图。",
+        "oldest": "24h 前",
+        "now": "现在"
+      },
       "incidents": {
         "title": "近期失败",
         "count": "{count} 次失败",

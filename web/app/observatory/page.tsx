@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/state";
 import { TraceChip } from "@/components/runs/TraceChip";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { MetricDrawer } from "@/components/observatory/MetricDrawer";
+import { LatencyHeatmap } from "@/components/observatory/LatencyHeatmap";
 import {
   fetchObservatorySummary,
   fetchTraces,
@@ -859,6 +860,14 @@ export default function ObservatoryPage() {
                   <ErrorsPanel rows={summary.top_errors} />
                 </section>
               ) : null}
+
+              {/* LATENCY HEATMAP · Honeycomb-style 24h x latency-bucket grid */}
+              <section>
+                <LatencyHeatmap
+                  cells={summary.latency_heatmap}
+                  buckets={summary.latency_heatmap_buckets_s}
+                />
+              </section>
 
               {/* INCIDENTS */}
               {incidents.length > 0 ? (

@@ -316,6 +316,45 @@ class ObservatoryService:
             for k in sorted(err_counts, key=lambda k: -err_counts[k])
         ]
 
+        # ── 24-hour latency histogram for the heatmap card ──────────────
+        # Inspired by Honeycomb's heatmap-of-duration view. We bucket by
+        # (hour-of-window, log-bucket-of-latency) so the front-end can
+        # render a 24x8 grid showing where the long tails live.
+        # The lookup is local-only — no extra DB roundtrip.
+        latency_hist_buckets: list[float] = [
+            0.5,
+            1.0,
+            2.0,
+            5.0,
+            10.0,
+            30.0,
+            60.0,
+        ]  # seconds; cells: <0.5, <1, <2, <5, <10, <30, <60, >=60
+        # cells[hour_index][bucket_index]
+        n_hours = 24
+        n_lat = len(latency_hist_buckets) + 1
+        cells: list[list[int]] = [[0] * n_lat for _ in range(n_hours)]
+        for e in recent:
+            if e.kind not in ("run.completed", "run.failed"):
+                continue
+            dur = e.payload.get("duration_s")
+            if not isinstance(dur, (int, float)):
+                continue
+            # hour index 0..23 from oldest to newest
+            seconds_into = (e.published_at - day_start).total_seconds()
+            h = int(seconds_into // 3600)
+            if h < 0 or h >= n_hours:
+                continue
+            # bucket index
+            b = n_lat - 1
+            for i, edge in enumerate(latency_hist_buckets):
+                if dur < edge:
+                    b = i
+                    break
+            cells[h][b] += 1
+        latency_heatmap = cells
+        latency_heatmap_buckets_s = list(latency_hist_buckets)
+
         # Previous-period comparison: same 24h window starting 48h ago →
         # ending 24h ago. Lets the UI render a real "vs yesterday" delta.
         prev_start = ts_now - timedelta(hours=48)
@@ -380,6 +419,8 @@ class ObservatoryService:
             by_model=by_model,
             by_tool=by_tool,
             top_errors=top_errors,
+            latency_heatmap=latency_heatmap,
+            latency_heatmap_buckets_s=latency_heatmap_buckets_s,
         )
 
     async def list_traces(

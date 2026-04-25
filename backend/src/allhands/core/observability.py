@@ -127,6 +127,12 @@ class ObservatorySummary(BaseModel):
     by_model: list[ObservatoryModelBreakdown] = Field(default_factory=list)
     by_tool: list[ObservatoryToolBreakdown] = Field(default_factory=list)
     top_errors: list[ObservatoryErrorBreakdown] = Field(default_factory=list)
+    # 24xN latency heatmap (24 hourly columns x N latency buckets) for the
+    # Honeycomb-style "where do my long tails live" panel. cells[h][b] is
+    # the count of runs that landed in hour h with duration < buckets[b]
+    # (last bucket = ≥ buckets[-1]).
+    latency_heatmap: list[list[int]] = Field(default_factory=list)
+    latency_heatmap_buckets_s: list[float] = Field(default_factory=list)
 
 
 class TimeSeriesPoint(BaseModel):

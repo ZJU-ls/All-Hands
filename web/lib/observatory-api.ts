@@ -54,6 +54,8 @@ export type ObservatorySummaryDto = {
   by_model: ObservatoryModelBreakdownDto[];
   by_tool: ObservatoryToolBreakdownDto[];
   top_errors: ObservatoryErrorBreakdownDto[];
+  latency_heatmap: number[][];
+  latency_heatmap_buckets_s: number[];
 };
 
 export type RunTokenUsageDto = {
