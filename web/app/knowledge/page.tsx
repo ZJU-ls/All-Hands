@@ -218,8 +218,7 @@ export default function KnowledgePage() {
       // and embedder rate limits; one-at-a-time keeps the UI honest about
       // what's happening too.
       for (const e of entries) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const file = list.find((_f) => `${e.id.split("-")[2] ?? ""}` === e.name) || list[entries.indexOf(e)];
+        const file = list[entries.indexOf(e)];
         if (!file) continue;
         setUploads((prev) =>
           prev.map((p) => (p.id === e.id ? { ...p, state: "uploading" } : p)),
@@ -756,7 +755,7 @@ export default function KnowledgePage() {
  *   2. 一句话能力简述 (e.g. "✓ 启用了语义检索" / "演示模式 · 检索只能匹配关键词")
  *   3. 数字: "5 段内容 · 来自 2 份资料"
  *
- * 检索权重 / embedder 维度等技术细节都收进设置弹窗的&ldquo;高级&rdquo;分组。
+ * 检索权重 / embedder 维度等技术细节都收进 设置弹窗的"高级"分组。
  */
 function KBInfoCard({
   kb,
@@ -1939,7 +1938,7 @@ function KBSettingsModal({
       {tab === "advanced" && (
         <div className="space-y-4">
           <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] text-text-muted">
-            一般不用动。两个权重控制&ldquo;关键词命中&rdquo;和&ldquo;语义匹配&rdquo;哪个更重要;<br />
+            一般不用动。两个权重控制“关键词命中”和“语义匹配”哪个更重要;<br />
             <span className="font-mono text-[11px]">top k</span> 是每次检索返回的最大段数。
           </p>
           <div className="grid grid-cols-2 gap-4">
@@ -2079,7 +2078,7 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
       ) : (
         <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] text-text-muted">
           输个 query,左边是只看关键词的命中,中间是只看语义的命中,右边是融合后的最终顺序。
-          相同段在三栏的位次差异能告诉你 BM25 和向量哪个更&ldquo;懂&rdquo;这个查询。
+          相同段在三栏的位次差异能告诉你 BM25 和向量哪个更“懂”这个查询。
         </p>
       )}
 
@@ -2256,7 +2255,7 @@ function BasicTab({
             </ul>
             <p className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[11px] text-text-muted">
               <Icon name="info" size={11} className="-mt-px mr-1 inline-block" />
-              切换 KB 的 embedding 模型需要重算所有&ldquo;语义指纹&rdquo;(reindex)·
+              切换 KB 的 embedding 模型需要重算所有“语义指纹”(reindex)·
               v0 暂不支持热切换。要换模型,先删了这个 KB,再用新模型新建。
             </p>
           </>
