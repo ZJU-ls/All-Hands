@@ -70,7 +70,7 @@ async def setup() -> AsyncIterator[tuple[SqlConversationRepo, SqlConversationEve
         created_at=datetime.now(UTC),
         metadata={},
     )
-    async with maker() as session, session.begin():
+    async with maker() as session:
         await SqlEmployeeRepo(session).upsert(emp)
         await SqlConversationRepo(session).create(conv)
 

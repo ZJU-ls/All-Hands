@@ -99,7 +99,7 @@ async def _seed(
     events: list[EventEnvelope] | None = None,
     config: ObservabilityConfig | None = None,
 ) -> None:
-    async with maker() as s, s.begin():
+    async with maker() as s:
         emp_repo = SqlEmployeeRepo(s)
         evt_repo = SqlEventRepo(s)
         cfg_repo = SqlObservabilityConfigRepo(s)
@@ -123,7 +123,7 @@ def _svc(session: AsyncSession) -> ObservatoryService:
 async def test_summary_is_empty_on_fresh_db(
     maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with maker() as s, s.begin():
+    async with maker() as s:
         summary = await _svc(s).get_summary()
     assert summary.traces_total == 0
     assert summary.failure_rate_24h == 0.0
@@ -176,7 +176,7 @@ async def test_summary_aggregates_runs_and_failures(
         ],
     )
 
-    async with maker() as s, s.begin():
+    async with maker() as s:
         summary = await _svc(s).get_summary(now=now)
 
     assert summary.traces_total == 4
@@ -206,7 +206,7 @@ async def test_summary_exposes_bootstrap_status(
             secret_key="sk",
         ),
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         summary = await _svc(s).get_summary()
     assert summary.observability_enabled is True
     assert summary.bootstrap_status == BootstrapStatus.OK
@@ -240,7 +240,7 @@ async def test_list_traces_filter_by_employee_and_status(
             ),
         ],
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         svc = _svc(s)
         only_writer = await svc.list_traces(employee_id="emp-writer")
         only_failed = await svc.list_traces(status="failed")
@@ -269,7 +269,7 @@ async def test_list_traces_limit_is_respected(
             for i in range(20)
         ],
     )
-    async with maker() as s, s.begin():
+    async with maker() as s:
         traces = await _svc(s).list_traces(limit=5)
     assert len(traces) == 5
 
@@ -278,7 +278,7 @@ async def test_list_traces_limit_is_respected(
 async def test_get_trace_returns_none_when_missing(
     maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with maker() as s, s.begin():
+    async with maker() as s:
         assert await _svc(s).get_trace("does-not-exist") is None
 
 
@@ -286,7 +286,7 @@ async def test_get_trace_returns_none_when_missing(
 async def test_bootstrap_now_is_idempotent_noop(
     maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with maker() as s, s.begin():
+    async with maker() as s:
         cfg = await _svc(s).bootstrap_now()
     # v0 MVP: returns pending singleton without touching Langfuse
     assert cfg.bootstrap_status == BootstrapStatus.PENDING

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
+import sqlalchemy as sa
 from sqlalchemy import delete, func, or_, select, update
 
 if TYPE_CHECKING:
@@ -256,14 +257,14 @@ class SqlEmployeeRepo:
             existing.extra_metadata = dict(employee.metadata)
         else:
             self._s.add(_employee_to_row(employee))
-        await self._s.flush()
+        await self._s.commit()
         return employee
 
     async def delete(self, employee_id: str) -> None:
         row = await self._s.get(EmployeeRow, employee_id)
         if row:
             await self._s.delete(row)
-            await self._s.flush()
+            await self._s.commit()
 
 
 class SqlConversationRepo:
@@ -284,7 +285,7 @@ class SqlConversationRepo:
             extra_metadata=dict(conversation.metadata),
         )
         self._s.add(row)
-        await self._s.flush()
+        await self._s.commit()
         return conversation
 
     async def update(self, conversation: Conversation) -> Conversation:
@@ -294,7 +295,7 @@ class SqlConversationRepo:
         row.title = conversation.title
         row.model_ref_override = conversation.model_ref_override
         row.extra_metadata = dict(conversation.metadata)
-        await self._s.flush()
+        await self._s.commit()
         return conversation
 
     async def list_for_employee(self, employee_id: str) -> list[Conversation]:
@@ -343,14 +344,14 @@ class SqlConversationRepo:
             created_at=_naive(message.created_at),
         )
         self._s.add(row)
-        await self._s.flush()
+        await self._s.commit()
         return message
 
     async def delete_messages(self, message_ids: list[str]) -> int:
         if not message_ids:
             return 0
         await self._s.execute(delete(MessageRow).where(MessageRow.id.in_(message_ids)))
-        await self._s.flush()
+        await self._s.commit()
         return len(message_ids)
 
     async def delete(self, conversation_id: str) -> bool:
@@ -374,7 +375,7 @@ class SqlConversationRepo:
         await self._s.execute(
             delete(SkillRuntimeRow).where(SkillRuntimeRow.conversation_id == conversation_id)
         )
-        await self._s.flush()
+        await self._s.commit()
         return True
 
     async def count_messages(self, conversation_ids: list[str]) -> dict[str, int]:
@@ -428,7 +429,7 @@ class SqlConfirmationRepo:
             expires_at=_naive(confirmation.expires_at),
         )
         self._s.add(row)
-        await self._s.flush()
+        await self._s.commit()
 
     async def update_status(self, confirmation_id: str, status: ConfirmationStatus) -> None:
         row = await self._s.get(ConfirmationRow, confirmation_id)
@@ -436,7 +437,7 @@ class SqlConfirmationRepo:
             row.status = status.value
             if status in (ConfirmationStatus.APPROVED, ConfirmationStatus.REJECTED):
                 row.resolved_at = _naive(datetime.now(UTC))
-            await self._s.flush()
+            await self._s.commit()
 
 
 def _row_to_user_input(row: UserInputRow) -> UserInput:
@@ -481,7 +482,7 @@ class SqlUserInputRepo:
             expires_at=_naive(ui.expires_at),
         )
         self._s.add(row)
-        await self._s.flush()
+        await self._s.commit()
 
     async def update_status_with_answers(
         self,
@@ -493,13 +494,13 @@ class SqlUserInputRepo:
         if row is not None:
             row.status = status.value
             row.answers_json = dict(answers)
-            await self._s.flush()
+            await self._s.commit()
 
     async def update_status(self, ui_id: str, status: UserInputStatus) -> None:
         row = await self._s.get(UserInputRow, ui_id)
         if row is not None:
             row.status = status.value
-            await self._s.flush()
+            await self._s.commit()
 
 
 class SqlSkillRepo:
@@ -542,13 +543,13 @@ class SqlSkillRepo:
                     path=skill.path,
                 )
             )
-        await self._s.flush()
+        await self._s.commit()
 
     async def delete(self, skill_id: str) -> None:
         row = await self._s.get(SkillRow, skill_id)
         if row:
             await self._s.delete(row)
-            await self._s.flush()
+            await self._s.commit()
 
 
 class SqlMCPServerRepo:
@@ -590,13 +591,13 @@ class SqlMCPServerRepo:
                     health=server.health.value,
                 )
             )
-        await self._s.flush()
+        await self._s.commit()
 
     async def delete(self, server_id: str) -> None:
         row = await self._s.get(MCPServerRow, server_id)
         if row:
             await self._s.delete(row)
-            await self._s.flush()
+            await self._s.commit()
 
 
 def _row_to_plan(row: AgentPlanRow) -> AgentPlan:
@@ -669,14 +670,14 @@ class SqlAgentPlanRepo:
                     updated_at=_naive(plan.updated_at),
                 )
             )
-        await self._s.flush()
+        await self._s.commit()
         return plan
 
     async def delete(self, plan_id: str) -> None:
         row = await self._s.get(AgentPlanRow, plan_id)
         if row:
             await self._s.delete(row)
-            await self._s.flush()
+            await self._s.commit()
 
 
 def _row_to_provider(row: LLMProviderRow) -> LLMProvider:
@@ -722,14 +723,14 @@ class SqlLLMProviderRepo:
                     enabled=provider.enabled,
                 )
             )
-        await self._s.flush()
+        await self._s.commit()
         return provider
 
     async def delete(self, provider_id: str) -> None:
         row = await self._s.get(LLMProviderRow, provider_id)
         if row:
             await self._s.delete(row)
-            await self._s.flush()
+            await self._s.commit()
 
 
 def _row_to_model(row: LLMModelRow) -> LLMModel:
@@ -793,14 +794,14 @@ class SqlLLMModelRepo:
                     is_default=model.is_default,
                 )
             )
-        await self._s.flush()
+        await self._s.commit()
         return model
 
     async def delete(self, model_id: str) -> None:
         row = await self._s.get(LLMModelRow, model_id)
         if row:
             await self._s.delete(row)
-            await self._s.flush()
+            await self._s.commit()
 
     async def set_default(self, model_id: str) -> LLMModel | None:
         """Atomically promote one model to "the workspace default".
@@ -819,7 +820,7 @@ class SqlLLMModelRepo:
             return None
         await self._s.execute(update(LLMModelRow).values(is_default=False))
         target.is_default = True
-        await self._s.flush()
+        await self._s.commit()
         return _row_to_model(target)
 
 
@@ -893,14 +894,14 @@ class SqlTriggerRepo:
                 setattr(existing, k, v)
         else:
             self._s.add(TriggerRow(**fields))
-        await self._s.flush()
+        await self._s.commit()
         return trigger
 
     async def delete(self, trigger_id: str) -> None:
         row = await self._s.get(TriggerRow, trigger_id)
         if row:
             await self._s.delete(row)
-            await self._s.flush()
+            await self._s.commit()
 
 
 def _row_to_trigger_fire(row: TriggerFireRow) -> TriggerFire:
@@ -957,7 +958,7 @@ class SqlTriggerFireRepo:
                 setattr(existing, k, v)
         else:
             self._s.add(TriggerFireRow(**fields))
-        await self._s.flush()
+        await self._s.commit()
         return fire
 
     async def count_in_window(self, seconds: int) -> int:
@@ -986,6 +987,15 @@ def _row_to_artifact(row: ArtifactRow) -> Artifact:
         conversation_id=row.conversation_id,
         created_at=_utc(row.created_at),
         updated_at=_utc(row.updated_at),
+        # v2 metadata (2026-04-25)
+        description=row.description,
+        summary=row.summary,
+        tags=list(row.tags or []),
+        labels=dict(row.labels or {}),
+        status=row.status if row.status in ("draft", "published", "archived") else "published",  # type: ignore[arg-type]
+        last_accessed_at=_utc(row.last_accessed_at) if row.last_accessed_at else None,
+        view_count=row.view_count or 0,
+        edit_count=row.edit_count or 0,
         extra_metadata=dict(row.extra_metadata or {}),
     )
 
@@ -998,6 +1008,13 @@ def _row_to_artifact_version(row: ArtifactVersionRow) -> ArtifactVersion:
         file_path=row.file_path,
         diff_from_prev=row.diff_from_prev,
         created_at=_utc(row.created_at),
+        # v2 (2026-04-25)
+        change_message=row.change_message,
+        parent_version=row.parent_version,
+        created_by_run_id=row.created_by_run_id,
+        created_by_employee_id=row.created_by_employee_id,
+        created_by_user=row.created_by_user,
+        size_bytes=row.size_bytes or 0,
     )
 
 
@@ -1018,6 +1035,16 @@ class SqlArtifactRepo:
         pinned_only: bool = False,
         include_deleted: bool = False,
         limit: int = 100,
+        # 2026-04-25 v2 — multi-dimensional filtering for /artifacts page
+        # and scope-aware sidebar / employee-tab views.
+        conversation_id: str | None = None,
+        employee_id: str | None = None,
+        status: str | None = None,
+        tag: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        q: str | None = None,
+        sort: str = "updated_at_desc",
     ) -> list[Artifact]:
         stmt = select(ArtifactRow).where(ArtifactRow.workspace_id == workspace_id)
         if not include_deleted:
@@ -1028,10 +1055,52 @@ class SqlArtifactRepo:
             stmt = stmt.where(ArtifactRow.name.like(f"{name_prefix}%"))
         if pinned_only:
             stmt = stmt.where(ArtifactRow.pinned.is_(True))
-        stmt = stmt.order_by(
-            ArtifactRow.pinned.desc(),
-            ArtifactRow.updated_at.desc(),
-        ).limit(limit)
+        if conversation_id is not None:
+            stmt = stmt.where(ArtifactRow.conversation_id == conversation_id)
+        if employee_id is not None:
+            stmt = stmt.where(ArtifactRow.created_by_employee_id == employee_id)
+        if status is not None:
+            stmt = stmt.where(ArtifactRow.status == status)
+        if created_after is not None:
+            stmt = stmt.where(ArtifactRow.created_at >= _naive(created_after))
+        if created_before is not None:
+            stmt = stmt.where(ArtifactRow.created_at <= _naive(created_before))
+        if q:
+            # Search across name + description + summary. SQLite LIKE is
+            # cheap on these short columns; future P2 swaps in FTS5.
+            like = f"%{q}%"
+            stmt = stmt.where(
+                or_(
+                    ArtifactRow.name.like(like),
+                    ArtifactRow.description.like(like),
+                    ArtifactRow.summary.like(like),
+                )
+            )
+        if tag:
+            # SQLite JSON contains: matches any tags entry equal to ``tag``.
+            # ``json_each`` is a builtin table-valued function; we use a
+            # subselect for portability.
+            stmt = stmt.where(
+                sa.text(
+                    "EXISTS (SELECT 1 FROM json_each(artifacts.tags) WHERE json_each.value = :tag)"
+                ).bindparams(tag=tag)
+            )
+
+        # Sort. List-typed so mypy is happy across mixed-typed columns.
+        order: list[Any] = [ArtifactRow.pinned.desc()]
+        if sort == "name_asc":
+            order.append(ArtifactRow.name.asc())
+        elif sort == "name_desc":
+            order.append(ArtifactRow.name.desc())
+        elif sort == "size_desc":
+            order.append(ArtifactRow.size_bytes.desc())
+        elif sort == "created_at_desc":
+            order.append(ArtifactRow.created_at.desc())
+        elif sort == "created_at_asc":
+            order.append(ArtifactRow.created_at.asc())
+        else:  # updated_at_desc default
+            order.append(ArtifactRow.updated_at.desc())
+        stmt = stmt.order_by(*order).limit(limit)
         result = await self._s.execute(stmt)
         return [_row_to_artifact(r) for r in result.scalars().all()]
 
@@ -1068,6 +1137,17 @@ class SqlArtifactRepo:
             existing.created_by_employee_id = artifact.created_by_employee_id
             existing.conversation_id = artifact.conversation_id
             existing.updated_at = _naive(artifact.updated_at)
+            # v2 metadata
+            existing.description = artifact.description
+            existing.summary = artifact.summary
+            existing.tags = list(artifact.tags)
+            existing.labels = dict(artifact.labels)
+            existing.status = artifact.status
+            existing.last_accessed_at = (
+                _naive(artifact.last_accessed_at) if artifact.last_accessed_at else None
+            )
+            existing.view_count = artifact.view_count
+            existing.edit_count = artifact.edit_count
             existing.extra_metadata = dict(artifact.extra_metadata)
         else:
             self._s.add(
@@ -1087,10 +1167,20 @@ class SqlArtifactRepo:
                     conversation_id=artifact.conversation_id,
                     created_at=_naive(artifact.created_at),
                     updated_at=_naive(artifact.updated_at),
+                    description=artifact.description,
+                    summary=artifact.summary,
+                    tags=list(artifact.tags),
+                    labels=dict(artifact.labels),
+                    status=artifact.status,
+                    last_accessed_at=(
+                        _naive(artifact.last_accessed_at) if artifact.last_accessed_at else None
+                    ),
+                    view_count=artifact.view_count,
+                    edit_count=artifact.edit_count,
                     extra_metadata=dict(artifact.extra_metadata),
                 )
             )
-        await self._s.flush()
+        await self._s.commit()
         return artifact
 
     async def soft_delete(self, artifact_id: str, deleted_at: datetime) -> None:
@@ -1128,9 +1218,16 @@ class SqlArtifactRepo:
                 file_path=version.file_path,
                 diff_from_prev=version.diff_from_prev,
                 created_at=_naive(version.created_at),
+                # v2 (2026-04-25)
+                change_message=version.change_message,
+                parent_version=version.parent_version,
+                created_by_run_id=version.created_by_run_id,
+                created_by_employee_id=version.created_by_employee_id,
+                created_by_user=version.created_by_user,
+                size_bytes=version.size_bytes,
             )
         )
-        await self._s.flush()
+        await self._s.commit()
 
 
 def _row_to_event(row: EventRow) -> EventEnvelope:
@@ -1167,7 +1264,7 @@ class SqlEventRepo:
                 workspace_id=event.workspace_id,
             )
         )
-        await self._s.flush()
+        await self._s.commit()
 
     async def list_recent(
         self,
@@ -1339,7 +1436,7 @@ class SqlTaskRepo:
             existing.tokens_used = task.tokens_used
             existing.updated_at = _naive(task.updated_at)
             existing.completed_at = _naive(task.completed_at) if task.completed_at else None
-        await self._s.flush()
+        await self._s.commit()
         return task
 
 
@@ -1362,7 +1459,7 @@ class SqlObservabilityConfigRepo:
                 id=1, bootstrap_status="pending", updated_at=datetime.now(UTC).replace(tzinfo=None)
             )
             self._s.add(row)
-            await self._s.flush()
+            await self._s.commit()
         return ObservabilityConfig(
             public_key=row.public_key,
             secret_key=row.secret_key,
@@ -1398,7 +1495,7 @@ class SqlObservabilityConfigRepo:
         row.bootstrapped_at = _naive(config.bootstrapped_at) if config.bootstrapped_at else None
         row.auto_title_enabled = config.auto_title_enabled
         row.updated_at = now
-        await self._s.flush()
+        await self._s.commit()
         return config
 
 
@@ -1436,13 +1533,13 @@ class SqlSkillRuntimeRepo:
         else:
             row.body = body
             row.updated_at = now
-        await self._s.flush()
+        await self._s.commit()
 
     async def delete(self, conversation_id: str) -> None:
         row = await self._s.get(SkillRuntimeRow, conversation_id)
         if row is not None:
             await self._s.delete(row)
-            await self._s.flush()
+            await self._s.commit()
 
 
 def _row_to_conversation_event(row: ConversationEventRow) -> ConversationEvent:
@@ -1498,7 +1595,7 @@ class SqlConversationEventRepo:
             created_at=_naive(_utc(event.created_at)),
         )
         self._s.add(row)
-        await self._s.flush()
+        await self._s.commit()
         return event
 
     async def list_by_conversation(
@@ -1564,4 +1661,4 @@ class SqlConversationEventRepo:
             .values(is_compacted=True)
         )
         await self._s.execute(stmt)
-        await self._s.flush()
+        await self._s.commit()

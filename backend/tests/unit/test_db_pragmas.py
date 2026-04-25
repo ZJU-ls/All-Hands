@@ -46,9 +46,13 @@ async def test_new_connection_has_busy_timeout_3000(tmp_path: Path) -> None:
         async with engine.connect() as conn:
             row = await conn.exec_driver_sql("PRAGMA busy_timeout")
             value = row.scalar()
-        # Must be the 3 s we installed, not the 5 s Python sqlite3 default
-        # or the 0 ms SQLite stock default.
-        assert value == 3000
+        # 2026-04-25 · bumped to 15s as a safety cushion when chat-side SSE
+        # writers and tool-executor sessions briefly contend for the WAL
+        # writer lock. Was 3000ms; tool-executor writes occasionally hit
+        # the original 3s budget under realistic concurrency. The actual
+        # lock-fix is short-transactions in deps.get_session + repo.commit
+        # per write — the timeout is just defense-in-depth.
+        assert value == 15000
     finally:
         await engine.dispose()
 

@@ -44,30 +44,56 @@ export type ArtifactContentDto = {
   truncated: boolean;
 };
 
-const BINARY: ReadonlySet<ArtifactKind> = new Set([
-  "image",
-  "drawio",
-  "pptx",
-  "video",
-]);
+// drawio is XML text on disk (mxfile), surfaced as `content` like markdown/html.
+// pptx / video remain binary placeholders for forward-compat kinds.
+const BINARY: ReadonlySet<ArtifactKind> = new Set(["image", "pptx", "video"]);
 
 export function isBinaryKind(kind: ArtifactKind): boolean {
   return BINARY.has(kind);
 }
 
-export async function listArtifacts(filter: {
+export type ArtifactSort =
+  | "updated_at_desc"
+  | "created_at_desc"
+  | "created_at_asc"
+  | "name_asc"
+  | "name_desc"
+  | "size_desc";
+
+export type ArtifactListFilter = {
   kind?: ArtifactKind;
   namePrefix?: string;
   pinned?: boolean;
   includeDeleted?: boolean;
   limit?: number;
-} = {}): Promise<ArtifactDto[]> {
+  // 2026-04-25 v2 · multi-dim filters for /artifacts global page.
+  conversationId?: string;
+  employeeId?: string;
+  status?: string;
+  tag?: string;
+  q?: string;
+  sort?: ArtifactSort;
+  createdAfter?: string;
+  createdBefore?: string;
+};
+
+export async function listArtifacts(
+  filter: ArtifactListFilter = {},
+): Promise<ArtifactDto[]> {
   const qs = new URLSearchParams();
   if (filter.kind) qs.set("kind", filter.kind);
   if (filter.namePrefix) qs.set("name_prefix", filter.namePrefix);
   if (filter.pinned) qs.set("pinned", "true");
   if (filter.includeDeleted) qs.set("include_deleted", "true");
   if (filter.limit != null) qs.set("limit", String(filter.limit));
+  if (filter.conversationId) qs.set("conversation_id", filter.conversationId);
+  if (filter.employeeId) qs.set("employee_id", filter.employeeId);
+  if (filter.status) qs.set("status", filter.status);
+  if (filter.tag) qs.set("tag", filter.tag);
+  if (filter.q) qs.set("q", filter.q);
+  if (filter.sort) qs.set("sort", filter.sort);
+  if (filter.createdAfter) qs.set("created_after", filter.createdAfter);
+  if (filter.createdBefore) qs.set("created_before", filter.createdBefore);
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   const res = await fetch(`${BASE}/api/artifacts${suffix}`);
   if (!res.ok) throw new Error(`listArtifacts failed: ${res.status}`);

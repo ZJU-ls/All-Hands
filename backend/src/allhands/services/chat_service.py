@@ -661,6 +661,7 @@ class ChatService:
             plan_repo=self._plan_repo,
             conversation_id=conversation_id,
             user_input_signal=self._user_input_signal,
+            run_id=run_id,
         )
         # ADR 0017 · per-turn thread_id. Claude Code invariant (V02 § 1.3):
         # each query() gets a fresh in-memory messages array; there's no

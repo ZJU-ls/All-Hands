@@ -262,10 +262,21 @@ class ArtifactRow(Base):
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     created_by_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    created_by_employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by_employee_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     conversation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    # 2026-04-25 v2 (Git-style) — see core.Artifact for semantics.
+    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    labels: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), default="published", index=True)
+    last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    edit_count: Mapped[int] = mapped_column(Integer, default=0)
     extra_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
 
 
@@ -282,6 +293,13 @@ class ArtifactVersionRow(Base):
     file_path: Mapped[str] = mapped_column(String(512))
     diff_from_prev: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    # 2026-04-25 v2 — per-version provenance + commit message.
+    change_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    parent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_by_employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by_user: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class EventRow(Base):

@@ -50,7 +50,7 @@ async def session_and_employee():  # type: ignore[no-untyped-def]
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session, session.begin():
+    async with maker() as session:
         emp_repo = SqlEmployeeRepo(session)
         employee = Employee(
             id="emp_lead",

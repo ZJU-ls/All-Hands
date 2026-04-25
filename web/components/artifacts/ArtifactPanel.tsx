@@ -23,7 +23,16 @@ import { ArtifactDetail } from "./ArtifactDetail";
 type LoadState = "loading" | "ok" | "error";
 type StreamConnection = "connecting" | "open" | "error";
 
-export function ArtifactPanel({ onClose }: { onClose: () => void }) {
+export function ArtifactPanel({
+  onClose,
+  conversationId,
+}: {
+  onClose: () => void;
+  // 2026-04-25 v2 · scope chat-side panel to current conversation. Undefined =
+  // workspace-global behaviour (preserved for legacy / tests). The /artifacts
+  // page builds its own list view directly off `listArtifacts({...filter})`.
+  conversationId?: string;
+}) {
   const t = useTranslations("artifacts.panel");
   const [artifacts, setArtifacts] = useState<ArtifactDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -36,7 +45,7 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
 
   const refresh = useCallback(async () => {
     try {
-      const items = await listArtifacts({ limit: 200 });
+      const items = await listArtifacts({ limit: 200, conversationId });
       setArtifacts(items);
       setError(null);
       setState("ok");
@@ -44,7 +53,7 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
       setError(String(e));
       setState((prev) => (prev === "ok" ? "ok" : "error"));
     }
-  }, []);
+  }, [conversationId]);
 
   useEffect(() => {
     void refresh();
@@ -66,6 +75,10 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
     const handleArtifactChanged = async (frame: ArtifactChangedFrame) => {
       const payload = frame.payload;
       if (!payload?.artifact_id || !payload.op) return;
+      // Scope filter (v2): drop frames for artifacts produced by other
+      // conversations. Cross-conversation artifacts still surface globally
+      // via /artifacts; the chat-side panel stays local.
+      if (conversationId && payload.conversation_id !== conversationId) return;
       const artifactId = payload.artifact_id;
 
       if (payload.op === "deleted") {
@@ -114,7 +127,7 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
       cancelled = true;
       source.close();
     };
-  }, [refresh]);
+  }, [refresh, conversationId]);
 
   return (
     <aside

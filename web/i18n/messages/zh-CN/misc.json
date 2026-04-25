@@ -219,6 +219,28 @@
     },
     "mermaid": {
       "renderFailed": "mermaid 渲染失败:{error}"
+    },
+    "drawio": {
+      "title": "drawio 流程图",
+      "loading": "正在加载 drawio 编辑器…"
+    },
+    "page": {
+      "title": "制品库",
+      "subtitle": "全工作区产出的统一视图 · 按类型 · 员工 · 会话 · 标签筛选",
+      "search": "搜索名称 / 描述 / 摘要",
+      "all": "全部",
+      "allKinds": "所有类型",
+      "sort": {
+        "updated_at_desc": "最近更新",
+        "created_at_desc": "最近创建",
+        "created_at_asc": "最早创建",
+        "name_asc": "名称 A-Z",
+        "name_desc": "名称 Z-A",
+        "size_desc": "尺寸大→小"
+      },
+      "empty": "当前筛选下没有制品。",
+      "loadFailed": "制品列表加载失败:{error}",
+      "count": "{n} 个制品"
     }
   },
   "brand": {

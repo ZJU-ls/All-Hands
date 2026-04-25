@@ -406,7 +406,7 @@ async def test_artifacts_stream_emits_ag_ui_envelope(
     assert run_started["data"].get("runId")
 
     # 2. Write an artifact → expect CUSTOM allhands.artifact_changed.
-    async with session_maker() as s, s.begin():
+    async with session_maker() as s:
         svc = ArtifactService(SqlArtifactRepo(s), tmp_path, bus=bus)
         art = await svc.create(name="ag-ui", kind=ArtifactKind.MARKDOWN, content="hi")
 

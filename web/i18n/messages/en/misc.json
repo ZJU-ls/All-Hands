@@ -217,6 +217,28 @@
     },
     "mermaid": {
       "renderFailed": "Mermaid render failed: {error}"
+    },
+    "drawio": {
+      "title": "drawio diagram",
+      "loading": "Loading drawio editor…"
+    },
+    "page": {
+      "title": "Artifacts",
+      "subtitle": "Workspace-wide artifact catalog · filter by kind, employee, conversation, tag",
+      "search": "Search name / description / summary",
+      "all": "All",
+      "allKinds": "All kinds",
+      "sort": {
+        "updated_at_desc": "Recently updated",
+        "created_at_desc": "Newest",
+        "created_at_asc": "Oldest",
+        "name_asc": "Name A-Z",
+        "name_desc": "Name Z-A",
+        "size_desc": "Size large→small"
+      },
+      "empty": "No artifacts match the current filter.",
+      "loadFailed": "Failed to load artifacts: {error}",
+      "count": "{n} artifacts"
     }
   },
   "brand": {
