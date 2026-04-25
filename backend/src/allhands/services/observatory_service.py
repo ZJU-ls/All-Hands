@@ -276,9 +276,7 @@ class ObservatoryService:
                         if 0 <= delta < 600:
                             tool_durations.setdefault(tid, []).append(delta)
         by_tool = []
-        for tid, inv in sorted(
-            tool_invocations.items(), key=lambda kv: -kv[1]
-        ):
+        for tid, inv in sorted(tool_invocations.items(), key=lambda kv: -kv[1]):
             fails = tool_failures.get(tid, 0)
             durs = tool_durations.get(tid, [])
             avg_dur = round(sum(durs) / len(durs), 3) if durs else 0.0
@@ -373,9 +371,7 @@ class ObservatoryService:
             since=prev_start,
         )
         prev_recent = [e for e in prev_recent if e.published_at < prev_end]
-        prev_runs = sum(
-            1 for e in prev_recent if e.kind in ("run.completed", "run.failed")
-        )
+        prev_runs = sum(1 for e in prev_recent if e.kind in ("run.completed", "run.failed"))
         prev_failed = sum(1 for e in prev_recent if e.kind == "run.failed")
         prev_failure_rate = (prev_failed / prev_runs) if prev_runs else 0.0
         prev_durations = [
@@ -392,9 +388,7 @@ class ObservatoryService:
                 ti = int(tok.get("input", 0) or 0)
                 to = int(tok.get("output", 0) or 0)
             mr = e.payload.get("model_ref")
-            prev_cost += estimate_cost_usd(
-                mr if isinstance(mr, str) else None, ti, to
-            )
+            prev_cost += estimate_cost_usd(mr if isinstance(mr, str) else None, ti, to)
 
         def _pct(curr: float, prev: float) -> float | None:
             if prev <= 0:
@@ -847,9 +841,7 @@ class ObservatoryService:
             if isinstance(lc, int):
                 llm_calls[idx] += lc
             mr = payload.get("model_ref")
-            cost[idx] += estimate_cost_usd(
-                mr if isinstance(mr, str) else None, ti, to
-            )
+            cost[idx] += estimate_cost_usd(mr if isinstance(mr, str) else None, ti, to)
 
         unit_by_metric = {
             "runs": "",

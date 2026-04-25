@@ -91,9 +91,7 @@ async def get_series(
     the user clicks a metric and we show the consumption curve over the
     selected time window.
     """
-    series = await svc.get_series(
-        metric=metric, since=since, until=until, bucket=bucket
-    )
+    series = await svc.get_series(metric=metric, since=since, until=until, bucket=bucket)
     return series.model_dump(mode="json")
 
 
