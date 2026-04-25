@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import {
   createEmployee,
   previewEmployeeComposition,
@@ -71,6 +72,25 @@ export function DesignForm({
     "idle",
   );
   const [composeError, setComposeError] = useState<string | null>(null);
+  // Edit / preview toggle. During streaming we force preview (you can't
+  // render markdown in a textarea); when streaming ends we leave the user
+  // wherever they were so they can keep iterating in either mode.
+  const [promptView, setPromptView] = useState<"edit" | "preview">("edit");
+  const previewRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-scroll preview / textarea to the bottom while chunks are landing.
+  // Without this the user sees the cursor "fall off the bottom" and the
+  // streaming feels inert. Triggers on every systemPrompt update; the
+  // browser collapses successive layout writes so it's cheap.
+  useEffect(() => {
+    if (composeState !== "loading") return;
+    if (promptView === "preview" && previewRef.current) {
+      previewRef.current.scrollTop = previewRef.current.scrollHeight;
+    } else if (textareaRef.current) {
+      textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+    }
+  }, [systemPrompt, composeState, promptView]);
 
   const canSave = name.trim().length > 0 && !busy;
 
@@ -82,6 +102,10 @@ export function DesignForm({
     setComposeState("loading");
     setComposeError(null);
     setSystemPrompt("");
+    // While streaming, preview is the only mode that makes sense — markdown
+    // can't render in a textarea, and the user wants to *see* the prompt
+    // shape, not the raw chars.
+    setPromptView("preview");
     try {
       const res = await fetch("/api/employees/compose-prompt", {
         method: "POST",
@@ -273,31 +297,98 @@ export function DesignForm({
           <p className="text-[11px] text-text-muted">
             员工性格 / 风格 / 禁止事项 — 也可以让 AI 根据上方的名字 / 描述 / 技能 / MCP 起草一份
           </p>
-          <button
-            type="button"
-            onClick={() => void composePrompt()}
-            disabled={composeState === "loading"}
-            data-testid="compose-prompt-trigger"
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-primary/30 bg-primary/5 text-[11px] font-medium text-primary hover:bg-primary/10 hover:border-primary/50 disabled:opacity-50 transition-colors duration-fast shrink-0"
-            title="根据当前表单内容,用 AI 起草一份系统提示词(会覆盖现有内容)"
-          >
-            <Icon
-              name={composeState === "loading" ? "loader" : "sparkles"}
-              size={11}
-              className={composeState === "loading" ? "animate-spin-slow" : ""}
-            />
-            {composeState === "loading" ? "生成中…" : "AI 生成"}
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Edit / preview toggle. Forced to "preview" while streaming
+                because the textarea can't render markdown — the user
+                wants to see the prompt shape forming live. */}
+            <div
+              role="tablist"
+              aria-label="编辑或预览"
+              className="inline-flex h-7 rounded-md border border-border bg-surface-2 p-0.5"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={promptView === "edit"}
+                onClick={() => setPromptView("edit")}
+                disabled={composeState === "loading"}
+                data-testid="prompt-view-edit"
+                className={
+                  "inline-flex items-center h-6 px-2 rounded text-[11px] font-medium transition-colors duration-fast disabled:opacity-50 " +
+                  (promptView === "edit"
+                    ? "bg-surface text-text shadow-soft-sm"
+                    : "text-text-muted hover:text-text")
+                }
+              >
+                编辑
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={promptView === "preview"}
+                onClick={() => setPromptView("preview")}
+                data-testid="prompt-view-preview"
+                className={
+                  "inline-flex items-center h-6 px-2 rounded text-[11px] font-medium transition-colors duration-fast " +
+                  (promptView === "preview"
+                    ? "bg-surface text-text shadow-soft-sm"
+                    : "text-text-muted hover:text-text")
+                }
+              >
+                预览
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => void composePrompt()}
+              disabled={composeState === "loading"}
+              data-testid="compose-prompt-trigger"
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-primary/30 bg-primary/5 text-[11px] font-medium text-primary hover:bg-primary/10 hover:border-primary/50 disabled:opacity-50 transition-colors duration-fast shrink-0"
+              title="根据当前表单内容,用 AI 起草一份系统提示词(会覆盖现有内容)"
+            >
+              <Icon
+                name={composeState === "loading" ? "loader" : "sparkles"}
+                size={11}
+                className={composeState === "loading" ? "animate-spin-slow" : ""}
+              />
+              {composeState === "loading" ? "生成中…" : "AI 生成"}
+            </button>
+          </div>
         </div>
-        <textarea
-          data-testid="field-system-prompt"
-          value={systemPrompt}
-          onChange={(e) => setSystemPrompt(e.target.value)}
-          rows={8}
-          placeholder="员工性格 / 风格 / 禁止事项"
-          disabled={composeState === "loading"}
-          className="w-full rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-70 transition-colors duration-base"
-        />
+        {promptView === "edit" ? (
+          <textarea
+            ref={textareaRef}
+            data-testid="field-system-prompt"
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
+            rows={8}
+            placeholder="员工性格 / 风格 / 禁止事项"
+            disabled={composeState === "loading"}
+            className="w-full rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-70 transition-colors duration-base"
+          />
+        ) : (
+          <div
+            ref={previewRef}
+            data-testid="prompt-preview"
+            className="w-full min-h-[180px] max-h-[400px] overflow-y-auto rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text"
+          >
+            {systemPrompt ? (
+              <AgentMarkdown
+                content={systemPrompt}
+                className="ah-prose ah-prose-sm max-w-none"
+              />
+            ) : composeState === "loading" ? (
+              <p className="text-[11px] text-text-muted">等待第一段输出…</p>
+            ) : (
+              <p className="text-[11px] text-text-subtle italic">
+                暂无内容 — 切到「编辑」手写,或点「AI 生成」
+              </p>
+            )}
+          </div>
+        )}
+        {/* Hidden textarea keeps the value in the form even while we're
+            on the preview tab; submit reads from `systemPrompt` state so
+            this is only a visual fallback for older a11y tools. */}
         {composeState === "error" && composeError && (
           <p className="mt-1.5 text-[11px] text-danger" data-testid="compose-prompt-error">
             生成失败:{composeError}

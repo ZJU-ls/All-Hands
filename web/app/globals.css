@@ -252,3 +252,31 @@ body {
   border-radius: 6px;
   border: 1px solid var(--color-border);
 }
+
+/* ----------------------------------------------------------------------
+ * Compact ah-prose variant — for embedding markdown inside forms /
+ * sidebars / chips where the surrounding scale is 12px, not the chat
+ * surface's 14-15px. Use it together with `.ah-prose`:
+ *   <div class="ah-prose ah-prose-sm">…</div>
+ * Headings, body, code all step down one notch and lose vertical air
+ * so the rendered prose blends with form labels instead of fighting
+ * them. Tables / images stay default — they're rare in this context
+ * and shrinking them past readable kills information density.
+ * -------------------------------------------------------------------- */
+.ah-prose-sm { font-size: 12px; line-height: 1.65; }
+.ah-prose-sm > * + * { margin-top: 0.55rem; }
+.ah-prose-sm h1 { font-size: 14px; }
+.ah-prose-sm h2 { font-size: 13px; }
+.ah-prose-sm h3 { font-size: 12.5px; }
+.ah-prose-sm h4 { font-size: 11.5px; }
+.ah-prose-sm > h1 + *, .ah-prose-sm > h2 + *,
+.ah-prose-sm > h3 + *, .ah-prose-sm > h4 + * {
+  margin-top: 0.3rem;
+}
+.ah-prose-sm p,
+.ah-prose-sm ul,
+.ah-prose-sm ol { font-size: 12px; }
+.ah-prose-sm ul, .ah-prose-sm ol { padding-left: 1.1rem; }
+.ah-prose-sm li + li { margin-top: 0.15rem; }
+.ah-prose-sm pre { font-size: 11px; padding: 0.5rem 0.65rem; }
+.ah-prose-sm hr { margin: 0.6rem 0; }
