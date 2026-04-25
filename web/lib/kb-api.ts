@@ -42,6 +42,73 @@ export interface DocumentDto {
   updated_at: string;
 }
 
+export interface DiagnoseDto {
+  bm25_only: ScoredChunkDto[];
+  vector_only: ScoredChunkDto[];
+  hybrid: ScoredChunkDto[];
+}
+
+export async function diagnoseSearch(
+  kbId: string,
+  query: string,
+  topK = 8,
+): Promise<DiagnoseDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/search/diagnose`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query, top_k: topK }),
+    }),
+    "diagnoseSearch",
+  );
+}
+
+export interface KBStatsDto {
+  count: number;
+  avg_latency_ms: number | null;
+  recent: Array<{
+    at: string;
+    query: string;
+    latency_ms: number;
+    hits: number;
+  }>;
+}
+
+export async function getKBStats(kbId: string): Promise<KBStatsDto> {
+  return check(await fetch(`${BASE}/api/kb/${kbId}/stats`), "getKBStats");
+}
+
+export interface DocumentChunkDto {
+  id: number;
+  ordinal: number;
+  text: string;
+  token_count: number;
+  section_path: string | null;
+  span_start: number;
+  span_end: number;
+  page: number | null;
+}
+
+export async function listDocumentChunks(
+  kbId: string,
+  docId: string,
+): Promise<DocumentChunkDto[]> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/documents/${docId}/chunks`),
+    "listDocumentChunks",
+  );
+}
+
+export async function getDocumentText(
+  kbId: string,
+  docId: string,
+): Promise<string> {
+  const r = await fetch(`${BASE}/api/kb/${kbId}/documents/${docId}/text`);
+  if (!r.ok) throw new Error(`getDocumentText failed (${r.status})`);
+  const j = (await r.json()) as { content: string };
+  return j.content;
+}
+
 export interface ScoredChunkDto {
   chunk_id: number;
   document_id: string;
