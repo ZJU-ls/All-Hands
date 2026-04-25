@@ -86,7 +86,7 @@ export function EmptyState({
               <button
                 type="button"
                 onClick={action.onClick}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg shadow-soft-sm transition-colors duration-base hover:bg-primary-hover hover:-translate-y-px"
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg shadow-soft-sm transition-colors duration-base hover:bg-primary-hover hover:-translate-y-px focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
               >
                 {action.icon && <Icon name={action.icon} size={14} />}
                 {action.label}
@@ -96,7 +96,7 @@ export function EmptyState({
               <button
                 type="button"
                 onClick={secondaryAction.onClick}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-4 py-2 text-sm text-text-muted transition-colors duration-base hover:border-border-strong hover:text-text hover:bg-surface-2"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-4 py-2 text-sm text-text-muted transition-colors duration-base hover:border-border-strong hover:text-text hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary/40"
               >
                 {secondaryAction.icon && (
                   <Icon name={secondaryAction.icon} size={14} />

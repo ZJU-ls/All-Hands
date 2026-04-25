@@ -196,7 +196,7 @@ function RowIconButton({
       aria-label={label}
       title={label}
       data-testid={testId}
-      className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-fast disabled:opacity-40 disabled:pointer-events-none ${toneCls}`}
+      className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-fast disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${toneCls}`}
     >
       <Icon name={icon} size={13} />
     </button>
