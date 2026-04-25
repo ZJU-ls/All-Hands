@@ -32,7 +32,7 @@
       "send": "Send",
       "thinking": "Deep thinking",
       "thinkingTooltipOn": "On · model thinks (sends thinking: enabled)",
-      "thinkingTooltipOff": "Off · model does not think (sends thinking: disabled). If the upstream proxy does not recognise the field, it returns an empty response and the dialog will suggest switching providers"
+      "thinkingTooltipOff": "Off · model does not think (sends thinking: disabled). If the upstream proxy doesn't recognize the field it'll return an empty response, and the dialog will suggest swapping providers."
     },
     "header": {
       "loading": "Loading…",

@@ -27,6 +27,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
@@ -53,13 +54,6 @@ import {
   updateRetrievalConfig,
   uploadDocument,
 } from "@/lib/kb-api";
-
-const STATE_FILTERS = [
-  { value: "", label: "全部状态" },
-  { value: "ready", label: "Ready" },
-  { value: "indexing", label: "Indexing" },
-  { value: "failed", label: "Failed" },
-];
 
 const SECTION_LABEL =
   "font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle";
@@ -115,6 +109,11 @@ function MimeBadge({ mime }: { mime: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function KnowledgePage() {
+  const t = useTranslations("knowledge");
+  const tToolbar = useTranslations("knowledge.toolbar");
+  const tSidebar = useTranslations("knowledge.sidebar");
+  const tDelete = useTranslations("knowledge.delete");
+
   const [kbs, setKbs] = useState<KBDto[] | null>(null);
   const [activeKb, setActiveKb] = useState<KBDto | null>(null);
   const [docs, setDocs] = useState<DocumentDto[] | null>(null);
@@ -132,6 +131,16 @@ export default function KnowledgePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [openDoc, setOpenDoc] = useState<DocumentDto | null>(null);
+
+  const stateFilters = useMemo(
+    () => [
+      { value: "", label: tToolbar("stateAll") },
+      { value: "ready", label: tToolbar("stateReady") },
+      { value: "indexing", label: tToolbar("stateIndexing") },
+      { value: "failed", label: tToolbar("stateFailed") },
+    ],
+    [tToolbar],
+  );
 
   async function refreshKbs(preserve?: KBDto | null) {
     try {
@@ -160,6 +169,7 @@ export default function KnowledgePage() {
     listEmbeddingModels()
       .then(setModels)
       .catch((e) => setError(String(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -170,6 +180,7 @@ export default function KnowledgePage() {
       setCommittedQuery("");
       setResults(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKb?.id]);
 
   async function handleUpload(file: File) {
@@ -208,7 +219,7 @@ export default function KnowledgePage() {
 
   async function handleDeleteDoc(d: DocumentDto) {
     if (!activeKb) return;
-    if (!confirm(`确认删除 "${d.title}"?(软删,30 天可恢复)`)) return;
+    if (!confirm(tDelete("confirm", { title: d.title }))) return;
     try {
       await deleteDocument(activeKb.id, d.id);
       setOpenDoc(null);
@@ -225,9 +236,9 @@ export default function KnowledgePage() {
       (kbs ?? []).map((k) => ({
         value: k.id,
         label: k.name,
-        hint: `${k.document_count} docs`,
+        hint: tToolbar("kbCount", { count: k.document_count }),
       })),
-    [kbs],
+    [kbs, tToolbar],
   );
 
   // Document filter (state)
@@ -245,8 +256,8 @@ export default function KnowledgePage() {
     <AppShell>
       <div className="flex h-full flex-col gap-4 p-6">
         <PageHeader
-          title="知识库"
-          subtitle="把资料存进来 · 自己搜得到 · 员工也能引用回答"
+          title={t("title")}
+          subtitle={t("subtitle")}
           count={kbs?.length ?? 0}
         />
 
@@ -257,7 +268,7 @@ export default function KnowledgePage() {
               type="button"
               onClick={() => setError(null)}
               className="ml-3 text-text-subtle hover:text-text"
-              aria-label="dismiss"
+              aria-label={t("dismiss")}
             >
               ✕
             </button>
@@ -274,19 +285,19 @@ export default function KnowledgePage() {
                 if (k) setActiveKb(k);
               }}
               options={kbSelectOptions}
-              placeholder="选择 KB"
+              placeholder={tToolbar("kbSelectPlaceholder")}
               className="min-w-[200px]"
               triggerClassName="h-9 rounded-xl"
-              ariaLabel="选择知识库"
+              ariaLabel={tToolbar("kbSelectAria")}
             />
             <button
               type="button"
               onClick={() => setShowCreate(true)}
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
-              aria-label="新建 KB"
+              aria-label={tToolbar("newKbAria")}
             >
               <Icon name="plus" size={13} />
-              <span>新建 KB</span>
+              <span>{tToolbar("newKb")}</span>
             </button>
 
             {/* Search bar */}
@@ -306,8 +317,8 @@ export default function KnowledgePage() {
                 }}
                 placeholder={
                   activeKb
-                    ? `搜 ${activeKb.name} 里的内容…`
-                    : "选个 KB 再搜"
+                    ? tToolbar("searchPlaceholder", { kb: activeKb.name })
+                    : tToolbar("searchPlaceholderEmpty")
                 }
                 disabled={!activeKb}
                 className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-20 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
@@ -317,7 +328,7 @@ export default function KnowledgePage() {
                   type="button"
                   onClick={handleClearSearch}
                   className="absolute right-12 top-1/2 -translate-y-1/2 text-[11px] text-text-subtle hover:text-text"
-                  aria-label="清除"
+                  aria-label={tToolbar("clearSearch")}
                 >
                   ✕
                 </button>
@@ -328,17 +339,17 @@ export default function KnowledgePage() {
                 disabled={searching || !searchQuery.trim() || !activeKb}
                 className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
               >
-                {searching ? "…" : "Search"}
+                {searching ? tToolbar("searchEllipsis") : tToolbar("search")}
               </button>
             </div>
 
             <Select
               value={stateFilter}
               onChange={setStateFilter}
-              options={STATE_FILTERS}
+              options={stateFilters}
               className="min-w-[120px]"
               triggerClassName="h-9 rounded-xl"
-              ariaLabel="状态过滤"
+              ariaLabel={tToolbar("stateFilterAria")}
             />
 
             <label
@@ -349,7 +360,7 @@ export default function KnowledgePage() {
               }`}
             >
               <Icon name="upload" size={13} />
-              {uploading ? "Uploading…" : "上传"}
+              {uploading ? tToolbar("uploading") : tToolbar("upload")}
               <input
                 type="file"
                 disabled={!activeKb || uploading}
@@ -369,10 +380,13 @@ export default function KnowledgePage() {
           {/* ─ Left aside */}
           <aside className="col-span-12 flex min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3">
             {pageState === "loading" && (
-              <LoadingState title="加载中" description="读取 KB 列表 · embedder 信息" />
+              <LoadingState
+                title={tSidebar("loadingTitle")}
+                description={tSidebar("loadingDesc")}
+              />
             )}
             {pageState === "error" && (
-              <ErrorState title={error || "加载失败"} />
+              <ErrorState title={error || t("loadFailed")} />
             )}
             {pageState === "ok" && activeKb && (
               <>
@@ -386,10 +400,10 @@ export default function KnowledgePage() {
             )}
             {pageState === "ok" && !activeKb && kbs && kbs.length === 0 && (
               <EmptyState
-                title="工作区还没有知识库"
-                description="新建一个 KB,开始把笔记 / PDF / 网页 clip 沉淀进来。"
+                title={tSidebar("emptyTitle")}
+                description={tSidebar("emptyDesc")}
                 action={{
-                  label: "新建知识库",
+                  label: tSidebar("emptyAction"),
                   onClick: () => setShowCreate(true),
                   icon: "plus",
                 }}
@@ -402,7 +416,7 @@ export default function KnowledgePage() {
           <main className="col-span-12 flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:col-span-9">
             {pageState === "ok" && !activeKb ? (
               <div className="flex h-full items-center justify-center px-6 py-12 text-[12px] text-text-muted">
-                先在工具栏左侧选择一个知识库
+                {tSidebar("pickKbHint")}
               </div>
             ) : pageState !== "ok" ? null : committedQuery ? (
               <SearchResultsView
@@ -423,7 +437,7 @@ export default function KnowledgePage() {
                 onUpload={() => {
                   // Trigger the toolbar upload — fastest path is to focus the
                   // hidden input, but simpler: surface a hint.
-                  setError("点右上角「上传」按钮添加文档");
+                  setError(t("uploadHint"));
                   setTimeout(() => setError(null), 2500);
                 }}
               />
@@ -504,6 +518,7 @@ function KBInfoCard({
   kb: KBDto;
   onOpenSettings: () => void;
 }) {
+  const t = useTranslations("knowledge.kb");
   const isMock = kb.embedding_model_ref.startsWith("mock:");
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
@@ -521,8 +536,8 @@ function KBInfoCard({
         <button
           type="button"
           onClick={onOpenSettings}
-          aria-label="知识库设置"
-          title="设置"
+          aria-label={t("settingsAria")}
+          title={t("settingsTitle")}
           className="grid h-7 w-7 place-items-center rounded-lg border border-border bg-surface text-text-subtle hover:border-border-strong hover:text-text transition duration-fast"
         >
           <Icon name="settings" size={12} />
@@ -533,12 +548,12 @@ function KBInfoCard({
       <div className="mt-3 flex items-baseline gap-3 text-[13px] text-text">
         <span>
           <span className="font-semibold">{kb.document_count}</span>
-          <span className="ml-1 text-text-muted">份资料</span>
+          <span className="ml-1 text-text-muted">{t("docCountUnit")}</span>
         </span>
         <span className="text-text-subtle">·</span>
         <span>
           <span className="font-semibold">{kb.chunk_count}</span>
-          <span className="ml-1 text-text-muted">段内容</span>
+          <span className="ml-1 text-text-muted">{t("chunkCountUnit")}</span>
         </span>
       </div>
 
@@ -551,17 +566,17 @@ function KBInfoCard({
         >
           <div className="flex items-center gap-1.5 font-medium">
             <Icon name="alert-triangle" size={12} />
-            <span>当前是演示模式</span>
+            <span>{t("demoMode")}</span>
           </div>
           <p className="mt-1 text-[11px] leading-relaxed">
-            检索只能匹配关键词,不懂语义近义词。
-            <span className="underline">点这里换成真实模型 →</span>
+            {t("demoModeDetail")}
+            <span className="underline">{t("demoModeCta")}</span>
           </p>
         </button>
       ) : (
         <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-success/30 bg-success-soft px-3 py-2 text-[12px] text-success">
           <Icon name="check" size={12} />
-          <span>已启用语义检索</span>
+          <span>{t("semanticEnabled")}</span>
         </div>
       )}
     </div>
@@ -569,24 +584,25 @@ function KBInfoCard({
 }
 
 function TagsCard({ docs }: { docs: DocumentDto[] }) {
+  const t = useTranslations("knowledge.tags");
   const tags = useMemo(() => {
     const counts = new Map<string, number>();
     for (const d of docs) {
-      for (const t of d.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
+      for (const tag of d.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
     }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [docs]);
   if (tags.length === 0) return null;
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <div className={SECTION_LABEL}>Tags</div>
+      <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {tags.map(([t, n]) => (
+        {tags.map(([tag, n]) => (
           <span
-            key={t}
+            key={tag}
             className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted"
           >
-            <span>#{t}</span>
+            <span>#{tag}</span>
             <span className="font-mono text-[10px] text-text-subtle">{n}</span>
           </span>
         ))}
@@ -596,15 +612,19 @@ function TagsCard({ docs }: { docs: DocumentDto[] }) {
 }
 
 function ToolsCard() {
+  const t = useTranslations("knowledge.tools");
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
       <div className="flex items-center gap-1.5 text-[12px] font-semibold text-text">
         <Icon name="users" size={13} className="text-primary" />
-        让员工帮你查
+        {t("title")}
       </div>
       <p className="mt-1.5 text-[12px] leading-relaxed text-text-muted">
-        在「员工」页给某个员工加上「<span className="text-text">知识库研究员</span>」技能,
-        TA 在对话里就能搜这个 KB 并引用原文回答你。
+        {t.rich("body", {
+          skill: () => (
+            <span className="text-text">{t("skillName")}</span>
+          ),
+        })}
       </p>
     </div>
   );
@@ -627,14 +647,15 @@ function DocumentsView({
   onClickDoc: (d: DocumentDto) => void;
   onUpload: () => void;
 }) {
+  const t = useTranslations("knowledge.docs");
   if (allDocsCount === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-12">
         <EmptyState
-          title="知识库为空"
-          description="上传第一份文档(支持 md / pdf / docx / html / txt)。Agent 会自动解析、切片、嵌入,数秒内可检索。"
+          title={t("emptyTitle")}
+          description={t("emptyDesc")}
           action={{
-            label: "上传文档",
+            label: t("emptyAction"),
             onClick: onUpload,
             icon: "upload",
           }}
@@ -646,16 +667,16 @@ function DocumentsView({
   if (docs.length === 0 && hasFilter) {
     return (
       <div className="flex h-full items-center justify-center px-6 py-12 text-[12px] text-text-muted">
-        当前过滤器没有命中任何文档
+        {t("noFilterMatch")}
       </div>
     );
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <div className={SECTION_LABEL}>Documents</div>
+        <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
         <span className="font-mono text-[10px] text-text-subtle">
-          {docs.length} / {allDocsCount}
+          {t("countOf", { visible: docs.length, total: allDocsCount })}
         </span>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -676,12 +697,12 @@ function DocumentsView({
               </div>
               {d.tags.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {d.tags.slice(0, 3).map((t) => (
+                  {d.tags.slice(0, 3).map((tag) => (
                     <span
-                      key={t}
+                      key={tag}
                       className="rounded-full bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle"
                     >
-                      #{t}
+                      #{tag}
                     </span>
                   ))}
                 </div>
@@ -689,9 +710,14 @@ function DocumentsView({
             </div>
             <div className="flex items-center justify-between font-mono text-[10px] text-text-subtle">
               <span>
-                🧩 {d.chunk_count} chunks · v{d.version}
+                {t("chunkSummary", {
+                  chunks: d.chunk_count,
+                  version: d.version,
+                })}
               </span>
-              <span>{(d.size_bytes / 1024).toFixed(1)} KB</span>
+              <span>
+                {t("sizeKb", { kb: (d.size_bytes / 1024).toFixed(1) })}
+              </span>
             </div>
             {d.state_error && (
               <div className="rounded-md border border-danger/30 bg-danger-soft px-2 py-1 text-[10px] text-danger">
@@ -720,31 +746,37 @@ function SearchResultsView({
   searching: boolean;
   onChunkClick: (docId: string) => void;
 }) {
+  const t = useTranslations("knowledge.search");
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <Icon name="search" size={13} className="text-text-subtle" />
-          <div className={SECTION_LABEL}>Search Results</div>
+          <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
           <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
             “{query}”
           </span>
         </div>
         {results && (
           <span className="font-mono text-[10px] text-text-subtle">
-            {results.length} hit{results.length !== 1 ? "s" : ""}
+            {results.length === 1
+              ? t("hits", { count: results.length })
+              : t("hitsPlural", { count: results.length })}
           </span>
         )}
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
         {searching && (
           <div className="flex h-full items-center justify-center">
-            <LoadingState title="检索中…" description="正在并发匹配关键词和语义" />
+            <LoadingState
+              title={t("loadingTitle")}
+              description={t("loadingDesc")}
+            />
           </div>
         )}
         {!searching && results && results.length === 0 && (
           <div className="flex h-full items-center justify-center text-[12px] text-text-muted">
-            没有命中 · 试试更具体的关键词,或把 BM25 / vector 权重调一下
+            {t("noResults")}
           </div>
         )}
         {!searching &&
@@ -765,17 +797,17 @@ function SearchResultsView({
                   </span>
                   {r.bm25_rank != null && (
                     <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      BM25 #{r.bm25_rank}
+                      {t("bm25Rank", { rank: r.bm25_rank })}
                     </span>
                   )}
                   {r.vector_rank != null && (
                     <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      vec #{r.vector_rank}
+                      {t("vecRank", { rank: r.vector_rank })}
                     </span>
                   )}
                 </div>
                 <div className="flex flex-col items-end font-mono text-[10px] text-text-subtle">
-                  <span>score</span>
+                  <span>{t("scoreLabel")}</span>
                   <span className="text-[12px] text-text">
                     {r.score.toFixed(4)}
                   </span>
@@ -811,6 +843,7 @@ function ModalShell({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
+  const t = useTranslations("knowledge.modal");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/60 backdrop-blur-sm">
       <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-lg">
@@ -820,7 +853,7 @@ function ModalShell({
             type="button"
             onClick={onClose}
             className="text-text-subtle hover:text-text"
-            aria-label="关闭"
+            aria-label={t("closeAria")}
           >
             ✕
           </button>
@@ -847,6 +880,7 @@ function CreateKBModal({
   onCreated: (kb: KBDto) => void;
   onError: (msg: string) => void;
 }) {
+  const t = useTranslations("knowledge.create");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [modelRef, setModelRef] = useState(
@@ -859,7 +893,7 @@ function CreateKBModal({
   const modelOptions = models.map((m) => ({
     value: m.ref,
     label: m.label,
-    hint: `${m.dim}d`,
+    hint: t("embeddingHintDim", { dim: m.dim }),
     disabled: !m.available,
   }));
 
@@ -882,7 +916,7 @@ function CreateKBModal({
 
   return (
     <ModalShell
-      title="新建知识库"
+      title={t("title")}
       onClose={onClose}
       footer={
         <>
@@ -891,7 +925,7 @@ function CreateKBModal({
             onClick={onClose}
             className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
           >
-            取消
+            {t("cancel")}
           </button>
           <button
             type="button"
@@ -899,43 +933,43 @@ function CreateKBModal({
             disabled={!name.trim() || submitting}
             className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
           >
-            {submitting ? "创建中…" : "创建"}
+            {submitting ? t("submitting") : t("submit")}
           </button>
         </>
       }
     >
       <div className="space-y-4">
-        <Field label="名称">
+        <Field label={t("fieldName")}>
           <input
             type="text"
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Personal Brain"
+            placeholder={t("namePlaceholder")}
             className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
           />
         </Field>
-        <Field label="描述(可选)">
+        <Field label={t("fieldDescription")}>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            placeholder="存什么 · 给谁看 · 任何对未来你有用的备注"
+            placeholder={t("descriptionPlaceholder")}
             className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none resize-none"
           />
         </Field>
-        <Field label="Embedding model">
+        <Field label={t("fieldEmbedding")}>
           <Select
             value={modelRef}
             onChange={setModelRef}
             options={modelOptions}
-            placeholder="选择 embedder"
+            placeholder={t("embeddingPlaceholder")}
             className="w-full"
             triggerClassName="h-9 rounded-xl"
-            ariaLabel="Embedding model"
+            ariaLabel={t("embeddingAria")}
           />
           <p className="mt-1 font-mono text-[10px] text-text-subtle">
-            灰色项缺少 API key · 在 .env 配置后启用 · 切换需 reindex
+            {t("embeddingHelp")}
           </p>
         </Field>
       </div>
@@ -966,6 +1000,9 @@ function KBSettingsModal({
   onError: (msg: string) => void;
 }) {
   type Tab = "basic" | "advanced" | "diagnose" | "danger";
+  const t = useTranslations("knowledge.settings");
+  const tTabs = useTranslations("knowledge.settings.tabs");
+  const tAdv = useTranslations("knowledge.advanced");
   const [tab, setTab] = useState<Tab>("basic");
 
   // Advanced state
@@ -976,9 +1013,19 @@ function KBSettingsModal({
   const [saving, setSaving] = useState(false);
 
   const rerankerOptions = [
-    { value: "none", label: "标准融合(默认)" },
-    { value: "bge-base", label: "bge-base — 二次排序", disabled: true, hint: "M3" },
-    { value: "cohere", label: "Cohere rerank", disabled: true, hint: "M3" },
+    { value: "none", label: tAdv("rerankerNone") },
+    {
+      value: "bge-base",
+      label: tAdv("rerankerBge"),
+      disabled: true,
+      hint: tAdv("rerankerHintM3"),
+    },
+    {
+      value: "cohere",
+      label: tAdv("rerankerCohere"),
+      disabled: true,
+      hint: tAdv("rerankerHintM3"),
+    },
   ];
 
   async function saveAdvanced() {
@@ -1003,15 +1050,15 @@ function KBSettingsModal({
     label: string;
     icon: "info" | "settings" | "search" | "trash-2";
   }[] = [
-    { id: "basic", label: "基础", icon: "info" },
-    { id: "diagnose", label: "调试检索", icon: "search" },
-    { id: "advanced", label: "高级", icon: "settings" },
-    { id: "danger", label: "危险", icon: "trash-2" },
+    { id: "basic", label: tTabs("basic"), icon: "info" },
+    { id: "diagnose", label: tTabs("diagnose"), icon: "search" },
+    { id: "advanced", label: tTabs("advanced"), icon: "settings" },
+    { id: "danger", label: tTabs("danger"), icon: "trash-2" },
   ];
 
   return (
     <ModalShell
-      title={`${kb.name} · 设置`}
+      title={t("titleSuffix", { name: kb.name })}
       onClose={onClose}
       footer={
         tab === "advanced" ? (
@@ -1021,7 +1068,7 @@ function KBSettingsModal({
               onClick={onClose}
               className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
             >
-              取消
+              {t("cancel")}
             </button>
             <button
               type="button"
@@ -1029,7 +1076,7 @@ function KBSettingsModal({
               disabled={saving}
               className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
             >
-              {saving ? "保存中…" : "保存"}
+              {saving ? t("saving") : t("save")}
             </button>
           </>
         ) : (
@@ -1038,47 +1085,50 @@ function KBSettingsModal({
             onClick={onClose}
             className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
           >
-            关闭
+            {t("close")}
           </button>
         )
       }
     >
       {/* Tabs */}
       <div className="-mt-2 mb-4 flex gap-1 border-b border-border">
-        {tabs.map((t) => {
-          const active = t.id === tab;
+        {tabs.map((tabItem) => {
+          const active = tabItem.id === tab;
           return (
             <button
-              key={t.id}
+              key={tabItem.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(tabItem.id)}
               className={`-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-[13px] transition duration-fast ${
                 active
                   ? "border-primary text-text"
                   : "border-transparent text-text-muted hover:text-text"
               }`}
             >
-              <Icon name={t.icon} size={13} />
-              {t.label}
+              <Icon name={tabItem.icon} size={13} />
+              {tabItem.label}
             </button>
           );
         })}
       </div>
 
       {/* Basic tab — embedder picker + plain-language explanation */}
-      {tab === "basic" && (
-        <BasicTab kb={kb} models={models} />
-      )}
+      {tab === "basic" && <BasicTab kb={kb} models={models} />}
 
       {/* Advanced tab — retrieval tune */}
       {tab === "advanced" && (
         <div className="space-y-4">
           <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] text-text-muted">
-            一般不用动。两个权重控制“关键词命中”和“语义匹配”哪个更重要;<br />
-            <span className="font-mono text-[11px]">top k</span> 是每次检索返回的最大段数。
+            {tAdv("intro")}
+            <br />
+            {tAdv.rich("introTopK", {
+              topK: () => (
+                <span className="font-mono text-[11px]">top k</span>
+              ),
+            })}
           </p>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="关键词命中(BM25)">
+            <Field label={tAdv("fieldBm25")}>
               <input
                 type="number"
                 min={0}
@@ -1088,7 +1138,7 @@ function KBSettingsModal({
                 className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
               />
             </Field>
-            <Field label="语义匹配(向量)">
+            <Field label={tAdv("fieldVec")}>
               <input
                 type="number"
                 min={0}
@@ -1098,7 +1148,7 @@ function KBSettingsModal({
                 className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
               />
             </Field>
-            <Field label="返回多少段">
+            <Field label={tAdv("fieldTopK")}>
               <input
                 type="number"
                 min={1}
@@ -1108,14 +1158,14 @@ function KBSettingsModal({
                 className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
               />
             </Field>
-            <Field label="二次排序">
+            <Field label={tAdv("fieldReranker")}>
               <Select
                 value={reranker}
                 onChange={(v) => setReranker(v as "none" | "bge-base" | "cohere")}
                 options={rerankerOptions}
                 className="w-full"
                 triggerClassName="h-9 rounded-xl"
-                ariaLabel="二次排序"
+                ariaLabel={tAdv("rerankerAria")}
               />
             </Field>
           </div>
@@ -1138,6 +1188,7 @@ function KBSettingsModal({
  * of magic.
  */
 function DiagnoseTab({ kb }: { kb: KBDto }) {
+  const t = useTranslations("knowledge.diagnose");
   const [query, setQuery] = useState("");
   const [running, setRunning] = useState(false);
   const [out, setOut] = useState<DiagnoseDto | null>(null);
@@ -1171,7 +1222,7 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && run()}
-          placeholder="输一个 query 看三种召回的对比…"
+          placeholder={t("queryPlaceholder")}
           className="h-9 flex-1 rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
         />
         <button
@@ -1180,7 +1231,7 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
           disabled={running || !query.trim()}
           className="inline-flex h-9 items-center rounded-xl bg-primary px-4 text-[12px] font-medium text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
         >
-          {running ? "…" : "对比"}
+          {running ? t("running") : t("compare")}
         </button>
       </div>
 
@@ -1193,37 +1244,42 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
       {out ? (
         <div className="grid grid-cols-3 gap-3">
           <DiagnoseColumn
-            title="只看关键词"
-            subtitle="BM25"
+            title={t("colKeywordTitle")}
+            subtitle={t("colKeywordSubtitle")}
             tone="warning"
             results={out.bm25_only}
+            noHits={t("noHits")}
           />
           <DiagnoseColumn
-            title="只看语义"
-            subtitle="Vector"
+            title={t("colVectorTitle")}
+            subtitle={t("colVectorSubtitle")}
             tone="primary"
             results={out.vector_only}
+            noHits={t("noHits")}
           />
           <DiagnoseColumn
-            title="融合(默认)"
-            subtitle="Hybrid · RRF"
+            title={t("colHybridTitle")}
+            subtitle={t("colHybridSubtitle")}
             tone="success"
             results={out.hybrid}
+            noHits={t("noHits")}
           />
         </div>
       ) : (
         <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] text-text-muted">
-          输个 query,左边是只看关键词的命中,中间是只看语义的命中,右边是融合后的最终顺序。
-          相同段在三栏的位次差异能告诉你 BM25 和向量哪个更“懂”这个查询。
+          {t("intro")}
         </p>
       )}
 
       {stats && stats.count > 0 && (
         <div className="rounded-xl border border-border bg-surface-2 p-3">
           <div className="mb-2 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
-            <span>本进程检索统计</span>
+            <span>{t("statsTitle")}</span>
             <span>
-              {stats.count} 次 · 均 {stats.avg_latency_ms?.toFixed(0)} ms
+              {t("statsSummary", {
+                count: stats.count,
+                avg: stats.avg_latency_ms?.toFixed(0) ?? "0",
+              })}
             </span>
           </div>
           <ul className="space-y-1 text-[11px]">
@@ -1234,7 +1290,10 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
               >
                 <span className="truncate text-text">{r.query}</span>
                 <span className="font-mono text-text-subtle">
-                  {r.hits} 命中 · {r.latency_ms.toFixed(0)} ms
+                  {t("statsRow", {
+                    hits: r.hits,
+                    ms: r.latency_ms.toFixed(0),
+                  })}
                 </span>
               </li>
             ))}
@@ -1250,11 +1309,13 @@ function DiagnoseColumn({
   subtitle,
   tone,
   results,
+  noHits,
 }: {
   title: string;
   subtitle: string;
   tone: "warning" | "primary" | "success";
   results: ScoredChunkDto[];
+  noHits: string;
 }) {
   const toneCls =
     tone === "warning"
@@ -1271,7 +1332,7 @@ function DiagnoseColumn({
       <ul className="space-y-1.5 p-2">
         {results.length === 0 && (
           <li className="px-2 py-3 text-center text-[11px] text-text-subtle">
-            没命中
+            {noHits}
           </li>
         )}
         {results.map((r, i) => (
@@ -1304,6 +1365,7 @@ function BasicTab({
   kb: KBDto;
   models: EmbeddingModelOption[];
 }) {
+  const t = useTranslations("knowledge.basic");
   const isMock = kb.embedding_model_ref.startsWith("mock:");
   const realAvailable = models.filter(
     (m) => !m.ref.startsWith("mock:") && m.available,
@@ -1325,19 +1387,17 @@ function BasicTab({
           }`}
         >
           <Icon name={isMock ? "alert-triangle" : "check"} size={14} />
-          {isMock ? "演示模式 · 检索靠关键词匹配" : "已启用语义检索"}
+          {isMock ? t("demoStatus") : t("semanticStatus")}
         </div>
         <p
           className={`mt-1.5 text-[12px] leading-relaxed ${
             isMock ? "text-warning/90" : "text-success/90"
           }`}
         >
-          {isMock
-            ? "搜「相机」不会命中「摄像机」。要理解语义近义词,需要绑一个真实的 embedding 模型。"
-            : "搜「相机」能命中「摄像机」等近义表达。"}
+          {isMock ? t("demoBody") : t("semanticBody")}
         </p>
         <div className="mt-2 font-mono text-[10px] text-text-subtle">
-          当前 · {kb.embedding_model_ref}
+          {t("currentModel", { model: kb.embedding_model_ref })}
         </div>
       </div>
 
@@ -1345,13 +1405,13 @@ function BasicTab({
       <div>
         <div className="mb-2 flex items-center justify-between">
           <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
-            可用的真实模型
+            {t("availableHeading")}
           </span>
           <a
             href="/gateway"
             className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
           >
-            管理 provider
+            {t("manageProvider")}
             <Icon name="external-link" size={11} />
           </a>
         </div>
@@ -1360,18 +1420,21 @@ function BasicTab({
           <div className="rounded-lg border border-border bg-surface-2 p-4 text-[12px] text-text-muted">
             <div className="mb-2 flex items-center gap-2 font-medium text-text">
               <Icon name="info" size={13} className="text-primary" />
-              还没有可用的 embedding 模型
+              {t("noModelsTitle")}
             </div>
             <p className="leading-relaxed">
-              去「<a href="/gateway" className="text-primary underline">模型网关</a>」
-              添加一个 OpenAI 或阿里云百炼 provider · 填上 API key,这里就会出现可用模型列表。
+              {t("noModelsBodyPrefix")}
+              <a href="/gateway" className="text-primary underline">
+                {t("noModelsLink")}
+              </a>
+              {t("noModelsBodySuffix")}
             </p>
             <a
               href="/gateway"
               className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover transition duration-fast"
             >
               <Icon name="plus" size={12} />
-              去配置
+              {t("goConfigure")}
             </a>
           </div>
         ) : (
@@ -1384,15 +1447,14 @@ function BasicTab({
                 >
                   <span className="text-text">{m.label}</span>
                   <span className="font-mono text-[10px] text-text-subtle">
-                    {m.dim}d
+                    {t("modelDimHint", { dim: m.dim })}
                   </span>
                 </li>
               ))}
             </ul>
             <p className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[11px] text-text-muted">
               <Icon name="info" size={11} className="-mt-px mr-1 inline-block" />
-              切换 KB 的 embedding 模型需要重算所有“语义指纹”(reindex)·
-              v0 暂不支持热切换。要换模型,先删了这个 KB,再用新模型新建。
+              {t("switchModelHint")}
             </p>
           </>
         )}
@@ -1408,27 +1470,30 @@ function DangerTab({
   kb: KBDto;
   onDelete: () => void;
 }) {
-  const [confirm, setConfirm] = useState("");
-  const enabled = confirm === kb.name;
+  const t = useTranslations("knowledge.danger");
+  const [confirmText, setConfirmText] = useState("");
+  const enabled = confirmText === kb.name;
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-danger/30 bg-danger-soft p-4">
         <div className="flex items-center gap-2 text-[13px] font-semibold text-danger">
           <Icon name="alert-triangle" size={14} />
-          删除知识库
+          {t("heading")}
         </div>
         <p className="mt-1.5 text-[12px] leading-relaxed text-danger/90">
-          软删除 · 30 天内可联系管理员恢复;之后所有文档 / 向量数据物理移除。
-          原始上传文件留在磁盘上(<code className="font-mono text-[11px]">data/kb/{kb.id.slice(0, 8)}…</code>),
-          需要手动清理。
+          {t("warningPrefix")}
+          <code className="font-mono text-[11px]">
+            {t("warningPath", { prefix: kb.id.slice(0, 8) })}
+          </code>
+          {t("warningSuffix")}
         </p>
       </div>
 
-      <Field label={`输入 KB 名称「${kb.name}」以确认`}>
+      <Field label={t("confirmFieldLabel", { name: kb.name })}>
         <input
           type="text"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
           placeholder={kb.name}
           className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-danger focus:outline-none"
         />
@@ -1441,7 +1506,7 @@ function DangerTab({
         className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-danger px-3 text-[13px] font-medium text-white shadow-soft-sm hover:bg-danger/90 disabled:opacity-30 disabled:cursor-not-allowed transition duration-fast"
       >
         <Icon name="trash-2" size={13} />
-        永久删除
+        {t("deleteAction")}
       </button>
     </div>
   );
@@ -1459,6 +1524,7 @@ function DocDrawer({
   onDelete: (d: DocumentDto) => void;
 }) {
   type Tab = "info" | "text" | "chunks";
+  const t = useTranslations("knowledge.detail");
   const [tab, setTab] = useState<Tab>("info");
   const [text, setText] = useState<string | null>(null);
   const [chunks, setChunks] = useState<DocumentChunkDto[] | null>(null);
@@ -1485,11 +1551,11 @@ function DocDrawer({
   }, [tab, kbId, doc.id, text, chunks, loading]);
 
   const tabs: { id: Tab; label: string; icon: "info" | "file" | "list" }[] = [
-    { id: "info", label: "概览", icon: "info" },
-    { id: "text", label: "原文", icon: "file" },
+    { id: "info", label: t("tabInfo"), icon: "info" },
+    { id: "text", label: t("tabText"), icon: "file" },
     {
       id: "chunks",
-      label: `分片 (${doc.chunk_count})`,
+      label: t("tabChunks", { count: doc.chunk_count }),
       icon: "list",
     },
   ];
@@ -1508,15 +1574,18 @@ function DocDrawer({
               {doc.title}
             </h2>
             <div className="mt-1 font-mono text-[10px] text-text-subtle">
-              v{doc.version} · {(doc.size_bytes / 1024).toFixed(1)} KB ·{" "}
-              {doc.chunk_count} 段
+              {t("headerMeta", {
+                version: doc.version,
+                kb: (doc.size_bytes / 1024).toFixed(1),
+                chunks: doc.chunk_count,
+              })}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="text-text-subtle hover:text-text"
-            aria-label="关闭"
+            aria-label={t("closeAria")}
           >
             ✕
           </button>
@@ -1524,21 +1593,21 @@ function DocDrawer({
 
         {/* Tabs */}
         <div className="flex gap-1 border-b border-border px-5">
-          {tabs.map((t) => {
-            const active = t.id === tab;
+          {tabs.map((tabItem) => {
+            const active = tabItem.id === tab;
             return (
               <button
-                key={t.id}
+                key={tabItem.id}
                 type="button"
-                onClick={() => setTab(t.id)}
+                onClick={() => setTab(tabItem.id)}
                 className={`-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-[12px] transition duration-fast ${
                   active
                     ? "border-primary text-text"
                     : "border-transparent text-text-muted hover:text-text"
                 }`}
               >
-                <Icon name={t.icon} size={12} />
-                {t.label}
+                <Icon name={tabItem.icon} size={12} />
+                {tabItem.label}
               </button>
             );
           })}
@@ -1552,31 +1621,31 @@ function DocDrawer({
                   {doc.state_error}
                 </div>
               )}
-              <DocMetaSection title="基本信息">
-                <MetaRow label="ID" value={doc.id} mono />
-                <MetaRow label="Mime" value={doc.mime_type} mono />
-                <MetaRow label="来源" value={doc.source_type} mono />
+              <DocMetaSection title={t("infoSectionBasic")}>
+                <MetaRow label={t("metaId")} value={doc.id} mono />
+                <MetaRow label={t("metaMime")} value={doc.mime_type} mono />
+                <MetaRow label={t("metaSource")} value={doc.source_type} mono />
                 {doc.source_uri && (
-                  <MetaRow label="URI" value={doc.source_uri} mono />
+                  <MetaRow label={t("metaUri")} value={doc.source_uri} mono />
                 )}
                 <MetaRow
-                  label="创建"
+                  label={t("metaCreated")}
                   value={new Date(doc.created_at).toLocaleString()}
                 />
                 <MetaRow
-                  label="更新"
+                  label={t("metaUpdated")}
                   value={new Date(doc.updated_at).toLocaleString()}
                 />
               </DocMetaSection>
               {doc.tags.length > 0 && (
-                <DocMetaSection title="标签">
+                <DocMetaSection title={t("infoSectionTags")}>
                   <div className="flex flex-wrap gap-1.5">
-                    {doc.tags.map((t) => (
+                    {doc.tags.map((tag) => (
                       <span
-                        key={t}
+                        key={tag}
                         className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text-muted"
                       >
-                        #{t}
+                        #{tag}
                       </span>
                     ))}
                   </div>
@@ -1588,12 +1657,12 @@ function DocDrawer({
           {tab === "text" && (
             <div className="p-5">
               {loading && text === null ? (
-                <LoadingState title="加载原文…" />
+                <LoadingState title={t("loadingText")} />
               ) : textErr ? (
                 <ErrorState title={textErr} />
               ) : text === null || text.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[12px] text-text-muted">
-                  文件为空或不可读
+                  {t("emptyText")}
                 </div>
               ) : (
                 <pre className="whitespace-pre-wrap break-words rounded-xl border border-border bg-surface-2 p-4 text-[12px] leading-relaxed text-text">
@@ -1607,12 +1676,12 @@ function DocDrawer({
             <div className="p-5">
               {loading && chunks === null ? (
                 <LoadingState
-                  title="加载分片…"
-                  description="读取每段的位置 / section / 页码"
+                  title={t("loadingChunks")}
+                  description={t("loadingChunksDesc")}
                 />
               ) : chunks === null || chunks.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[12px] text-text-muted">
-                  这个文档没有分片(可能解析为空)
+                  {t("emptyChunks")}
                 </div>
               ) : (
                 <ul className="space-y-3">
@@ -1632,7 +1701,11 @@ function DocDrawer({
                           </span>
                         )}
                         <span className="ml-auto">
-                          {c.span_start}–{c.span_end} · ~{c.token_count} tokens
+                          {t("chunkRange", {
+                            start: c.span_start,
+                            end: c.span_end,
+                            tokens: c.token_count,
+                          })}
                         </span>
                       </div>
                       <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-text">
@@ -1653,14 +1726,14 @@ function DocDrawer({
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-danger/40 bg-danger-soft px-3 text-[12px] text-danger hover:bg-danger/10 transition duration-fast"
           >
             <Icon name="trash-2" size={12} />
-            软删除
+            {t("softDelete")}
           </button>
           <button
             type="button"
             onClick={onClose}
             className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
           >
-            关闭
+            {t("close")}
           </button>
         </footer>
       </aside>

@@ -49,7 +49,7 @@
       "historyAriaLabel": "历史会话",
       "historyTooltip": "切换到这位员工的其他会话",
       "history": "历史",
-      "loadHistoryFailed": "读取历史失败：{error}",
+      "loadHistoryFailed": "读取历史失败:{error}",
       "noOther": "还没有其他会话",
       "untitled": "未命名 · {id}",
       "justNow": "刚刚",
