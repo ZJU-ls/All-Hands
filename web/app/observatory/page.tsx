@@ -6,9 +6,11 @@ import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState } from "@/components/state";
 import { TraceChip } from "@/components/runs/TraceChip";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { MetricDrawer } from "@/components/observatory/MetricDrawer";
 import {
   fetchObservatorySummary,
   fetchTraces,
+  type ObservatoryMetric,
   type ObservatorySummaryDto,
   type TraceSummaryDto,
 } from "@/lib/observatory-api";
@@ -66,9 +68,12 @@ interface KpiCardProps {
   hero?: boolean;
   sparkSeed: number;
   sparkTone?: "primary" | "success" | "warning" | "danger";
+  /** When set, the card becomes a button that opens the metric drilldown drawer. */
+  onClick?: () => void;
+  clickHint?: string;
 }
 
-function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "primary" }: KpiCardProps) {
+function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "primary", onClick, clickHint }: KpiCardProps) {
   const deltaToneClass =
     delta?.tone === "success"
       ? "text-success"
@@ -78,9 +83,22 @@ function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "prim
           ? "text-danger"
           : "text-text-muted";
 
+  const Tag = onClick ? "button" : "div";
+  const interactiveProps = onClick
+    ? {
+        type: "button" as const,
+        onClick,
+        "aria-label": clickHint ?? label,
+      }
+    : {};
+  const interactiveCls = onClick ? "cursor-pointer text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" : "";
+
   if (hero) {
     return (
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary via-primary to-primary-hover text-primary-fg p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-px transition-shadow duration-base">
+      <Tag
+        {...interactiveProps}
+        className={`relative overflow-hidden rounded-xl bg-gradient-to-br from-primary via-primary to-primary-hover text-primary-fg p-5 shadow-soft hover:shadow-soft-lg hover:-translate-y-px transition-shadow duration-base ${interactiveCls}`}
+      >
         <div
           aria-hidden
           className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-white/15 blur-2xl"
@@ -119,7 +137,7 @@ function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "prim
             <path d={sparkPath(sparkSeed)} />
           </svg>
         </div>
-      </div>
+      </Tag>
     );
   }
 
@@ -133,7 +151,10 @@ function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "prim
           : "text-primary";
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-surface border border-border p-5 shadow-soft-sm hover:shadow-soft hover:-translate-y-px hover:border-border-strong transition-shadow duration-base">
+    <Tag
+      {...interactiveProps}
+      className={`relative overflow-hidden rounded-xl bg-surface border border-border p-5 shadow-soft-sm hover:shadow-soft hover:-translate-y-px hover:border-border-strong transition-shadow duration-base ${interactiveCls}`}
+    >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] font-mono text-text-subtle">
           <Icon name={icon} size={12} />
@@ -168,7 +189,7 @@ function KpiCard({ label, value, delta, icon, hero, sparkSeed, sparkTone = "prim
           <path d={sparkPath(sparkSeed)} />
         </svg>
       </div>
-    </div>
+    </Tag>
   );
 }
 
@@ -179,7 +200,12 @@ function HealthPanel({
 }: {
   title: string;
   icon: IconName;
-  rows: Array<{ label: string; value: string; tone?: "success" | "warning" | "danger" | "muted" }>;
+  rows: Array<{
+    label: string;
+    value: string;
+    tone?: "success" | "warning" | "danger" | "muted";
+    onClick?: () => void;
+  }>;
 }) {
   const t = useTranslations("pages.observatory.panels");
   return (
@@ -212,15 +238,34 @@ function HealthPanel({
                   : row.tone === "danger"
                     ? "text-danger"
                     : "text-text";
-            return (
-              <li
-                key={`${row.label}-${idx}`}
-                className="flex items-center justify-between px-5 h-10 hover:bg-surface-2 transition-colors duration-fast"
-              >
+            const Inner = (
+              <>
                 <span className="text-[12px] text-text truncate mr-3">{row.label}</span>
                 <span className={`text-[12px] font-mono tabular-nums ${toneClass}`}>
                   {row.value}
                 </span>
+              </>
+            );
+            return (
+              <li key={`${row.label}-${idx}`}>
+                {row.onClick ? (
+                  <button
+                    type="button"
+                    onClick={row.onClick}
+                    className="flex w-full items-center justify-between px-5 h-10 hover:bg-surface-2 transition-colors duration-fast text-left focus-visible:outline-none focus-visible:bg-surface-2"
+                  >
+                    {Inner}
+                    <Icon
+                      name="chevron-right"
+                      size={12}
+                      className="ml-2 text-text-subtle"
+                    />
+                  </button>
+                ) : (
+                  <div className="flex items-center justify-between px-5 h-10 hover:bg-surface-2 transition-colors duration-fast">
+                    {Inner}
+                  </div>
+                )}
               </li>
             );
           })
@@ -289,6 +334,12 @@ export default function ObservatoryPage() {
   const [state, setState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<TimeRange>("24h");
+  const [drawerMetric, setDrawerMetric] = useState<ObservatoryMetric | null>(null);
+  const [drawerLabel, setDrawerLabel] = useState<string | undefined>(undefined);
+  const openDrawer = (metric: ObservatoryMetric, label?: string) => {
+    setDrawerMetric(metric);
+    setDrawerLabel(label);
+  };
 
   async function load() {
     setState("loading");
@@ -406,6 +457,8 @@ export default function ObservatoryPage() {
                       tone: "muted",
                     }}
                     sparkSeed={11}
+                    onClick={() => openDrawer("failure_rate", t("kpi.uptime"))}
+                    clickHint={t("kpi.clickHint")}
                   />
                   <KpiCard
                     icon="zap"
@@ -418,6 +471,8 @@ export default function ObservatoryPage() {
                     }}
                     sparkSeed={23}
                     sparkTone="primary"
+                    onClick={() => openDrawer("latency_p50", t("kpi.latency"))}
+                    clickHint={t("kpi.clickHint")}
                   />
                   <KpiCard
                     icon="alert-circle"
@@ -444,6 +499,8 @@ export default function ObservatoryPage() {
                           ? "warning"
                           : "success"
                     }
+                    onClick={() => openDrawer("failure_rate", t("kpi.failure"))}
+                    clickHint={t("kpi.clickHint")}
                   />
                   <KpiCard
                     icon="database"
@@ -465,6 +522,8 @@ export default function ObservatoryPage() {
                     }}
                     sparkSeed={53}
                     sparkTone="primary"
+                    onClick={() => openDrawer("tokens_total", t("kpi.tokens"))}
+                    clickHint={t("kpi.clickHint")}
                   />
                 </>
               ) : state === "loading" ? (
@@ -495,16 +554,22 @@ export default function ObservatoryPage() {
                       label: t("panels.rows.latencyP50"),
                       value: formatDuration(summary.latency_p50_s),
                       tone: "muted",
+                      onClick: () =>
+                        openDrawer("latency_p50", t("panels.rows.latencyP50")),
                     },
                     {
                       label: t("panels.rows.latencyP95"),
                       value: formatDuration(summary.latency_p95_s),
                       tone: "muted",
+                      onClick: () =>
+                        openDrawer("latency_p95", t("panels.rows.latencyP95")),
                     },
                     {
                       label: t("panels.rows.latencyP99"),
                       value: formatDuration(summary.latency_p99_s),
                       tone: "muted",
+                      onClick: () =>
+                        openDrawer("latency_p99", t("panels.rows.latencyP99")),
                     },
                     {
                       label: t("panels.rows.estimatedCost"),
@@ -513,10 +578,14 @@ export default function ObservatoryPage() {
                           ? `$${summary.estimated_cost_usd.toFixed(4)}`
                           : "—",
                       tone: "muted",
+                      onClick: () =>
+                        openDrawer("cost", t("panels.rows.estimatedCost")),
                     },
                     {
                       label: t("panels.rows.totalTraces"),
                       value: summary.traces_total.toLocaleString(),
+                      onClick: () =>
+                        openDrawer("runs", t("panels.rows.totalTraces")),
                     },
                   ]}
                 />
@@ -748,6 +817,13 @@ export default function ObservatoryPage() {
           ) : null}
         </div>
       </div>
+      <MetricDrawer
+        open={drawerMetric !== null}
+        metric={drawerMetric}
+        contextLabel={drawerLabel}
+        defaultWindow="24h"
+        onClose={() => setDrawerMetric(null)}
+      />
     </AppShell>
   );
 }

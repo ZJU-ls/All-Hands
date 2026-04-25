@@ -63,6 +63,51 @@ export async function fetchObservatorySummary(): Promise<ObservatorySummaryDto> 
   return res.json() as Promise<ObservatorySummaryDto>;
 }
 
+export type ObservatoryMetric =
+  | "runs"
+  | "failure_rate"
+  | "latency_p50"
+  | "latency_p95"
+  | "latency_p99"
+  | "tokens_total"
+  | "tokens_input"
+  | "tokens_output"
+  | "llm_calls"
+  | "cost";
+
+export type TimeSeriesPointDto = {
+  ts: string;
+  value: number;
+  count: number;
+};
+
+export type TimeSeriesDto = {
+  metric: ObservatoryMetric;
+  bucket: "5m" | "1h";
+  since: string;
+  until: string;
+  points: TimeSeriesPointDto[];
+  unit: string;
+};
+
+export async function fetchMetricSeries(params: {
+  metric: ObservatoryMetric;
+  since?: string;
+  until?: string;
+  bucket?: "5m" | "1h";
+}): Promise<TimeSeriesDto> {
+  const q = new URLSearchParams();
+  q.set("metric", params.metric);
+  if (params.since) q.set("since", params.since);
+  if (params.until) q.set("until", params.until);
+  if (params.bucket) q.set("bucket", params.bucket);
+  const res = await fetch(`${BASE}/api/observatory/series?${q.toString()}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`series failed: ${res.status}`);
+  return res.json() as Promise<TimeSeriesDto>;
+}
+
 export type SystemFlagsDto = {
   observability_enabled: boolean;
   auto_title_enabled: boolean;

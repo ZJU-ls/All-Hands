@@ -65,6 +65,32 @@ async def patch_config(
     }
 
 
+_METRICS_PATTERN = (
+    "^(runs|failure_rate|latency_p50|latency_p95|latency_p99|"
+    "tokens_total|tokens_input|tokens_output|llm_calls|cost)$"
+)
+
+
+@router.get("/series")
+async def get_series(
+    svc: ObservatoryService = Depends(get_observatory_service),
+    metric: str = Query(..., pattern=_METRICS_PATTERN),
+    since: datetime | None = Query(default=None),
+    until: datetime | None = Query(default=None),
+    bucket: str = Query(default="1h", pattern="^(5m|1h)$"),
+) -> dict[str, object]:
+    """Bucketed time-series for one observatory metric.
+
+    Drives the KPI-card / stat-row drilldown chart on the observatory page —
+    the user clicks a metric and we show the consumption curve over the
+    selected time window.
+    """
+    series = await svc.get_series(
+        metric=metric, since=since, until=until, bucket=bucket
+    )
+    return series.model_dump(mode="json")
+
+
 @router.get("/traces")
 async def list_traces(
     svc: ObservatoryService = Depends(get_observatory_service),

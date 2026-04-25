@@ -87,6 +87,41 @@ class ObservatorySummary(BaseModel):
     by_employee: list[ObservatoryEmployeeBreakdown] = Field(default_factory=list)
     by_model: list[ObservatoryModelBreakdown] = Field(default_factory=list)
 
+
+class TimeSeriesPoint(BaseModel):
+    """One time-bucket of an observatory metric.
+
+    ``ts`` is the bucket start (UTC ISO). ``value`` is the metric value
+    aggregated over the bucket — meaning depends on which metric: latency
+    p-percentiles use the percentile within the bucket; counts (runs /
+    llm_calls) sum; tokens / cost sum; failure_rate is failed/total within
+    the bucket. ``count`` is the number of run.* events that contributed,
+    surfaced for UI tooltips ("48 runs in this hour").
+    """
+
+    ts: datetime
+    value: float = 0.0
+    count: int = 0
+
+    model_config = {"frozen": True}
+
+
+class TimeSeries(BaseModel):
+    """Bucketed series for the metric drilldown chart.
+
+    Returned by ``GET /api/observatory/series?metric=...&bucket=...``.
+    The frontend renders a single-line chart with hover tooltips; missing
+    buckets at the start/end of the window are filled with zero-value
+    points so the x-axis stays continuous.
+    """
+
+    metric: str
+    bucket: str  # "1h" | "5m"
+    since: datetime
+    until: datetime
+    points: list[TimeSeriesPoint] = Field(default_factory=list)
+    unit: str = ""  # "s" / "tokens" / "USD" / "%"
+
     model_config = {"frozen": True}
 
 
@@ -263,6 +298,8 @@ __all__ = [
     "RunError",
     "RunStatus",
     "RunTokenUsage",
+    "TimeSeries",
+    "TimeSeriesPoint",
     "TraceSummary",
     "Turn",
     "TurnLLMCall",

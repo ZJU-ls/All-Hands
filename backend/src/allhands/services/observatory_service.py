@@ -26,6 +26,8 @@ from allhands.core import (
     RunError,
     RunStatus,
     RunTokenUsage,
+    TimeSeries,
+    TimeSeriesPoint,
     TraceSummary,
     Turn,
     TurnLLMCall,
@@ -575,6 +577,146 @@ class ObservatoryService:
             cfg = cfg.model_copy(update={"auto_title_enabled": auto_title_enabled})
             cfg = await self._config.save(cfg)
         return cfg
+
+    async def get_series(
+        self,
+        *,
+        metric: str,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        bucket: str = "1h",
+    ) -> TimeSeries:
+        """Bucket run.* events into a time-series for the metric drilldown.
+
+        Metrics:
+        - ``runs`` · count of completed runs per bucket
+        - ``failure_rate`` · failed/total within bucket (0-1)
+        - ``latency_p50`` / ``latency_p95`` / ``latency_p99`` · seconds
+        - ``tokens_total`` · sum of total_tokens
+        - ``tokens_input`` / ``tokens_output`` · sum of in / out
+        - ``llm_calls`` · sum of per-run llm_calls
+        - ``cost`` · sum of estimated USD cost
+
+        Buckets: ``"5m"`` (5 min) or ``"1h"``. Empty leading/trailing
+        buckets are filled with zero points so the x-axis stays continuous
+        for the chart.
+        """
+        ts_now = until or datetime.now(UTC)
+        ts_start = since or (ts_now - timedelta(hours=24))
+        # Bucket size in seconds (kept as a small whitelist — the UI only
+        # ever asks for these; we reject anything else as 1h).
+        bucket_seconds = 300 if bucket == "5m" else 3600
+        bucket_size = timedelta(seconds=bucket_seconds)
+
+        events = await self._events.list_recent(
+            limit=5000,
+            workspace_id=self._ws,
+            kind_prefixes=list(_RUN_KINDS),
+            since=ts_start,
+        )
+        # Build empty buckets first so missing windows still render as 0.
+        bucket_count = max(1, int((ts_now - ts_start).total_seconds() // bucket_seconds))
+        bucket_ts: list[datetime] = [ts_start + bucket_size * i for i in range(bucket_count)]
+        durs: list[list[float]] = [[] for _ in range(bucket_count)]
+        runs = [0] * bucket_count
+        failed = [0] * bucket_count
+        tokens_in = [0] * bucket_count
+        tokens_out = [0] * bucket_count
+        tokens_total = [0] * bucket_count
+        llm_calls = [0] * bucket_count
+        cost = [0.0] * bucket_count
+
+        for e in events:
+            if e.published_at < ts_start or e.published_at > ts_now:
+                continue
+            idx = int((e.published_at - ts_start).total_seconds() // bucket_seconds)
+            if not (0 <= idx < bucket_count):
+                continue
+            payload = e.payload
+            if e.kind == "run.completed":
+                runs[idx] += 1
+            elif e.kind == "run.failed":
+                runs[idx] += 1
+                failed[idx] += 1
+            else:
+                continue
+            dur = payload.get("duration_s")
+            if isinstance(dur, (int, float)):
+                durs[idx].append(float(dur))
+            tok = payload.get("tokens")
+            ti = to = tt = 0
+            if isinstance(tok, dict):
+                ti = int(tok.get("input", 0) or 0)
+                to = int(tok.get("output", 0) or 0)
+                tt = int(tok.get("total", 0) or 0) or (ti + to)
+            elif isinstance(tok, int):
+                tt = int(tok)
+            tokens_in[idx] += ti
+            tokens_out[idx] += to
+            tokens_total[idx] += tt
+            lc = payload.get("llm_calls")
+            if isinstance(lc, int):
+                llm_calls[idx] += lc
+            mr = payload.get("model_ref")
+            cost[idx] += estimate_cost_usd(
+                mr if isinstance(mr, str) else None, ti, to
+            )
+
+        unit_by_metric = {
+            "runs": "",
+            "failure_rate": "%",
+            "latency_p50": "s",
+            "latency_p95": "s",
+            "latency_p99": "s",
+            "tokens_total": "tokens",
+            "tokens_input": "tokens",
+            "tokens_output": "tokens",
+            "llm_calls": "",
+            "cost": "USD",
+        }
+        unit = unit_by_metric.get(metric, "")
+
+        points: list[TimeSeriesPoint] = []
+        for i, ts_bucket in enumerate(bucket_ts):
+            n = runs[i]
+            value = 0.0
+            if metric == "runs":
+                value = float(n)
+            elif metric == "failure_rate":
+                value = float(failed[i]) / n if n else 0.0
+            elif metric == "latency_p50":
+                value = _percentile(durs[i], 0.5) if durs[i] else 0.0
+            elif metric == "latency_p95":
+                value = _percentile(durs[i], 0.95) if durs[i] else 0.0
+            elif metric == "latency_p99":
+                value = _percentile(durs[i], 0.99) if durs[i] else 0.0
+            elif metric == "tokens_total":
+                value = float(tokens_total[i])
+            elif metric == "tokens_input":
+                value = float(tokens_in[i])
+            elif metric == "tokens_output":
+                value = float(tokens_out[i])
+            elif metric == "llm_calls":
+                value = float(llm_calls[i])
+            elif metric == "cost":
+                value = cost[i]
+            points.append(
+                TimeSeriesPoint(
+                    ts=ts_bucket,
+                    value=round(value, 6),
+                    count=n,
+                )
+            )
+
+        return TimeSeries(
+            metric=metric,
+            bucket=bucket if bucket in ("5m", "1h") else "1h",
+            since=ts_start,
+            until=ts_now,
+            points=points,
+            unit=unit,
+        )
+
 
 def _compose_turns(
     messages: list[Message],

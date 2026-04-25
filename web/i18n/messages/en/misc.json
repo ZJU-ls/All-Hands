@@ -86,15 +86,16 @@
         "failure": "Failure rate",
         "failureWarn": "Watch",
         "failureStable": "Stable",
-        "tokens": "Avg tokens · run",
-        "tokensDelta": "{count} total traces"
+        "tokens": "Avg tokens / run",
+        "tokensDelta": "{count} total traces",
+        "clickHint": "Click for consumption curve →"
       },
       "panels": {
         "telemetry": "Self-instrumented · 24h",
         "topEmployees": "Top employees · 24h",
         "byModel": "By model · 24h",
         "noData": "No data yet",
-        "moreLabel": "{title} more",
+        "moreLabel": "More {title}",
         "rows": {
           "observability": "Telemetry",
           "latencyP50": "Latency p50",
@@ -108,12 +109,20 @@
           "disabled": "disabled",
           "selfInstrumented": "self-instrumented",
           "runs": "{count} runs"
+        },
+        "modelTable": {
+          "model": "model",
+          "runs": "runs",
+          "in": "in",
+          "out": "out",
+          "total": "total",
+          "modelsCount": "{n} models · {calls} calls"
         }
       },
       "incidents": {
         "title": "Recent incidents",
         "count": "{count} failed",
-        "tokensSuffix": "tok"
+        "tokensSuffix": "tokens"
       },
       "traces": {
         "title": "Latest 50 traces",
@@ -134,6 +143,37 @@
           "ok": "ok",
           "failed": "failed",
           "running": "running"
+        }
+      },
+      "metricDrawer": {
+        "close": "Close",
+        "loading": "Loading series…",
+        "loadFailed": "Failed to load. Tap retry.",
+        "retry": "Retry",
+        "empty": "No data in the selected window.",
+        "bucket1h": "1-hour buckets",
+        "bucket5m": "5-minute buckets",
+        "rangeLastHour": "Last hour",
+        "range24h": "24 hours",
+        "range7d": "7 days",
+        "rangeAria": "Time window",
+        "tooltipCount": "{n} runs",
+        "summaryLabel": {
+          "max": "Peak",
+          "avg": "Avg",
+          "current": "Latest"
+        },
+        "metric": {
+          "runs": "Runs",
+          "failure_rate": "Failure rate",
+          "latency_p50": "Latency p50",
+          "latency_p95": "Latency p95",
+          "latency_p99": "Latency p99",
+          "tokens_total": "Total tokens",
+          "tokens_input": "Input tokens",
+          "tokens_output": "Output tokens",
+          "llm_calls": "LLM calls",
+          "cost": "Estimated cost"
         }
       }
     },
