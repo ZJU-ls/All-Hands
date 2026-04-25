@@ -757,12 +757,12 @@ export default function KnowledgePage() {
  * KB info card · user perspective · no BM25/RRF/dim/cosine jargon.
  *
  * Three layers:
- *   1. Name + description + [gear] settings entry
+ *   1. Name + description + settings entry
  *   2. One-line capability summary (e.g. semantic search on / demo mode warning)
  *   3. Numbers: "5 snippets · from 2 sources"
  *
  * Retrieval weights / embedder dim and other technical details are tucked
- * into the "Advanced" tab of the [gear] settings dialog.
+ * into the "Advanced" tab of the settings dialog.
  */
 function KBInfoCard({
   kb,

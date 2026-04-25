@@ -229,12 +229,33 @@ function LegacyAgentBody({
   message: Message;
   showCursor: boolean;
 }) {
+  // Mid-stream the model can call several tools in a row without emitting any
+  // text. Without an indicator the bubble collapses to a thin tool-chip strip,
+  // reading as "broken / empty" — show a small typing pulse next to the
+  // tool-call group so the user sees activity. Only fires while still
+  // streaming AND no committed text has arrived yet AND there's at least one
+  // tool_call in flight.
+  const showSilentToolPulse =
+    showCursor && !message.content && message.tool_calls.length > 0;
   return (
     <>
       {(message.content || showCursor) && (
         <div>
           {message.content && <AgentMarkdown content={message.content} />}
           {showCursor && <StreamingCursor />}
+        </div>
+      )}
+      {showSilentToolPulse && (
+        <div
+          data-testid="agent-silent-tool-pulse"
+          className="-mb-1 mt-1 inline-flex items-center gap-1.5 text-[12px] text-text-subtle"
+        >
+          <span className="inline-flex items-center gap-1">
+            <BubbleDot delay={0} />
+            <BubbleDot delay={160} />
+            <BubbleDot delay={320} />
+          </span>
+          <span>正在执行工具…</span>
         </div>
       )}
       {message.tool_calls.length > 0 && (
@@ -351,6 +372,16 @@ function ReasoningBlock({ text, isStreaming }: { text: string; isStreaming: bool
         </div>
       )}
     </div>
+  );
+}
+
+function BubbleDot({ delay }: { delay: number }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-block h-1.5 w-1.5 rounded-full bg-primary"
+      style={{ animation: `ah-dot 1.2s ease-in-out ${delay}ms infinite` }}
+    />
   );
 }
 

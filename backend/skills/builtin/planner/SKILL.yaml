@@ -1,13 +1,11 @@
 id: sk_planner
-name: Planning · Plan then Execute
-description: Lay out a working plan via plan_create, then execute steps and update progress.
-version: 0.2.0
+name: Planning · Update Plan
+description: Track multi-step work with a single update_plan tool — Claude Code TodoWrite style.
+version: 1.0.0
 builtin: true
 
 tool_ids:
-  - allhands.meta.plan_create
-  - allhands.meta.plan_update_step
-  - allhands.meta.plan_complete_step
-  - allhands.meta.plan_view
+  - allhands.meta.update_plan
+  - allhands.meta.view_plan
 
 prompt_fragment_file: prompts/guidance.md
