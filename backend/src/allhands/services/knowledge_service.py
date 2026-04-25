@@ -352,7 +352,17 @@ class KnowledgeService:
 
         now = datetime.now(UTC)
         doc_id = str(uuid.uuid4())
-        mime = mime_type or (detect_mime(filename) if filename else "text/plain")
+        # Mime resolution: prefer caller-provided, but treat the generic
+        # "application/octet-stream" as missing — multipart uploads from
+        # browsers / curl often default to it for unknown extensions, and
+        # we'd then fail with "no parser registered" even though the
+        # filename suffix tells us exactly what it is.
+        if mime_type and mime_type != "application/octet-stream":
+            mime = mime_type
+        elif filename:
+            mime = detect_mime(filename)
+        else:
+            mime = "text/plain"
         ext = (Path(filename).suffix.lstrip(".") if filename else "bin") or "bin"
         rel_path = f"{kb_id}/{doc_id}/v1.{ext}"
         abs_path = self._data_dir / "kb" / rel_path
