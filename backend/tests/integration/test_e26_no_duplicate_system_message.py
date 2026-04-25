@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """E26 regression: multi-turn chat through AgentRunner with a real
 checkpointer must NOT accumulate duplicate/non-consecutive SystemMessages
 in graph state.
@@ -30,6 +31,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="ADR 0018: graph-state mechanics superseded · MessageRepo is sole SoT · "
+    "deleted in B5 with the rest of LangGraph"
+)
+
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, SystemMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver

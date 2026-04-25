@@ -23,6 +23,7 @@ directly — no events yielded mid-flight, gather composes naturally.
 from __future__ import annotations
 
 import inspect
+import json
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
@@ -174,16 +175,48 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+def _coerce_stringified_json(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Recover nested object/array args that the LLM serialized as JSON
+    strings. Some providers (and some models on fuzzy tool-use training)
+    flatten nested object / array arguments to a single JSON-encoded
+    string instead of sending a structured value. Pydantic v2 in lax mode
+    does NOT auto-parse `str → dict` or `str → list`, so the tool call
+    blows up with `ValidationError` on input. This walker rescues any
+    `str` value that parses to a `dict` or `list`, leaves everything else
+    untouched.
+
+    Real-world trigger (regression for runner.py + render tools):
+    `render_stat` called with `delta='{"value": 2, ...}'` instead of
+    `delta={"value": 2, ...}`.
+    """
+    out: dict[str, Any] = {}
+    for k, v in kwargs.items():
+        if isinstance(v, str):
+            stripped = v.strip()
+            if stripped.startswith(("{", "[")):
+                try:
+                    parsed = json.loads(stripped)
+                except (ValueError, TypeError):
+                    parsed = None
+                if isinstance(parsed, dict | list):
+                    out[k] = parsed
+                    continue
+        out[k] = v
+    return out
+
+
 async def _invoke_executor(
     executor: ToolExecutor,
     args: dict[str, Any],
 ) -> Any:
     """Call the bound tool executor with the LLM-provided args.
 
-    Wrapping in try/except is the caller's responsibility — different
-    paths (concurrent vs iter) record errors differently.
+    Args coerced for stringified-JSON nested values so executors with
+    Pydantic schema validation accept what fuzzy LLMs produce. Wrapping
+    in try/except is the caller's responsibility — different paths
+    (concurrent vs iter) record errors differently.
     """
-    return await _maybe_await(executor(**args))
+    return await _maybe_await(executor(**_coerce_stringified_json(args)))
 
 
 # --- Concurrent path (parallel-safe, no defer possible) -------------------

@@ -11,10 +11,11 @@ from .preview import Preset
 EXECUTE_PRESET = Preset(
     id="execute",
     friendly_name_zh="标准执行",
-    description="直接执行任务:取/写文件,走技能白名单,10 步上限。",
+    description="直接执行任务:取网页 + 制品产出,走技能白名单,10 步上限。",
+    # write_file dropped 2026-04-25: data/reports/ is invisible to the user;
+    # user-facing outputs go through allhands.artifacts skill instead.
     tool_ids_base=[
         "allhands.builtin.fetch_url",
-        "allhands.builtin.write_file",
         "allhands.meta.resolve_skill",
         "allhands.meta.read_skill_file",
     ],

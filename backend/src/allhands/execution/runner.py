@@ -1,19 +1,24 @@
-"""AgentRunner — wraps LangGraph create_react_agent.
+"""AgentRunner — ADR 0018 facade over AgentLoop.
 
-Yields AgentEvent stream. LangGraph types never escape this module.
+Yields legacy AgentEvent stream for backward compatibility with the
+existing chat_service tap and AG-UI encoder. Under the hood, all real
+work happens in `agent_loop.AgentLoop`; this module:
 
-Contract § 8.1-8.4: holds a `SkillRuntime` across send_message calls
-(persisted by ChatService per conversation) and rebuilds `lc_tools` +
-`system_prompt` at the start of each stream() call from:
+  * AgentRunner (class) — public API + ctor matching current callers.
+    `stream()` delegates to `_facade_stream` which iterates AgentLoop
+    and projects InternalEvent → AgentEvent through `_LegacyProjector`.
+  * Module-level helpers retained for reuse (mostly by AgentLoop):
+    `_build_model`, `_apply_overrides`, `_bind_thinking`,
+    `_split_content_blocks`, `_as_render_envelope`. B5 cleanup will
+    move these into `agent_loop.py` / `model_factory.py` and delete
+    runner.py outright.
+  * `checkpointer` ctor kwarg accepted but no longer drives behavior —
+    state lives in MessageRepo + ConfirmationRepo; ConfirmationDeferred
+    handles suspend/resume via polling. B5 also removes this kwarg.
 
-    base_tool_ids = runtime.base_tool_ids
-    resolved_tool_ids = flatten(runtime.resolved_skills.values())
-    system_prompt = employee.system_prompt + descriptors + resolved_fragments
-
-Ref: ref-src-claude/V02-execution-kernel.md § 2.1 · query() while(true) main
-loop · rebuild context every turn.
-Ref: ref-src-claude/V04-tool-call-mechanism.md § 2.1 · Tool scope →
-partitioned gate pipeline.
+The legacy LangGraph implementation that previously lived here (~280
+lines using `create_react_agent` + `AsyncSqliteSaver` + `interrupt()`)
+was deleted in B3. ADR 0018 has the full migration story.
 """
 
 from __future__ import annotations
@@ -26,7 +31,6 @@ from allhands.config import get_settings
 from allhands.core.conversation import RenderPayload, ToolCall, ToolCallStatus
 from allhands.core.provider import LLMProvider
 from allhands.core.run_overrides import RunOverrides
-from allhands.core.tool import ToolScope
 from allhands.execution.events import (
     AgentEvent,
     DoneEvent,
@@ -43,9 +47,6 @@ from allhands.execution.skills import (
     SkillRuntime,
     render_skill_descriptors,
 )
-from allhands.execution.tools.meta.resolve_skill import make_resolve_skill_executor
-from allhands.execution.tools.meta.skill_files import make_read_skill_file_executor
-from allhands.execution.tools.meta.spawn_subagent import make_spawn_subagent_executor
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -326,6 +327,161 @@ def _apply_overrides(
         return model
 
 
+# --- ADR 0018 facade ---------------------------------------------------------
+# AgentRunner.stream now delegates to AgentLoop and projects InternalEvent
+# into the legacy AgentEvent stream the existing chat_service tap and AG-UI
+# encoder consume. Single per-turn message_id so event correlation stays
+# stable across tool-execution iterations within one stream call.
+
+
+def _facade_stream(
+    *,
+    employee: Employee,
+    tool_registry: ToolRegistry,
+    gate: BaseGate,
+    provider: LLMProvider | None,
+    dispatch_service: DispatchService | None,
+    skill_registry: SkillRegistry | None,
+    runtime: SkillRuntime,
+    spawn_subagent_service: SpawnSubagentService | None,
+    model_ref_override: str | None,
+    messages: list[dict[str, Any]],
+    overrides: RunOverrides | None,
+) -> AsyncIterator[AgentEvent]:
+    """Run the new AgentLoop, translate its InternalEvent stream into the
+    legacy AgentEvent surface, yield. Async generator factory.
+    """
+    from allhands.execution.agent_loop import AgentLoop
+
+    loop = AgentLoop(
+        employee=employee,
+        tool_registry=tool_registry,
+        gate=gate,
+        provider=provider,
+        dispatch_service=dispatch_service,
+        skill_registry=skill_registry,
+        runtime=runtime,
+        spawn_subagent_service=spawn_subagent_service,
+        model_ref_override=model_ref_override,
+    )
+
+    async def _gen() -> AsyncIterator[AgentEvent]:
+        projector = _LegacyProjector()
+        async for ev in loop.stream(messages=messages, overrides=overrides):
+            for legacy in projector.project(ev):
+                yield legacy
+
+    return _gen()
+
+
+class _LegacyProjector:
+    """One projector per AgentRunner.stream call. Holds:
+    * stable run_message_id for all TokenEvent / ReasoningEvent /
+      DoneEvent so the chat_service tap can group them as one
+      assistant message (matching the legacy single-message-per-turn
+      contract).
+    * tool_use metadata (name + args) keyed by id so ToolCallEndEvent
+      can carry them when only the tool_use_id is on the wire.
+    """
+
+    def __init__(self) -> None:
+        self.run_message_id: str = str(uuid.uuid4())
+        self.tool_meta: dict[str, tuple[str, dict[str, Any]]] = {}
+
+    def project(self, ev: Any) -> list[AgentEvent]:
+        from allhands.core.conversation import ToolUseBlock
+        from allhands.execution.internal_events import (
+            AssistantMessageCommitted,
+            AssistantMessagePartial,
+            ConfirmationRequested,
+            LoopExited,
+            ToolMessageCommitted,
+        )
+
+        out: list[AgentEvent] = []
+        if isinstance(ev, AssistantMessagePartial):
+            if ev.text_delta:
+                out.append(TokenEvent(message_id=self.run_message_id, delta=ev.text_delta))
+            if ev.reasoning_delta:
+                out.append(ReasoningEvent(message_id=self.run_message_id, delta=ev.reasoning_delta))
+            return out
+        if isinstance(ev, AssistantMessageCommitted):
+            for block in ev.message.content_blocks:
+                if isinstance(block, ToolUseBlock):
+                    self.tool_meta[block.id] = (block.name, dict(block.input))
+                    out.append(
+                        ToolCallStartEvent(
+                            tool_call=ToolCall(
+                                id=block.id,
+                                tool_id=block.name,
+                                args=dict(block.input),
+                                status=ToolCallStatus.RUNNING,
+                            )
+                        )
+                    )
+            return out
+        if isinstance(ev, ToolMessageCommitted):
+            tc_id = ev.message.tool_call_id or ""
+            tool_name, tool_args = self.tool_meta.get(tc_id, ("", {}))
+            # Message.content is declared str on the legacy schema, but the
+            # tool_pipeline pushes structured payloads through model_copy
+            # (success dict, error envelope). Treat as Any here for the
+            # mypy narrowing that follows.
+            content: Any = ev.message.content
+            failed = isinstance(content, dict) and "error" in content
+            error_text: str | None = None
+            if failed and isinstance(content, dict):
+                error_text = str(content.get("error"))
+            out.append(
+                ToolCallEndEvent(
+                    tool_call=ToolCall(
+                        id=tc_id,
+                        tool_id=tool_name,
+                        args=tool_args,
+                        status=ToolCallStatus.FAILED if failed else ToolCallStatus.SUCCEEDED,
+                        result=content,
+                        error=error_text,
+                    )
+                )
+            )
+            envelope = _as_render_envelope(content) if isinstance(content, dict) else None
+            if envelope is not None:
+                out.append(
+                    RenderEvent(
+                        message_id=self.run_message_id,
+                        payload=RenderPayload(**envelope),
+                    )
+                )
+            return out
+        if isinstance(ev, ConfirmationRequested):
+            out.append(
+                InterruptEvent(
+                    interrupt_id=ev.confirmation_id,
+                    value={
+                        "kind": "confirm_required",
+                        "tool_call_id": ev.tool_use_id,
+                        "summary": ev.summary,
+                        "rationale": ev.rationale,
+                        "diff": ev.diff,
+                    },
+                )
+            )
+            return out
+        if isinstance(ev, LoopExited):
+            if ev.reason != "completed":
+                out.append(
+                    ErrorEvent(
+                        code=ev.reason.upper(),
+                        message=ev.detail or ev.reason,
+                    )
+                )
+                out.append(DoneEvent(message_id=self.run_message_id, reason="error"))
+            else:
+                out.append(DoneEvent(message_id=self.run_message_id, reason="done"))
+            return out
+        return out
+
+
 class AgentRunner:
     def __init__(
         self,
@@ -398,365 +554,28 @@ class AgentRunner:
         overrides: RunOverrides | None = None,
         resume: dict[str, Any] | None = None,
     ) -> AsyncIterator[AgentEvent]:
-        """Drive one turn (or a resume) of the agent.
+        """ADR 0018 facade · delegates to AgentLoop, projects internal
+        events to the legacy AgentEvent stream existing chat_service /
+        chat router consume.
 
-        ``resume`` is the ADR 0014 Phase 3 lever: when set, the runner
-        invokes the graph with ``Command(resume=resume["value"])`` under
-        ``thread_id`` and the checkpointer picks up from wherever the prior
-        invocation paused (a ``interrupt()`` call in a tool / node).
-        ``messages`` is ignored in that case — the graph state already has
-        its messages from the pre-pause checkpoint. ``resume`` requires a
-        ``checkpointer`` on the runner; without one the Command has nothing
-        to resume.
+        ``checkpointer``, ``thread_id``, and ``resume`` kwargs are
+        accepted for backward compatibility but no longer drive
+        behavior — state lives in MessageRepo + ConfirmationRepo and
+        the polling ConfirmationDeferred handles suspend/resume. B5
+        cleanup deletes these params entirely.
         """
-        from langchain_core.messages import (
-            AIMessage,
-            AIMessageChunk,
-            HumanMessage,
-        )
-        from langchain_core.tools import StructuredTool
-        from langgraph.prebuilt import create_react_agent
-        from langgraph.types import Command
-
-        class _CoercingStructuredTool(StructuredTool):
-            """Override `_parse_input` so we coerce stringified-JSON nested
-            args back to structured values before Pydantic validates. See
-            `_coerce_stringified_json` for the failure mode this rescues.
-            """
-
-            def _parse_input(self, tool_input: Any, tool_call_id: str | None) -> Any:
-                if isinstance(tool_input, dict):
-                    tool_input = _coerce_stringified_json(tool_input)
-                return super()._parse_input(tool_input, tool_call_id)
-
-        message_id = str(uuid.uuid4())
-        gate = self._gate
-
-        lc_tools: list[Any] = []
-        for tool_id in self._active_tool_ids():
-            try:
-                tool, executor = self._tool_registry.get(tool_id)
-            except KeyError:
-                continue
-
-            if tool_id == RESOLVE_SKILL_TOOL_ID and self._skill_registry is not None:
-                executor = make_resolve_skill_executor(
-                    employee=self._employee,
-                    runtime=self._runtime,
-                    skill_registry=self._skill_registry,
-                )
-                lc_tools.append(
-                    _CoercingStructuredTool.from_function(
-                        coroutine=executor,
-                        name=tool.name,
-                        description=tool.description,
-                    )
-                )
-                continue
-
-            if tool_id == READ_SKILL_FILE_TOOL_ID and self._skill_registry is not None:
-                executor = make_read_skill_file_executor(
-                    runtime=self._runtime,
-                    skill_registry=self._skill_registry,
-                )
-                lc_tools.append(
-                    _CoercingStructuredTool.from_function(
-                        coroutine=executor,
-                        name=tool.name,
-                        description=tool.description,
-                    )
-                )
-                continue
-
-            if tool_id == DISPATCH_TOOL_ID and self._dispatch_service is not None:
-                lc_tools.append(
-                    _CoercingStructuredTool.from_function(
-                        coroutine=_make_dispatch_executor(self._dispatch_service),
-                        name=tool.name,
-                        description=tool.description,
-                    )
-                )
-                continue
-
-            if tool_id == SPAWN_SUBAGENT_TOOL_ID and self._spawn_subagent_service is not None:
-                # Rebind the registry's no-op stub to the real service. We then
-                # fall through to the gate-wrap logic below so the user is
-                # prompted (spawn_subagent declares scope=WRITE + requires_confirmation=True).
-                executor = make_spawn_subagent_executor(self._spawn_subagent_service)
-
-            needs_gate = (
-                tool.scope in (ToolScope.WRITE, ToolScope.IRREVERSIBLE, ToolScope.BOOTSTRAP)
-                and tool.requires_confirmation
-            )
-
-            if needs_gate:
-                _tool = tool
-                _executor = executor
-
-                def _make_gated(t: Any, e: Any) -> Any:
-                    async def _gated(**kwargs: Any) -> Any:
-                        tc_id = str(uuid.uuid4())
-                        outcome = await gate.request(
-                            tool=t,
-                            args=dict(kwargs),
-                            tool_call_id=tc_id,
-                            rationale=f"Tool '{t.name}' requires confirmation.",
-                            summary=f"Execute {t.name} with args: {kwargs}",
-                        )
-                        if outcome != "approved":
-                            return {"error": f"Tool call {outcome} by user."}
-                        return await e(**kwargs)
-
-                    return _gated
-
-                lc_tool = _CoercingStructuredTool.from_function(
-                    coroutine=_make_gated(_tool, _executor),
-                    name=tool.name,
-                    description=tool.description,
-                )
-            else:
-                _executor2 = executor
-                lc_tool = _CoercingStructuredTool.from_function(
-                    coroutine=_executor2,
-                    name=tool.name,
-                    description=tool.description,
-                )
-            lc_tools.append(lc_tool)
-
-        effective_model_ref = self._model_ref_override or self._employee.model_ref
-        model = _build_model(effective_model_ref, self._provider, overrides)
-
-        # Per-turn system override (overrides.system_override) is a prepend,
-        # not a replace — the employee's skill descriptors + resolved
-        # fragments must still be in scope for tool use. The override lands
-        # first so the user's framing is the most salient instruction.
-        system_parts: list[str] = []
-        if overrides and overrides.system_override:
-            override_text = overrides.system_override.strip()
-            if override_text:
-                system_parts.append(override_text)
-        base_prompt = self._compose_system_prompt()
-        if base_prompt:
-            system_parts.append(base_prompt)
-        system_prompt = "\n\n".join(system_parts).strip()
-
-        # The system prompt goes through `create_react_agent(prompt=...)` below
-        # so LangGraph prepends it at model-call time rather than storing it as
-        # a message in graph state. With `checkpointer=` enabled (ADR 0014
-        # default-on) and `add_messages` as the reducer, putting `SystemMessage`
-        # in the input `messages` channel caused it to accumulate across turns
-        # at non-consecutive positions (one per turn) — providers validating
-        # message order (e.g. Qwen/OpenAI-compatible) reject with
-        # "Received multiple non-consecutive system messages" (see E26).
-        from langchain_core.messages import ToolMessage
-
-        # Stable message ids flow in from chat_service so LangGraph's
-        # ``add_messages`` reducer can dedup by id across turns.
-        #
-        # ADR 0017 · build_llm_context returns user / assistant / tool roles,
-        # and assistant content can be either a plain string or a list of
-        # content_blocks (text + tool_use mixtures from prior turns where
-        # the agent called tools). We materialize all three LC message
-        # subclasses so the history stays faithful to what actually
-        # happened — dropping tool messages would leave the LLM seeing
-        # ``assistant(tool_use) → assistant(next turn)`` with no tool_result
-        # in between, which Anthropic rejects and OpenAI interprets
-        # incorrectly.
-        def _to_lc_message(m: dict[str, Any]) -> Any:
-            role = m.get("role")
-            if role == "user":
-                return HumanMessage(content=m["content"], id=m.get("id"))
-            if role == "assistant":
-                return AIMessage(content=m["content"], id=m.get("id"))
-            if role == "tool":
-                return ToolMessage(
-                    content=str(m.get("content", "")),
-                    tool_call_id=str(m.get("tool_call_id", "")),
-                    id=m.get("id"),
-                )
-            return None
-
-        lc_messages: list[Any] = [
-            lc for lc in (_to_lc_message(m) for m in messages) if lc is not None
-        ]
-
-        # Per-turn bookkeeping so tool_call lifecycle events stay in sync
-        # with LangGraph's node stream:
-        # - agent-node chunks may expose `tool_calls` as the LLM decides;
-        #   we emit ToolCallStartEvent the first time each id appears so
-        #   the UI can stamp a pending ToolCallCard.
-        # - tools-node chunks emit ToolMessage on completion; we close the
-        #   pair with ToolCallEndEvent and, when the result is a render
-        #   envelope, also yield a RenderEvent so the frontend's
-        #   component registry renders the Viz.* component inline.
-        seen_tool_call_ids: set[str] = set()
-        ended_tool_call_ids: set[str] = set()
-        tool_call_by_id: dict[str, dict[str, Any]] = {}
-        try:
-            # ADR 0014 · checkpointer is None in v0-compat mode (MessageRepo is
-            # the sole SoT). With a checkpointer, LangGraph snapshots the graph
-            # state per node transition under thread_id — enabling Phase 3/4
-            # interrupt() + resume. The runner never reads back from the
-            # checkpointer directly; that's LangGraph's responsibility when the
-            # same thread_id is re-invoked.
-            # `prompt=` is the LangGraph-idiomatic way to inject the system
-            # message: it's prepended at model-call time and never persisted
-            # into the message channel, so the checkpointer can't accumulate
-            # duplicates across turns (E26). `_compose_system_prompt()` is
-            # evaluated fresh every `runner.stream()` call (principle 3.3
-            # Pure-Function Query Loop), so skill activations that happened
-            # on earlier turns are reflected in later turns' prompts.
-            agent = create_react_agent(
-                model,
-                lc_tools,
-                checkpointer=self._checkpointer,
-                prompt=system_prompt or None,
-            )
-            # ADR 0014 · Phase 3 — multi-mode streaming.
-            # - "messages" gives per-token deltas (AIMessageChunk tuples) —
-            #   the only mode that supports token-level streaming for the
-            #   chat UX. Alternatives emit completed messages only.
-            # - "updates" surfaces ``{"__interrupt__": (Interrupt(...),)}``
-            #   when a node calls ``interrupt()``. Without subscribing to
-            #   updates, the graph pauses silently and the UI has no way to
-            #   know a human decision is needed. Plain state updates from
-            #   nodes also come through this channel — we filter those out.
-            #
-            # Each chunk is ``(mode, payload)``. We dispatch by mode to the
-            # existing message-parsing logic or the new interrupt-emission
-            # path.
-            #
-            # Phase 3 · resume: when the caller passes ``resume=...`` we
-            # hand ``Command(resume=resume["value"])`` to astream instead
-            # of a new messages dict. LangGraph uses the checkpointer to
-            # recover where ``interrupt()`` was paused.
-            agent_input: Any
-            if resume is not None:
-                agent_input = Command(resume=resume.get("value"))
-            else:
-                agent_input = {"messages": lc_messages}
-            async for stream_chunk in agent.astream(
-                agent_input,
-                config={"configurable": {"thread_id": thread_id}},
-                stream_mode=["messages", "updates"],
-            ):
-                if not (isinstance(stream_chunk, tuple) and len(stream_chunk) == 2):
-                    continue
-                mode, payload = stream_chunk
-
-                if mode == "updates":
-                    # Interrupt marker is the only signal in "updates" we
-                    # care about — regular node state transitions are
-                    # redundant with the per-token stream. Each interrupt
-                    # carries an id that stays stable across the pause so
-                    # the frontend can match a later resume to the right
-                    # suspension (§ ADR 0014 Phase 3 R4).
-                    if not isinstance(payload, dict):
-                        continue
-                    interrupts = payload.get("__interrupt__")
-                    if interrupts:
-                        for itr in interrupts:
-                            itr_id = getattr(itr, "id", "") or ""
-                            raw_value = getattr(itr, "value", None)
-                            value_dict: dict[str, object]
-                            if isinstance(raw_value, dict):
-                                value_dict = dict(raw_value)
-                            else:
-                                value_dict = {"value": raw_value}
-                            yield InterruptEvent(
-                                interrupt_id=itr_id,
-                                value=value_dict,
-                            )
-                    continue
-
-                # Everything below is mode == "messages".
-                if not (isinstance(payload, tuple) and len(payload) == 2):
-                    continue
-                msg, meta = payload
-                node = meta.get("langgraph_node") if isinstance(meta, dict) else None
-
-                if node == "agent":
-                    if not isinstance(msg, AIMessage | AIMessageChunk):
-                        continue
-                    if msg.content:
-                        text_delta, thinking_delta = _split_content_blocks(msg.content)
-                        if thinking_delta:
-                            yield ReasoningEvent(
-                                message_id=message_id,
-                                delta=thinking_delta,
-                            )
-                        if text_delta:
-                            yield TokenEvent(
-                                message_id=message_id,
-                                delta=text_delta,
-                            )
-                    # LLM may stream tool_calls across several chunks; the
-                    # final chunk carries the consolidated list. Emit
-                    # ToolCallStart the first time we see each id so the
-                    # UI can paint a pending card before the tool runs.
-                    raw_tcs = getattr(msg, "tool_calls", None) or []
-                    for tc in raw_tcs:
-                        tc_id = tc.get("id") if isinstance(tc, dict) else None
-                        if not tc_id or tc_id in seen_tool_call_ids:
-                            continue
-                        seen_tool_call_ids.add(tc_id)
-                        name = tc.get("name") or ""
-                        args = tc.get("args") or {}
-                        tool_call_by_id[tc_id] = {"name": name, "args": args}
-                        yield ToolCallStartEvent(
-                            tool_call=ToolCall(
-                                id=tc_id,
-                                tool_id=name,
-                                args=args,
-                                status=ToolCallStatus.RUNNING,
-                            )
-                        )
-                    continue
-
-                if node == "tools" and isinstance(msg, ToolMessage):
-                    tc_id = getattr(msg, "tool_call_id", None) or ""
-                    result = _parse_tool_message_content(msg.content)
-                    meta_tc = tool_call_by_id.get(tc_id, {})
-                    tool_name = meta_tc.get("name") or getattr(msg, "name", "") or ""
-                    tool_args = meta_tc.get("args") or {}
-                    ended_tool_call_ids.add(tc_id)
-                    yield ToolCallEndEvent(
-                        tool_call=ToolCall(
-                            id=tc_id,
-                            tool_id=tool_name,
-                            args=tool_args,
-                            status=ToolCallStatus.SUCCEEDED,
-                            result=result,
-                        )
-                    )
-                    envelope = _as_render_envelope(result)
-                    if envelope is not None:
-                        yield RenderEvent(
-                            message_id=message_id,
-                            payload=RenderPayload(**envelope),
-                        )
-                    continue
-            # Some providers (notably gpt-4o-mini) emit a tool_call in the
-            # agent stream but never produce executable args, so the tools
-            # node never fires and no ToolMessage closes the pair. Without
-            # this fallback the UI sticks at "pending" forever (the frontend
-            # only flips status on TOOL_CALL_END / TOOL_CALL_RESULT). Emit a
-            # synthetic FAILED end-event for any started-but-unended id so
-            # both backend persistence and SSE consumers see a terminal
-            # state.
-            for tc_id in seen_tool_call_ids - ended_tool_call_ids:
-                meta_tc = tool_call_by_id.get(tc_id, {})
-                yield ToolCallEndEvent(
-                    tool_call=ToolCall(
-                        id=tc_id,
-                        tool_id=meta_tc.get("name") or "",
-                        args=meta_tc.get("args") or {},
-                        status=ToolCallStatus.FAILED,
-                        result=None,
-                        error="tool_call_dropped",
-                    )
-                )
-            yield DoneEvent(message_id=message_id, reason="done")
-        except Exception as exc:
-            yield ErrorEvent(code="INTERNAL", message=str(exc))
-            yield DoneEvent(message_id=message_id, reason="error")
+        async for legacy_event in _facade_stream(
+            employee=self._employee,
+            tool_registry=self._tool_registry,
+            gate=self._gate,
+            provider=self._provider,
+            dispatch_service=self._dispatch_service,
+            skill_registry=self._skill_registry,
+            runtime=self._runtime,
+            spawn_subagent_service=self._spawn_subagent_service,
+            model_ref_override=self._model_ref_override,
+            messages=messages,
+            overrides=overrides,
+        ):
+            yield legacy_event
+        return

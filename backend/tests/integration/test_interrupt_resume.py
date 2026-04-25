@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """ADR 0014 · Phase 3 — interrupt() → InterruptEvent → resume round trip.
 
 End-to-end guarantee of the Phase 3 contract:
@@ -25,6 +26,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="ADR 0018: interrupt-based resume superseded by polling deferred signal · deleted in B5"
+)
+
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
