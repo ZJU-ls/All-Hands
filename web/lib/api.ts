@@ -342,6 +342,12 @@ export type ModelDto = {
   name: string;
   display_name: string;
   context_window: number;
+  // Optional advanced caps — null when "use model default" (no max_tokens
+  // sent on outbound chat; chip falls back to context_window). When set,
+  // max_input_tokens drives the composer's budget chip denominator and
+  // max_output_tokens is forwarded as max_tokens on outbound chat requests.
+  max_input_tokens: number | null;
+  max_output_tokens: number | null;
   enabled: boolean;
   // Singleton across the whole table — at most one model has is_default=true.
   // Indicates the workspace-wide default for Lead Agent + ai_explainer when

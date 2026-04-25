@@ -24,6 +24,11 @@ export type GatewayModel = {
   name: string;
   display_name: string;
   context_window: number;
+  /** Optional advanced caps. null = "use model default". When set,
+   *  max_input_tokens drives the composer chip denominator and
+   *  max_output_tokens is forwarded as max_tokens on outbound chat. */
+  max_input_tokens: number | null;
+  max_output_tokens: number | null;
   enabled: boolean;
   /** Singleton flag — at most one row across the whole table is_default=true. */
   is_default: boolean;
