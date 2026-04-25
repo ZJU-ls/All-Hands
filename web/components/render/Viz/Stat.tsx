@@ -3,6 +3,7 @@
 import type { RenderProps } from "@/lib/component-registry";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { CopyButton } from "@/components/render/_shared/CopyButton";
 
 type Direction = "up" | "down" | "flat";
 type Tone = "positive" | "negative" | "neutral";
@@ -97,8 +98,16 @@ export function Stat({ props }: RenderProps) {
         ? "var(--color-danger)"
         : "var(--color-primary)";
 
+  // Copy payload bundles label + value + unit so paste lands as a
+  // self-describing snippet ("Active · 37 employees") rather than just a
+  // number that would be ambiguous out of context.
+  const copyValue =
+    value == null
+      ? ""
+      : `${label}${label ? ": " : ""}${String(value)}${unit ? ` ${unit}` : ""}`;
+
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-surface px-4 py-3 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft animate-fade-up">
+    <div className="group relative overflow-hidden rounded-xl border border-border bg-surface px-4 py-3 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft animate-fade-up">
       <span
         aria-hidden
         className="absolute inset-x-0 top-0 h-[2px]"
@@ -107,6 +116,12 @@ export function Stat({ props }: RenderProps) {
           opacity: 0.7,
         }}
       />
+      {/* Hover-revealed copy · single source for "give me this number". */}
+      {value != null ? (
+        <div className="absolute right-2 top-2 opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-within:opacity-100">
+          <CopyButton value={copyValue} label="复制指标" />
+        </div>
+      ) : null}
       <div className="text-caption font-mono uppercase tracking-wider text-text-muted">
         {label}
       </div>
@@ -120,6 +135,7 @@ export function Stat({ props }: RenderProps) {
         {delta && (
           <span
             className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-medium tabular-nums ${TONE_PILL[tone]}`}
+            title={`${direction === "up" ? "上升" : direction === "down" ? "下降" : "持平"} · ${delta.value}`}
           >
             <Icon name={DIRECTION_ICON[direction]} size={12} />
             {String(delta.value)}
