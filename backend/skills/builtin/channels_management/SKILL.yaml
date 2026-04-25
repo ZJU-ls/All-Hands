@@ -1,6 +1,6 @@
 id: allhands.channels_management
 name: 通知渠道
-description: 注册 Slack / 邮件 / Webhook 等 · 让员工的输出能推送到外部
+description: Slack / 邮件 / webhook 推送 · 注册渠道 测连通 订阅 topic 直接发消息
 version: 1.0.0
 builtin: true
 
