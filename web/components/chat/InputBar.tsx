@@ -252,6 +252,16 @@ export function InputBar({
     cancelStreaming();
   }, [cancelStreaming]);
 
+  // 2026-04-25 · MessageList's stalled-stream chip dispatches `chat:abort`
+  // when the user clicks 「停止」 on a hung stream. Sibling components can't
+  // share `streamRef` directly without lifting it up; a window-level event
+  // is the smallest seam that doesn't redesign the chat layout.
+  useEffect(() => {
+    const onAbort = () => handleAbort();
+    window.addEventListener("chat:abort", onAbort);
+    return () => window.removeEventListener("chat:abort", onAbort);
+  }, [handleAbort]);
+
   // Abort any in-flight SSE when the conversation switches (or on unmount).
   // Without this, navigating away mid-stream leaves the previous chat's
   // tokens writing into the global store, which then bleeds into the next
