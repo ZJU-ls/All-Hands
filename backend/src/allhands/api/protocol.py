@@ -16,7 +16,20 @@ class ConversationResponse(BaseModel):
     employee_id: str
     title: str | None = None
     model_ref_override: str | None = None
+    # Computed at response time by the three-stage resolver (override →
+    # employee → workspace default). Lets the model chip show what will
+    # actually run instead of just echoing the override field — the two
+    # diverge whenever the override / employee ref points at an
+    # unconfigured provider/model and resolution falls through to the
+    # workspace default. ``None`` only when no provider repo is wired
+    # (legacy test paths) — production always populates this.
+    effective_model_ref: str | None = None
+    effective_model_source: str | None = None
     created_at: str
+    # Persisted message count (user + assistant + tool). The history panel
+    # renders this as the "N 轮" badge — defaults to 0 so older clients can
+    # ignore it. Derived field, not stored on core.Conversation.
+    message_count: int = 0
 
 
 class UpdateConversationRequest(BaseModel):

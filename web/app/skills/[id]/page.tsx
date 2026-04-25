@@ -7,6 +7,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { SkillExplainer } from "@/components/skills/SkillExplainer";
 
 /**
  * Skill detail page · ADR 0016 V2 Azure Live polish.
@@ -409,6 +410,7 @@ function Overview({
 }) {
   return (
     <div data-testid="tab-panel-overview" className="space-y-5">
+      <SkillExplainer skillId={skill.id} />
       <Section title="元数据" icon="info">
         <MetaGrid
           items={[

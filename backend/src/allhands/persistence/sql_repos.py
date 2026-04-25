@@ -347,6 +347,44 @@ class SqlConversationRepo:
         await self._s.flush()
         return len(message_ids)
 
+    async def delete(self, conversation_id: str) -> bool:
+        """Cascade-aware conversation delete.
+
+        Messages + tool_calls go through ``cascade="all, delete-orphan"``,
+        agent_plans through ``ondelete=CASCADE``. The standalone tables that
+        reference ``conversation_id`` without a FK — ``conversation_events``
+        (ADR 0017) and ``skill_runtimes`` — are wiped explicitly. Artifacts
+        and tasks intentionally keep their conversation_id.
+        """
+        row = await self._s.get(ConversationRow, conversation_id)
+        if row is None:
+            return False
+        await self._s.delete(row)
+        await self._s.execute(
+            delete(ConversationEventRow).where(
+                ConversationEventRow.conversation_id == conversation_id
+            )
+        )
+        await self._s.execute(
+            delete(SkillRuntimeRow).where(SkillRuntimeRow.conversation_id == conversation_id)
+        )
+        await self._s.flush()
+        return True
+
+    async def count_messages(self, conversation_ids: list[str]) -> dict[str, int]:
+        if not conversation_ids:
+            return {}
+        stmt = (
+            select(MessageRow.conversation_id, func.count(MessageRow.id))
+            .where(MessageRow.conversation_id.in_(conversation_ids))
+            .group_by(MessageRow.conversation_id)
+        )
+        rows = await self._s.execute(stmt)
+        counts: dict[str, int] = dict.fromkeys(conversation_ids, 0)
+        for conv_id, n in rows.all():
+            counts[conv_id] = int(n)
+        return counts
+
 
 class SqlConfirmationRepo:
     def __init__(self, session: AsyncSession) -> None:

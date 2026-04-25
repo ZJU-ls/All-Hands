@@ -55,8 +55,17 @@ export function ModelOverrideChip({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const effectiveRef = conversation.model_ref_override ?? employee.model_ref;
-  const isOverridden = conversation.model_ref_override !== null;
+  // Backend resolves the three-stage chain (override → employee → workspace
+  // default) and returns it as `effective_model_ref`. Prefer it whenever
+  // present — it tells the truth even when the override / employee.model_ref
+  // points at an unregistered provider/model and resolution falls through.
+  // Legacy fallback to local stitching keeps tests / older API responses
+  // working until everyone migrates.
+  const effectiveRef =
+    conversation.effective_model_ref ?? conversation.model_ref_override ?? employee.model_ref;
+  const isOverridden = conversation.effective_model_source === "override"
+    || (conversation.effective_model_source === null && conversation.model_ref_override !== null);
+  const fellBackToGlobal = conversation.effective_model_source === "global_default";
   const { name: effModel } = splitRef(effectiveRef);
 
   async function handleChange(next: string) {
@@ -79,8 +88,10 @@ export function ModelOverrideChip({
   const title = error
     ? `切换失败 · ${error}`
     : isOverridden
-      ? `本对话覆盖为 ${effectiveRef} · 默认 ${employee.model_ref}`
-      : `跟随员工默认 · ${employee.model_ref}`;
+      ? `本对话覆盖为 ${effectiveRef} · 员工默认 ${employee.model_ref}`
+      : fellBackToGlobal
+        ? `员工配置 ${employee.model_ref} 在当前供应商未找到 · 已落到全局默认 ${effectiveRef}`
+        : `跟随员工默认 · ${effectiveRef}`;
 
   // Chip styling lives here so the Select trigger visually inherits the
   // prior look. `border-primary` when overridden keeps the original signal;
@@ -102,7 +113,11 @@ export function ModelOverrideChip({
       }}
       autoPickDefault={false}
       disabled={saving}
-      inheritLabel={`跟随员工默认 · ${employee.model_ref}`}
+      inheritLabel={
+        fellBackToGlobal
+          ? `跟随默认 · ${effectiveRef}（员工 ${employee.model_ref} 未配置)`
+          : `跟随员工默认 · ${effectiveRef}`
+      }
       testId="model-override-chip"
       size="sm"
       triggerClassName={chipClass}

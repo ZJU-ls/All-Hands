@@ -13,6 +13,7 @@ import {
   type PopoverSide,
 } from "@/lib/popover-placement";
 import { Icon } from "@/components/ui/icon";
+import { useChatStore } from "@/lib/store";
 
 // Max-h-96 (384px) is the hard panel cap; use that as the flip threshold.
 const HISTORY_POPOVER_MAX = 384;
@@ -51,6 +52,13 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
   const popRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
+  // Avoid spawning empty drafts when the user mashes 新建. If the current
+  // conversation has no user activity yet (no messages on disk + nothing
+  // streaming), the button no-ops — the current chat *is* the fresh one.
+  const messageCount = useChatStore((s) => s.messages.length);
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  const currentIsEmpty = messageCount === 0 && !isStreaming;
+
   // Flip the history popover when opening near the bottom of the viewport
   // (e.g. short windows, split panels). Horizontal alignment stays right-end
   // since the trigger sits at the right edge of the chat header; an h-flip
@@ -65,6 +73,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
 
   const handleNew = useCallback(async () => {
     if (!employeeId || busy) return;
+    if (currentIsEmpty) return;
     setBusy(true);
     try {
       const created = await createConversation(employeeId);
@@ -74,7 +83,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
     } finally {
       setBusy(false);
     }
-  }, [employeeId, busy, router]);
+  }, [employeeId, busy, currentIsEmpty, router]);
 
   const toggleHistory = useCallback(() => {
     setOpen((v) => !v);
@@ -136,9 +145,13 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
       <button
         type="button"
         onClick={handleNew}
-        disabled={disabled || busy}
+        disabled={disabled || busy || currentIsEmpty}
         aria-label="新建对话"
-        title="为当前员工新建一个空白对话"
+        title={
+          currentIsEmpty
+            ? "当前对话还是空的 · 直接在下方输入即可"
+            : "为当前员工新建一个空白对话"
+        }
         data-testid="chat-new-conversation"
         className={baseBtn}
       >

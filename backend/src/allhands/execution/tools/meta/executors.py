@@ -755,6 +755,20 @@ def make_artifact_search_executor(
     return _exec
 
 
+def _make_delete_conversation_exec_factory() -> Callable[
+    [async_sessionmaker[AsyncSession]], ToolExecutor
+]:
+    """Deferred import keeps this module independent of ``conversation_tools``
+    so the import graph stays flat (``conversation_tools`` already imports
+    ``persistence/``; we don't want a cycle from this side)."""
+
+    from allhands.execution.tools.meta.conversation_tools import (
+        make_delete_conversation_executor,
+    )
+
+    return make_delete_conversation_executor
+
+
 # Tool-id → executor-factory map. Keys match the ``Tool.id`` strings in
 # ``tools/meta/*.py``; values are callables that take a session_maker and
 # return an executor. Resolved in ``tools/__init__.discover_builtin_tools``.
@@ -785,4 +799,6 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     "allhands.artifacts.delete": make_artifact_delete_executor,
     "allhands.artifacts.pin": make_artifact_pin_executor,
     "allhands.artifacts.search": make_artifact_search_executor,
+    # History-panel conversation lifecycle (Tool First · L01).
+    "allhands.meta.delete_conversation": _make_delete_conversation_exec_factory(),
 }
