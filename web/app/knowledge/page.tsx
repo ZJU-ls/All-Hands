@@ -621,22 +621,23 @@ export default function KnowledgePage() {
               </>
             )}
             {pageState === "ok" && !activeKb && kbs && kbs.length === 0 && (
-              <EmptyState
-                title="工作区还没有知识库"
-                description="新建一个 KB,开始把笔记 / PDF / 网页 clip 沉淀进来。"
-                action={{
-                  label: "新建知识库",
-                  onClick: () => setShowCreate(true),
-                  icon: "plus",
-                }}
-                icon="book-open"
-              />
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <div className={SECTION_LABEL}>开始</div>
+                <p className="mt-2 text-[12px] leading-relaxed text-text-muted">
+                  右边是首次设置向导 · 跟着两步就能用。
+                </p>
+              </div>
             )}
           </aside>
 
           {/* ─ Main canvas */}
           <main className="col-span-12 flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:col-span-9">
-            {pageState === "ok" && !activeKb ? (
+            {pageState === "ok" && !activeKb && kbs && kbs.length === 0 ? (
+              <OnboardingWizard
+                models={models}
+                onCreate={() => setShowCreate(true)}
+              />
+            ) : pageState === "ok" && !activeKb ? (
               <div className="flex h-full items-center justify-center px-6 py-12 text-[12px] text-text-muted">
                 先在工具栏左侧选择一个知识库
               </div>
@@ -909,6 +910,139 @@ function ToolsCard() {
         在「员工」页给某个员工加上「<span className="text-text">知识库研究员</span>」技能,
         TA 在对话里就能搜这个 KB 并引用原文回答你。
       </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Onboarding wizard (zero-KB state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Full-page first-run experience. Notion / ChatGPT custom-GPT do this:
+ * give the user a numbered "here's how to start" guide plus the primary
+ * action prominent. Avoids the "blank canvas where do I click" anxiety.
+ */
+function OnboardingWizard({
+  models,
+  onCreate,
+}: {
+  models: EmbeddingModelOption[];
+  onCreate: () => void;
+}) {
+  const realAvailable = models.filter(
+    (m) => !m.ref.startsWith("mock:") && m.available,
+  ).length;
+  const steps = [
+    {
+      n: 1,
+      title: "(可选)配置语义检索模型",
+      done: realAvailable > 0,
+      cta: realAvailable > 0
+        ? `已找到 ${realAvailable} 个可用模型`
+        : "没配也能用 mock(只匹配关键词)",
+      action: realAvailable === 0
+        ? { href: "/gateway", label: "去模型网关" }
+        : undefined,
+      desc: "在「模型网关」加一个 OpenAI 或阿里云百炼 provider · KB 才能理解语义。不配的话演示模式也能跑通流程。",
+    },
+    {
+      n: 2,
+      title: "新建第一个知识库",
+      done: false,
+      cta: undefined,
+      action: { onClick: onCreate, label: "新建知识库" },
+      desc: "起个名字 · 选 embedder · 创建。建好后拖几个 md / pdf / docx 进来就能搜。",
+    },
+    {
+      n: 3,
+      title: "上传 / 抓 URL · 然后搜或问",
+      done: false,
+      cta: undefined,
+      action: undefined,
+      desc: "顶部工具栏:文件按钮 / 抓 URL · 多文件直接拖到页面。「搜/问」分段里切「问」就是 RAG 问答。",
+    },
+    {
+      n: 4,
+      title: "(可选)让员工帮你查",
+      done: false,
+      cta: undefined,
+      action: { href: "/employees", label: "去员工页" },
+      desc: "给某个员工挂上「知识库研究员」技能,他在 /chat 里就能搜这个 KB 并引用回答。",
+    },
+  ];
+  return (
+    <div className="flex h-full flex-col overflow-y-auto px-8 py-10">
+      <div className="mx-auto w-full max-w-2xl">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary-muted">
+            <Icon name="book-open" size={26} className="text-primary" />
+          </div>
+          <h2 className="text-[20px] font-semibold text-text">第一次来 · 4 步搭好</h2>
+          <p className="mt-1 text-[13px] text-text-muted">
+            把零散的笔记 / 文档存进来 · 自己搜得到 · 员工也能引用回答你
+          </p>
+        </div>
+        <ol className="space-y-3">
+          {steps.map((s) => (
+            <li
+              key={s.n}
+              className="flex gap-3 rounded-xl border border-border bg-surface-2 p-4"
+            >
+              <div
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg font-mono text-[12px] ${
+                  s.done
+                    ? "bg-success-soft text-success"
+                    : "bg-primary-muted text-primary"
+                }`}
+              >
+                {s.done ? <Icon name="check" size={14} /> : s.n}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-[13px] font-semibold text-text">
+                  {s.title}
+                  {s.cta && (
+                    <span className="font-mono text-[10px] text-text-subtle">
+                      · {s.cta}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[12px] leading-relaxed text-text-muted">
+                  {s.desc}
+                </p>
+                {s.action && "href" in s.action ? (
+                  <a
+                    href={s.action.href}
+                    className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted hover:border-border-strong hover:text-text"
+                  >
+                    {s.action.label}
+                    <Icon name="external-link" size={11} />
+                  </a>
+                ) : s.action ? (
+                  <button
+                    type="button"
+                    onClick={s.action.onClick}
+                    className="mt-2 inline-flex h-7 items-center gap-1.5 rounded-md bg-primary px-2.5 text-[11px] font-medium text-primary-fg hover:bg-primary-hover"
+                  >
+                    <Icon name="plus" size={11} />
+                    {s.action.label}
+                  </button>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-6 flex justify-center">
+          <button
+            type="button"
+            onClick={onCreate}
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-5 text-[13px] font-semibold text-primary-fg shadow-soft-sm hover:bg-primary-hover transition duration-fast"
+          >
+            <Icon name="plus" size={14} />
+            现在新建第一个知识库
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
