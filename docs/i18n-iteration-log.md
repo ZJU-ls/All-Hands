@@ -21,3 +21,32 @@
 - 启动 docs/i18n-iteration-log.md(本文件)
 - 派子 agent 重做 Knowledge 页 i18n(并行)
 - 主线检查 catalog 形状对齐
+
+**结果**:KB 页 147 keys · 形状 100% 对齐 · 0 placeholder mismatch
+
+**commits**:3a9b1b4 · e9d8969 · d3f8ca3
+
+## Round 2 · 2026-04-26 00:00
+
+**主题**:merge main + ArtifactPeek 时间格式化 + LocaleSwitcher 单测 + KB 增量
+
+**碰到**:origin/main 又给 KB 页加了 onboarding wizard / URL ingest modal /
+upload progress strip / Ask 模式 RAG / 拖拽上传 / 文档批选 等大堆新功能,
+新增 ~174 处中文。需要再派 agent 跟。
+
+**做的事**:
+- 拉 main(无源代码冲突)
+- ArtifactPeek 的 `relativeTime` helper(刚刚 / N 分钟前 / N 小时前 / N 天前)
+  迁出到 `artifacts.peek.{justNow,minutesAgo,hoursAgo,daysAgo,size,updated,created}`
+  · 14 keys × 2 locales
+- 新增 `tests/i18n-locale-switcher.test.tsx` · 4 个 contract 测试覆盖
+  compact / full 两种模式 + 切换 action 触发 / refresh 调用 / 同 locale 不触发
+- 派 agent 把 KB 剩余 174 行中文迁完 · catalog 又扩 ~80 keys 横跨 8 个新
+  sub-namespace(dragOverlay / onboarding / urlIngest / uploads / ask / ...)
+- KB 页 lint 警告 2 处 useEffect deps disable 行加上(matches 项目风格)
+
+**结果**:
+- 1863 tests passed · typecheck/lint/build 全绿
+- catalog: zh-CN 2209 / en 2209 keys · 100% intersect
+
+**commits**:待提交

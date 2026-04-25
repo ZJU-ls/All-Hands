@@ -186,6 +186,15 @@
     "editor": {
       "loading": "Loading editor…"
     },
+    "peek": {
+      "size": "size",
+      "updated": "updated",
+      "created": "created",
+      "justNow": "just now",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago"
+    },
     "list": {
       "pinned": "Pinned",
       "empty": "No artifacts yet. Have an employee produce a doc, code, or diagram."
