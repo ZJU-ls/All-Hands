@@ -220,10 +220,17 @@ function ChatStatusChip({
 }) {
   const t = useTranslations("chat.messageList");
   const SILENT_WARN_MS = 8000;
+  // After this much silence the chip turns into an explicit「停止」button
+  // (in addition to the warning tone). Below 60s the SSE watchdog hasn't
+  // tripped yet, but the user can already feel something's off and may want
+  // out of the spinner — give them an exit ramp instead of waiting for the
+  // 60s transport timeout.
+  const SILENT_ABORT_OFFER_MS = 25_000;
   const stalled = isStreaming && silentMs >= SILENT_WARN_MS;
+  const offerAbort = isStreaming && silentMs >= SILENT_ABORT_OFFER_MS;
   const seconds = Math.max(0, Math.floor(elapsedMs / 100) / 10).toFixed(1);
   const silentSeconds = Math.max(0, Math.round(silentMs / 1000));
-  const isClickable = !atBottom;
+  const isClickable = offerAbort || !atBottom;
 
   // Three tones · streaming-stalled (warning) · streaming-fine (primary) ·
   // idle-away (neutral surface, like the old jump-to-bottom).
@@ -240,17 +247,27 @@ function ChatStatusChip({
       : t("streamProcessing")
     : t("backToLatest");
 
+  const onClick = offerAbort
+    ? () => window.dispatchEvent(new CustomEvent("chat:abort"))
+    : !atBottom
+      ? onJumpToBottom
+      : undefined;
+  const titleText = offerAbort
+    ? t("streamAbortTitle")
+    : !atBottom
+      ? t("jumpToLatest")
+      : undefined;
   const Element = isClickable ? "button" : "div";
 
   return (
     <Element
       type={isClickable ? "button" : undefined}
-      onClick={isClickable ? onJumpToBottom : undefined}
+      onClick={onClick}
       data-testid={isStreaming ? "stream-status-chip" : "jump-to-bottom"}
       role={isStreaming ? "status" : undefined}
       aria-live={isStreaming ? "polite" : undefined}
-      aria-label={isClickable ? t("jumpToLatest") : undefined}
-      title={isClickable ? t("jumpToLatest") : undefined}
+      aria-label={titleText}
+      title={titleText}
       className={`absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-mono shadow-soft-sm tabular-nums transition-colors duration-base ${tone} ${isClickable ? "cursor-pointer" : ""}`}
     >
       {isStreaming ? (
@@ -267,7 +284,14 @@ function ChatStatusChip({
               {t("streamSilent", { s: silentSeconds })}
             </span>
           ) : null}
-          {isClickable ? <Icon name="arrow-down" size={11} className="ml-1 opacity-80" /> : null}
+          {offerAbort ? (
+            <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+              <Icon name="x" size={10} strokeWidth={2.5} />
+              {t("streamAbort")}
+            </span>
+          ) : !atBottom ? (
+            <Icon name="arrow-down" size={11} className="ml-1 opacity-80" />
+          ) : null}
         </>
       ) : (
         <>

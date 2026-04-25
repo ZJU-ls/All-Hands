@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>allhands · KB v0 验收清单</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root[data-theme="dark"]{
+  --bg-base:#0a0d14; --bg-surface:#11151f; --bg-elevated:#161b28; --bg-soft:#1c2233;
+  --border-hairline:rgba(120,140,200,0.10); --border-strong:rgba(140,165,220,0.18);
+  --text-strong:#f4f6fb; --text-default:#c9d1e3; --text-muted:#8590a8; --text-faint:#5d6680;
+  --primary:#4a7dff; --primary-soft:rgba(74,125,255,0.14); --primary-glow:rgba(74,125,255,0.42);
+  --accent-cyan:#38c8d8; --accent-violet:#8b6cff;
+  --success:#44d18a; --warning:#f0b048; --danger:#ff6477;
+}
+:root[data-theme="light"]{
+  --bg-base:#f5f7fc; --bg-surface:#fff; --bg-elevated:#fff; --bg-soft:#eef2fa;
+  --border-hairline:rgba(20,30,60,0.08); --border-strong:rgba(20,30,60,0.16);
+  --text-strong:#0c1426; --text-default:#2c364c; --text-muted:#5a6680; --text-faint:#8a93ab;
+  --primary:#2c5cff; --primary-soft:rgba(44,92,255,0.10); --primary-glow:rgba(44,92,255,0.35);
+  --accent-cyan:#1e9aa8; --accent-violet:#6a4cf0;
+  --success:#1fae6a; --warning:#c98a25; --danger:#d8324a;
+}
+html,body{background:var(--bg-base);color:var(--text-default);font-family:'Inter','PingFang SC',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+.text-strong{color:var(--text-strong);} .text-default{color:var(--text-default);} .text-muted{color:var(--text-muted);} .text-faint{color:var(--text-faint);}
+.bg-surface{background:var(--bg-surface);} .bg-soft{background:var(--bg-soft);} .border-hairline{border-color:var(--border-hairline);} .border-strong{border-color:var(--border-strong);}
+.gradient-text{background:linear-gradient(120deg,var(--primary),var(--accent-cyan),var(--accent-violet));-webkit-background-clip:text;background-clip:text;color:transparent;}
+.hero-mesh{background:radial-gradient(60% 50% at 20% 0%,var(--primary-soft) 0,transparent 60%),radial-gradient(50% 40% at 90% 20%,rgba(56,200,216,.10) 0,transparent 60%),radial-gradient(40% 30% at 50% 100%,rgba(139,108,255,.10) 0,transparent 60%);}
+.card{background:var(--bg-surface);border:1px solid var(--border-hairline);border-radius:14px;}
+.card-elev{background:var(--bg-elevated);border:1px solid var(--border-hairline);border-radius:12px;}
+.kbd{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;padding:2px 6px;border-radius:4px;background:var(--bg-soft);border:1px solid var(--border-hairline);color:var(--text-default);}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:11px;line-height:1.4;border-radius:999px;border:1px solid var(--border-strong);color:var(--text-muted);background:var(--bg-soft);font-weight:500;letter-spacing:0.02em;}
+.pill-primary{color:var(--primary);border-color:var(--primary-soft);background:var(--primary-soft);}
+.pill-success{color:var(--success);border-color:rgba(68,209,138,0.2);background:rgba(68,209,138,0.10);}
+.pill-warning{color:var(--warning);border-color:rgba(240,176,72,0.2);background:rgba(240,176,72,0.10);}
+.pill-danger{color:var(--danger);border-color:rgba(255,100,119,0.2);background:rgba(255,100,119,0.10);}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.accent-bar{background:linear-gradient(90deg,var(--primary),var(--accent-cyan));height:2px;border-radius:2px;}
+.cmd{position:relative;}
+.cmd pre{background:var(--bg-soft);border:1px solid var(--border-hairline);border-radius:8px;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;overflow-x:auto;color:var(--text-default);}
+.cmd .copy{position:absolute;top:8px;right:8px;font-size:10px;padding:3px 8px;border-radius:4px;background:var(--bg-elevated);border:1px solid var(--border-hairline);color:var(--text-muted);cursor:pointer;}
+.cmd .copy:hover{color:var(--text-strong);border-color:var(--border-strong);}
+.step{position:relative;padding-left:48px;}
+.step::before{content:attr(data-n);position:absolute;left:0;top:0;width:32px;height:32px;border-radius:50%;background:var(--primary-soft);color:var(--primary);font-weight:600;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:12px;border:1px solid var(--primary-soft);}
+.checkbox{width:16px;height:16px;border:1.5px solid var(--border-strong);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+.checkbox.checked{background:var(--success);border-color:var(--success);}
+.checkbox.checked::after{content:'✓';color:white;font-size:11px;font-weight:bold;}
+details > summary{list-style:none;cursor:pointer;}
+details > summary::-webkit-details-marker{display:none;}
+details > summary::after{content:'▾';color:var(--text-faint);margin-left:6px;transition:transform .15s;display:inline-block;}
+details[open] > summary::after{transform:rotate(180deg);}
+table.api{width:100%;font-size:13px;}
+table.api th{text-align:left;font-weight:500;color:var(--text-faint);padding:8px 12px;border-bottom:1px solid var(--border-hairline);text-transform:uppercase;letter-spacing:0.04em;font-size:10px;}
+table.api td{padding:10px 12px;border-bottom:1px solid var(--border-hairline);vertical-align:top;}
+.expected{background:linear-gradient(0deg,var(--primary-soft),transparent);border-left:2px solid var(--primary);padding:10px 14px;border-radius:0 8px 8px 0;color:var(--text-default);font-size:13px;}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- top nav -->
+<header class="sticky top-0 z-50 backdrop-blur-xl" style="background:color-mix(in srgb,var(--bg-base) 80%,transparent);border-bottom:1px solid var(--border-hairline);">
+  <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,var(--primary),var(--accent-violet));">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M4 7l8-4 8 4M4 7v10l8 4 8-4V7M4 7l8 4 8-4M12 11v10"/></svg>
+      </div>
+      <span class="text-strong font-semibold tracking-tight">KB v0 · 验收清单</span>
+      <span class="pill pill-success"><span class="dot"></span>已合并 main</span>
+    </div>
+    <button id="themeToggle" class="px-3 py-1.5 rounded-md text-muted hover:text-strong border border-hairline text-sm">主题</button>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero-mesh">
+  <div class="max-w-6xl mx-auto px-6 pt-16 pb-12">
+    <div class="flex items-center gap-2 mb-5">
+      <span class="pill pill-primary"><span class="dot"></span>验收 · 26 commits · 18 块代码</span>
+      <span class="pill">2026-04-25</span>
+    </div>
+    <h1 class="text-4xl md:text-5xl font-semibold tracking-tight leading-[1.1] text-strong mb-4">
+      照着这份单子点一遍 · <span class="gradient-text">能过就算交付</span>
+    </h1>
+    <p class="text-base text-muted max-w-3xl mb-8">
+      6 段验收 · 每段先告诉你"看什么"再告诉你"怎么点"。命令可复制 · 期望结果一栏写得明确。点一遍 ~10 分钟。
+    </p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+      <div class="card p-3"><div class="text-xs text-faint">代码</div><div class="text-strong text-lg font-semibold">~6.8k 行</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">单元测试</div><div class="text-strong text-lg font-semibold">25 / 25 ✓</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">REST 端点</div><div class="text-strong text-lg font-semibold">14</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">Meta Tools</div><div class="text-strong text-lg font-semibold">8</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 0. PRECHECK -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-1">§0 · 起服务前的环境检查</h2>
+  <p class="text-muted mb-6 text-sm">代码已在 <span class="kbd">main</span> 分支。确认依赖到位、DB 跑过 migration。</p>
+
+  <div class="card p-6 space-y-5">
+    <div class="step" data-n="01">
+      <div class="text-strong font-medium mb-1">拉最新 main</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>git checkout main && git pull origin main
+git log --oneline -3
+# 期望最上面看到 "fix(kb): renumber migration to 0026 …" 或更新</pre></div>
+    </div>
+
+    <div class="step" data-n="02">
+      <div class="text-strong font-medium mb-1">后端依赖 + DB 升级</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>cd backend
+uv sync                              # 依赖装好
+uv run alembic upgrade head          # 走 0023 → 0024 → 0025 → 0026</pre></div>
+      <div class="expected mt-3 text-xs">期望最后一行打印 <span class="mono">Running upgrade 0025 -&gt; 0026, knowledge base tables + FTS5 virtual index</span></div>
+    </div>
+
+    <div class="step" data-n="03">
+      <div class="text-strong font-medium mb-1">(可选) 配 embedding provider · 不配也能跑</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre># 默认 mock:hash-64 — 始终可用,适合验收。换真实 provider:
+# 在 .env 里加 (二选一):
+ALLHANDS_KB_DEFAULT_EMBEDDING_MODEL_REF=bailian:text-embedding-v3
+ALLHANDS_DASHSCOPE_API_KEY=sk-...
+
+# 或:
+ALLHANDS_KB_DEFAULT_EMBEDDING_MODEL_REF=openai:text-embedding-3-small
+ALLHANDS_OPENAI_API_KEY=sk-...</pre></div>
+      <div class="expected mt-3 text-xs">默认走 mock 可避免任何 key/网络依赖。后续每个步骤都能在 mock 下完成。</div>
+    </div>
+  </div>
+</section>
+
+<!-- 1. BACKEND VERIFY -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-1">§1 · 后端单测 + lint(30 秒)</h2>
+  <p class="text-muted mb-6 text-sm">确认 KB 这块的代码自洽 · 没破坏任何分层契约。</p>
+
+  <div class="card p-6 space-y-5">
+    <div class="step" data-n="01">
+      <div class="text-strong font-medium mb-1">跑 KB 这套单测</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>cd backend
+uv run pytest tests/unit/test_knowledge_service.py \
+              tests/unit/test_kb_chunker.py \
+              tests/unit/test_kb_retriever.py \
+              tests/unit/test_kb_embedder.py \
+              tests/unit/test_kb_parsers.py -v</pre></div>
+      <div class="expected mt-3 text-xs">期望全绿 · <span class="mono">25 passed</span></div>
+    </div>
+
+    <div class="step" data-n="02">
+      <div class="text-strong font-medium mb-1">分层契约 + 类型 + 风格</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>uv run ruff check src/ tests/
+uv run mypy src/
+uv run lint-imports
+uv run ruff format --check src/ tests/</pre></div>
+      <div class="expected mt-3 text-xs">每条都要 0 报错 · <span class="mono">Contracts: 4 kept, 0 broken</span> · execution → services 这条边没破。</div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. START SERVERS -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-1">§2 · 起前后端服务</h2>
+
+  <div class="card p-6 space-y-5">
+    <div class="step" data-n="01">
+      <div class="text-strong font-medium mb-1">后端</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>cd backend
+uv run uvicorn allhands.main:app --reload --port 8000</pre></div>
+      <div class="expected mt-3 text-xs">期望日志末尾 <span class="mono">Application startup complete.</span> 接着访问 <a href="http://localhost:8000/api/health" class="text-primary underline">http://localhost:8000/api/health</a> 应返回 <span class="mono">{"status":"ok",...}</span></div>
+    </div>
+
+    <div class="step" data-n="02">
+      <div class="text-strong font-medium mb-1">前端</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>cd web
+pnpm install
+pnpm dev   # 默认 http://localhost:3000</pre></div>
+      <div class="expected mt-3 text-xs">访问 <a href="http://localhost:3000/knowledge" class="text-primary underline">http://localhost:3000/knowledge</a> 不报错 · 左侧边栏看到 <span class="kbd">📚 知识库</span> 高亮项。</div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. UI ACCEPTANCE -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-1">§3 · UI 验收 · 五件事</h2>
+  <p class="text-muted mb-6 text-sm">浏览器打开 <span class="kbd">/knowledge</span> · 按下面顺序点。每项一句话能验。</p>
+
+  <div class="space-y-4">
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <span class="checkbox" onclick="this.classList.toggle('checked')"></span>
+        <div class="flex-1">
+          <div class="text-strong font-medium mb-1">3.1 创建一个 KB · 选择 embedder</div>
+          <p class="text-sm text-muted mb-3">左下"新 KB 名称"输入 <span class="kbd">Personal Brain</span>;下方 <span class="kbd">Embedding model</span> 下拉应该看到 6 项 — mock 两个(默认,可用)、openai/bailian 各两个(无 key 时 disabled 并显示 reason)。点 <span class="kbd">+ 新建 KB</span>。</p>
+          <div class="expected text-xs">期望 KB 出现在左侧列表 · 中部 header 显示 <span class="mono">mock:hash-64</span> · 状态计数 <span class="mono">0 docs · 0 chunks · 64d</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <span class="checkbox" onclick="this.classList.toggle('checked')"></span>
+        <div class="flex-1">
+          <div class="text-strong font-medium mb-1">3.2 上传不同格式各一份</div>
+          <p class="text-sm text-muted mb-3">点 <span class="kbd">+ 上传文档</span> · 依次试 4 种:</p>
+          <ul class="text-xs text-muted space-y-1 ml-4 mb-3">
+            <li>• 一份 <span class="kbd">.md</span>(任意 markdown)— 应有 heading 切片</li>
+            <li>• 一份 <span class="kbd">.txt</span> — 走 plain 路径</li>
+            <li>• 一份 <span class="kbd">.html</span>(可保存任一网页)— script/style 应被剥</li>
+            <li>• 一份 <span class="kbd">.pdf</span>(任意 PDF)— 每页变 Section</li>
+          </ul>
+          <div class="expected text-xs">每份上传后 ~1-3 秒 · 状态 pill 从 <span class="pill pill-warning">indexing</span> 变 <span class="pill pill-success">ready</span> · chunks 数显示出来。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <span class="checkbox" onclick="this.classList.toggle('checked')"></span>
+        <div class="flex-1">
+          <div class="text-strong font-medium mb-1">3.3 Hybrid 检索</div>
+          <p class="text-sm text-muted mb-3">在搜索框里输入你刚上传文档里出现的关键词,按 Enter。</p>
+          <div class="expected text-xs">右侧出现结果卡 · 每条带 <span class="kbd">cite</span>(doc id + section + page)、<span class="mono">score</span>、<span class="mono">BM25 #N</span>、<span class="mono">vec #N</span>。出现 <strong>RRF 融合后的 top-k</strong>。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <span class="checkbox" onclick="this.classList.toggle('checked')"></span>
+        <div class="flex-1">
+          <div class="text-strong font-medium mb-1">3.4 检索 Tune 面板</div>
+          <p class="text-sm text-muted mb-3">点 <span class="kbd">⚙ Tune</span> · 把 <span class="kbd">BM25 weight</span> 设 <span class="mono">0</span>(关掉 BM25),保存。再搜同一个 query。</p>
+          <div class="expected text-xs">期望:结果顺序变 — 现在只剩向量这条线;mock embedder 下结果差异肉眼可见(分数变小)。再切回 <span class="mono">1.0/1.0</span> 恢复。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <span class="checkbox" onclick="this.classList.toggle('checked')"></span>
+        <div class="flex-1">
+          <div class="text-strong font-medium mb-1">3.5 删除 + 软删校验</div>
+          <p class="text-sm text-muted mb-3">(可选)调 REST <span class="kbd">DELETE /api/kb/&lt;id&gt;/documents/&lt;did&gt;</span> 或后续做 UI 的删除按钮。</p>
+          <div class="expected text-xs">删除后 list 不再返回该 doc · DB 里看 <span class="kbd">deleted_at</span> 非空(软删 30 天)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. REST -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-1">§4 · REST 验收 · 14 个端点</h2>
+  <p class="text-muted mb-6 text-sm">不想点 UI 也能验。复制命令到终端跑。</p>
+
+  <div class="card p-6 space-y-4">
+    <div>
+      <div class="text-xs uppercase tracking-wide text-faint mb-2">列 KB · 列模型</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>curl -s http://localhost:8000/api/kb | jq
+curl -s http://localhost:8000/api/kb/embedding-models | jq</pre></div>
+    </div>
+
+    <div>
+      <div class="text-xs uppercase tracking-wide text-faint mb-2">建 KB</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>curl -s -X POST http://localhost:8000/api/kb \
+  -H 'content-type: application/json' \
+  -d '{"name":"curl-test","embedding_model_ref":"mock:hash-64"}' | jq</pre></div>
+    </div>
+
+    <div>
+      <div class="text-xs uppercase tracking-wide text-faint mb-2">上传文档(替换 KB_ID)</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>echo "# Hello\n\nThis is a hybrid retrieval test." > /tmp/sample.md
+curl -s -X POST "http://localhost:8000/api/kb/&lt;KB_ID&gt;/documents" \
+  -F "file=@/tmp/sample.md" -F "title=sample" -F "tags=demo" | jq</pre></div>
+    </div>
+
+    <div>
+      <div class="text-xs uppercase tracking-wide text-faint mb-2">搜索</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>curl -s -X POST "http://localhost:8000/api/kb/&lt;KB_ID&gt;/search" \
+  -H 'content-type: application/json' \
+  -d '{"query":"hybrid retrieval"}' | jq</pre></div>
+    </div>
+
+    <div>
+      <div class="text-xs uppercase tracking-wide text-faint mb-2">调检索权重</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>curl -s -X PATCH "http://localhost:8000/api/kb/&lt;KB_ID&gt;/retrieval-config" \
+  -H 'content-type: application/json' \
+  -d '{"bm25_weight":0,"vector_weight":1.0,"top_k":5}' | jq</pre></div>
+    </div>
+
+    <div>
+      <div class="text-xs uppercase tracking-wide text-faint mb-2">颁发 grant(给某员工写权限)</div>
+      <div class="cmd"><button class="copy" onclick="cp(this)">copy</button><pre>curl -s -X POST "http://localhost:8000/api/kb/&lt;KB_ID&gt;/grants" \
+  -H 'content-type: application/json' \
+  -d '{"scope":"write","employee_id":"emp_xxx"}' | jq</pre></div>
+    </div>
+
+    <div>
+      <div class="text-xs uppercase tracking-wide text-faint mb-2">完整端点表</div>
+      <table class="api">
+        <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">GET</td><td class="mono">/api/kb</td><td class="text-muted">列 workspace 下的 KB</td></tr>
+          <tr><td class="mono">POST</td><td class="mono">/api/kb</td><td class="text-muted">建 KB</td></tr>
+          <tr><td class="mono">GET</td><td class="mono">/api/kb/embedding-models</td><td class="text-muted">列可用 embedding provider</td></tr>
+          <tr><td class="mono">GET</td><td class="mono">/api/kb/{id}</td><td class="text-muted">取 KB 详情</td></tr>
+          <tr><td class="mono">DELETE</td><td class="mono">/api/kb/{id}</td><td class="text-muted">软删 KB</td></tr>
+          <tr><td class="mono">PATCH</td><td class="mono">/api/kb/{id}/retrieval-config</td><td class="text-muted">改检索配置</td></tr>
+          <tr><td class="mono">GET</td><td class="mono">/api/kb/{id}/documents</td><td class="text-muted">列文档(可 filter)</td></tr>
+          <tr><td class="mono">POST</td><td class="mono">/api/kb/{id}/documents</td><td class="text-muted">上传文档(multipart)</td></tr>
+          <tr><td class="mono">GET</td><td class="mono">/api/kb/{id}/documents/{did}</td><td class="text-muted">取文档元数据</td></tr>
+          <tr><td class="mono">GET</td><td class="mono">/api/kb/{id}/documents/{did}/text</td><td class="text-muted">取文档原文</td></tr>
+          <tr><td class="mono">DELETE</td><td class="mono">/api/kb/{id}/documents/{did}</td><td class="text-muted">软删文档</td></tr>
+          <tr><td class="mono">POST</td><td class="mono">/api/kb/{id}/search</td><td class="text-muted">Hybrid 检索</td></tr>
+          <tr><td class="mono">GET</td><td class="mono">/api/kb/{id}/grants</td><td class="text-muted">列 grants</td></tr>
+          <tr><td class="mono">POST</td><td class="mono">/api/kb/{id}/grants</td><td class="text-muted">颁发 grant</td></tr>
+          <tr><td class="mono">DELETE</td><td class="mono">/api/kb/{id}/grants/{gid}</td><td class="text-muted">收回 grant</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 5. AGENT FLOW -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-1">§5 · Agent 端到端 · kb-researcher</h2>
+  <p class="text-muted mb-6 text-sm">这是最有说服力的一段。Lead 应该能用 KB 回答你。</p>
+
+  <div class="card p-6 space-y-5">
+    <div class="step" data-n="01">
+      <div class="text-strong font-medium mb-1">给 Lead 挂上 kb-researcher skill</div>
+      <p class="text-sm text-muted mb-2">/employees → 找 Lead → Skills 里加 <span class="kbd">allhands.skills.kb_researcher</span> → 保存。</p>
+      <div class="expected text-xs">如果没有这条 skill,检查 <span class="kbd">backend/skills/builtin/kb_researcher/SKILL.yaml</span> 是否存在;启动日志里应有它的注册。</div>
+    </div>
+
+    <div class="step" data-n="02">
+      <div class="text-strong font-medium mb-1">在 /chat 里问 Lead</div>
+      <p class="text-sm text-muted mb-2">用你 §3.2 上传文档里出现过的内容提问 · 例如:</p>
+      <div class="card-elev p-3 text-xs mono mb-2">
+        我刚上传到 KB 的那份 markdown 里讲了什么?引用具体段落给我。
+      </div>
+      <div class="expected text-xs">期望 Lead 调用顺序(在 trace 里能看到):<br>
+      <span class="mono">resolve_skill(allhands.skills.kb_researcher)</span><br>
+      → <span class="mono">kb_list()</span> → <span class="mono">kb_search(kb_id, query)</span><br>
+      → 必要时 <span class="mono">kb_read_document(doc_id)</span> → 答复带 citation。</div>
+    </div>
+
+    <div class="step" data-n="03">
+      <div class="text-strong font-medium mb-1">写权限闭环(可选,验权限护栏)</div>
+      <p class="text-sm text-muted mb-2">让 Lead 试 <span class="mono">kb_create_document</span> · 默认会拒(没 grant)。</p>
+      <div class="card-elev p-3 text-xs mono mb-2">
+        把刚才的回答总结成一篇文档,沉淀到 KB。
+      </div>
+      <div class="expected text-xs">期望:第一次返回 <span class="mono">{error: "no_grant", message: "Ask the user to call kb_grant_permission first"}</span> · 你说"给它 write 权限"后,Lead 调 kb_grant_permission · Confirmation Gate 弹出 · 你点 Allow · 第二次 kb_create_document 通过。</div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. SUMMARY + LIMITS -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-1">§6 · 已交付 vs. 已知遗留</h2>
+
+  <div class="grid md:grid-cols-2 gap-4 mt-6">
+    <div class="card p-5">
+      <div class="text-xs uppercase tracking-wide text-success mb-2 flex items-center gap-2"><span class="dot"></span>已交付</div>
+      <ul class="text-sm text-default space-y-2">
+        <li>✓ 8 张表 · alembic 0026 · FTS5 + 触发器</li>
+        <li>✓ 5 种格式 parser:txt / md / pdf / html / docx</li>
+        <li>✓ Embedder 三种 provider:mock / openai / bailian · 可配</li>
+        <li>✓ Hybrid 检索:BM25 + 向量 + RRF · query embed cache</li>
+        <li>✓ 14 REST 端点 + 8 Meta Tool · L01 配对</li>
+        <li>✓ Grant 模型 · 写操作 confirmation gate</li>
+        <li>✓ /knowledge UI · 三栏 + tune 面板 + 模型下拉</li>
+        <li>✓ kb-researcher 内置 skill · 渐进加载</li>
+        <li>✓ 25 单测 + ADR 0020</li>
+      </ul>
+    </div>
+    <div class="card p-5">
+      <div class="text-xs uppercase tracking-wide text-warning mb-2 flex items-center gap-2"><span class="dot"></span>已知遗留(不影响 v0)</div>
+      <ul class="text-sm text-default space-y-2">
+        <li>✦ 同步 ingest:大文件会阻塞 REST · M2 改 BackgroundTasks</li>
+        <li>✦ docx parser 需手动 <span class="kbd">uv add python-docx</span>;不装时会清晰报错</li>
+        <li>✦ pdf parser 需 <span class="kbd">uv add pypdf</span>;同上</li>
+        <li>✦ 向量层 BlobVecStore 是 brute-force,&gt; 100k chunks 要换 sqlite-vec</li>
+        <li>✦ Reranker 占位(M3 起 bge-base ONNX)</li>
+        <li>✦ 没有 audio/video 转写</li>
+        <li>✦ 检索回归 P@5 / MRR 套件没建</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="py-12 text-center text-xs text-faint">
+  <div class="max-w-6xl mx-auto px-6 border-t border-hairline pt-8">
+    KB v0 · 2026-04-25 · main 分支 · 本 HTML:<span class="kbd">docs/specs/kb/acceptance.html</span><br>
+    设计文档:<a href="2026-04-25-knowledge-base-design.md" class="text-primary underline">design.md</a> ·
+    架构展示:<a href="showcase.html" class="text-primary underline">showcase.html</a> ·
+    ADR:<a href="../../product/adr/0020-knowledge-base.md" class="text-primary underline">0020</a>
+  </div>
+</footer>
+
+<script>
+const root = document.documentElement;
+document.getElementById('themeToggle').addEventListener('click', () => {
+  root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+});
+function cp(btn){
+  const txt = btn.parentElement.querySelector('pre').textContent;
+  navigator.clipboard.writeText(txt).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'copied!';
+    setTimeout(() => btn.textContent = orig, 1200);
+  });
+}
+</script>
+</body></html>

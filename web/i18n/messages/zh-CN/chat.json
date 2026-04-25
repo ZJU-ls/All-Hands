@@ -76,7 +76,9 @@
       "internalHint": "多半是模型凭证没配好或上游拒绝。去 /gateway 核对 provider 的 API Key 与 base_url。",
       "streamProcessing": "处理中",
       "streamStalled": "等待响应",
-      "streamSilent": "无响应 {s}s"
+      "streamSilent": "无响应 {s}s",
+      "streamAbort": "停止",
+      "streamAbortTitle": "停止本次流(无响应过久 · 点击中断 SSE 并解锁输入)"
     },
     "modelOverride": {
       "defaultModel": "默认模型",
