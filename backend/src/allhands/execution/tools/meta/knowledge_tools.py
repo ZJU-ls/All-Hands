@@ -15,6 +15,24 @@ from allhands.core import Tool, ToolKind, ToolScope
 
 # ── READ tools (executors registered in api/app.py via extra_executors)
 
+KB_LIST_EMBEDDING_MODELS_TOOL = Tool(
+    id="allhands.kb.list_embedding_models",
+    kind=ToolKind.META,
+    name="kb_list_embedding_models",
+    description=(
+        "List embedding models that can be used for KB creation. Returns "
+        "`{models: [{ref, label, dim, available, reason, is_default}]}`. "
+        "Use before `kb_create_document` flows that involve creating a new "
+        "KB so the user picks an embedding model that's actually usable in "
+        "this deployment (e.g. openai needs an API key)."
+    ),
+    input_schema={"type": "object", "properties": {}},
+    output_schema={"type": "object"},
+    scope=ToolScope.READ,
+    requires_confirmation=False,
+)
+
+
 KB_LIST_TOOL = Tool(
     id="allhands.kb.list",
     kind=ToolKind.META,
@@ -177,6 +195,7 @@ KB_GRANT_PERMISSION_TOOL = Tool(
 
 ALL_KB_META_TOOLS = [
     KB_LIST_TOOL,
+    KB_LIST_EMBEDDING_MODELS_TOOL,
     KB_BROWSE_COLLECTION_TOOL,
     KB_SEARCH_TOOL,
     KB_READ_DOCUMENT_TOOL,
@@ -190,6 +209,7 @@ __all__ = [
     "KB_BROWSE_COLLECTION_TOOL",
     "KB_CREATE_DOCUMENT_TOOL",
     "KB_GRANT_PERMISSION_TOOL",
+    "KB_LIST_EMBEDDING_MODELS_TOOL",
     "KB_LIST_TOOL",
     "KB_READ_DOCUMENT_TOOL",
     "KB_SEARCH_TOOL",

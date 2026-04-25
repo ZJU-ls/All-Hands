@@ -53,6 +53,19 @@ export interface ScoredChunkDto {
   vector_rank: number | null;
 }
 
+export interface EmbeddingModelOption {
+  ref: string;
+  label: string;
+  dim: number;
+  available: boolean;
+  reason: string | null;
+  is_default: boolean;
+}
+
+export async function listEmbeddingModels(): Promise<EmbeddingModelOption[]> {
+  return check(await fetch(`${BASE}/api/kb/embedding-models`), "listEmbeddingModels");
+}
+
 export interface GrantDto {
   id: string;
   kb_id: string;

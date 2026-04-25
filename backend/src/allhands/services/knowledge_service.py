@@ -28,6 +28,7 @@ import contextlib
 import hashlib
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -71,7 +72,26 @@ _logger = logging.getLogger(__name__)
 
 
 DEFAULT_WORKSPACE_ID = "default"
-DEFAULT_EMBEDDING_REF = "mock:hash-64"
+# Fallback when settings somehow aren't available (test harness without
+# pydantic-settings). Real default is read from settings at construction.
+_FALLBACK_EMBEDDING_REF = "mock:hash-64"
+
+
+@dataclass(frozen=True)
+class EmbeddingModelOption:
+    """One row in the "pick an embedding model" UI dropdown.
+
+    `available` is False when the scheme exists but is not currently
+    usable in this process (e.g. ``openai`` without ``openai_api_key``).
+    The UI greys out such options + shows ``reason``.
+    """
+
+    ref: str
+    label: str
+    dim: int
+    available: bool
+    reason: str | None = None
+    is_default: bool = False
 
 
 class KBError(DomainError):
@@ -105,13 +125,36 @@ class KnowledgeService:
         chunker_config: ChunkerConfig | None = None,
     ) -> None:
         self._session_maker = session_maker
-        self._data_dir = data_dir or Path(get_settings().data_dir)
+        settings = get_settings()
+        self._data_dir = data_dir or Path(settings.data_dir)
         self._chunker = Chunker(chunker_config)
 
-        # Default to mock embedder so the platform boots without API keys.
+        # Embedder default chain:
+        #   1. caller-provided embedder (tests / DI)
+        #   2. settings.kb_default_embedding_model_ref (env-configured)
+        #   3. mock:hash-64 (always-available fallback)
+        # The settings path is what makes this user-configurable: prod sets
+        # ALLHANDS_KB_DEFAULT_EMBEDDING_MODEL_REF=bailian:text-embedding-v3
+        # and existing call sites need no change.
         if embedder is None:
-            provider = resolve_provider(DEFAULT_EMBEDDING_REF)
-            embedder = Embedder(model_ref=DEFAULT_EMBEDDING_REF, provider=provider)
+            ref = (
+                getattr(settings, "kb_default_embedding_model_ref", None) or _FALLBACK_EMBEDDING_REF
+            )
+            try:
+                provider = resolve_provider(ref)
+            except ValueError as exc:
+                # Misconfigured env (e.g. openai:* without API key) → fall
+                # back loudly. We log + degrade rather than crash boot,
+                # so the platform stays available even when keys go stale.
+                _logger.warning(
+                    "kb embedder default %r unusable (%s) — falling back to %s",
+                    ref,
+                    exc,
+                    _FALLBACK_EMBEDDING_REF,
+                )
+                ref = _FALLBACK_EMBEDDING_REF
+                provider = resolve_provider(ref)
+            embedder = Embedder(model_ref=ref, provider=provider)
         self._embedder = embedder
 
         if vec_store is None:
@@ -130,6 +173,83 @@ class KnowledgeService:
             vec_store=self._vec_store,
             fts_search=self._fts_search_for_kb,
             chunk_lookup=self._chunk_lookup,
+        )
+
+    # ------------------------------------------------------------------
+    # Embedding model registry — what's installable in this process
+    # ------------------------------------------------------------------
+
+    def list_embedding_models(self) -> list[EmbeddingModelOption]:
+        """Return options the create-KB form can render in a dropdown.
+
+        Discovery is deliberately static: we know the three schemes the
+        embedder supports + the per-scheme prerequisites (api keys). We do
+        NOT round-trip provider HTTP here — UI render must be cheap and
+        free of external dependencies.
+        """
+        settings = get_settings()
+        default_ref = (
+            getattr(settings, "kb_default_embedding_model_ref", None) or _FALLBACK_EMBEDDING_REF
+        )
+        options: list[EmbeddingModelOption] = []
+
+        # Mock — always on, two common dims
+        for dim in (64, 256):
+            ref = f"mock:hash-{dim}"
+            options.append(
+                EmbeddingModelOption(
+                    ref=ref,
+                    label=f"Mock · hash-{dim} (deterministic, dev only)",
+                    dim=dim,
+                    available=True,
+                    is_default=ref == default_ref,
+                )
+            )
+
+        # OpenAI
+        openai_key = getattr(settings, "openai_api_key", None)
+        for model, dim in (
+            ("text-embedding-3-small", 1536),
+            ("text-embedding-3-large", 3072),
+        ):
+            ref = f"openai:{model}"
+            options.append(
+                EmbeddingModelOption(
+                    ref=ref,
+                    label=f"OpenAI · {model}",
+                    dim=dim,
+                    available=bool(openai_key),
+                    reason=None if openai_key else "set ALLHANDS_OPENAI_API_KEY",
+                    is_default=ref == default_ref,
+                )
+            )
+
+        # Bailian (DashScope)
+        dash_key = getattr(settings, "dashscope_api_key", None)
+        for model, dim in (
+            ("text-embedding-v3", 1024),
+            ("text-embedding-v4", 1024),
+        ):
+            ref = f"bailian:{model}"
+            options.append(
+                EmbeddingModelOption(
+                    ref=ref,
+                    label=f"百炼 · {model}",
+                    dim=dim,
+                    available=bool(dash_key),
+                    reason=None if dash_key else "set ALLHANDS_DASHSCOPE_API_KEY",
+                    is_default=ref == default_ref,
+                )
+            )
+        return options
+
+    @staticmethod
+    def default_embedding_model_ref() -> str:
+        """Resolved env-configured default; convenience for callers that
+        only need the string (e.g. UI form initial value)."""
+        return (
+            getattr(get_settings(), "kb_default_embedding_model_ref", None)
+            or _FALLBACK_EMBEDDING_REF
         )
 
     # ------------------------------------------------------------------
@@ -405,8 +525,8 @@ class KnowledgeService:
 
 
 __all__ = [
-    "DEFAULT_EMBEDDING_REF",
     "DocumentNotFound",
+    "EmbeddingModelOption",
     "GrantDenied",
     "KBError",
     "KBNotFound",

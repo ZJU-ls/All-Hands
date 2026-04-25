@@ -209,6 +209,37 @@ def _grant_out(g: Grant) -> GrantOut:
 # ----------------------------------------------------------------------
 
 
+class EmbeddingModelOut(BaseModel):
+    ref: str
+    label: str
+    dim: int
+    available: bool
+    reason: str | None
+    is_default: bool
+
+
+@router.get("/embedding-models")
+async def list_embedding_models() -> list[EmbeddingModelOut]:
+    """List embedding models the create-KB form can offer.
+
+    Static discovery: doesn't probe any provider HTTP endpoint. UI greys
+    out options where ``available=false`` and surfaces ``reason`` so the
+    user knows which env var to set.
+    """
+    opts = _service().list_embedding_models()
+    return [
+        EmbeddingModelOut(
+            ref=o.ref,
+            label=o.label,
+            dim=o.dim,
+            available=o.available,
+            reason=o.reason,
+            is_default=o.is_default,
+        )
+        for o in opts
+    ]
+
+
 @router.get("")
 async def list_kbs() -> list[KBOut]:
     kbs = await _service().list_kbs()

@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     confirmation_ttl_seconds: int = Field(default=300, ge=10)
     max_iterations_default: int = Field(default=10, ge=1, le=10000)
 
+    # ---- Knowledge Base ----
+    # Default embedding model_ref for newly created KBs. Schemes:
+    #   mock:hash-<dim>     — always available, deterministic, dim ∈ {16..2048}
+    #   openai:<model>      — needs openai_api_key  (e.g. text-embedding-3-small)
+    #   bailian:<model>     — needs dashscope_api_key (e.g. text-embedding-v3)
+    # Per-KB override is allowed at create-time; this is just the default the
+    # form/Meta-Tool falls back to when the user doesn't pick.
+    kb_default_embedding_model_ref: str = Field(default="mock:hash-64")
+    # Concurrency cap for the embedding worker (M2 stretch). Currently the
+    # ingest path drains synchronously; this hook is for the future async path.
+    kb_embedding_batch_size: int = Field(default=64, ge=1, le=512)
+
     # ---- Skill market (GitHub-backed, default: anthropics/skills) ----
     skill_market_owner: str = Field(default="anthropics")
     skill_market_repo: str = Field(default="skills")

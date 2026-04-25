@@ -182,8 +182,24 @@ def kb_executors_for(svc: KnowledgeService) -> dict[str, ToolExecutor]:
             "expires_at": grant.expires_at.isoformat() if grant.expires_at else None,
         }
 
+    async def _list_models(**_: Any) -> dict[str, Any]:
+        return {
+            "models": [
+                {
+                    "ref": o.ref,
+                    "label": o.label,
+                    "dim": o.dim,
+                    "available": o.available,
+                    "reason": o.reason,
+                    "is_default": o.is_default,
+                }
+                for o in svc.list_embedding_models()
+            ]
+        }
+
     return {
         "allhands.kb.list": _list,
+        "allhands.kb.list_embedding_models": _list_models,
         "allhands.kb.browse_collection": _browse,
         "allhands.kb.search": _search,
         "allhands.kb.read_document": _read,

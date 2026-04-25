@@ -123,3 +123,33 @@ async def test_search_empty_query_returns_empty(svc: KnowledgeService) -> None:
     kb = await svc.create_kb(name="brain")
     assert await svc.search(kb.id, "") == []
     assert await svc.search(kb.id, "   ") == []
+
+
+async def test_create_kb_honors_explicit_embedding_ref(svc: KnowledgeService) -> None:
+    kb = await svc.create_kb(name="alt", embedding_model_ref="mock:hash-128")
+    assert kb.embedding_model_ref == "mock:hash-128"
+    assert kb.embedding_dim == 128
+
+
+def test_list_embedding_models_marks_mock_available_and_default(
+    svc: KnowledgeService,
+) -> None:
+    opts = svc.list_embedding_models()
+    refs = [o.ref for o in opts]
+    # Mock dims always present
+    assert "mock:hash-64" in refs
+    assert "mock:hash-256" in refs
+    # OpenAI / bailian present but conditional on env keys
+    assert any(o.ref.startswith("openai:") for o in opts)
+    assert any(o.ref.startswith("bailian:") for o in opts)
+    # Mock is always available
+    assert all(o.available for o in opts if o.ref.startswith("mock:"))
+    # Default surfaces; in test env it's mock:hash-64
+    defaults = [o for o in opts if o.is_default]
+    assert len(defaults) == 1
+    assert defaults[0].ref == "mock:hash-64"
+
+
+def test_default_embedding_model_ref_pulled_from_settings() -> None:
+    # Settings.kb_default_embedding_model_ref drives the default
+    assert KnowledgeService.default_embedding_model_ref() == "mock:hash-64"

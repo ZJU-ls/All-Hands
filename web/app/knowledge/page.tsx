@@ -6,10 +6,12 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Icon } from "@/components/ui/icon";
 import {
   type DocumentDto,
+  type EmbeddingModelOption,
   type KBDto,
   type ScoredChunkDto,
   createKB,
   listDocuments,
+  listEmbeddingModels,
   listKBs,
   searchKB,
   uploadDocument,
@@ -35,6 +37,8 @@ export default function KnowledgePage() {
   const [docs, setDocs] = useState<DocumentDto[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [models, setModels] = useState<EmbeddingModelOption[]>([]);
+  const [chosenModel, setChosenModel] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<ScoredChunkDto[] | null>(null);
@@ -63,6 +67,13 @@ export default function KnowledgePage() {
 
   useEffect(() => {
     refreshKbs();
+    listEmbeddingModels()
+      .then((m) => {
+        setModels(m);
+        const def = m.find((x) => x.is_default && x.available) ?? m.find((x) => x.available);
+        if (def) setChosenModel(def.ref);
+      })
+      .catch((e) => setError(String(e)));
   }, []);
 
   useEffect(() => {
@@ -73,7 +84,10 @@ export default function KnowledgePage() {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const kb = await createKB({ name: newName.trim() });
+      const kb = await createKB({
+        name: newName.trim(),
+        embedding_model_ref: chosenModel || undefined,
+      });
       setNewName("");
       await refreshKbs();
       setActiveKb(kb);
@@ -167,6 +181,23 @@ export default function KnowledgePage() {
               placeholder="新 KB 名称…"
               className="w-full px-2 py-1.5 text-sm rounded border border-hairline bg-soft text-default"
             />
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-faint">
+                Embedding model
+              </label>
+              <select
+                value={chosenModel}
+                onChange={(e) => setChosenModel(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs rounded border border-hairline bg-soft text-default"
+              >
+                {models.map((m) => (
+                  <option key={m.ref} value={m.ref} disabled={!m.available}>
+                    {m.label} · {m.dim}d{m.is_default ? " · default" : ""}
+                    {!m.available ? ` · (${m.reason})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               type="button"
               onClick={handleCreateKB}
