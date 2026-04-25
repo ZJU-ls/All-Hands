@@ -3,10 +3,12 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { AllhandsLogo } from "@/components/brand/AllhandsLogo";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
 
 // Lazy-load the two global overlays so their module graph (DotGridBackdrop,
 // RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
@@ -23,48 +25,48 @@ const RunTraceDrawer = dynamic(
 );
 const TRACE_QUERY_KEY = "trace";
 
-type MenuItem = { label: string; href: string; icon: IconName; badge?: string };
-type MenuSection = { title: string; items: MenuItem[] };
+type MenuItem = { labelKey: string; href: string; icon: IconName; badge?: string };
+type MenuSection = { titleKey: string; items: MenuItem[] };
 
 // All business-icon choices route through <Icon> (lucide) per ADR 0016 §D1.
 const MENU: MenuSection[] = [
   {
-    title: "工作区",
+    titleKey: "workspace",
     items: [
-      { label: "驾驶舱", href: "/", icon: "layout-grid" },
-      { label: "对话", href: "/chat", icon: "message-square" },
-      { label: "任务", href: "/tasks", icon: "check-circle-2" },
-      { label: "历史会话", href: "/conversations", icon: "clock" },
+      { labelKey: "cockpit", href: "/", icon: "layout-grid" },
+      { labelKey: "chat", href: "/chat", icon: "message-square" },
+      { labelKey: "tasks", href: "/tasks", icon: "check-circle-2" },
+      { labelKey: "conversations", href: "/conversations", icon: "clock" },
     ],
   },
   {
-    title: "团队与能力",
+    titleKey: "team",
     items: [
-      { label: "员工", href: "/employees", icon: "users" },
-      { label: "员工设计", href: "/employees/design", icon: "user-plus" },
-      { label: "技能", href: "/skills", icon: "wand-2" },
-      { label: "MCP 服务器", href: "/mcp-servers", icon: "plug" },
+      { labelKey: "employees", href: "/employees", icon: "users" },
+      { labelKey: "employeeDesign", href: "/employees/design", icon: "user-plus" },
+      { labelKey: "skills", href: "/skills", icon: "wand-2" },
+      { labelKey: "mcpServers", href: "/mcp-servers", icon: "plug" },
     ],
   },
   {
-    title: "模型网关",
-    items: [{ label: "供应商与模型", href: "/gateway", icon: "server" }],
+    titleKey: "gateway",
+    items: [{ labelKey: "providers", href: "/gateway", icon: "server" }],
   },
   {
-    title: "运行时",
+    titleKey: "runtime",
     items: [
-      { label: "触发器", href: "/triggers", icon: "zap" },
-      { label: "审批", href: "/confirmations", icon: "shield-check" },
-      { label: "追踪", href: "/traces", icon: "activity" },
-      { label: "观测中心", href: "/observatory", icon: "brain" },
+      { labelKey: "triggers", href: "/triggers", icon: "zap" },
+      { labelKey: "confirmations", href: "/confirmations", icon: "shield-check" },
+      { labelKey: "traces", href: "/traces", icon: "activity" },
+      { labelKey: "observatory", href: "/observatory", icon: "brain" },
     ],
   },
   {
-    title: "系统",
+    titleKey: "system",
     items: [
-      { label: "Review", href: "/review", icon: "check" },
-      { label: "设置", href: "/settings", icon: "settings" },
-      { label: "关于", href: "/about", icon: "info" },
+      { labelKey: "review", href: "/review", icon: "check" },
+      { labelKey: "settings", href: "/settings", icon: "settings" },
+      { labelKey: "about", href: "/about", icon: "info" },
     ],
   },
 ];
@@ -74,6 +76,7 @@ const MENU: MenuSection[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CmdKHint({ onOpen }: { onOpen: () => void }) {
+  const t = useTranslations("shell.search");
   const [isMac, setIsMac] = useState(true);
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
@@ -83,11 +86,11 @@ function CmdKHint({ onOpen }: { onOpen: () => void }) {
       type="button"
       onClick={onOpen}
       className="group hidden md:inline-flex h-9 min-w-[220px] items-center gap-2.5 rounded-xl border border-border bg-surface px-3 text-sm text-text-muted hover:border-border-strong hover:bg-surface-2 hover:text-text transition duration-base"
-      aria-label="打开命令面板"
-      title="⌘K 打开命令面板"
+      aria-label={t("ariaOpen")}
+      title={t("title")}
     >
       <Icon name="search" size={14} />
-      <span className="flex-1 text-left">跳转到…</span>
+      <span className="flex-1 text-left">{t("placeholder")}</span>
       <span className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-caption text-text-subtle group-hover:text-text-muted">
         {isMac ? "⌘K" : "Ctrl K"}
       </span>
@@ -96,6 +99,7 @@ function CmdKHint({ onOpen }: { onOpen: () => void }) {
 }
 
 function ThemeToggle() {
+  const t = useTranslations("shell.topbar");
   const { theme, toggle } = useTheme();
   // Avoid hydration flash — only trust `theme` after mount.
   const [mounted, setMounted] = useState(false);
@@ -105,8 +109,8 @@ function ThemeToggle() {
     <button
       onClick={toggle}
       className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text transition duration-base"
-      aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
-      title={isDark ? "切换到浅色" : "切换到深色"}
+      aria-label={isDark ? t("themeAriaLight") : t("themeAriaDark")}
+      title={isDark ? t("switchToLight") : t("switchToDark")}
     >
       <Icon name={isDark ? "sun" : "moon"} size={15} />
     </button>
@@ -119,7 +123,7 @@ function SidebarItem({
   active,
   icon,
   badge,
-}: MenuItem & { active: boolean }) {
+}: { label: string; href: string; icon: IconName; badge?: string; active: boolean }) {
   return (
     <li>
       <Link
@@ -156,8 +160,6 @@ function matchActive(pathname: string, href: string, allHrefs: string[]): boolea
   // Exact match always wins.
   if (pathname === href) return true;
   // Prefix match only when no sibling href is a longer prefix of pathname.
-  // Fixes the "员工 vs 员工设计" conflict at `/employees/design` — without
-  // this the shorter `/employees` would also light up.
   if (!pathname.startsWith(href + "/")) return false;
   for (const other of allHrefs) {
     if (other === href) continue;
@@ -167,6 +169,7 @@ function matchActive(pathname: string, href: string, allHrefs: string[]): boolea
 }
 
 function WorkspaceSwitcher() {
+  const t = useTranslations("shell");
   return (
     <button
       type="button"
@@ -178,7 +181,7 @@ function WorkspaceSwitcher() {
           allhands
         </div>
         <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
-          v0 · mvp
+          {t("workspaceVersion")}
         </div>
       </div>
       <Icon name="chevrons-up-down" size={14} className="text-text-subtle" />
@@ -187,10 +190,11 @@ function WorkspaceSwitcher() {
 }
 
 function UsageCard() {
+  const t = useTranslations("shell");
   return (
     <div className="mx-3 mb-3 rounded-xl border border-primary/20 bg-primary-muted p-3">
       <div className="flex items-center gap-2 text-caption font-semibold text-primary">
-        <Icon name="zap" size={12} /> Usage · 62%
+        <Icon name="zap" size={12} /> {t("usage")} · 62%
       </div>
       <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface">
         <div
@@ -203,7 +207,7 @@ function UsageCard() {
         />
       </div>
       <div className="mt-2 font-mono text-caption text-text-muted">
-        18.4M / 30M tokens
+        {t("tokens", { used: "18.4M", total: "30M" })}
       </div>
     </div>
   );
@@ -211,7 +215,9 @@ function UsageCard() {
 
 function Sidebar() {
   const pathname = usePathname();
-  const allHrefs = MENU.flatMap((s) => s.items.map((i) => i.href));
+  const tSection = useTranslations("shell.sections");
+  const tMenu = useTranslations("shell.menu");
+  const allHrefs = useMemo(() => MENU.flatMap((s) => s.items.map((i) => i.href)), []);
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface">
       <div className="flex h-14 items-center border-b border-border px-3">
@@ -219,15 +225,22 @@ function Sidebar() {
       </div>
       <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-4">
         {MENU.map((section) => (
-          <div key={section.title}>
+          <div key={section.titleKey}>
             <div className="mb-1.5 px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
-              {section.title}
+              {tSection(section.titleKey)}
             </div>
             <ul className="space-y-0.5">
               {section.items.map((item) => {
                 const active = matchActive(pathname, item.href, allHrefs);
                 return (
-                  <SidebarItem key={item.href} {...item} active={active} />
+                  <SidebarItem
+                    key={item.href}
+                    label={tMenu(item.labelKey)}
+                    href={item.href}
+                    icon={item.icon}
+                    badge={item.badge}
+                    active={active}
+                  />
                 );
               })}
             </ul>
@@ -252,15 +265,12 @@ export function AppShell({
   title?: string;
   actions?: React.ReactNode;
 }) {
+  const t = useTranslations("shell.topbar");
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // Gate the dynamic-imported CommandPalette behind first-open so its module
-  // graph never loads on a dev session where the user never presses ⌘K.
   const [paletteMounted, setPaletteMounted] = useState(false);
   const searchParams = useSearchParams();
   const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
 
-  // Global ⌘K is owned here (not inside CommandPalette) so the palette can
-  // stay unloaded until first open.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k") {
@@ -290,12 +300,13 @@ export function AppShell({
             <CmdKHint onOpen={openPalette} />
             {actions}
             <span className="mx-1 h-6 w-px bg-border" aria-hidden />
+            <LocaleSwitcher />
             <ThemeToggle />
             <button
               type="button"
               className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text transition duration-base"
-              aria-label="Notifications"
-              title="通知"
+              aria-label={t("notifications")}
+              title={t("notifications")}
             >
               <Icon name="bell" size={15} />
             </button>
@@ -305,8 +316,8 @@ export function AppShell({
                 background:
                   "linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))",
               }}
-              aria-label="User"
-              title="你的账户"
+              aria-label={t("account")}
+              title={t("account")}
             >
               LS
             </div>

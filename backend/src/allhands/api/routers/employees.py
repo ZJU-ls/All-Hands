@@ -25,6 +25,7 @@ from allhands.api.deps import (
 )
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.execution.modes import PRESETS, compose_preview
+from allhands.i18n import t
 from allhands.persistence.sql_repos import SqlLLMProviderRepo, SqlMCPServerRepo
 from allhands.services import ai_explainer
 
@@ -166,7 +167,7 @@ async def compose_employee_prompt(
                 if chunk:
                     yield chunk.encode("utf-8")
         except DomainError as exc:
-            yield f"\n\n[错误] {exc}".encode()
+            yield f"\n\n{t('errors.stream.error_prefix')} {exc}".encode()
 
     return StreamingResponse(
         _gen(),
@@ -208,7 +209,7 @@ async def get_lead_employee(
     svc = await get_employee_service(session)
     lead = await svc.get_lead()
     if lead is None:
-        raise HTTPException(status_code=404, detail="Lead agent not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.lead_agent"))
     return _to_response(lead)
 
 

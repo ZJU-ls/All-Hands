@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from allhands.api.deps import get_session
 from allhands.core import Task, TaskSource, TaskStatus
+from allhands.i18n import t as _t
 from allhands.persistence.sql_repos import SqlTaskRepo
 from allhands.services.task_service import (
     TaskError,
@@ -124,7 +125,9 @@ async def list_tasks(
         try:
             parsed = [TaskStatus(s) for s in status]
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=f"invalid status filter: {exc}") from exc
+            raise HTTPException(
+                status_code=400, detail=_t("errors.invalid_status_filter", detail=str(exc))
+            ) from exc
     tasks = await svc.list_all(statuses=parsed, assignee_id=assignee_id, limit=limit)
     return [_to_response(t) for t in tasks]
 
@@ -149,7 +152,9 @@ async def create_task(
     try:
         source = TaskSource(body.source or "user")
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"invalid source: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=_t("errors.invalid_source", detail=str(exc))
+        ) from exc
     try:
         task = await svc.create(
             title=body.title,

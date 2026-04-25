@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 const backendOrigin = process.env.BACKEND_ORIGIN ?? "http://localhost:8000";
 
@@ -19,4 +22,4 @@ const config: NextConfig = {
   },
 };
 
-export default config;
+export default withNextIntl(config);

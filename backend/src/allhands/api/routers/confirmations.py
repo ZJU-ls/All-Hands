@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from allhands.api.deps import get_confirmation_service, get_session
 from allhands.api.protocol import ConfirmationDecisionRequest, ConfirmationResponse
+from allhands.i18n import t
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +46,7 @@ async def resolve_confirmation(
     svc = await get_confirmation_service(session)
     conf = await svc.get(confirmation_id)
     if conf is None:
-        raise HTTPException(status_code=404, detail="Confirmation not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.confirmation"))
     if body.decision == "approve":
         await svc.approve(confirmation_id)
     else:
