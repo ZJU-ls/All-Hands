@@ -1,10 +1,13 @@
 id: sk_planner
-name: Planning · Output before Act
-description: Always emit a full plan via render_plan before taking action.
-version: 0.1.0
+name: Planning · Plan then Execute
+description: Lay out a working plan via plan_create, then execute steps and update progress.
+version: 0.2.0
 builtin: true
 
 tool_ids:
-  - allhands.builtin.render_plan
+  - allhands.meta.plan_create
+  - allhands.meta.plan_update_step
+  - allhands.meta.plan_complete_step
+  - allhands.meta.plan_view
 
 prompt_fragment_file: prompts/guidance.md
