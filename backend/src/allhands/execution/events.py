@@ -128,6 +128,25 @@ class DoneEvent(BaseModel):
     reason: Literal["done", "max_iterations", "error"] = "done"
 
 
+class LLMCallEvent(BaseModel):
+    """Per-turn LLM telemetry · piped through the legacy AgentEvent stream.
+
+    Carries the model identifier, wall-clock duration, and per-call token
+    counts (input / output / total) so chat_service can accumulate run-level
+    totals and write a per-call ``llm.call`` event to the trace ledger. NOT
+    forwarded to AG-UI — the translator drops it (front-end has no direct
+    use; trace viewer reads it from the events table).
+    """
+
+    kind: Literal["llm_call"] = "llm_call"
+    message_id: str
+    model_ref: str | None = None
+    duration_s: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
 AgentEvent = (
     TokenEvent
     | ReasoningEvent
@@ -143,6 +162,7 @@ AgentEvent = (
     | TraceEvent
     | ErrorEvent
     | DoneEvent
+    | LLMCallEvent
 )
 
 

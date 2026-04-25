@@ -37,6 +37,13 @@ function bootstrapTone(s: BootstrapStatus): "success" | "warning" | "danger" {
   return "danger";
 }
 
+function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  if (n < 1000) return n.toString();
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}K`;
+  return `${(n / 1_000_000).toFixed(2)}M`;
+}
+
 function formatPct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
@@ -524,10 +531,19 @@ export default function ObservatoryPage() {
                   <KpiCard
                     icon="database"
                     label={t("kpi.tokens")}
-                    value={summary.avg_tokens_per_run.toLocaleString()}
+                    value={
+                      summary.total_tokens_total > 0
+                        ? formatTokens(summary.total_tokens_total)
+                        : summary.avg_tokens_per_run.toLocaleString()
+                    }
                     delta={{
                       icon: "trending-up",
-                      text: t("kpi.tokensDelta", { count: summary.traces_total.toLocaleString() }),
+                      text:
+                        summary.total_tokens_total > 0
+                          ? `in ${formatTokens(summary.input_tokens_total)} · out ${formatTokens(summary.output_tokens_total)} · ${summary.llm_calls_total} calls`
+                          : t("kpi.tokensDelta", {
+                              count: summary.traces_total.toLocaleString(),
+                            }),
                       tone: "muted",
                     }}
                     sparkSeed={53}
@@ -581,12 +597,78 @@ export default function ObservatoryPage() {
                     summary.by_employee.length > 0
                       ? summary.by_employee.slice(0, 6).map((row) => ({
                           label: row.employee_name,
-                          value: t("panels.values.runs", { count: row.runs_count.toLocaleString() }),
+                          value:
+                            row.total_tokens > 0
+                              ? `${row.runs_count} · ${formatTokens(row.total_tokens)} tok`
+                              : t("panels.values.runs", {
+                                  count: row.runs_count.toLocaleString(),
+                                }),
                         }))
                       : []
                   }
                 />
               </section>
+
+              {summary.by_model.length > 0 ? (
+                <section>
+                  <div className="flex items-baseline justify-between mb-3">
+                    <h2 className="text-[18px] font-semibold tracking-tight text-text flex items-center gap-2">
+                      <Icon name="brain" size={16} className="text-primary" />
+                      {t("panels.byModel")}
+                    </h2>
+                    <span className="text-[11px] font-mono text-text-subtle">
+                      {summary.by_model.length} models · {summary.llm_calls_total} calls
+                    </span>
+                  </div>
+                  <div className="rounded-xl bg-surface border border-border shadow-soft-sm overflow-hidden">
+                    <table className="w-full border-collapse text-[12px]">
+                      <thead>
+                        <tr className="bg-surface-2 text-left text-text-subtle border-b border-border">
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium">
+                            model
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            runs
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            in
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            out
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            total
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summary.by_model.map((row) => (
+                          <tr
+                            key={row.model_ref}
+                            className="border-b border-border last:border-b-0 hover:bg-surface-2/40"
+                          >
+                            <td className="py-2 px-4 font-mono text-[11px] text-text">
+                              {row.model_ref}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {row.runs_count.toLocaleString()}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {formatTokens(row.input_tokens)}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {formatTokens(row.output_tokens)}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {formatTokens(row.total_tokens)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ) : null}
 
               {/* INCIDENTS */}
               {incidents.length > 0 ? (
@@ -626,7 +708,7 @@ export default function ObservatoryPage() {
                               <Icon name="clock" size={11} />
                               {formatDuration(row.duration_s)}
                             </span>
-                            <span>{row.tokens.toLocaleString()} {t("incidents.tokensSuffix")}</span>
+                            <span>{row.tokens.total.toLocaleString()} {t("incidents.tokensSuffix")}</span>
                             <span className="hidden md:inline">{formatDate(row.started_at)}</span>
                           </div>
                         </div>
@@ -697,6 +779,11 @@ export default function ObservatoryPage() {
                                   <Icon name="alert-circle" size={11} />
                                   {t("traces.status.failed")}
                                 </span>
+                              ) : row.status === "running" ? (
+                                <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-mono bg-warning-soft text-warning">
+                                  <Icon name="loader" size={11} className="animate-spin-slow" />
+                                  {t("traces.status.running")}
+                                </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-mono bg-success-soft text-success">
                                   <Icon name="check-circle-2" size={11} />
@@ -707,8 +794,15 @@ export default function ObservatoryPage() {
                             <td className="py-2.5 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
                               {formatDuration(row.duration_s)}
                             </td>
-                            <td className="py-2.5 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                              {row.tokens.toLocaleString()}
+                            <td
+                              className="py-2.5 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums"
+                              title={
+                                row.tokens.total > 0
+                                  ? `in ${row.tokens.prompt.toLocaleString()} · out ${row.tokens.completion.toLocaleString()} · total ${row.tokens.total.toLocaleString()}`
+                                  : undefined
+                              }
+                            >
+                              {row.tokens.total > 0 ? row.tokens.total.toLocaleString() : "—"}
                             </td>
                             <td className="py-2.5 px-4 text-text-muted">
                               {formatDate(row.started_at)}
