@@ -58,10 +58,6 @@ const KIND_ICON: Record<ArtifactKind, IconName> = {
   csv: "database",
   docx: "file",
   pptx: "file",
-  pdf: "file",
-  xlsx: "file",
-  csv: "file",
-  docx: "file",
   video: "play-circle",
 };
 
