@@ -142,6 +142,21 @@
     "autoTitleSaving": "Saving…",
     "autoTitleError": "Save failed, please retry",
     "footnote": "More preferences (timezone, keybinding overrides, AP long-loop budgets, etc.) coming soon. The sun / moon toggle in the top-right still controls themes.",
+    "storage": {
+      "title": "Storage paths",
+      "subtitle": "Where the runtime puts files on disk · change via .env then restart the backend · live migration ships with the desktop wrapper.",
+      "loading": "Reading paths…",
+      "loadFailed": "Failed to load paths: {error}",
+      "notSet": "(not set)",
+      "readonly": "read-only",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyTitle": "Copy the absolute path to clipboard",
+      "open": "Open",
+      "opened": "Opened",
+      "openTitle": "Reveal in file manager (desktop shell only · falls back to copy in the browser)",
+      "footnote": "Overrides: set ALLHANDS_DATA_DIR / ALLHANDS_SKILLS_DIR / ALLHANDS_ARTIFACTS_DIR in .env, restart the backend, and migrate existing files manually with mv."
+    },
     "cards": {
       "providers": {
         "title": "Providers",

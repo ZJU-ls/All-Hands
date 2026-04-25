@@ -329,7 +329,10 @@ def _data_dir() -> Path:
 
 
 def _artifact_root() -> Path:
-    root = _data_dir() / "artifacts"
+    # Honour ``settings.artifacts_dir`` override so the meta-tool path
+    # matches the REST service path — both must point at the same blob
+    # folder or rollback / version diff break across the two surfaces.
+    root = get_settings().resolved_artifacts_dir()
     root.mkdir(parents=True, exist_ok=True)
     return root
 

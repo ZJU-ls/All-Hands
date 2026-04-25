@@ -101,7 +101,9 @@
     "ttft": "TTFT",
     "ttftThinking": "TTFT · thinking",
     "ttftAnswer": "TTFT · answer",
-    "tokIO": "Tokens in/out/total",
+    "tokInput": "Input tokens",
+    "tokOutput": "Output tokens",
+    "tokTotal": "Total tokens",
     "tokPerSec": "Tokens/sec"
   }
 }

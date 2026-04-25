@@ -28,6 +28,25 @@ class Settings(BaseSettings):
         default="./data",
         description="Root for file-backed state: sqlite, installed skills, uploads.",
     )
+    # 2026-04-25 · split out so a future desktop-shell installer can move
+    # user-managed assets to OS-conventional locations (e.g.
+    # ~/Library/Application Support/Allhands/skills on macOS) without dragging
+    # the SQLite file along. Empty string = derive from data_dir at resolve
+    # time; callers must use ``settings.resolved_skills_dir()`` /
+    # ``settings.resolved_artifacts_dir()`` instead of building the path
+    # themselves.
+    skills_dir: str = Field(
+        default="",
+        description=(
+            "Override for installed-skill storage. Defaults to <data_dir>/skills. "
+            "Built-in skills always live in repo at ./skills/builtin and are not "
+            "affected by this setting."
+        ),
+    )
+    artifacts_dir: str = Field(
+        default="",
+        description="Override for artifact blob storage. Defaults to <data_dir>/artifacts.",
+    )
     database_url: str = Field(
         default="sqlite+aiosqlite:///./data/app.db",
         description="Async SQLAlchemy URL. Default uses local SQLite under ./data.",
@@ -86,6 +105,19 @@ class Settings(BaseSettings):
             if "sqlite" in url:
                 path = url.split("///", 1)[-1]
                 Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+    def resolved_skills_dir(self) -> Path:
+        """Effective skill install root. Override → settings.skills_dir;
+        else <data_dir>/skills. Returns an absolute Path (no symlink
+        resolution — that would block in async handlers)."""
+        base = Path(self.skills_dir) if self.skills_dir else Path(self.data_dir) / "skills"
+        return base.absolute()
+
+    def resolved_artifacts_dir(self) -> Path:
+        """Effective artifact blob root. Override → settings.artifacts_dir;
+        else <data_dir>/artifacts. Returns absolute, non-symlink-resolved."""
+        base = Path(self.artifacts_dir) if self.artifacts_dir else Path(self.data_dir) / "artifacts"
+        return base.absolute()
 
 
 @lru_cache(maxsize=1)

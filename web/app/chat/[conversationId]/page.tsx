@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { MessageList } from "@/components/chat/MessageList";
 import { InputBar } from "@/components/chat/InputBar";
 import { ConfirmationDialog } from "@/components/chat/ConfirmationDialog";
+import { ProgressPanel } from "@/components/chat/ProgressPanel";
 import { UserInputDialog } from "@/components/chat/UserInputDialog";
 import {
   ConversationHeader,
@@ -278,6 +279,9 @@ export default function ConversationPage() {
           <div className="min-h-0 flex-1">
             <MessageList conversationId={conversationId} />
           </div>
+          {/* ADR 0019 · plan + sub-agent progress (sticks above input,
+              auto-hides when nothing to show). */}
+          <ProgressPanel conversationId={conversationId} />
           <InputBar
             conversationId={conversationId}
             employeeModelRef={employee?.model_ref}
