@@ -13,8 +13,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { ConversationSwitcher } from "../ConversationSwitcher";
+import { useChatStore } from "@/lib/store";
 
 const pushSpy = vi.fn();
+
+function seedNonEmptyConversation() {
+  // 新建 is suppressed when the current chat has no activity (the current
+  // empty draft *is* the fresh one) — seed a message so the button works.
+  useChatStore.getState().replaceMessages([
+    {
+      id: "m1",
+      conversation_id: "c1",
+      role: "user",
+      content: "hi",
+      tool_calls: [],
+      render_payloads: [],
+      created_at: "2026-04-25T00:00:00Z",
+    },
+  ]);
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushSpy }),
@@ -34,18 +51,27 @@ beforeEach(() => {
   pushSpy.mockReset();
   mockedCreate.mockReset();
   mockedList.mockReset();
+  useChatStore.getState().reset();
 });
 
 afterEach(cleanup);
 
 describe("ConversationSwitcher", () => {
   it("creates a fresh conversation and routes to it", async () => {
+    seedNonEmptyConversation();
     mockedCreate.mockResolvedValue({ id: "new-conv" });
     render(<ConversationSwitcher employeeId="emp1" currentConversationId="c1" />);
 
     fireEvent.click(screen.getByTestId("chat-new-conversation"));
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledWith("emp1"));
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/chat/new-conv"));
+  });
+
+  it("disables 新建 when the current conversation is empty (no draft spam)", () => {
+    render(<ConversationSwitcher employeeId="emp1" currentConversationId="c1" />);
+    expect(
+      (screen.getByTestId("chat-new-conversation") as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it("opens the history popover and lazy-loads conversations", async () => {
