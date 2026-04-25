@@ -280,6 +280,12 @@
         "activeChip": "已选: {label}",
         "removeChipAria": "移除筛选 {label}"
       },
+      "view": {
+        "list": "列表",
+        "grid": "网格",
+        "listAria": "切换列表视图",
+        "gridAria": "切换网格视图"
+      },
       "stats": {
         "total": "总数",
         "totalHint": "全部制品",

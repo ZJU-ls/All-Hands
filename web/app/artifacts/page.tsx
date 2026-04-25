@@ -15,6 +15,7 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { Select } from "@/components/ui/Select";
 import { LoadingState, ErrorState } from "@/components/state";
 import { ArtifactList } from "@/components/artifacts/ArtifactList";
+import { ArtifactGrid } from "@/components/artifacts/ArtifactGrid";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import {
   artifactStreamUrl,
@@ -83,6 +84,17 @@ export default function ArtifactsGlobalPage() {
   const [q, setQ] = useState("");
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>("all");
+  // localStorage-backed view mode · sticks across page visits so the user's
+  // preferred density stays put. SSR-safe: lazy initial.
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    if (typeof window === "undefined") return "list";
+    return (localStorage.getItem("allhands.artifacts.viewMode") as "list" | "grid" | null) ?? "list";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("allhands.artifacts.viewMode", viewMode);
+    }
+  }, [viewMode]);
 
   const createdAfter = useMemo(() => {
     if (dateRange === "all") return undefined;
@@ -244,7 +256,42 @@ export default function ArtifactsGlobalPage() {
             {t("filters.pinnedOnly")}
           </button>
 
-          <span className="ml-auto font-mono text-[11px] text-text-subtle">
+          {/* List / grid view toggle · localStorage-backed so the user's
+              density preference sticks across visits. */}
+          <div className="ml-auto inline-flex h-9 items-center rounded-xl border border-border bg-surface p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              aria-pressed={viewMode === "list"}
+              aria-label={t("view.listAria")}
+              title={t("view.list")}
+              className={`inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[12px] transition-colors duration-fast ${
+                viewMode === "list"
+                  ? "bg-primary-muted text-primary"
+                  : "text-text-muted hover:text-text"
+              }`}
+            >
+              <Icon name="list" size={12} />
+              <span className="hidden md:inline">{t("view.list")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              aria-pressed={viewMode === "grid"}
+              aria-label={t("view.gridAria")}
+              title={t("view.grid")}
+              className={`inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[12px] transition-colors duration-fast ${
+                viewMode === "grid"
+                  ? "bg-primary-muted text-primary"
+                  : "text-text-muted hover:text-text"
+              }`}
+            >
+              <Icon name="layout-grid" size={12} />
+              <span className="hidden md:inline">{t("view.grid")}</span>
+            </button>
+          </div>
+
+          <span className="font-mono text-[11px] text-text-subtle">
             {t("count", { n: items.length })}
           </span>
         </div>
@@ -266,15 +313,32 @@ export default function ArtifactsGlobalPage() {
           />
         ) : null}
 
-        {/* List + detail · stays as 4/8 split on lg */}
+        {/* List + detail · proportions vary by view mode:
+              · list  · sidebar 4/12  · detail 8/12   (dense)
+              · grid  · gallery 8/12  · detail 4/12   (gallery-first)
+                  if nothing selected, gallery takes all 12 cols */}
         <div className="grid min-h-[60vh] flex-1 grid-cols-12 gap-4">
-          <aside className="col-span-12 overflow-y-auto rounded-xl border border-border bg-surface lg:col-span-4 xl:col-span-3">
+          <aside
+            className={
+              viewMode === "list"
+                ? "col-span-12 overflow-y-auto rounded-xl border border-border bg-surface lg:col-span-4 xl:col-span-3"
+                : selectedId
+                ? "col-span-12 overflow-y-auto rounded-xl border border-border bg-surface lg:col-span-8"
+                : "col-span-12 overflow-y-auto rounded-xl border border-border bg-surface"
+            }
+          >
             {state === "loading" ? (
               <LoadingState title={t("title")} description={t("subtitle")} />
             ) : state === "error" && error ? (
               <ErrorState title={t("loadFailed", { error })} />
             ) : items.length === 0 ? (
               <EmptyList q={q} kind={kind} t={t} />
+            ) : viewMode === "grid" ? (
+              <ArtifactGrid
+                artifacts={items}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
             ) : (
               <ArtifactList
                 artifacts={items}
@@ -284,13 +348,21 @@ export default function ArtifactsGlobalPage() {
             )}
           </aside>
 
-          <main className="col-span-12 overflow-hidden rounded-xl border border-border bg-surface lg:col-span-8 xl:col-span-9">
-            {selectedId ? (
-              <ArtifactDetail artifactId={selectedId} />
-            ) : (
-              <DetailPlaceholder t={t} />
-            )}
-          </main>
+          {(viewMode === "list" || selectedId) && (
+            <main
+              className={
+                viewMode === "list"
+                  ? "col-span-12 overflow-hidden rounded-xl border border-border bg-surface lg:col-span-8 xl:col-span-9"
+                  : "col-span-12 overflow-hidden rounded-xl border border-border bg-surface lg:col-span-4"
+              }
+            >
+              {selectedId ? (
+                <ArtifactDetail artifactId={selectedId} />
+              ) : (
+                <DetailPlaceholder t={t} />
+              )}
+            </main>
+          )}
         </div>
       </div>
     </AppShell>
