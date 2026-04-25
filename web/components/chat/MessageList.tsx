@@ -18,6 +18,51 @@ export function MessageList({ conversationId }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
 
+  // Stream liveness state — drives the "处理中 · Xs" chip so users know the
+  // model isn't dead even when nothing visible has changed in a while.
+  // Resets on each new turn (isStreaming flip false → true).
+  const [streamStartAt, setStreamStartAt] = useState<number | null>(null);
+  const [lastProgressAt, setLastProgressAt] = useState<number>(0);
+  const [now, setNow] = useState<number>(() => Date.now());
+  const lastSignatureRef = useRef<string>("");
+
+  // Build a cheap "did anything change?" signature from streamingMessage.
+  // Token deltas / reasoning deltas / tool-call updates all bump it; while
+  // it's stable, we treat the stream as silent (likely buffering or paused
+  // between tool calls) and the chip can shift to a "still waiting" tone.
+  const progressSignature = streamingMessage
+    ? `${streamingMessage.content.length}|${streamingMessage.reasoning?.length ?? 0}|${streamingMessage.tool_calls.length}|${streamingMessage.render_payloads.length}`
+    : "";
+
+  useEffect(() => {
+    if (!isStreaming) {
+      setStreamStartAt(null);
+      lastSignatureRef.current = "";
+      return;
+    }
+    if (streamStartAt === null) {
+      setStreamStartAt(Date.now());
+      setLastProgressAt(Date.now());
+      lastSignatureRef.current = progressSignature;
+    }
+  }, [isStreaming, streamStartAt, progressSignature]);
+
+  useEffect(() => {
+    if (!isStreaming) return;
+    if (progressSignature !== lastSignatureRef.current) {
+      lastSignatureRef.current = progressSignature;
+      setLastProgressAt(Date.now());
+    }
+  }, [progressSignature, isStreaming]);
+
+  // 200ms ticker drives the chip's elapsed counter. Cheap (a single setState
+  // per tick · no DOM thrash), and only runs while a stream is in flight.
+  useEffect(() => {
+    if (!isStreaming) return;
+    const id = window.setInterval(() => setNow(Date.now()), 200);
+    return () => window.clearInterval(id);
+  }, [isStreaming]);
+
   const isAtBottom = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return true;
@@ -100,6 +145,16 @@ export function MessageList({ conversationId }: Props) {
         )}
       </div>
 
+      {/* Stream liveness chip · always visible during a turn so the user
+          can see we're alive, with elapsed seconds + a stalled-state warning
+          after 8s of no new tokens. Sits above 回到最新 so they don't fight
+          for the same anchor. */}
+      {isStreaming && streamStartAt !== null ? (
+        <StreamStatusChip
+          elapsedMs={now - streamStartAt}
+          silentMs={now - lastProgressAt}
+        />
+      ) : null}
       {!stickToBottom && hasAnything && (
         <button
           type="button"
@@ -109,12 +164,62 @@ export function MessageList({ conversationId }: Props) {
           }}
           data-testid="jump-to-bottom"
           aria-label={t("jumpToLatest")}
-          className="absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[11px] font-medium text-text-muted shadow-soft-sm transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2"
+          className={`absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[11px] font-medium text-text-muted shadow-soft-sm transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2 ${
+            isStreaming ? "bottom-14" : "bottom-4"
+          }`}
         >
           <Icon name="arrow-down" size={12} />
           {t("backToLatest")}
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * StreamStatusChip · always-on liveness beacon during a streaming turn.
+ *
+ * Shows elapsed seconds since the user hit send, with a pulsing primary
+ * dot. After 8s with no new tokens / tool-call activity / render payload,
+ * shifts to a warning tone + "等待响应" label so users distinguish "model
+ * is thinking" from "stuck / network silent".
+ *
+ * Floats fixed bottom-center over the message list — visible regardless
+ * of where the user is scrolled.
+ */
+function StreamStatusChip({
+  elapsedMs,
+  silentMs,
+}: {
+  elapsedMs: number;
+  silentMs: number;
+}) {
+  const t = useTranslations("chat.messageList");
+  const SILENT_WARN_MS = 8000;
+  const stalled = silentMs >= SILENT_WARN_MS;
+  const seconds = Math.max(0, Math.floor(elapsedMs / 100) / 10).toFixed(1);
+  const silentSeconds = Math.max(0, Math.round(silentMs / 1000));
+  const tone = stalled
+    ? "border-warning/30 bg-warning-soft text-warning"
+    : "border-primary/25 bg-primary-muted text-primary";
+  const dot = stalled ? "bg-warning" : "bg-primary";
+  return (
+    <div
+      data-testid="stream-status-chip"
+      role="status"
+      aria-live="polite"
+      className={`absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-mono shadow-soft-sm tabular-nums transition-colors duration-base ${tone}`}
+    >
+      <span className="relative inline-flex h-2 w-2">
+        <span className={`absolute inset-0 rounded-full ${dot} animate-pulse-ring`} />
+        <span className={`absolute inset-0 rounded-full ${dot}`} />
+      </span>
+      <span>{stalled ? t("streamStalled") : t("streamProcessing")}</span>
+      <span className="text-[11px] opacity-70">·</span>
+      <span>{seconds}s</span>
+      {stalled ? (
+        <span className="ml-1 text-[10px] opacity-80">{t("streamSilent", { s: silentSeconds })}</span>
+      ) : null}
     </div>
   );
 }
