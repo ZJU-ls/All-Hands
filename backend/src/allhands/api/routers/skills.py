@@ -161,6 +161,61 @@ async def get_skill(
     return _to_response(skill)
 
 
+class SkillFileEntry(BaseModel):
+    """One file under a skill's directory · used by /files endpoint."""
+
+    relative_path: str
+    size_bytes: int
+
+
+class SkillFilesResponse(BaseModel):
+    files: list[SkillFileEntry]
+
+
+def _walk_skill_files(root_path: str) -> list[SkillFileEntry]:
+    """Sync walker · pure filesystem · pulled out of the async handler so
+    ASYNC240 lint is satisfied. Filters out manifest + prompt files and
+    blocks sym-link traversal."""
+    from pathlib import Path
+
+    root = Path(root_path).resolve()
+    if not root.is_dir():
+        return []
+    files: list[SkillFileEntry] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        # Symlink containment guard
+        try:
+            resolved = path.resolve()
+            resolved.relative_to(root)
+        except (ValueError, OSError):
+            continue
+        # Skip the manifest itself + prompt body (already in prompt_fragment field)
+        rel = path.relative_to(root).as_posix()
+        if rel in ("SKILL.yaml", "SKILL.md") or rel.startswith("prompts/"):
+            continue
+        files.append(SkillFileEntry(relative_path=rel, size_bytes=path.stat().st_size))
+    return files
+
+
+@router.get("/{skill_id}/files", response_model=SkillFilesResponse)
+async def list_skill_files(
+    skill_id: str,
+    svc: SkillService = Depends(get_skill_service),
+) -> SkillFilesResponse:
+    """List the files under a skill's directory — references / templates that
+    `read_skill_file` can fetch. Used by the detail UI to surface「这个 skill
+    带了哪些参考资料」 without the user having to grep the repo.
+    """
+    skill = await svc.get(skill_id)
+    if skill is None:
+        raise HTTPException(status_code=404, detail=t("errors.not_found.skill"))
+    if not skill.path:
+        return SkillFilesResponse(files=[])
+    return SkillFilesResponse(files=_walk_skill_files(skill.path))
+
+
 @router.patch("/{skill_id}", response_model=SkillResponse)
 async def update_skill(
     skill_id: str,
