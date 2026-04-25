@@ -144,32 +144,42 @@ class TestExplainSkillStream:
         ai_explainer._explain_cache[skill.id] = "已缓存的解读"
 
         provider_repo = AsyncMock()
-        provider_repo.get_default.return_value = None  # would raise if called
+        model_repo = AsyncMock()
+        # If the cache short-circuit is broken, get_default would be called
+        # and we'd see this assertion below. Both repos default to "no
+        # default configured" so any LLM call would explode.
+        model_repo.get_default.return_value = None
 
         chunks: list[str] = []
-        async for chunk in ai_explainer.explain_skill_stream(skill, provider_repo=provider_repo):
+        async for chunk in ai_explainer.explain_skill_stream(
+            skill, provider_repo=provider_repo, model_repo=model_repo
+        ):
             chunks.append(chunk)
         assert "".join(chunks) == "已缓存的解读"
-        provider_repo.get_default.assert_not_called()
+        model_repo.get_default.assert_not_called()
         ai_explainer.invalidate_skill_explanation(skill.id)
 
     @pytest.mark.asyncio
-    async def test_no_default_provider_raises_domain_error(self) -> None:
+    async def test_no_default_model_raises_domain_error(self) -> None:
         skill = _skill(sid="skill.no-cache")
         ai_explainer.invalidate_skill_explanation(skill.id)
         provider_repo = AsyncMock()
-        provider_repo.get_default.return_value = None
+        model_repo = AsyncMock()
+        model_repo.get_default.return_value = None  # singleton flag unset
 
         with pytest.raises(DomainError):
-            async for _ in ai_explainer.explain_skill_stream(skill, provider_repo=provider_repo):
+            async for _ in ai_explainer.explain_skill_stream(
+                skill, provider_repo=provider_repo, model_repo=model_repo
+            ):
                 pass
 
 
 class TestComposeEmployeePromptStream:
     @pytest.mark.asyncio
-    async def test_no_default_provider_raises(self) -> None:
+    async def test_no_default_model_raises(self) -> None:
         provider_repo = AsyncMock()
-        provider_repo.get_default.return_value = None
+        model_repo = AsyncMock()
+        model_repo.get_default.return_value = None
 
         skill_registry = type("R", (), {"get": lambda self, _id: None})()
 
@@ -180,6 +190,7 @@ class TestComposeEmployeePromptStream:
                 skill_ids=[],
                 mcp_server_ids=[],
                 provider_repo=provider_repo,
+                model_repo=model_repo,
                 skill_registry=skill_registry,
                 mcp_repo=None,
             ):

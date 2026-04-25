@@ -94,7 +94,10 @@ def _parse_iso_utc(value: str) -> datetime:
 async def ensure_providers(session: AsyncSession) -> int:
     """Upsert all seed providers. Idempotent by `name`.
 
-    Ensures exactly one `is_default=True` provider — the seed JSON flags one.
+    Per the 2026-04-25 default-pointer refactor, "default" is no longer a
+    provider attribute. The seed JSON's legacy `is_default` / `default_model`
+    fields are accepted for back-compat but applied at the model layer (see
+    `ensure_models`), not on the provider row.
     """
     data = _load_seed_json("providers.json")
     assert isinstance(data, list)
@@ -116,8 +119,6 @@ async def ensure_providers(session: AsyncSession) -> int:
             kind=kind,  # type: ignore[arg-type]
             base_url=item["base_url"],
             api_key=item.get("api_key", ""),
-            default_model=item.get("default_model", "gpt-4o-mini"),
-            is_default=bool(item.get("is_default", False)),
             enabled=bool(item.get("enabled", True)),
         )
         await repo.upsert(provider)
@@ -139,14 +140,28 @@ async def ensure_models(session: AsyncSession) -> int:
     silently corrupting the table.
     """
     data = _load_seed_json("models.json")
+    providers_data = _load_seed_json("providers.json")
     assert isinstance(data, list)
+    assert isinstance(providers_data, list)
 
     provider_repo = SqlLLMProviderRepo(session)
     model_repo = SqlLLMModelRepo(session)
 
     provider_by_name = {p.name: p for p in await provider_repo.list_all()}
 
+    # Resolve "which (provider, model) pair should be marked default" from the
+    # legacy seed shape, where the default-provider row carried a
+    # `default_model` name string. We translate to the new singleton flag.
+    legacy_default_provider_name: str | None = None
+    legacy_default_model_name: str | None = None
+    for p_item in providers_data:
+        if isinstance(p_item, dict) and bool(p_item.get("is_default")):
+            legacy_default_provider_name = p_item.get("name")
+            legacy_default_model_name = p_item.get("default_model")
+            break
+
     written = 0
+    default_target_id: str | None = None
     for item in data:
         provider_name = item["provider_name"]
         provider = provider_by_name.get(provider_name)
@@ -163,6 +178,14 @@ async def ensure_models(session: AsyncSession) -> int:
         ]
         model_id = existing[0].id if existing else item["id"]
 
+        is_default_seed = bool(item.get("is_default", False))
+        # Map legacy provider-side default to this model row, if it matches.
+        if (
+            provider_name == legacy_default_provider_name
+            and item["name"] == legacy_default_model_name
+        ):
+            is_default_seed = True
+
         model = LLMModel(
             id=model_id,
             provider_id=provider.id,
@@ -170,9 +193,19 @@ async def ensure_models(session: AsyncSession) -> int:
             display_name=item.get("display_name", ""),
             context_window=int(item.get("context_window", 0)),
             enabled=bool(item.get("enabled", True)),
+            # Persist only the singleton flag the model JSON carries directly.
+            # Legacy provider-side default is funnelled into `default_target_id`
+            # below and applied via the repo's atomic `set_default` so the
+            # singleton invariant is preserved across re-seeds.
+            is_default=False,
         )
         await model_repo.upsert(model)
         written += 1
+        if is_default_seed and default_target_id is None:
+            default_target_id = model.id
+
+    if default_target_id is not None:
+        await model_repo.set_default(default_target_id)
 
     return written
 

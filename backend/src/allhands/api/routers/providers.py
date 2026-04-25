@@ -14,7 +14,6 @@ from allhands.core.provider_presets import (
     PROVIDER_PRESETS,
     ProviderKind,
 )
-from allhands.execution.llm_factory import build_llm, probe_endpoint
 from allhands.i18n import t
 from allhands.services.connectivity import (
     ENDPOINT_TIMEOUT_S,
@@ -30,13 +29,18 @@ router = APIRouter(prefix="/providers", tags=["providers"])
 
 
 class ProviderResponse(BaseModel):
+    """Provider DTO. The "default" concept is no longer surfaced here —
+    it lives on `LLMModel.is_default` (a singleton flag on a specific
+    model row), exposed via the Models API. UI derives "this provider
+    is the default one" by checking whether any of its models has
+    `is_default=True`.
+    """
+
     id: str
     name: str
     kind: ProviderKind
     base_url: str
     api_key_set: bool  # never return the actual key
-    default_model: str
-    is_default: bool
     enabled: bool
 
 
@@ -45,8 +49,6 @@ class CreateProviderRequest(BaseModel):
     kind: ProviderKind = "openai"
     base_url: str
     api_key: str = ""
-    default_model: str = "gpt-4o-mini"
-    set_as_default: bool = False
 
 
 class UpdateProviderRequest(BaseModel):
@@ -54,11 +56,17 @@ class UpdateProviderRequest(BaseModel):
     kind: ProviderKind | None = None
     base_url: str | None = None
     api_key: str | None = None
-    default_model: str | None = None
     enabled: bool | None = None
 
 
 class ProviderPresetResponse(BaseModel):
+    """Static suggestion shown by the UI when picking a provider format.
+
+    `default_model` here is a STRING HINT — "the canonical model for this
+    kind, suggested as the first one to register" — not a default-pointer
+    field. It seeds the model-add dialog's name input on a fresh provider.
+    """
+
     kind: ProviderKind
     label: str
     base_url: str
@@ -74,8 +82,6 @@ def _to_response(p: LLMProvider) -> ProviderResponse:
         kind=p.kind,
         base_url=p.base_url,
         api_key_set=bool(p.api_key),
-        default_model=p.default_model,
-        is_default=p.is_default,
         enabled=p.enabled,
     )
 
@@ -111,8 +117,6 @@ async def create_provider(
         kind=body.kind,
         base_url=body.base_url,
         api_key=body.api_key,
-        default_model=body.default_model,
-        set_as_default=body.set_as_default,
     )
     return _to_response(provider)
 
@@ -130,24 +134,11 @@ async def update_provider(
         kind=body.kind,
         base_url=body.base_url,
         api_key=body.api_key,
-        default_model=body.default_model,
         enabled=body.enabled,
     )
     if provider is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
     return _to_response(provider)
-
-
-@router.post("/{provider_id}/set-default", status_code=204)
-async def set_default_provider(
-    provider_id: str,
-    session: AsyncSession = Depends(get_session),
-) -> None:
-    svc = await get_provider_service(session)
-    p = await svc.get(provider_id)
-    if p is None:
-        raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
-    await svc.set_default(provider_id)
 
 
 @router.delete("/{provider_id}", status_code=204)
@@ -157,42 +148,6 @@ async def delete_provider(
 ) -> None:
     svc = await get_provider_service(session)
     await svc.delete(provider_id)
-
-
-@router.post("/{provider_id}/test", response_model=dict)
-async def test_provider(
-    provider_id: str,
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, object]:
-    """Connectivity test: list-models probe, fallback to a tiny chat call."""
-    svc = await get_provider_service(session)
-    provider = await svc.get(provider_id)
-    if provider is None:
-        raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
-
-    url, headers = probe_endpoint(provider)
-    try:
-        import httpx
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=headers)
-        if resp.status_code < 400:
-            return {"ok": True, "endpoint": url, "status": resp.status_code}
-    except Exception:
-        pass
-
-    try:
-        from langchain_core.messages import HumanMessage
-
-        llm = build_llm(provider, provider.default_model)
-        resp2 = await llm.ainvoke([HumanMessage(content="ping")])
-        return {
-            "ok": True,
-            "model": provider.default_model,
-            "response": str(resp2.content)[:100],
-        }
-    except Exception as exc:
-        return {"ok": False, "error": str(exc)}
 
 
 @router.post("/{provider_id}/ping", response_model=dict)

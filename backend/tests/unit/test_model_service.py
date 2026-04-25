@@ -33,8 +33,6 @@ def _provider() -> LLMProvider:
         name="TestProvider",
         base_url="https://api.example.com/v1",
         api_key="sk-fake",
-        default_model="gpt-4o-mini",
-        is_default=True,
     )
 
 
@@ -426,8 +424,6 @@ def _anthropic_provider(base_url: str = "https://api.anthropic.com") -> LLMProvi
         kind="anthropic",
         base_url=base_url,
         api_key="sk-ant-fake",
-        default_model="claude-3-5-sonnet-latest",
-        is_default=False,
     )
 
 

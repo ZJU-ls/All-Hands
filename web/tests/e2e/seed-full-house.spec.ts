@@ -40,6 +40,10 @@ const SHOT_ENABLED = process.env.I0020_CAPTURE === "1";
 type ProviderSeed = {
   id: string;
   name: string;
+  // Legacy seed-shape fields. After 2026-04-25 these are read but no longer
+  // surfaced through the provider DTO; the e2e fixture constructor below
+  // funnels `is_default` + `default_model` into the matching model row's
+  // `is_default` flag instead.
   base_url: string;
   api_key: string;
   default_model: string;
@@ -98,13 +102,15 @@ test.describe("seed full-house · cold-start pages render real data", () => {
     const providerDtos = providers.map((p) => ({
       id: p.id,
       name: p.name,
+      kind: "openai" as const,
       base_url: p.base_url,
       api_key_set: true,
-      default_model: p.default_model,
-      is_default: p.is_default,
       enabled: p.enabled,
     }));
     const providerByName = new Map(providerDtos.map((p) => [p.name, p.id]));
+    // Translate the legacy seed-shape default (provider.is_default +
+    // provider.default_model name string) into a model-row is_default flag.
+    const defaultLegacyProvider = providers.find((p) => p.is_default);
     const modelDtos = modelsRaw.map((m) => ({
       id: m.id,
       provider_id: providerByName.get(m.provider_name) ?? "",
@@ -112,6 +118,11 @@ test.describe("seed full-house · cold-start pages render real data", () => {
       display_name: m.display_name,
       context_window: m.context_window,
       enabled: m.enabled,
+      is_default: Boolean(
+        defaultLegacyProvider &&
+          m.provider_name === defaultLegacyProvider.name &&
+          m.name === defaultLegacyProvider.default_model,
+      ),
     }));
 
     await page.route("**/api/providers", async (route) => {
@@ -129,9 +140,13 @@ test.describe("seed full-house · cold-start pages render real data", () => {
     }
     expect(providerDtos.length).toBeGreaterThanOrEqual(3);
 
-    // Default provider (Bailian) has 3 models. models-empty must NOT render.
+    // Default provider is the one whose models include is_default=true now.
     await expect(page.getByTestId("models-empty")).toHaveCount(0);
-    const defaultProvider = providerDtos.find((p) => p.is_default);
+    const defaultModel = modelDtos.find((m) => m.is_default);
+    expect(defaultModel).toBeDefined();
+    const defaultProvider = providerDtos.find(
+      (p) => p.id === defaultModel!.provider_id,
+    );
     expect(defaultProvider).toBeDefined();
     const defaultModels = modelDtos.filter(
       (m) => m.provider_id === defaultProvider!.id,

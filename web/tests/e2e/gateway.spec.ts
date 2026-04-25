@@ -19,8 +19,6 @@ type Provider = {
   kind: "openai" | "anthropic" | "aliyun";
   base_url: string;
   api_key_set: boolean;
-  default_model: string;
-  is_default: boolean;
   enabled: boolean;
 };
 
@@ -73,6 +71,7 @@ type Model = {
   display_name: string;
   context_window: number;
   enabled: boolean;
+  is_default: boolean;
 };
 
 test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
@@ -95,8 +94,6 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
             kind: (body.kind as Provider["kind"]) ?? "openai",
             base_url: String(body.base_url ?? ""),
             api_key_set: true,
-            default_model: String(body.default_model ?? ""),
-            is_default: body.set_as_default === true,
             enabled: true,
           },
         ];
@@ -183,8 +180,6 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
         kind: "openai",
         base_url: "https://demo.example.com/v1",
         api_key_set: true,
-        default_model: "m-ok",
-        is_default: true,
         enabled: true,
       },
     ];
@@ -196,6 +191,7 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
         display_name: "Fast",
         context_window: 32_000,
         enabled: true,
+        is_default: true,
       },
       {
         id: "m-fail",
@@ -204,6 +200,7 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
         display_name: "Broken",
         context_window: 4096,
         enabled: true,
+        is_default: false,
       },
     ];
 
@@ -248,7 +245,7 @@ test.describe("gateway · accordion 三态 + ConfirmDialog + ping", () => {
 });
 
 test.describe("gateway · 供应商格式 UX", () => {
-  test("add dialog: picking format autofills base_url + default_model", async ({
+  test("add dialog: picking format autofills base_url (default model is picked later on a model row)", async ({
     page,
   }) => {
     let providers: Provider[] = [];
@@ -268,8 +265,6 @@ test.describe("gateway · 供应商格式 UX", () => {
             kind: (postBody.kind as Provider["kind"]) ?? "openai",
             base_url: String(postBody.base_url ?? ""),
             api_key_set: true,
-            default_model: String(postBody.default_model ?? ""),
-            is_default: false,
             enabled: true,
           },
         ];
@@ -295,7 +290,9 @@ test.describe("gateway · 供应商格式 UX", () => {
       "true",
     );
 
-    // Click anthropic — base_url + default_model should autofill to the preset.
+    // Click anthropic — only base_url autofills now. The "default model"
+    // field was retired; the user picks a default by clicking 「设为默认」
+    // on a registered model row instead. Form must show the explanatory hint.
     await page.getByTestId("provider-kind-anthropic").click();
     await expect(page.getByTestId("provider-kind-anthropic")).toHaveAttribute(
       "aria-checked",
@@ -303,18 +300,19 @@ test.describe("gateway · 供应商格式 UX", () => {
     );
     const baseUrlInput = page.locator('input[placeholder*="https://"]').first();
     await expect(baseUrlInput).toHaveValue("https://api.anthropic.com");
+    await expect(page.getByTestId("provider-form-default-hint")).toBeVisible();
+    // No default-model input lingers in the form.
     await expect(
       page.locator('input[value="claude-3-5-sonnet-latest"]'),
-    ).toBeVisible();
+    ).toHaveCount(0);
 
-    // Fill name + key and save — POST must carry kind=anthropic.
+    // Fill name + key and save — POST body must NOT carry default_model.
     await page
       .getByPlaceholder("例: OpenAI / DeepSeek / 本地 Ollama")
       .fill("MyAnthropic");
     await page.getByPlaceholder("sk-ant-...").fill("sk-ant-test");
     await page.getByRole("button", { name: "保存" }).click();
 
-    // Card shows ANTHROPIC badge; POST body carried the right kind.
     await expect(page.getByTestId("gateway-provider-MyAnthropic")).toBeVisible();
     await expect(
       page.getByTestId("gateway-provider-kind-MyAnthropic"),
@@ -322,5 +320,7 @@ test.describe("gateway · 供应商格式 UX", () => {
     expect(postBody).not.toBeNull();
     const body = postBody as unknown as Record<string, unknown>;
     expect(body.kind).toBe("anthropic");
+    expect(body.default_model).toBeUndefined();
+    expect(body.set_as_default).toBeUndefined();
   });
 });

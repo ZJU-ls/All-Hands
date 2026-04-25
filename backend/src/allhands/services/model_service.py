@@ -140,6 +140,37 @@ class LLMModelService:
             return None
         return model, provider
 
+    async def get_default(self) -> tuple[LLMModel, LLMProvider] | None:
+        """Return the workspace default (model, provider) pair, or None.
+
+        Reads the singleton `LLMModel.is_default=True` row and joins to its
+        provider. The pair is the canonical "what does the workspace use
+        when nothing else is specified" pointer — reused by ai_explainer,
+        Lead Agent's bootstrap snapshot, model_resolution.
+        """
+        model = await self._models.get_default()
+        if model is None:
+            return None
+        provider = await self._providers.get(model.provider_id)
+        if provider is None:
+            return None
+        return model, provider
+
+    async def set_as_default(self, model_id: str) -> tuple[LLMModel, LLMProvider] | None:
+        """Promote one model to the workspace default. Atomic + singleton.
+
+        Wraps the repo's transaction (clear all, set this) and joins the
+        provider so the API response can render "你已切到 X · Y" in one call.
+        """
+        updated = await self._models.set_default(model_id)
+        if updated is None:
+            return None
+        provider = await self._providers.get(updated.provider_id)
+        if provider is None:
+            # Orphan model — shouldn't happen with FK cascade, but be honest.
+            return None
+        return updated, provider
+
 
 # ---------------------------------------------------------------------------
 # Error categorization — convert raw exception text into a UI-grade category.

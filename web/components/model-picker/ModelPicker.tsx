@@ -101,7 +101,7 @@ export function ModelPicker({
         if (cancelled) return;
         setState({ status: "ready", providers: data.providers, models: data.models });
         if (autoPickDefault && !value) {
-          const fallback = defaultModelRef(data.providers);
+          const fallback = defaultModelRef(data.providers, data.models);
           if (fallback) onChange(fallback);
         }
       } catch (e) {
@@ -150,7 +150,7 @@ export function ModelPicker({
     );
   }
 
-  const defaultRef = defaultModelRef(state.providers);
+  const defaultRef = defaultModelRef(state.providers, state.models);
 
   const selectGroups: SelectGroup[] = [];
   if (inheritLabel !== undefined) {
@@ -167,9 +167,13 @@ export function ModelPicker({
     });
   }
   for (const { provider, models } of grouped) {
+    // 2026-04-25: "default provider" is no longer a provider field — derive
+    // it from "any model under me has is_default=true". The model-level dot
+    // continues to render via `hint: 默认` on the matching option.
+    const providerHostsDefault = models.some((m) => m.is_default);
     selectGroups.push({
       id: provider.id,
-      label: `${provider.name}${provider.is_default ? " · 默认" : ""}`,
+      label: `${provider.name}${providerHostsDefault ? " · 默认" : ""}`,
       options: models.map((m) => {
         const ref = buildModelRef(provider, m);
         return {

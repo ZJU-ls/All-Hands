@@ -171,8 +171,6 @@ class LLMProviderRow(Base):
     kind: Mapped[str] = mapped_column(String(32), default="openai")
     base_url: Mapped[str] = mapped_column(String(512))
     api_key: Mapped[str] = mapped_column(String(512), default="")
-    default_model: Mapped[str] = mapped_column(String(128), default="gpt-4o-mini")
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -187,6 +185,11 @@ class LLMModelRow(Base):
     display_name: Mapped[str] = mapped_column(String(128), default="")
     context_window: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # System-wide singleton: at most one row has is_default=True. Service
+    # layer enforces — see LLMModelRepo.set_default(). Indexed because
+    # `model_resolution.resolve()` runs every Lead Agent turn and needs a
+    # fast lookup of "the unique default model".
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
 
 class TriggerRow(Base):

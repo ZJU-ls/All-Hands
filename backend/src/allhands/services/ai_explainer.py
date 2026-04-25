@@ -19,12 +19,18 @@ classification + paraphrase task. ``ChatOpenAI``/``ChatAnthropic`` from
 ``execution.llm_factory.build_llm`` astream() is enough — each text
 chunk is a string, the caller (router) wraps it as SSE.
 
-Model picked via ``LLMProviderRepo.get_default()`` + its
-``default_model``. The three-stage resolver lives in
-``execution.model_resolution`` for the chat surface; here we always use
-the workspace default — the user isn't picking a model, they're asking
-"explain X" / "draft a prompt", and the platform should answer with
-whatever the workspace standardised on.
+Model picked via ``LLMModelRepo.get_default()`` (the system-wide
+singleton flag — see ``core.model.LLMModel.is_default``). Its
+``provider_id`` is then looked up in ``LLMProviderRepo``. The three-stage
+resolver lives in ``execution.model_resolution`` for the chat surface;
+here we always use the workspace default — the user isn't picking a
+model, they're asking "explain X" / "draft a prompt", and the platform
+should answer with whatever the workspace standardised on.
+
+Pre-2026-04-25 we read ``provider.default_model`` directly. That string
+field could desync from what was actually registered as a real
+``LLMModel``. The new path always returns a (provider, model_name) pair
+that is FK-backed — no orphan defaults.
 """
 
 from __future__ import annotations
@@ -44,7 +50,11 @@ if TYPE_CHECKING:
     from allhands.core.skill import Skill
     from allhands.execution.registry import ToolRegistry
     from allhands.execution.skills import SkillRegistry
-    from allhands.persistence.repositories import LLMProviderRepo, MCPServerRepo
+    from allhands.persistence.repositories import (
+        LLMModelRepo,
+        LLMProviderRepo,
+        MCPServerRepo,
+    )
 
 log = logging.getLogger(__name__)
 
@@ -212,10 +222,32 @@ def _build_compose_prompt_prompt(
     )
 
 
+async def _resolve_default_pair(
+    provider_repo: LLMProviderRepo, model_repo: LLMModelRepo
+) -> tuple[object, str]:
+    """Return (provider, model_name) for the workspace default.
+
+    Single helper so all three explain/compose entrypoints use the same
+    resolution — single source of truth for "what model does the platform
+    default to". Raises ``DomainError`` with a user-actionable message
+    when nothing is configured yet.
+    """
+    default_model = await model_repo.get_default()
+    if default_model is None:
+        raise DomainError("尚未指定默认模型 — 请先到「模型网关」点一行模型,设为默认。")
+    provider = await provider_repo.get(default_model.provider_id)
+    if provider is None:
+        # Default points at a deleted provider — schema-broken state. Tell
+        # the user honestly rather than silently picking some other one.
+        raise DomainError("默认模型所在的供应商已被删除 — 请重新指定默认模型。")
+    return provider, default_model.name
+
+
 async def explain_skill_stream(
     skill: Skill,
     *,
     provider_repo: LLMProviderRepo,
+    model_repo: LLMModelRepo,
     tool_registry: ToolRegistry | None = None,
 ) -> AsyncIterator[str]:
     """Stream a Markdown explanation of `skill` chunk-by-chunk.
@@ -228,14 +260,12 @@ async def explain_skill_stream(
         yield cached
         return
 
-    provider = await provider_repo.get_default()
-    if provider is None:
-        raise DomainError("尚未配置默认 LLM 供应商 — 请先到「模型网关」选一家供应商并标记为默认。")
+    provider, model_name = await _resolve_default_pair(provider_repo, model_repo)
 
     prompt_text = _build_skill_explain_prompt(
         skill, _format_tool_block(skill.tool_ids, tool_registry)
     )
-    llm = _build_explainer_llm(provider, provider.default_model)
+    llm = _build_explainer_llm(provider, model_name)
 
     chunks: list[str] = []
     async for chunk in llm.astream([HumanMessage(content=prompt_text)]):  # type: ignore[attr-defined]
@@ -261,6 +291,7 @@ async def explain_market_skill_stream(
     source_url: str,
     skill_md: str,
     provider_repo: LLMProviderRepo,
+    model_repo: LLMModelRepo,
 ) -> AsyncIterator[str]:
     """Stream a Markdown explanation for an **uninstalled** market skill.
 
@@ -279,9 +310,7 @@ async def explain_market_skill_stream(
         yield cached
         return
 
-    provider = await provider_repo.get_default()
-    if provider is None:
-        raise DomainError("尚未配置默认 LLM 供应商 — 请先到「模型网关」选一家供应商并标记为默认。")
+    provider, model_name = await _resolve_default_pair(provider_repo, model_repo)
 
     prompt_text = _build_market_explain_prompt(
         name=name,
@@ -290,7 +319,7 @@ async def explain_market_skill_stream(
         source_url=source_url,
         skill_md=skill_md,
     )
-    llm = _build_explainer_llm(provider, provider.default_model)
+    llm = _build_explainer_llm(provider, model_name)
 
     chunks: list[str] = []
     async for chunk in llm.astream([HumanMessage(content=prompt_text)]):  # type: ignore[attr-defined]
@@ -311,6 +340,7 @@ async def compose_employee_prompt_stream(
     skill_ids: list[str],
     mcp_server_ids: list[str],
     provider_repo: LLMProviderRepo,
+    model_repo: LLMModelRepo,
     skill_registry: SkillRegistry,
     mcp_repo: MCPServerRepo | None,
 ) -> AsyncIterator[str]:
@@ -322,9 +352,7 @@ async def compose_employee_prompt_stream(
     invalid ones, and a strict-fail here would block the user from
     iterating on the form.
     """
-    provider = await provider_repo.get_default()
-    if provider is None:
-        raise DomainError("尚未配置默认 LLM 供应商 — 请先到「模型网关」选一家供应商并标记为默认。")
+    provider, model_name = await _resolve_default_pair(provider_repo, model_repo)
 
     skills: list[Skill] = []
     for sid in skill_ids:
@@ -344,7 +372,7 @@ async def compose_employee_prompt_stream(
     prompt_text = _build_compose_prompt_prompt(
         name=name, description=description, skills=skills, mcp_servers=mcp_servers
     )
-    llm = _build_explainer_llm(provider, provider.default_model)
+    llm = _build_explainer_llm(provider, model_name)
 
     async for chunk in llm.astream([HumanMessage(content=prompt_text)]):  # type: ignore[attr-defined]
         text = _chunk_text(chunk)

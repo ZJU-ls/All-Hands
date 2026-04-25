@@ -48,13 +48,16 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; providers: GatewayProvider[]; models: GatewayModel[] };
 
+// Provider form shape (2026-04-25 cleanup): the provider IS just an
+// endpoint + credentials. "Default" is no longer a provider attribute —
+// it's a per-model singleton flag set by clicking 「设为默认」on a
+// concrete model row, after the provider has been registered AND the
+// user knows which model they actually want.
 const EMPTY_PROVIDER_FORM = {
   kind: "openai" as ProviderKind,
   name: "",
   base_url: "https://api.openai.com/v1",
   api_key: "",
-  default_model: "gpt-4o-mini",
-  set_as_default: false,
 };
 
 const EMPTY_MODEL_FORM = {
@@ -143,9 +146,19 @@ function GatewayPageInner() {
     () => (state.status === "ready" ? state.models : []),
     [state],
   );
+  // 默认 = 那个唯一带 is_default 的 model;它的 provider 派生出来。
+  // 这取代了旧的「provider.is_default + provider.default_model 字符串」二元组,
+  // 让指针永远指向一行真实存在、enabled 的模型。
+  const defaultModel = useMemo(
+    () => allModels.find((m) => m.is_default && m.enabled) ?? null,
+    [allModels],
+  );
   const defaultProvider = useMemo(
-    () => providers.find((p) => p.is_default) ?? null,
-    [providers],
+    () =>
+      defaultModel
+        ? providers.find((p) => p.id === defaultModel.provider_id) ?? null
+        : null,
+    [defaultModel, providers],
   );
   const enabledCount = useMemo(
     () => providers.filter((p) => p.enabled).length,
@@ -349,7 +362,6 @@ function GatewayPageInner() {
       const body: Record<string, unknown> = {
         name: providerForm.name,
         base_url: providerForm.base_url,
-        default_model: providerForm.default_model,
       };
       if (providerForm.api_key) body.api_key = providerForm.api_key;
       // kind is set at creation time and not editable here
@@ -366,8 +378,14 @@ function GatewayPageInner() {
     }
   }
 
-  async function handleSetDefault(id: string) {
-    await fetch(`/api/providers/${id}/set-default`, { method: "POST" });
+  // 「设为默认」入口现在挂在每一行**模型**上 —— 一键同时切供应商 + 模型,
+  // 因为后端已经把"默认"统一收成 LLMModel.is_default 单例。供应商再也
+  // 没有"默认"概念,只是这个被选中模型的派生属性。
+  async function handleSetDefaultModel(model: GatewayModel) {
+    const res = await fetch(`/api/models/${model.id}/set-default`, {
+      method: "POST",
+    });
+    if (!res.ok) return;
     await load();
   }
 
@@ -476,8 +494,6 @@ function GatewayPageInner() {
                     ...EMPTY_PROVIDER_FORM,
                     kind,
                     base_url: preset?.base_url ?? EMPTY_PROVIDER_FORM.base_url,
-                    default_model:
-                      preset?.default_model ?? EMPTY_PROVIDER_FORM.default_model,
                   });
                 }}
               />
@@ -491,6 +507,7 @@ function GatewayPageInner() {
                 modelCount={allModels.length}
                 enabledCount={enabledCount}
                 defaultProvider={defaultProvider}
+                defaultModel={defaultModel}
                 testAllBusy={testAllBusy}
                 onTestAll={() => void testAll()}
                 onAdd={openCreate}
@@ -513,7 +530,7 @@ function GatewayPageInner() {
                       onPingModel={pingOne}
                       onBulkPing={() => void bulkPingProvider(p.id, models)}
                       bulkPingInProgress={bulkPing[p.id] ?? null}
-                      onSetDefault={() => void handleSetDefault(p.id)}
+                      onSetDefaultModel={(m) => void handleSetDefaultModel(m)}
                       onEdit={() => {
                         setEditingProviderId(p.id);
                         setProviderForm({
@@ -521,8 +538,6 @@ function GatewayPageInner() {
                           name: p.name,
                           base_url: p.base_url,
                           api_key: "",
-                          default_model: p.default_model,
-                          set_as_default: p.is_default,
                         });
                       }}
                       onDelete={() => setDeleteProviderTarget(p)}
@@ -607,6 +622,7 @@ function GatewayHero({
   modelCount,
   enabledCount,
   defaultProvider,
+  defaultModel,
   testAllBusy,
   onTestAll,
   onAdd,
@@ -615,10 +631,15 @@ function GatewayHero({
   modelCount: number;
   enabledCount: number;
   defaultProvider: GatewayProvider | null;
+  defaultModel: GatewayModel | null;
   testAllBusy: boolean;
   onTestAll: () => void;
   onAdd: () => void;
 }) {
+  const defaultLabel =
+    defaultProvider && defaultModel
+      ? `${defaultProvider.name}/${defaultModel.name}`
+      : null;
   return (
     <section
       className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-sm"
@@ -664,16 +685,14 @@ function GatewayHero({
             </span>
           </div>
           <p className="mt-1 text-[13px] text-text-muted leading-relaxed">
-            {defaultProvider ? (
+            {defaultLabel ? (
               <>
                 全局默认 ={" "}
-                <span className="font-medium text-text">
-                  {defaultProvider.name}/{defaultProvider.default_model}
-                </span>
-                ;员工 / 对话未指定模型时回退到这一对 · 卡片右上角「设为默认」切换 · 编辑供应商可改默认模型。
+                <span className="font-medium text-text">{defaultLabel}</span>
+                ;员工 / 对话未指定模型时回退到这一对 · 在任意模型行点「设为默认」即可一键切换。
               </>
             ) : (
-              <>尚未选择默认供应商 · 任一卡片右上角点「设为默认」即可。</>
+              <>尚未选择默认模型 · 在任意模型行点「设为默认」即可指定。</>
             )}
           </p>
 
@@ -687,13 +706,13 @@ function GatewayHero({
               value={enabledCount}
               tone="success"
             />
-            {defaultProvider && (
+            {defaultLabel && (
               <span
                 className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20"
                 title="未指定时所有对话回退到这一对 (供应商, 模型)"
               >
                 <Icon name="star" size={11} />
-                全局默认 · {defaultProvider.name}/{defaultProvider.default_model}
+                全局默认 · {defaultLabel}
               </span>
             )}
           </div>
@@ -938,23 +957,21 @@ function ProviderFormDialog({
   const currentPreset = presets.find((p) => p.kind === form.kind);
   const keyPlaceholder = currentPreset?.key_hint || "sk-... (本地部署可留空)";
   const baseUrlPlaceholder = currentPreset?.base_url || "https://api.openai.com/v1";
-  const defaultModelPlaceholder = currentPreset?.default_model || "gpt-4o-mini";
 
   function handleKindChange(nextKind: ProviderKind) {
     const next = presets.find((p) => p.kind === nextKind);
     onChange({
       ...form,
       kind: nextKind,
-      // Autofill canonical values, but only overwrite if the user hasn't typed a
-      // different value yet (or is still sitting on the previous preset's default).
+      // Autofill canonical base_url, but only overwrite if the user hasn't
+      // typed a different value yet (or is still sitting on the previous
+      // preset's default). The "default model" field that used to live here
+      // is gone — set the workspace default by clicking 「设为默认」on a
+      // specific model row after registering it.
       base_url:
         next && (form.base_url === "" || presets.some((p) => p.base_url === form.base_url))
           ? next.base_url
           : form.base_url,
-      default_model:
-        next && (form.default_model === "" || presets.some((p) => p.default_model === form.default_model))
-          ? next.default_model
-          : form.default_model,
     });
   }
 
@@ -964,7 +981,7 @@ function ProviderFormDialog({
       title={editing ? "编辑 LLM 供应商" : "添加 LLM 供应商"}
       subtitle={
         editing
-          ? "修改 endpoint · 轮换 key · 切换默认模型"
+          ? "修改 endpoint · 轮换 API key"
           : "挑一种 API 格式,填入 endpoint 与凭证"
       }
       iconName={editing ? "edit" : "plug"}
@@ -1062,36 +1079,25 @@ function ProviderFormDialog({
         />
       </FormSection>
 
-      <FormSection label="默认">
-        <LabeledInput
-          label="默认模型"
-          mono
-          placeholder={defaultModelPlaceholder}
-          value={form.default_model}
-          onChange={(v) => onChange({ ...form, default_model: v })}
-          icon="brain"
-        />
-        {!editing && (
-          <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
-            <input
-              type="checkbox"
-              checked={form.set_as_default}
-              onChange={(e) =>
-                onChange({ ...form, set_as_default: e.target.checked })
-              }
-              className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-primary/20"
-            />
-            <span className="text-[12px] text-text-muted inline-flex items-center gap-1.5">
-              <Icon
-                name="star"
-                size={11}
-                className="text-text-subtle"
-              />
-              设为默认供应商
-            </span>
-          </label>
-        )}
-      </FormSection>
+      {/* "默认" 字段已废弃 — 默认模型在保存供应商之后,通过模型行上的
+          「设为默认」按钮一键指定。这里多一个提示告诉用户下一步去哪。 */}
+      {!editing && (
+        <p
+          className="text-[12px] text-text-muted leading-relaxed flex items-start gap-1.5"
+          data-testid="provider-form-default-hint"
+        >
+          <Icon
+            name="info"
+            size={12}
+            className="mt-0.5 shrink-0 text-text-subtle"
+          />
+          <span>
+            保存后,在该供应商下注册一个或多个模型,然后点模型行右侧的
+            <span className="font-medium text-text"> 「设为默认」</span>
+            把它定为全局默认 (provider + model)。
+          </span>
+        </p>
+      )}
 
       <DialogFooter
         saveLabel={saving ? "保存中" : "保存"}
