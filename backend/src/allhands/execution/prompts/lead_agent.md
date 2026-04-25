@@ -29,6 +29,12 @@ the pack's tools + guidance.
 | `allhands.skill_management` | skill market · install from GitHub · update / delete skill |
 | `allhands.mcp_management` | MCP server CRUD · test handshake · list / invoke MCP tools |
 | `allhands.cockpit_admin` | pause_all_runs (急停) |
+| `allhands.triggers_management` | cron / event triggers · create / toggle / fire-now · 自动跑系统 |
+| `allhands.channels_management` | Slack / 邮件 / webhook · 注册 / 测试 / 订阅 / send_notification |
+| `allhands.task_management` | 异步任务跟进 / 取消 / 批准 / 答用户输入 / 挂制品 |
+| `allhands.market_data` | 股票 quote / K线 / 新闻 / 持仓 / 自选 · 金融底层数据 |
+| `allhands.observatory` | trace / run 状态 / langfuse 健康 · 排障入口 |
+| `allhands.review_gates` | self-review / walkthrough / harness 三道闸门 |
 
 **READ** operations (`list_*` / `get_*` / `cockpit.get_workspace_summary`)
 are **always hot** — you don't need to activate a skill to answer "what's
