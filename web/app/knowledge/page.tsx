@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Icon } from "@/components/ui/icon";
 import {
   type DocumentDto,
   type EmbeddingModelOption,
@@ -33,6 +33,7 @@ import {
  * lucide-react import.
  */
 export default function KnowledgePage() {
+  const t = useTranslations("knowledge");
   const [kbs, setKbs] = useState<KBDto[] | null>(null);
   const [activeKb, setActiveKb] = useState<KBDto | null>(null);
   const [docs, setDocs] = useState<DocumentDto[] | null>(null);
@@ -51,7 +52,7 @@ export default function KnowledgePage() {
     try {
       const data = await listKBs();
       setKbs(data);
-      if (!activeKb && data.length > 0) {
+      if (!activeKb && data[0]) {
         setActiveKb(data[0]);
       }
     } catch (e) {
@@ -76,10 +77,12 @@ export default function KnowledgePage() {
         if (def) setChosenModel(def.ref);
       })
       .catch((e) => setError(String(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (activeKb) refreshDocs(activeKb.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKb?.id]);
 
   async function handleCreateKB() {
@@ -129,10 +132,7 @@ export default function KnowledgePage() {
 
   return (
     <AppShell>
-      <PageHeader
-        title="Knowledge Base"
-        subtitle="Workspace 级知识库 · Hybrid 检索 · Tool-First 写入"
-      />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {error && (
         <div className="mx-6 mb-4 rounded-md border border-strong bg-soft px-3 py-2 text-sm text-default">
@@ -150,11 +150,11 @@ export default function KnowledgePage() {
       <div className="mx-6 grid grid-cols-12 gap-4 min-h-[600px]">
         {/* Left · KB list */}
         <aside className="col-span-3 card p-4 flex flex-col gap-3">
-          <div className="text-xs uppercase tracking-wide text-faint">Knowledge Bases</div>
+          <div className="text-xs uppercase tracking-wide text-faint">{t("kbsTitle")}</div>
           <ul className="space-y-1">
-            {kbs === null && <li className="text-sm text-faint">loading…</li>}
+            {kbs === null && <li className="text-sm text-faint">{t("loading")}</li>}
             {kbs?.length === 0 && (
-              <li className="text-sm text-muted">尚未创建 KB · 用下方表单建一个</li>
+              <li className="text-sm text-muted">{t("kbsEmpty")}</li>
             )}
             {kbs?.map((k) => (
               <li key={k.id}>
@@ -169,7 +169,11 @@ export default function KnowledgePage() {
                 >
                   <div className="text-sm font-medium">{k.name}</div>
                   <div className="text-xs text-faint mt-0.5">
-                    {k.document_count} docs · {k.chunk_count} chunks · {k.embedding_dim}d
+                    {t("kbStats", {
+                      docs: k.document_count,
+                      chunks: k.chunk_count,
+                      dim: k.embedding_dim,
+                    })}
                   </div>
                 </button>
               </li>
@@ -180,12 +184,12 @@ export default function KnowledgePage() {
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="新 KB 名称…"
+              placeholder={t("newKbPlaceholder")}
               className="w-full px-2 py-1.5 text-sm rounded border border-hairline bg-soft text-default"
             />
             <div className="flex flex-col gap-1">
               <label className="text-[10px] uppercase tracking-wide text-faint">
-                Embedding model
+                {t("embeddingModel")}
               </label>
               <select
                 value={chosenModel}
@@ -194,7 +198,7 @@ export default function KnowledgePage() {
               >
                 {models.map((m) => (
                   <option key={m.ref} value={m.ref} disabled={!m.available}>
-                    {m.label} · {m.dim}d{m.is_default ? " · default" : ""}
+                    {m.label} · {m.dim}d{m.is_default ? ` · ${t("modelDefault")}` : ""}
                     {!m.available ? ` · (${m.reason})` : ""}
                   </option>
                 ))}
@@ -206,7 +210,7 @@ export default function KnowledgePage() {
               disabled={creating || !newName.trim()}
               className="w-full py-1.5 text-sm rounded bg-primary text-white disabled:opacity-40"
             >
-              {creating ? "Creating…" : "+ 新建 KB"}
+              {creating ? t("creating") : t("createKb")}
             </button>
           </div>
         </aside>
@@ -215,7 +219,7 @@ export default function KnowledgePage() {
         <main className="col-span-5 card p-4 flex flex-col gap-3 min-h-0">
           {!activeKb ? (
             <div className="text-sm text-faint flex items-center justify-center flex-1">
-              选择左侧 KB 或新建一个
+              {t("pickKb")}
             </div>
           ) : (
             <>
@@ -232,10 +236,10 @@ export default function KnowledgePage() {
                     onClick={() => setShowCfg((s) => !s)}
                     className="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong"
                   >
-                    {showCfg ? "Close ⚙" : "⚙ Tune"}
+                    {showCfg ? t("cfgClose") : t("cfgOpen")}
                   </button>
                   <label className="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong cursor-pointer">
-                    {uploading ? "Uploading…" : "+ 上传文档"}
+                    {uploading ? t("uploading") : t("uploadDoc")}
                     <input
                       type="file"
                       className="hidden"
@@ -267,7 +271,7 @@ export default function KnowledgePage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  placeholder="搜索知识库…  (BM25 + vector + RRF)"
+                  placeholder={t("searchPlaceholder")}
                   className="flex-1 px-3 py-2 text-sm rounded border border-hairline bg-soft text-default"
                 />
                 <button
@@ -276,17 +280,17 @@ export default function KnowledgePage() {
                   disabled={searching || !searchQuery.trim()}
                   className="px-4 py-2 text-sm rounded bg-primary text-white disabled:opacity-40"
                 >
-                  {searching ? "…" : "Search"}
+                  {searching ? "…" : t("searchAction")}
                 </button>
               </div>
 
               <div className="text-xs uppercase tracking-wide text-faint mt-2">
-                Documents ({docs?.length ?? "…"})
+                {t("documents", { count: docs?.length ?? "…" })}
               </div>
               <ul className="space-y-2 overflow-y-auto flex-1">
                 {docs?.length === 0 && (
                   <li className="text-sm text-faint p-3 text-center border border-dashed border-hairline rounded">
-                    KB 为空 · 上传第一份文档
+                    {t("docsEmpty")}
                   </li>
                 )}
                 {docs?.map((d) => (
@@ -302,7 +306,7 @@ export default function KnowledgePage() {
                           </span>
                         </div>
                         <div className="text-xs text-faint flex gap-3">
-                          <span>🧩 {d.chunk_count} chunks</span>
+                          <span>🧩 {t("chunks", { n: d.chunk_count })}</span>
                           <span>v{d.version}</span>
                           <span>{(d.size_bytes / 1024).toFixed(1)} KB</span>
                         </div>
@@ -332,29 +336,31 @@ export default function KnowledgePage() {
         {/* Right · search results */}
         <aside className="col-span-4 card p-4 flex flex-col gap-3">
           <div className="text-xs uppercase tracking-wide text-faint">
-            {results === null ? "Tips" : `Results (${results.length})`}
+            {results === null ? t("tipsTitle") : t("resultsTitle", { count: results.length })}
           </div>
           {results === null && (
             <div className="text-xs text-muted leading-relaxed space-y-2">
               <p>
-                <strong>Hybrid search</strong> 把 BM25 全文与向量语义检索通过 RRF 融合 ·
-                自动 top-k。
+                <strong>{t("tip1Strong")}</strong>
+                {t("tip1Body")}
               </p>
               <p>
-                Agent 通过 <span className="kbd">kb_search</span> /{" "}
-                <span className="kbd">kb_read_document</span> 主动检索;
-                带 grant 的 agent 还能 <span className="kbd">kb_create_document</span>{" "}
-                沉淀对话产出。
+                {t.rich("tip2Body", {
+                  s1: () => <span className="kbd">kb_search</span>,
+                  s2: () => <span className="kbd">kb_read_document</span>,
+                  s3: () => <span className="kbd">kb_create_document</span>,
+                })}
               </p>
               <p>
-                试试给一个 employee 挂上 <span className="kbd">allhands.skills.kb_researcher</span>{" "}
-                skill,然后问它："xxx 在我的笔记里讲过吗?"
+                {t.rich("tip3Body", {
+                  s: () => <span className="kbd">allhands.skills.kb_researcher</span>,
+                })}
               </p>
             </div>
           )}
           {results !== null && results.length === 0 && (
             <div className="text-sm text-faint text-center py-8 border border-dashed border-hairline rounded">
-              没有命中 · 换个检索词试试
+              {t("noResults")}
             </div>
           )}
           {results?.map((r) => (
@@ -398,6 +404,7 @@ function RetrievalConfigEditor({
   onSaved: (next: KBDto) => void;
   onError: (msg: string) => void;
 }) {
+  const t = useTranslations("knowledge.cfg");
   const [bm25, setBm25] = useState(kb.retrieval_config.bm25_weight);
   const [vec, setVec] = useState(kb.retrieval_config.vector_weight);
   const [topK, setTopK] = useState(kb.retrieval_config.top_k);
@@ -424,7 +431,7 @@ function RetrievalConfigEditor({
   return (
     <div className="card-elev p-3 grid grid-cols-2 gap-3 text-xs">
       <label className="flex flex-col gap-1">
-        <span className="text-faint">BM25 weight</span>
+        <span className="text-faint">{t("bm25Weight")}</span>
         <input
           type="number"
           min={0}
@@ -435,7 +442,7 @@ function RetrievalConfigEditor({
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-faint">Vector weight</span>
+        <span className="text-faint">{t("vectorWeight")}</span>
         <input
           type="number"
           min={0}
@@ -446,7 +453,7 @@ function RetrievalConfigEditor({
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-faint">Top K</span>
+        <span className="text-faint">{t("topK")}</span>
         <input
           type="number"
           min={1}
@@ -457,7 +464,7 @@ function RetrievalConfigEditor({
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-faint">Reranker (M3)</span>
+        <span className="text-faint">{t("reranker")}</span>
         <select
           value={reranker}
           onChange={(e) =>
@@ -480,7 +487,7 @@ function RetrievalConfigEditor({
         disabled={saving}
         className="col-span-2 py-1.5 rounded bg-primary text-white disabled:opacity-40"
       >
-        {saving ? "Saving…" : "保存"}
+        {saving ? t("saving") : t("save")}
       </button>
     </div>
   );

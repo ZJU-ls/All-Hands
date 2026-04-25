@@ -1,0 +1,40 @@
+{
+  "knowledge": {
+    "title": "知识库",
+    "subtitle": "Workspace 级知识库 · Hybrid 检索 · Tool-First 写入",
+    "kbsTitle": "Knowledge Bases",
+    "loading": "加载中…",
+    "kbsEmpty": "尚未创建 KB · 用下方表单建一个",
+    "kbStats": "{docs} 篇文档 · {chunks} 块 · {dim} 维",
+    "newKbPlaceholder": "新 KB 名称…",
+    "embeddingModel": "Embedding 模型",
+    "modelDefault": "默认",
+    "createKb": "+ 新建 KB",
+    "creating": "创建中…",
+    "pickKb": "选择左侧 KB 或新建一个",
+    "cfgOpen": "⚙ 调参",
+    "cfgClose": "关闭 ⚙",
+    "uploadDoc": "+ 上传文档",
+    "uploading": "上传中…",
+    "searchPlaceholder": "搜索知识库…  (BM25 + 向量 + RRF)",
+    "searchAction": "搜索",
+    "documents": "Documents ({count})",
+    "docsEmpty": "KB 为空 · 上传第一份文档",
+    "chunks": "{n} 块",
+    "tipsTitle": "提示",
+    "resultsTitle": "结果({count})",
+    "tip1Strong": "Hybrid search ",
+    "tip1Body": "把 BM25 全文与向量语义检索通过 RRF 融合 · 自动 top-k。",
+    "tip2Body": "Agent 通过 <s1>kb_search</s1> / <s2>kb_read_document</s2> 主动检索;带 grant 的 agent 还能 <s3>kb_create_document</s3> 沉淀对话产出。",
+    "tip3Body": "试试给一个 employee 挂上 <s>allhands.skills.kb_researcher</s> skill,然后问它:\"xxx 在我的笔记里讲过吗?\"",
+    "noResults": "没有命中 · 换个检索词试试",
+    "cfg": {
+      "bm25Weight": "BM25 权重",
+      "vectorWeight": "向量权重",
+      "topK": "Top K",
+      "reranker": "Reranker (M3)",
+      "save": "保存",
+      "saving": "保存中…"
+    }
+  }
+}

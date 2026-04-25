@@ -1,0 +1,40 @@
+{
+  "knowledge": {
+    "title": "Knowledge Base",
+    "subtitle": "Workspace-scoped knowledge bases · hybrid retrieval · tool-first writes",
+    "kbsTitle": "Knowledge Bases",
+    "loading": "loading…",
+    "kbsEmpty": "No KBs yet · create one with the form below",
+    "kbStats": "{docs} docs · {chunks} chunks · {dim}d",
+    "newKbPlaceholder": "New KB name…",
+    "embeddingModel": "Embedding model",
+    "modelDefault": "default",
+    "createKb": "+ New KB",
+    "creating": "Creating…",
+    "pickKb": "Pick a KB on the left or create a new one",
+    "cfgOpen": "⚙ Tune",
+    "cfgClose": "Close ⚙",
+    "uploadDoc": "+ Upload document",
+    "uploading": "Uploading…",
+    "searchPlaceholder": "Search the KB…  (BM25 + vector + RRF)",
+    "searchAction": "Search",
+    "documents": "Documents ({count})",
+    "docsEmpty": "KB is empty · upload the first document",
+    "chunks": "{n} chunks",
+    "tipsTitle": "Tips",
+    "resultsTitle": "Results ({count})",
+    "tip1Strong": "Hybrid search ",
+    "tip1Body": "fuses BM25 full-text and vector semantic retrieval via RRF · auto top-k.",
+    "tip2Body": "Agents call <s1>kb_search</s1> / <s2>kb_read_document</s2> to retrieve; agents with the right grant can also <s3>kb_create_document</s3> to capture conversation outputs.",
+    "tip3Body": "Try mounting <s>allhands.skills.kb_researcher</s> on an employee and asking it: \"did I write about xxx in my notes?\"",
+    "noResults": "No hits · try a different query",
+    "cfg": {
+      "bm25Weight": "BM25 weight",
+      "vectorWeight": "Vector weight",
+      "topK": "Top K",
+      "reranker": "Reranker (M3)",
+      "save": "Save",
+      "saving": "Saving…"
+    }
+  }
+}
