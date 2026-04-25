@@ -185,3 +185,16 @@ horizontal ellipsis "…",和其他 placeholder 不一致。
 - 两个新 regression net 入 vitest / pytest,以后 PR 闭环
 
 **commits**:待提交
+
+## Round 8 · 2026-04-26 04:15
+
+**主题**:最终轮 · 收尾 + HTML 报告
+
+**做的事**:
+- 生成 docs/i18n-final-report.html(618 行 · self-contained · light/dark 自适应):
+  - stats grid · 8 轮时间线表格 · 5 个 before/after 对比 · catalog 完整度 · 已知不翻译清单 · next steps
+- 启 HTTP server 通过 http:// URL 发出报告(不给 file://)
+
+**结果**:i18n 8 轮迭代收尾 · 报告交付。
+
+**commits**:见 git log
