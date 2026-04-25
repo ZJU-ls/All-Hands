@@ -128,6 +128,9 @@ class MessageRow(Base):
     trace_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     parent_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # See core.Message.interrupted — true when the LLM stream didn't
+    # reach a clean done (user 中止 / transport drop / mid-stream error).
+    interrupted: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
     conversation: Mapped[ConversationRow] = relationship(back_populates="messages")

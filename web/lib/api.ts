@@ -190,6 +190,13 @@ export type ChatMessageDto = {
    * enable_thinking, DeepSeek-R1). None otherwise.
    */
   reasoning?: string | null;
+  /**
+   * 2026-04-25 · True when the producing turn was cut short (user 中止 ·
+   * SSE drop · backend mid-stream error). Whatever streamed before the
+   * cut is still on this row; the bubble renders an 「已中止」 tail to
+   * tell the reader the answer is incomplete.
+   */
+  interrupted?: boolean;
 };
 
 export async function listConversationMessages(

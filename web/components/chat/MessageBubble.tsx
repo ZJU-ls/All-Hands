@@ -92,6 +92,13 @@ export function MessageBubble({ message, isStreaming }: Props) {
           ) : (
             <LegacyAgentBody message={message} showCursor={showCursor} />
           )}
+          {/* 「已中止」 tail (Claude Code parity). Shown when the producing
+              turn was cut short — user 中止 / SSE drop / mid-stream error.
+              Whatever streamed before the cut is still on the message above;
+              this chip just tells the reader the answer is incomplete. */}
+          {!isStreaming && message.interrupted && (
+            <InterruptedTail />
+          )}
           {message.parent_run_id && (
             <div className="mt-2 flex justify-end">
               <TraceChip runId={message.parent_run_id} variant="link" />
@@ -99,6 +106,19 @@ export function MessageBubble({ message, isStreaming }: Props) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function InterruptedTail() {
+  return (
+    <div
+      data-testid="message-interrupted-tail"
+      className="mt-3 flex items-center gap-1.5 border-t border-dashed border-warning/30 pt-2 text-[11px] text-warning"
+      title="该回复未完成 — 用户中止 / 网络断开 / 后端错误。已保留中断前的内容。"
+    >
+      <Icon name="alert-triangle" size={11} strokeWidth={2} />
+      <span>已中止 · 内容不完整</span>
     </div>
   );
 }

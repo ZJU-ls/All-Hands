@@ -166,6 +166,7 @@ def _row_to_message(row: MessageRow) -> Message:
         trace_ref=row.trace_ref,
         parent_run_id=row.parent_run_id,
         reasoning=row.reasoning,
+        interrupted=row.interrupted,
         created_at=_utc(row.created_at),
     )
 
@@ -338,6 +339,7 @@ class SqlConversationRepo:
             trace_ref=message.trace_ref,
             parent_run_id=message.parent_run_id,
             reasoning=message.reasoning,
+            interrupted=message.interrupted,
             created_at=_naive(message.created_at),
         )
         self._s.add(row)

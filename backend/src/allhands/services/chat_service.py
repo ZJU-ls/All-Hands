@@ -811,6 +811,16 @@ class ChatService:
         persisted = False
         run_finalized = False
         error_payload: dict[str, object] | None = None
+        # 2026-04-25 · Claude-Code-style interrupt preservation. The tap
+        # records partial bytes always; the interrupted flag distinguishes
+        # "we made it to a clean done" from "the stream was cut" so:
+        #   1. Frontend renders the saved row with an 「已中止」 marker
+        #   2. build_llm_context synthesizes "Interrupted by user"
+        #      tool_results for any tool_use blocks the model committed
+        #      before the cut (next-turn wire shape stays valid).
+        # done_seen flips on the runner's terminal "done" event; absence
+        # at flush() time means client disconnect / runner abort.
+        done_seen = False
 
         async def flush() -> None:
             nonlocal persisted
@@ -819,6 +829,11 @@ class ChatService:
             persisted = True
             content = "".join(buffer)
             reasoning_text = "".join(reasoning_buffer) or None
+            # interrupted = stream did not deliver a clean done. Captures
+            # both the explicit error path (error_payload set above) and
+            # the silent client-disconnect path (CancelledError raised
+            # inside ``async for``, lands here via the finally tap).
+            interrupted = error_payload is not None or not done_seen
             msg = Message(
                 id=message_id,
                 conversation_id=conversation_id,
@@ -828,6 +843,7 @@ class ChatService:
                 parent_run_id=run_id,
                 render_payloads=list(render_payloads),
                 tool_calls=list(tool_calls_by_id.values()),
+                interrupted=interrupted,
                 created_at=first_seen or datetime.now(UTC),
             )
             try:
@@ -857,6 +873,7 @@ class ChatService:
                                 "tool_calls": [tc.model_dump() for tc in tool_calls_by_id.values()],
                                 "render_payloads": [rp.model_dump() for rp in render_payloads],
                                 "run_id": run_id,
+                                "interrupted": interrupted,
                             },
                             created_at=first_seen or datetime.now(UTC),
                         )
@@ -1025,6 +1042,7 @@ class ChatService:
                                 extra={"conversation_id": conversation_id},
                             )
                 elif event.kind == "done":
+                    done_seen = True
                     await flush()
                 yield event
         finally:
