@@ -42,7 +42,11 @@ describe("HtmlView", () => {
     render(<HtmlView content="<p>hi</p>" />);
     const frame = document.querySelector("iframe");
     expect(frame).not.toBeNull();
-    expect(frame?.getAttribute("sandbox")).toBe("");
+    // Sandbox needs allow-scripts so canvas / p5.js artifacts run; we
+    // intentionally do NOT add allow-same-origin so the embedded HTML
+    // can't reach the parent's localStorage / cookies.
+    expect(frame?.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(frame?.getAttribute("sandbox")).not.toContain("allow-same-origin");
     expect(frame?.getAttribute("srcdoc")).toBe("<p>hi</p>");
   });
 });
