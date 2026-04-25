@@ -248,8 +248,9 @@ class ArtifactRow(Base):
     name: Mapped[str] = mapped_column(String(256), index=True)
     kind: Mapped[str] = mapped_column(String(32), index=True)
     mime_type: Mapped[str] = mapped_column(String(128))
-    content: Mapped[str | None] = mapped_column(String, nullable=True)
-    file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # 2026-04-25 storage refactor: all kinds (text + binary) now live on
+    # disk; ``content`` column is gone. ``file_path`` is required.
+    file_path: Mapped[str] = mapped_column(String(512))
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     version: Mapped[int] = mapped_column(Integer, default=1)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
@@ -272,8 +273,7 @@ class ArtifactVersionRow(Base):
         index=True,
     )
     version: Mapped[int] = mapped_column(Integer)
-    content: Mapped[str | None] = mapped_column(String, nullable=True)
-    file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    file_path: Mapped[str] = mapped_column(String(512))
     diff_from_prev: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 

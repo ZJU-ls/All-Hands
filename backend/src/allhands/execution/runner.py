@@ -387,7 +387,15 @@ def _facade_stream(
 
     async def _gen() -> AsyncIterator[AgentEvent]:
         projector = _LegacyProjector()
-        async for ev in loop.stream(messages=messages, overrides=overrides):
+        # Forward the employee's stored max_iterations · AgentLoop's stream()
+        # has its own default=10, which silently overrode whatever the user
+        # configured. Reproducer: bump Lead Agent's max_iterations to 100 in
+        # /employees/{id} → next turn still hits MAX_ITERATIONS at iter 11.
+        async for ev in loop.stream(
+            messages=messages,
+            max_iterations=employee.max_iterations,
+            overrides=overrides,
+        ):
             for legacy in projector.project(ev):
                 yield legacy
 

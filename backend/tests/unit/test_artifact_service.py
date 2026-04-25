@@ -39,6 +39,8 @@ def _svc(session: AsyncSession, data_dir: Path) -> ArtifactService:
 
 
 async def test_create_text_then_read_back(session: AsyncSession, data_dir: Path) -> None:
+    """2026-04-25 storage refactor: text kinds also live on disk now,
+    not in DB. file_path is required; reading goes through read_text()."""
     svc = _svc(session, data_dir)
     art = await svc.create(
         name="spec-draft",
@@ -48,10 +50,12 @@ async def test_create_text_then_read_back(session: AsyncSession, data_dir: Path)
     assert art.version == 1
     assert art.size_bytes > 0
     assert art.mime_type == "text/markdown"
+    assert art.file_path is not None
+    assert (data_dir / "artifacts" / art.file_path).exists()
 
     same = await svc.get(art.id)
-    assert same.content == "# Hello\n\nworld.\n"
-    assert same.file_path is None
+    assert same.file_path == art.file_path
+    assert svc.read_text(same) == "# Hello\n\nworld.\n"
 
 
 async def test_create_rejects_missing_content(session: AsyncSession, data_dir: Path) -> None:
@@ -67,13 +71,13 @@ async def test_update_overwrite_bumps_version_and_keeps_history(
     art = await svc.create(name="plan", kind=ArtifactKind.MARKDOWN, content="first draft")
     updated = await svc.update(art.id, mode="overwrite", content="second draft")
     assert updated.version == 2
-    assert updated.content == "second draft"
+    assert svc.read_text(updated) == "second draft"
 
     versions = await svc.list_versions(art.id)
     assert [v.version for v in versions] == [2, 1]
 
     v1 = await svc.read_version(art.id, 1)
-    assert v1.content == "first draft"
+    assert svc.read_version_bytes(v1).decode("utf-8") == "first draft"
 
 
 async def test_update_patch_applies_unified_diff(session: AsyncSession, data_dir: Path) -> None:
@@ -85,7 +89,7 @@ async def test_update_patch_applies_unified_diff(session: AsyncSession, data_dir
     )
     patch = "--- a\n+++ b\n@@ -1,3 +1,3 @@\n line a\n-line b\n+line B!\n line c\n"
     updated = await svc.update(art.id, mode="patch", patch=patch)
-    assert updated.content == "line a\nline B!\nline c\n"
+    assert svc.read_text(updated) == "line a\nline B!\nline c\n"
     assert updated.version == 2
 
 
@@ -126,12 +130,23 @@ async def test_pin_toggles_and_keeps_pinned_on_top(session: AsyncSession, data_d
     assert a.id in {x.id for x in listed}
 
 
-async def test_search_matches_name_and_content(session: AsyncSession, data_dir: Path) -> None:
+async def test_search_matches_name_only_after_content_moved_off_db(
+    session: AsyncSession, data_dir: Path
+) -> None:
+    """2026-04-25: content moved off DB; search no longer scans body.
+
+    Old test asserted body match; that's a feature-loss but acceptable for
+    now (body search was rarely used and the SQLite LIKE on TEXT column
+    was the slow path anyway). Re-add with a proper FTS index later if
+    users actually want it.
+    """
     svc = _svc(session, data_dir)
     await svc.create(name="login-redesign", kind=ArtifactKind.MARKDOWN, content="TBD")
     await svc.create(name="billing", kind=ArtifactKind.MARKDOWN, content="redesign plan")
     hits = await svc.search("redesign")
-    assert len(hits) == 2
+    # Only the artifact whose NAME contains "redesign" matches now.
+    assert len(hits) == 1
+    assert hits[0].name == "login-redesign"
 
 
 async def test_create_image_writes_binary_file(session: AsyncSession, data_dir: Path) -> None:
@@ -143,7 +158,6 @@ async def test_create_image_writes_binary_file(session: AsyncSession, data_dir: 
         content_base64=base64.b64encode(png_bytes).decode("ascii"),
         mime_type="image/png",
     )
-    assert art.content is None
     assert art.file_path is not None
     assert art.size_bytes == len(png_bytes)
     assert svc.read_binary(art) == png_bytes

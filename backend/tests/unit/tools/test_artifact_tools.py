@@ -16,8 +16,9 @@ from allhands.execution.tools.meta.artifact_tools import (
 )
 
 
-def test_all_eight_tools_exported() -> None:
-    assert len(ALL_ARTIFACT_TOOLS) == 8
+def test_all_nine_tools_exported() -> None:
+    """2026-04-25: added artifact_rollback (revert to older version)."""
+    assert len(ALL_ARTIFACT_TOOLS) == 9
     ids = {t.id for t in ALL_ARTIFACT_TOOLS}
     assert ids == {
         "allhands.artifacts.create",
@@ -25,6 +26,7 @@ def test_all_eight_tools_exported() -> None:
         "allhands.artifacts.read",
         "allhands.artifacts.render",
         "allhands.artifacts.update",
+        "allhands.artifacts.rollback",
         "allhands.artifacts.delete",
         "allhands.artifacts.pin",
         "allhands.artifacts.search",
@@ -110,6 +112,7 @@ def test_names_match_tool_registry_convention() -> None:
         "artifact_read": "allhands.artifacts.read",
         "artifact_render": "allhands.artifacts.render",
         "artifact_update": "allhands.artifacts.update",
+        "artifact_rollback": "allhands.artifacts.rollback",
         "artifact_delete": "allhands.artifacts.delete",
         "artifact_pin": "allhands.artifacts.pin",
         "artifact_search": "allhands.artifacts.search",
