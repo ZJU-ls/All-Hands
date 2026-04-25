@@ -1,8 +1,8 @@
 """Integration tests for POST /api/models/{id}/ping (I-0019).
 
 Fast connectivity test for a specific model. Runs a single one-shot chat
-call with max_tokens=4, strict 5s timeout, and returns
-`{ok, latency_ms, model, error?, error_category?}`.
+call with max_tokens=4, strict 15s timeout, `enable_thinking=False`, and
+returns `{ok, latency_ms, model, error?, error_category?}`.
 
 Unlike `/api/models/{id}/test`, this endpoint is optimised for row-level
 "ping" UX on the Gateway page — not for a full chat conversation. The
@@ -155,13 +155,18 @@ def test_ping_returns_404_when_model_missing(
     assert r.status_code == 404
 
 
-def test_ping_applies_5s_timeout_via_kwargs(
+def test_ping_applies_fast_budget_via_kwargs(
     seeded_client: tuple[TestClient, str, str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ping is supposed to fail fast. The route must instruct run_chat_test
-    with a max_tokens=4 budget and a strict timeout so a slow/dead provider
-    doesn't hold the UI for 120s (the default chat_test timeout).
+    with a max_tokens=4 budget, a strict timeout, and `enable_thinking=False`
+    so a slow / thinking provider doesn't hold the UI for 120s (the default
+    chat_test timeout).
+
+    `enable_thinking=False` is what unsticks Qwen3-thinking / GLM-4.5-thinking:
+    a 4-token budget cannot cover a reasoning pass, so the call would time
+    out even though the model itself is reachable.
     """
     client, _pid, mid = seeded_client
     seen: dict[str, Any] = {}
@@ -178,6 +183,8 @@ def test_ping_applies_5s_timeout_via_kwargs(
 
     # The route is responsible for imposing the fast-ping budget.
     assert seen.get("max_tokens") == 4
+    # Reasoning models must be pinged in non-thinking mode.
+    assert seen.get("enable_thinking") is False
     # The helper may or may not take `timeout` directly — but it MUST receive
     # a dedicated short-lived httpx client. We assert the contract at the
     # max_tokens level here; the route is free to pass an http_client.

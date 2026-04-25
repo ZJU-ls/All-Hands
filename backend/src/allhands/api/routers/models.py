@@ -17,7 +17,7 @@ from allhands.api.deps import get_model_service, get_session
 from allhands.core.model import LLMModel
 from allhands.services.model_service import astream_chat_test, run_chat_test
 
-PING_TIMEOUT_SECONDS = 5.0
+PING_TIMEOUT_SECONDS = 15.0
 PING_MAX_TOKENS = 4
 
 if TYPE_CHECKING:
@@ -163,9 +163,14 @@ async def ping_model(
     """Fast connectivity ping for one model (I-0019).
 
     Fires a single chat call with prompt="ping", max_tokens=4 and a
-    dedicated 5s httpx client so a dead provider cannot hold the UI for
+    dedicated 15s httpx client so a dead provider cannot hold the UI for
     120s. Shares the `run_chat_test` code path so error categorisation
     matches the rest of the gateway surface.
+
+    Reasoning models (Qwen3 thinking · GLM-4.5 thinking · DeepSeek-R1) are
+    explicitly pinged with `enable_thinking=False` — a healthcheck doesn't
+    need a chain-of-thought, and 4 max_tokens is not enough budget for the
+    reasoning pass anyway. Non-thinking providers ignore the flag.
     """
     svc = await get_model_service(session)
     pair = await svc.resolve_with_provider(model_id)
@@ -178,6 +183,7 @@ async def ping_model(
             model.name,
             prompt="ping",
             max_tokens=PING_MAX_TOKENS,
+            enable_thinking=False,
             http_client=client,
         )
 
