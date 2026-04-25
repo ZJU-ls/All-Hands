@@ -46,6 +46,7 @@ import {
   diagnoseSearch,
   getDocumentText,
   getKBStats,
+  ingestUrl,
   listDocumentChunks,
   createKB,
   deleteDocument,
@@ -146,6 +147,7 @@ export default function KnowledgePage() {
   );
   const [showCreate, setShowCreate] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showUrlIngest, setShowUrlIngest] = useState(false);
   const [openDoc, setOpenDoc] = useState<DocumentDto | null>(null);
 
   async function refreshKbs(preserve?: KBDto | null) {
@@ -483,6 +485,17 @@ export default function KnowledgePage() {
               ariaLabel="状态过滤"
             />
 
+            <button
+              type="button"
+              onClick={() => activeKb && setShowUrlIngest(true)}
+              disabled={!activeKb || uploading}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text disabled:opacity-40 disabled:cursor-not-allowed transition duration-fast"
+              title="抓 URL 入库"
+            >
+              <Icon name="link" size={13} />
+              抓 URL
+            </button>
+
             <label
               className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm transition duration-fast cursor-pointer ${
                 activeKb
@@ -627,6 +640,18 @@ export default function KnowledgePage() {
         )}
 
         {/* ─ Modal: Create KB */}
+        {showUrlIngest && activeKb && (
+          <UrlIngestModal
+            kb={activeKb}
+            onClose={() => setShowUrlIngest(false)}
+            onIngested={async () => {
+              setShowUrlIngest(false);
+              await refreshDocs(activeKb.id);
+              await refreshKbs(activeKb);
+            }}
+            onError={setError}
+          />
+        )}
         {showCreate && (
           <CreateKBModal
             models={models}
@@ -1264,6 +1289,101 @@ function ModalShell({
         )}
       </div>
     </div>
+  );
+}
+
+function UrlIngestModal({
+  kb,
+  onClose,
+  onIngested,
+  onError,
+}: {
+  kb: KBDto;
+  onClose: () => void;
+  onIngested: () => void;
+  onError: (msg: string) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [tagsRaw, setTagsRaw] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (!url.trim()) return;
+    setSubmitting(true);
+    try {
+      await ingestUrl(kb.id, url.trim(), {
+        title: title.trim() || undefined,
+        tags: tagsRaw
+          ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
+          : undefined,
+      });
+      onIngested();
+    } catch (e) {
+      onError(String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ModalShell
+      title={`抓 URL 到「${kb.name}」`}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!url.trim() || submitting}
+            className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
+          >
+            {submitting ? "抓取中…" : "抓取"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="URL">
+          <input
+            type="url"
+            autoFocus
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.com/some-article"
+            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+          <p className="mt-1 font-mono text-[10px] text-text-subtle">
+            v0 只支持服务端渲染好的 HTML 页面 · JS-only SPA 抓不到内容
+          </p>
+        </Field>
+        <Field label="标题(可选)">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="留空 = 用 URL 末段自动生成"
+            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+        </Field>
+        <Field label="标签(可选 · 逗号分隔)">
+          <input
+            type="text"
+            value={tagsRaw}
+            onChange={(e) => setTagsRaw(e.target.value)}
+            placeholder="article, blog, must-read"
+            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+        </Field>
+      </div>
+    </ModalShell>
   );
 }
 

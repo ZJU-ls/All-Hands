@@ -349,6 +349,45 @@ class KnowledgeService:
     # Documents
     # ------------------------------------------------------------------
 
+    async def ingest_url(
+        self,
+        kb_id: str,
+        url: str,
+        *,
+        title: str | None = None,
+        tags: list[str] | None = None,
+        timeout_seconds: float = 20.0,
+    ) -> Document:
+        """Fetch a URL, treat the body as HTML, ingest as a document.
+
+        Reuses ``upload_document`` so chunking / embedding pipeline is
+        identical. Title falls back to the URL itself; mime defaults to
+        ``text/html`` so the html parser handles it. The fetch is via
+        httpx with redirect-follow + a generous timeout — websites that
+        require JS rendering won't extract well, but raw HTML pages
+        (docs / wikis / blog posts) work fine.
+        """
+        import httpx
+
+        await self.get_kb(kb_id)
+        async with httpx.AsyncClient(follow_redirects=True, timeout=timeout_seconds) as client:
+            r = await client.get(url, headers={"user-agent": "allhands-kb/0.1"})
+            r.raise_for_status()
+            body = r.content
+            mime = r.headers.get("content-type", "text/html").split(";")[0].strip()
+
+        derived_title = title or _derive_title_from_url(url)
+        return await self.upload_document(
+            kb_id,
+            title=derived_title,
+            content_bytes=body,
+            filename=f"{derived_title}.html",
+            mime_type=mime or "text/html",
+            source_type=SourceType.URL,
+            source_uri=url,
+            tags=tags,
+        )
+
     async def upload_document(
         self,
         kb_id: str,
@@ -725,6 +764,19 @@ class SearchStatsSummary:
     count: int
     avg_latency_ms: float | None
     recent: list[SearchStatRecent]
+
+
+def _derive_title_from_url(url: str) -> str:
+    """Best-effort human title from a URL: last path segment with hyphens
+    swapped to spaces, falling back to the host. Keeps the create-doc UX
+    pleasant when the user just pastes a link."""
+    from urllib.parse import unquote, urlparse
+
+    p = urlparse(url)
+    last = (p.path or "").rstrip("/").split("/")[-1]
+    if last:
+        return unquote(last).replace("-", " ").replace("_", " ")[:200]
+    return p.netloc or url
 
 
 def _summarize_stats(kb_id: str) -> SearchStatsSummary:

@@ -269,6 +269,21 @@ export async function uploadDocument(
   );
 }
 
+export async function ingestUrl(
+  kbId: string,
+  url: string,
+  opts: { title?: string; tags?: string[] } = {},
+): Promise<DocumentDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/ingest-url`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url, title: opts.title, tags: opts.tags }),
+    }),
+    "ingestUrl",
+  );
+}
+
 export async function deleteDocument(kbId: string, docId: string): Promise<void> {
   const res = await fetch(`${BASE}/api/kb/${kbId}/documents/${docId}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`deleteDocument failed (${res.status})`);

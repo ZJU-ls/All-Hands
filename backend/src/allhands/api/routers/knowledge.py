@@ -318,6 +318,27 @@ async def list_documents(
     return [_doc_out(d) for d in docs]
 
 
+class IngestUrlPayload(BaseModel):
+    url: str
+    title: str | None = None
+    tags: list[str] | None = None
+
+
+@router.post("/{kb_id}/ingest-url", status_code=201)
+async def ingest_url(kb_id: str, payload: IngestUrlPayload) -> DocOut:
+    """Fetch a URL and ingest as document. v0 only handles HTML pages
+    that don't require JS rendering."""
+    try:
+        doc = await _service().ingest_url(
+            kb_id, payload.url, title=payload.title, tags=payload.tags
+        )
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"无法抓取: {exc}") from exc
+    return _doc_out(doc)
+
+
 @router.post("/{kb_id}/documents", status_code=201)
 async def upload_document(
     kb_id: str,
