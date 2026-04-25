@@ -280,3 +280,13 @@ body {
 .ah-prose-sm li + li { margin-top: 0.15rem; }
 .ah-prose-sm pre { font-size: 11px; padding: 0.5rem 0.65rem; }
 .ah-prose-sm hr { margin: 0.6rem 0; }
+
+/* ----------------------------------------------------------------------
+ * scroll-fade-bottom — feathered bottom edge on scrollable containers
+ * so the cut-off line doesn't look flat/abrupt.  Used on long reasoning
+ * blocks, tool result panels, etc. Pure mask, doesn't shift layout.
+ * -------------------------------------------------------------------- */
+.scroll-fade-bottom {
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 28px), transparent 100%);
+          mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 28px), transparent 100%);
+}

@@ -136,7 +136,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
 
   const disabled = !employeeId;
   const baseBtn =
-    "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] font-medium text-text-muted transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-surface";
+    "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] font-medium text-text-muted transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary/40";
 
   return (
     <div ref={popRef} className="relative flex items-center gap-2">
