@@ -12,7 +12,7 @@ Seven rules (§ 6.2):
    calling dispatch raises `MaxDispatchDepthExceeded`.
 6. **independent iteration budget** — sub-run counts its own max_iterations;
    the dispatch call itself consumes one iteration of the parent.
-7. **nested trace** — Langfuse span is nested (wired via observability hooks).
+7. **nested trace** — child run.* events carry parent run_id so the trace viewer renders them as sub-runs.
 
 Depth + parent_run_id are carried through the Python task via contextvars so
 that nested dispatch calls see the correct ambient state without threading

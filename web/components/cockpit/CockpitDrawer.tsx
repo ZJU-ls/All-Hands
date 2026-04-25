@@ -110,7 +110,6 @@ function HealthPanelBody({ health }: { health: HealthSnapshotDto }) {
   const entries: { key: keyof HealthSnapshotDto; label: string; icon: IconName }[] = [
     { key: "gateway", label: t("healthGateway"), icon: "plug" },
     { key: "mcp_servers", label: t("healthMcp"), icon: "server" },
-    { key: "langfuse", label: t("healthLangfuse"), icon: "activity" },
     { key: "db", label: t("healthDb"), icon: "database" },
     { key: "triggers", label: t("healthTriggers"), icon: "zap" },
   ];

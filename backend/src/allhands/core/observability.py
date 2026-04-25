@@ -1,14 +1,14 @@
-"""Observability domain model — single-row bootstrap config + summary projection.
+"""Observability domain model — single-row system config + summary projection.
 
-Spec: `docs/specs/agent-design/2026-04-18-observatory.md` § 4.2, § 6.2.
+The platform self-instruments via the local ``events`` table (run.* / llm.call /
+tool.invoked / tool.returned). Langfuse and the embedded bootstrap flow were
+removed in 2026-04-25 — observatory now reads only from local events. The
+``observability_config`` row is kept as a singleton system-config holder for
+flags like ``auto_title_enabled``; the langfuse credential / bootstrap columns
+are dropped via migration 0023.
 
-`ObservabilityConfig` mirrors the `observability_config` table (migration 0012);
 `ObservatorySummary` is the projection the `/observatory` page renders
 (aggregate counts over existing events + runs, not a new persisted aggregate).
-
-v0 stores `secret_key` / `admin_password` in plaintext columns to match the
-existing providers.api_key convention; AES-256-GCM wrapping is deferred until a
-project-wide secret helper lands (spec § 4.1 contract unchanged).
 """
 
 from __future__ import annotations
@@ -20,43 +20,21 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class BootstrapStatus(StrEnum):
-    """Lifecycle states of the embedded Langfuse bootstrap flow."""
-
-    PENDING = "pending"  # container not yet healthy / first boot
-    OK = "ok"  # admin + org + project + keys confirmed
-    FAILED = "failed"  # gave up after retries; UI shows warning banner
-    EXTERNAL = "external"  # user pointed at their own Langfuse via .env
-
-
 class ObservabilityConfig(BaseModel):
-    """Bootstrap state + credentials for the Langfuse link.
+    """Singleton system-config row.
 
-    `observability_enabled` is derived: true when status is OK or EXTERNAL.
-    The handler (observability/tracing.py `get_langfuse_callback_handler`)
-    reads this to decide whether to attach spans to agent runs.
+    Now that Langfuse is gone, the only field that drives behavior is
+    ``auto_title_enabled``. ``observability_enabled`` always returns True —
+    self-instrumentation is unconditional and the trace pipeline can never
+    be "off" because it writes to the same DB the rest of the app uses.
     """
 
-    public_key: str | None = None
-    secret_key: str | None = None
-    host: str | None = None
-    org_id: str | None = None
-    project_id: str | None = None
-    admin_email: str | None = None
-    admin_password: str | None = None
-    bootstrap_status: BootstrapStatus = BootstrapStatus.PENDING
-    bootstrap_error: str | None = None
-    bootstrapped_at: datetime | None = None
     updated_at: datetime | None = None
-    # System-wide toggle for LLM-summarised conversation titles. When False
-    # (default) the platform falls back to a truncated copy of the user's
-    # first message. The flag lives on this row because the v1 platform has
-    # no separate ``system_config`` table; ADR follow-up may extract it.
     auto_title_enabled: bool = False
 
     @property
     def observability_enabled(self) -> bool:
-        return self.bootstrap_status in (BootstrapStatus.OK, BootstrapStatus.EXTERNAL)
+        return True
 
 
 class ObservatoryEmployeeBreakdown(BaseModel):
@@ -66,6 +44,7 @@ class ObservatoryEmployeeBreakdown(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+    estimated_cost_usd: float = 0.0
 
     model_config = {"frozen": True}
 
@@ -81,6 +60,7 @@ class ObservatoryModelBreakdown(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+    estimated_cost_usd: float = 0.0
 
     model_config = {"frozen": True}
 
@@ -89,23 +69,23 @@ class ObservatorySummary(BaseModel):
     """Left-pane summary rendered on `/observatory` (spec § 6.2).
 
     Aggregated in one pass from `events` + `tasks` + config so the page does
-    not have to fan out across REST endpoints.
+    not have to fan out across REST endpoints. Self-instrumented; no
+    external tracing backend involved.
     """
 
     traces_total: int = 0
     failure_rate_24h: float = 0.0
     latency_p50_s: float = 0.0
+    latency_p95_s: float = 0.0
+    latency_p99_s: float = 0.0
     avg_tokens_per_run: int = 0
     input_tokens_total: int = 0
     output_tokens_total: int = 0
     total_tokens_total: int = 0
     llm_calls_total: int = 0
+    estimated_cost_usd: float = 0.0
     by_employee: list[ObservatoryEmployeeBreakdown] = Field(default_factory=list)
     by_model: list[ObservatoryModelBreakdown] = Field(default_factory=list)
-    observability_enabled: bool = False
-    bootstrap_status: BootstrapStatus = BootstrapStatus.PENDING
-    bootstrap_error: str | None = None
-    host: str | None = None
 
     model_config = {"frozen": True}
 
@@ -241,6 +221,7 @@ class RunDetail(BaseModel):
     tokens: RunTokenUsage = Field(default_factory=RunTokenUsage)
     llm_calls: int = 0
     model_ref: str | None = None
+    estimated_cost_usd: float = 0.0
     error: RunError | None = None
     turns: list[Turn] = Field(default_factory=list)
     artifacts: list[ArtifactSummary] = Field(default_factory=list)
@@ -274,7 +255,6 @@ class TraceSummary(BaseModel):
 
 __all__ = [
     "ArtifactSummary",
-    "BootstrapStatus",
     "ObservabilityConfig",
     "ObservatoryEmployeeBreakdown",
     "ObservatoryModelBreakdown",

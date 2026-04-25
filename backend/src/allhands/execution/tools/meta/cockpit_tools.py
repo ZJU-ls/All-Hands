@@ -22,7 +22,7 @@ COCKPIT_GET_WORKSPACE_SUMMARY_TOOL = Tool(
     description=(
         "Get a single-snapshot summary of the workspace: how many employees, "
         "how many runs currently active, today's token usage, system health "
-        "(gateway / MCP / langfuse / db / triggers), recent activity (last 20 "
+        "(gateway / MCP / db / triggers), recent activity (last 20 "
         "events), and any runs currently waiting for user confirmation. "
         "Use this when the user asks 'what's running right now', 'is everything "
         "healthy', or similar status questions — answer from this summary "

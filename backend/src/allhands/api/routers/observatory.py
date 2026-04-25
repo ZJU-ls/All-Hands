@@ -1,15 +1,10 @@
-"""Observatory router — summary, status, bootstrap kick, trace listing.
+"""Observatory router — summary, status, trace listing.
 
-Spec `docs/specs/agent-design/2026-04-18-observatory.md` § 8.
+Self-instrumented · sources are local events. Langfuse + the embedded
+bootstrap flow were removed in 2026-04-25.
 
 Shares `ObservatoryService` with `execution/tools/meta/observatory_tools.py`
 so REST (UI path) and Meta Tools (Lead Agent path) can never drift.
-
-Deferred endpoints (Langfuse wave 2, out of this MVP):
-- `GET /api/observatory/ui/*` — iframe proxy; needs a live Langfuse UI.
-- Bootstrap body that actually talks to Langfuse — stubbed here to return
-  the current status; the Lead Agent can still wire `observatory.bootstrap_now`
-  to this route and the call stays idempotent.
 """
 
 from __future__ import annotations
@@ -40,14 +35,16 @@ async def get_summary(
 async def get_status(
     svc: ObservatoryService = Depends(get_observatory_service),
 ) -> dict[str, object]:
+    """Self-instrumented telemetry health · always enabled.
+
+    Returns the user-toggleable flags (currently ``auto_title_enabled``)
+    plus a constant ``observability_enabled=True``. Pre-2026-04-25 this
+    endpoint also surfaced langfuse bootstrap state; that is gone.
+    """
     cfg = await svc.get_status()
     return {
-        "bootstrap_status": cfg.bootstrap_status.value,
-        "bootstrap_error": cfg.bootstrap_error,
-        "host": cfg.host,
         "observability_enabled": cfg.observability_enabled,
         "auto_title_enabled": cfg.auto_title_enabled,
-        "bootstrapped_at": cfg.bootstrapped_at.isoformat() if cfg.bootstrapped_at else None,
     }
 
 
@@ -56,12 +53,7 @@ async def patch_config(
     payload: dict[str, object] = Body(...),
     svc: ObservatoryService = Depends(get_observatory_service),
 ) -> dict[str, object]:
-    """Mutate user-toggleable system flags (currently `auto_title_enabled`).
-
-    Kept on the observatory router because the singleton row that backs it
-    also stores observability bootstrap state; once a dedicated
-    `system_config` table lands this endpoint moves with it.
-    """
+    """Mutate user-toggleable system flags (currently `auto_title_enabled`)."""
     cfg = await svc.update_flags(
         auto_title_enabled=(
             bool(payload["auto_title_enabled"]) if "auto_title_enabled" in payload else None
@@ -69,19 +61,6 @@ async def patch_config(
     )
     return {
         "auto_title_enabled": cfg.auto_title_enabled,
-        "bootstrap_status": cfg.bootstrap_status.value,
-        "observability_enabled": cfg.observability_enabled,
-    }
-
-
-@router.post("/bootstrap")
-async def post_bootstrap(
-    svc: ObservatoryService = Depends(get_observatory_service),
-) -> dict[str, object]:
-    cfg = await svc.bootstrap_now()
-    return {
-        "bootstrap_status": cfg.bootstrap_status.value,
-        "bootstrap_error": cfg.bootstrap_error,
         "observability_enabled": cfg.observability_enabled,
     }
 

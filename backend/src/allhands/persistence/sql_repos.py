@@ -1484,36 +1484,24 @@ class SqlTaskRepo:
 
 
 class SqlObservabilityConfigRepo:
-    """Single-row observability_config repo (spec § 4.1).
+    """Single-row system-config repo · post-Langfuse (2026-04-25).
 
-    The id=1 row is seeded by migration 0012; `load()` materialises it even if
-    a caller hits the DB before the seed has landed (fresh SQLite in tests).
+    Now only carries ``auto_title_enabled``; the langfuse credential /
+    bootstrap columns were dropped via migration 0023. The id=1 row is
+    seeded by migration 0012 and topped up here on first read so a fresh
+    SQLite in tests doesn't NPE before alembic runs.
     """
 
     def __init__(self, session: AsyncSession) -> None:
         self._s = session
 
     async def load(self) -> ObservabilityConfig:
-        from allhands.core import BootstrapStatus
-
         row = await self._s.get(ObservabilityConfigRow, 1)
         if row is None:
-            row = ObservabilityConfigRow(
-                id=1, bootstrap_status="pending", updated_at=datetime.now(UTC).replace(tzinfo=None)
-            )
+            row = ObservabilityConfigRow(id=1, updated_at=datetime.now(UTC).replace(tzinfo=None))
             self._s.add(row)
             await self._s.commit()
         return ObservabilityConfig(
-            public_key=row.public_key,
-            secret_key=row.secret_key,
-            host=row.host,
-            org_id=row.org_id,
-            project_id=row.project_id,
-            admin_email=row.admin_email,
-            admin_password=row.admin_password,
-            bootstrap_status=BootstrapStatus(row.bootstrap_status),
-            bootstrap_error=row.bootstrap_error,
-            bootstrapped_at=_utc(row.bootstrapped_at) if row.bootstrapped_at else None,
             updated_at=_utc(row.updated_at) if row.updated_at else None,
             auto_title_enabled=bool(row.auto_title_enabled),
         )
@@ -1522,20 +1510,8 @@ class SqlObservabilityConfigRepo:
         row = await self._s.get(ObservabilityConfigRow, 1)
         now = datetime.now(UTC).replace(tzinfo=None)
         if row is None:
-            row = ObservabilityConfigRow(
-                id=1, bootstrap_status=config.bootstrap_status.value, updated_at=now
-            )
+            row = ObservabilityConfigRow(id=1, updated_at=now)
             self._s.add(row)
-        row.public_key = config.public_key
-        row.secret_key = config.secret_key
-        row.host = config.host
-        row.org_id = config.org_id
-        row.project_id = config.project_id
-        row.admin_email = config.admin_email
-        row.admin_password = config.admin_password
-        row.bootstrap_status = config.bootstrap_status.value
-        row.bootstrap_error = config.bootstrap_error
-        row.bootstrapped_at = _naive(config.bootstrapped_at) if config.bootstrapped_at else None
         row.auto_title_enabled = config.auto_title_enabled
         row.updated_at = now
         await self._s.commit()

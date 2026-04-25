@@ -73,14 +73,6 @@
       },
       "refreshing": "刷新中…",
       "refresh": "刷新",
-      "bootstrap": {
-        "headlinePrefix": "Langfuse",
-        "headlineSuffix": "· 追踪未连上",
-        "body": "Agent 运行照常,但每次 run 的 trace 会被丢弃。下方 Trace 列表读的是本地 events 表的 run.* 事件,不是 Langfuse。",
-        "lastPrefix": "last ·",
-        "retrying": "重试中…",
-        "retry": "重试 bootstrap"
-      },
       "loadFailed": {
         "title": "加载失败",
         "fallback": "无法拉取观测数据,点右侧重试。",
@@ -98,20 +90,23 @@
         "tokensDelta": "{count} total traces"
       },
       "panels": {
-        "langfuse": "Langfuse · 追踪后端",
+        "telemetry": "自建埋点 · 24h",
         "topEmployees": "Top employees · 24h",
         "byModel": "按模型 · 24h",
         "noData": "还没有数据",
         "moreLabel": "{title} more",
         "rows": {
-          "bootstrap": "Bootstrap status",
-          "observability": "Observability",
-          "host": "Host",
+          "observability": "埋点状态",
+          "latencyP50": "Latency p50",
+          "latencyP95": "Latency p95",
+          "latencyP99": "Latency p99",
+          "estimatedCost": "成本估算 · 24h",
           "totalTraces": "Total traces"
         },
         "values": {
           "enabled": "enabled",
           "disabled": "disabled",
+          "selfInstrumented": "self-instrumented",
           "runs": "{count} runs"
         }
       },
@@ -122,6 +117,7 @@
       },
       "traces": {
         "title": "近 50 条 trace",
+        "selfInstrumentedNote": "self-instrumented · 本地 events.run.*",
         "empty": {
           "title": "还没有 run 事件",
           "description": "和 Lead 对话发起第一条任务,这里会出现 trace 摘要。"

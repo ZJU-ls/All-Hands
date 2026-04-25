@@ -73,14 +73,6 @@
       },
       "refreshing": "Refreshing…",
       "refresh": "Refresh",
-      "bootstrap": {
-        "headlinePrefix": "Langfuse",
-        "headlineSuffix": "· tracing not connected",
-        "body": "Agents keep running, but every run's trace is dropped. The trace list below reads run.* events from the local events table, not Langfuse.",
-        "lastPrefix": "last ·",
-        "retrying": "Retrying…",
-        "retry": "Retry bootstrap"
-      },
       "loadFailed": {
         "title": "Failed to load",
         "fallback": "Couldn't fetch observability data. Tap retry on the right.",
@@ -98,20 +90,23 @@
         "tokensDelta": "{count} total traces"
       },
       "panels": {
-        "langfuse": "Langfuse · tracing backend",
+        "telemetry": "Self-instrumented · 24h",
         "topEmployees": "Top employees · 24h",
         "byModel": "By model · 24h",
         "noData": "No data yet",
         "moreLabel": "{title} more",
         "rows": {
-          "bootstrap": "Bootstrap status",
-          "observability": "Observability",
-          "host": "Host",
+          "observability": "Telemetry",
+          "latencyP50": "Latency p50",
+          "latencyP95": "Latency p95",
+          "latencyP99": "Latency p99",
+          "estimatedCost": "Est. cost · 24h",
           "totalTraces": "Total traces"
         },
         "values": {
           "enabled": "enabled",
           "disabled": "disabled",
+          "selfInstrumented": "self-instrumented",
           "runs": "{count} runs"
         }
       },
@@ -122,6 +117,7 @@
       },
       "traces": {
         "title": "Latest 50 traces",
+        "selfInstrumentedNote": "self-instrumented · local events.run.*",
         "empty": {
           "title": "No run events yet",
           "description": "Chat with Lead and kick off the first task — trace summaries will appear here."
@@ -364,7 +360,7 @@
         "triggers": "scheduled + webhook",
         "channels": "slack email webhook",
         "confirmations": "pending approvals",
-        "traces": "langfuse traces",
+        "traces": "run traces",
         "observatory": "platform observability",
         "stockAssistant": "market anomaly demo",
         "review": "agent review",

@@ -44,6 +44,7 @@ function makeRun(over: Partial<RunDetailDto> = {}): RunDetailDto {
     tokens: { prompt: 1, completion: 1, total: 2 },
     llm_calls: 1,
     model_ref: null,
+    estimated_cost_usd: 0,
     error: null,
     turns: [],
     artifacts: [],
