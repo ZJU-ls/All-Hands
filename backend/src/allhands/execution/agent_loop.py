@@ -68,6 +68,13 @@ from allhands.execution.tool_pipeline import (
     partition_tool_uses,
 )
 
+# Special-case meta-tool ids (mirrors runner.py constants — kept here so
+# B5 cleanup can fully delete runner.py without breaking imports).
+RESOLVE_SKILL_TOOL_ID = "allhands.meta.resolve_skill"
+READ_SKILL_FILE_TOOL_ID = "allhands.meta.read_skill_file"
+DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
+SPAWN_SUBAGENT_TOOL_ID = "allhands.meta.spawn_subagent"
+
 if TYPE_CHECKING:
     from allhands.core import Employee
     from allhands.execution.gate import BaseGate
@@ -364,15 +371,87 @@ class AgentLoop:
 
         Looks up each active tool_id in the registry; tools that
         aren't registered are silently dropped (the registry is the
-        SoT for what executors exist)."""
+        SoT for what executors exist).
+
+        Special-case meta tools have stub executors in the registry
+        (intentionally — they need per-turn services not available at
+        registration time). Substitute the real executor here:
+
+          * resolve_skill / read_skill_file → bound to skill_registry
+            + per-conversation runtime
+          * dispatch_employee → bound to dispatch_service
+          * spawn_subagent → bound to spawn_subagent_service
+
+        Mirrors runner.py:442-485. Tests for the executors themselves
+        live in their own modules; here we only verify the binding
+        substitution lands the right callable.
+        """
         out: dict[str, ToolBinding] = {}
         for tool_id in self._active_tool_ids():
             try:
                 tool, executor = self._tool_registry.get(tool_id)
             except KeyError:
                 continue
+            executor = self._maybe_substitute_executor(tool_id, executor)
             out[tool.name] = ToolBinding(tool=tool, executor=executor)
         return out
+
+    def _maybe_substitute_executor(self, tool_id: str, default: Any) -> Any:
+        """Replace the registry's stub for special meta tools with one
+        bound to this turn's services. Returns the default executor
+        unchanged if no substitution applies."""
+        if tool_id == RESOLVE_SKILL_TOOL_ID and self._skill_registry is not None:
+            from allhands.execution.tools.meta.resolve_skill import (
+                make_resolve_skill_executor,
+            )
+
+            return make_resolve_skill_executor(
+                employee=self._employee,
+                runtime=self._runtime,
+                skill_registry=self._skill_registry,
+            )
+        if tool_id == READ_SKILL_FILE_TOOL_ID and self._skill_registry is not None:
+            from allhands.execution.tools.meta.skill_files import (
+                make_read_skill_file_executor,
+            )
+
+            return make_read_skill_file_executor(
+                runtime=self._runtime,
+                skill_registry=self._skill_registry,
+            )
+        if tool_id == DISPATCH_TOOL_ID and self._dispatch_service is not None:
+            return self._build_dispatch_executor()
+        if tool_id == SPAWN_SUBAGENT_TOOL_ID and self._spawn_subagent_service is not None:
+            from allhands.execution.tools.meta.spawn_subagent import (
+                make_spawn_subagent_executor,
+            )
+
+            return make_spawn_subagent_executor(self._spawn_subagent_service)
+        return default
+
+    def _build_dispatch_executor(self) -> Any:
+        """The dispatch executor closes over self._dispatch_service.
+        Defined as a method so the closure has a clean reference; the
+        same shape as runner.py:_make_dispatch_executor."""
+        dispatch_service = self._dispatch_service
+
+        async def _dispatch(
+            employee_id: str,
+            task: str,
+            context_refs: list[str] | None = None,
+            timeout_seconds: int = 300,
+        ) -> dict[str, Any]:
+            assert dispatch_service is not None  # _maybe_substitute guard
+            result = await dispatch_service.dispatch(
+                employee_id=employee_id,
+                task=task,
+                context_refs=context_refs,
+                timeout_seconds=timeout_seconds,
+            )
+            dumped = result.model_dump()
+            return dict(dumped) if isinstance(dumped, dict) else {"result": dumped}
+
+        return _dispatch
 
     def _build_lc_tools(self, bindings: dict[str, ToolBinding]) -> list[Any]:
         """Build LangChain StructuredTool wrappers for `model.bind_tools`.

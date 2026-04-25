@@ -600,6 +600,195 @@ async def test_loop_defers_write_tool_records_rejection_message_on_reject() -> N
     assert exits[-1].reason == "completed"
 
 
+# --- Task 12: max_iterations + abort exit reasons --------------------------
+
+
+# --- Task 11: skill / dispatch / subagent special-case bindings -----------
+
+
+def test_build_bindings_substitutes_dispatch_executor_when_service_present() -> None:
+    """The registry's stub executor for dispatch_employee is replaced
+    with a closure over the AgentLoop's dispatch_service."""
+    from allhands.execution.agent_loop import DISPATCH_TOOL_ID
+    from allhands.execution.registry import ToolExecutor
+
+    async def _stub(**_: Any) -> dict[str, Any]:
+        return {"error": "stub — dispatch_service not wired"}
+
+    dispatch_tool = Tool(
+        id=DISPATCH_TOOL_ID,
+        kind=ToolKind.BACKEND,
+        name="dispatch_employee",
+        description="dispatch a task to another employee",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        scope=ToolScope.WRITE,
+        requires_confirmation=False,
+    )
+    reg = ToolRegistry()
+    reg.register(dispatch_tool, _stub)
+
+    class _FakeDispatchResult:
+        def model_dump(self) -> dict[str, Any]:
+            return {"dispatched": True}
+
+    class _FakeDispatch:
+        async def dispatch(self, **_: Any) -> Any:
+            return _FakeDispatchResult()
+
+    emp = _employee(tool_ids=[DISPATCH_TOOL_ID])
+    loop = AgentLoop(
+        employee=emp,
+        tool_registry=reg,
+        gate=AutoApproveGate(),
+        dispatch_service=_FakeDispatch(),
+    )
+    bindings = loop._build_bindings()
+    assert "dispatch_employee" in bindings
+    real_executor: ToolExecutor = bindings["dispatch_employee"].executor
+    assert real_executor is not _stub  # substitution happened
+
+
+@pytest.mark.asyncio
+async def test_dispatch_executor_routes_through_dispatch_service() -> None:
+    """Verify the substituted executor actually calls dispatch_service."""
+    from allhands.execution.agent_loop import DISPATCH_TOOL_ID
+
+    captured_kwargs: dict[str, Any] = {}
+
+    class _FakeResult:
+        def model_dump(self) -> dict[str, Any]:
+            return {"ok": True}
+
+    class _FakeDispatch:
+        async def dispatch(self, **kw: Any) -> Any:
+            captured_kwargs.update(kw)
+            return _FakeResult()
+
+    dispatch_tool = Tool(
+        id=DISPATCH_TOOL_ID,
+        kind=ToolKind.BACKEND,
+        name="dispatch_employee",
+        description="x",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        scope=ToolScope.WRITE,
+        requires_confirmation=False,
+    )
+    reg = ToolRegistry()
+
+    async def _stub(**_: Any) -> dict[str, Any]:
+        return {}
+
+    reg.register(dispatch_tool, _stub)
+
+    emp = _employee(tool_ids=[DISPATCH_TOOL_ID])
+    loop = AgentLoop(
+        employee=emp,
+        tool_registry=reg,
+        gate=AutoApproveGate(),
+        dispatch_service=_FakeDispatch(),
+    )
+    bindings = loop._build_bindings()
+    result = await bindings["dispatch_employee"].executor(
+        employee_id="e2", task="do thing", context_refs=None, timeout_seconds=60
+    )
+    assert result == {"ok": True}
+    assert captured_kwargs["employee_id"] == "e2"
+    assert captured_kwargs["task"] == "do thing"
+
+
+def test_build_bindings_does_not_substitute_when_service_missing() -> None:
+    """Without dispatch_service, the registry's stub executor stays —
+    no AttributeError on closure init."""
+    from allhands.execution.agent_loop import DISPATCH_TOOL_ID
+
+    async def _stub(**_: Any) -> dict[str, Any]:
+        return {"stub": True}
+
+    dispatch_tool = Tool(
+        id=DISPATCH_TOOL_ID,
+        kind=ToolKind.BACKEND,
+        name="dispatch_employee",
+        description="x",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        scope=ToolScope.WRITE,
+        requires_confirmation=False,
+    )
+    reg = ToolRegistry()
+    reg.register(dispatch_tool, _stub)
+
+    emp = _employee(tool_ids=[DISPATCH_TOOL_ID])
+    loop = AgentLoop(employee=emp, tool_registry=reg, gate=AutoApproveGate())
+    bindings = loop._build_bindings()
+    assert bindings["dispatch_employee"].executor is _stub
+
+
+@pytest.mark.asyncio
+async def test_pipeline_coerces_stringified_json_args() -> None:
+    """LLMs (especially gpt-4o-mini) sometimes serialize nested object
+    args as a JSON string instead of structured value. The pipeline
+    coerces before invoking the executor, so the executor sees the
+    structured form regardless of model quirks. Regression for the
+    render_stat / render_bar_chart bug."""
+    from allhands.execution.tool_pipeline import _coerce_stringified_json
+
+    out = _coerce_stringified_json(
+        {
+            "delta": '{"value": 2, "label": "x"}',  # stringified dict
+            "items": '[{"a": 1}]',  # stringified list
+            "name": "leave alone",  # plain string stays
+            "count": 5,  # primitive stays
+        }
+    )
+    assert out == {
+        "delta": {"value": 2, "label": "x"},
+        "items": [{"a": 1}],
+        "name": "leave alone",
+        "count": 5,
+    }
+
+
+@pytest.mark.asyncio
+async def test_loop_yields_max_iterations_when_model_keeps_calling_tools() -> None:
+    """If the model keeps emitting tool_calls forever, the loop bails
+    with reason='max_iterations' rather than running indefinitely."""
+    add = _tool("add")
+
+    async def _ex(**_: Any) -> dict[str, int]:
+        return {"x": 1}
+
+    reg = ToolRegistry()
+    reg.register(add, _ex)
+
+    class _ForeverModel:
+        def bind_tools(self, *_a: object, **_kw: object) -> Any:
+            return self
+
+        async def astream(self, *_a: object, **_kw: object) -> Any:
+            # Always emit a tool_call → loop never reaches a clean text
+            # turn → max_iterations cap fires.
+            yield AIMessageChunk(
+                content="",
+                tool_calls=[{"id": "tu1", "name": "add", "args": {}}],
+            )
+
+    emp = _employee(tool_ids=["t.add"])
+    with patch("allhands.execution.agent_loop._build_model", return_value=_ForeverModel()):
+        loop = AgentLoop(employee=emp, tool_registry=reg, gate=AutoApproveGate())
+        events = [
+            ev
+            async for ev in loop.stream(
+                messages=[{"role": "user", "content": "go"}],
+                max_iterations=3,
+            )
+        ]
+    exits = [ev for ev in events if isinstance(ev, LoopExited)]
+    assert len(exits) == 1
+    assert exits[0].reason == "max_iterations"
+
+
 @pytest.mark.asyncio
 async def test_loop_read_only_tool_with_signal_wired_does_not_defer() -> None:
     """The signal is only consulted for WRITE+ + requires_confirmation
