@@ -18,7 +18,7 @@
  *     │ KB info  │  │ Search results (when query)   │
  *     │ Tags     │  │  ── or ──                     │
  *     │ Grants   │  │ Documents grid                │
- *     │ ⚙ Tune   │  │                               │
+ *     │ Tune     │  │                               │
  *     └──────────┘  └───────────────────────────────┘
  *
  * Visual contract: Brand Blue Dual Theme tokens only. No native <select>
@@ -132,7 +132,7 @@ export default function KnowledgePage() {
       setKbs(data);
       const target = preserve ? data.find((k) => k.id === preserve.id) : null;
       if (target) setActiveKb(target);
-      else if (!activeKb && data.length > 0) setActiveKb(data[0]);
+      else if (!activeKb && data[0]) setActiveKb(data[0]);
       setPageState("ok");
     } catch (e) {
       setError(String(e));

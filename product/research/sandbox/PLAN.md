@@ -9,34 +9,43 @@
 ## 0. 一图看懂
 
 ```
-        ┌──────────────────────────────────────────────┐
-        │                  Lead Agent                  │
-        │  (拿到一个任务 · 决定调哪些 tool / 激活哪个 skill) │
-        └─────────────┬─────────────────┬──────────────┘
-                      │                 │
-          activate    │                 │ call
-                      ▼                 ▼
-        ┌────────────────────┐  ┌──────────────────────┐
-        │ Skill (能力 + 知识) │  │  Local Executor Tool │
-        │  excel-ops         │  │  local.bash          │
-        │  file-organize     │  │  local.read/write/edit│
-        │  cleanup-junk      │  │  local.glob/grep     │
-        │  code-edit         │  │  local.run_python    │
-        └────────────────────┘  └─────────┬────────────┘
-                                          │
-                              PermissionGate(读规则)
-                                          │
-                            allow / ask(走 Confirmation)/ deny
-                                          │
-                                          ▼
-                         ┌────────────────────────────────┐
-                         │   宿主进程(用户机器 · cwd 限定) │
-                         │   Python · git · ripgrep · ...  │
-                         │   (可选)sandbox-exec/Landlock   │
-                         └────────────────────────────────┘
+       ┌─────────────────────────────────────────────────────────┐
+       │                       Lead Agent                        │
+       │   拿到任务 · 决定 ① 激活哪个 skill ② 调哪些 tool         │
+       │                ③ 必要时调 meta tool 改权限              │
+       └────────┬──────────────────┬───────────────┬─────────────┘
+       activate │            call  │          call │
+                ▼                  ▼               ▼
+   ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────┐
+   │ Skill(能力+知识)│  │ Local Executor   │  │ Meta Tool          │
+   │ excel-ops        │  │ local.bash       │  │ permission_grant   │
+   │ file-organize    │  │ local.read/write │  │ permission_revoke  │
+   │ cleanup-junk     │  │ local.edit       │  │ permission_test    │
+   │ code-edit        │  │ local.glob/grep  │  └─────────┬──────────┘
+   │ pdf-extract      │  │ local.run_python │            │
+   └──────────────────┘  └────────┬─────────┘   改 JSON │
+                                  │                      ▼
+                       ┌──────────▼──────────┐  ┌──────────────────────┐
+                       │  PermissionGate     │◄─┤ permissions.json     │
+                       │  读规则 → 决策      │  │ (单一 SoT · 三入口同) │
+                       └──────────┬──────────┘  └──────────────────────┘
+                       allow / ask(Confirmation 弹"总是允许")/ deny
+                                  │
+                                  ▼
+                       ┌──────────────────────────────────────┐
+                       │   宿主进程(用户机器 · cwd 限定)     │
+                       │   Python · git · ripgrep · libreoffice│
+                       │   (可选)sandbox-exec / Landlock      │
+                       └──────────────────────────────────────┘
+
+       三入口改同一份 permissions.json:
+       (a) UI Settings 页拖卡片 → API
+       (b) Confirmation 弹窗 "总是允许" 按钮 → API
+       (c) Lead Agent 调 meta tool → 同一 service 函数
 ```
 
-核心三件套:**Local Tool · Permission System · Skill Pack**。Python 环境就是用户机器上已经有的(或我们安装时装好)。
+核心三件套:**Local Tool · Permission System · Skill Pack** + **零感知引导(三步向导 · 隐式权限学习 · Agent 一句话改规则)**。
+Python 环境就是用户机器上已经有的(或我们 setup script 装好)。
 
 ---
 
@@ -157,7 +166,70 @@ uv venv ~/.allhands/venv --python 3.12
 echo "Done. allhands Python at ~/.allhands/venv"
 ```
 
-### 1.5 可视化权限页
+### 1.5 无感引导(零配置启动)
+
+> **设计目标:用户首次启动不需要懂"权限规则",直接对话就能干活。所有引导都自然嵌在交互里。**
+
+**首次启动 3 个动作(向导,跳过即用默认):**
+
+```
+第 1 步:选个工作目录(可拖拽 / 输入路径)        ← 默认 ~/allhands-workspace,不动也行
+第 2 步:选个权限策略 profile                     ← 默认 balanced(详见下表)
+第 3 步:跑 setup-local-env.sh(按钮一键)        ← 装 Python 标准库
+```
+
+**3 个内置 profile(选一个 = 一份 permissions.json 模板):**
+
+| Profile | 适合 | default_mode | 关键差异 |
+|---|---|---|---|
+| `trusted` | 自己机器 · 高度信任 agent | `allow` | 只 deny 高危(rm -rf · sudo · curl|sh)· 其余全过 |
+| **`balanced`(默认)** | 大部分用户 · 平衡 | `ask` | READ 默认 allow · WRITE 默认 ask · 高危 deny |
+| `paranoid` | 给"敏感目录"用 · 多重保险 | `ask` | 全部 ask(连 read 都问)· 沙箱 mode=light |
+
+**进入主界面后的引导(隐式 · 不打断):**
+
+- **首次让 agent 干活时:** 第一次触发 confirmation,弹窗里多 3 个按钮 —— `允许这一次` / **`总是允许这种(local.bash git status)`** / `总是允许这个 tool(local.bash)` · 用户点"总是" = 自动写一条 allow 规则
+- **同类操作弹第 2 次时:** 提示条 "这是第 2 次问 X,要不要免问?" + 一键添加 allow
+- **设置页右上角始终有 Pill:** "本月被弹了 N 次确认 · 看建议" → 点开列出"高频弹问"建议批量加 allow
+
+**引导文案落点:** Welcome 弹窗 / Confirmation 弹窗 / Settings 页顶部 Hint 条 · 3 个位置就能让用户不读文档跑通。
+
+### 1.6 Agent 一句话配权限(Meta Tool 早于 UI 提供)
+
+> **设计目标:不用 UI 就能改权限。用户对话一句"以后 git push 直接放行",Lead Agent 调 Meta Tool 改 permissions.json,即时生效。**
+
+**3 个 Meta Tool(scope=WRITE · 改完弹一次确认):**
+
+| Tool ID | 入参 | 说明 |
+|---|---|---|
+| `allhands.meta.permission_grant` | `pattern, mode (allow/ask/deny), scope (global/workspace/session), remember=true` | 加 / 改一条规则 |
+| `allhands.meta.permission_revoke` | `pattern` | 删除匹配规则 |
+| `allhands.meta.permission_test` | `tool_id, args?` | 给 Lead Agent 自检"这条命令会被怎么处理" |
+
+**典型对话脚本(用户感受):**
+
+```
+用户:以后让你跑 git 系列命令,不用每次问我了
+Lead:好的,我准备给 local.bash(git:*) 加一条 allow 规则
+       (作用域:全局 · 永久生效)
+       要执行吗?  [允许]  [拒绝]
+用户:允许
+Lead:✓ 已添加。后续 git status / git diff / git push 等不再确认
+```
+
+```
+用户:刚才那个删除文件的操作,以后这个目录都别问了
+Lead:理解。我把 local.bash(rm:*) 在 ~/Documents/work 这个 workspace 内
+       改成 allow,其他目录保持 ask。
+       要执行吗?
+```
+
+**ConfirmationGate 增强(让"总是允许"和 Meta Tool 走同一条路):**
+
+- 用户在 confirmation 弹窗点"总是允许这种" → UI 实际上调 `permission_grant` API · 跟 agent 走同一通道
+- 这样保证:UI 改的、agent 改的、用户手编 JSON 改的,**永远是一份规则**(单一 SoT)
+
+### 1.7 可视化权限页
 
 `web/app/settings/permissions/page.tsx`:
 
@@ -227,21 +299,26 @@ web/
 
 > 总工作量预估 ~ 6-8 个工作日。每 phase 完成自跑 lint / mypy / pytest / lint-imports / pnpm typecheck / build,绿了直接合 main。
 
-### Phase 1 · Local Executor + 权限引擎(2-3 天)
+### Phase 1 · Local Executor + 权限引擎 + Agent 一句话配置(3-4 天)
 
-**目标:** Lead Agent 通过 `local.*` 跑命令 · 每次写操作走 ConfirmationGate · 用静态规则(暂无 UI)
+**目标:** Lead Agent 通过 `local.*` 跑命令 · 每次写操作走 ConfirmationGate · **同时**让 Lead Agent 通过 Meta Tool 一句话改权限(无 UI 也能用)
 
 - `core/domain/permissions.py`(PermissionRule / Mode / Decision · 全部 pydantic)
-- `persistence/stores/permission_store.py`(JSON 读写 · `~/.allhands/permissions.json` + 项目级覆盖)
+- `persistence/stores/permission_store.py`(JSON 读写 · `~/.allhands/permissions.json` + 项目级覆盖 · 文件 mtime 监听 hot-reload)
 - `execution/permission_resolver.py`(deny > allow > ask · 入参 glob 匹配)
 - `execution/tools/local/{bash,read,write,edit,list_dir,glob,grep,run_python}.py`(8 个 tool)
-- `discover_builtin_tools()` 注册 8 个 tool
+- `execution/tools/meta/permissions.py`(3 个 meta tool:`permission_grant` / `permission_revoke` / `permission_test`)
+- `discover_builtin_tools()` 注册 8 + 3 个 tool
+- 3 个 profile 模板:`backend/src/allhands/templates/permissions_profile_{trusted,balanced,paranoid}.json`(首次启动按用户选择复制)
 - `tests/unit/permissions/test_resolver.py`(规则优先级 / pattern matching / 边界)
 - `tests/unit/tools/test_local_*.py`(每个 tool 单元 · 用 tmp_path)
+- `tests/unit/tools/meta/test_permission_grant.py`(meta tool 改文件 · resolver 立即看到)
 - `tests/integration/test_local_executor_flow.py`(agent → bash → confirmation → 执行)
-- 默认 `permissions.json` 模板:`backend/src/allhands/templates/default_permissions.json`(首次启动复制到 `~/.allhands/`)
+- `tests/integration/test_one_shot_permission_dialog.py`(模拟"以后 git push 直接放行"对话 → 验证 JSON 文件被改对)
 
-**Definition of Done:** 起 backend + UI · 通过对话让员工 "ls 我 home 目录"成功 · "rm 任意文件"会弹确认。
+**Definition of Done:**
+- 通过对话让员工 "ls 我 home 目录"成功 · "rm 任意文件"会弹确认
+- **对话 "以后 git push 直接放行" → Lead Agent 调 `permission_grant` 弹一次确认 → 改完 `~/.allhands/permissions.json` → 下次 git push 不再问**(关键:无 UI 也能完成全流程)
 
 ### Phase 2 · Skill 集 + 真实场景演示(1-2 天)
 
@@ -255,18 +332,31 @@ web/
 
 **DoD:** 用户上传一个 xlsx,对话"对账两列差异"能跑出来。
 
-### Phase 3 · 可视化权限页(1-2 天)
+### Phase 3 · 无感引导 + 可视化权限页(2 天)
 
-**目标:** 在 UI 上 CRUD 规则 · 测试器 · 沙箱开关
+**目标:** 首次启动有向导 · Confirmation 弹窗带"总是允许"快捷键 · 设置页能 CRUD 规则
 
-- `web/app/settings/permissions/page.tsx`
-- `RuleCard` / `RuleTester` / `SandboxModeSwitch` / `ImportFromClaudeCode`
-- API routes(已在 Phase 1 占位):`GET/PUT /api/settings/permissions` + `POST /api/settings/permissions/test`
+**首次启动向导(`web/app/welcome/page.tsx`):**
+- 3 步:工作目录 / Profile / setup 脚本(均可跳过 · 默认 balanced)
+- 跳过也能直接对话 · profile 自动按 balanced 落盘
+
+**Confirmation 弹窗增强(改现有组件):**
+- 多 3 个按钮:`允许这一次` · **`总是允许这种 (xxx)`** · `总是允许这个 tool`
+- 后两个 → 调 `permission_grant` API · 写规则 + 立即放行本次
+
+**Settings 页 (`web/app/settings/permissions/page.tsx`):**
+- 三栏(Allow / Ask / Deny)+ 拖拽改归属
+- `RuleCard` / `RuleTester` / `SandboxModeSwitch` / `ImportFromClaudeCode` / `ProfileSwitcher`
+- 顶部 Hint 条:"本月被弹了 N 次确认 · 看建议" · 点开列出高频弹问 · 一键批量 allow
+- API routes:`GET/PUT /api/settings/permissions` + `POST /api/settings/permissions/test` + `GET /api/settings/permissions/suggestions`
 - 命中统计:`PermissionStore` 简单 counter(进程内 + 周期持久化)
-- e2e:playwright 改一条规则 → 命中变化
+- e2e:playwright 改一条规则 → 命中变化 · 跑 confirmation 流点"总是允许" → 规则文件被加
 - 设计:走 Brand Blue token · 不写裸色
 
-**DoD:** 用户能在页面把"local.bash(rm:*)"从 ask 移到 deny · 立即生效。
+**DoD:**
+- 新用户从启动到跑通第一个 Excel 任务 · 全程不用打开 Settings 页
+- 用户在 Confirmation 点"总是允许 (local.bash git status)" → ~/.allhands/permissions.json allow 数组多一条
+- Settings 页拖一条规则从 ask 到 deny → 立即生效
 
 ### Phase 4 · 轻沙箱(可选 · 1 天)
 
@@ -280,15 +370,16 @@ web/
 
 **DoD:** mode=strict 时跑 `curl example.com` 被拒,`ls cwd` 正常。
 
-### Phase 5(后续 · 不在本批) · Meta Tool + 完整 Tool First 闭环
+### Phase 5(后续) · L01 Tool First 闭环回归
 
-- `allhands.meta.update_permissions` / `read_permissions` / `test_permission_rule` 三个 meta tool
-- 让 Lead Agent 在对话里说 "把 git push 加到 ask 里" 也能完成
 - L01 回归:REST 路由 ↔ Meta Tool 配对检查(`test_learnings.py::TestL01ToolFirstBoundary`)
+- ADR `00NN-local-execution-foundation.md` 落档(取代 sandbox-foundation 的命名)
+- 文档化:CLAUDE.md §3.X 加一节 "本地执行原则 · 规则即配置 · UI/CLI/Agent 三入口同 SoT"
+- 注:meta tool 已在 Phase 1 落地,这里只做 L01 配对回归 + 文档收尾
 
 ---
 
-## 4. 关键决策(请你拍板,否则我按括号里默认走)
+## 4. 关键决策(请你拍板,否则我按默认走 · 10 项)
 
 | # | 问题 | 默认选项 |
 |---|------|---------|
@@ -299,6 +390,9 @@ web/
 | D5 | `allowed_roots` 默认 | 仅 `~/allhands-workspace`(强制用户首次 setup 时确认要不要加 `~/Documents` 等)|
 | D6 | 工作目录概念 | 不引入"workspace 实体"· cwd 由 conversation/employee 配置直接给(轻量 · 同 Claude Code)|
 | D7 | 是否兼容导入 Claude Code settings.json | 是 · `Bash(git:*)` → `local.bash(git:*)` 自动映射 |
+| D8 | 默认 profile | `balanced`(READ allow / WRITE ask / 高危 deny)· 首次启动向导可改 |
+| D9 | 向导是否强制 | **不强制** · 全部一键 Next · 不点也能直接对话(默认 balanced + ~/allhands-workspace + setup 脚本异步后台跑) |
+| D10 | "总是允许"是写到全局还是当前 workspace | 默认 workspace 级(精确)· 弹窗下面有 checkbox "扩到全局" · 一键提升 |
 
 如果都按默认 → 我可以直接进 Phase 1。
 
@@ -340,19 +434,46 @@ web/
 
 ## 8. 落地后用户视角
 
+### 8.1 零配置上手(典型新用户)
+
 ```
-1. 安装 allhands · 首次启动弹"配置工作目录"
-   → 用户选 ~/Documents/work · 自动写入 permissions.json
-2. 跑 scripts/setup-local-env.sh · 装 Python 标准库
-3. 创建一个员工(默认带 local.* + 5 个 builtin skill)
-4. 对话:"把 ~/Documents/work/sales.xlsx 里两个 sheet 的客户编号差异列出来"
-   → agent 激活 excel-ops skill
-   → 调 local.read 探查文件
-   → 调 local.run_python 跑 openpyxl 读两个 sheet
-   → 弹 confirmation:"将运行 Python · 只读模式"  → 用户 allow
-   → 返回差异列表
-5. 用户在 settings/permissions 把 "local.run_python(只读)" 改成 allow
-   → 下次同类操作不再弹
+1. 安装 allhands · 首次启动 3 步向导(全部一键 Next 即可)
+   → 默认工作目录 ~/allhands-workspace · 默认 balanced profile
+   → 后台自动跑 setup-local-env.sh 装 Python 标准库
+2. 创建员工 · 默认带 local.* + 5 个 builtin skill(零额外配置)
+3. 对话:"把 ~/Documents/work/sales.xlsx 里两个 sheet 的客户编号差异列出来"
+   → agent 激活 excel-ops skill → local.read 探查 → local.run_python 跑 openpyxl
+   → 弹 confirmation 三个按钮:[允许这次] [总是允许这种] [总是允许 local.run_python]
+   → 用户点"总是允许这种" → 返回差异列表 + 后台静默写一条 allow 规则
+4. 同类对话再发一次 → 不再弹 · 直接出结果
 ```
 
-跟 Claude Code 的体感几乎一样,只是装在 web 里 + agent 是"团队员工"而不是 CLI。
+**全程没打开过 Settings 页。**
+
+### 8.2 用对话调权限(进阶 / 偷懒党)
+
+```
+用户:刚才 git status 弹了三次了,以后所有 git 命令都别问
+Lead:好的,我加一条规则:local.bash(git:*) → allow(全局生效)
+       要执行吗?  [允许]  [拒绝]
+用户:允许
+Lead:✓ 已添加 · 后续 git 命令直接放行
+```
+
+```
+用户:~/Documents/secret/ 这个目录给我严管,任何写都问
+Lead:好,我在 workspace 级覆盖加 ~/Documents/secret/.allhands/permissions.json
+       把 local.write / edit / bash(rm:*) 全部设为 ask
+       执行吗?
+```
+
+### 8.3 高阶 / 直接编 JSON
+
+`~/.allhands/permissions.json` 是单一 SoT · 用户可以直接 vim 编辑 · 文件 mtime 监听自动 hot-reload。**UI 改 / Agent 改 / 手编都改同一份文件**(三入口语义等价)。
+
+---
+
+跟 Claude Code 的体感几乎一样,只是:
+- 装在 web 里(不是 CLI)
+- agent 是"团队员工"(不是单 instance)
+- **比 Claude Code 多一层:可以让 agent 一句话改权限**(Claude Code 现在也只能编 settings.json)
