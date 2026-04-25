@@ -1,9 +1,22 @@
 """Phase 1 · preset → (tool_ids, skill_ids, max_iterations) expansion.
 
 Spec: docs/specs/agent-runtime-contract.md § 4.1 + § 4.2.
-Q7 signoff (2026-04-19): plan_with_subagent.max_iterations = 15 (was 20).
-Q6 signoff: UI may add/remove from preset skill defaults; service uses the
-UI-provided custom_skill_ids as authoritative (no whitelist intersect).
+
+User feedback (2026-04-25, post-ADR 0019):
+  * execute = 10 iter (no plan, no subagent — direct work)
+  * plan = 15 iter (has plan tools, no subagent — agent makes plan AND
+    executes itself)
+  * plan_with_subagent = 20 iter (plan + spawn_subagent — orchestrator
+    role, dispatches parallel children)
+
+The plan/plan_with_subagent presets switched from the legacy
+``render_plan`` (one-shot Approve/Reject card · ADR 0014 vintage) to
+the ADR 0019 C1 ``plan_create`` family (continuously-mutable todo memo
+that renders PlanTimeline). The two systems are intentionally separate
+products; presets pick the one that matches the preset's semantic.
+
+Q6 signoff: UI may add/remove from preset skill defaults; service uses
+the UI-provided custom_skill_ids as authoritative (no whitelist intersect).
 
 Reference: ref-src-claude/V05 — skills are declared but not pre-loaded;
 preset is a form template, not a runtime mode (CLAUDE.md § 3.2 red line).
@@ -37,21 +50,51 @@ def test_execute_preset_defaults() -> None:
 
 
 def test_plan_preset_defaults() -> None:
+    """plan = make plan + execute themselves · 15 iter · no subagent.
+
+    Uses the ADR 0019 C1 plan_create family (continuously-mutable todo
+    memo) instead of the legacy render_plan (one-shot Approve/Reject
+    card). Includes execution tools (fetch_url + research/write skills)
+    so the agent can actually execute the plan it just made.
+    """
     tools, skills, max_it = expand_preset("plan")
-    assert "allhands.builtin.render_plan" in tools
+    # New: plan_create family for ongoing todo
+    assert "allhands.meta.plan_create" in tools
+    assert "allhands.meta.plan_view" in tools
+    assert "allhands.meta.plan_update_step" in tools
+    assert "allhands.meta.plan_complete_step" in tools
+    # Execution capability (must self-execute, not dispatch)
+    assert "allhands.builtin.fetch_url" in tools
+    # Legacy render_plan dropped from this preset
+    assert "allhands.builtin.render_plan" not in tools
+    # Definitively NO subagent dispatch
+    assert "allhands.meta.spawn_subagent" not in tools
     assert "allhands.meta.resolve_skill" in tools
-    assert skills == ["sk_planner"]
-    assert max_it == 3
+    assert set(skills) == {"sk_planner", "sk_research", "sk_write"}
+    assert max_it == 15
 
 
-def test_plan_with_subagent_preset_defaults_q7_signoff() -> None:
-    """Q7 signoff (2026-04-19): max_iterations = 15 (reduced from 20)."""
+def test_plan_with_subagent_preset_defaults() -> None:
+    """plan_with_subagent = make plan + dispatch parallel subagents · 20 iter.
+
+    Pure orchestrator role: HAS plan tools + spawn_subagent, but NO
+    direct execution tools (fetch_url etc) — forces dispatch pattern.
+    Uses plan_create family (ADR 0019 C1) instead of legacy render_plan.
+
+    Q7 (2026-04-19) signed off max=15. User feedback (2026-04-25)
+    raised it to 20 to match the "plan + dispatch + track" workflow's
+    real iteration footprint.
+    """
     tools, skills, max_it = expand_preset("plan_with_subagent")
-    assert "allhands.builtin.render_plan" in tools
+    assert "allhands.meta.plan_create" in tools
+    assert "allhands.meta.plan_view" in tools
     assert "allhands.meta.spawn_subagent" in tools
+    assert "allhands.builtin.render_plan" not in tools
+    # Pure orchestrator — no direct fetch/write
+    assert "allhands.builtin.fetch_url" not in tools
     assert "allhands.meta.resolve_skill" in tools
     assert set(skills) == {"sk_planner", "sk_executor_spawn"}
-    assert max_it == 15, "Q7: plan_with_subagent.max_iterations signed off as 15"
+    assert max_it == 20
 
 
 def test_unknown_preset_raises() -> None:

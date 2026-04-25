@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phase C 实现 + 测试指南 · ADR 0019</title>
+    <style>
+      :root {
+        --bg: #0a0f1c;
+        --surface: #111a2e;
+        --surface-2: #16223c;
+        --surface-3: #1d2c4d;
+        --border: #243152;
+        --border-strong: #324468;
+        --text: #e6edf7;
+        --muted: #8a9bbf;
+        --subtle: #5e7299;
+        --primary: #4f8cff;
+        --primary-soft: rgba(79, 140, 255, 0.18);
+        --success: #34d399;
+        --success-soft: rgba(52, 211, 153, 0.15);
+        --danger: #f87171;
+        --warning: #fbbf24;
+        --warning-soft: rgba(251, 191, 36, 0.15);
+        --accent: #a78bfa;
+        --accent-soft: rgba(167,139,250,0.15);
+        --pink: #f9a8d4;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 40px 24px 80px;
+        background:
+          radial-gradient(1100px 600px at 12% -8%, #1a2748, transparent),
+          radial-gradient(800px 480px at 88% 4%, #2a1d4d, transparent),
+          var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.65;
+      }
+      .wrap { max-width: 1240px; margin: 0 auto; }
+      h1 {
+        font-size: 30px; font-weight: 700; margin: 0 0 8px;
+        background: linear-gradient(90deg, #93c5fd, #c4b5fd, #f9a8d4);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .meta { color: var(--muted); font-size: 13px; margin-bottom: 30px; }
+      .meta code { color: var(--text); font-family: var(--mono); font-size: 12px; padding: 1px 5px; background: var(--surface); border-radius: 4px; }
+      h2 {
+        font-size: 18px; font-weight: 600; margin: 36px 0 14px;
+        padding-left: 12px; border-left: 3px solid var(--primary);
+        display: flex; align-items: baseline; gap: 12px;
+      }
+      h2 .num {
+        font-family: var(--mono); font-size: 11px;
+        color: var(--primary); padding: 2px 8px;
+        background: var(--primary-soft); border-radius: 4px;
+        font-weight: 500;
+      }
+      h3 { font-size: 14px; font-weight: 600; margin: 18px 0 8px; color: var(--text); }
+      h4 { font-size: 12px; font-weight: 600; margin: 12px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+      p { margin: 0 0 10px; }
+      code { font-family: var(--mono); font-size: 12.5px; }
+      pre {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin: 10px 0;
+        overflow-x: auto;
+        font-family: var(--mono); font-size: 12px;
+        line-height: 1.55;
+      }
+      pre code { color: var(--text); }
+      .kw { color: var(--pink); }
+      .str { color: var(--success); }
+      .com { color: var(--subtle); font-style: italic; }
+      .key { color: var(--accent); }
+
+      .lead {
+        background: linear-gradient(135deg, rgba(79,140,255,0.08), rgba(167,139,250,0.06));
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px 24px;
+      }
+      .lead b { color: #c4b5fd; }
+
+      .feature {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px 22px;
+        margin-bottom: 18px;
+      }
+      .feature.c1 { border-left: 4px solid var(--primary); }
+      .feature.c2 { border-left: 4px solid var(--success); }
+      .feature.c3 { border-left: 4px solid var(--accent); }
+      .feature h3 {
+        font-size: 16px;
+        display: flex; align-items: center; gap: 10px;
+        margin-top: 0;
+      }
+      .tag {
+        font-family: var(--mono); font-size: 10px;
+        padding: 2px 7px; border-radius: 4px;
+        letter-spacing: 0.05em; text-transform: uppercase;
+      }
+      .tag.c1 { background: var(--primary-soft); color: var(--primary); }
+      .tag.c2 { background: var(--success-soft); color: var(--success); }
+      .tag.c3 { background: var(--accent-soft); color: var(--accent); }
+      .tag.test { background: var(--warning-soft); color: var(--warning); }
+      .tag.api { background: rgba(255,255,255,0.06); color: var(--muted); }
+
+      .flow {
+        background: var(--surface-2);
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin: 10px 0;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .flow .step {
+        display: grid; grid-template-columns: 70px 1fr; gap: 12px; align-items: start;
+        padding: 4px 0;
+      }
+      .flow .who {
+        color: var(--subtle); text-transform: uppercase; letter-spacing: 0.05em;
+        font-size: 10px; font-weight: 600; padding-top: 2px;
+      }
+      .flow .what em { color: var(--accent); font-style: normal; }
+      .flow .what code { background: var(--bg); padding: 1px 4px; border-radius: 3px; color: var(--text); }
+
+      table.files {
+        width: 100%; border-collapse: collapse;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        margin: 10px 0;
+        font-size: 12px;
+      }
+      table.files th, table.files td {
+        padding: 7px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      table.files th {
+        background: var(--surface-3);
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 10.5px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      table.files td:first-child { font-family: var(--mono); font-size: 11.5px; color: var(--accent); white-space: nowrap; }
+      table.files td:nth-child(2) { white-space: nowrap; }
+      table.files tr:last-child td { border-bottom: none; }
+      .new { color: var(--success); font-weight: 600; }
+      .mod { color: var(--warning); font-weight: 600; }
+
+      .test-box {
+        background: linear-gradient(135deg, rgba(251,191,36,0.06), rgba(251,191,36,0.02));
+        border: 1px solid rgba(251,191,36,0.3);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin: 10px 0;
+      }
+      .test-box h4 {
+        margin-top: 0;
+        color: var(--warning);
+        display: flex; align-items: center; gap: 8px;
+      }
+      .test-box ol, .test-box ul {
+        margin: 6px 0;
+        padding-left: 22px;
+      }
+      .test-box li {
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+      .test-box li b { color: var(--text); }
+      .test-box li code { background: var(--bg); padding: 1px 5px; border-radius: 3px; color: var(--accent); font-size: 11.5px; }
+
+      .footer-cta {
+        margin-top: 36px;
+        padding: 22px 26px;
+        background: linear-gradient(135deg, rgba(79,140,255,0.1), rgba(167,139,250,0.08));
+        border: 1px solid var(--border-strong);
+        border-radius: 14px;
+      }
+      .footer-cta h2 { margin-top: 0; border: none; padding-left: 0; }
+
+      ul.bare { margin: 6px 0; padding-left: 18px; }
+      ul.bare li { margin-bottom: 5px; color: var(--muted); }
+      ul.bare li b { color: var(--text); }
+      ul.bare li code { background: var(--bg); padding: 1px 4px; border-radius: 3px; color: var(--accent); font-size: 11.5px; }
+
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 880px) { .grid2 { grid-template-columns: 1fr; } }
+
+      .quick {
+        display: inline-block;
+        font-family: var(--mono); font-size: 11px;
+        background: var(--bg); padding: 4px 8px; border-radius: 5px;
+        border: 1px solid var(--border-strong);
+        color: var(--success);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Phase C 实现 + 测试指南</h1>
+      <div class="meta">
+        ADR 0019 · 三个特性已落 main · <code>fix/logic-bugs == origin/main</code> ·
+        本文告诉你 <b>怎么实现的</b> 和 <b>怎么自己测</b>
+      </div>
+
+      <div class="lead">
+        <b>Phase C 落地内容:</b><br/>
+        ✅ <b>C1 Plan tool</b>:agent 维护内部 todo · 用户实时看时间线 · 复用 70% 已有基础设施<br/>
+        ✅ <b>C2 子代理 trace 链路</b>:ToolCallCard 加按钮 · 一键弹现有右侧 drawer<br/>
+        ✅ <b>C3 ask_user_question</b>:全新澄清能力 · DeferredSignal 第二个 impl · 600s TTL · 多问题表单 dialog<br/>
+        <br/>
+        全部基于 ADR 0018 五公理 · 没新加任何运行时原语 · LangGraph 已退场。
+      </div>
+
+      <h2><span class="num">§ 0</span> 启动 dev 环境(测试前提)</h2>
+
+      <pre><code><span class="com"># 后端</span>
+cd /Volumes/Storage/code/allhands-bugfix/backend
+uv sync
+uv run uvicorn allhands.main:app --reload --port 8000
+
+<span class="com"># 新开终端 · 前端</span>
+cd /Volumes/Storage/code/allhands-bugfix/web
+pnpm install
+pnpm dev  <span class="com"># http://localhost:3000</span>
+
+<span class="com"># 数据库迁移(ADR 0019 加了 user_inputs 表)</span>
+cd /Volumes/Storage/code/allhands-bugfix/backend
+uv run alembic upgrade head</code></pre>
+
+      <p style="color: var(--muted); font-size: 12.5px;">
+        访问 <code>http://localhost:3000</code> · 选 / 创建一个 employee · 进入 chat 页。
+      </p>
+
+      <!-- C1 -->
+
+      <div class="feature c1">
+        <h3>C1 · Plan Tool <span class="tag c1">已落地</span></h3>
+        <p style="color: var(--muted);">
+          agent 把"todo 进度"通过 4 个 plan tool 暴露给用户 · 用户在 chat 流里看到 PlanTimeline 时间线。
+        </p>
+
+        <h4>怎么实现的</h4>
+        <table class="files">
+          <thead><tr><th>文件</th><th>动作</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>execution/tools/meta/plan_executors.py</td><td><span class="new">NEW · 220 LOC</span></td><td>4 个 executor factory · 由 AgentPlanRepo 持久化 · plan_view 返回 render envelope</td></tr>
+            <tr><td>execution/agent_loop.py</td><td><span class="mod">MODIFY</span></td><td>ctor 加 <code>plan_repo</code> + <code>conversation_id</code> · _maybe_substitute_executor 加 4 分支</td></tr>
+            <tr><td>execution/runner.py</td><td><span class="mod">MODIFY</span></td><td>AgentRunner facade 透传 plan_repo + conversation_id</td></tr>
+            <tr><td>services/chat_service.py</td><td><span class="mod">MODIFY</span></td><td>ctor 接 plan_repo · _build_runner_factory 透给子 runner</td></tr>
+            <tr><td>api/deps.py</td><td><span class="mod">MODIFY</span></td><td>注入 SqlAgentPlanRepo(session)</td></tr>
+            <tr><td>tests/unit/test_plan_executors.py</td><td><span class="new">NEW</span></td><td>16 单测覆盖 create/update_step/complete_step/view + cross-conversation 防御</td></tr>
+          </tbody>
+        </table>
+
+        <h4>原理 · 一图看清</h4>
+        <div class="flow">
+          <div class="step"><div class="who">user</div><div class="what">"帮我重构 X 模块"</div></div>
+          <div class="step"><div class="who">agent</div><div class="what">调 <em>plan_create(title="重构 X", steps=["读代码", "拆模块", "测试"])</em></div></div>
+          <div class="step"><div class="who">executor</div><div class="what"><code>SqlAgentPlanRepo.upsert(plan)</code> · 返回 <code>{plan_id, step_count: 3}</code></div></div>
+          <div class="step"><div class="who">agent</div><div class="what">调 <em>plan_view()</em> · 返回 <code>{component: "PlanTimeline", props: {steps: [...]}}</code></div></div>
+          <div class="step"><div class="who">pipeline</div><div class="what"><code>_as_render_envelope</code> 检测 → emit RenderEvent → 前端 PlanTimeline 渲染</div></div>
+          <div class="step"><div class="who">agent</div><div class="what">干活... 调 <em>plan_update_step(0, "running")</em> · 再 <em>plan_complete_step(0)</em></div></div>
+          <div class="step"><div class="who">user</div><div class="what">看到时间线第一项打勾 · 第二项 running · 心里有底</div></div>
+        </div>
+
+        <div class="test-box">
+          <h4>🧪 怎么测</h4>
+          <h5 style="color: var(--text); margin: 8px 0 4px; font-size: 12px;">方式 A · API 直接验证 plan tool 持久化</h5>
+          <pre><code><span class="com"># 假设已有一个 conversation_id (从 /api/conversations 拿)</span>
+CONV=$(curl -s -XPOST http://localhost:8000/api/conversations \
+  -H "Content-Type: application/json" -d '{"employee_id":"emp-lead"}' | jq -r .id)
+
+<span class="com"># 让 agent 触发 plan_create:发一条消息</span>
+curl -N http://localhost:8000/api/conversations/$CONV/messages \
+  -H "Content-Type: application/json" \
+  -d '{"content":"帮我做一个三步骤的重构计划,然后用 plan_view 给我看看","thinking":false}' \
+  | head -100  <span class="com"># 看 SSE 流里有 PlanTimeline render envelope</span></code></pre>
+
+          <h5 style="color: var(--text); margin: 12px 0 4px; font-size: 12px;">方式 B · 浏览器交互</h5>
+          <ol>
+            <li><b>打开 chat 页</b> · 选一个 employee(Lead 或任何带 plan_* 工具的)</li>
+            <li><b>输入</b>: <i>"帮我列出三个步骤的代码重构计划,做完用 plan_view 展示给我"</i></li>
+            <li><b>观察</b>: agent 调 <code>plan_create</code> · 然后 <code>plan_view</code> · chat 流里出现 <b>PlanTimeline 卡片</b>(三步 · 全 pending)</li>
+            <li><b>追问</b>: <i>"开始第一步,完成后再 plan_view 一次"</i></li>
+            <li><b>观察</b>: agent 调 <code>plan_update_step(0, "running")</code> → <code>plan_complete_step(0)</code> → <code>plan_view</code> · 看到第一项打勾</li>
+          </ol>
+
+          <h5 style="color: var(--text); margin: 12px 0 4px; font-size: 12px;">方式 C · 自动化 unit test</h5>
+          <pre><code>cd backend && uv run pytest tests/unit/test_plan_executors.py -v
+<span class="com"># 应当 16 passed</span></code></pre>
+        </div>
+      </div>
+
+      <!-- C2 -->
+
+      <div class="feature c2">
+        <h3>C2 · 子代理 Trace 链路 <span class="tag c2">已落地</span></h3>
+        <p style="color: var(--muted);">
+          dispatch_employee / spawn_subagent 的 ToolCallCard 加 "查看链路详情 →" 链接 · 点击弹现有右侧 RunTraceDrawer。
+        </p>
+
+        <h4>怎么实现的</h4>
+        <table class="files">
+          <thead><tr><th>文件</th><th>动作</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>web/components/chat/ToolCallCard.tsx</td><td><span class="mod">MODIFY · +26 LOC</span></td><td>expand 区 duck-type 检测 <code>result.run_id</code> · 渲染 TraceChip</td></tr>
+          </tbody>
+        </table>
+
+        <p style="color: var(--muted); font-size: 12.5px;">
+          基础设施 100% 已有 — DispatchService 早就在 result 里塞 <code>run_id</code> · TraceChip 也早就把 <code>?trace=&lt;run_id&gt;</code> 推到 URL · RunTraceDrawer 监听 URL 自动滑出 · RunTracePanel 拉细节渲染。**Phase C2 就是把这条链路串起来**(零新组件)。
+        </p>
+
+        <h4>原理 · 一图看清</h4>
+        <div class="flow">
+          <div class="step"><div class="who">user</div><div class="what">"让 OnPM employee 调研一下市场情况"</div></div>
+          <div class="step"><div class="who">agent</div><div class="what">调 <em>dispatch_employee(employee_id="onpm", task="...")</em></div></div>
+          <div class="step"><div class="who">backend</div><div class="what">DispatchService 跑子 runner · result 含 <code>run_id</code></div></div>
+          <div class="step"><div class="who">ui</div><div class="what">ToolCallCard 出现 · 状态 succeeded · expand 显示 "查看链路详情 →" 链接</div></div>
+          <div class="step"><div class="who">user</div><div class="what">点链接 · URL 加 <code>?trace=&lt;run_id&gt;</code></div></div>
+          <div class="step"><div class="who">drawer</div><div class="what">RunTraceDrawer 监听 URL · 右侧滑出 · RunTracePanel 拉子 run 完整细节</div></div>
+        </div>
+
+        <div class="test-box">
+          <h4>🧪 怎么测</h4>
+          <h5 style="color: var(--text); margin: 8px 0 4px; font-size: 12px;">浏览器交互</h5>
+          <ol>
+            <li><b>需要</b>:至少 2 个 employee · 一个有 <code>dispatch_employee</code> tool(通常是 Lead employee)</li>
+            <li>chat 里发 <i>"dispatch 给 [其他 employee 名字] 让 ta 写个 hello world"</i>(描述要够明确,LLM 才会真的 dispatch)</li>
+            <li>等 dispatch 完成 · ToolCallCard 状态变 <b>succeeded</b></li>
+            <li><b>点 ToolCallCard</b> 展开 expand 区</li>
+            <li>展开区顶部应当有 "<b>查看链路详情 →</b>" 链接 · 点击</li>
+            <li>右侧 drawer 滑出 · 显示子 run 的 RunTracePanel · 包含子 agent 的所有 turn / token / tool_call</li>
+            <li><b>关闭</b>:点遮罩 / Esc / 关闭按钮 · drawer 收起 · URL 的 <code>?trace</code> 参数被清掉</li>
+          </ol>
+
+          <h5 style="color: var(--text); margin: 12px 0 4px; font-size: 12px;">手动 URL 验证(无需触发 dispatch)</h5>
+          <ol>
+            <li>从 cockpit 或 observatory 拿一个 run_id</li>
+            <li>访问 <code>http://localhost:3000/chat/&lt;conv-id&gt;?trace=&lt;run_id&gt;</code></li>
+            <li>RunTraceDrawer 应该立即滑出 · 显示 run 详情</li>
+            <li>这就是 ToolCallCard 链接背后做的事</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- C3 -->
+
+      <div class="feature c3">
+        <h3>C3 · ask_user_question(澄清) <span class="tag c3">已落地 · 全新</span></h3>
+        <p style="color: var(--muted);">
+          全新能力 · 复用 ADR 0018 留好的 DeferredSignal 原语 · agent 拿不准时主动问用户。
+        </p>
+
+        <h4>怎么实现的</h4>
+        <table class="files">
+          <thead><tr><th>文件</th><th>动作</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>core/user_input.py</td><td><span class="new">NEW</span></td><td>UserInput · UserInputStatus · UserInputQuestion</td></tr>
+            <tr><td>persistence/sql_repos.py</td><td><span class="mod">MODIFY</span></td><td>+ UserInputRow 表 · SqlUserInputRepo 类</td></tr>
+            <tr><td>alembic/versions/0021_add_user_inputs.py</td><td><span class="new">NEW</span></td><td>建表 migration</td></tr>
+            <tr><td>execution/user_input_deferred.py</td><td><span class="new">NEW</span></td><td>UserInputDeferred(DeferredSignal) · 600s TTL · 轮询 ANSWERED/EXPIRED</td></tr>
+            <tr><td>execution/tools/builtin/ask_user_question.py</td><td><span class="new">NEW</span></td><td>tool · requires_user_input=True · echo executor</td></tr>
+            <tr><td>core/tool.py</td><td><span class="mod">MODIFY</span></td><td>+ <code>requires_user_input: bool = False</code> field</td></tr>
+            <tr><td>execution/agent_loop.py</td><td><span class="mod">MODIFY</span></td><td>ctor 加 user_input_signal · _permission_check 检测 requires_user_input → Defer</td></tr>
+            <tr><td>execution/tool_pipeline.py</td><td><span class="mod">MODIFY</span></td><td>outcome.kind=="answered" 时把 payload(answers)merge 进 block.input</td></tr>
+            <tr><td>execution/internal_events.py</td><td><span class="mod">MODIFY</span></td><td>+ UserInputRequested 事件类型</td></tr>
+            <tr><td>api/ag_ui_translator.py</td><td><span class="mod">MODIFY</span></td><td>UserInputRequested → custom("allhands.user_input_required", ...)</td></tr>
+            <tr><td>api/routers/user_input.py</td><td><span class="new">NEW</span></td><td>POST /api/user-input/{id}/answer · GET /api/user-input/pending</td></tr>
+            <tr><td>web/lib/protocol.ts</td><td><span class="mod">MODIFY</span></td><td>+ PendingUserInput 类型</td></tr>
+            <tr><td>web/lib/store.ts</td><td><span class="mod">MODIFY</span></td><td>+ pendingUserInputs · addUserInput / removeUserInput</td></tr>
+            <tr><td>web/components/chat/UserInputDialog.tsx</td><td><span class="new">NEW</span></td><td>多问题表单 dialog · 提交 POST /answer</td></tr>
+            <tr><td>web/components/chat/InputBar.tsx</td><td><span class="mod">MODIFY</span></td><td>onCustom 加 allhands.user_input_required 分支</td></tr>
+            <tr><td>tests/unit/test_user_input_deferred.py</td><td><span class="new">NEW · 8 tests</span></td><td>publish/wait/expire</td></tr>
+            <tr><td>tests/unit/test_user_input_agent_loop.py</td><td><span class="new">NEW · 1 integration</span></td><td>Defer → publish → wait answered → execute</td></tr>
+          </tbody>
+        </table>
+
+        <h4>原理 · 一图看清</h4>
+        <div class="flow">
+          <div class="step"><div class="who">user</div><div class="what">"帮我写代码" (模糊)</div></div>
+          <div class="step"><div class="who">agent</div><div class="what">不确定 · 调 <em>ask_user_question(questions=[{label: "Python or Go?", description: "..."}])</em></div></div>
+          <div class="step"><div class="who">permission</div><div class="what"><code>tool.requires_user_input == True</code> → <code>Defer(UserInputDeferred, kwargs)</code></div></div>
+          <div class="step"><div class="who">pipeline</div><div class="what">signal.publish() → 写 UserInputRow PENDING + emit UserInputRequested 事件</div></div>
+          <div class="step"><div class="who">translator</div><div class="what">UserInputRequested → AG-UI <code>custom("allhands.user_input_required", ...)</code></div></div>
+          <div class="step"><div class="who">frontend</div><div class="what">InputBar onCustom · addUserInput · UserInputDialog 弹</div></div>
+          <div class="step"><div class="who">user</div><div class="what">填答案 · 提交 POST /api/user-input/{id}/answer</div></div>
+          <div class="step"><div class="who">backend</div><div class="what">Repo 翻 status=ANSWERED + 存 answers · DeferredSignal 下个 tick 看到</div></div>
+          <div class="step"><div class="who">pipeline</div><div class="what">outcome.payload (answers dict) merge 进 block.input · 调 executor</div></div>
+          <div class="step"><div class="who">agent</div><div class="what">收到 tool_message · 看到 answers · 接着干活</div></div>
+        </div>
+
+        <div class="test-box">
+          <h4>🧪 怎么测</h4>
+
+          <h5 style="color: var(--text); margin: 8px 0 4px; font-size: 12px;">方式 A · curl 直接验证 backend 流程</h5>
+          <pre><code><span class="com"># 1. 检查 ask_user_question tool 已注册</span>
+curl -s http://localhost:8000/api/employees | jq '.[] | select(.tool_ids[]? | contains("ask_user_question"))'
+
+<span class="com"># 2. 模拟 user_input 流(不需要 LLM,直接走 API)</span>
+<span class="com">#    a. 列出当前 pending</span>
+curl -s http://localhost:8000/api/user-input/pending | jq
+
+<span class="com">#    b. 答一个 pending(模拟前端 UserInputDialog 提交)</span>
+UI_ID=&lt;从上面拿一个 pending id&gt;
+curl -XPOST http://localhost:8000/api/user-input/$UI_ID/answer \
+  -H "Content-Type: application/json" \
+  -d '{"answers":{"Python or Go?":"Python"}}'</code></pre>
+
+          <h5 style="color: var(--text); margin: 12px 0 4px; font-size: 12px;">方式 B · 端到端浏览器测</h5>
+          <ol>
+            <li><b>需要</b>:employee 的 tool_ids 包含 <code>allhands.builtin.ask_user_question</code></li>
+            <li>(若没有 · 用 meta tool 加上)在对话里说:<i>"add ask_user_question to my employee"</i></li>
+            <li>新一轮对话发一句 <b>故意模糊</b>的:<i>"帮我写一段代码"</i></li>
+            <li>system prompt 里加点提示:<i>"如果不确定用户意图,调 ask_user_question 询问"</i></li>
+            <li><b>观察</b>:agent 调 <code>ask_user_question</code> · 弹出 <b>UserInputDialog</b></li>
+            <li>填答案 · 提交 · dialog 关闭</li>
+            <li>chat 继续 · agent 收到 answers 后接着写代码</li>
+          </ol>
+
+          <h5 style="color: var(--text); margin: 12px 0 4px; font-size: 12px;">方式 C · 自动化 unit test</h5>
+          <pre><code>cd backend && uv run pytest tests/unit/test_user_input_deferred.py tests/unit/test_user_input_agent_loop.py -v
+<span class="com"># 应当 ~10 passed · 覆盖 publish/wait/expire/loop integration</span></code></pre>
+
+          <h5 style="color: var(--text); margin: 12px 0 4px; font-size: 12px;">方式 D · 验证 600s TTL</h5>
+          <pre><code><span class="com"># 在 publish 后等 10 分钟不答 · 应该自动 EXPIRED · agent 收到 expired tool_message</span>
+<span class="com"># 在测试里可以用 monkeypatch ttl_seconds=2 加速</span></code></pre>
+        </div>
+      </div>
+
+      <h2><span class="num">§ 4</span> 全套 sanity 检查</h2>
+
+      <p style="color: var(--muted);">
+        一次跑完所有验证(等价 CI):
+      </p>
+
+      <pre><code>cd /Volumes/Storage/code/allhands-bugfix
+./scripts/check.sh
+
+<span class="com"># 期望:</span>
+<span class="com">#   backend: ruff / mypy / lint-imports 4/4 contracts kept</span>
+<span class="com">#   backend: 1343 passed</span>
+<span class="com">#   web: 1664 passed</span>
+<span class="com">#   visual / tool-first / acceptance · 全绿</span>
+<span class="com">#   <span class="str">All checks passed.</span></span></code></pre>
+
+      <h2><span class="num">§ 5</span> 5 公理验证 · 三个特性都符合</h2>
+
+      <div class="grid2">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;">
+          <h3 style="margin-top: 0; font-size: 13px;">A1 · 没有平行状态机 ✅</h3>
+          <p style="font-size: 12.5px; color: var(--muted); margin: 0;">
+            C1: plan 是 tool 不是 mode<br/>
+            C2: 复用 ?trace=&lt;run_id&gt; 路由 · 没新 state<br/>
+            C3: UserInputDeferred 走 DeferredSignal 协议 · 没新 loop 路径
+          </p>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;">
+          <h3 style="margin-top: 0; font-size: 13px;">A2 · State 终态化 ✅</h3>
+          <p style="font-size: 12.5px; color: var(--muted); margin: 0;">
+            C1: AgentPlanRepo<br/>
+            C2: MessageRepo + parent_run_id<br/>
+            C3: UserInputRepo · 进程重启 / uvicorn reload 不丢
+          </p>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;">
+          <h3 style="margin-top: 0; font-size: 13px;">A3 · AG-UI 仅适配层 ✅</h3>
+          <p style="font-size: 12.5px; color: var(--muted); margin: 0;">
+            internal_events.py 加 <code>UserInputRequested</code> ·<br/>
+            ag_ui_translator.py 翻成 <code>custom("allhands.user_input_required")</code> · execution/ 不知道 AG-UI
+          </p>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;">
+          <h3 style="margin-top: 0; font-size: 13px;">A4 · Deferred tool 一等公民 ✅</h3>
+          <p style="font-size: 12.5px; color: var(--muted); margin: 0;">
+            UserInputDeferred 是 DeferredSignal 的 <b>第二个 impl</b> · 验证原语通用性 · 跟 ConfirmationDeferred 共享 publish/wait 协议
+          </p>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; grid-column: 1 / -1;">
+          <h3 style="margin-top: 0; font-size: 13px;">A5 · Tool-as-everything ✅</h3>
+          <p style="font-size: 12.5px; color: var(--muted); margin: 0;">
+            <b>每件事都是 tool</b>:plan 管理是 4 个 tool · 询问用户是 1 个 tool · 子代理 dispatch 是 1 个 tool · 没有任何旁路 service / gate / interrupt 路径。新 agent 能力起手式始终是"这能做成 tool 吗"。
+          </p>
+        </div>
+      </div>
+
+      <h2><span class="num">§ 6</span> 已知 follow-up</h2>
+
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px;">
+        <ul class="bare">
+          <li><b>子 agent 实时 stream-through</b>(C2 后端部分)· 当前 dispatch 等子 agent 完成才返回 result · drawer 看完整子 run 没问题 · 实时流可作单独优化</li>
+          <li><b>UserInputDialog 多选 radio</b>:当前是 free-text input · ask_user_question schema 加 <code>choices</code> 字段后可升级 radio</li>
+          <li><b>Plan 权限 gating</b>:用户原话"权限我最后再审查添加" · 后期需要时 hook 进 <code>_permission_check</code></li>
+          <li><b>ask_user_question 默认装载</b>:目前需要手动加到 employee.tool_ids · 可以做成 builtin 默认装载(待商议)</li>
+        </ul>
+      </div>
+
+      <div class="footer-cta">
+        <h2 style="margin: 0 0 8px;">📌 测试 checklist · 对照本页跑</h2>
+        <ul class="bare">
+          <li><b>启动</b>:<span class="quick">uv run uvicorn allhands.main:app --reload</span> + <span class="quick">pnpm dev</span> + <span class="quick">alembic upgrade head</span></li>
+          <li><b>C1 plan</b>:聊"做三步骤计划再 plan_view 给我看" → 看到 PlanTimeline 时间线渲染</li>
+          <li><b>C2 trace</b>:聊"dispatch 给 X" → 展开 ToolCallCard → 点"查看链路详情" → 右侧 drawer 弹</li>
+          <li><b>C3 ask_user_question</b>:确保 employee 有此 tool · 发模糊请求 → UserInputDialog 弹 → 填答案 → agent 继续</li>
+          <li><b>全套</b>:<span class="quick">./scripts/check.sh</span> 一定全绿</li>
+        </ul>
+        <p style="margin-bottom: 0; color: var(--muted); font-size: 12.5px;">
+          完整方案:<code>docs/superpowers/plans/2026-04-25-phase-c-deferred-features.md</code> · ADR:<code>product/adr/0019-deferred-capabilities.md</code>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
