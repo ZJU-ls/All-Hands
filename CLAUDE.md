@@ -90,10 +90,26 @@
 
 - Tool 必须声明 `scope`(READ / WRITE / IRREVERSIBLE / BOOTSTRAP)· 未声明 → 注册拒绝
 - WRITE 以上 + `requires_confirmation=True` 走 **DeferredSignal**(`execution/deferred.py`)· `_permission_check` 返回 `Defer(signal, kwargs)` · pipeline 自动 publish/wait
+- READ + `requires_user_input=True` 同样走 **DeferredSignal**(ADR 0019 C3) · 由 `UserInputDeferred` 提供 · 答案在 `outcome.payload` · pipeline 注入 `block.input` 后调 executor
 - BOOTSTRAP 必须走"候选版本 + 显式切换"流程,不能直接生效
 - 测试里跳 confirmation:用 `AutoApproveGate` 或不注入 `confirmation_signal`,Allow 默认通过
-- 参考:Claude Code `shouldDefer: true` tool · ADR 0018 deferred tool 一等公民
-- 回归:`test_agent_loop.py::test_loop_defers_write_tool_*` · `test_tool_pipeline.py::test_iter_emits_confirmation_requested_*` · `test_deferred.py`
+- 参考:Claude Code `shouldDefer: true` tool · ADR 0018 deferred tool 一等公民 · ADR 0019 C3 第二个 impl 验证通用性
+- 回归:`test_agent_loop.py` · `test_tool_pipeline.py` · `test_deferred.py` · `test_user_input_deferred.py` · `test_user_input_agent_loop.py`
+
+#### 3.6a · Plan as a Tool(ADR 0019 C1)
+
+- agent 调 `plan_create` / `plan_update_step` / `plan_complete_step` / `plan_view` 维护内部 todo · scope=WRITE 但 `requires_confirmation=False`(不动外部系统)
+- `plan_view` 返回 render envelope · 前端 `PlanTimeline.tsx` 渲染时间线 · 用户实时看进度
+- **不做 plan mode** · 没有 conversation.permission_mode · 没有 enter/exit 仪式 · 没有权限 gating(后期审查再加)
+- AgentLoop ctor 注入 `plan_repo` + `conversation_id` · `_maybe_substitute_executor` 把 4 个 plan tool 的 stub 替换成 repo-bound executor
+- 回归:`test_plan_executors.py`(16 tests)
+
+#### 3.6b · Sub-agent Trace Drawer(ADR 0019 C2)
+
+- `dispatch_employee` / `spawn_subagent` tool result 包含 `run_id`(子 run 的 trace 锚)
+- 前端 ToolCallCard expand 区 duck-type 检测 `result.run_id` · 渲染 `TraceChip(variant=link)` · 点击设 `?trace=<run_id>` · 现有 `RunTraceDrawer` 滑出
+- 复用现有 `RunTracePanel` + `fetchRunDetail` · 零新组件
+- 实时 stream-through(子事件流回父流)留作后续 follow-up · 当前 drawer 已能拉子 run 完整细节
 
 ### 3.7 低耦合 / 高扩展 + 状态可 Checkpoint(v1 扩展)
 
