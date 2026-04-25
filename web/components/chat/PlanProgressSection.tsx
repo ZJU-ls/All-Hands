@@ -110,47 +110,45 @@ export function PlanProgressSection({ plan }: Props) {
       </button>
       {expanded && (
         <div className="space-y-px border-t border-border bg-surface px-2 pb-1.5 pt-1.5">
-          {plan.steps.map((s) => (
-            <div
-              key={s.index}
-              data-testid={`plan-step-${s.index}`}
-              data-status={s.status}
-              className={cn(
-                "flex items-center gap-2.5 rounded-md px-2 py-1 transition-[background-color,color]",
-                s.status === "running"
-                  ? "bg-warning-soft/40"
-                  : "hover:bg-surface-2",
-              )}
-            >
-              <span className="w-4 shrink-0 text-right font-mono text-[10px] text-text-subtle">
-                {s.index + 1}
-              </span>
-              <StepDot status={s.status} />
-              <span
+          {plan.steps.map((s) => {
+            // ADR 0019 C1 Round 1: backend stashes Claude-Code style
+            // activeForm into PlanStep.note. Running rows show activeForm
+            // ("Reading code"), pending / completed rows show content
+            // ("Read code") — the spinner/imperative dichotomy.
+            const isRunning = s.status === "running";
+            const display = isRunning && s.note ? s.note : s.title;
+            return (
+              <div
+                key={s.index}
+                data-testid={`plan-step-${s.index}`}
+                data-status={s.status}
                 className={cn(
-                  "min-w-0 flex-1 truncate text-[12.5px] leading-snug",
-                  s.status === "done"
-                    ? "text-text-subtle line-through decoration-text-subtle/40"
-                    : s.status === "running"
-                      ? "font-medium text-text"
-                      : s.status === "failed"
-                        ? "text-danger"
-                        : "text-text-muted",
+                  "flex items-center gap-2.5 rounded-md px-2 py-1 transition-[background-color,color]",
+                  isRunning ? "bg-warning-soft/40" : "hover:bg-surface-2",
                 )}
-                title={s.note ? `${s.title} · ${s.note}` : s.title}
               >
-                {s.title}
-              </span>
-              {s.note && (
-                <span
-                  className="shrink-0 truncate text-[11px] text-text-subtle"
-                  title={s.note}
-                >
-                  {s.note}
+                <span className="w-4 shrink-0 text-right font-mono text-[10px] text-text-subtle">
+                  {s.index + 1}
                 </span>
-              )}
-            </div>
-          ))}
+                <StepDot status={s.status} />
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-[12.5px] leading-snug",
+                    s.status === "done"
+                      ? "text-text-subtle line-through decoration-text-subtle/40"
+                      : isRunning
+                        ? "font-medium text-text"
+                        : s.status === "failed"
+                          ? "text-danger"
+                          : "text-text-muted",
+                  )}
+                  title={s.note ? `${s.title} · ${s.note}` : s.title}
+                >
+                  {display}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

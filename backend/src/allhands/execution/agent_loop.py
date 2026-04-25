@@ -511,38 +511,24 @@ class AgentLoop:
 
             return make_spawn_subagent_executor(self._spawn_subagent_service)
 
-        # ADR 0019 C1 · plan tools · substitute the registry's no-op stubs
-        # with executors bound to the per-conversation AgentPlanRepo.
+        # ADR 0019 C1 (Round 1 redesign) · plan tools · single-tool atomic
+        # replace, bound to per-conversation AgentPlanRepo.
         if self._plan_repo is not None and self._conversation_id:
             from allhands.execution.tools.meta.plan_executors import (
-                PLAN_COMPLETE_STEP_TOOL_ID,
-                PLAN_CREATE_TOOL_ID,
-                PLAN_UPDATE_STEP_TOOL_ID,
-                PLAN_VIEW_TOOL_ID,
-                make_plan_complete_step_executor,
-                make_plan_create_executor,
-                make_plan_update_step_executor,
-                make_plan_view_executor,
+                UPDATE_PLAN_TOOL_ID,
+                VIEW_PLAN_TOOL_ID,
+                make_update_plan_executor,
+                make_view_plan_executor,
             )
 
-            if tool_id == PLAN_CREATE_TOOL_ID:
-                return make_plan_create_executor(
+            if tool_id == UPDATE_PLAN_TOOL_ID:
+                return make_update_plan_executor(
                     repo=self._plan_repo,
                     conversation_id=self._conversation_id,
                     employee_id=self._employee.id,
                 )
-            if tool_id == PLAN_UPDATE_STEP_TOOL_ID:
-                return make_plan_update_step_executor(
-                    repo=self._plan_repo,
-                    conversation_id=self._conversation_id,
-                )
-            if tool_id == PLAN_COMPLETE_STEP_TOOL_ID:
-                return make_plan_complete_step_executor(
-                    repo=self._plan_repo,
-                    conversation_id=self._conversation_id,
-                )
-            if tool_id == PLAN_VIEW_TOOL_ID:
-                return make_plan_view_executor(
+            if tool_id == VIEW_PLAN_TOOL_ID:
+                return make_view_plan_executor(
                     repo=self._plan_repo,
                     conversation_id=self._conversation_id,
                 )
