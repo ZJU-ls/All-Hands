@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@/tests/test-utils/i18n-render";
 import { TraceChip, TRACE_QUERY_KEY } from "../TraceChip";
 
 const { routerReplaceMock } = vi.hoisted(() => ({

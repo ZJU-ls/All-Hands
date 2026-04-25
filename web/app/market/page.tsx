@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/icon";
@@ -69,6 +70,7 @@ type RemoveTarget = {
 };
 
 export default function MarketPage() {
+  const t = useTranslations("market.list");
   const [tab, setTab] = useState<Tab>("watched");
   const [watched, setWatched] = useState<Watched[]>([]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
@@ -187,7 +189,7 @@ export default function MarketPage() {
     : holdings;
 
   return (
-    <AppShell title="行情">
+    <AppShell title={t("appShellTitle")}>
       <div className="h-full overflow-y-auto">
         <div className="max-w-6xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
           {/* Eyebrow + hero header */}
@@ -196,22 +198,18 @@ export default function MarketPage() {
               <div className="flex items-center gap-2 mb-2">
                 <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-primary-muted text-primary text-caption font-mono font-semibold uppercase tracking-wider">
                   <Icon name="activity" size={10} strokeWidth={2.25} />
-                  Market
+                  {t("eyebrow")}
                 </span>
                 <span className="font-mono text-caption text-text-subtle uppercase tracking-wider">
-                  quotes · positions · tickers
+                  {t("eyebrowHint")}
                 </span>
               </div>
               <PageHeader
-                title="行情"
+                title={t("pageTitle")}
                 count={tab === "watched" ? watched.length : holdings.length}
-                subtitle={
-                  <>
-                    跟踪自选与持仓的实时报价;ticker-poller 按设定阈值推送异动到 Lead Agent。
-                    代码前缀 <span className="font-mono">SSE:</span> /{" "}
-                    <span className="font-mono">SZSE:</span> 标记交易所。
-                  </>
-                }
+                subtitle={t.rich("subtitle", {
+                  mono: (chunks) => <span className="font-mono">{chunks}</span>,
+                })}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -226,7 +224,7 @@ export default function MarketPage() {
                 }`}
               >
                 <Icon name={status?.running ? "pause" : "play"} size={12} strokeWidth={2} />
-                {status?.running ? "停 poller" : "启 poller"}
+                {status?.running ? t("stopPoller") : t("startPoller")}
               </button>
               <button
                 onClick={() =>
@@ -235,7 +233,7 @@ export default function MarketPage() {
                 className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-[12px] font-medium bg-primary hover:bg-primary-hover text-primary-fg shadow-soft-sm transition-colors duration-fast"
               >
                 <Icon name="plus" size={12} strokeWidth={2.25} />
-                {tab === "watched" ? "加自选" : "加持仓"}
+                {tab === "watched" ? t("addWatched") : t("addHolding")}
               </button>
             </div>
           </div>
@@ -244,26 +242,26 @@ export default function MarketPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <HeroKpi
               label="Poller"
-              value={status?.running ? "Live" : "Idle"}
+              value={status?.running ? t("kpi.pollerLive") : t("kpi.pollerIdle")}
               icon="activity"
               hint={
                 status?.last_tick_at
-                  ? `tick ${new Date(status.last_tick_at).toLocaleTimeString()}`
-                  : "awaiting first tick"
+                  ? t("kpi.pollerTick", { time: new Date(status.last_tick_at).toLocaleTimeString() })
+                  : t("kpi.pollerAwaiting")
               }
               pulse={status?.running ?? false}
             />
             <StatKpi
-              label="Watched"
+              label={t("kpi.watched")}
               value={watched.length}
               icon="eye"
-              hint={`${gainers} up · ${losers} down`}
+              hint={t("kpi.watchedHint", { up: gainers, down: losers })}
             />
             <StatKpi
-              label="Holdings"
+              label={t("kpi.holdings")}
               value={holdings.length}
               icon="layout-grid"
-              hint={`cost ${totalCost.toFixed(0)}`}
+              hint={t("kpi.holdingsHint", { cost: totalCost.toFixed(0) })}
               monoHint
             />
             <PnLKpi pnl={totalPnL} pnlPct={totalPnLPct} hasData={holdings.length > 0} />
@@ -278,20 +276,20 @@ export default function MarketPage() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div
               role="tablist"
-              aria-label="行情视图"
+              aria-label={t("tabsLabel")}
               className="inline-flex items-center gap-1 rounded-xl bg-surface-2 p-1 border border-border"
             >
               <TabPill
                 active={tab === "watched"}
                 icon="eye"
-                label="自选"
+                label={t("tabs.watched")}
                 count={watched.length}
                 onClick={() => setTab("watched")}
               />
               <TabPill
                 active={tab === "holdings"}
                 icon="layout-grid"
-                label="持仓"
+                label={t("tabs.holdings")}
                 count={holdings.length}
                 onClick={() => setTab("holdings")}
               />
@@ -308,14 +306,14 @@ export default function MarketPage() {
                   <Icon name="alert-circle" size={16} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-danger mb-1">加载行情失败</p>
+                  <p className="text-sm font-semibold text-danger mb-1">{t("loadErrorTitle")}</p>
                   <p className="text-xs text-text-muted font-mono break-all mb-3">{error}</p>
                   <button
                     onClick={() => void load()}
                     className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition-colors duration-fast"
                   >
                     <Icon name="refresh" size={12} />
-                    重试
+                    {t("retry")}
                   </button>
                 </div>
               </div>
@@ -368,13 +366,13 @@ export default function MarketPage() {
 
       <ConfirmDialog
         open={removeTarget !== null}
-        title={`移除 ${removeTarget?.name ?? ""}?`}
+        title={t("removeTitle", { name: removeTarget?.name ?? "" })}
         message={
           removeTarget?.kind === "holdings"
-            ? "此操作会删除这笔持仓记录,不可撤销。历史成交历史仍会保留在 trace 里。"
-            : "此操作会将该标的从自选列表移除,不可撤销。你可以随时重新添加。"
+            ? t("removeHolding")
+            : t("removeWatched")
         }
-        confirmLabel="移除"
+        confirmLabel={t("removeConfirm")}
         danger
         busy={removing}
         onConfirm={() => void handleRemoveConfirmed()}
@@ -493,6 +491,7 @@ function PnLKpi({
   pnlPct: number;
   hasData: boolean;
 }) {
+  const t = useTranslations("market.list.kpi");
   const positive = pnl >= 0;
   const icon = positive ? "trending-up" : "trending-down";
   const color = positive ? "text-success" : "text-danger";
@@ -504,7 +503,7 @@ function PnLKpi({
     >
       <div className="flex items-center justify-between">
         <span className="font-mono text-caption font-semibold uppercase tracking-wider text-text-subtle truncate">
-          P&L
+          {t("pnl")}
         </span>
         <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg ${bg} ${color}`}>
           <Icon name={icon} size={14} strokeWidth={2} />
@@ -520,7 +519,7 @@ function PnLKpi({
           hasData ? color : "text-text-subtle"
         }`}
       >
-        {hasData ? `${positive ? "+" : ""}${pnlPct.toFixed(2)}%` : "无持仓"}
+        {hasData ? `${positive ? "+" : ""}${pnlPct.toFixed(2)}%` : t("noHoldings")}
       </div>
     </div>
   );
@@ -531,14 +530,15 @@ function PnLKpi({
 // ---------------------------------------------------------------------------
 
 function PollerStrip({ status }: { status: PollerStatus }) {
+  const t = useTranslations("market.list.thresholds");
   const th = status.thresholds;
   const chips: Array<{ label: string; value: string }> = [
-    { label: "↑ spike", value: `${th.sudden_spike_pct}%` },
-    { label: "↓ drop", value: `${th.sudden_drop_pct}%` },
-    { label: "crash", value: `${th.crash_pct}%` },
-    { label: "limit-up", value: `${th.limit_up_pct}%` },
-    { label: "σ volume", value: th.volume_spike_sigma.toString() },
-    { label: "window", value: `${th.window_seconds}s` },
+    { label: t("spike"), value: `${th.sudden_spike_pct}%` },
+    { label: t("drop"), value: `${th.sudden_drop_pct}%` },
+    { label: t("crash"), value: `${th.crash_pct}%` },
+    { label: t("limitUp"), value: `${th.limit_up_pct}%` },
+    { label: t("volume"), value: th.volume_spike_sigma.toString() },
+    { label: t("window"), value: `${th.window_seconds}s` },
   ];
   return (
     <div className="relative rounded-xl border border-border bg-surface p-4 shadow-soft-sm overflow-hidden">
@@ -549,7 +549,7 @@ function PollerStrip({ status }: { status: PollerStatus }) {
       <div className="flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-2 shrink-0">
           <span className="font-mono text-caption uppercase tracking-wider text-text-subtle">
-            Thresholds
+            {t("title")}
           </span>
           <span
             className={`inline-flex items-center gap-1.5 h-5 px-2 rounded-full text-caption font-mono font-semibold ${
@@ -561,7 +561,7 @@ function PollerStrip({ status }: { status: PollerStatus }) {
             <span
               className={`h-1.5 w-1.5 rounded-full ${status.running ? "bg-success" : "bg-text-subtle"}`}
             />
-            {status.running ? "live" : "idle"}
+            {status.running ? t("live") : t("idle")}
           </span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -632,6 +632,7 @@ function SearchInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const t = useTranslations("market.list");
   return (
     <div className="relative flex-1 max-w-sm min-w-[200px]">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle">
@@ -641,14 +642,14 @@ function SearchInput({
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="搜索代码 / 名称 / 标签"
+        placeholder={t("searchPlaceholder")}
         className="w-full h-9 pl-9 pr-3 rounded-lg bg-surface border border-border text-[13px] text-text placeholder:text-text-subtle focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary transition-colors duration-fast"
       />
       {value && (
         <button
           type="button"
           onClick={() => onChange("")}
-          aria-label="清空搜索"
+          aria-label={t("clearSearch")}
           className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded text-text-subtle hover:text-text hover:bg-surface-2 transition-colors duration-fast"
         >
           <Icon name="x" size={12} />
@@ -675,12 +676,13 @@ function WatchedTable({
   onRequestRemove: (r: Watched) => void;
   onAdd: () => void;
 }) {
+  const t = useTranslations("market.list");
   if (totalRows === 0) {
     return (
       <MarketEmpty
-        title="还没有自选"
-        description="从 SSE: / SZSE: 代码开始跟踪第一只标的,ticker-poller 会在异动时通知 Lead Agent。"
-        cta={{ label: "加自选", icon: "plus", onClick: onAdd }}
+        title={t("emptyWatchedTitle")}
+        description={t("emptyWatchedDesc")}
+        cta={{ label: t("addWatched"), icon: "plus", onClick: onAdd }}
       />
     );
   }
@@ -692,12 +694,12 @@ function WatchedTable({
       <table className="w-full text-[13px]">
         <thead className="text-[10px] uppercase tracking-wider text-text-subtle bg-surface-2">
           <tr>
-            <Th>代码</Th>
-            <Th>名称</Th>
-            <Th>Tag</Th>
-            <Th right>最新</Th>
-            <Th right>涨跌</Th>
-            <Th right>涨跌%</Th>
+            <Th>{t("table.code")}</Th>
+            <Th>{t("table.name")}</Th>
+            <Th>{t("table.tag")}</Th>
+            <Th right>{t("table.last")}</Th>
+            <Th right>{t("table.change")}</Th>
+            <Th right>{t("table.changePct")}</Th>
             <Th right> </Th>
           </tr>
         </thead>
@@ -744,7 +746,7 @@ function WatchedTable({
                   <button
                     type="button"
                     onClick={() => onRequestRemove(r)}
-                    aria-label={`移除 ${r.name}`}
+                    aria-label={t("removeAria", { name: r.name })}
                     className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-subtle hover:text-danger hover:bg-danger-soft transition-colors duration-fast"
                   >
                     <Icon name="trash-2" size={13} />
@@ -772,12 +774,13 @@ function HoldingsTable({
   onRequestRemove: (r: Holding) => void;
   onAdd: () => void;
 }) {
+  const t = useTranslations("market.list");
   if (totalRows === 0) {
     return (
       <MarketEmpty
-        title="还没有持仓"
-        description="录入第一笔持仓,平台会按现价实时计算浮动盈亏。或让 Lead Agent 帮你 CSV 批量导入。"
-        cta={{ label: "加持仓", icon: "plus", onClick: onAdd }}
+        title={t("emptyHoldingTitle")}
+        description={t("emptyHoldingDesc")}
+        cta={{ label: t("addHolding"), icon: "plus", onClick: onAdd }}
       />
     );
   }
@@ -789,13 +792,13 @@ function HoldingsTable({
       <table className="w-full text-[13px]">
         <thead className="text-[10px] uppercase tracking-wider text-text-subtle bg-surface-2">
           <tr>
-            <Th>代码</Th>
-            <Th>名称</Th>
-            <Th right>数量</Th>
-            <Th right>成本</Th>
-            <Th right>现价</Th>
-            <Th right>盈亏</Th>
-            <Th right>盈亏%</Th>
+            <Th>{t("table.code")}</Th>
+            <Th>{t("table.name")}</Th>
+            <Th right>{t("table.quantity")}</Th>
+            <Th right>{t("table.cost")}</Th>
+            <Th right>{t("table.now")}</Th>
+            <Th right>{t("table.pnl")}</Th>
+            <Th right>{t("table.pnlPct")}</Th>
             <Th right> </Th>
           </tr>
         </thead>
@@ -841,7 +844,7 @@ function HoldingsTable({
                   <button
                     type="button"
                     onClick={() => onRequestRemove(r)}
-                    aria-label={`移除 ${r.name}`}
+                    aria-label={t("removeAria", { name: r.name })}
                     className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-subtle hover:text-danger hover:bg-danger-soft transition-colors duration-fast"
                   >
                     <Icon name="trash-2" size={13} />
@@ -964,13 +967,14 @@ function MarketEmpty({
 }
 
 function FilteredEmpty() {
+  const t = useTranslations("market.list");
   return (
     <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-10 text-center">
       <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-full bg-primary-muted text-primary">
         <Icon name="search" size={16} />
       </div>
-      <p className="text-[13px] text-text">没有匹配的结果</p>
-      <p className="mt-1 text-[11px] text-text-muted">调整搜索词或清空筛选再试一次。</p>
+      <p className="text-[13px] text-text">{t("filteredEmpty")}</p>
+      <p className="mt-1 text-[11px] text-text-muted">{t("filteredEmptyHint")}</p>
     </div>
   );
 }
@@ -1022,16 +1026,17 @@ function AddWatchedDrawer({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const t = useTranslations("market.list.drawer");
   const [symbol, setSymbol] = useState("SSE:");
   const [name, setName] = useState("");
   const [tag, setTag] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   return (
-    <Drawer onClose={onClose} title="添加自选" subtitle="跟踪一只新标的到自选列表">
-      <Field label="symbol" hint="例如 SSE:600519 / SZSE:000001" value={symbol} onChange={setSymbol} mono />
+    <Drawer onClose={onClose} title={t("addWatchedTitle")} subtitle={t("addWatchedSubtitle")}>
+      <Field label="symbol" hint={t("symbolWatchHint")} value={symbol} onChange={setSymbol} mono />
       <Field label="name" value={name} onChange={setName} />
-      <Field label="tag" hint="可选 · 用于分组" value={tag} onChange={setTag} />
+      <Field label="tag" hint={t("tagHint")} value={tag} onChange={setTag} />
       {err && (
         <div className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2">
           <Icon name="alert-circle" size={14} className="text-danger shrink-0 mt-0.5" />
@@ -1077,15 +1082,16 @@ function AddHoldingDrawer({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const t = useTranslations("market.list.drawer");
   return (
-    <Drawer onClose={onClose} title="添加持仓" subtitle="录入一笔实际持仓,用于计算浮动盈亏">
-      <Field label="symbol" hint="例如 SSE:600519" value={symbol} onChange={setSymbol} mono />
+    <Drawer onClose={onClose} title={t("addHoldingTitle")} subtitle={t("addHoldingSubtitle")}>
+      <Field label="symbol" hint={t("symbolHoldingHint")} value={symbol} onChange={setSymbol} mono />
       <Field label="name" value={name} onChange={setName} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="quantity" value={quantity} onChange={setQuantity} mono />
         <Field label="avg_cost" value={avgCost} onChange={setAvgCost} mono />
       </div>
-      <Field label="notes" hint="可选" value={notes} onChange={setNotes} />
+      <Field label="notes" hint={t("notesHint")} value={notes} onChange={setNotes} />
       {err && (
         <div className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2">
           <Icon name="alert-circle" size={14} className="text-danger shrink-0 mt-0.5" />
@@ -1134,7 +1140,8 @@ function Drawer({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  // ESC = 关闭抽屉,与全站对话框契约对齐
+  const t = useTranslations("market.list.drawer");
+  // ESC closes the drawer — matches the global dialog contract.
   useDismissOnEscape(true, onClose);
   return (
     <div
@@ -1156,7 +1163,7 @@ function Drawer({
           </div>
           <button
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("close")}
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-subtle hover:text-text hover:bg-surface-2 transition-colors duration-fast"
           >
             <Icon name="x" size={14} />
@@ -1210,13 +1217,14 @@ function DrawerFooter({
   onConfirm: () => void | Promise<void>;
   busy: boolean;
 }) {
+  const t = useTranslations("market.list.drawer");
   return (
     <div className="pt-3 flex gap-2 justify-end border-t border-border -mx-6 px-6 mt-2">
       <button
         onClick={onCancel}
         className="h-9 px-3 rounded-lg bg-surface border border-border text-text hover:border-border-strong hover:bg-surface-2 text-[13px] font-medium transition-colors duration-fast"
       >
-        取消
+        {t("cancel")}
       </button>
       <button
         onClick={onConfirm}
@@ -1229,7 +1237,7 @@ function DrawerFooter({
             aria-hidden="true"
           />
         )}
-        {busy ? "保存中…" : "保存"}
+        {busy ? t("saving") : t("save")}
       </button>
     </div>
   );

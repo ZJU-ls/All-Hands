@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@/tests/test-utils/i18n-render";
 import { CompactChip } from "../CompactChip";
 import { useChatStore } from "@/lib/store";
 import type { CompactResult } from "@/lib/api";

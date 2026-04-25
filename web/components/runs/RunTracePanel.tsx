@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   fetchRunDetail,
   RunNotFoundError,
@@ -27,6 +28,7 @@ type State =
   | { status: "ready"; run: RunDetailDto };
 
 export function RunTracePanel(props: Props) {
+  const t = useTranslations("runs.tracePanel");
   const initialRun = "run" in props ? props.run : undefined;
   const runId = "runId" in props ? props.runId : undefined;
 
@@ -34,6 +36,7 @@ export function RunTracePanel(props: Props) {
     initialRun ? { status: "ready", run: initialRun } : { status: "idle" },
   );
 
+  const fallbackMsg = t("loadFailed");
   useEffect(() => {
     if (!runId) return;
     let cancelled = false;
@@ -49,19 +52,19 @@ export function RunTracePanel(props: Props) {
         setState({
           status: "error",
           message:
-            err instanceof Error ? err.message : "加载 trace 出错,请稍后重试",
+            err instanceof Error ? err.message : fallbackMsg,
           notFound,
         });
       });
     return () => {
       cancelled = true;
     };
-  }, [runId]);
+  }, [runId, fallbackMsg]);
 
   if (state.status === "idle" || state.status === "loading") {
     return (
       <div data-testid="run-trace-panel" data-state="loading">
-        <LoadingState title="加载 trace" variant="skeleton" />
+        <LoadingState title={t("loading")} variant="skeleton" />
       </div>
     );
   }
@@ -76,8 +79,8 @@ export function RunTracePanel(props: Props) {
         <div data-testid="run-trace-panel" data-state="error">
           <EmptyState
             icon="clock"
-            title="这次执行的 trace 已不在"
-            description="可能已过期、被清理,或这次 run 没产生 trace。打开一条更近期的 run 试试。"
+            title={t("notFoundTitle")}
+            description={t("notFoundDescription")}
           />
         </div>
       );
@@ -85,8 +88,8 @@ export function RunTracePanel(props: Props) {
     return (
       <div data-testid="run-trace-panel" data-state="error">
         <ErrorState
-          title="加载 trace 失败"
-          description="网络抖动或服务暂时不可达 · 可以稍后重试。"
+          title={t("errorTitle")}
+          description={t("errorDescription")}
           detail={state.message}
         />
       </div>

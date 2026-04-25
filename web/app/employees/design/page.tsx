@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -38,13 +39,14 @@ function avatarInitials(name: string): string {
   return trimmed.slice(0, 2).toUpperCase();
 }
 
-function modelDisplay(modelRef: string): string {
-  if (!modelRef) return "跟随默认";
+function modelDisplay(modelRef: string, fallback: string): string {
+  if (!modelRef) return fallback;
   const idx = modelRef.indexOf("/");
   return idx >= 0 ? modelRef.slice(idx + 1) : modelRef;
 }
 
 export default function EmployeeDesignPage() {
+  const t = useTranslations("employees.design");
   const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeDto[] | null>(null);
   const [skills, setSkills] = useState<SkillDto[] | null>(null);
@@ -129,7 +131,7 @@ export default function EmployeeDesignPage() {
     employees?.filter((e) => e.status === "published").length ?? 0;
 
   return (
-    <AppShell title="员工设计">
+    <AppShell title={t("shellTitle")}>
       <div className="flex h-full min-h-0">
         <aside
           data-testid="design-employee-list"
@@ -137,9 +139,9 @@ export default function EmployeeDesignPage() {
         >
           <div className="p-4 border-b border-border space-y-3">
             <div>
-              <h2 className="text-[13px] font-semibold text-text">团队编辑</h2>
+              <h2 className="text-[13px] font-semibold text-text">{t("rosterTitle")}</h2>
               <p className="mt-0.5 text-caption text-text-muted">
-                草稿 {draftCount} · 上岗 {publishedCount}
+                {t("rosterCounts", { draft: draftCount, published: publishedCount })}
               </p>
             </div>
             <button
@@ -152,7 +154,7 @@ export default function EmployeeDesignPage() {
               }`}
             >
               <Icon name="user-plus" size={14} strokeWidth={2} />
-              新建员工
+              {t("newEmployee")}
               <Icon
                 name="arrow-right"
                 size={12}
@@ -162,7 +164,7 @@ export default function EmployeeDesignPage() {
           </div>
           {employees === null ? (
             <div className="p-4">
-              <LoadingState title="加载员工" />
+              <LoadingState title={t("loadingEmployees")} />
             </div>
           ) : employees.length === 0 ? (
             <div className="p-5 text-center">
@@ -170,7 +172,7 @@ export default function EmployeeDesignPage() {
                 <Icon name="users" size={16} />
               </div>
               <p className="text-[12px] text-text-muted">
-                还没有员工 · 右侧填完表单即可招聘第一位。
+                {t("rosterEmpty")}
               </p>
             </div>
           ) : (
@@ -227,7 +229,7 @@ export default function EmployeeDesignPage() {
                           )}
                         </div>
                         <p className="font-mono text-caption text-text-subtle truncate">
-                          {modelDisplay(e.model_ref)}
+                          {modelDisplay(e.model_ref, t("fallbackModel"))}
                         </p>
                       </div>
                       {isDraft && (
@@ -235,7 +237,7 @@ export default function EmployeeDesignPage() {
                           data-testid={`design-emp-${e.id}-draft-tag`}
                           className="inline-flex items-center h-5 px-1.5 rounded bg-warning-soft text-warning font-mono text-[10px] uppercase tracking-wider shrink-0"
                         >
-                          草稿
+                          {t("draftTag")}
                         </span>
                       )}
                     </button>
@@ -249,14 +251,14 @@ export default function EmployeeDesignPage() {
         <section className="flex-1 min-w-0 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-8 space-y-6 animate-fade-up">
             {!ready && (selectedId !== "" || employees === null) ? (
-              <LoadingState title="加载表单依赖" />
+              <LoadingState title={t("loadingForm")} />
             ) : (
               <>
                 {selectedId === "" ? (
                   <>
                     <PageHeader
-                      title="招聘新员工"
-                      subtitle="选 preset → 表单展开默认技能 / 工具 / 迭代上限 · 可在 dry-run 预览里查看最终落库 payload"
+                      title={t("hireHeading")}
+                      subtitle={t("hireSubtitle")}
                     />
                     <CreateHint />
                   </>
@@ -306,7 +308,7 @@ export default function EmployeeDesignPage() {
                   />
                 )}
                 {ready && selectedId !== "" && !selected && (
-                  <p className="text-[12px] text-text-muted">员工不存在。</p>
+                  <p className="text-[12px] text-text-muted">{t("missingEmployee")}</p>
                 )}
               </>
             )}
@@ -316,9 +318,9 @@ export default function EmployeeDesignPage() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`删除员工「${deleteTarget?.name ?? ""}」?`}
-        message="此操作不可撤销。该员工名下的对话历史仍会保留,但会失去对员工档案的引用。"
-        confirmLabel="删除"
+        title={t("deleteTitle", { name: deleteTarget?.name ?? "" })}
+        message={t("deleteMessage")}
+        confirmLabel={t("deleteConfirm")}
         danger
         busy={busyAction === "delete"}
         onConfirm={() => void confirmDelete()}
@@ -329,6 +331,7 @@ export default function EmployeeDesignPage() {
 }
 
 function CreateHint() {
+  const t = useTranslations("employees.design");
   return (
     <div className="relative overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm p-5">
       <div
@@ -341,12 +344,10 @@ function CreateHint() {
         </span>
         <div className="min-w-0">
           <h3 className="text-[13px] font-semibold text-text">
-            从模板开始最快
+            {t("templateHeading")}
           </h3>
           <p className="mt-1 text-caption text-text-muted leading-relaxed">
-            Lead / Worker / Specialist / Free —— 每个 preset 会预填一组推荐技能与
-            迭代上限。你可以在表单里覆盖所有字段;落库时不会存 preset,只存展开后
-            的 tool_ids / skill_ids / max_iterations(§3.2 红线)。
+            {t("templateBody")}
           </p>
         </div>
       </div>
@@ -367,6 +368,7 @@ function EmployeeToolbar({
   onDelete: () => void;
   onTry: () => void;
 }) {
+  const t = useTranslations("employees.design");
   const isDraft = employee.status === "draft";
   const busy = busyAction !== null;
   return (
@@ -411,18 +413,22 @@ function EmployeeToolbar({
               <span
                 className={`h-1.5 w-1.5 rounded-full ${isDraft ? "bg-warning" : "bg-success"}`}
               />
-              {isDraft ? "草稿" : "已上岗"}
+              {isDraft ? t("statusDraft") : t("statusPublished")}
             </span>
             {employee.is_lead_agent && (
               <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-primary text-primary-fg text-caption font-medium shadow-soft-sm">
                 <Icon name="sparkles" size={10} />
-                Lead
+                {t("leadBadge")}
               </span>
             )}
           </div>
           <p className="mt-1 font-mono text-caption text-text-subtle truncate">
-            {employee.model_ref || "平台默认模型"} · {employee.tool_ids.length} tools ·{" "}
-            {employee.skill_ids.length} skills · {employee.max_iterations} 轮
+            {t("toolbarSummary", {
+              model: employee.model_ref || t("platformDefaultModel"),
+              tools: employee.tool_ids.length,
+              skills: employee.skill_ids.length,
+              iter: employee.max_iterations,
+            })}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -436,12 +442,12 @@ function EmployeeToolbar({
             {busyAction === "chat" ? (
               <>
                 <Icon name="loader" size={12} className="animate-spin" />
-                打开中
+                {t("openingChat")}
               </>
             ) : (
               <>
                 <Icon name="play" size={12} strokeWidth={2.25} />
-                试用
+                {t("tryEmployee")}
               </>
             )}
           </button>
@@ -456,12 +462,12 @@ function EmployeeToolbar({
               {busyAction === "publish" ? (
                 <>
                   <Icon name="loader" size={12} className="animate-spin" />
-                  上岗中
+                  {t("publishing")}
                 </>
               ) : (
                 <>
                   <Icon name="check-circle-2" size={12} strokeWidth={2} />
-                  上岗
+                  {t("publish")}
                 </>
               )}
             </button>
@@ -470,12 +476,12 @@ function EmployeeToolbar({
             type="button"
             onClick={onDelete}
             disabled={busy || employee.is_lead_agent}
-            title={employee.is_lead_agent ? "Lead Agent 不可删除" : "删除员工(不可撤销)"}
+            title={employee.is_lead_agent ? t("leadCannotDelete") : t("deleteHint")}
             data-testid="design-delete"
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/40 bg-surface text-danger hover:bg-danger-soft text-[12px] font-medium shadow-soft-sm transition duration-base disabled:opacity-30 disabled:hover:bg-surface"
           >
             <Icon name="trash-2" size={12} strokeWidth={2} />
-            {busyAction === "delete" ? "删除中" : "删除"}
+            {busyAction === "delete" ? t("deleting") : t("delete")}
           </button>
         </div>
       </div>

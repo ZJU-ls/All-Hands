@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { RenderProps } from "@/lib/component-registry";
 import {
@@ -66,6 +67,7 @@ function StatusShell({
 }
 
 export function ArtifactPreview({ props }: RenderProps) {
+  const t = useTranslations("render.preview");
   const artifactId = (props.artifact_id as string | undefined) ?? "";
   const [meta, setMeta] = useState<ArtifactDto | null>(null);
   const [text, setText] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export function ArtifactPreview({ props }: RenderProps) {
     return (
       <StatusShell tone="muted">
         <Icon name="alert-circle" size={14} />
-        Artifact.Preview 缺少 artifact_id
+        {t("missingId")}
       </StatusShell>
     );
   }
@@ -106,7 +108,7 @@ export function ArtifactPreview({ props }: RenderProps) {
     return (
       <StatusShell tone="danger">
         <Icon name="alert-triangle" size={14} />
-        制品加载失败:{error}
+        {t("loadFailed", { error })}
       </StatusShell>
     );
   }
@@ -114,7 +116,7 @@ export function ArtifactPreview({ props }: RenderProps) {
     return (
       <StatusShell tone="loading">
         <Icon name="loader" size={14} className="animate-spin-slow" />
-        读取制品…
+        {t("loading")}
       </StatusShell>
     );
   }
@@ -145,7 +147,7 @@ export function ArtifactPreview({ props }: RenderProps) {
       default:
         body = (
           <div className="px-5 py-4 text-[12px] text-text-muted">
-            kind {meta.kind} 暂不支持预览
+            {t("unsupportedKind", { kind: meta.kind })}
           </div>
         );
     }

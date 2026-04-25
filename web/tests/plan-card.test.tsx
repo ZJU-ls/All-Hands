@@ -7,7 +7,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@/tests/test-utils/i18n-render";
 import { PlanCard } from "@/components/render/PlanCard";
 
 afterEach(cleanup);

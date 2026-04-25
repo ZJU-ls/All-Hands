@@ -10,7 +10,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@/tests/test-utils/i18n-render";
 
 import { ConversationSwitcher } from "../ConversationSwitcher";
 import { useChatStore } from "@/lib/store";

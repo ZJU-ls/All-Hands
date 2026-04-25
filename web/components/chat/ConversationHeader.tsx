@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import type { EmployeeForBadges } from "@/lib/employee-profile";
 
@@ -44,6 +45,7 @@ export function ConversationHeader({
   effectiveModelRef,
   isOverridden,
 }: Props) {
+  const t = useTranslations("chat.header");
   if (!employee) {
     return (
       <div
@@ -58,7 +60,7 @@ export function ConversationHeader({
           <Icon name="loader" size={12} className="animate-spin text-text-muted" />
         </span>
         {/* eslint-disable-next-line no-restricted-syntax */}
-        <span className="font-medium text-text">加载中…</span>
+        <span className="font-medium text-text">{t("loading")}</span>
       </div>
     );
   }
@@ -81,7 +83,7 @@ export function ConversationHeader({
         <Link
           href={`/employees/${employee.id}`}
           className="min-w-0 text-text hover:text-primary transition-colors duration-base"
-          aria-label={`查看员工 ${employee.name} 主页`}
+          aria-label={t("viewEmployee", { name: employee.name })}
         >
           <span className="font-semibold text-[14px] truncate">{employee.name}</span>
         </Link>
@@ -100,8 +102,8 @@ export function ConversationHeader({
           data-overridden={isOverridden ? "true" : "false"}
           title={
             isOverridden
-              ? `本对话覆盖为 ${effectiveModelRef}`
-              : `跟随员工默认 · ${effectiveModelRef}`
+              ? t("modelOverridden", { ref: effectiveModelRef ?? "" })
+              : t("modelInherited", { ref: effectiveModelRef ?? "" })
           }
           className={
             isOverridden

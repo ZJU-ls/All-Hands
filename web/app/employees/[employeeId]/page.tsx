@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState } from "@/components/state";
 import { Icon } from "@/components/ui/icon";
@@ -37,13 +38,14 @@ function avatarInitials(name: string): string {
   return trimmed.slice(0, 2).toUpperCase();
 }
 
-function modelDisplay(modelRef: string): string {
-  if (!modelRef) return "默认模型";
+function modelDisplay(modelRef: string, fallback: string): string {
+  if (!modelRef) return fallback;
   const idx = modelRef.indexOf("/");
   return idx >= 0 ? modelRef.slice(idx + 1) : modelRef;
 }
 
 export default function EmployeePage() {
+  const t = useTranslations("employees.detail");
   const { employeeId } = useParams<{ employeeId: string }>();
   const router = useRouter();
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
@@ -92,14 +94,14 @@ export default function EmployeePage() {
 
   return (
     <AppShell
-      title={employee?.name ?? "员工"}
+      title={employee?.name ?? t("shellTitleFallback")}
       actions={
         <Link
           href="/employees"
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition-colors duration-fast"
         >
           <Icon name="arrow-left" size={12} />
-          员工列表
+          {t("backToList")}
         </Link>
       }
     >
@@ -116,7 +118,7 @@ export default function EmployeePage() {
           )}
 
           {employee === null && !error ? (
-            <LoadingState title="加载员工" />
+            <LoadingState title={t("loadingEmployee")} />
           ) : employee ? (
             <>
               <HeroCard
@@ -132,13 +134,13 @@ export default function EmployeePage() {
               />
 
               <Section
-                title="挂载技能"
-                subtitle={`${employee.skill_ids.length} 项 · 激活时才注入 runtime`}
+                title={t("skillsTitle")}
+                subtitle={t("skillsSubtitle", { count: employee.skill_ids.length })}
                 icon="wand-2"
               >
                 {employee.skill_ids.length === 0 ? (
                   <p className="text-[12px] text-text-subtle italic">
-                    未挂载任何技能 · 仅具备基础工具调用能力。
+                    {t("skillsEmpty")}
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
@@ -156,7 +158,7 @@ export default function EmployeePage() {
                 {badges.length > 0 && (
                   <div className="mt-3 flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono text-caption uppercase tracking-wider text-text-subtle">
-                      profile
+                      {t("profileLabel")}
                     </span>
                     {badges.map((b) => (
                       <span
@@ -171,8 +173,8 @@ export default function EmployeePage() {
               </Section>
 
               <Section
-                title="系统提示词片段"
-                subtitle="在员工 system prompt 里叠加的段落 · 影响语气 / 禁忌 / 聚焦"
+                title={t("promptTitle")}
+                subtitle={t("promptSubtitle")}
                 icon="file-code-2"
               >
                 {employee.system_prompt?.trim() ? (
@@ -181,19 +183,19 @@ export default function EmployeePage() {
                   </pre>
                 ) : (
                   <p className="text-[12px] text-text-subtle italic">
-                    无自定义提示词 · 使用平台默认人设。
+                    {t("promptEmpty")}
                   </p>
                 )}
               </Section>
 
               <Section
-                title="最近对话"
+                title={t("conversationsTitle")}
                 subtitle={
                   conversations === null
-                    ? "加载中…"
+                    ? t("conversationsLoading")
                     : conversations.length === 0
-                      ? "还没有对话"
-                      : `${conversations.length} 条 · 点开继续`
+                      ? t("conversationsEmpty")
+                      : t("conversationsCount", { count: conversations.length })
                 }
                 icon="message-square"
                 actions={
@@ -207,12 +209,12 @@ export default function EmployeePage() {
                     {creating ? (
                       <>
                         <Icon name="loader" size={12} className="animate-spin" />
-                        创建中
+                        {t("creating")}
                       </>
                     ) : (
                       <>
                         <Icon name="plus" size={12} strokeWidth={2.25} />
-                        新对话
+                        {t("newConversation")}
                       </>
                     )}
                   </button>
@@ -235,7 +237,7 @@ export default function EmployeePage() {
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="text-[13px] text-text truncate">
-                              {c.title ?? "(无标题)"}
+                              {c.title ?? t("untitled")}
                             </p>
                             <p className="mt-0.5 font-mono text-caption text-text-subtle truncate">
                               {c.id.slice(0, 8)} ·{" "}
@@ -276,6 +278,7 @@ function HeroCard({
   creating: boolean;
   onNewConversation: () => void;
 }) {
+  const t = useTranslations("employees.detail");
   return (
     <section
       data-testid="employee-hero"
@@ -315,7 +318,7 @@ function HeroCard({
                 className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-primary text-primary-fg text-caption font-medium shadow-soft-sm"
               >
                 <Icon name="sparkles" size={10} />
-                Lead
+                {t("leadBadge")}
               </span>
             )}
             <span
@@ -330,7 +333,7 @@ function HeroCard({
                   employee.status === "draft" ? "bg-warning" : "bg-success"
                 }`}
               />
-              {employee.status === "draft" ? "草稿" : "已上岗"}
+              {employee.status === "draft" ? t("statusDraft") : t("statusPublished")}
             </span>
           </div>
           {employee.description ? (
@@ -338,20 +341,20 @@ function HeroCard({
               {employee.description}
             </p>
           ) : (
-            <p className="mt-2 text-[13px] text-text-subtle italic">暂无描述</p>
+            <p className="mt-2 text-[13px] text-text-subtle italic">{t("noDescription")}</p>
           )}
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-surface-2 border border-border font-mono text-caption text-text-muted">
               <Icon name="brain" size={11} strokeWidth={2} />
-              {modelDisplay(employee.model_ref)}
+              {modelDisplay(employee.model_ref, t("defaultModel"))}
             </span>
             <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-surface-2 border border-border font-mono text-caption text-text-muted">
               <Icon name="zap" size={11} strokeWidth={2} />
-              {employee.tool_ids.length} tools
+              {employee.tool_ids.length} {t("toolsLabel")}
             </span>
             <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-surface-2 border border-border font-mono text-caption text-text-muted">
               <Icon name="refresh" size={11} strokeWidth={2} />
-              {employee.max_iterations} 轮
+              {employee.max_iterations} {t("iterationsSuffix")}
             </span>
           </div>
         </div>
@@ -367,12 +370,12 @@ function HeroCard({
             {creating ? (
               <>
                 <Icon name="loader" size={14} className="animate-spin" />
-                打开中
+                {t("openingChat")}
               </>
             ) : (
               <>
                 <Icon name="send" size={14} />
-                开始对话
+                {t("startChat")}
               </>
             )}
           </button>
@@ -382,17 +385,17 @@ function HeroCard({
             className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
           >
             <Icon name="edit" size={14} />
-            编辑
+            {t("edit")}
           </Link>
           <Link
             href={`/chat?prefill=${encodeURIComponent(
-              `@${employee.name} 帮我完成一项任务:`,
+              t("dispatchPrefill", { name: employee.name }),
             )}`}
             data-testid="employee-hero-dispatch"
             className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
           >
             <Icon name="share-2" size={14} />
-            派发
+            {t("dispatch")}
           </Link>
         </div>
       </div>
@@ -411,31 +414,32 @@ function MetaStrip({
   employee: EmployeeDto;
   conversationCount: number;
 }) {
+  const t = useTranslations("employees.detail");
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       <HeroKpi
-        label="Conversations"
+        label={t("kpiConversations")}
         value={conversationCount.toString()}
         icon="message-square"
-        hint="累计对话数"
+        hint={t("kpiConversationsHint")}
       />
       <StatKpi
-        label="Skills"
+        label={t("kpiSkills")}
         value={employee.skill_ids.length}
         icon="wand-2"
-        hint="已挂载技能"
+        hint={t("kpiSkillsHint")}
       />
       <StatKpi
-        label="Tools"
+        label={t("kpiTools")}
         value={employee.tool_ids.length}
         icon="zap"
-        hint="可调工具"
+        hint={t("kpiToolsHint")}
       />
       <StatKpi
-        label="Max iter"
+        label={t("kpiMaxIter")}
         value={employee.max_iterations}
         icon="refresh"
-        hint="单次最大轮次"
+        hint={t("kpiMaxIterHint")}
         monoHint
       />
     </div>
@@ -595,6 +599,7 @@ function ConversationsSkeleton() {
 }
 
 function EmptyConversations({ employeeName }: { employeeName: string }) {
+  const t = useTranslations("employees.detail");
   return (
     <div className="relative overflow-hidden rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center">
       <div
@@ -611,10 +616,10 @@ function EmptyConversations({ employeeName }: { employeeName: string }) {
           <Icon name="message-square" size={20} strokeWidth={2} />
         </div>
         <p className="text-[14px] text-text">
-          还没有和 {employeeName} 的对话
+          {t("emptyConvosHeading", { name: employeeName })}
         </p>
         <p className="mt-1 text-[12px] text-text-muted">
-          点上方「新对话」开始第一段 · 对话会自动保存并出现在这里。
+          {t("emptyConvosBody")}
         </p>
       </div>
     </div>

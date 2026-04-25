@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState } from "@/components/state";
 import { TraceChip } from "@/components/runs/TraceChip";
@@ -194,6 +195,7 @@ function HealthPanel({
   icon: IconName;
   rows: Array<{ label: string; value: string; tone?: "success" | "warning" | "danger" | "muted" }>;
 }) {
+  const t = useTranslations("pages.observatory.panels");
   return (
     <div className="rounded-xl bg-surface border border-border shadow-soft-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 h-11 border-b border-border">
@@ -206,14 +208,14 @@ function HealthPanel({
         <button
           type="button"
           className="h-6 w-6 rounded-md text-text-subtle hover:text-text hover:bg-surface-2 grid place-items-center transition-colors duration-fast"
-          aria-label={`${title} more`}
+          aria-label={t("moreLabel", { title })}
         >
           <Icon name="more-horizontal" size={14} />
         </button>
       </div>
       <ul className="divide-y divide-border">
         {rows.length === 0 ? (
-          <li className="px-5 py-5 text-[12px] text-text-muted">还没有数据</li>
+          <li className="px-5 py-5 text-[12px] text-text-muted">{t("noData")}</li>
         ) : (
           rows.map((row, idx) => {
             const toneClass =
@@ -265,10 +267,11 @@ function TimeRangePills({
   value: TimeRange;
   onChange: (v: TimeRange) => void;
 }) {
+  const t = useTranslations("pages.observatory.range");
   const opts: Array<{ key: TimeRange; label: string }> = [
-    { key: "1h", label: "Last hour" },
-    { key: "24h", label: "24h" },
-    { key: "7d", label: "7d" },
+    { key: "1h", label: t("lastHour") },
+    { key: "24h", label: t("h24") },
+    { key: "7d", label: t("d7") },
   ];
   return (
     <div className="inline-flex p-1 rounded-lg bg-surface-2 border border-border">
@@ -294,6 +297,7 @@ function TimeRangePills({
 }
 
 export default function ObservatoryPage() {
+  const t = useTranslations("pages.observatory");
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [traces, setTraces] = useState<TraceSummaryDto[]>([]);
   const [state, setState] = useState<LoadState>("idle");
@@ -351,7 +355,7 @@ export default function ObservatoryPage() {
         : "bg-danger-soft";
 
   return (
-    <AppShell title="观测中心">
+    <AppShell title={t("title")}>
       <div className="h-full overflow-y-auto bg-bg">
         <div className="mx-auto max-w-[1400px] px-6 md:px-8 py-8 space-y-8">
           {/* HEADER */}
@@ -368,13 +372,13 @@ export default function ObservatoryPage() {
                     className="absolute inset-0 rounded-full bg-primary"
                   />
                 </span>
-                Observatory
+                {t("eyebrow")}
               </div>
               <h1 className="mt-2 text-[28px] md:text-[32px] font-semibold tracking-tight text-text">
-                Platform health at a glance
+                {t("heading")}
               </h1>
               <p className="mt-1 text-[13px] text-text-muted">
-                聚合 traces · runs · latency · cost · 一屏看清员工运行状态。
+                {t("subtitle")}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -390,7 +394,7 @@ export default function ObservatoryPage() {
                   size={13}
                   className={state === "loading" ? "animate-spin" : ""}
                 />
-                {state === "loading" ? "刷新中…" : "刷新"}
+                {state === "loading" ? t("refreshing") : t("refresh")}
               </button>
             </div>
           </header>
@@ -406,15 +410,15 @@ export default function ObservatoryPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-semibold text-text">
-                  Langfuse {statusLabel(summary.bootstrap_status)} · 追踪未连上
+                  {t("bootstrap.headlinePrefix")} {statusLabel(summary.bootstrap_status)} {t("bootstrap.headlineSuffix")}
                 </div>
                 <div className="mt-0.5 text-[12px] text-text-muted">
-                  Agent 运行照常,但每次 run 的 trace 会被丢弃。下方 Trace 列表读的是本地 events 表的 run.* 事件,不是 Langfuse。
+                  {t("bootstrap.body")}
                   {summary.bootstrap_error ? (
                     <>
                       {" "}
                       <span className="text-text-subtle font-mono">
-                        last · {summary.bootstrap_error}
+                        {t("bootstrap.lastPrefix")} {summary.bootstrap_error}
                       </span>
                     </>
                   ) : null}
@@ -431,7 +435,7 @@ export default function ObservatoryPage() {
                   size={12}
                   className={isRetrying ? "animate-spin" : ""}
                 />
-                {isRetrying ? "重试中…" : "重试 bootstrap"}
+                {isRetrying ? t("bootstrap.retrying") : t("bootstrap.retry")}
               </button>
             </div>
           ) : null}
@@ -446,9 +450,9 @@ export default function ObservatoryPage() {
                 <Icon name="alert-circle" size={16} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-text">加载失败</div>
+                <div className="text-[13px] font-semibold text-text">{t("loadFailed.title")}</div>
                 <div className="mt-0.5 text-[12px] text-text-muted">
-                  {error ?? "无法拉取观测数据,点右侧重试。"}
+                  {error ?? t("loadFailed.fallback")}
                 </div>
               </div>
               <button
@@ -457,7 +461,7 @@ export default function ObservatoryPage() {
                 className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-surface border border-border hover:border-border-strong text-[12px] font-medium text-text transition-colors duration-fast"
               >
                 <Icon name="refresh" size={12} />
-                重试
+                {t("loadFailed.action")}
               </button>
             </div>
           ) : null}
@@ -470,22 +474,22 @@ export default function ObservatoryPage() {
                   <KpiCard
                     hero
                     icon="activity"
-                    label="Uptime · 24h"
+                    label={t("kpi.uptime")}
                     value={formatPct(1 - summary.failure_rate_24h)}
                     delta={{
                       icon: "trending-up",
-                      text: "+0.2% vs yesterday",
+                      text: t("kpi.uptimeDelta"),
                       tone: "muted",
                     }}
                     sparkSeed={11}
                   />
                   <KpiCard
                     icon="zap"
-                    label="Latency p50"
+                    label={t("kpi.latency")}
                     value={formatDuration(summary.latency_p50_s)}
                     delta={{
                       icon: "trending-down",
-                      text: "快于上周",
+                      text: t("kpi.latencyDelta"),
                       tone: "success",
                     }}
                     sparkSeed={23}
@@ -493,14 +497,14 @@ export default function ObservatoryPage() {
                   />
                   <KpiCard
                     icon="alert-circle"
-                    label="Failure rate"
+                    label={t("kpi.failure")}
                     value={formatPct(summary.failure_rate_24h)}
                     delta={{
                       icon:
                         summary.failure_rate_24h > 0.02
                           ? "trending-up"
                           : "trending-down",
-                      text: summary.failure_rate_24h > 0.02 ? "警戒" : "稳定",
+                      text: summary.failure_rate_24h > 0.02 ? t("kpi.failureWarn") : t("kpi.failureStable"),
                       tone:
                         summary.failure_rate_24h > 0.05
                           ? "danger"
@@ -519,11 +523,11 @@ export default function ObservatoryPage() {
                   />
                   <KpiCard
                     icon="database"
-                    label="Avg tokens · run"
+                    label={t("kpi.tokens")}
                     value={summary.avg_tokens_per_run.toLocaleString()}
                     delta={{
                       icon: "trending-up",
-                      text: `${summary.traces_total.toLocaleString()} total traces`,
+                      text: t("kpi.tokensDelta", { count: summary.traces_total.toLocaleString() }),
                       tone: "muted",
                     }}
                     sparkSeed={53}
@@ -546,38 +550,38 @@ export default function ObservatoryPage() {
               {/* SECONDARY GRID */}
               <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <HealthPanel
-                  title="Langfuse · 追踪后端"
+                  title={t("panels.langfuse")}
                   icon="shield-check"
                   rows={[
                     {
-                      label: "Bootstrap status",
+                      label: t("panels.rows.bootstrap"),
                       value: statusLabel(summary.bootstrap_status),
                       tone: tone,
                     },
                     {
-                      label: "Observability",
-                      value: summary.observability_enabled ? "enabled" : "disabled",
+                      label: t("panels.rows.observability"),
+                      value: summary.observability_enabled ? t("panels.values.enabled") : t("panels.values.disabled"),
                       tone: summary.observability_enabled ? "success" : "warning",
                     },
                     {
-                      label: "Host",
+                      label: t("panels.rows.host"),
                       value: summary.host ?? "—",
                       tone: "muted",
                     },
                     {
-                      label: "Total traces",
+                      label: t("panels.rows.totalTraces"),
                       value: summary.traces_total.toLocaleString(),
                     },
                   ]}
                 />
                 <HealthPanel
-                  title="Top employees · 24h"
+                  title={t("panels.topEmployees")}
                   icon="users"
                   rows={
                     summary.by_employee.length > 0
                       ? summary.by_employee.slice(0, 6).map((row) => ({
                           label: row.employee_name,
-                          value: `${row.runs_count.toLocaleString()} runs`,
+                          value: t("panels.values.runs", { count: row.runs_count.toLocaleString() }),
                         }))
                       : []
                   }
@@ -590,16 +594,16 @@ export default function ObservatoryPage() {
                   <div className="flex items-baseline justify-between mb-3">
                     <h2 className="text-[18px] font-semibold tracking-tight text-text flex items-center gap-2">
                       <Icon name="alert-triangle" size={16} className="text-danger" />
-                      Recent incidents
+                      {t("incidents.title")}
                     </h2>
                     <span className="text-[11px] font-mono text-text-subtle">
-                      {incidents.length} failed
+                      {t("incidents.count", { count: incidents.length })}
                     </span>
                   </div>
                   <div className="space-y-2">
-                    {incidents.map((t) => (
+                    {incidents.map((row) => (
                       <div
-                        key={t.trace_id}
+                        key={row.trace_id}
                         className="relative overflow-hidden rounded-lg bg-surface border border-border shadow-soft-sm hover:shadow-soft transition-shadow duration-base pl-4 pr-4 py-3"
                       >
                         <div
@@ -610,20 +614,20 @@ export default function ObservatoryPage() {
                           <div className="flex items-center gap-3 min-w-0">
                             <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-mono bg-danger-soft text-danger">
                               <Icon name="alert-circle" size={11} />
-                              failed
+                              {t("traces.status.failed")}
                             </span>
-                            <TraceChip runId={t.trace_id} label={t.trace_id} />
+                            <TraceChip runId={row.trace_id} label={row.trace_id} />
                             <span className="text-[12px] text-text truncate">
-                              {t.employee_name ?? t.employee_id ?? "—"}
+                              {row.employee_name ?? row.employee_id ?? "—"}
                             </span>
                           </div>
                           <div className="shrink-0 flex items-center gap-4 text-[11px] font-mono text-text-muted tabular-nums">
                             <span className="inline-flex items-center gap-1">
                               <Icon name="clock" size={11} />
-                              {formatDuration(t.duration_s)}
+                              {formatDuration(row.duration_s)}
                             </span>
-                            <span>{t.tokens.toLocaleString()} tok</span>
-                            <span className="hidden md:inline">{formatDate(t.started_at)}</span>
+                            <span>{row.tokens.toLocaleString()} {t("incidents.tokensSuffix")}</span>
+                            <span className="hidden md:inline">{formatDate(row.started_at)}</span>
                           </div>
                         </div>
                       </div>
@@ -637,18 +641,18 @@ export default function ObservatoryPage() {
                 <div className="flex items-baseline justify-between mb-3">
                   <h2 className="text-[18px] font-semibold tracking-tight text-text flex items-center gap-2">
                     <Icon name="activity" size={16} className="text-primary" />
-                    近 50 条 trace
+                    {t("traces.title")}
                   </h2>
                   <div className="inline-flex items-center gap-2 text-[11px] font-mono text-text-subtle">
                     <span className={`inline-block w-1.5 h-1.5 rounded-full ${toneDot}`} />
-                    Langfuse {statusLabel(summary.bootstrap_status)}
+                    {t("bootstrap.headlinePrefix")} {statusLabel(summary.bootstrap_status)}
                   </div>
                 </div>
 
                 {traces.length === 0 ? (
                   <EmptyState
-                    title="还没有 run 事件"
-                    description="和 Lead 对话发起第一条任务,这里会出现 trace 摘要。"
+                    title={t("traces.empty.title")}
+                    description={t("traces.empty.description")}
                   />
                 ) : (
                   <div className="rounded-xl bg-surface border border-border shadow-soft-sm overflow-hidden">
@@ -656,58 +660,58 @@ export default function ObservatoryPage() {
                       <thead>
                         <tr className="bg-surface-2 text-left text-text-subtle border-b border-border">
                           <th className="py-2.5 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium">
-                            trace
+                            {t("traces.headers.trace")}
                           </th>
                           <th className="py-2.5 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium">
-                            employee
+                            {t("traces.headers.employee")}
                           </th>
                           <th className="py-2.5 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium">
-                            status
+                            {t("traces.headers.status")}
                           </th>
                           <th className="py-2.5 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
-                            duration
+                            {t("traces.headers.duration")}
                           </th>
                           <th className="py-2.5 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
-                            tokens
+                            {t("traces.headers.tokens")}
                           </th>
                           <th className="py-2.5 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium">
-                            started
+                            {t("traces.headers.started")}
                           </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {traces.map((t) => (
+                        {traces.map((row) => (
                           <tr
-                            key={t.trace_id}
+                            key={row.trace_id}
                             className="border-b border-border last:border-b-0 hover:bg-surface-2 transition-colors duration-fast"
                           >
                             <td className="py-2.5 px-4 font-mono text-[11px] text-text-muted truncate max-w-[220px]">
-                              <TraceChip runId={t.trace_id} label={t.trace_id} />
+                              <TraceChip runId={row.trace_id} label={row.trace_id} />
                             </td>
                             <td className="py-2.5 px-4 text-text">
-                              {t.employee_name ?? t.employee_id ?? "—"}
+                              {row.employee_name ?? row.employee_id ?? "—"}
                             </td>
                             <td className="py-2.5 px-4">
-                              {t.status === "failed" ? (
+                              {row.status === "failed" ? (
                                 <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-mono bg-danger-soft text-danger">
                                   <Icon name="alert-circle" size={11} />
-                                  failed
+                                  {t("traces.status.failed")}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-mono bg-success-soft text-success">
                                   <Icon name="check-circle-2" size={11} />
-                                  ok
+                                  {t("traces.status.ok")}
                                 </span>
                               )}
                             </td>
                             <td className="py-2.5 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                              {formatDuration(t.duration_s)}
+                              {formatDuration(row.duration_s)}
                             </td>
                             <td className="py-2.5 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                              {t.tokens.toLocaleString()}
+                              {row.tokens.toLocaleString()}
                             </td>
                             <td className="py-2.5 px-4 text-text-muted">
-                              {formatDate(t.started_at)}
+                              {formatDate(row.started_at)}
                             </td>
                           </tr>
                         ))}

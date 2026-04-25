@@ -36,6 +36,7 @@ from langchain_core.messages import HumanMessage
 
 from allhands.core.errors import DomainError
 from allhands.execution.llm_factory import build_llm
+from allhands.i18n import t
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -230,7 +231,7 @@ async def explain_skill_stream(
 
     provider = await provider_repo.get_default()
     if provider is None:
-        raise DomainError("尚未配置默认 LLM 供应商 — 请先到「模型网关」选一家供应商并标记为默认。")
+        raise DomainError(t("errors.no_default_provider"))
 
     prompt_text = _build_skill_explain_prompt(
         skill, _format_tool_block(skill.tool_ids, tool_registry)
@@ -281,7 +282,7 @@ async def explain_market_skill_stream(
 
     provider = await provider_repo.get_default()
     if provider is None:
-        raise DomainError("尚未配置默认 LLM 供应商 — 请先到「模型网关」选一家供应商并标记为默认。")
+        raise DomainError(t("errors.no_default_provider"))
 
     prompt_text = _build_market_explain_prompt(
         name=name,
@@ -324,7 +325,7 @@ async def compose_employee_prompt_stream(
     """
     provider = await provider_repo.get_default()
     if provider is None:
-        raise DomainError("尚未配置默认 LLM 供应商 — 请先到「模型网关」选一家供应商并标记为默认。")
+        raise DomainError(t("errors.no_default_provider"))
 
     skills: list[Skill] = []
     for sid in skill_ids:

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@/tests/test-utils/i18n-render";
 import type { ArtifactDto } from "@/lib/artifacts-api";
 
 // --- module mocks ---------------------------------------------------------

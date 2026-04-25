@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
+import { render } from "@/tests/test-utils/i18n-render";
 
 import { BrandMark, resolveBrand } from "../BrandMark";
 

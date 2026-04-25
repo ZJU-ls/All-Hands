@@ -10,11 +10,13 @@
 
 import { useCallback, useEffect } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { RunTracePanel } from "./RunTracePanel";
 import { TRACE_QUERY_KEY } from "./TraceChip";
 
 export function RunTraceDrawer() {
+  const t = useTranslations("runs.traceDrawer");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -47,13 +49,13 @@ export function RunTraceDrawer() {
     >
       <button
         type="button"
-        aria-label="关闭 trace"
+        aria-label={t("closeTrace")}
         onClick={close}
         className="flex-1 bg-black/60 backdrop-blur-sm"
       />
       <aside
         role="dialog"
-        aria-label={`Trace ${runId}`}
+        aria-label={t("ariaLabel", { id: runId })}
         className="flex h-full w-[420px] shrink-0 flex-col border-l border-border bg-surface shadow-soft-lg"
       >
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-surface-2/40 px-4">
@@ -66,7 +68,7 @@ export function RunTraceDrawer() {
             </span>
             <div className="min-w-0">
               <div className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-                trace
+                {t("traceLabel")}
               </div>
               <div className="truncate font-mono text-caption text-text">
                 {runId}
@@ -76,7 +78,7 @@ export function RunTraceDrawer() {
           <button
             type="button"
             onClick={close}
-            aria-label="关闭"
+            aria-label={t("close")}
             data-testid="run-trace-drawer-close"
             className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-text-muted transition-colors duration-base hover:border-border-strong hover:bg-surface-2 hover:text-text"
           >

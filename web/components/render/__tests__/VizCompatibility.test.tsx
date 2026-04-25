@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/tests/test-utils/i18n-render";
 import { Stat } from "../Viz/Stat";
 import { LineChart } from "../Viz/LineChart";
 import { BarChart } from "../Viz/BarChart";

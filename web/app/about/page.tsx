@@ -1,10 +1,12 @@
 "use client";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon } from "@/components/ui/icon";
 
 export default function AboutPage() {
+  const t = useTranslations("pages.about");
   return (
-    <AppShell title="关于">
+    <AppShell title={t("title")}>
       <div className="h-full overflow-y-auto">
         <div className="mx-auto max-w-3xl px-8 py-12 animate-fade-up">
           {/* Hero card */}
@@ -45,15 +47,15 @@ export default function AboutPage() {
                 </span>
               </h1>
               <p className="mt-3 text-base text-text">
-                One for All — 开源自部署的数字员工组织平台。
+                {t("tagline")}
               </p>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted">
-                通过与 Lead Agent 对话来设计、调度并观测一支员工团队。所有能力以 Tool 的形式注册,前端菜单只是入口,后端遵循 Tool First 原则。
+                {t("description")}
               </p>
               <div className="mt-6 inline-flex h-6 items-center gap-2 rounded-full border border-border bg-surface px-2.5 shadow-soft-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-success" />
                 <span className="font-mono text-caption text-text-muted uppercase tracking-wider">
-                  v0 · mvp
+                  {t("version")}
                 </span>
               </div>
             </div>
@@ -63,18 +65,18 @@ export default function AboutPage() {
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
             <Fact
               icon="layout-grid"
-              label="核心原则"
-              body="Tool First · 统一 React Agent · Pure Query Loop · Skill 渐进加载 · Subagent 组合 · L4 护栏"
+              label={t("facts.principles.label")}
+              body={t("facts.principles.body")}
             />
             <Fact
               icon="users"
-              label="数字员工"
-              body="每个 agent 都是配置 (model · skills · tools · system prompt) · 没有 mode 字段"
+              label={t("facts.employees.label")}
+              body={t("facts.employees.body")}
             />
             <Fact
               icon="shield-check"
-              label="护栏可控"
-              body="Tool 必须声明 scope · WRITE 默认要确认 · IRREVERSIBLE 走双重确认"
+              label={t("facts.guardrails.label")}
+              body={t("facts.guardrails.body")}
             />
           </div>
         </div>

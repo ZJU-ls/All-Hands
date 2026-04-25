@@ -1,10 +1,12 @@
 "use client";
+import { useTranslations } from "next-intl";
 import { PlaceholderPage } from "@/components/shell/PlaceholderPage";
 export default function Page() {
+  const t = useTranslations("pages.confirmations");
   return (
     <PlaceholderPage
-      title="审批"
-      description="查看和处理待审批的 L4 工具调用。"
+      title={t("title")}
+      description={t("description")}
     />
   );
 }

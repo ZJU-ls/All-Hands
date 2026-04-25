@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { createConversation } from "@/lib/api";
 import { AppShell } from "@/components/shell/AppShell";
 import { hasCompletedFirstRun } from "@/lib/first-run";
@@ -12,6 +13,7 @@ const CONVERSATION_STORAGE_KEY = "allhands_conversation_id";
 
 export default function ChatPage() {
   const router = useRouter();
+  const t = useTranslations("chat.page");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export default function ChatPage() {
 
         const res = await fetch("/api/employees/lead");
         if (!res.ok) {
-          setError("后端未就绪,请确认服务已启动。");
+          setError(t("backendNotReady"));
           return;
         }
         const lead = (await res.json()) as { id: string };
@@ -43,18 +45,18 @@ export default function ChatPage() {
       }
     }
     void bootstrap();
-  }, [router]);
+  }, [router, t]);
 
   return (
-    <AppShell title="对话">
+    <AppShell title={t("shellTitle")}>
       <div className="flex h-full items-center justify-center p-8">
         {error ? (
           <div className="text-sm max-w-md text-center">
-            <p className="font-semibold mb-2 text-danger">连接错误</p>
+            <p className="font-semibold mb-2 text-danger">{t("connectionError")}</p>
             <p className="text-text-muted">{error}</p>
           </div>
         ) : (
-          <p className="text-text-muted text-sm">正在初始化对话…</p>
+          <p className="text-text-muted text-sm">{t("initializing")}</p>
         )}
       </div>
     </AppShell>

@@ -23,6 +23,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -46,24 +47,6 @@ type Channel = {
 type TestOutcome = { ok: boolean; detail: string; latency_ms: number };
 
 type Tab = "registered" | "add";
-
-const KIND_LABEL: Record<ChannelKind, string> = {
-  telegram: "Telegram",
-  bark: "Bark (iOS)",
-  wecom: "企业微信",
-  feishu: "飞书",
-  email: "邮件 (SMTP)",
-  pushdeer: "PushDeer",
-};
-
-const KIND_HINT: Record<ChannelKind, string> = {
-  telegram: "bot_token + chat_id · 双向",
-  bark: "device_key · 单向 iOS 推送",
-  wecom: "corp_id + corp_secret + agent_id · v0 stub",
-  feishu: "webhook_url + signing_secret · v0 stub",
-  email: "SMTP host/port/credentials · v0 stub",
-  pushdeer: "push_key · v0 stub",
-};
 
 const KIND_CONFIG_FIELDS: Record<ChannelKind, string[]> = {
   telegram: ["bot_token", "chat_id"],
@@ -110,6 +93,7 @@ function emptyDraft(kind: ChannelKind = "telegram"): CreateDraft {
 }
 
 export default function ChannelsPage() {
+  const t = useTranslations("channels.list");
   const [tab, setTab] = useState<Tab>("registered");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -167,7 +151,7 @@ export default function ChannelsPage() {
   const kpis = useMemo(() => buildKpis(channels), [channels]);
 
   return (
-    <AppShell title="通知渠道">
+    <AppShell title={t("title")}>
       <div className="h-full overflow-y-auto">
         <div className="max-w-6xl mx-auto px-6 md:px-8 py-8 space-y-6 animate-fade-up">
           {/* Hero · eyebrow + h1 + primary CTA */}
@@ -175,10 +159,10 @@ export default function ChannelsPage() {
             <div className="min-w-0">
               <div className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.18em] text-text-subtle">
                 <span className="inline-block h-1 w-1 rounded-full bg-primary" />
-                Platform Notifications
+                {t("eyebrow")}
               </div>
               <h1 className="mt-1.5 text-[26px] md:text-[28px] font-bold tracking-tight text-text leading-tight">
-                通知{" "}
+                {t("headlineLead")}{" "}
                 <span
                   className="bg-clip-text text-transparent"
                   style={{
@@ -186,13 +170,11 @@ export default function ChannelsPage() {
                       "linear-gradient(120deg, var(--color-primary), color-mix(in srgb, var(--color-accent, var(--color-primary)) 85%, var(--color-primary)))",
                   }}
                 >
-                  渠道
+                  {t("headlineGradient")}
                 </span>
               </h1>
               <p className="mt-1.5 max-w-2xl text-sm text-text-muted leading-relaxed">
-                平台级通知出口 · 任何 skill / trigger / agent 调用{" "}
-                <span className="font-mono text-text">send_notification</span>{" "}
-                即可触达用户 · Telegram 与 Bark 为 v0 真实可用,其他为 stub
+                {t("subtitle")}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -200,10 +182,10 @@ export default function ChannelsPage() {
                 type="button"
                 onClick={() => void load()}
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[12px] font-medium text-text hover:border-border-strong hover:shadow-soft-sm transition duration-base"
-                aria-label="刷新"
+                aria-label={t("refresh")}
               >
                 <Icon name="refresh" size={14} />
-                刷新
+                {t("refresh")}
               </button>
               <button
                 type="button"
@@ -212,7 +194,7 @@ export default function ChannelsPage() {
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-[12px] font-semibold text-primary-fg shadow-soft hover:bg-primary-hover hover:-translate-y-px transition duration-base"
               >
                 <Icon name="plus" size={14} />
-                注册渠道
+                {t("registerChannel")}
               </button>
             </div>
           </div>
@@ -222,32 +204,32 @@ export default function ChannelsPage() {
             <KpiCard
               variant="gradient"
               icon="bell"
-              label="注册总数"
+              label={t("kpiTotal")}
               value={kpis.total}
-              hint={kpis.total === 0 ? "尚未注册" : "所有 kind"}
+              hint={kpis.total === 0 ? t("kpiTotalEmpty") : t("kpiTotalAllKinds")}
             />
             <KpiCard
               icon="check-circle-2"
-              label="启用中"
+              label={t("kpiActive")}
               value={kpis.active}
               hint={
                 kpis.total > 0 && kpis.active === kpis.total
-                  ? "全部启用"
-                  : `${kpis.total - kpis.active} 个已停用`
+                  ? t("kpiActiveAll")
+                  : t("kpiActiveSomeDisabled", { count: kpis.total - kpis.active })
               }
               tone={kpis.total > 0 && kpis.active === kpis.total ? "success" : "neutral"}
             />
             <KpiCard
               icon="arrow-down"
-              label="入站已接"
+              label={t("kpiInbound")}
               value={kpis.inbound}
-              hint={kpis.inbound === 0 ? "无双向渠道" : "可接收用户回复"}
+              hint={kpis.inbound === 0 ? t("kpiInboundEmpty") : t("kpiInboundActive")}
             />
             <KpiCard
               icon="shield-check"
-              label="自动批准"
+              label={t("kpiAutoApprove")}
               value={kpis.autoApprove}
-              hint={kpis.autoApprove === 0 ? "全走 Gate" : "跳过 ConfirmationGate"}
+              hint={kpis.autoApprove === 0 ? t("kpiAutoApproveAll") : t("kpiAutoApproveSome")}
               tone={kpis.autoApprove > 0 ? "warning" : "neutral"}
             />
           </div>
@@ -256,8 +238,8 @@ export default function ChannelsPage() {
           <div role="tablist" className="flex items-center gap-1 border-b border-border">
             {(
               [
-                ["registered", "已注册", "list"],
-                ["add", "注册新渠道", "plus"],
+                ["registered", t("tabRegistered"), "list"],
+                ["add", t("tabAdd"), "plus"],
               ] as [Tab, string, IconName][]
             ).map(([key, label, icon]) => (
               <button
@@ -299,7 +281,7 @@ export default function ChannelsPage() {
                 <Icon name="alert-circle" size={16} />
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-danger">加载渠道失败</p>
+                <p className="text-sm font-semibold text-danger">{t("loadFailed")}</p>
                 <p className="mt-0.5 text-xs text-text-muted font-mono truncate">{error}</p>
               </div>
               <button
@@ -307,7 +289,7 @@ export default function ChannelsPage() {
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-xs font-medium text-text hover:border-border-strong hover:shadow-soft-sm transition duration-base"
               >
                 <Icon name="refresh" size={12} />
-                重试
+                {t("retry")}
               </button>
             </div>
           )}
@@ -340,14 +322,14 @@ export default function ChannelsPage() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="删除渠道?"
+        title={t("deleteConfirm.title")}
         message={
           deleteTarget
-            ? `该操作不可撤销。渠道 ${deleteTarget.display_name} 的订阅和消息审计都会被级联删除。`
+            ? t("deleteConfirm.message", { name: deleteTarget.display_name })
             : ""
         }
-        confirmLabel={deleting ? "删除中…" : "删除"}
-        cancelLabel="取消"
+        confirmLabel={deleting ? t("deleteConfirm.deleting") : t("deleteConfirm.confirm")}
+        cancelLabel={t("deleteConfirm.cancel")}
         danger
         busy={deleting}
         onConfirm={handleDeleteConfirmed}
@@ -453,38 +435,38 @@ function buildKpis(channels: Channel[]) {
 // Channel card target summary
 // ────────────────────────────────────────────────────────────────────────────
 
-function targetSummary(ch: Channel): string {
+function targetSummary(ch: Channel, tt: (key: string) => string): string {
   const cfg = ch.config as Record<string, unknown>;
   const str = (k: string): string =>
     typeof cfg[k] === "string" ? (cfg[k] as string) : "";
   switch (ch.kind) {
     case "telegram": {
       const chat = str("chat_id");
-      return chat ? `chat_id=${chat}` : "未配置 chat_id";
+      return chat ? `chat_id=${chat}` : tt("noChatId");
     }
     case "bark": {
       const key = str("device_key");
-      return key ? `device=${maskTail(key)}` : "未配置 device_key";
+      return key ? `device=${maskTail(key)}` : tt("noDeviceKey");
     }
     case "email": {
       const to = str("to_addr");
       const host = str("smtp_host");
       if (to) return `→ ${to}`;
-      return host ? `smtp=${host}` : "未配置 SMTP";
+      return host ? `smtp=${host}` : tt("noSmtp");
     }
     case "feishu": {
       const url = str("webhook_url");
-      return url ? url : "未配置 webhook_url";
+      return url ? url : tt("noWebhookUrl");
     }
     case "wecom": {
       const corp = str("corp_id");
       const agent = str("agent_id");
       if (corp) return `corp=${corp}${agent ? ` · agent=${agent}` : ""}`;
-      return "未配置 corp_id";
+      return tt("noCorpId");
     }
     case "pushdeer": {
       const key = str("push_key");
-      return key ? `push_key=${maskTail(key)}` : "未配置 push_key";
+      return key ? `push_key=${maskTail(key)}` : tt("noPushKey");
     }
     default:
       return JSON.stringify(ch.config);
@@ -551,6 +533,9 @@ function ChannelCard({
   onTest: (c: Channel) => void;
   onDelete: (c: Channel) => void;
 }) {
+  const t = useTranslations("channels.list");
+  const tKindLabel = useTranslations("channels.list.kindLabel");
+  const tTarget = useTranslations("channels.list.target");
   const cardClass = featured
     ? "group relative overflow-hidden rounded-xl border border-primary/40 bg-gradient-to-br from-primary/10 via-surface to-surface shadow-soft-lg hover:shadow-soft-lg hover:-translate-y-px transition duration-base"
     : "group relative overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm hover:border-border-strong hover:shadow-soft hover:-translate-y-px transition duration-base";
@@ -559,7 +544,7 @@ function ChannelCard({
     ? "text-success border-success/30 bg-success-soft"
     : "text-text-muted border-border bg-surface-2";
   const statusDot = channel.enabled ? "bg-success" : "bg-text-subtle";
-  const statusLabel = channel.enabled ? "启用" : "停用";
+  const statusLabel = channel.enabled ? t("statusEnabled") : t("statusDisabled");
 
   return (
     <div data-testid={`channel-${channel.id}`} className={cardClass}>
@@ -597,7 +582,7 @@ function ChannelCard({
             </div>
             <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-border bg-surface-2 text-text-muted text-[10px] font-mono">
-                {KIND_LABEL[channel.kind]}
+                {tKindLabel(channel.kind)}
               </span>
               <span
                 className={`inline-flex items-center gap-1 h-5 px-2 rounded-full border text-[10px] font-medium ${statusChip}`}
@@ -621,7 +606,7 @@ function ChannelCard({
               {channel.auto_approve_outbound && (
                 <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-warning/30 bg-warning-soft text-warning text-[10px] font-medium">
                   <Icon name="shield-check" size={10} />
-                  自动批准
+                  {t("autoApproveChip")}
                 </span>
               )}
             </div>
@@ -631,7 +616,7 @@ function ChannelCard({
         {/* Target mono row */}
         <div className="mt-3 rounded-lg border border-border bg-bg px-3 py-2 min-w-0">
           <p className="text-[11px] font-mono text-text-muted truncate">
-            {targetSummary(channel)}
+            {targetSummary(channel, tTarget)}
           </p>
         </div>
 
@@ -643,21 +628,21 @@ function ChannelCard({
                 <>
                   <Icon name="check-circle-2" size={11} className="text-success" />
                   <span className="text-success font-mono tabular-nums">
-                    ok · {testOutcome.latency_ms}ms
+                    {t("lastTestOk", { ms: testOutcome.latency_ms })}
                   </span>
                 </>
               ) : (
                 <>
                   <Icon name="alert-circle" size={11} className="text-danger" />
                   <span className="text-danger font-mono truncate">
-                    fail · {testOutcome.detail || "错误"}
+                    {t("lastTestFail", { detail: testOutcome.detail || t("lastTestFailFallback") })}
                   </span>
                 </>
               )
             ) : (
               <>
                 <Icon name="clock" size={11} className="text-text-subtle" />
-                <span className="text-text-subtle">尚未测试</span>
+                <span className="text-text-subtle">{t("lastTestNone")}</span>
               </>
             )}
           </span>
@@ -672,12 +657,12 @@ function ChannelCard({
               {testing ? (
                 <>
                   <Icon name="loader" size={11} className="animate-spin-slow" />
-                  测试中
+                  {t("testing")}
                 </>
               ) : (
                 <>
                   <Icon name="send" size={11} />
-                  测试
+                  {t("test")}
                 </>
               )}
             </button>
@@ -687,7 +672,7 @@ function ChannelCard({
               className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2.5 text-[11px] font-medium text-text hover:border-border-strong transition duration-base"
             >
               <Icon name="edit" size={11} />
-              编辑
+              {t("edit")}
             </Link>
             <button
               type="button"
@@ -696,7 +681,7 @@ function ChannelCard({
               className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2.5 text-[11px] font-medium text-danger hover:border-danger/40 hover:bg-danger-soft transition duration-base"
             >
               <Icon name="trash-2" size={11} />
-              删除
+              {t("delete")}
             </button>
           </div>
         </div>
@@ -742,6 +727,7 @@ function ChannelsSkeleton() {
 }
 
 function EmptyChannels({ onAdd }: { onAdd: () => void }) {
+  const t = useTranslations("channels.list.empty");
   return (
     <div
       data-testid="channels-empty"
@@ -775,12 +761,10 @@ function EmptyChannels({ onAdd }: { onAdd: () => void }) {
           <Icon name="bell" size={36} strokeWidth={1.5} />
         </div>
         <h3 className="mt-6 text-display font-bold tracking-tight text-text">
-          Connect your first channel
+          {t("title")}
         </h3>
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-text-muted">
-          注册一个通知出口,任何 skill / trigger / agent 调用{" "}
-          <span className="font-mono text-text">send_notification</span> 就能触达你。或在对话里让
-          Lead Agent 用 <span className="font-mono text-text">register_channel</span> 代办。
+          {t("description")}
         </p>
         <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
           <button
@@ -790,18 +774,18 @@ function EmptyChannels({ onAdd }: { onAdd: () => void }) {
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary text-primary-fg text-[13px] font-semibold shadow-soft hover:bg-primary-hover hover:-translate-y-px transition duration-base"
           >
             <Icon name="plus" size={14} />
-            注册渠道
+            {t("register")}
           </button>
           <Link
             href="/chat"
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-surface border border-border text-[13px] font-semibold text-text hover:border-primary hover:text-primary hover:-translate-y-px transition duration-base"
           >
             <Icon name="sparkles" size={14} />
-            让 Lead Agent 代办
+            {t("askAgent")}
           </Link>
         </div>
         <div className="mt-8 flex items-center justify-center gap-2 text-[11px] text-text-subtle flex-wrap">
-          <span className="font-mono uppercase tracking-wider">Popular presets</span>
+          <span className="font-mono uppercase tracking-wider">{t("popularPresets")}</span>
           {KINDS.map((k) => (
             <span
               key={k}
@@ -828,6 +812,9 @@ function CreateForm({
   onCreated: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useTranslations("channels.list.form");
+  const tKindLabel = useTranslations("channels.list.kindLabel");
+  const tKindHint = useTranslations("channels.list.kindHint");
   const [draft, setDraft] = useState<CreateDraft>(emptyDraft("telegram"));
   const [submitting, setSubmitting] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -843,7 +830,7 @@ function CreateForm({
   async function handleSubmit() {
     setErr("");
     if (!draft.display_name.trim()) {
-      setErr("请填 display_name");
+      setErr(t("needDisplayName"));
       return;
     }
     setSubmitting(true);
@@ -918,20 +905,20 @@ function CreateForm({
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-[14px] font-semibold text-text leading-tight">
-            注册新渠道
+            {t("title")}
           </h3>
           <p className="mt-0.5 text-[11px] text-text-muted">
-            选择 kind · 填写连接参数 · 建议先「测试投递」再提交
+            {t("subtitle")}
           </p>
         </div>
       </div>
 
       <div className="p-5 flex flex-col gap-5">
         {/* Section 1 · Kind radio cards */}
-        <Section icon="layout-grid" title="Kind">
+        <Section icon="layout-grid" title={t("sectionKind")}>
           <div
             role="radiogroup"
-            aria-label="渠道 kind"
+            aria-label={t("kindAria")}
             data-testid="kind-select"
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"
           >
@@ -967,7 +954,7 @@ function CreateForm({
                         active ? "text-primary" : "text-text"
                       }`}
                     >
-                      {KIND_LABEL[k]}
+                      {tKindLabel(k)}
                     </span>
                     {active && (
                       <Icon
@@ -982,7 +969,7 @@ function CreateForm({
                       active ? "text-primary/80" : "text-text-muted"
                     }`}
                   >
-                    {KIND_HINT[k]}
+                    {tKindHint(k)}
                   </p>
                 </button>
               );
@@ -991,18 +978,18 @@ function CreateForm({
         </Section>
 
         {/* Section 2 · Basics */}
-        <Section icon="info" title="基础信息">
+        <Section icon="info" title={t("sectionBasics")}>
           <Field
-            label="显示名称"
+            label={t("displayName")}
             value={draft.display_name}
             onChange={(v) => setDraft((d) => ({ ...d, display_name: v }))}
-            placeholder="例如:我的 Telegram Bot"
+            placeholder={t("displayNamePlaceholder")}
             testid="field-display-name"
           />
         </Section>
 
         {/* Section 3 · Kind-specific config */}
-        <Section icon="settings" title={`${KIND_LABEL[draft.kind]} · 配置`}>
+        <Section icon="settings" title={t("sectionConfig", { kind: tKindLabel(draft.kind) })}>
           <div className="flex flex-col gap-3">
             {KIND_CONFIG_FIELDS[draft.kind].map((field) => (
               <Field
@@ -1020,7 +1007,7 @@ function CreateForm({
               />
             ))}
             <Field
-              label="webhook_secret (可选)"
+              label={t("webhookSecret")}
               mono
               value={draft.webhook_secret}
               onChange={(v) => setDraft((d) => ({ ...d, webhook_secret: v }))}
@@ -1030,25 +1017,25 @@ function CreateForm({
         </Section>
 
         {/* Section 4 · Toggles */}
-        <Section icon="shield-check" title="路由与策略">
+        <Section icon="shield-check" title={t("sectionRouting")}>
           <div className="flex flex-col gap-2">
             <ToggleRow
-              label="接收入站消息 (inbound)"
-              hint="用户可从此渠道回复 · 仅 Telegram 在 v0 生效"
+              label={t("toggleInbound")}
+              hint={t("toggleInboundHint")}
               checked={draft.inbound_enabled}
               onChange={(v) => setDraft((d) => ({ ...d, inbound_enabled: v }))}
               testid="toggle-inbound"
             />
             <ToggleRow
-              label="允许出站 (outbound)"
-              hint="关闭则 send_notification 会报错"
+              label={t("toggleOutbound")}
+              hint={t("toggleOutboundHint")}
               checked={draft.outbound_enabled}
               onChange={(v) => setDraft((d) => ({ ...d, outbound_enabled: v }))}
               testid="toggle-outbound"
             />
             <ToggleRow
-              label="自动批准出站"
-              hint="跳过 ConfirmationGate · 仅限低风险渠道"
+              label={t("toggleAutoApprove")}
+              hint={t("toggleAutoApproveHint")}
               checked={draft.auto_approve_outbound}
               onChange={(v) =>
                 setDraft((d) => ({ ...d, auto_approve_outbound: v }))
@@ -1077,8 +1064,8 @@ function CreateForm({
             />
             <span className="font-mono min-w-0 break-words">
               {testResult.ok
-                ? `投递成功 · ${testResult.latency_ms}ms`
-                : `投递失败 · ${testResult.detail || "unknown"}`}
+                ? t("deliverOk", { ms: testResult.latency_ms })
+                : t("deliverFail", { detail: testResult.detail || t("deliverFailUnknown") })}
             </span>
           </div>
         )}
@@ -1106,12 +1093,12 @@ function CreateForm({
             {testing ? (
               <>
                 <Icon name="loader" size={13} className="animate-spin-slow" />
-                投递中
+                {t("testing")}
               </>
             ) : (
               <>
                 <Icon name="send" size={13} />
-                测试投递
+                {t("testDelivery")}
               </>
             )}
           </button>
@@ -1122,7 +1109,7 @@ function CreateForm({
               disabled={submitting}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[12px] font-medium text-text-muted hover:text-text hover:border-border-strong disabled:opacity-40 transition duration-base"
             >
-              取消
+              {t("cancel")}
             </button>
             <button
               type="button"
@@ -1134,12 +1121,12 @@ function CreateForm({
               {submitting ? (
                 <>
                   <Icon name="loader" size={13} className="animate-spin-slow" />
-                  创建中
+                  {t("submitting")}
                 </>
               ) : (
                 <>
                   <Icon name="plus" size={13} />
-                  创建渠道
+                  {t("submit")}
                 </>
               )}
             </button>

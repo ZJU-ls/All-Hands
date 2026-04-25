@@ -23,6 +23,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -50,6 +51,7 @@ type ToolInfo = {
 type Tab = "registered" | "add";
 
 export default function McpServersPage() {
+  const t = useTranslations("mcp.list");
   const [tab, setTab] = useState<Tab>("registered");
   const [servers, setServers] = useState<Server[]>([]);
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -134,10 +136,10 @@ export default function McpServersPage() {
     }
   }
 
-  const kpis = useMemo(() => buildKpis(servers), [servers]);
+  const kpis = useMemo(() => buildKpis(servers, t), [servers, t]);
 
   return (
-    <AppShell title="MCP 服务器">
+    <AppShell title={t("appShellTitle")}>
       <div className="h-full overflow-y-auto">
         <div className="max-w-6xl mx-auto px-6 md:px-8 py-8 space-y-6 animate-fade-up">
           {/* Hero · eyebrow + h1 + primary CTA */}
@@ -145,10 +147,10 @@ export default function McpServersPage() {
             <div className="min-w-0">
               <div className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.18em] text-text-subtle">
                 <span className="inline-block h-1 w-1 rounded-full bg-primary" />
-                Model Context Protocol
+                {t("eyebrow")}
               </div>
               <h1 className="mt-1.5 text-[26px] md:text-[28px] font-bold tracking-tight text-text leading-tight">
-                MCP{" "}
+                {t("title")}{" "}
                 <span
                   className="bg-clip-text text-transparent"
                   style={{
@@ -156,11 +158,11 @@ export default function McpServersPage() {
                       "linear-gradient(120deg, var(--color-primary), color-mix(in srgb, var(--color-accent, var(--color-primary)) 85%, var(--color-primary)))",
                   }}
                 >
-                  服务器
+                  {t("titleAccent")}
                 </span>
               </h1>
               <p className="mt-1.5 max-w-2xl text-sm text-text-muted leading-relaxed">
-                接入外部 MCP 服务器以扩展工具集 · 支持 stdio / sse / http 三种 transport · 测试连通性后工具即被 Lead Agent 调用
+                {t("subtitle")}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -168,10 +170,10 @@ export default function McpServersPage() {
                 type="button"
                 onClick={() => void load()}
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[12px] font-medium text-text hover:border-border-strong hover:shadow-soft-sm transition duration-base"
-                aria-label="刷新"
+                aria-label={t("refreshAria")}
               >
                 <Icon name="refresh" size={14} />
-                刷新
+                {t("refresh")}
               </button>
               <button
                 type="button"
@@ -180,7 +182,7 @@ export default function McpServersPage() {
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-[12px] font-semibold text-primary-fg shadow-soft hover:bg-primary-hover hover:-translate-y-px transition duration-base"
               >
                 <Icon name="plus" size={14} />
-                添加服务器
+                {t("addServer")}
               </button>
             </div>
           </div>
@@ -190,26 +192,26 @@ export default function McpServersPage() {
             <KpiCard
               variant="gradient"
               icon="server"
-              label="注册总数"
+              label={t("kpi.total")}
               value={kpis.total}
-              hint="所有 transport"
+              hint={t("kpi.totalHint")}
             />
             <KpiCard
               icon="check-circle-2"
-              label="在线"
+              label={t("kpi.online")}
               value={kpis.online}
-              hint={kpis.online === kpis.total ? "全部可达" : `${kpis.total - kpis.online} 个需排查`}
+              hint={kpis.online === kpis.total ? t("kpi.onlineAll") : t("kpi.onlineSome", { count: kpis.total - kpis.online })}
               tone={kpis.online === kpis.total && kpis.total > 0 ? "success" : "neutral"}
             />
             <KpiCard
               icon="zap"
-              label="工具总数"
+              label={t("kpi.tools")}
               value={kpis.tools}
-              hint="已暴露给 Lead Agent"
+              hint={t("kpi.toolsHint")}
             />
             <KpiCard
               icon="clock"
-              label="上次握手"
+              label={t("kpi.lastSync")}
               value={kpis.lastSyncLabel}
               hint={kpis.lastSyncSub}
               valueClass="text-[15px]"
@@ -220,10 +222,10 @@ export default function McpServersPage() {
           <div role="tablist" className="flex items-center gap-1 border-b border-border">
             {(
               [
-                ["registered", "已注册", "list"],
-                ["add", "添加", "plus"],
-              ] as [Tab, string, IconName][]
-            ).map(([key, label, icon]) => (
+                ["registered", "list"],
+                ["add", "plus"],
+              ] as [Tab, IconName][]
+            ).map(([key, icon]) => (
               <button
                 key={key}
                 role="tab"
@@ -237,7 +239,7 @@ export default function McpServersPage() {
                 }`}
               >
                 <Icon name={icon} size={13} />
-                {label}
+                {t(`tabs.${key}`)}
                 {key === "registered" && servers.length > 0 && (
                   <span className="font-mono text-[10px] text-text-subtle">· {servers.length}</span>
                 )}
@@ -261,7 +263,7 @@ export default function McpServersPage() {
                 <Icon name="alert-circle" size={16} />
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-danger">加载 MCP 服务器失败</p>
+                <p className="text-sm font-semibold text-danger">{t("loadErrorTitle")}</p>
                 <p className="mt-0.5 text-xs text-text-muted font-mono truncate">{loadError}</p>
               </div>
               <button
@@ -269,7 +271,7 @@ export default function McpServersPage() {
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-xs font-medium text-text hover:border-border-strong hover:shadow-soft-sm transition duration-base"
               >
                 <Icon name="refresh" size={12} />
-                重试
+                {t("retry")}
               </button>
             </div>
           )}
@@ -301,9 +303,9 @@ export default function McpServersPage() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`删除 MCP 服务器 ${deleteTarget?.name ?? ""}?`}
-        message="此操作会永久移除注册记录,不影响外部服务本身。"
-        confirmLabel="删除"
+        title={t("deleteTitle", { name: deleteTarget?.name ?? "" })}
+        message={t("deleteMessage")}
+        confirmLabel={t("deleteConfirm")}
         danger
         busy={deleting}
         onConfirm={() => void handleDeleteConfirmed()}
@@ -397,30 +399,32 @@ function KpiCard({
   );
 }
 
-function buildKpis(servers: Server[]) {
+type Translator = ReturnType<typeof useTranslations>;
+
+function buildKpis(servers: Server[], t: Translator) {
   const total = servers.length;
   const online = servers.filter((s) => s.health === "ok").length;
   const tools = servers.reduce((acc, s) => acc + (s.exposed_tool_ids?.length ?? 0), 0);
   const lastTimestamps = servers
     .map((s) => (s.last_handshake_at ? Date.parse(s.last_handshake_at) : NaN))
-    .filter((t) => !Number.isNaN(t));
+    .filter((ts) => !Number.isNaN(ts));
   const latest = lastTimestamps.length > 0 ? Math.max(...lastTimestamps) : null;
-  const lastSyncLabel = latest !== null ? formatRelative(latest) : "—";
-  const lastSyncSub = latest !== null ? formatAbsolute(latest) : "尚未连接";
+  const lastSyncLabel = latest !== null ? formatRelative(latest, t) : "—";
+  const lastSyncSub = latest !== null ? formatAbsolute(latest) : t("neverSynced");
   return { total, online, tools, lastSyncLabel, lastSyncSub };
 }
 
-function formatRelative(ts: number): string {
+function formatRelative(ts: number, t: Translator): string {
   const diff = Date.now() - ts;
-  if (diff < 0) return "刚刚";
+  if (diff < 0) return t("relativeJustNow");
   const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s 前`;
+  if (s < 60) return t("relativeSeconds", { n: s });
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m 前`;
+  if (m < 60) return t("relativeMinutes", { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h 前`;
+  if (h < 24) return t("relativeHours", { n: h });
   const d = Math.floor(h / 24);
-  return `${d}d 前`;
+  return t("relativeDays", { n: d });
 }
 
 function formatAbsolute(ts: number): string {
@@ -435,7 +439,7 @@ function formatAbsolute(ts: number): string {
 // Health + transport visual language
 // ────────────────────────────────────────────────────────────────────────────
 
-function healthMeta(h: Health): {
+function healthMeta(h: Health, t: Translator): {
   label: string;
   dot: string;
   chip: string;
@@ -443,7 +447,7 @@ function healthMeta(h: Health): {
 } {
   if (h === "ok") {
     return {
-      label: "在线",
+      label: t("health.ok"),
       dot: "bg-success",
       chip: "text-success border-success/30 bg-success-soft",
       icon: "check-circle-2",
@@ -451,7 +455,7 @@ function healthMeta(h: Health): {
   }
   if (h === "unreachable") {
     return {
-      label: "不可达",
+      label: t("health.unreachable"),
       dot: "bg-danger",
       chip: "text-danger border-danger/30 bg-danger-soft",
       icon: "alert-circle",
@@ -459,14 +463,14 @@ function healthMeta(h: Health): {
   }
   if (h === "auth_failed") {
     return {
-      label: "鉴权失败",
+      label: t("health.authFailed"),
       dot: "bg-danger",
       chip: "text-danger border-danger/30 bg-danger-soft",
       icon: "lock",
     };
   }
   return {
-    label: "未知",
+    label: t("health.unknown"),
     dot: "bg-text-subtle",
     chip: "text-text-muted border-border bg-surface-2",
     icon: "circle-help",
@@ -565,8 +569,9 @@ function ServerCard({
   onListTools: (s: Server) => void;
   onDelete: (s: Server) => void;
 }) {
-  const h = healthMeta(server.health);
-  const t = transportMeta(server.transport);
+  const tr = useTranslations("mcp.list");
+  const h = healthMeta(server.health, tr);
+  const tp = transportMeta(server.transport);
   const toolCount = server.exposed_tool_ids?.length ?? 0;
   const cardClass = featured
     ? "group relative overflow-hidden rounded-xl border border-primary/40 bg-gradient-to-br from-primary/10 via-surface to-surface shadow-soft-lg hover:shadow-soft-lg hover:-translate-y-px transition duration-base"
@@ -580,7 +585,7 @@ function ServerCard({
           aria-hidden="true"
         >
           <Icon name="sparkles" size={10} />
-          featured
+          {tr("card.featured")}
         </span>
       )}
       <div className="p-5">
@@ -618,8 +623,8 @@ function ServerCard({
             </div>
             <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-border bg-surface-2 text-text-muted text-[10px] font-mono">
-                <Icon name={t.icon} size={10} />
-                {t.label}
+                <Icon name={tp.icon} size={10} />
+                {tp.label}
               </span>
               <span
                 data-testid={`health-${server.name}`}
@@ -632,7 +637,7 @@ function ServerCard({
               <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-border bg-surface-2 text-text-muted text-[10px] font-medium">
                 <Icon name="zap" size={10} className="text-text-subtle" />
                 <span className="tabular-nums font-semibold text-text">{toolCount}</span>
-                tools
+                {tr("card.tools")}
               </span>
             </div>
           </div>
@@ -651,8 +656,8 @@ function ServerCard({
             <Icon name="clock" size={11} />
             <span className="truncate">
               {server.last_handshake_at
-                ? `上次握手 ${formatRelative(Date.parse(server.last_handshake_at))}`
-                : "尚未握手"}
+                ? tr("card.lastHandshake", { when: formatRelative(Date.parse(server.last_handshake_at), tr) })
+                : tr("card.neverHandshake")}
             </span>
           </span>
           <div className="flex items-center gap-1 shrink-0">
@@ -666,12 +671,12 @@ function ServerCard({
               {busy ? (
                 <>
                   <Icon name="loader" size={11} className="animate-spin-slow" />
-                  测试中
+                  {tr("card.testing")}
                 </>
               ) : (
                 <>
                   <Icon name="refresh" size={11} />
-                  测试
+                  {tr("card.test")}
                 </>
               )}
             </button>
@@ -687,7 +692,7 @@ function ServerCard({
               }`}
             >
               <Icon name={expanded ? "chevron-up" : "chevron-down"} size={11} />
-              工具
+              {tr("card.tools")}
             </button>
             <button
               type="button"
@@ -696,7 +701,7 @@ function ServerCard({
               className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2.5 text-[11px] font-medium text-danger hover:border-danger/40 hover:bg-danger-soft transition duration-base"
             >
               <Icon name="trash-2" size={11} />
-              删除
+              {tr("card.delete")}
             </button>
           </div>
         </div>
@@ -710,7 +715,7 @@ function ServerCard({
             {tools === undefined && (
               <p className="inline-flex items-center gap-1.5 text-[11px] text-text-muted">
                 <Icon name="loader" size={11} className="animate-spin-slow" />
-                加载工具…
+                {tr("card.loadingTools")}
               </p>
             )}
             {tools && "error" in tools && (
@@ -723,7 +728,7 @@ function ServerCard({
               </p>
             )}
             {tools && Array.isArray(tools) && tools.length === 0 && (
-              <p className="text-[11px] text-text-muted">该服务器未声明任何工具。</p>
+              <p className="text-[11px] text-text-muted">{tr("card.emptyTools")}</p>
             )}
             {tools && Array.isArray(tools) && tools.length > 0 && (
               <ul className="flex flex-col gap-1.5">
@@ -792,6 +797,7 @@ function RegisteredSkeleton() {
 }
 
 function EmptyServers({ onAdd }: { onAdd: () => void }) {
+  const t = useTranslations("mcp.list.empty");
   return (
     <div
       data-testid="mcp-empty"
@@ -825,11 +831,12 @@ function EmptyServers({ onAdd }: { onAdd: () => void }) {
           <Icon name="plug" size={36} strokeWidth={1.5} />
         </div>
         <h3 className="mt-6 text-display font-bold tracking-tight text-text">
-          Add your first MCP server
+          {t("title")}
         </h3>
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-text-muted">
-          通过 MCP 把外部系统(GitHub、文件系统、数据库等)接成 Lead Agent 可调用的工具。或在对话里让 Lead Agent 用{" "}
-          <span className="font-mono text-text">register_mcp_server</span> 代办。
+          {t.rich("description", {
+            mono: (chunks) => <span className="font-mono text-text">{chunks}</span>,
+          })}
         </p>
         <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
           <button
@@ -839,18 +846,18 @@ function EmptyServers({ onAdd }: { onAdd: () => void }) {
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary text-primary-fg text-[13px] font-semibold shadow-soft hover:bg-primary-hover hover:-translate-y-px transition duration-base"
           >
             <Icon name="plus" size={14} />
-            添加 MCP 服务器
+            {t("addServer")}
           </button>
           <Link
             href="/chat"
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-surface border border-border text-[13px] font-semibold text-text hover:border-primary hover:text-primary hover:-translate-y-px transition duration-base"
           >
             <Icon name="sparkles" size={14} />
-            让 Lead Agent 代办
+            {t("askLeadAgent")}
           </Link>
         </div>
         <div className="mt-8 flex items-center justify-center gap-2 text-[11px] text-text-subtle flex-wrap">
-          <span className="font-mono uppercase tracking-wider">Popular presets</span>
+          <span className="font-mono uppercase tracking-wider">{t("presets")}</span>
           {["github-official", "filesystem", "postgres", "slack"].map((p) => (
             <span
               key={p}
@@ -872,27 +879,12 @@ function EmptyServers({ onAdd }: { onAdd: () => void }) {
 const TRANSPORT_OPTIONS: {
   value: Transport;
   label: string;
-  desc: string;
+  descKey: "stdioDesc" | "httpDesc" | "sseDesc";
   icon: IconName;
 }[] = [
-  {
-    value: "stdio",
-    label: "stdio",
-    desc: "本地子进程 · 低延迟",
-    icon: "terminal",
-  },
-  {
-    value: "http",
-    label: "http",
-    desc: "远端 HTTP 请求响应",
-    icon: "link",
-  },
-  {
-    value: "sse",
-    label: "sse",
-    desc: "远端 Server-Sent Events",
-    icon: "activity",
-  },
+  { value: "stdio", label: "stdio", descKey: "stdioDesc", icon: "terminal" },
+  { value: "http", label: "http", descKey: "httpDesc", icon: "link" },
+  { value: "sse", label: "sse", descKey: "sseDesc", icon: "activity" },
 ];
 
 function AddForm({
@@ -902,6 +894,7 @@ function AddForm({
   onAdded: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useTranslations("mcp.list.form");
   const [name, setName] = useState("");
   const [transport, setTransport] = useState<Transport>("stdio");
   const [command, setCommand] = useState("");
@@ -914,7 +907,7 @@ function AddForm({
 
   function buildConfig(): Record<string, unknown> | string {
     if (transport === "stdio") {
-      if (!command) return "请填写 command";
+      if (!command) return t("errorCommand");
       const argList = args
         ? args
             .split(",")
@@ -926,18 +919,18 @@ function AddForm({
         const trimmed = line.trim();
         if (!trimmed) continue;
         const idx = trimmed.indexOf("=");
-        if (idx <= 0) return `环境变量行格式应为 KEY=VALUE: ${trimmed}`;
+        if (idx <= 0) return t("errorEnvFormat", { line: trimmed });
         env[trimmed.slice(0, idx)] = trimmed.slice(idx + 1);
       }
       return { command, args: argList, env };
     }
-    if (!url) return "请填写 URL";
+    if (!url) return t("errorUrl");
     const headers: Record<string, string> = {};
     for (const line of headersText.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       const idx = trimmed.indexOf(":");
-      if (idx <= 0) return `Header 行格式应为 Key: Value: ${trimmed}`;
+      if (idx <= 0) return t("errorHeaderFormat", { line: trimmed });
       headers[trimmed.slice(0, idx).trim()] = trimmed.slice(idx + 1).trim();
     }
     return { url, headers };
@@ -945,7 +938,7 @@ function AddForm({
 
   async function submit() {
     if (!name) {
-      setErr("请填写名称");
+      setErr(t("errorName"));
       return;
     }
     const cfg = buildConfig();
@@ -1020,30 +1013,30 @@ function AddForm({
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-[14px] font-semibold text-text leading-tight">
-            注册新 MCP 服务器
+            {t("title")}
           </h3>
           <p className="mt-0.5 text-[11px] text-text-muted">
-            填写连接参数 · 建议先「测试连接」再提交
+            {t("subtitle")}
           </p>
         </div>
       </div>
 
       <div className="p-5 flex flex-col gap-5">
         {/* Section 1 · Basics */}
-        <Section icon="info" title="基础信息">
+        <Section icon="info" title={t("basics")}>
           <Field
-            label="名称"
+            label={t("name")}
             value={name}
             onChange={setName}
-            placeholder="例如 github-official"
+            placeholder={t("namePlaceholder")}
           />
         </Section>
 
         {/* Section 2 · Transport radio cards */}
-        <Section icon="share-2" title="传输协议">
+        <Section icon="share-2" title={t("transport")}>
           <div
             role="radiogroup"
-            aria-label="传输协议"
+            aria-label={t("transportAria")}
             data-testid="transport-select"
             className="grid grid-cols-1 sm:grid-cols-3 gap-2"
           >
@@ -1094,7 +1087,7 @@ function AddForm({
                       active ? "text-primary/80" : "text-text-muted"
                     }`}
                   >
-                    {opt.desc}
+                    {t(opt.descKey)}
                   </p>
                 </button>
               );
@@ -1105,12 +1098,12 @@ function AddForm({
         {/* Section 3 · transport-specific config */}
         <Section
           icon={transport === "stdio" ? "terminal" : "link"}
-          title={transport === "stdio" ? "命令与环境" : "端点与头部"}
+          title={transport === "stdio" ? t("stdioSection") : t("httpSection")}
         >
           {transport === "stdio" ? (
             <div className="flex flex-col gap-3">
               <Field
-                label="Command"
+                label={t("command")}
                 mono
                 value={command}
                 onChange={setCommand}
@@ -1118,7 +1111,7 @@ function AddForm({
                 testid="field-command"
               />
               <Field
-                label="Args (逗号分隔)"
+                label={t("args")}
                 mono
                 value={args}
                 onChange={setArgs}
@@ -1126,7 +1119,7 @@ function AddForm({
                 testid="field-args"
               />
               <TextareaField
-                label="Env (每行 KEY=VALUE)"
+                label={t("env")}
                 testid="field-env"
                 value={envText}
                 onChange={setEnvText}
@@ -1136,7 +1129,7 @@ function AddForm({
           ) : (
             <div className="flex flex-col gap-3">
               <Field
-                label="URL"
+                label={t("url")}
                 mono
                 value={url}
                 onChange={setUrl}
@@ -1145,7 +1138,7 @@ function AddForm({
                 leading="external-link"
               />
               <TextareaField
-                label="Headers (每行 Key: Value)"
+                label={t("headers")}
                 testid="field-headers"
                 value={headersText}
                 onChange={setHeadersText}
@@ -1178,12 +1171,12 @@ function AddForm({
             {busy ? (
               <>
                 <Icon name="loader" size={13} className="animate-spin-slow" />
-                测试中
+                {t("testing")}
               </>
             ) : (
               <>
                 <Icon name="zap" size={13} />
-                测试连接
+                {t("testConnection")}
               </>
             )}
           </button>
@@ -1194,7 +1187,7 @@ function AddForm({
               disabled={busy}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[12px] font-medium text-text-muted hover:text-text hover:border-border-strong disabled:opacity-40 transition duration-base"
             >
-              取消
+              {t("cancel")}
             </button>
             <button
               type="button"
@@ -1206,12 +1199,12 @@ function AddForm({
               {busy ? (
                 <>
                   <Icon name="loader" size={13} className="animate-spin-slow" />
-                  注册中
+                  {t("registering")}
                 </>
               ) : (
                 <>
                   <Icon name="plus" size={13} />
-                  注册
+                  {t("register")}
                 </>
               )}
             </button>

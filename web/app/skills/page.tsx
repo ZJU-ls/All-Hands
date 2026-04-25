@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -53,14 +54,10 @@ type MarketPreview = {
 
 type Tab = "installed" | "market" | "github" | "upload";
 
-const TABS: ReadonlyArray<readonly [Tab, string]> = [
-  ["installed", "已安装"],
-  ["market", "官方市场"],
-  ["github", "GitHub 安装"],
-  ["upload", "上传 .zip"],
-];
+const TAB_KEYS: ReadonlyArray<Tab> = ["installed", "market", "github", "upload"];
 
 export default function SkillsPage() {
+  const t = useTranslations("skills.list");
   const [tab, setTab] = useState<Tab>("installed");
   const [skills, setSkills] = useState<Skill[]>([]);
   const [market, setMarket] = useState<MarketEntry[]>([]);
@@ -161,10 +158,10 @@ export default function SkillsPage() {
   const latestLabel = latestSkill?.installed_at
     ? formatRelativeDate(latestSkill.installed_at)
     : "—";
-  const latestHint = latestSkill?.name ?? "暂无安装";
+  const latestHint = latestSkill?.name ?? t("kpi.latestEmpty");
 
   return (
-    <AppShell title="技能">
+    <AppShell title={t("appShellTitle")}>
       <div className="h-full overflow-y-auto">
         <div className="max-w-6xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
           {/* Eyebrow + hero header */}
@@ -173,22 +170,18 @@ export default function SkillsPage() {
               <div className="flex items-center gap-2 mb-2">
                 <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-primary-muted text-primary text-caption font-mono font-semibold uppercase tracking-wider">
                   <Icon name="wand-2" size={10} strokeWidth={2.25} />
-                  Skills
+                  {t("eyebrow")}
                 </span>
                 <span className="font-mono text-caption text-text-subtle uppercase tracking-wider">
-                  capability packs
+                  {t("eyebrowHint")}
                 </span>
               </div>
               <PageHeader
-                title="技能"
+                title={t("pageTitle")}
                 count={skills.length || undefined}
-                subtitle={
-                  <>
-                    技能包 = 工具 ID 列表 + 提示片段。从 GitHub、官方市场(
-                    <span className="font-mono">anthropics/skills</span>
-                    )或本地 .zip 安装,并分配给任意员工。
-                  </>
-                }
+                subtitle={t.rich("subtitle", {
+                  mono: (chunks) => <span className="font-mono">{chunks}</span>,
+                })}
               />
             </div>
           </div>
@@ -199,25 +192,25 @@ export default function SkillsPage() {
             className="grid grid-cols-2 md:grid-cols-4 gap-3"
           >
             <HeroKpi
-              label="Total"
+              label={t("kpi.total")}
               value={skills.length}
               icon="wand-2"
-              hint={`${installedCount} 自管 · ${builtinCount} 内建`}
+              hint={t("kpi.totalHint", { managed: installedCount, builtin: builtinCount })}
             />
             <StatKpi
-              label="Installed"
+              label={t("kpi.installed")}
               value={installedCount}
               icon="download"
-              hint="用户安装"
+              hint={t("kpi.installedHint")}
             />
             <StatKpi
-              label="Builtin"
+              label={t("kpi.builtin")}
               value={builtinCount}
               icon="shield-check"
-              hint="平台内建"
+              hint={t("kpi.builtinHint")}
             />
             <StatKpi
-              label="Latest"
+              label={t("kpi.latest")}
               value={latestLabel}
               icon="clock"
               hint={latestHint}
@@ -229,10 +222,10 @@ export default function SkillsPage() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div
               role="tablist"
-              aria-label="技能视图"
+              aria-label={t("tabsLabel")}
               className="inline-flex items-center gap-1 rounded-xl bg-surface-2 p-1 border border-border"
             >
-              {TABS.map(([key, label]) => {
+              {TAB_KEYS.map((key) => {
                 const active = tab === key;
                 return (
                   <button
@@ -248,7 +241,7 @@ export default function SkillsPage() {
                     }`}
                   >
                     <Icon name={tabIcon(key)} size={12} strokeWidth={2} />
-                    {label}
+                    {t(`tabs.${key}`)}
                   </button>
                 );
               })}
@@ -272,7 +265,7 @@ export default function SkillsPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-danger mb-1">
-                    加载技能失败
+                    {t("loadErrorTitle")}
                   </p>
                   <p className="text-xs text-text-muted font-mono break-all mb-3">
                     {loadError}
@@ -282,7 +275,7 @@ export default function SkillsPage() {
                     className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
                   >
                     <Icon name="refresh" size={12} />
-                    重试
+                    {t("retry")}
                   </button>
                 </div>
               </div>
@@ -332,9 +325,9 @@ export default function SkillsPage() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`卸载技能 ${deleteTarget?.name ?? ""}?`}
-        message={"此操作会同时删除本地目录,不可撤销。已分配该技能的员工将失去对应提示片段。"}
-        confirmLabel="卸载"
+        title={t("uninstallTitle", { name: deleteTarget?.name ?? "" })}
+        message={t("uninstallMessage")}
+        confirmLabel={t("uninstallConfirm")}
         danger
         busy={deleting}
         onConfirm={() => void handleDeleteConfirmed()}
@@ -488,11 +481,12 @@ function SkillCard({
   skill: Skill;
   onDelete: (s: Skill) => void;
 }) {
+  const t = useTranslations("skills.list");
   const isBuiltin = skill.source === "builtin";
   const installedLabel = skill.installed_at
     ? formatRelativeDate(skill.installed_at)
     : isBuiltin
-      ? "内建"
+      ? t("builtinLabel")
       : "—";
 
   return (
@@ -541,7 +535,7 @@ function SkillCard({
         </p>
       ) : (
         <p className="text-[12px] text-text-subtle italic leading-snug min-h-[32px]">
-          暂无描述
+          {t("noDescription")}
         </p>
       )}
 
@@ -562,7 +556,7 @@ function SkillCard({
           <button
             onClick={() => onDelete(skill)}
             data-testid={`delete-${skill.name}`}
-            aria-label={`卸载 ${skill.name}`}
+            aria-label={t("uninstallAria", { name: skill.name })}
             className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-text-subtle hover:text-danger hover:bg-danger-soft transition duration-base"
           >
             <Icon name="trash-2" size={13} />
@@ -610,6 +604,7 @@ function Stat({
 }
 
 function SkillsSkeleton() {
+  const t = useTranslations("skills.list");
   return (
     <div
       aria-hidden="true"
@@ -637,13 +632,14 @@ function SkillsSkeleton() {
         </div>
       ))}
       <span className="sr-only">
-        <LoadingState title="加载技能" />
+        <LoadingState title={t("loadingLabel")} />
       </span>
     </div>
   );
 }
 
 function EmptySkills({ onBrowse }: { onBrowse: () => void }) {
+  const t = useTranslations("skills.list.empty");
   return (
     <div
       data-testid="skills-empty"
@@ -677,12 +673,12 @@ function EmptySkills({ onBrowse }: { onBrowse: () => void }) {
           <Icon name="wand-2" size={36} strokeWidth={1.5} />
         </div>
         <h3 className="mt-6 text-display font-bold tracking-tight text-text">
-          安装你的第一个技能包
+          {t("title")}
         </h3>
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-text-muted">
-          技能 = 工具 ID 列表 + 提示片段。从官方市场挑一个,或把
-          <span className="font-mono text-text"> anthropics/skills </span>
-          的任一仓库直接克隆安装。
+          {t.rich("description", {
+            mono: (chunks) => <span className="font-mono text-text">{chunks}</span>,
+          })}
         </p>
         <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
           <button
@@ -692,7 +688,7 @@ function EmptySkills({ onBrowse }: { onBrowse: () => void }) {
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary text-primary-fg text-[13px] font-semibold shadow-soft hover:bg-primary-hover hover:-translate-y-px transition duration-base"
           >
             <Icon name="store" size={14} />
-            浏览官方市场
+            {t("browseMarket")}
           </button>
           <Link
             href="/chat"
@@ -700,22 +696,22 @@ function EmptySkills({ onBrowse }: { onBrowse: () => void }) {
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-surface border border-border text-[13px] font-semibold text-text hover:border-primary hover:text-primary hover:-translate-y-px transition duration-base"
           >
             <Icon name="sparkles" size={14} />
-            让 Lead Agent 代办
+            {t("askLeadAgent")}
           </Link>
         </div>
         <div className="mt-8 flex items-center justify-center gap-2 text-[11px] text-text-subtle flex-wrap">
-          <span className="font-mono uppercase tracking-wider">Sources</span>
+          <span className="font-mono uppercase tracking-wider">{t("sources")}</span>
           <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-surface-2 border border-border text-text-muted font-medium">
             <Icon name="store" size={10} />
-            Market
+            {t("sourceMarket")}
           </span>
           <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-surface-2 border border-border text-text-muted font-medium">
             <Icon name="code" size={10} />
-            GitHub
+            {t("sourceGithub")}
           </span>
           <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-surface-2 border border-border text-text-muted font-medium">
             <Icon name="upload" size={10} />
-            Upload .zip
+            {t("sourceUpload")}
           </span>
         </div>
       </div>
@@ -742,6 +738,7 @@ function MarketList({
   onInstall: (slug: string) => void;
   onPreview: (slug: string) => void;
 }) {
+  const t = useTranslations("skills.list.market");
   const [activeTag, setActiveTag] = useState<string>("");
 
   // Collect every tag + how many skills use it. Sorted by popularity so the
@@ -772,9 +769,9 @@ function MarketList({
             type="search"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="搜索名称、描述或标签…"
+            placeholder={t("searchPlaceholder")}
             data-testid="market-search"
-            aria-label="搜索官方市场"
+            aria-label={t("searchAria")}
             className="w-full rounded-xl bg-surface border border-border pl-9 pr-3 py-2 text-sm text-text placeholder-text-subtle focus:outline-none focus:border-primary shadow-soft-sm transition duration-base"
           />
         </div>
@@ -784,7 +781,7 @@ function MarketList({
             data-testid="market-loading"
           >
             <Icon name="loader" size={12} className="animate-spin-slow" />
-            搜索中…
+            {t("loading")}
           </span>
         )}
       </div>
@@ -795,7 +792,7 @@ function MarketList({
           className="flex items-center gap-1.5 flex-wrap text-[11px]"
         >
           <span className="font-mono uppercase tracking-wider text-text-subtle mr-1">
-            Tags
+            {t("tagsLabel")}
           </span>
           <button
             type="button"
@@ -807,7 +804,7 @@ function MarketList({
                 : "bg-surface-2 text-text-muted border-border hover:border-border-strong"
             }`}
           >
-            全部
+            {t("tagsAll")}
             <span className="font-mono tabular-nums opacity-80">
               {entries.length}
             </span>
@@ -842,18 +839,17 @@ function MarketList({
 
       <div className="flex items-center justify-between gap-3 text-[11px] text-text-subtle">
         <span data-testid="market-summary" className="font-mono">
-          {visible.length} / {entries.length} 个技能
+          {t("summary", { shown: visible.length, total: entries.length })}
           {activeTag && (
             <>
-              {" "}
-              · 标签:
+              {t("summaryWithTag")}
               <span className="text-text"> {activeTag}</span>
             </>
           )}
         </span>
         {totalInstalled > 0 && (
           <span className="font-mono">
-            已安装 <span className="text-text">{totalInstalled}</span>
+            {t("installedSummary", { count: totalInstalled })}
           </span>
         )}
       </div>
@@ -863,12 +859,12 @@ function MarketList({
           <EmptyState
             title={
               activeTag
-                ? `没有标签为 "${activeTag}" 的技能`
+                ? t("emptyTagged", { tag: activeTag })
                 : query
-                  ? `未找到匹配 "${query}" 的技能`
-                  : "市场目录为空"
+                  ? t("emptyQueried", { query })
+                  : t("emptyDefault")
             }
-            description={activeTag || query ? "换个关键词或清除标签" : undefined}
+            description={activeTag || query ? t("emptyHint") : undefined}
           />
         </div>
       ) : (
@@ -932,7 +928,7 @@ function MarketList({
                     className="inline-flex items-center gap-1 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text-muted hover:text-text hover:border-border-strong transition duration-base"
                   >
                     <Icon name="eye" size={12} />
-                    预览
+                    {t("preview")}
                   </button>
                   <button
                     onClick={() => onInstall(e.slug)}
@@ -943,17 +939,17 @@ function MarketList({
                     {installed ? (
                       <>
                         <Icon name="check" size={12} />
-                        已安装
+                        {t("installed")}
                       </>
                     ) : busy ? (
                       <>
                         <Icon name="loader" size={12} className="animate-spin-slow" />
-                        安装中
+                        {t("installing")}
                       </>
                     ) : (
                       <>
                         <Icon name="download" size={12} />
-                        安装
+                        {t("install")}
                       </>
                     )}
                   </button>
@@ -980,6 +976,7 @@ function PreviewModal({
   onClose: () => void;
   onInstall: () => void;
 }) {
+  const t = useTranslations("skills.list.preview");
   const [preview, setPreview] = useState<MarketPreview | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [err, setErr] = useState("");
@@ -1028,7 +1025,7 @@ function PreviewModal({
         const body = await res.text();
         throw new Error(`${res.status} ${body || res.statusText}`);
       }
-      if (!res.body) throw new Error("解读失败:响应没有 body");
+      if (!res.body) throw new Error(t("noBody"));
       const reader = res.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let acc = "";
@@ -1046,7 +1043,7 @@ function PreviewModal({
       setAiError(e instanceof Error ? e.message : String(e));
       setAiState("error");
     }
-  }, [slug]);
+  }, [slug, t]);
 
   useEffect(() => {
     if (slug && aiState === "idle") void startAi();
@@ -1152,7 +1149,7 @@ function PreviewModal({
           <button
             onClick={onClose}
             data-testid="preview-close"
-            aria-label="关闭"
+            aria-label={t("close")}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-subtle hover:text-text hover:bg-surface-2 transition duration-base shrink-0"
           >
             <Icon name="x" size={14} />
@@ -1164,7 +1161,7 @@ function PreviewModal({
             doesn't reflow when toggling. */}
         <div
           role="tablist"
-          aria-label="解读视图"
+          aria-label={t("viewLabel")}
           className="flex items-center gap-1 px-5 pt-3 border-b border-border"
         >
           <button
@@ -1181,7 +1178,7 @@ function PreviewModal({
             }
           >
             <Icon name="sparkles" size={12} />
-            AI 解读
+            {t("ai")}
             {aiState === "loading" && (
               <Icon
                 name="loader"
@@ -1204,7 +1201,7 @@ function PreviewModal({
             }
           >
             <Icon name="file-code-2" size={12} />
-            原文 SKILL.md
+            {t("raw")}
           </button>
         </div>
 
@@ -1217,7 +1214,7 @@ function PreviewModal({
                   data-testid="preview-loading"
                 >
                   <Icon name="loader" size={12} className="animate-spin-slow" />
-                  读取技能元信息…
+                  {t("loadingMeta")}
                 </p>
               )}
               {aiState === "error" ? (
@@ -1229,7 +1226,7 @@ function PreviewModal({
                     className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border bg-surface text-[11px] text-text-muted hover:border-primary/40 hover:text-primary transition-colors duration-fast"
                   >
                     <Icon name="refresh" size={11} />
-                    重新解读
+                    {t("regenerate")}
                   </button>
                 </div>
               ) : aiText ? (
@@ -1241,7 +1238,7 @@ function PreviewModal({
                   {aiState === "done" && (
                     <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
                       <span className="text-[11px] text-text-subtle">
-                        AI 解读基于 SKILL.md · 仅供决策参考
+                        {t("aiHint")}
                       </span>
                       <button
                         type="button"
@@ -1250,7 +1247,7 @@ function PreviewModal({
                         className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border bg-surface text-[11px] text-text-muted hover:border-primary/40 hover:text-primary transition-colors duration-fast"
                       >
                         <Icon name="refresh" size={11} />
-                        重新解读
+                        {t("regenerate")}
                       </button>
                     </div>
                   )}
@@ -1258,7 +1255,7 @@ function PreviewModal({
               ) : aiState === "loading" ? (
                 <p className="inline-flex items-center gap-1.5 text-xs text-text-muted">
                   <Icon name="sparkles" size={12} className="text-primary" />
-                  AI 正在阅读 SKILL.md,稍等几秒…
+                  {t("aiWaiting")}
                 </p>
               ) : null}
             </div>
@@ -1270,7 +1267,7 @@ function PreviewModal({
                   data-testid="preview-loading"
                 >
                   <Icon name="loader" size={12} className="animate-spin-slow" />
-                  读取 SKILL.md…
+                  {t("loadingMd")}
                 </p>
               )}
               {status === "error" && (
@@ -1285,7 +1282,7 @@ function PreviewModal({
                   </p>
                   <div className="mb-4">
                     <h4 className="text-[11px] uppercase tracking-wider text-text-subtle mb-1.5 font-mono font-semibold">
-                      文件({preview.files.length})
+                      {t("filesHeading", { count: preview.files.length })}
                     </h4>
                     <div className="flex flex-wrap gap-1">
                       {preview.files.map((f) => (
@@ -1299,7 +1296,7 @@ function PreviewModal({
                     </div>
                   </div>
                   <h4 className="text-[11px] uppercase tracking-wider text-text-subtle mb-1.5 font-mono font-semibold">
-                    SKILL.md
+                    {t("skillMdHeading")}
                   </h4>
                   <pre
                     data-testid="preview-skill-md"
@@ -1318,7 +1315,7 @@ function PreviewModal({
             onClick={onClose}
             className="inline-flex items-center h-9 px-4 rounded-lg border border-border bg-surface text-sm font-medium text-text-muted hover:text-text hover:border-border-strong transition duration-base"
           >
-            关闭
+            {t("close")}
           </button>
           <button
             onClick={onInstall}
@@ -1331,17 +1328,17 @@ function PreviewModal({
             {alreadyInstalled ? (
               <>
                 <Icon name="check" size={14} />
-                已安装
+                {t("installed")}
               </>
             ) : installing ? (
               <>
                 <Icon name="loader" size={14} className="animate-spin-slow" />
-                安装中
+                {t("installing")}
               </>
             ) : (
               <>
                 <Icon name="download" size={14} />
-                安装
+                {t("install")}
               </>
             )}
           </button>
@@ -1352,6 +1349,7 @@ function PreviewModal({
 }
 
 function GithubInstallForm({ onInstalled }: { onInstalled: () => Promise<void> }) {
+  const t = useTranslations("skills.list.github");
   const [url, setUrl] = useState("");
   const [ref, setRef] = useState("main");
   const [busy, setBusy] = useState(false);
@@ -1394,24 +1392,24 @@ function GithubInstallForm({ onInstalled }: { onInstalled: () => Promise<void> }
           <Icon name="code" size={16} />
         </span>
         <div>
-          <h3 className="text-sm font-semibold text-text">从 GitHub 克隆</h3>
+          <h3 className="text-sm font-semibold text-text">{t("title")}</h3>
           <p className="font-mono text-caption text-text-subtle uppercase tracking-wider">
-            git clone · ref
+            {t("subtitle")}
           </p>
         </div>
       </div>
       <div className="flex flex-col gap-3">
         <Field
-          label="仓库 URL"
+          label={t("repoUrl")}
           mono
-          placeholder="https://github.com/anthropic/skill-xxx"
+          placeholder={t("repoPlaceholder")}
           value={url}
           onChange={setUrl}
         />
         <Field
-          label="分支 / tag / commit"
+          label={t("ref")}
           mono
-          placeholder="main"
+          placeholder={t("refPlaceholder")}
           value={ref}
           onChange={setRef}
         />
@@ -1431,18 +1429,16 @@ function GithubInstallForm({ onInstalled }: { onInstalled: () => Promise<void> }
           >
             <Icon name="check" size={14} className="mt-0.5 shrink-0" />
             <span className="min-w-0 break-words">
-              已安装 {lastInstalled.length} 个技能:
+              {t("okPrefix", { count: lastInstalled.length })}
               <span className="font-mono ml-1">{lastInstalled.join(" · ")}</span>
             </span>
           </div>
         )}
         <div className="pt-1">
           <p className="text-[11px] text-text-subtle mb-2 leading-relaxed">
-            支持单 skill 仓库(根目录含{" "}
-            <span className="font-mono text-text">SKILL.md</span>)和多 skill
-            仓库(如{" "}
-            <span className="font-mono text-text">anthropics/skills</span>,
-            会扫描前 3 级子目录,自动批量安装每个找到的 SKILL.md)。
+            {t.rich("hint", {
+              mono: (chunks) => <span className="font-mono text-text">{chunks}</span>,
+            })}
           </p>
           <button
             onClick={() => void submit()}
@@ -1453,12 +1449,12 @@ function GithubInstallForm({ onInstalled }: { onInstalled: () => Promise<void> }
             {busy ? (
               <>
                 <Icon name="loader" size={14} className="animate-spin-slow" />
-                克隆中
+                {t("cloning")}
               </>
             ) : (
               <>
                 <Icon name="download" size={14} />
-                克隆并安装
+                {t("cloneInstall")}
               </>
             )}
           </button>
@@ -1469,6 +1465,7 @@ function GithubInstallForm({ onInstalled }: { onInstalled: () => Promise<void> }
 }
 
 function UploadForm({ onInstalled }: { onInstalled: () => Promise<void> }) {
+  const t = useTranslations("skills.list.upload");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -1504,17 +1501,16 @@ function UploadForm({ onInstalled }: { onInstalled: () => Promise<void> }) {
           <Icon name="upload" size={16} />
         </span>
         <div>
-          <h3 className="text-sm font-semibold text-text">上传 .zip 安装</h3>
+          <h3 className="text-sm font-semibold text-text">{t("title")}</h3>
           <p className="font-mono text-caption text-text-subtle uppercase tracking-wider">
-            local archive · SKILL.md
+            {t("subtitle")}
           </p>
         </div>
       </div>
       <p className="text-xs text-text-muted mb-3 leading-relaxed">
-        .zip 解压后的根目录(或任一子目录)须存在{" "}
-        <span className="font-mono text-text">SKILL.md</span>,前言至少包含{" "}
-        <span className="font-mono text-text">name</span> 与{" "}
-        <span className="font-mono text-text">version</span>。
+        {t.rich("hint", {
+          mono: (chunks) => <span className="font-mono text-text">{chunks}</span>,
+        })}
       </p>
       <div className="flex flex-col gap-3">
         <input
@@ -1543,12 +1539,12 @@ function UploadForm({ onInstalled }: { onInstalled: () => Promise<void> }) {
             {busy ? (
               <>
                 <Icon name="loader" size={14} className="animate-spin-slow" />
-                上传中
+                {t("uploading")}
               </>
             ) : (
               <>
                 <Icon name="upload" size={14} />
-                上传并安装
+                {t("uploadInstall")}
               </>
             )}
           </button>

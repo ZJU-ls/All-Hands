@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
@@ -49,14 +50,15 @@ type Tab = "overview" | "prompt" | "versions" | "dependencies";
 
 type LoadStatus = "loading" | "ready" | "notfound" | "error";
 
-const TABS: ReadonlyArray<readonly [Tab, string, IconName]> = [
-  ["overview", "概览", "layout-grid"],
-  ["prompt", "参数 / 模板", "file-code-2"],
-  ["versions", "版本历史", "clock"],
-  ["dependencies", "依赖图", "share-2"],
+const TABS: ReadonlyArray<readonly [Tab, IconName]> = [
+  ["overview", "layout-grid"],
+  ["prompt", "file-code-2"],
+  ["versions", "clock"],
+  ["dependencies", "share-2"],
 ];
 
 export default function SkillDetailPage() {
+  const t = useTranslations("skills.detail");
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
 
@@ -114,29 +116,29 @@ export default function SkillDetailPage() {
     : [];
 
   return (
-    <AppShell title={skill?.name ?? "技能"}>
+    <AppShell title={skill?.name ?? t("appShellFallback")}>
       <div className="h-full overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
           <Breadcrumb name={skill?.name} />
 
           {status === "loading" && (
             <div data-testid="skill-detail-loading">
-              <LoadingState title="加载技能详情" />
+              <LoadingState title={t("loadingTitle")} />
             </div>
           )}
 
           {status === "notfound" && (
             <div data-testid="skill-detail-notfound">
               <EmptyState
-                title={`技能 ${id} 不存在`}
-                description="可能已被卸载,或 URL 拼写有误。"
+                title={t("notFoundTitle", { id })}
+                description={t("notFoundDescription")}
               >
                 <Link
                   href="/skills"
                   className="inline-flex items-center gap-1.5 mt-2 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
                 >
                   <Icon name="arrow-left" size={12} />
-                  回到列表
+                  {t("backToList")}
                 </Link>
               </EmptyState>
             </div>
@@ -145,9 +147,9 @@ export default function SkillDetailPage() {
           {status === "error" && (
             <div data-testid="skill-detail-error">
               <ErrorState
-                title="加载技能失败"
+                title={t("loadErrorTitle")}
                 detail={error}
-                action={{ label: "重试", onClick: () => void load() }}
+                action={{ label: t("retry"), onClick: () => void load() }}
               />
             </div>
           )}
@@ -162,10 +164,10 @@ export default function SkillDetailPage() {
 
               <div
                 role="tablist"
-                aria-label="技能详情视图"
+                aria-label={t("tabsLabel")}
                 className="inline-flex items-center gap-1 rounded-xl bg-surface-2 p-1 border border-border"
               >
-                {TABS.map(([key, label, icon]) => {
+                {TABS.map(([key, icon]) => {
                   const active = tab === key;
                   return (
                     <button
@@ -181,7 +183,7 @@ export default function SkillDetailPage() {
                       }`}
                     >
                       <Icon name={icon} size={12} strokeWidth={2} />
-                      {label}
+                      {t(`tabs.${key}`)}
                     </button>
                   );
                 })}
@@ -200,9 +202,9 @@ export default function SkillDetailPage() {
 
       <ConfirmDialog
         open={confirmDelete}
-        title={`卸载技能 ${skill?.name ?? ""}?`}
-        message="此操作会同时删除本地目录,不可撤销。已分配该技能的员工将失去对应提示片段。"
-        confirmLabel="卸载"
+        title={t("uninstallTitle", { name: skill?.name ?? "" })}
+        message={t("uninstallMessage")}
+        confirmLabel={t("uninstallConfirm")}
         danger
         busy={deleting}
         onConfirm={() => void handleDelete()}
@@ -213,6 +215,7 @@ export default function SkillDetailPage() {
 }
 
 function Breadcrumb({ name }: { name?: string }) {
+  const t = useTranslations("skills.detail");
   return (
     <div className="flex items-center gap-1.5 font-mono text-caption uppercase tracking-wider text-text-subtle">
       <Link
@@ -220,7 +223,7 @@ function Breadcrumb({ name }: { name?: string }) {
         className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md text-text-muted hover:text-primary hover:bg-primary-muted transition duration-base"
       >
         <Icon name="arrow-left" size={11} strokeWidth={2} />
-        Skills
+        {t("breadcrumbRoot")}
       </Link>
       <Icon name="chevron-right" size={11} className="text-text-subtle" />
       <span className="text-text truncate max-w-[30ch]">{name ?? "…"}</span>
@@ -259,6 +262,7 @@ function Hero({
   dependentCount: number;
   onDelete: () => void;
 }) {
+  const t = useTranslations("skills.detail.hero");
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-soft-sm p-6">
       <div
@@ -299,11 +303,11 @@ function Hero({
               <SourceChip source={skill.source} />
               <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
                 <Icon name="users" size={10} strokeWidth={2.25} />
-                {dependentCount} 在用
+                {t("inUse", { count: dependentCount })}
               </span>
             </div>
             <p className="text-[13px] text-text-muted leading-relaxed mb-2">
-              {skill.description || "该技能暂无描述。"}
+              {skill.description || t("noDescription")}
             </p>
             <p className="font-mono text-caption text-text-subtle truncate">
               {skill.id}
@@ -320,7 +324,7 @@ function Hero({
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text-muted hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
             >
               <Icon name="external-link" size={12} />
-              源码
+              {t("sourceLink")}
             </a>
           )}
           {skill.source !== "builtin" && (
@@ -330,7 +334,7 @@ function Hero({
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/30 bg-danger-soft text-[12px] font-semibold text-danger hover:bg-danger/15 transition duration-base"
             >
               <Icon name="trash-2" size={12} />
-              卸载
+              {t("uninstall")}
             </button>
           )}
         </div>
@@ -408,22 +412,23 @@ function Overview({
   skill: Skill;
   dependents: Employee[];
 }) {
+  const t = useTranslations("skills.detail.overview");
   return (
     <div data-testid="tab-panel-overview" className="space-y-5">
       <SkillExplainer skillId={skill.id} />
-      <Section title="元数据" icon="info">
+      <Section title={t("metadata")} icon="info">
         <MetaGrid
           items={[
-            { k: "version", v: `v${skill.version}`, mono: true },
-            { k: "source", v: skill.source, mono: true },
+            { k: t("version"), v: `v${skill.version}`, mono: true },
+            { k: t("source"), v: skill.source, mono: true },
             {
-              k: "installed at",
+              k: t("installedAt"),
               v: skill.installed_at ? formatTime(skill.installed_at) : "—",
               mono: true,
             },
-            { k: "tools", v: String(skill.tool_ids.length), mono: true },
+            { k: t("tools"), v: String(skill.tool_ids.length), mono: true },
             {
-              k: "local path",
+              k: t("localPath"),
               v: skill.path ?? "—",
               mono: true,
             },
@@ -431,10 +436,10 @@ function Overview({
         />
       </Section>
 
-      <Section title={`依赖工具 · ${skill.tool_ids.length}`} icon="zap">
+      <Section title={t("depTools", { count: skill.tool_ids.length })} icon="zap">
         {skill.tool_ids.length === 0 ? (
           <p className="text-sm text-text-muted leading-relaxed">
-            该技能未声明任何工具依赖。仅贡献提示片段。
+            {t("depToolsEmpty")}
           </p>
         ) : (
           <ul
@@ -460,7 +465,7 @@ function Overview({
       </Section>
 
       <Section
-        title={`使用该技能的员工 · ${dependents.length}`}
+        title={t("dependents", { count: dependents.length })}
         icon="users"
       >
         {dependents.length === 0 ? (
@@ -468,7 +473,7 @@ function Overview({
             data-testid="dependents-empty"
             className="text-sm text-text-muted leading-relaxed"
           >
-            尚无员工引用该技能。
+            {t("dependentsEmpty")}
           </p>
         ) : (
           <div
@@ -492,7 +497,7 @@ function Overview({
                     </span>
                     {e.is_lead_agent && (
                       <span className="inline-flex items-center h-4 px-1.5 rounded-sm bg-primary-muted text-primary text-caption font-mono font-semibold uppercase tracking-wider shrink-0">
-                        lead
+                        {t("leadBadge")}
                       </span>
                     )}
                   </div>
@@ -515,9 +520,10 @@ function Overview({
 }
 
 function PromptTab({ skill }: { skill: Skill }) {
+  const t = useTranslations("skills.detail.prompt");
   return (
     <div data-testid="tab-panel-prompt" className="space-y-5">
-      <Section title="系统提示片段" icon="file-code-2">
+      <Section title={t("section")} icon="file-code-2">
         {skill.prompt_fragment ? (
           <pre
             data-testid="prompt-fragment"
@@ -530,23 +536,23 @@ function PromptTab({ skill }: { skill: Skill }) {
             data-testid="prompt-empty"
             className="text-sm text-text-muted leading-relaxed"
           >
-            该技能没有附带提示片段,仅通过工具注入能力。
+            {t("empty")}
           </p>
         )}
       </Section>
 
-      <Section title="调用示例" icon="sparkles">
+      <Section title={t("sample")} icon="sparkles">
         <p className="text-sm text-text-muted leading-relaxed mb-3">
-          将{" "}
+          {t("sampleBefore")}{" "}
           <span className="font-mono text-text bg-surface-2 px-1.5 py-0.5 rounded border border-border">
             {skill.id}
           </span>{" "}
-          添加到员工的{" "}
-          <span className="font-mono text-text">skill_ids</span> 后,员工的
-          system prompt 会追加上方片段,并获得下列 tools:
+          {t.rich("sampleAfter", {
+            mono: (chunks) => <span className="font-mono text-text">{chunks}</span>,
+          })}
         </p>
         {skill.tool_ids.length === 0 ? (
-          <p className="text-sm text-text-subtle italic">— 无 tool 依赖 —</p>
+          <p className="text-sm text-text-subtle italic">{t("noToolDeps")}</p>
         ) : (
           <ul className="flex flex-wrap gap-1.5">
             {skill.tool_ids.map((tid) => (
@@ -566,19 +572,20 @@ function PromptTab({ skill }: { skill: Skill }) {
 }
 
 function VersionsTab({ skill }: { skill: Skill }) {
+  const t = useTranslations("skills.detail.versions");
   return (
     <div data-testid="tab-panel-versions" className="space-y-5">
-      <Section title="当前版本" icon="clock">
+      <Section title={t("section")} icon="clock">
         <MetaGrid
           items={[
-            { k: "version", v: `v${skill.version}`, mono: true },
+            { k: t("version"), v: `v${skill.version}`, mono: true },
             {
-              k: "installed at",
+              k: t("installedAt"),
               v: skill.installed_at ? formatTime(skill.installed_at) : "—",
               mono: true,
             },
             {
-              k: "source url",
+              k: t("sourceUrl"),
               v: skill.source_url ?? "—",
               mono: true,
             },
@@ -587,8 +594,8 @@ function VersionsTab({ skill }: { skill: Skill }) {
       </Section>
       <div data-testid="version-history-empty">
         <EmptyState
-          title="暂无版本历史"
-          description="当前后端仅记录安装时刻的单一版本。未来通过 reinstall / 切换分支可保留历史。"
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
         />
       </div>
     </div>
@@ -596,19 +603,19 @@ function VersionsTab({ skill }: { skill: Skill }) {
 }
 
 function DependenciesTab({ skill }: { skill: Skill }) {
+  const t = useTranslations("skills.detail.dependencies");
   return (
     <div data-testid="tab-panel-dependencies" className="space-y-5">
       <Section
-        title={`技能 → 工具 · ${skill.tool_ids.length}`}
+        title={t("section", { count: skill.tool_ids.length })}
         icon="share-2"
       >
         <p className="text-sm text-text-muted leading-relaxed mb-4">
-          该技能注入到员工时会开放以下工具。点击 tool_id 跳 /gateway
-          查看实际实现与 scope。
+          {t("intro")}
         </p>
         {skill.tool_ids.length === 0 ? (
           <p data-testid="dep-empty" className="text-sm text-text-muted">
-            没有工具依赖。
+            {t("empty")}
           </p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
@@ -616,13 +623,13 @@ function DependenciesTab({ skill }: { skill: Skill }) {
               <thead>
                 <tr className="bg-surface-2">
                   <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold w-12">
-                    #
+                    {t("thIndex")}
                   </th>
                   <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold">
-                    tool_id
+                    {t("thToolId")}
                   </th>
                   <th className="text-left py-2 px-3 font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold w-24">
-                    kind
+                    {t("thKind")}
                   </th>
                 </tr>
               </thead>
