@@ -77,6 +77,25 @@ class ArtifactContentResponse(BaseModel):
     truncated: bool = False
 
 
+class ArtifactStatsResponse(BaseModel):
+    """Workspace-wide artifact aggregations for the /artifacts dashboard.
+
+    Computed from `list_all` so we share one query path; the page asks for
+    stats once on mount + after any artifact_changed SSE frame, not on every
+    keystroke. If we ever cross the ~10k-rows mark we'll move to a SQL
+    GROUP BY in the repo, but at that point the global page should also
+    paginate; for v0 the catalog is well under that.
+    """
+
+    total: int
+    pinned: int
+    last_7d: int
+    total_bytes: int
+    by_kind: dict[str, int]
+    largest_kind: str | None
+    latest_updated_at: str | None
+
+
 def _to_response(art: Artifact) -> ArtifactResponse:
     return ArtifactResponse(
         id=art.id,
@@ -150,6 +169,39 @@ async def list_artifacts(
         created_before=created_before,
     )
     return [_to_response(a) for a in items]
+
+
+@router.get("/stats", response_model=ArtifactStatsResponse)
+async def artifact_stats(
+    svc: ArtifactService = Depends(get_artifact_service),
+) -> ArtifactStatsResponse:
+    """Workspace-wide artifact aggregations for the /artifacts dashboard."""
+    items = await svc.list_all(limit=500, include_deleted=False)
+    by_kind: dict[str, int] = {}
+    total_bytes = 0
+    pinned = 0
+    last_7d = 0
+    latest_updated: datetime | None = None
+    cutoff = datetime.now(UTC).timestamp() - 7 * 24 * 3600
+    for a in items:
+        by_kind[a.kind.value] = by_kind.get(a.kind.value, 0) + 1
+        total_bytes += a.size_bytes
+        if a.pinned:
+            pinned += 1
+        if a.created_at.timestamp() >= cutoff:
+            last_7d += 1
+        if latest_updated is None or a.updated_at > latest_updated:
+            latest_updated = a.updated_at
+    largest_kind = max(by_kind.items(), key=lambda kv: kv[1])[0] if by_kind else None
+    return ArtifactStatsResponse(
+        total=len(items),
+        pinned=pinned,
+        last_7d=last_7d,
+        total_bytes=total_bytes,
+        by_kind=by_kind,
+        largest_kind=largest_kind,
+        latest_updated_at=latest_updated.isoformat() if latest_updated else None,
+    )
 
 
 @router.get("/stream")

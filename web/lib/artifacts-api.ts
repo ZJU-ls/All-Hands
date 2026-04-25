@@ -77,6 +77,22 @@ export type ArtifactListFilter = {
   createdBefore?: string;
 };
 
+export type ArtifactStatsDto = {
+  total: number;
+  pinned: number;
+  last_7d: number;
+  total_bytes: number;
+  by_kind: Record<string, number>;
+  largest_kind: string | null;
+  latest_updated_at: string | null;
+};
+
+export async function getArtifactStats(): Promise<ArtifactStatsDto> {
+  const res = await fetch(`${BASE}/api/artifacts/stats`);
+  if (!res.ok) throw new Error(`getArtifactStats failed: ${res.status}`);
+  return res.json() as Promise<ArtifactStatsDto>;
+}
+
 export async function listArtifacts(
   filter: ArtifactListFilter = {},
 ): Promise<ArtifactDto[]> {

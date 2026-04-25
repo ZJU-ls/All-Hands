@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -184,6 +185,9 @@ def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
 
 
 # --- AgentLoop --------------------------------------------------------------
+
+
+_log = logging.getLogger(__name__)
 
 
 class AgentLoop:
@@ -360,7 +364,25 @@ class AgentLoop:
 
                 tool_use_blocks = [b for b in blocks if isinstance(b, ToolUseBlock)]
                 if not tool_use_blocks:
-                    yield LoopExited(reason="completed")
+                    # Distinguish "model finished cleanly with a reply" from
+                    # "model emitted nothing at all". The latter usually means
+                    # the model tried to call a tool that doesn't exist (e.g.
+                    # a stale skill referencing a de-registered tool id) and
+                    # had its phantom tool_call dropped — leaving it with no
+                    # text and no valid tool. Surfacing it as `empty_response`
+                    # lets the UI show an error instead of going silent.
+                    if not text_full.strip():
+                        yield LoopExited(
+                            reason="empty_response",
+                            detail=(
+                                "model produced no text and no tool calls — "
+                                "this typically means a tool referenced by a "
+                                "skill / prompt is not registered for this "
+                                "employee, or the model ran out of ideas mid-turn"
+                            ),
+                        )
+                    else:
+                        yield LoopExited(reason="completed")
                     return
 
                 # Append assistant message (with tool_uses) to lc history
@@ -442,6 +464,16 @@ class AgentLoop:
             try:
                 tool, executor = self._tool_registry.get(tool_id)
             except KeyError:
+                # A skill / employee config referenced a tool that is no
+                # longer registered (e.g. deprecated render_plan). Log so
+                # the operator can spot the stale reference instead of
+                # debugging "agent goes silent" at the model layer.
+                _log.warning(
+                    "active tool_id %r is not registered; skipping. "
+                    "If this came from a builtin skill, update its "
+                    "tool_ids list.",
+                    tool_id,
+                )
                 continue
             executor = self._maybe_substitute_executor(tool_id, executor)
             out[tool.name] = ToolBinding(tool=tool, executor=executor)
