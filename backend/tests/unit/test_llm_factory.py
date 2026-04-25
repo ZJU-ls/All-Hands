@@ -13,16 +13,19 @@ from allhands.execution.llm_factory import build_llm, probe_endpoint, resolve_mo
 
 
 def _p(
-    *, kind: str, base_url: str, api_key: str = "sk-fake", default_model: str = "m"
+    *,
+    kind: str,
+    base_url: str,
+    api_key: str = "sk-fake",
+    default_model: str = "m",  # kept for back-compat with old tests; unused
 ) -> LLMProvider:
+    del default_model
     return LLMProvider(
         id="p1",
         name="T",
         kind=kind,  # type: ignore[arg-type]
         base_url=base_url,
         api_key=api_key,
-        default_model=default_model,
-        is_default=False,
     )
 
 
@@ -32,7 +35,6 @@ def test_build_llm_dispatches_anthropic_kind_to_chat_anthropic() -> None:
     provider = _p(
         kind="anthropic",
         base_url="https://api.anthropic.com",
-        default_model="claude-3-5-sonnet-latest",
     )
     llm = build_llm(provider, "claude-3-5-sonnet-latest")
     assert isinstance(llm, ChatAnthropic)
@@ -53,7 +55,6 @@ def test_build_llm_dispatches_aliyun_kind_to_chat_openai() -> None:
     provider = _p(
         kind="aliyun",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        default_model="qwen-plus",
     )
     llm = build_llm(provider, "qwen-plus")
     assert isinstance(llm, ChatOpenAI)
@@ -121,7 +122,6 @@ def test_build_llm_anthropic_bakes_thinking_disabled_into_ctor() -> None:
     provider = _p(
         kind="anthropic",
         base_url="https://coding.dashscope.aliyuncs.com/apps/anthropic",
-        default_model="qwen3.6-plus",
     )
     llm = build_llm(provider, "qwen3.6-plus", thinking=False)
     assert getattr(llm, "thinking", None) == {"type": "disabled"}
@@ -165,15 +165,13 @@ def test_build_llm_openai_ignores_thinking_arg() -> None:
 # --- resolve_model_name --------------------------------------------------
 
 
-def _provider(*, kind: str, name: str = "T", default_model: str = "fallback-x") -> LLMProvider:
+def _provider(*, kind: str, name: str = "T") -> LLMProvider:
     return LLMProvider(
         id="p1",
         name=name,
         kind=kind,  # type: ignore[arg-type]
         base_url="http://x",
         api_key="sk",
-        default_model=default_model,
-        is_default=False,
     )
 
 
@@ -192,20 +190,24 @@ def test_resolve_prefix_matching_provider_name_is_stripped_case_insensitive() ->
     assert resolve_model_name(p, "dashscope/qwen-plus") == "qwen-plus"
 
 
-def test_resolve_mismatched_prefix_on_aliyun_falls_back_to_default() -> None:
-    """Stale seed `bailian/qwen-plus` on an aliyun provider should not 400."""
-    p = _provider(kind="aliyun", name="CodingPlan", default_model="qwen3.6-plus")
-    assert resolve_model_name(p, "bailian/qwen-plus") == "qwen3.6-plus"
+def test_resolve_mismatched_prefix_passes_through_aliyun() -> None:
+    """Pre-2026-04-25 we used to fall back to provider.default_model on a
+    mismatched prefix. That field is gone — defaulting is now the
+    resolver's job. The factory just passes the ref through; the upstream
+    will tell the caller if the ref is bogus.
+    """
+    p = _provider(kind="aliyun", name="CodingPlan")
+    assert resolve_model_name(p, "bailian/qwen-plus") == "bailian/qwen-plus"
 
 
-def test_resolve_mismatched_prefix_on_anthropic_falls_back_to_default() -> None:
-    p = _provider(kind="anthropic", name="Anthropic", default_model="claude-3-5-sonnet-latest")
-    assert resolve_model_name(p, "deepseek/deepseek-coder") == "claude-3-5-sonnet-latest"
+def test_resolve_mismatched_prefix_passes_through_anthropic() -> None:
+    p = _provider(kind="anthropic", name="Anthropic")
+    assert resolve_model_name(p, "deepseek/deepseek-coder") == "deepseek/deepseek-coder"
 
 
 def test_resolve_mismatched_prefix_on_openai_passes_through_for_aggregator_routing() -> None:
     """OpenRouter/DeepSeek aggregators use slashes as routing — don't strip."""
-    p = _provider(kind="openai", name="OpenRouter", default_model="gpt-4o-mini")
+    p = _provider(kind="openai", name="OpenRouter")
     assert resolve_model_name(p, "anthropic/claude-3") == "anthropic/claude-3"
 
 
@@ -214,6 +216,9 @@ def test_resolve_prefix_matching_openai_kind_is_stripped() -> None:
     assert resolve_model_name(p, "openai/gpt-4o-mini") == "gpt-4o-mini"
 
 
-def test_resolve_empty_ref_falls_back_to_default() -> None:
-    p = _provider(kind="aliyun", default_model="qwen3.6-plus")
-    assert resolve_model_name(p, "") == "qwen3.6-plus"
+def test_resolve_empty_ref_returns_empty() -> None:
+    """`provider.default_model` is gone — empty in, empty out. Callers
+    are expected to never pass empty strings now (model_resolution
+    guarantees a real ref)."""
+    p = _provider(kind="aliyun")
+    assert resolve_model_name(p, "") == ""

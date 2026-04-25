@@ -30,7 +30,6 @@ from pydantic import BaseModel
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_artifact_service
 from allhands.core import BINARY_KINDS, Artifact, ArtifactKind, ArtifactVersion
-from allhands.i18n import t
 from allhands.services.artifact_service import ArtifactNotFound, ArtifactService
 
 if TYPE_CHECKING:
@@ -97,15 +96,13 @@ def _to_response(art: Artifact) -> ArtifactResponse:
 
 
 def _to_version_response(v: ArtifactVersion) -> ArtifactVersionResponse:
-    size = (
-        len((v.content or "").encode("utf-8"))
-        if v.content is not None
-        else 0  # on-disk binaries report zero here; clients fetch the content endpoint for bytes
-    )
+    # All versions live on disk now; size reads via stat. Cheap, but a 0
+    # fallback keeps the endpoint forgiving when the file was wiped (e.g.
+    # devs nuking data/artifacts/ to clean up).
     return ArtifactVersionResponse(
         version=v.version,
         created_at=v.created_at.isoformat(),
-        size_bytes=size,
+        size_bytes=0,
         has_diff=v.diff_from_prev is not None,
     )
 
@@ -240,15 +237,11 @@ async def get_artifact_content(
     except ArtifactNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    if art.kind in BINARY_KINDS:
-        blob = svc.read_binary(art)
-        headers: dict[str, str] = {}
-        if download:
-            headers["Content-Disposition"] = f'attachment; filename="{art.name}"'
-        return Response(content=blob, media_type=art.mime_type, headers=headers)
-
-    body = art.content or ""
-    return Response(content=body, media_type=art.mime_type)
+    blob = svc.read_bytes(art)
+    headers: dict[str, str] = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{art.name}"'
+    return Response(content=blob, media_type=art.mime_type, headers=headers)
 
 
 @router.get("/{artifact_id}/versions", response_model=list[ArtifactVersionResponse])
@@ -264,6 +257,72 @@ async def list_artifact_versions(
     return [_to_version_response(v) for v in versions]
 
 
+class UpdateArtifactRequest(BaseModel):
+    """User-edit payload (P1 · 2026-04-25). The artifact panel's edit UI
+    POSTs this directly; ``mode='overwrite'`` is the only path the UI uses.
+    Lead Agent goes through the meta tool ``artifact_update`` instead —
+    same service-layer code, different transport."""
+
+    mode: str = "overwrite"
+    content: str | None = None
+    content_base64: str | None = None
+    patch: str | None = None
+
+
+class RollbackArtifactRequest(BaseModel):
+    to_version: int
+
+
+@router.patch("/{artifact_id}", response_model=ArtifactResponse)
+async def update_artifact(
+    artifact_id: str,
+    body: UpdateArtifactRequest,
+    svc: ArtifactService = Depends(get_artifact_service),
+) -> ArtifactResponse:
+    """Edit an artifact's content (UI ⇆ panel edit mode).
+
+    Pairs with the ``allhands.artifacts.update`` Meta Tool (L01 contract);
+    same service entry-point. Confirmation Gate is NOT in front of this
+    REST path — UI edit is a direct user action; the gate exists to put a
+    human in the loop on agent-driven writes, not to prompt the user
+    twice on their own click.
+    """
+    from allhands.services.artifact_service import ArtifactError
+
+    try:
+        updated = await svc.update(
+            artifact_id,
+            mode=body.mode,
+            content=body.content,
+            content_base64=body.content_base64,
+            patch=body.patch,
+        )
+    except ArtifactNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ArtifactError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _to_response(updated)
+
+
+@router.post("/{artifact_id}/rollback", response_model=ArtifactResponse)
+async def rollback_artifact(
+    artifact_id: str,
+    body: RollbackArtifactRequest,
+    svc: ArtifactService = Depends(get_artifact_service),
+) -> ArtifactResponse:
+    """Roll back to an older version. Creates a new v{N+1} carrying the
+    older content; original history is preserved."""
+    from allhands.services.artifact_service import ArtifactError
+
+    try:
+        updated = await svc.rollback(artifact_id, to_version=body.to_version)
+    except ArtifactNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ArtifactError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _to_response(updated)
+
+
 @router.get("/{artifact_id}/versions/{version}/content", response_model=ArtifactContentResponse)
 async def get_artifact_version_content(
     artifact_id: str,
@@ -276,10 +335,8 @@ async def get_artifact_version_content(
     except ArtifactNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    blob = svc.read_version_bytes(v)
     if art.kind in BINARY_KINDS:
-        if v.file_path is None:
-            raise HTTPException(status_code=404, detail=t("errors.not_found.version_blob"))
-        blob = (svc.absolute_path(v.file_path)).read_bytes()
         return ArtifactContentResponse(
             id=art.id,
             version=v.version,
@@ -287,11 +344,10 @@ async def get_artifact_version_content(
             mime_type=art.mime_type,
             content_base64=base64.b64encode(blob).decode("ascii"),
         )
-
     return ArtifactContentResponse(
         id=art.id,
         version=v.version,
         kind=art.kind.value,
         mime_type=art.mime_type,
-        content=v.content,
+        content=blob.decode("utf-8"),
     )

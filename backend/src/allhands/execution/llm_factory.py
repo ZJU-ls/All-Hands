@@ -26,24 +26,24 @@ def resolve_model_name(provider: LLMProvider, model_ref: str) -> str:
          OpenRouter/DeepSeek aggregators use slashes as routing (e.g.
          ``anthropic/claude-3``); we can't tell them apart from bare OpenAI
          at the kind level, so we err on the side of preserving intent.
-      4. Mismatched prefix + other kinds (``anthropic`` / ``aliyun``) → the
-         ref was meant for a different provider that is no longer bound;
-         fall back to ``provider.default_model`` rather than sending an
-         unknown model to an upstream that doesn't do slash routing.
-      5. Empty / missing ref → fall back to ``provider.default_model``.
-         Seeds may leave ``model_ref`` blank to pick up whatever the
-         currently bound provider recommends.
+      4. Mismatched prefix + other kinds (``anthropic`` / ``aliyun``) → pass
+         through; upstream will reject if it isn't real, which is the right
+         signal to the user. We used to fall back to ``provider.default_model``
+         here, but that field is gone — defaulting is now the caller's job
+         (``model_resolution.resolve_effective_model`` always returns a
+         resolvable ref before reaching this layer).
+      5. Empty ref → return empty; upstream LangChain ctor will validate.
+         Callers shouldn't pass empty refs in the new flow, but we keep the
+         function total to avoid surprise exceptions on the hot path.
     """
     if not model_ref:
-        return provider.default_model
+        return ""
     if "/" not in model_ref:
         return model_ref
     prefix, name = model_ref.split("/", 1)
     if prefix.lower() == provider.name.lower() or prefix.lower() == provider.kind:
         return name
-    if provider.kind == "openai":
-        return model_ref
-    return provider.default_model
+    return model_ref
 
 
 def build_llm(

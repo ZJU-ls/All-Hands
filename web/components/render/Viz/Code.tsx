@@ -6,11 +6,19 @@ import type { RenderProps } from "@/lib/component-registry";
 import { Icon } from "@/components/ui/icon";
 import { CopyButton } from "@/components/render/_shared/CopyButton";
 
+// Lines longer than this risk needing horizontal scroll in a chat-embedded
+// preview. Below the threshold, the wrap toggle is a no-op visually, so we
+// hide it altogether — a button you can press without seeing any change is
+// strictly worse than no button.
+const WRAP_THRESHOLD_CHARS = 80;
+
 /**
  * Brand-Blue V2 (ADR 0016) · code block.
  *
  * Interactions (2026-04-25):
- *   - line-wrap toggle  · long lines no longer force horizontal scroll
+ *   - line-wrap toggle  · only renders when at least one line exceeds
+ *                         WRAP_THRESHOLD_CHARS; otherwise the button
+ *                         would be a no-op + an unclear icon
  *   - copy              · standardised on shared CopyButton
  *   - line numbers      · always on
  *   - highlight lines   · driven by props.highlightLines
@@ -31,6 +39,7 @@ export function Code({ props, interactions }: RenderProps) {
   const copyAction = safeInteractions.find((i) => i.action === "copy_to_clipboard");
   const copyText = (copyAction?.payload?.text as string | undefined) ?? code;
   const lineNumWidth = String(lines.length).length;
+  const hasLongLine = lines.some((l) => l.length > WRAP_THRESHOLD_CHARS);
 
   return (
     <div className="rounded-xl border border-border bg-surface-2 overflow-hidden shadow-soft-sm animate-fade-up">
@@ -46,19 +55,22 @@ export function Code({ props, interactions }: RenderProps) {
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setWrap((v) => !v)}
-            aria-pressed={wrap}
-            title={wrap ? t("wrapOff") : t("wrapOn")}
-            className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors duration-fast ${
-              wrap
-                ? "bg-primary-muted text-primary"
-                : "text-text-muted hover:bg-surface hover:text-text"
-            }`}
-          >
-            <Icon name="list" size={12} />
-          </button>
+          {hasLongLine ? (
+            <button
+              type="button"
+              onClick={() => setWrap((v) => !v)}
+              aria-pressed={wrap}
+              title={wrap ? t("wrapOff") : t("wrapOn")}
+              className={`inline-flex h-6 items-center gap-1 rounded-md border px-2 text-caption transition-colors duration-fast ${
+                wrap
+                  ? "border-primary/40 bg-primary-muted text-primary"
+                  : "border-border bg-surface text-text-muted hover:border-border-strong hover:text-text"
+              }`}
+            >
+              <Icon name="list" size={11} />
+              <span>{wrap ? t("wrapped") : t("wrap")}</span>
+            </button>
+          ) : null}
           <CopyButton value={copyText} label={t("copyLabel")} />
         </div>
       </div>

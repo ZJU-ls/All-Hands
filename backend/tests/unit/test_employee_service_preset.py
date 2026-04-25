@@ -43,8 +43,9 @@ async def test_preset_execute_defaults(svc) -> None:  # type: ignore[no-untyped-
     assert "allhands.meta.resolve_skill" in emp.tool_ids
 
 
-async def test_preset_plan_with_subagent_max_iterations_is_15(svc) -> None:  # type: ignore[no-untyped-def]
-    """Q7 signoff · plan_with_subagent budget 15 (was 20 in draft)."""
+async def test_preset_plan_with_subagent_max_iterations_is_20(svc) -> None:  # type: ignore[no-untyped-def]
+    """User feedback (2026-04-25): plan_with_subagent = 20 iter
+    (was Q7's 15) for the orchestrator workflow's real footprint."""
     emp = await svc.create(
         name="Planner",
         description="d",
@@ -52,7 +53,7 @@ async def test_preset_plan_with_subagent_max_iterations_is_15(svc) -> None:  # t
         model_ref="openai/gpt-4o-mini",
         preset="plan_with_subagent",
     )
-    assert emp.max_iterations == 15
+    assert emp.max_iterations == 20
 
 
 async def test_preset_custom_tool_ids_append_to_base(svc) -> None:  # type: ignore[no-untyped-def]

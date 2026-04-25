@@ -61,24 +61,32 @@ EXPECTED_EXECUTE = {
 
 EXPECTED_PLAN = {
     "tool_ids": [
-        "allhands.builtin.render_plan",
+        "allhands.builtin.fetch_url",
+        "allhands.meta.plan_create",
+        "allhands.meta.plan_update_step",
+        "allhands.meta.plan_complete_step",
+        "allhands.meta.plan_view",
         "allhands.meta.resolve_skill",
         "allhands.meta.read_skill_file",
     ],
-    "skill_ids": ["sk_planner"],
-    "max_iterations": 3,
+    "skill_ids": ["sk_planner", "sk_research", "sk_write"],
+    "max_iterations": 15,
 }
 
-# Q7: contract §4.1 text says 20, SIGNOFF Q7 answer lowered to 15.
+# 2026-04-25 user feedback: max raised to 20 (was Q7's 15) for the
+# "plan + dispatch + track" workflow's real iteration footprint.
 EXPECTED_PLAN_WITH_SUBAGENT = {
     "tool_ids": [
-        "allhands.builtin.render_plan",
+        "allhands.meta.plan_create",
+        "allhands.meta.plan_update_step",
+        "allhands.meta.plan_complete_step",
+        "allhands.meta.plan_view",
         "allhands.meta.spawn_subagent",
         "allhands.meta.resolve_skill",
         "allhands.meta.read_skill_file",
     ],
     "skill_ids": ["sk_planner", "sk_executor_spawn"],
-    "max_iterations": 15,
+    "max_iterations": 20,
 }
 
 
@@ -108,11 +116,12 @@ def test_preview_defaults_match_contract(
     assert "preset" not in body
 
 
-def test_preview_plan_with_subagent_is_15_not_20(client: TestClient) -> None:
-    """Explicit anchor test for SIGNOFF Q7 override (15, not the contract's 20)."""
+def test_preview_plan_with_subagent_is_20(client: TestClient) -> None:
+    """User feedback (2026-04-25): plan_with_subagent budget = 20 iter
+    (was Q7's 15) to match the actual orchestrator workflow footprint."""
     r = client.post("/api/employees/preview", json={"preset": "plan_with_subagent"})
     assert r.status_code == 200
-    assert r.json()["max_iterations"] == 15
+    assert r.json()["max_iterations"] == 20
 
 
 def test_preview_custom_tool_ids_appended_to_base(client: TestClient) -> None:
@@ -162,13 +171,13 @@ def test_preview_custom_max_iterations_wins(client: TestClient) -> None:
 
 
 def test_preview_max_iterations_range(client: TestClient) -> None:
-    """UI slider bound: 1 ≤ max_iterations ≤ 50 (SIGNOFF Q7)."""
+    """UI bound: 1 ≤ max_iterations ≤ 10000 (raised from 50 per origin/main 9fb682c)."""
     r_low = client.post(
         "/api/employees/preview", json={"preset": "execute", "custom_max_iterations": 0}
     )
     r_high = client.post(
         "/api/employees/preview",
-        json={"preset": "execute", "custom_max_iterations": 51},
+        json={"preset": "execute", "custom_max_iterations": 10001},
     )
     assert r_low.status_code == 422
     assert r_high.status_code == 422

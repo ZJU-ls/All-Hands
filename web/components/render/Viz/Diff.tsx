@@ -113,14 +113,18 @@ function computeBlocks(lines: DiffLine[]): Block[] {
  *
  * Interactions (2026-04-25):
  *   - view toggle      · split / unified · in-header SegmentedControl
+ *                       · default = split (easier to scan two faces)
  *   - fold unchanged   · runs of ≥5 unchanged lines collapse into a click-
  *                         to-expand bar; folded blocks remember their state
- *   - copy left/right  · copies the before / after side independently
+ *   - copy 旧版 / 新版 · explicit text labels instead of two identical
+ *                         clipboard icons (which read as "copy what?")
  */
 export function Diff({ props }: RenderProps) {
   const before = (props.before as string | undefined) ?? "";
   const after = (props.after as string | undefined) ?? "";
-  const initialMode: ViewMode = props.mode === "split" ? "split" : "unified";
+  // Default to split — two-column view makes the before/after relationship
+  // obvious without scanning gutter pills. Unified is opt-in via prop.
+  const initialMode: ViewMode = props.mode === "unified" ? "unified" : "split";
   const filename = props.filename as string | undefined;
   const language = props.language as string | undefined;
 
@@ -401,8 +405,11 @@ function Header({
           { key: "split", label: "Split" },
         ]}
       />
-      <CopyButton value={before} label={t("copyBefore")} />
-      <CopyButton value={after} label={t("copyAfter")} />
+      {/* Visible chip text stays as Before / After (developer convention from
+          GitHub diffs); the tooltip uses the localized "copy original / copy
+          new" wording. */}
+      <CopyButton value={before} label={t("copyBefore")} short="Before" variant="button" />
+      <CopyButton value={after} label={t("copyAfter")} short="After" variant="button" />
     </div>
   );
 }

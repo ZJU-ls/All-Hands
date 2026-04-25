@@ -202,9 +202,9 @@ async def test_ensure_providers_idempotent_by_name(
         providers = await SqlLLMProviderRepo(session).list_all()
     names = [p.name for p in providers]
     assert len(names) == len(set(names)), f"providers duplicated by name: {names}"
-    # Default flag is held by exactly one provider.
-    defaults = [p for p in providers if p.is_default]
-    assert len(defaults) == 1, f"exactly one default provider, got {len(defaults)}"
+    # Post-2026-04-25: "default" lives on `LLMModel.is_default` now, not on
+    # the provider. The model-level invariant is checked by the model seed
+    # test below — providers don't carry a default flag any more.
 
 
 async def test_ensure_models_idempotent_and_linked_to_providers(

@@ -34,6 +34,7 @@ from allhands.api.routers.providers import router as providers_router
 from allhands.api.routers.skills import router as skills_router
 from allhands.api.routers.tasks import router as tasks_router
 from allhands.api.routers.triggers import router as triggers_router
+from allhands.api.routers.user_input import router as user_input_router
 from allhands.api.routers.webhooks import router as webhooks_router
 from allhands.config import get_settings
 
@@ -176,6 +177,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(chat_router, prefix="/api")
     app.include_router(confirmations_router, prefix="/api")
+    app.include_router(user_input_router, prefix="/api")
     app.include_router(employees_router, prefix="/api")
     app.include_router(providers_router, prefix="/api")
     app.include_router(models_router, prefix="/api")

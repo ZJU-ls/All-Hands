@@ -65,8 +65,6 @@ def seeded_client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, str, str
                     name="TestProvider",
                     base_url="https://api.example.com/v1",
                     api_key="sk-fake",
-                    default_model="gpt-4o-mini",
-                    is_default=True,
                 )
             )
             await m_repo.upsert(

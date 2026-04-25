@@ -53,6 +53,7 @@ export function InputBar({
     updateToolCall,
     addRenderPayload,
     addConfirmation,
+    addUserInput,
     addMessage,
     finalizeStreaming,
     cancelStreaming,
@@ -121,6 +122,28 @@ export function InputBar({
             conversationId,
             source: "polling",
           });
+        } else if (name === "allhands.user_input_required") {
+          // ADR 0019 C3 · clarification (ask_user_question) paused mid-turn.
+          const ev = (value ?? {}) as {
+            user_input_id?: string;
+            tool_call_id?: string;
+            questions?: Array<{
+              label?: string;
+              description?: string;
+              preview?: string | null;
+            }>;
+          };
+          if (!ev.user_input_id || !ev.tool_call_id) return;
+          const normalized = (ev.questions ?? []).map((q) => ({
+            label: q.label ?? "",
+            description: q.description ?? "",
+            preview: q.preview ?? null,
+          }));
+          addUserInput({
+            userInputId: ev.user_input_id,
+            toolCallId: ev.tool_call_id,
+            questions: normalized,
+          });
         } else if (name === "allhands.render") {
           const ev = (value ?? {}) as {
             message_id?: string;
@@ -158,6 +181,7 @@ export function InputBar({
     updateToolCall,
     addRenderPayload,
     addConfirmation,
+    addUserInput,
     finalizeStreaming,
     cancelStreaming,
     setStreamError,

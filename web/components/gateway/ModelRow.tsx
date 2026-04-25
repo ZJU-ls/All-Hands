@@ -21,6 +21,8 @@ export type GatewayModel = {
   display_name: string;
   context_window: number;
   enabled: boolean;
+  /** Singleton flag — at most one row across the whole table is_default=true. */
+  is_default: boolean;
 };
 
 export function ModelRow({
@@ -29,12 +31,15 @@ export function ModelRow({
   onPing,
   onChatTest,
   onDelete,
+  onSetDefault,
 }: {
   model: GatewayModel;
   pingState: PingState;
   onPing: () => void;
   onChatTest: () => void;
   onDelete: () => void;
+  /** Promote this model — atomically clears any prior default + sets this row. */
+  onSetDefault: () => void;
 }) {
   const t = useTranslations("gateway.modelRow");
   const running = pingState.status === "running";
@@ -80,6 +85,36 @@ export function ModelRow({
           <span className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border text-[10px] text-text-muted">
             {t("disabled")}
           </span>
+        )}
+
+        {/* 默认徽标 / 设为默认按钮互斥占同一槽位:
+            - is_default → 蓝色「★ 默认」chip(状态标识)
+            - else        → 灰色「设为默认」按钮(单击切默认)
+            放在模型名称区右侧、操作按钮组之外,这样右边的
+            ping / chat / delete 三个 icon 在所有行上水平对齐,不会因
+            "这一行有没有默认按钮"而漂移。 */}
+        {model.is_default ? (
+          <span
+            data-testid={`gateway-default-badge-${model.id}`}
+            className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm bg-primary/10 border border-primary/25 text-primary text-[10px] font-semibold"
+            title="工作区默认模型 · Lead Agent 与 AI 解读默认走这一对 (provider, model)"
+          >
+            <Icon name="star" size={10} strokeWidth={2} />
+            默认
+          </span>
+        ) : (
+          model.enabled && (
+            <button
+              type="button"
+              onClick={onSetDefault}
+              data-testid={`gateway-set-default-${model.id}`}
+              title="设为工作区默认 (provider + model 一起切)"
+              className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm border border-dashed border-border bg-transparent text-text-subtle text-[10px] font-medium hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors duration-fast opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <Icon name="star" size={10} strokeWidth={2} />
+              设为默认
+            </button>
+          )
         )}
       </div>
 

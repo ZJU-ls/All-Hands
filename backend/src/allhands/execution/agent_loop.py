@@ -203,6 +203,7 @@ class AgentLoop:
         spawn_subagent_service: Any = None,
         model_ref_override: str | None = None,
         confirmation_signal: DeferredSignal | None = None,
+        user_input_signal: DeferredSignal | None = None,
         plan_repo: Any = None,
         conversation_id: str = "",
         **_unused: Any,
@@ -228,6 +229,10 @@ class AgentLoop:
         # production wiring (B3) injects a ConfirmationDeferred backed
         # by ConfirmationRepo.
         self._confirmation_signal = confirmation_signal
+        # ADR 0019 C3 · clarification signal. None = ask_user_question
+        # tools fall through to a straight Allow (the executor receives
+        # an empty `answers` dict and echoes back).
+        self._user_input_signal = user_input_signal
 
     # --- public stream ----------------------------------------------------
 
@@ -243,13 +248,6 @@ class AgentLoop:
         try:
             effective_model_ref = self._model_ref_override or self._employee.model_ref
             base_model = _build_model(effective_model_ref, self._provider, overrides)
-            bindings = self._build_bindings()
-            lc_tools = self._build_lc_tools(bindings)
-            model = (
-                base_model.bind_tools(lc_tools)
-                if lc_tools and hasattr(base_model, "bind_tools")
-                else base_model
-            )
             lc_messages = self._build_lc_messages(messages, overrides)
 
             iteration = 0
@@ -258,6 +256,23 @@ class AgentLoop:
                 if iteration > max_iterations:
                     yield LoopExited(reason="max_iterations")
                     return
+
+                # 2026-04-25 (P2): rebuild bindings + tool list every
+                # iteration. SkillRuntime can mutate during a turn (a
+                # successful `resolve_skill` adds tool_ids to
+                # ``runtime.resolved_skills``); the next iteration's
+                # ``model.astream`` then sees the freshly-unlocked tools.
+                # This is the Claude Code while-true contract — tool list
+                # is a function of current state, not a build-time
+                # constant. Cost: ~6ms per iteration (binding map + LangChain
+                # bind_tools), invisible next to the LLM round-trip.
+                bindings = self._build_bindings()
+                lc_tools = self._build_lc_tools(bindings)
+                model = (
+                    base_model.bind_tools(lc_tools)
+                    if lc_tools and hasattr(base_model, "bind_tools")
+                    else base_model
+                )
 
                 message_id = str(uuid.uuid4())
                 accumulated: AIMessageChunk | None = None
@@ -630,6 +645,22 @@ class AgentLoop:
           * sub-agent → executor itself does the recursion; the pipeline
             doesn't need to defer at this layer
         """
+        # ADR 0019 C3 · clarification path runs BEFORE the confirmation
+        # check. ask_user_question is ToolScope.READ + requires_user_input,
+        # so it would otherwise fall through to Allow.
+        if getattr(tool, "requires_user_input", False) and self._user_input_signal is not None:
+            raw_questions = block.input.get("questions") or []
+            questions_list: list[Any] = (
+                list(raw_questions) if isinstance(raw_questions, list) else []
+            )
+            return Defer(
+                signal=self._user_input_signal,
+                publish_kwargs={
+                    "tool_use_id": block.id,
+                    "questions": questions_list,
+                },
+            )
+
         needs_confirm = (
             tool.scope
             in (

@@ -48,6 +48,7 @@ class Tool(BaseModel):
     output_schema: dict[str, object]
     scope: ToolScope
     requires_confirmation: bool = False
+    requires_user_input: bool = False
     cost_hint: CostHint | None = None
 
     model_config = {"frozen": True}

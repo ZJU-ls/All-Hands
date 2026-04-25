@@ -27,8 +27,6 @@ export type GatewayProvider = {
   kind: ProviderKind;
   base_url: string;
   api_key_set: boolean;
-  default_model: string;
-  is_default: boolean;
   enabled: boolean;
 };
 
@@ -47,7 +45,7 @@ export function ProviderSection({
   onPingModel,
   onBulkPing,
   bulkPingInProgress,
-  onSetDefault,
+  onSetDefaultModel,
   onEdit,
   onDelete,
   onAddModel,
@@ -62,7 +60,10 @@ export function ProviderSection({
   onPingModel: (m: GatewayModel) => void;
   onBulkPing: () => void;
   bulkPingInProgress: { done: number; total: number } | null;
-  onSetDefault: () => void;
+  // Promote a specific model to the workspace default. Replaces the
+  // legacy `onSetDefault` (which used to act on the provider). The page
+  // wires it to `POST /api/models/{id}/set-default`.
+  onSetDefaultModel: (m: GatewayModel) => void;
   onEdit: () => void;
   onDelete: () => void;
   onAddModel: () => void;
@@ -74,6 +75,11 @@ export function ProviderSection({
   const bulkLabel = bulkRunning
     ? t("bulkRunning", { done: bulkPingInProgress.done, total: bulkPingInProgress.total })
     : t("bulkLabel");
+
+  // 「这个 provider 是默认的」= 它下面有任何一个 model 被标记为
+  // is_default. UI 派生,不再是 provider 的字段。
+  const defaultModel = models.find((m) => m.is_default && m.enabled) ?? null;
+  const providerHostsDefault = defaultModel !== null;
 
   return (
     <section
@@ -112,7 +118,7 @@ export function ProviderSection({
               >
                 {KIND_BADGE[provider.kind]}
               </span>
-              {provider.is_default && (
+              {providerHostsDefault && (
                 <span className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm bg-primary/10 border border-primary/25 text-primary text-[10px] font-semibold">
                   <Icon name="star" size={10} strokeWidth={2} />
                   {t("default")}
@@ -143,7 +149,7 @@ export function ProviderSection({
                 ·
               </span>
               <span className="font-mono text-[11px] text-text-subtle truncate">
-                default={provider.default_model}
+                {defaultModel ? `default=${defaultModel.name}` : "default=—"}
               </span>
             </div>
           </div>
@@ -173,16 +179,11 @@ export function ProviderSection({
             />
             <span className="tabular-nums">{bulkLabel}</span>
           </button>
-          {!provider.is_default && (
-            <button
-              type="button"
-              onClick={onSetDefault}
-              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-surface border border-border text-[11px] font-medium text-text-muted hover:border-primary/40 hover:text-primary transition-colors duration-fast"
-            >
-              <Icon name="star" size={11} />
-              {t("setAsDefault")}
-            </button>
-          )}
+          {/* 「设为默认」按钮已下沉到每个 ModelRow:点哪一行就把那一行的
+              (provider, model) 二元组同时切成全局默认。Provider header 这里
+              只剩"该 provider 是否托管着默认 model"的显示(顶部 ⭐ 徽标)。
+              不再需要 provider-level 的设为默认入口 — 那是基于"provider 是
+              一个二字段默认指针"的旧模型,现在 provider 没默认这个概念了。 */}
           <IconOnlyButton icon="edit" label={t("edit")} onClick={onEdit} />
           <IconOnlyButton
             icon="trash-2"
@@ -238,6 +239,7 @@ export function ProviderSection({
                   onPing={() => onPingModel(m)}
                   onChatTest={() => onChatTestModel(m)}
                   onDelete={() => onDeleteModel(m)}
+                  onSetDefault={() => onSetDefaultModel(m)}
                 />
               ))}
               <div className="ml-6 border-l border-border pl-4 pt-2 pr-3">

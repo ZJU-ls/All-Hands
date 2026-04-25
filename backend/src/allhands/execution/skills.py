@@ -233,35 +233,30 @@ def bootstrap_employee_runtime(
 ) -> SkillRuntime:
     """Start-of-conversation scaffolding · contract § 8.1.
 
-    **2026-04-25 update — eager-resolve for all employees.**
+    **2026-04-25 P2 · revert eager-resolve, restore lazy progressive load.**
 
-    Original design: descriptors always load; full skill body + tool_ids
-    are lazy via `resolve_skill` (Claude-Code-style progressive loading,
-    ADR 0015). Only Lead Agent eager-resolved.
+    Earlier (2026-04-25 morning) we had an emergency eager-resolve here
+    because LangGraph's ``create_react_agent`` bound tool list at graph
+    construction — a mid-turn ``resolve_skill`` mutation didn't become
+    callable in the same turn, breaking weak models.
 
-    Reality check: `create_react_agent` binds the tool list at graph
-    construction. A mid-turn `resolve_skill` mutates SkillRuntime fine,
-    but the new tool_ids do NOT become callable in the same turn — the
-    react graph keeps using the tool list it bound at start. Users hit
-    this as "Error: artifact_create is not a valid tool" right after a
-    successful resolve_skill response (no path to recover within the
-    same user turn).
+    With ADR 0018 + the P2 fix in ``agent_loop.stream``, that's no
+    longer true. The custom AgentLoop rebuilds bindings + ``bind_tools``
+    **every iteration**, so a successful resolve_skill on iteration N
+    means iteration N+1 sees the freshly-unlocked tools. We can return
+    to the ADR 0015 design:
 
-    For Lead Agent that gap was tolerable — admin skills are huge
-    descriptor blocks the user rarely needs, and Lead pre-resolves all
-    of them anyway (the Lead is "the one place where eager resolution
-    is OK"). For NON-Lead employees we hit the gap on every fresh
-    conversation: 粒子艺术师 has `allhands.artifacts` mounted, calls
-    resolve_skill, can't actually call artifact_create, ends up dumping
-    raw HTML into the chat. Nobody wins.
+      - Descriptor (~50 char per mounted skill) always loads
+      - Full body (prompt_fragment + SKILL.md body + tool_ids) is lazy:
+        injected only when the model calls resolve_skill
+      - Sub-files (references/, templates/) on-demand via read_skill_file
 
-    Resolution: employee.skill_ids is an explicit capability declaration
-    at employee design time. We always know which skills the user picked.
-    Eager-resolve ALL of them regardless of is_lead_agent. The descriptor
-    list still ships in the prompt (so the model knows what's available);
-    the tools are simply always-bound from turn 0. resolve_skill stays
-    as a no-op idempotent surface for the few self-aware models that
-    insist on activating before use.
+    Lead Agent still eager-resolves its 5 admin packs because:
+      (a) Lead-side admin skills are large (5-20KB descriptor + body)
+          and pre-loading them all wouldn't add much over lazy
+      (b) Lead's prompt explicitly enumerates them as capability packs
+          that should "just work"
+      (c) keeps the existing Lead UX intact during this transition
     """
     del tool_registry  # signature symmetry with expand_skills_to_tools
     descriptors: list[SkillDescriptor] = []
@@ -272,11 +267,16 @@ def bootstrap_employee_runtime(
         if d is None:
             continue
         descriptors.append(d)
-        skill = skill_registry.get_full(sid)
-        if skill is not None:
-            resolved_skills[sid] = list(skill.tool_ids)
-            if skill.prompt_fragment:
-                resolved_fragments.append(skill.prompt_fragment)
+        if employee.is_lead_agent:
+            # Lead-only eager: admin packs (team_management /
+            # model_management / skill_management / mcp_management /
+            # cockpit_admin) are pre-resolved so Lead doesn't need to
+            # call resolve_skill in chat for routine CRUD.
+            skill = skill_registry.get_full(sid)
+            if skill is not None:
+                resolved_skills[sid] = list(skill.tool_ids)
+                if skill.prompt_fragment:
+                    resolved_fragments.append(skill.prompt_fragment)
 
     return SkillRuntime(
         base_tool_ids=list(employee.tool_ids),

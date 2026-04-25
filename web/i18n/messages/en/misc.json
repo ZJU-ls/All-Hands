@@ -165,7 +165,27 @@
       "loadingMeta": "Loading…",
       "loadingContent": "Loading content…",
       "download": "Download",
-      "unsupportedKind": "Kind {kind} can't be previewed in the panel."
+      "unsupportedKind": "Kind {kind} can't be previewed in the panel.",
+      "copyFailed": "Copy failed: {error}",
+      "rollbackConfirm": "Roll back the current version to v{target}?\nA new version v{next} will be created with content from v{target}.",
+      "toolbarCopyTitle": "Copy content to clipboard",
+      "toolbarEditTitle": "Switch to edit mode",
+      "toolbarOpenNewTitle": "Open in a new window — full-screen render",
+      "toolbarDownloadTitle": "Download to local",
+      "copy": "Copy",
+      "copied": "Copied",
+      "edit": "Edit",
+      "openNew": "New window",
+      "editMode": "Edit mode",
+      "editModeHint": "⌘S save · Esc cancel",
+      "editCancelTitle": "Don't save",
+      "editSaveTitle": "Save as a new version",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…"
+    },
+    "editor": {
+      "loading": "Loading editor…"
     },
     "list": {
       "pinned": "Pinned",

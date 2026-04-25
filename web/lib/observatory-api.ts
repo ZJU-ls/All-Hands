@@ -40,6 +40,33 @@ export async function fetchObservatorySummary(): Promise<ObservatorySummaryDto> 
   return res.json() as Promise<ObservatorySummaryDto>;
 }
 
+export type SystemFlagsDto = {
+  bootstrap_status: BootstrapStatus;
+  bootstrap_error: string | null;
+  host: string | null;
+  observability_enabled: boolean;
+  auto_title_enabled: boolean;
+  bootstrapped_at: string | null;
+};
+
+export async function fetchSystemFlags(): Promise<SystemFlagsDto> {
+  const res = await fetch(`${BASE}/api/observatory/status`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`observatory status failed: ${res.status}`);
+  return res.json() as Promise<SystemFlagsDto>;
+}
+
+export async function patchSystemFlags(
+  body: { auto_title_enabled?: boolean },
+): Promise<{ auto_title_enabled: boolean; bootstrap_status: BootstrapStatus; observability_enabled: boolean }> {
+  const res = await fetch(`${BASE}/api/observatory/config`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`observatory patch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function retryBootstrap(): Promise<{
   bootstrap_status: BootstrapStatus;
   bootstrap_error: string | null;

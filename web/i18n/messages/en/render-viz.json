@@ -21,8 +21,10 @@
       "emptyAll": "No cards"
     },
     "code": {
-      "wrapOn": "Enable wrap",
+      "wrapOn": "Enable wrap · long lines stop scrolling horizontally",
       "wrapOff": "Disable wrap",
+      "wrap": "Wrap",
+      "wrapped": "Wrapped",
       "copyLabel": "Copy code"
     },
     "diff": {

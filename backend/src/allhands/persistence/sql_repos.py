@@ -48,6 +48,9 @@ from allhands.core import (
     TriggerFireSource,
     TriggerFireStatus,
     TriggerKind,
+    UserInput,
+    UserInputQuestion,
+    UserInputStatus,
 )
 from allhands.persistence.orm.models import (
     AgentPlanRow,
@@ -68,6 +71,7 @@ from allhands.persistence.orm.models import (
     TaskRow,
     TriggerFireRow,
     TriggerRow,
+    UserInputRow,
 )
 
 
@@ -162,6 +166,7 @@ def _row_to_message(row: MessageRow) -> Message:
         trace_ref=row.trace_ref,
         parent_run_id=row.parent_run_id,
         reasoning=row.reasoning,
+        interrupted=row.interrupted,
         created_at=_utc(row.created_at),
     )
 
@@ -334,6 +339,7 @@ class SqlConversationRepo:
             trace_ref=message.trace_ref,
             parent_run_id=message.parent_run_id,
             reasoning=message.reasoning,
+            interrupted=message.interrupted,
             created_at=_naive(message.created_at),
         )
         self._s.add(row)
@@ -430,6 +436,69 @@ class SqlConfirmationRepo:
             row.status = status.value
             if status in (ConfirmationStatus.APPROVED, ConfirmationStatus.REJECTED):
                 row.resolved_at = _naive(datetime.now(UTC))
+            await self._s.flush()
+
+
+def _row_to_user_input(row: UserInputRow) -> UserInput:
+    questions = [UserInputQuestion.model_validate(q) for q in (row.questions_json or [])]
+    answers_raw = row.answers_json or {}
+    answers = {str(k): str(v) for k, v in answers_raw.items()}
+    return UserInput(
+        id=row.id,
+        tool_call_id=row.tool_call_id,
+        questions=questions,
+        answers=answers,
+        status=UserInputStatus(row.status),
+        created_at=_utc(row.created_at),
+        expires_at=_utc(row.expires_at),
+    )
+
+
+class SqlUserInputRepo:
+    """ADR 0019 C3 · clarification flow persistence (mirrors SqlConfirmationRepo)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, ui_id: str) -> UserInput | None:
+        row = await self._s.get(UserInputRow, ui_id)
+        return _row_to_user_input(row) if row else None
+
+    async def list_pending(self) -> list[UserInput]:
+        result = await self._s.execute(
+            select(UserInputRow).where(UserInputRow.status == UserInputStatus.PENDING.value)
+        )
+        return [_row_to_user_input(r) for r in result.scalars().all()]
+
+    async def save(self, ui: UserInput) -> None:
+        row = UserInputRow(
+            id=ui.id,
+            tool_call_id=ui.tool_call_id,
+            questions_json=[q.model_dump(mode="json") for q in ui.questions],
+            answers_json=dict(ui.answers),
+            status=ui.status.value,
+            created_at=_naive(ui.created_at),
+            expires_at=_naive(ui.expires_at),
+        )
+        self._s.add(row)
+        await self._s.flush()
+
+    async def update_status_with_answers(
+        self,
+        ui_id: str,
+        status: UserInputStatus,
+        answers: dict[str, str],
+    ) -> None:
+        row = await self._s.get(UserInputRow, ui_id)
+        if row is not None:
+            row.status = status.value
+            row.answers_json = dict(answers)
+            await self._s.flush()
+
+    async def update_status(self, ui_id: str, status: UserInputStatus) -> None:
+        row = await self._s.get(UserInputRow, ui_id)
+        if row is not None:
+            row.status = status.value
             await self._s.flush()
 
 
@@ -618,8 +687,6 @@ def _row_to_provider(row: LLMProviderRow) -> LLMProvider:
         kind=kind,  # type: ignore[arg-type]
         base_url=row.base_url,
         api_key=row.api_key,
-        default_model=row.default_model,
-        is_default=row.is_default,
         enabled=row.enabled,
     )
 
@@ -630,15 +697,6 @@ class SqlLLMProviderRepo:
 
     async def get(self, provider_id: str) -> LLMProvider | None:
         row = await self._s.get(LLMProviderRow, provider_id)
-        return _row_to_provider(row) if row else None
-
-    async def get_default(self) -> LLMProvider | None:
-        result = await self._s.execute(
-            select(LLMProviderRow).where(
-                LLMProviderRow.is_default.is_(True), LLMProviderRow.enabled.is_(True)
-            )
-        )
-        row = result.scalar_one_or_none()
         return _row_to_provider(row) if row else None
 
     async def list_all(self) -> list[LLMProvider]:
@@ -652,8 +710,6 @@ class SqlLLMProviderRepo:
             existing.kind = provider.kind
             existing.base_url = provider.base_url
             existing.api_key = provider.api_key
-            existing.default_model = provider.default_model
-            existing.is_default = provider.is_default
             existing.enabled = provider.enabled
         else:
             self._s.add(
@@ -663,8 +719,6 @@ class SqlLLMProviderRepo:
                     kind=provider.kind,
                     base_url=provider.base_url,
                     api_key=provider.api_key,
-                    default_model=provider.default_model,
-                    is_default=provider.is_default,
                     enabled=provider.enabled,
                 )
             )
@@ -677,13 +731,6 @@ class SqlLLMProviderRepo:
             await self._s.delete(row)
             await self._s.flush()
 
-    async def set_default(self, provider_id: str) -> None:
-        await self._s.execute(update(LLMProviderRow).values(is_default=False))
-        row = await self._s.get(LLMProviderRow, provider_id)
-        if row:
-            row.is_default = True
-        await self._s.flush()
-
 
 def _row_to_model(row: LLMModelRow) -> LLMModel:
     return LLMModel(
@@ -693,6 +740,7 @@ def _row_to_model(row: LLMModelRow) -> LLMModel:
         display_name=row.display_name,
         context_window=row.context_window,
         enabled=row.enabled,
+        is_default=row.is_default,
     )
 
 
@@ -702,6 +750,16 @@ class SqlLLMModelRepo:
 
     async def get(self, model_id: str) -> LLMModel | None:
         row = await self._s.get(LLMModelRow, model_id)
+        return _row_to_model(row) if row else None
+
+    async def get_default(self) -> LLMModel | None:
+        """Singleton lookup — at most one row across the table has is_default=True."""
+        result = await self._s.execute(
+            select(LLMModelRow).where(
+                LLMModelRow.is_default.is_(True), LLMModelRow.enabled.is_(True)
+            )
+        )
+        row = result.scalar_one_or_none()
         return _row_to_model(row) if row else None
 
     async def list_all(self) -> list[LLMModel]:
@@ -722,6 +780,7 @@ class SqlLLMModelRepo:
             existing.display_name = model.display_name
             existing.context_window = model.context_window
             existing.enabled = model.enabled
+            existing.is_default = model.is_default
         else:
             self._s.add(
                 LLMModelRow(
@@ -731,6 +790,7 @@ class SqlLLMModelRepo:
                     display_name=model.display_name,
                     context_window=model.context_window,
                     enabled=model.enabled,
+                    is_default=model.is_default,
                 )
             )
         await self._s.flush()
@@ -741,6 +801,26 @@ class SqlLLMModelRepo:
         if row:
             await self._s.delete(row)
             await self._s.flush()
+
+    async def set_default(self, model_id: str) -> LLMModel | None:
+        """Atomically promote one model to "the workspace default".
+
+        Two-step transaction:
+          1. Clear is_default on every other row (preserves the singleton
+             invariant — the service layer guarantees no two rows are ever
+             True simultaneously).
+          2. Set is_default=True on the target row.
+
+        Returns the updated model, or None if the id doesn't exist (caller
+        translates to a 404 / NotFound).
+        """
+        target = await self._s.get(LLMModelRow, model_id)
+        if target is None:
+            return None
+        await self._s.execute(update(LLMModelRow).values(is_default=False))
+        target.is_default = True
+        await self._s.flush()
+        return _row_to_model(target)
 
 
 # ---- Trigger repos (Wave B.3) ----
@@ -896,7 +976,6 @@ def _row_to_artifact(row: ArtifactRow) -> Artifact:
         name=row.name,
         kind=ArtifactKind(row.kind),
         mime_type=row.mime_type,
-        content=row.content,
         file_path=row.file_path,
         size_bytes=row.size_bytes,
         version=row.version,
@@ -916,7 +995,6 @@ def _row_to_artifact_version(row: ArtifactVersionRow) -> ArtifactVersion:
         id=row.id,
         artifact_id=row.artifact_id,
         version=row.version,
-        content=row.content,
         file_path=row.file_path,
         diff_from_prev=row.diff_from_prev,
         created_at=_utc(row.created_at),
@@ -958,12 +1036,16 @@ class SqlArtifactRepo:
         return [_row_to_artifact(r) for r in result.scalars().all()]
 
     async def search(self, workspace_id: str, query: str, limit: int = 50) -> list[Artifact]:
+        # Content moved off-DB (2026-04-25); search is name-only now. A
+        # full-text index over disk content can be re-added later if users
+        # actually rely on body search — for now nobody does, and grepping
+        # 1MB blobs in SQLite was the slow path anyway.
         like = f"%{query}%"
         stmt = (
             select(ArtifactRow)
             .where(ArtifactRow.workspace_id == workspace_id)
             .where(ArtifactRow.deleted_at.is_(None))
-            .where((ArtifactRow.name.like(like)) | (ArtifactRow.content.like(like)))
+            .where(ArtifactRow.name.like(like))
             .order_by(ArtifactRow.updated_at.desc())
             .limit(limit)
         )
@@ -977,7 +1059,6 @@ class SqlArtifactRepo:
             existing.name = artifact.name
             existing.kind = artifact.kind.value
             existing.mime_type = artifact.mime_type
-            existing.content = artifact.content
             existing.file_path = artifact.file_path
             existing.size_bytes = artifact.size_bytes
             existing.version = artifact.version
@@ -996,7 +1077,6 @@ class SqlArtifactRepo:
                     name=artifact.name,
                     kind=artifact.kind.value,
                     mime_type=artifact.mime_type,
-                    content=artifact.content,
                     file_path=artifact.file_path,
                     size_bytes=artifact.size_bytes,
                     version=artifact.version,
@@ -1045,7 +1125,6 @@ class SqlArtifactRepo:
                 id=version.id,
                 artifact_id=version.artifact_id,
                 version=version.version,
-                content=version.content,
                 file_path=version.file_path,
                 diff_from_prev=version.diff_from_prev,
                 created_at=_naive(version.created_at),
@@ -1296,6 +1375,7 @@ class SqlObservabilityConfigRepo:
             bootstrap_error=row.bootstrap_error,
             bootstrapped_at=_utc(row.bootstrapped_at) if row.bootstrapped_at else None,
             updated_at=_utc(row.updated_at) if row.updated_at else None,
+            auto_title_enabled=bool(row.auto_title_enabled),
         )
 
     async def save(self, config: ObservabilityConfig) -> ObservabilityConfig:
@@ -1316,6 +1396,7 @@ class SqlObservabilityConfigRepo:
         row.bootstrap_status = config.bootstrap_status.value
         row.bootstrap_error = config.bootstrap_error
         row.bootstrapped_at = _naive(config.bootstrapped_at) if config.bootstrapped_at else None
+        row.auto_title_enabled = config.auto_title_enabled
         row.updated_at = now
         await self._s.flush()
         return config

@@ -133,6 +133,12 @@
     "subtitle": "偏好与工作区配置 · 主题切换在右上角 · 模型/供应商请到「模型网关」",
     "language": "语言",
     "languageDescription": "选择界面显示语言;切换后会立即生效",
+    "autoTitle": "对话标题自动总结",
+    "autoTitleDescription": "开启后,会用默认模型对你的第一条消息生成简短标题;关闭则直接截取原话(最多 40 字符)。",
+    "autoTitleOn": "已开启 · 用模型总结",
+    "autoTitleOff": "已关闭 · 截取原话",
+    "autoTitleSaving": "保存中…",
+    "autoTitleError": "保存失败,请重试",
     "footnote": "更多偏好项(时区、快捷键覆盖、AP 长循环预算等)即将加入。主题切换仍在右上角 sun/moon 按钮。",
     "cards": {
       "providers": {

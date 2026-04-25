@@ -67,6 +67,10 @@ def repair_parent_chain(
     return out
 
 
+_INTERRUPTED_PLACEHOLDER = "Interrupted by user"
+_CRASH_PLACEHOLDER = "(tool result missing — recovered after crash)"
+
+
 def fill_orphan_tool_results(
     messages: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -78,13 +82,24 @@ def fill_orphan_tool_results(
     Operates on the ``build_llm_context`` output (role/content dicts),
     not on raw events — by the time projection completed we have the
     canonical pairing view and can detect gaps cheaply.
+
+    **2026-04-25 (interrupt parity with Claude Code):** if the parent
+    assistant carries ``_interrupted=True`` (set by ``_project_assistant``
+    when the source ASSISTANT event was marked interrupted by chat_service),
+    the placeholder content becomes ``"Interrupted by user"``. Otherwise
+    it stays the legacy crash-recovery message. This mirrors Claude
+    Code's ``yieldMissingToolResultBlocks(messages, 'Interrupted by user')``
+    path — the model sees an honest signal of why the tool didn't run,
+    not a confusing "crash" framing.
     """
     # Collect tool_use ids from assistant content_blocks.
     tool_use_ids: list[str] = []
     tool_use_indices: dict[str, int] = {}
+    tool_use_interrupted: dict[str, bool] = {}
     tool_result_ids: set[str] = set()
     for i, msg in enumerate(messages):
         if msg.get("role") == "assistant":
+            interrupted = bool(msg.get("_interrupted", False))
             content = msg.get("content")
             if isinstance(content, list):
                 for b in content:
@@ -93,6 +108,7 @@ def fill_orphan_tool_results(
                         if isinstance(tid, str):
                             tool_use_ids.append(tid)
                             tool_use_indices[tid] = i
+                            tool_use_interrupted[tid] = interrupted
         elif msg.get("role") == "tool":
             tid = msg.get("tool_call_id")
             if isinstance(tid, str):
@@ -111,12 +127,15 @@ def fill_orphan_tool_results(
     orphan_ids.sort(key=lambda tid: -tool_use_indices[tid])
     for tid in orphan_ids:
         insert_at = tool_use_indices[tid] + 1
+        placeholder = (
+            _INTERRUPTED_PLACEHOLDER if tool_use_interrupted.get(tid, False) else _CRASH_PLACEHOLDER
+        )
         out.insert(
             insert_at,
             {
                 "role": "tool",
                 "tool_call_id": tid,
-                "content": "(tool result missing — recovered after crash)",
+                "content": placeholder,
             },
         )
     return out

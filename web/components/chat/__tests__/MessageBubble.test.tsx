@@ -53,6 +53,53 @@ describe("MessageBubble streaming cursor", () => {
   });
 });
 
+describe("MessageBubble interrupted tail", () => {
+  it("renders 「已中止」 chip when message.interrupted is true", () => {
+    render(
+      <MessageBubble
+        message={makeMessage({
+          content: "Hello, I'll fetch ",
+          interrupted: true,
+        })}
+        isStreaming={false}
+      />,
+    );
+    const tail = screen.getByTestId("message-interrupted-tail");
+    expect(tail).toBeInTheDocument();
+    expect(tail.textContent).toContain("已中止");
+  });
+
+  it("does not render the tail when message.interrupted is false", () => {
+    render(
+      <MessageBubble
+        message={makeMessage({ content: "complete answer" })}
+        isStreaming={false}
+      />,
+    );
+    expect(screen.queryByTestId("message-interrupted-tail")).toBeNull();
+  });
+
+  it("does not render the tail while streaming (live partial isn't 'interrupted yet')", () => {
+    render(
+      <MessageBubble
+        message={makeMessage({ content: "live", interrupted: true })}
+        isStreaming
+      />,
+    );
+    expect(screen.queryByTestId("message-interrupted-tail")).toBeNull();
+  });
+
+  it("never renders the tail on a user message", () => {
+    render(
+      <MessageBubble
+        message={makeMessage({ role: "user", content: "hi", interrupted: true })}
+        isStreaming={false}
+      />,
+    );
+    expect(screen.queryByTestId("message-interrupted-tail")).toBeNull();
+  });
+});
+
 describe("MessageBubble segment interleaving", () => {
   // AgentMarkdown dynamic-imports `marked` and renders asynchronously — its
   // text isn't synchronously in the DOM at test time. So we assert on the

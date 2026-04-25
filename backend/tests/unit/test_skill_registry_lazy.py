@@ -102,13 +102,10 @@ def test_registry_lazy_loader_only_invoked_on_get_full() -> None:
     assert full_a is full_b or full_a == full_b
 
 
-def test_bootstrap_employee_runtime_eager_resolves_mounted_skills() -> None:
-    """bootstrap_employee_runtime eager-resolves all mounted skills (2026-04-25).
-
-    LangGraph's create_react_agent binds the tool list at graph construction,
-    so a mid-turn resolve_skill couldn't make new tools callable in the same
-    turn. We now eager-resolve at conversation init for all employees.
-    resolve_skill becomes an idempotent no-op for models that still try.
+def test_bootstrap_employee_runtime_lazy_for_non_lead() -> None:
+    """2026-04-25 P2: with AgentLoop's per-iteration tool rebind in place,
+    resolve_skill mid-turn finally works. So we revert eager-resolve and
+    return to the ADR 0015 design: descriptors at turn 0, body lazy.
     """
     tool_reg = ToolRegistry()
     discover_builtin_tools(tool_reg)
@@ -120,13 +117,12 @@ def test_bootstrap_employee_runtime_eager_resolves_mounted_skills() -> None:
 
     assert isinstance(runtime, SkillRuntime)
     assert runtime.base_tool_ids == list(emp.tool_ids)
-    # Descriptors for all mounted skills present.
+    # Descriptors for all mounted skills present (cheap, always at turn 0).
     ids = {d.id for d in runtime.skill_descriptors}
     assert {"sk_research", "sk_write"} <= ids
-    # Skills eager-resolved — tools bound from turn 0 (was empty pre-fix).
-    assert set(runtime.resolved_skills.keys()) == {"sk_research", "sk_write"}
-    for tids in runtime.resolved_skills.values():
-        assert len(tids) > 0
+    # Bodies NOT pre-loaded — model must call resolve_skill to unlock.
+    assert runtime.resolved_skills == {}
+    assert runtime.resolved_fragments == []
 
 
 def test_token_budget_drops_from_3000_to_600() -> None:

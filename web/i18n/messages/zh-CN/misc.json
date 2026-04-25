@@ -165,7 +165,27 @@
       "loadingMeta": "读取中…",
       "loadingContent": "读取内容…",
       "download": "下载",
-      "unsupportedKind": "kind {kind} 暂不支持在面板内预览。"
+      "unsupportedKind": "kind {kind} 暂不支持在面板内预览。",
+      "copyFailed": "复制失败:{error}",
+      "rollbackConfirm": "确认把当前版本回退到 v{target}?\n会创建一个新版本 v{next},内容来自 v{target}。",
+      "toolbarCopyTitle": "复制内容到剪贴板",
+      "toolbarEditTitle": "切到编辑模式",
+      "toolbarOpenNewTitle": "在新窗口打开 — 看全屏渲染",
+      "toolbarDownloadTitle": "下载到本地",
+      "copy": "复制",
+      "copied": "已复制",
+      "edit": "编辑",
+      "openNew": "新窗口",
+      "editMode": "编辑模式",
+      "editModeHint": "⌘S 保存 · Esc 取消",
+      "editCancelTitle": "不保存",
+      "editSaveTitle": "保存为新版本",
+      "cancel": "取消",
+      "save": "保存",
+      "saving": "保存中…"
+    },
+    "editor": {
+      "loading": "加载编辑器…"
     },
     "list": {
       "pinned": "置顶",
@@ -193,7 +213,9 @@
       }
     },
     "versionSwitcher": {
-      "ariaLabel": "版本切换"
+      "ariaLabel": "版本切换",
+      "rollbackTitle": "回退到 v{current}(创建新版本 v{next},内容来自 v{current})",
+      "rollbackLabel": "回退到 v{v}"
     },
     "mermaid": {
       "renderFailed": "mermaid 渲染失败:{error}"

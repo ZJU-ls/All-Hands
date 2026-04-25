@@ -39,6 +39,22 @@ export type RenderPayload = {
 };
 
 /**
+ * ADR 0019 C3 · clarification request from ``ask_user_question``.
+ * Mirrors the backend ``UserInputRequiredEvent`` payload shape.
+ */
+export type PendingUserInputQuestion = {
+  label: string;
+  description: string;
+  preview?: string | null;
+};
+
+export type PendingUserInput = {
+  userInputId: string;
+  toolCallId: string;
+  questions: PendingUserInputQuestion[];
+};
+
+/**
  * EmployeeCardProps — mirrors backend EmployeeCardProps in protocol.py.
  * Target component is `EmployeeCard` (registered in component-registry).
  */
@@ -126,6 +142,13 @@ export type Message = {
   trace_ref?: string | null;
   parent_run_id?: string | null;
   created_at: string;
+  /**
+   * 2026-04-25 · True when the producing turn was cut short — user clicked
+   * 中止, SSE transport dropped, or backend raised mid-stream. Whatever
+   * streamed before the cut still lives on this row (we never discard
+   * partial); the bubble shows an 「已中止」 tail to flag the gap.
+   */
+  interrupted?: boolean;
 };
 
 /** SSE event envelope — mirrors backend allhands/execution/events.py AgentEvent union. */

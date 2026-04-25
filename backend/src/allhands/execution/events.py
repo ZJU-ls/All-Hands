@@ -76,6 +76,21 @@ class InterruptEvent(BaseModel):
     value: dict[str, object]
 
 
+class UserInputRequiredEvent(BaseModel):
+    """ADR 0019 C3 · clarification request paused mid-turn.
+
+    Mirrors ``ConfirmRequiredEvent`` shape but carries multiple-choice
+    questions instead of a single approve/reject summary. Frontend
+    renders the ``UserInputDialog`` which POSTs answers back to
+    /api/user-input/{id}/answer.
+    """
+
+    kind: Literal["user_input_required"] = "user_input_required"
+    user_input_id: str
+    tool_call_id: str
+    questions: list[dict[str, object]]
+
+
 class RenderEvent(BaseModel):
     kind: Literal["render"] = "render"
     message_id: str
@@ -121,6 +136,7 @@ AgentEvent = (
     | ConfirmRequiredEvent
     | ConfirmResolvedEvent
     | InterruptEvent
+    | UserInputRequiredEvent
     | RenderEvent
     | NestedRunStartEvent
     | NestedRunEndEvent

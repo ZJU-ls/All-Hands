@@ -26,7 +26,11 @@ from allhands.api.deps import (
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.execution.modes import PRESETS, compose_preview
 from allhands.i18n import t
-from allhands.persistence.sql_repos import SqlLLMProviderRepo, SqlMCPServerRepo
+from allhands.persistence.sql_repos import (
+    SqlLLMModelRepo,
+    SqlLLMProviderRepo,
+    SqlMCPServerRepo,
+)
 from allhands.services import ai_explainer
 
 if TYPE_CHECKING:
@@ -95,7 +99,7 @@ class EmployeePreviewRequest(BaseModel):
     preset: Preset
     custom_tool_ids: list[str] = Field(default_factory=list)
     custom_skill_ids: list[str] | None = None
-    custom_max_iterations: int | None = Field(default=None, ge=1, le=50)
+    custom_max_iterations: int | None = Field(default=None, ge=1, le=10000)
 
 
 class EmployeePreviewResponse(BaseModel):
@@ -161,6 +165,7 @@ async def compose_employee_prompt(
                 skill_ids=list(body.skill_ids),
                 mcp_server_ids=list(body.mcp_server_ids),
                 provider_repo=SqlLLMProviderRepo(session),
+                model_repo=SqlLLMModelRepo(session),
                 skill_registry=get_skill_registry(),
                 mcp_repo=SqlMCPServerRepo(session),
             ):

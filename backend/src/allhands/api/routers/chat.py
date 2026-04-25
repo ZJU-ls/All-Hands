@@ -105,6 +105,7 @@ def _to_message_response(m: Message) -> ChatMessageResponse:
         render_payloads=[rp.model_dump(mode="json") for rp in m.render_payloads],
         tool_calls=[tc.model_dump(mode="json") for tc in m.tool_calls],
         reasoning=m.reasoning,
+        interrupted=m.interrupted,
     )
 
 
@@ -472,6 +473,10 @@ async def _encode_chat_sse(
             elif event.kind == "confirm_resolved":
                 payload = event.model_dump(mode="json", exclude={"kind"})
                 yield agui.encode_sse(agui.custom("allhands.confirm_resolved", payload))
+            elif event.kind == "user_input_required":
+                # ADR 0019 C3 · clarification (ask_user_question) paused.
+                payload = event.model_dump(mode="json", exclude={"kind"})
+                yield agui.encode_sse(agui.custom("allhands.user_input_required", payload))
             elif event.kind == "interrupt_required":
                 # ADR 0014 Phase 3 · LangGraph interrupt() lands here.
                 # Semantically a superset of confirm_required — value is

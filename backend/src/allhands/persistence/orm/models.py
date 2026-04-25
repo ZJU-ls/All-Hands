@@ -128,6 +128,9 @@ class MessageRow(Base):
     trace_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     parent_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # See core.Message.interrupted — true when the LLM stream didn't
+    # reach a clean done (user 中止 / transport drop / mid-stream error).
+    interrupted: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
     conversation: Mapped[ConversationRow] = relationship(back_populates="messages")
@@ -163,6 +166,20 @@ class ConfirmationRow(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
 
+class UserInputRow(Base):
+    """ADR 0019 C3 · clarification request persistence (ask_user_question)."""
+
+    __tablename__ = "user_inputs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tool_call_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    questions_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    answers_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
 class LLMProviderRow(Base):
     __tablename__ = "llm_providers"
 
@@ -171,8 +188,6 @@ class LLMProviderRow(Base):
     kind: Mapped[str] = mapped_column(String(32), default="openai")
     base_url: Mapped[str] = mapped_column(String(512))
     api_key: Mapped[str] = mapped_column(String(512), default="")
-    default_model: Mapped[str] = mapped_column(String(128), default="gpt-4o-mini")
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -187,6 +202,11 @@ class LLMModelRow(Base):
     display_name: Mapped[str] = mapped_column(String(128), default="")
     context_window: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # System-wide singleton: at most one row has is_default=True. Service
+    # layer enforces — see LLMModelRepo.set_default(). Indexed because
+    # `model_resolution.resolve()` runs every Lead Agent turn and needs a
+    # fast lookup of "the unique default model".
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
 
 class TriggerRow(Base):
@@ -234,8 +254,9 @@ class ArtifactRow(Base):
     name: Mapped[str] = mapped_column(String(256), index=True)
     kind: Mapped[str] = mapped_column(String(32), index=True)
     mime_type: Mapped[str] = mapped_column(String(128))
-    content: Mapped[str | None] = mapped_column(String, nullable=True)
-    file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # 2026-04-25 storage refactor: all kinds (text + binary) now live on
+    # disk; ``content`` column is gone. ``file_path`` is required.
+    file_path: Mapped[str] = mapped_column(String(512))
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     version: Mapped[int] = mapped_column(Integer, default=1)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
@@ -258,8 +279,7 @@ class ArtifactVersionRow(Base):
         index=True,
     )
     version: Mapped[int] = mapped_column(Integer)
-    content: Mapped[str | None] = mapped_column(String, nullable=True)
-    file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    file_path: Mapped[str] = mapped_column(String(512))
     diff_from_prev: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
@@ -326,6 +346,7 @@ class ObservabilityConfigRow(Base):
     bootstrap_error: Mapped[str | None] = mapped_column(String, nullable=True)
     bootstrapped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
+    auto_title_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class SkillRuntimeRow(Base):

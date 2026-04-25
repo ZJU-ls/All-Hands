@@ -43,7 +43,6 @@ def _provider(kind: str = "openai", base_url: str = "https://api.example.com/v1"
         kind=kind,  # type: ignore[arg-type]
         base_url=base_url,
         api_key="sk-test",
-        default_model="m",
     )
 
 

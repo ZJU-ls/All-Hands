@@ -8,10 +8,7 @@ import {
   SearchInput,
   matchesQuery,
 } from "@/components/render/_shared/SearchInput";
-import {
-  Toolbar,
-  SegmentedControl,
-} from "@/components/render/_shared/Toolbar";
+import { Toolbar } from "@/components/render/_shared/Toolbar";
 import { CopyButton } from "@/components/render/_shared/CopyButton";
 
 type Column = {
@@ -23,17 +20,14 @@ type Column = {
 
 type Row = Record<string, unknown>;
 
-type Density = "cozy" | "compact";
-
 /**
  * Brand-Blue V2 (ADR 0016) · data table.
  *
- * Interactions (2026-04-25 · whole-row interactions sweep):
+ * Interactions:
  *   - sort by column · click header (asc/desc/clear cycle)
  *   - free-text filter · matches across all columns
- *   - density toggle · cozy / compact
- *   - copy as CSV · entire visible table
- *   - auto-right-align numeric columns
+ *   - copy as CSV · entire visible table (respects sort + filter)
+ *   - auto-right-align numeric columns (sampled from first 8 rows)
  */
 export function Table({ props }: RenderProps) {
   const t = useTranslations("viz.table");
@@ -52,7 +46,6 @@ export function Table({ props }: RenderProps) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [query, setQuery] = useState("");
-  const [density, setDensity] = useState<Density>("cozy");
 
   // Filter first · then sort · so result counts reflect the visible set.
   const filteredRows = useMemo(() => {
@@ -131,7 +124,6 @@ export function Table({ props }: RenderProps) {
     return body ? `${header}\n${body}` : header;
   }, [columns, rows]);
 
-  const cellPadding = density === "compact" ? "px-2.5 py-1" : "px-3 py-2";
   const totalRows = rawRowsRaw?.length ?? 0;
   const filteredHint =
     query && rows.length !== totalRows
@@ -147,14 +139,6 @@ export function Table({ props }: RenderProps) {
           placeholder={t("searchPlaceholder")}
           hint={filteredHint}
         />
-        <SegmentedControl<Density>
-          value={density}
-          onChange={setDensity}
-          options={[
-            { key: "cozy", label: t("densityCozy") },
-            { key: "compact", label: t("densityCompact") },
-          ]}
-        />
         <CopyButton value={csv} label={t("copyCsv")} />
       </Toolbar>
       <div className="overflow-x-auto">
@@ -167,7 +151,7 @@ export function Table({ props }: RenderProps) {
                 return (
                   <th
                     key={c.key}
-                    className={`sticky top-0 ${cellPadding} text-caption font-mono font-semibold uppercase tracking-[0.18em] bg-surface-2/60 text-text-muted border-b border-border`}
+                    className={`sticky top-0 px-3 py-2 text-caption font-mono font-semibold uppercase tracking-[0.18em] bg-surface-2/60 text-text-muted border-b border-border`}
                     style={{ width: c.width, textAlign: align }}
                   >
                     <button
@@ -208,7 +192,7 @@ export function Table({ props }: RenderProps) {
                   return (
                     <td
                       key={c.key}
-                      className={`${cellPadding} border-b border-border ${
+                      className={`px-3 py-2 border-b border-border ${
                         isNumeric
                           ? "font-mono tabular-nums text-text"
                           : "text-text"

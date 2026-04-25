@@ -407,14 +407,14 @@ def make_artifact_create_executor(
             mime = mime_type or _ARTIFACT_DEFAULT_MIME[kind_enum]
             now = datetime.now(UTC)
             artifact_id = str(uuid.uuid4())
+            # 2026-04-25 storage refactor: every kind goes to disk now.
             if kind_enum in TEXT_KINDS:
                 if content is None:
                     return {"error": f"kind={kind!r} requires `content`"}
                 size = len(content.encode("utf-8"))
                 if size > _MAX_TEXT_BYTES:
                     return {"error": f"size {size}B exceeds text ceiling {_MAX_TEXT_BYTES}B"}
-                file_path: str | None = None
-                art_content: str | None = content
+                blob = content.encode("utf-8")
             elif kind_enum in BINARY_KINDS:
                 if content_base64 is None:
                     return {"error": f"kind={kind!r} requires `content_base64`"}
@@ -422,25 +422,23 @@ def make_artifact_create_executor(
                 size = len(blob)
                 if size > _MAX_BINARY_BYTES:
                     return {"error": f"size {size}B exceeds binary ceiling {_MAX_BINARY_BYTES}B"}
-                file_path = _write_artifact_blob(
-                    _DEFAULT_WORKSPACE_ID,
-                    artifact_id,
-                    version=1,
-                    kind=kind_enum,
-                    mime=mime,
-                    blob=blob,
-                )
-                art_content = None
             else:  # pragma: no cover
                 return {"error": f"unsupported kind {kind!r}"}
 
+            file_path = _write_artifact_blob(
+                _DEFAULT_WORKSPACE_ID,
+                artifact_id,
+                version=1,
+                kind=kind_enum,
+                mime=mime,
+                blob=blob,
+            )
             artifact = Artifact(
                 id=artifact_id,
                 workspace_id=_DEFAULT_WORKSPACE_ID,
                 name=name,
                 kind=kind_enum,
                 mime_type=mime,
-                content=art_content,
                 file_path=file_path,
                 size_bytes=size,
                 version=1,
@@ -455,7 +453,6 @@ def make_artifact_create_executor(
                         id=str(uuid.uuid4()),
                         artifact_id=artifact.id,
                         version=1,
-                        content=artifact.content,
                         file_path=artifact.file_path,
                         diff_from_prev=None,
                         created_at=now,
@@ -566,14 +563,28 @@ def make_artifact_read_executor(
             art = await repo.get(artifact_id)
             if art is None:
                 return {"error": f"artifact {artifact_id!r} not found"}
-            content: str | None = art.content
+            target_path = art.file_path
             resolved_version = art.version
             if version is not None and version != art.version:
                 v = await repo.get_version(artifact_id, version)
                 if v is None:
                     return {"error": f"artifact {artifact_id!r} version {version} not found"}
-                content = v.content
+                target_path = v.file_path
                 resolved_version = version
+        # Read content off disk (storage refactor 2026-04-25). Binary kinds
+        # are returned base64'd; text kinds as utf-8 string.
+        try:
+            blob = (_artifact_root() / target_path).read_bytes()
+        except OSError as exc:
+            return {"error": f"failed reading artifact bytes: {exc}"}
+        content: str | None
+        if art.kind in BINARY_KINDS:
+            content = base64.b64encode(blob).decode("ascii")
+        else:
+            try:
+                content = blob.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                return {"error": f"non-utf-8 content for text kind {art.kind.value!r}: {exc}"}
         return {
             "artifact_id": art.id,
             "name": art.name,
@@ -609,6 +620,7 @@ def make_artifact_update_executor(
                 now = datetime.now(UTC)
                 next_version = existing.version + 1
 
+                # 2026-04-25 storage refactor: every update writes to disk.
                 if existing.kind in TEXT_KINDS:
                     if mode == "patch":
                         return {
@@ -617,49 +629,37 @@ def make_artifact_update_executor(
                         }
                     if content is None:
                         return {"error": "mode='overwrite' requires `content`"}
-                    new_content = content
-                    size = len(new_content.encode("utf-8"))
+                    new_blob = content.encode("utf-8")
+                    size = len(new_blob)
                     if size > _MAX_TEXT_BYTES:
                         return {"error": f"size {size}B exceeds text ceiling {_MAX_TEXT_BYTES}B"}
-                    diff = _artifact_diff(existing.content or "", new_content)
-                    updated = existing.model_copy(
-                        update={
-                            "content": new_content,
-                            "size_bytes": size,
-                            "version": next_version,
-                            "updated_at": now,
-                        }
-                    )
-                    await repo.upsert(updated)
-                    await repo.save_version(
-                        ArtifactVersion(
-                            id=str(uuid.uuid4()),
-                            artifact_id=existing.id,
-                            version=next_version,
-                            content=new_content,
-                            file_path=None,
-                            diff_from_prev=diff,
-                            created_at=now,
+                    try:
+                        prev_text = (_artifact_root() / existing.file_path).read_text(
+                            encoding="utf-8"
                         )
-                    )
-                    return {"artifact_id": updated.id, "version": updated.version}
+                    except OSError:
+                        prev_text = ""
+                    diff: str | None = _artifact_diff(prev_text, content)
+                else:
+                    if mode == "patch":
+                        return {"error": f"kind={existing.kind.value!r} does not support 'patch'"}
+                    if content_base64 is None:
+                        return {"error": "binary update requires `content_base64`"}
+                    new_blob = _decode_artifact_base64(content_base64)
+                    size = len(new_blob)
+                    if size > _MAX_BINARY_BYTES:
+                        return {
+                            "error": f"size {size}B exceeds binary ceiling {_MAX_BINARY_BYTES}B"
+                        }
+                    diff = None
 
-                # binary path (image)
-                if mode == "patch":
-                    return {"error": f"kind={existing.kind.value!r} does not support 'patch'"}
-                if content_base64 is None:
-                    return {"error": "binary update requires `content_base64`"}
-                blob = _decode_artifact_base64(content_base64)
-                size = len(blob)
-                if size > _MAX_BINARY_BYTES:
-                    return {"error": f"size {size}B exceeds binary ceiling {_MAX_BINARY_BYTES}B"}
                 rel = _write_artifact_blob(
                     existing.workspace_id,
                     existing.id,
                     version=next_version,
                     kind=existing.kind,
                     mime=existing.mime_type,
-                    blob=blob,
+                    blob=new_blob,
                 )
                 updated = existing.model_copy(
                     update={
@@ -675,9 +675,8 @@ def make_artifact_update_executor(
                         id=str(uuid.uuid4()),
                         artifact_id=existing.id,
                         version=next_version,
-                        content=None,
                         file_path=rel,
-                        diff_from_prev=None,
+                        diff_from_prev=diff,
                         created_at=now,
                     )
                 )
@@ -702,6 +701,81 @@ def make_artifact_delete_executor(
             if existing.deleted_at is None:
                 await repo.soft_delete(artifact_id, datetime.now(UTC))
         return {"artifact_id": artifact_id, "deleted": True}
+
+    return _exec
+
+
+def make_artifact_rollback_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(
+        artifact_id: str,
+        to_version: int,
+        **_: Any,
+    ) -> dict[str, Any]:
+        try:
+            async with _session_context(maker) as session:
+                repo = SqlArtifactRepo(session)
+                existing = await repo.get(artifact_id)
+                if existing is None:
+                    return {"error": f"artifact {artifact_id!r} not found"}
+                if to_version == existing.version:
+                    return {"error": f"to_version={to_version} is already current; nothing to do"}
+                if to_version < 1 or to_version > existing.version:
+                    return {
+                        "error": f"to_version={to_version} out of range (1..{existing.version})"
+                    }
+                target = await repo.get_version(artifact_id, to_version)
+                if target is None:
+                    return {"error": f"artifact {artifact_id!r} version {to_version} not found"}
+                old_blob = (_artifact_root() / target.file_path).read_bytes()
+                next_version = existing.version + 1
+                rel = _write_artifact_blob(
+                    existing.workspace_id,
+                    existing.id,
+                    version=next_version,
+                    kind=existing.kind,
+                    mime=existing.mime_type,
+                    blob=old_blob,
+                )
+                diff: str | None = None
+                if existing.kind in TEXT_KINDS:
+                    try:
+                        cur_text = (_artifact_root() / existing.file_path).read_text(
+                            encoding="utf-8"
+                        )
+                        diff = _artifact_diff(cur_text, old_blob.decode("utf-8"))
+                    except (OSError, UnicodeDecodeError):
+                        diff = None
+                now = datetime.now(UTC)
+                updated = existing.model_copy(
+                    update={
+                        "file_path": rel,
+                        "size_bytes": len(old_blob),
+                        "version": next_version,
+                        "updated_at": now,
+                    }
+                )
+                await repo.upsert(updated)
+                await repo.save_version(
+                    ArtifactVersion(
+                        id=str(uuid.uuid4()),
+                        artifact_id=existing.id,
+                        version=next_version,
+                        file_path=rel,
+                        diff_from_prev=diff,
+                        created_at=now,
+                    )
+                )
+                return {
+                    "artifact_id": updated.id,
+                    "version": updated.version,
+                    "rolled_back_to": to_version,
+                }
+        except _ArtifactExecutorError as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_rollback failed: {exc}"}
 
     return _exec
 
@@ -796,6 +870,7 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     "allhands.artifacts.list": make_artifact_list_executor,
     "allhands.artifacts.read": make_artifact_read_executor,
     "allhands.artifacts.update": make_artifact_update_executor,
+    "allhands.artifacts.rollback": make_artifact_rollback_executor,
     "allhands.artifacts.delete": make_artifact_delete_executor,
     "allhands.artifacts.pin": make_artifact_pin_executor,
     "allhands.artifacts.search": make_artifact_search_executor,

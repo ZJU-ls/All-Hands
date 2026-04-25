@@ -21,8 +21,10 @@
       "emptyAll": "暂无卡片"
     },
     "code": {
-      "wrapOn": "开启自动换行",
+      "wrapOn": "开启自动换行 · 长行不再水平滚动",
       "wrapOff": "关闭自动换行",
+      "wrap": "换行",
+      "wrapped": "已换行",
       "copyLabel": "复制代码"
     },
     "diff": {
