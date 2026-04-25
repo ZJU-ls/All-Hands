@@ -1,0 +1,12 @@
+id: allhands.observatory
+name: 运行观测
+description: trace / run 状态 / langfuse 健康检查 · 排障 + 失败原因分析
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.observatory.get_status
+  - allhands.meta.observatory.query_traces
+  - allhands.meta.observatory.get_trace
+
+prompt_fragment_file: prompts/guidance.md

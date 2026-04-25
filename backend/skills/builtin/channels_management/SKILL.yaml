@@ -1,0 +1,18 @@
+id: allhands.channels_management
+name: 通知渠道
+description: Slack / 邮件 / webhook 推送 · 注册渠道 测连通 订阅 topic 直接发消息
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.list_channels
+  - allhands.meta.register_channel
+  - allhands.meta.update_channel
+  - allhands.meta.delete_channel
+  - allhands.meta.test_channel
+  - allhands.meta.list_subscriptions
+  - allhands.meta.update_subscription
+  - allhands.meta.send_notification
+  - allhands.meta.query_channel_history
+
+prompt_fragment_file: prompts/guidance.md

@@ -162,6 +162,7 @@
       "loadFailed": "Failed to load artifact: {error}",
       "loadingMeta": "Loading…",
       "loadingContent": "Loading content…",
+      "contentMissing": "The artifact's content file is no longer on disk (the metadata row stayed). Likely cleaned up or the workspace was swapped — regenerate or delete the metadata.",
       "download": "Download",
       "unsupportedKind": "Kind {kind} can't be previewed in the panel.",
       "copyFailed": "Copy failed: {error}",
@@ -211,7 +212,9 @@
       }
     },
     "versionSwitcher": {
-      "ariaLabel": "Switch version"
+      "ariaLabel": "Switch version",
+      "rollbackTitle": "Roll back to v{current} (creates a new version v{next} with content from v{current})",
+      "rollbackLabel": "Roll back to v{v}"
     },
     "mermaid": {
       "renderFailed": "Mermaid render failed: {error}"
@@ -268,17 +271,40 @@
       "loadFailed": "Failed to load artifacts: {error}",
       "count": "{n} artifacts",
       "selectHint": "Pick an artifact on the left to see its detail",
+      "filters": {
+        "pinnedOnly": "Pinned only",
+        "dateAll": "All time",
+        "date7d": "Last 7d",
+        "date30d": "Last 30d",
+        "clearAll": "Clear filters",
+        "activeChip": "Filter: {label}",
+        "removeChipAria": "Remove filter {label}"
+      },
+      "view": {
+        "list": "List",
+        "grid": "Grid",
+        "listAria": "Switch to list view",
+        "gridAria": "Switch to grid view"
+      },
+      "kbd": {
+        "search": "/",
+        "navHint": "j / k navigate · / search · Esc clear"
+      },
       "stats": {
         "total": "Total",
         "totalHint": "All artifacts",
         "size": "Disk usage",
         "sizeHint": "Sum across versions",
         "pinned": "Pinned",
-        "pinnedHint": "Team favourites",
+        "pinnedHint": "Team favorites",
         "last7d": "Last 7d",
         "last7dHint": "Recently created",
         "byKind": "By kind",
-        "topKindHint": "Largest kind · {kind}"
+        "topKindHint": "Largest kind · {kind}",
+        "activity": "Last 14 days",
+        "activityHint": "Artifacts created per day",
+        "contributors": "Top contributors",
+        "contributorsHint": "Most prolific employees in this workspace"
       }
     }
   },

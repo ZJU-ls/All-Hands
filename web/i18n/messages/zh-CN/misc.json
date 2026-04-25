@@ -162,6 +162,7 @@
       "loadFailed": "制品加载失败:{error}",
       "loadingMeta": "读取中…",
       "loadingContent": "读取内容…",
+      "contentMissing": "这份制品的内容文件已不在磁盘上(元数据仍在)· 可能因清理 / 工作区切换造成,可以重新生成或删除元数据。",
       "download": "下载",
       "unsupportedKind": "kind {kind} 暂不支持在面板内预览。",
       "copyFailed": "复制失败:{error}",
@@ -270,6 +271,25 @@
       "loadFailed": "制品列表加载失败:{error}",
       "count": "{n} 个制品",
       "selectHint": "从左侧选一个制品查看详情",
+      "filters": {
+        "pinnedOnly": "仅置顶",
+        "dateAll": "全部时间",
+        "date7d": "近 7 天",
+        "date30d": "近 30 天",
+        "clearAll": "清空筛选",
+        "activeChip": "已选: {label}",
+        "removeChipAria": "移除筛选 {label}"
+      },
+      "view": {
+        "list": "列表",
+        "grid": "网格",
+        "listAria": "切换列表视图",
+        "gridAria": "切换网格视图"
+      },
+      "kbd": {
+        "search": "/",
+        "navHint": "j / k 浏览 · / 搜索 · Esc 清除"
+      },
       "stats": {
         "total": "总数",
         "totalHint": "全部制品",
@@ -280,7 +300,11 @@
         "last7d": "近 7 天",
         "last7dHint": "新增制品",
         "byKind": "按类型分布",
-        "topKindHint": "最多类型 · {kind}"
+        "topKindHint": "最多类型 · {kind}",
+        "activity": "近 14 天活跃度",
+        "activityHint": "每日新增产物",
+        "contributors": "Top 创作者",
+        "contributorsHint": "本工作区贡献最多的员工"
       }
     }
   },

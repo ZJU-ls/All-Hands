@@ -29,5 +29,12 @@ class LLMModel(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     display_name: str = Field(default="")
     context_window: int = Field(default=0, ge=0)
+    # Optional explicit caps overriding model-default behavior. None means
+    # "don't constrain" — request goes out without a max_tokens hint, and the
+    # composer's budget chip falls back to context_window. Three vendor numbers
+    # (total / input / output) are kept distinct so the chip denominator can
+    # use the actual input cap rather than the conflated total.
+    max_input_tokens: int | None = Field(default=None, ge=1)
+    max_output_tokens: int | None = Field(default=None, ge=1)
     enabled: bool = True
     is_default: bool = False

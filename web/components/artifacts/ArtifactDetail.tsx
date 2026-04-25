@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  ArtifactContentMissingError,
   getArtifact,
   getArtifactTextContent,
   getArtifactVersionContent,
@@ -35,7 +36,8 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 type LoadedContent =
   | { kind: "text"; content: string }
   | { kind: "base64"; mime: string; base64: string }
-  | { kind: "binary-src"; src: string };
+  | { kind: "binary-src"; src: string }
+  | { kind: "missing" };
 
 function extractLanguage(mime: string): string | undefined {
   if (!mime.startsWith("text/")) return undefined;
@@ -54,7 +56,21 @@ function renderBody(
   artifact: ArtifactDto,
   loaded: LoadedContent,
   unsupportedMsg: string,
+  missingMsg: string,
 ): React.ReactNode {
+  // Workspace drift / disk wipe can leave the metadata row in place while the
+  // backing file is gone. Render a calm placeholder rather than letting each
+  // kind render `null` (blank) or hit `loaded.content` and crash.
+  if (loaded.kind === "missing") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-surface-2 text-text-muted">
+          <Icon name="alert-circle" size={18} />
+        </span>
+        <p className="text-sm text-text-muted">{missingMsg}</p>
+      </div>
+    );
+  }
   switch (artifact.kind) {
     case "markdown":
       return loaded.kind === "text" ? <MarkdownView content={loaded.content} /> : null;
@@ -167,7 +183,17 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
         const dto = await getArtifactVersionContent(meta.id, currentVersion!);
         if (!cancelled) setContent(contentFromDto(dto));
       } catch (e) {
-        if (!cancelled) setError(String(e));
+        if (cancelled) return;
+        // Distinguish "content gone" from real fetch errors so we render
+        // a friendly placeholder instead of a red banner. Workspace data
+        // can drift across worktrees / restored snapshots — the metadata
+        // row stays, the file disappears, and the user shouldn't see a
+        // 404/500 error chip for an artifact whose card is right there.
+        if (e instanceof ArtifactContentMissingError) {
+          setContent({ kind: "missing" });
+          return;
+        }
+        setError(String(e));
       }
     }
     void load();
@@ -377,7 +403,12 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
           />
         ) : content ? (
           <div className="h-full overflow-y-auto">
-            {renderBody(meta, content, t("unsupportedKind", { kind: meta.kind }))}
+            {renderBody(
+              meta,
+              content,
+              t("unsupportedKind", { kind: meta.kind }),
+              t("contentMissing"),
+            )}
           </div>
         ) : (
           <div className="px-4 py-3 text-[12px] text-text-muted">{t("loadingContent")}</div>

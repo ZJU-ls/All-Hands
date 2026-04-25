@@ -768,6 +768,8 @@ def _row_to_model(row: LLMModelRow) -> LLMModel:
         name=row.name,
         display_name=row.display_name,
         context_window=row.context_window,
+        max_input_tokens=row.max_input_tokens,
+        max_output_tokens=row.max_output_tokens,
         enabled=row.enabled,
         is_default=row.is_default,
     )
@@ -808,6 +810,8 @@ class SqlLLMModelRepo:
             existing.name = model.name
             existing.display_name = model.display_name
             existing.context_window = model.context_window
+            existing.max_input_tokens = model.max_input_tokens
+            existing.max_output_tokens = model.max_output_tokens
             existing.enabled = model.enabled
             existing.is_default = model.is_default
         else:
@@ -818,6 +822,8 @@ class SqlLLMModelRepo:
                     name=model.name,
                     display_name=model.display_name,
                     context_window=model.context_window,
+                    max_input_tokens=model.max_input_tokens,
+                    max_output_tokens=model.max_output_tokens,
                     enabled=model.enabled,
                     is_default=model.is_default,
                 )

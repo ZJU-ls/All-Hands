@@ -46,7 +46,9 @@ export function PlanProgressSection({ plan }: Props) {
 
   const done = plan.steps.filter((s) => s.status === "done").length;
   const running = plan.steps.filter((s) => s.status === "running").length;
+  const failed = plan.steps.filter((s) => s.status === "failed").length;
   const total = plan.steps.length;
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
 
   return (
     <div
@@ -57,16 +59,16 @@ export function PlanProgressSection({ plan }: Props) {
         type="button"
         onClick={toggle}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors duration-fast hover:bg-surface-2"
+        className="group flex w-full items-center gap-2.5 px-3 py-2 text-left transition-[background-color,color] duration-fast hover:bg-surface-3"
       >
         <Icon
           name={expanded ? "chevron-down" : "chevron-right"}
           size={11}
-          className="shrink-0 text-text-subtle"
+          className="shrink-0 text-text-subtle transition-[background-color,color] group-hover:text-text-muted"
         />
         <span
           aria-hidden="true"
-          className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-success-soft text-success"
+          className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-primary-muted text-primary"
         >
           <Icon name="list" size={11} />
         </span>
@@ -76,37 +78,77 @@ export function PlanProgressSection({ plan }: Props) {
         >
           {plan.title}
         </span>
+
+        {/* Inline progress bar — makes "almost done?" answerable at a glance */}
+        <div
+          aria-hidden="true"
+          className="hidden h-1 w-24 shrink-0 overflow-hidden rounded-full bg-surface sm:block"
+        >
+          <div
+            className={cn(
+              "h-full transition-[width] duration-fast",
+              failed > 0
+                ? "bg-danger"
+                : running > 0
+                  ? "bg-warning"
+                  : "bg-primary",
+            )}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
         <span className="shrink-0 font-mono text-[11px] text-text-muted">
-          {done}/{total}
+          <span className="tabular-nums">{done}</span>
+          <span className="text-text-subtle">/{total}</span>
           {running > 0 && (
             <span className="ml-1.5 text-warning">· {running} 进行中</span>
+          )}
+          {failed > 0 && (
+            <span className="ml-1.5 text-danger">· {failed} 失败</span>
           )}
         </span>
       </button>
       {expanded && (
-        <div className="space-y-0.5 px-3 pb-2 pt-0.5">
+        <div className="space-y-px border-t border-border bg-surface px-2 pb-1.5 pt-1.5">
           {plan.steps.map((s) => (
             <div
               key={s.index}
               data-testid={`plan-step-${s.index}`}
               data-status={s.status}
-              className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-surface-2"
+              className={cn(
+                "flex items-center gap-2.5 rounded-md px-2 py-1 transition-[background-color,color]",
+                s.status === "running"
+                  ? "bg-warning-soft/40"
+                  : "hover:bg-surface-2",
+              )}
             >
-              <span className="w-5 shrink-0 font-mono text-[10px] text-text-subtle">
-                {String(s.index + 1).padStart(2, "0")}
+              <span className="w-4 shrink-0 text-right font-mono text-[10px] text-text-subtle">
+                {s.index + 1}
               </span>
               <StepDot status={s.status} />
               <span
                 className={cn(
-                  "min-w-0 flex-1 truncate text-[12px]",
+                  "min-w-0 flex-1 truncate text-[12.5px] leading-snug",
                   s.status === "done"
-                    ? "text-text-subtle line-through"
-                    : "text-text",
+                    ? "text-text-subtle line-through decoration-text-subtle/40"
+                    : s.status === "running"
+                      ? "font-medium text-text"
+                      : s.status === "failed"
+                        ? "text-danger"
+                        : "text-text-muted",
                 )}
                 title={s.note ? `${s.title} · ${s.note}` : s.title}
               >
                 {s.title}
               </span>
+              {s.note && (
+                <span
+                  className="shrink-0 truncate text-[11px] text-text-subtle"
+                  title={s.note}
+                >
+                  {s.note}
+                </span>
+              )}
             </div>
           ))}
         </div>

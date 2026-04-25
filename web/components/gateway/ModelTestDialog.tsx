@@ -499,7 +499,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 onClick={() => setShowAdvanced((v) => !v)}
                 data-testid="model-test-advanced-toggle"
                 aria-expanded={showAdvanced}
-                className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] font-medium text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast"
+                className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] font-medium text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <Icon name="settings" size={12} />
                 {t("advancedToggle")}
@@ -961,7 +961,7 @@ function ReasoningBlock({
           ref={bodyRef}
           data-testid="model-test-reasoning-body"
           className={`border-t border-primary/15 px-3 py-2 text-[12px] leading-relaxed text-text-muted ${
-            isStreaming ? "max-h-60 overflow-y-auto" : ""
+            isStreaming ? "max-h-80 overflow-y-auto scroll-fade-bottom" : ""
           }`}
         >
           <AgentMarkdown

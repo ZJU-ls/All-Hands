@@ -24,6 +24,11 @@ export type GatewayModel = {
   name: string;
   display_name: string;
   context_window: number;
+  /** Optional advanced caps. null = "use model default". When set,
+   *  max_input_tokens drives the composer chip denominator and
+   *  max_output_tokens is forwarded as max_tokens on outbound chat. */
+  max_input_tokens: number | null;
+  max_output_tokens: number | null;
   enabled: boolean;
   /** Singleton flag — at most one row across the whole table is_default=true. */
   is_default: boolean;
@@ -191,7 +196,7 @@ function RowIconButton({
       aria-label={label}
       title={label}
       data-testid={testId}
-      className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-fast disabled:opacity-40 disabled:pointer-events-none ${toneCls}`}
+      className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-fast disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${toneCls}`}
     >
       <Icon name={icon} size={13} />
     </button>
