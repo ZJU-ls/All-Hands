@@ -23,7 +23,7 @@ import {
   screen,
   fireEvent,
   waitFor,
-} from "@testing-library/react";
+} from "@/tests/test-utils/i18n-render";
 
 vi.mock("@/components/shell/AppShell", () => ({
   AppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

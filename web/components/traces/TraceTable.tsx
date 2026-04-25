@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { TraceSummaryDto } from "@/lib/observatory-api";
 
@@ -78,6 +79,7 @@ export function TraceTable({
   onSort: (next: TraceSort) => void;
   onSelect: (trace: TraceSummaryDto) => void;
 }) {
+  const t = useTranslations("traces.table");
   const toggleSort = (key: TraceSortKey) => {
     if (sort.key === key) {
       onSort({ key, dir: sort.dir === "asc" ? "desc" : "asc" });
@@ -95,17 +97,17 @@ export function TraceTable({
     <table className="w-full border-collapse text-[12px]">
       <thead className="sticky top-0 z-[1] bg-surface-2/60 backdrop-blur-sm">
         <tr className="border-b border-border text-left">
-          <th className={HEAD_CELL}>trace</th>
-          <th className={HEAD_CELL}>员工</th>
-          <th className={HEAD_CELL}>状态</th>
+          <th className={HEAD_CELL}>{t("trace")}</th>
+          <th className={HEAD_CELL}>{t("employee")}</th>
+          <th className={HEAD_CELL}>{t("status")}</th>
           <th className={`${HEAD_CELL} text-right`}>
             <button
               type="button"
               onClick={() => toggleSort("duration_s")}
               className={`${HEAD_BTN} ml-auto`}
-              aria-label="按时长排序"
+              aria-label={t("sortDuration")}
             >
-              时长
+              {t("duration")}
               <SortGlyph name={sortGlyph("duration_s")} />
             </button>
           </th>
@@ -114,9 +116,9 @@ export function TraceTable({
               type="button"
               onClick={() => toggleSort("tokens")}
               className={`${HEAD_BTN} ml-auto`}
-              aria-label="按 tokens 排序"
+              aria-label={t("sortTokens")}
             >
-              tokens
+              {t("tokens")}
               <SortGlyph name={sortGlyph("tokens")} />
             </button>
           </th>
@@ -125,30 +127,30 @@ export function TraceTable({
               type="button"
               onClick={() => toggleSort("started_at")}
               className={HEAD_BTN}
-              aria-label="按开始时间排序"
+              aria-label={t("sortStartedAt")}
             >
-              开始时间
+              {t("startedAt")}
               <SortGlyph name={sortGlyph("started_at")} />
             </button>
           </th>
         </tr>
       </thead>
       <tbody>
-        {traces.map((t) => {
-          const active = t.trace_id === selectedId;
-          const failed = t.status === "failed";
+        {traces.map((row) => {
+          const active = row.trace_id === selectedId;
+          const failed = row.status === "failed";
           return (
             <tr
-              key={t.trace_id}
+              key={row.trace_id}
               role="row"
               aria-selected={active}
               tabIndex={0}
               data-active={active ? "true" : undefined}
-              onClick={() => onSelect(t)}
+              onClick={() => onSelect(row)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  onSelect(t);
+                  onSelect(row);
                 }
               }}
               className={
@@ -166,11 +168,11 @@ export function TraceTable({
                   />
                 )}
                 <span className={active ? "text-primary" : "text-text-muted"}>
-                  {t.trace_id}
+                  {row.trace_id}
                 </span>
               </td>
               <td className="py-2.5 px-3 text-text">
-                {t.employee_name ?? t.employee_id ?? "—"}
+                {row.employee_name ?? row.employee_id ?? t("fallback")}
               </td>
               <td className="py-2.5 px-3">
                 <span
@@ -185,17 +187,17 @@ export function TraceTable({
                     name={failed ? "alert-circle" : "check-circle-2"}
                     size={11}
                   />
-                  {failed ? "失败" : "成功"}
+                  {failed ? t("failed") : t("ok")}
                 </span>
               </td>
               <td className="py-2.5 px-3 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                {formatDuration(t.duration_s)}
+                {formatDuration(row.duration_s)}
               </td>
               <td className="py-2.5 px-3 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                {t.tokens.toLocaleString()}
+                {row.tokens.toLocaleString()}
               </td>
               <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted">
-                {formatStartedAt(t.started_at)}
+                {formatStartedAt(row.started_at)}
               </td>
             </tr>
           );

@@ -119,6 +119,7 @@ class ChatService:
         checkpointer: Any | None = None,
         confirmation_repo: ConfirmationRepo | None = None,
         event_repo: ConversationEventRepo | None = None,
+        plan_repo: Any = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -162,6 +163,9 @@ class ChatService:
         # persistent handle. None in unit tests that don't exercise the gate
         # flow; optional keeps those tests unchanged.
         self._confirmation_repo = confirmation_repo
+        # ADR 0019 C1 · per-conversation plan persistence. Optional so
+        # legacy test constructions (no plan tools exercised) keep working.
+        self._plan_repo = plan_repo
         # ADR 0017 · append-only event log. The authoritative SoT for
         # conversation history; ``messages`` table becomes a projection
         # cache. None keeps pre-ADR-0017 tests compiling — when unset the
@@ -624,6 +628,8 @@ class ChatService:
             runtime=runtime,
             spawn_subagent_service=spawn_subagent_service,
             model_ref_override=effective_model_ref,
+            plan_repo=self._plan_repo,
+            conversation_id=conversation_id,
         )
         # ADR 0017 · per-turn thread_id. Claude Code invariant (V02 § 1.3):
         # each query() gets a fresh in-memory messages array; there's no
@@ -1149,9 +1155,12 @@ class ChatService:
                 skill_registry=skill_registry,
                 runtime=child_runtime,
                 spawn_subagent_service=nested_spawn,
-                # Share the same checkpointer — child thread_ids are distinct
-                # (allocated by dispatch/spawn call sites) so child graph state
-                # lands in its own checkpoint family. ADR 0014 §3 Phase 1.
+                # ADR 0019 · plan_repo also shared with subagents so a Lead
+                # → child dispatch can update the same plan. conversation_id
+                # is None at the nested factory layer; the dispatch / spawn
+                # service knows the conversation it's targeting and can
+                # supply it through the runner kwargs path if needed.
+                plan_repo=self._plan_repo,
             )
 
         return factory

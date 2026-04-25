@@ -203,6 +203,8 @@ class AgentLoop:
         spawn_subagent_service: Any = None,
         model_ref_override: str | None = None,
         confirmation_signal: DeferredSignal | None = None,
+        plan_repo: Any = None,
+        conversation_id: str = "",
         **_unused: Any,
     ) -> None:
         self._employee = employee
@@ -214,6 +216,12 @@ class AgentLoop:
         self._runtime = runtime
         self._spawn_subagent_service = spawn_subagent_service
         self._model_ref_override = model_ref_override
+        # ADR 0019 C1 · plan tools · plan_repo and conversation_id passed
+        # in by ChatService when constructing the runner; None during
+        # legacy unit-test paths means plan tools fall back to their
+        # registry stubs (return empty / ignore).
+        self._plan_repo = plan_repo
+        self._conversation_id = conversation_id
         # Deferred suspend primitive used by _permission_check to gate
         # WRITE+ / requires_confirmation tool execution. None = legacy
         # auto-approve behaviour (matches old AutoApproveGate path);
@@ -235,13 +243,6 @@ class AgentLoop:
         try:
             effective_model_ref = self._model_ref_override or self._employee.model_ref
             base_model = _build_model(effective_model_ref, self._provider, overrides)
-            bindings = self._build_bindings()
-            lc_tools = self._build_lc_tools(bindings)
-            model = (
-                base_model.bind_tools(lc_tools)
-                if lc_tools and hasattr(base_model, "bind_tools")
-                else base_model
-            )
             lc_messages = self._build_lc_messages(messages, overrides)
 
             iteration = 0
@@ -250,6 +251,23 @@ class AgentLoop:
                 if iteration > max_iterations:
                     yield LoopExited(reason="max_iterations")
                     return
+
+                # 2026-04-25 (P2): rebuild bindings + tool list every
+                # iteration. SkillRuntime can mutate during a turn (a
+                # successful `resolve_skill` adds tool_ids to
+                # ``runtime.resolved_skills``); the next iteration's
+                # ``model.astream`` then sees the freshly-unlocked tools.
+                # This is the Claude Code while-true contract — tool list
+                # is a function of current state, not a build-time
+                # constant. Cost: ~6ms per iteration (binding map + LangChain
+                # bind_tools), invisible next to the LLM round-trip.
+                bindings = self._build_bindings()
+                lc_tools = self._build_lc_tools(bindings)
+                model = (
+                    base_model.bind_tools(lc_tools)
+                    if lc_tools and hasattr(base_model, "bind_tools")
+                    else base_model
+                )
 
                 message_id = str(uuid.uuid4())
                 accumulated: AIMessageChunk | None = None
@@ -427,6 +445,42 @@ class AgentLoop:
             )
 
             return make_spawn_subagent_executor(self._spawn_subagent_service)
+
+        # ADR 0019 C1 · plan tools · substitute the registry's no-op stubs
+        # with executors bound to the per-conversation AgentPlanRepo.
+        if self._plan_repo is not None and self._conversation_id:
+            from allhands.execution.tools.meta.plan_executors import (
+                PLAN_COMPLETE_STEP_TOOL_ID,
+                PLAN_CREATE_TOOL_ID,
+                PLAN_UPDATE_STEP_TOOL_ID,
+                PLAN_VIEW_TOOL_ID,
+                make_plan_complete_step_executor,
+                make_plan_create_executor,
+                make_plan_update_step_executor,
+                make_plan_view_executor,
+            )
+
+            if tool_id == PLAN_CREATE_TOOL_ID:
+                return make_plan_create_executor(
+                    repo=self._plan_repo,
+                    conversation_id=self._conversation_id,
+                    employee_id=self._employee.id,
+                )
+            if tool_id == PLAN_UPDATE_STEP_TOOL_ID:
+                return make_plan_update_step_executor(
+                    repo=self._plan_repo,
+                    conversation_id=self._conversation_id,
+                )
+            if tool_id == PLAN_COMPLETE_STEP_TOOL_ID:
+                return make_plan_complete_step_executor(
+                    repo=self._plan_repo,
+                    conversation_id=self._conversation_id,
+                )
+            if tool_id == PLAN_VIEW_TOOL_ID:
+                return make_plan_view_executor(
+                    repo=self._plan_repo,
+                    conversation_id=self._conversation_id,
+                )
         return default
 
     def _build_dispatch_executor(self) -> Any:

@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@/tests/test-utils/i18n-render";
 import { HUD } from "../HUD";
 import type { WorkspaceSummaryDto } from "@/lib/cockpit-api";
 

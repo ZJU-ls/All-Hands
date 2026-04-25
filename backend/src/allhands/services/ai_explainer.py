@@ -42,6 +42,7 @@ from langchain_core.messages import HumanMessage
 
 from allhands.core.errors import DomainError
 from allhands.execution.llm_factory import build_llm
+from allhands.i18n import t
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -234,12 +235,12 @@ async def _resolve_default_pair(
     """
     default_model = await model_repo.get_default()
     if default_model is None:
-        raise DomainError("尚未指定默认模型 — 请先到「模型网关」点一行模型,设为默认。")
+        raise DomainError(t("errors.no_default_model"))
     provider = await provider_repo.get(default_model.provider_id)
     if provider is None:
         # Default points at a deleted provider — schema-broken state. Tell
         # the user honestly rather than silently picking some other one.
-        raise DomainError("默认模型所在的供应商已被删除 — 请重新指定默认模型。")
+        raise DomainError(t("errors.default_model_provider_missing"))
     return provider, default_model.name
 
 

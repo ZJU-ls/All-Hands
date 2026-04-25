@@ -907,7 +907,6 @@ def _row_to_artifact(row: ArtifactRow) -> Artifact:
         name=row.name,
         kind=ArtifactKind(row.kind),
         mime_type=row.mime_type,
-        content=row.content,
         file_path=row.file_path,
         size_bytes=row.size_bytes,
         version=row.version,
@@ -927,7 +926,6 @@ def _row_to_artifact_version(row: ArtifactVersionRow) -> ArtifactVersion:
         id=row.id,
         artifact_id=row.artifact_id,
         version=row.version,
-        content=row.content,
         file_path=row.file_path,
         diff_from_prev=row.diff_from_prev,
         created_at=_utc(row.created_at),
@@ -969,12 +967,16 @@ class SqlArtifactRepo:
         return [_row_to_artifact(r) for r in result.scalars().all()]
 
     async def search(self, workspace_id: str, query: str, limit: int = 50) -> list[Artifact]:
+        # Content moved off-DB (2026-04-25); search is name-only now. A
+        # full-text index over disk content can be re-added later if users
+        # actually rely on body search — for now nobody does, and grepping
+        # 1MB blobs in SQLite was the slow path anyway.
         like = f"%{query}%"
         stmt = (
             select(ArtifactRow)
             .where(ArtifactRow.workspace_id == workspace_id)
             .where(ArtifactRow.deleted_at.is_(None))
-            .where((ArtifactRow.name.like(like)) | (ArtifactRow.content.like(like)))
+            .where(ArtifactRow.name.like(like))
             .order_by(ArtifactRow.updated_at.desc())
             .limit(limit)
         )
@@ -988,7 +990,6 @@ class SqlArtifactRepo:
             existing.name = artifact.name
             existing.kind = artifact.kind.value
             existing.mime_type = artifact.mime_type
-            existing.content = artifact.content
             existing.file_path = artifact.file_path
             existing.size_bytes = artifact.size_bytes
             existing.version = artifact.version
@@ -1007,7 +1008,6 @@ class SqlArtifactRepo:
                     name=artifact.name,
                     kind=artifact.kind.value,
                     mime_type=artifact.mime_type,
-                    content=artifact.content,
                     file_path=artifact.file_path,
                     size_bytes=artifact.size_bytes,
                     version=artifact.version,
@@ -1056,7 +1056,6 @@ class SqlArtifactRepo:
                 id=version.id,
                 artifact_id=version.artifact_id,
                 version=version.version,
-                content=version.content,
                 file_path=version.file_path,
                 diff_from_prev=version.diff_from_prev,
                 created_at=_naive(version.created_at),

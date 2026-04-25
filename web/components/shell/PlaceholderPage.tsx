@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { AppShell } from "./AppShell";
 
 export function PlaceholderPage({
@@ -11,6 +12,7 @@ export function PlaceholderPage({
   description: string;
   note?: string;
 }) {
+  const t = useTranslations("shellExtras.placeholder");
   return (
     <AppShell title={title}>
       <div className="h-full overflow-y-auto">
@@ -19,7 +21,7 @@ export function PlaceholderPage({
           <p className="text-sm text-text-muted mb-6">{description}</p>
           <div className="rounded-xl border border-dashed border-border p-8 text-center">
             <p className="text-text-subtle text-sm">
-              {note ?? "此模块正在建设中。未来通过与 Lead Agent 对话或本页面进行管理。"}
+              {note ?? t("defaultNote")}
             </p>
           </div>
         </div>

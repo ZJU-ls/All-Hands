@@ -18,6 +18,7 @@
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ErrorState } from "@/components/state";
@@ -68,13 +69,19 @@ const EMPTY_MODEL_FORM = {
 
 export default function GatewayPage() {
   return (
-    <Suspense fallback={<AppShell title="模型网关">{null}</AppShell>}>
+    <Suspense fallback={<GatewayFallback />}>
       <GatewayPageInner />
     </Suspense>
   );
 }
 
+function GatewayFallback() {
+  const t = useTranslations("gateway.page");
+  return <AppShell title={t("title")}>{null}</AppShell>;
+}
+
 function GatewayPageInner() {
+  const t = useTranslations("gateway.page");
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [presets, setPresets] = useState<ProviderPreset[]>([]);
   const [openProviders, setOpenProviders] = useState<Set<string>>(new Set());
@@ -280,7 +287,7 @@ function GatewayPageInner() {
           [model.id]: {
             status: "fail",
             category: data.error_category ?? "unknown",
-            error: data.error ?? "失败",
+            error: data.error ?? t("pingFailure"),
             latencyMs: data.latency_ms ?? elapsed,
           },
         }));
@@ -297,7 +304,7 @@ function GatewayPageInner() {
         },
       }));
     }
-  }, []);
+  }, [t]);
 
   const bulkPingProvider = useCallback(
     async (providerId: string, models: GatewayModel[]) => {
@@ -437,7 +444,7 @@ function GatewayPageInner() {
 
   return (
     <AppShell
-      title="模型网关"
+      title={t("title")}
       actions={
         <button
           type="button"
@@ -446,7 +453,7 @@ function GatewayPageInner() {
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary text-primary-fg text-[12px] font-semibold shadow-soft-sm hover:bg-primary-hover hover:-translate-y-px transition duration-base"
         >
           <Icon name="plus" size={14} />
-          添加供应商
+          {t("addProvider")}
         </button>
       }
     >
@@ -455,8 +462,8 @@ function GatewayPageInner() {
           {state.status === "loading" && (
             <>
               <PageHeader
-                title="模型网关"
-                subtitle="管理 LLM 供应商和模型 · 配置 API · 一键健康检查"
+                title={t("title")}
+                subtitle={t("subtitle")}
               />
               <GatewaySkeleton />
             </>
@@ -465,14 +472,14 @@ function GatewayPageInner() {
           {state.status === "error" && (
             <>
               <PageHeader
-                title="模型网关"
-                subtitle="管理 LLM 供应商和模型 · 配置 API · 一键健康检查"
+                title={t("title")}
+                subtitle={t("subtitle")}
               />
               <div data-testid="gateway-error">
                 <ErrorState
-                  title="加载失败"
+                  title={t("loadFailedTitle")}
                   detail={state.message}
-                  action={{ label: "重试", onClick: () => void load() }}
+                  action={{ label: t("errorRetry"), onClick: () => void load() }}
                 />
               </div>
             </>
@@ -481,8 +488,8 @@ function GatewayPageInner() {
           {state.status === "ready" && providers.length === 0 && (
             <>
               <PageHeader
-                title="模型网关"
-                subtitle="管理 LLM 供应商和模型 · 配置 API · 一键健康检查"
+                title={t("title")}
+                subtitle={t("subtitle")}
               />
               <EmptyGateway
                 onAdd={openCreate}
@@ -587,11 +594,9 @@ function GatewayPageInner() {
       )}
       <ConfirmDialog
         open={deleteProviderTarget !== null}
-        title={`删除供应商 ${deleteProviderTarget?.name ?? ""}?`}
-        message={
-          "此操作不可撤销。其下注册的所有模型会一并删除。\n\n建议先把依赖它的员工迁移到其它供应商。"
-        }
-        confirmLabel="删除"
+        title={t("deleteProviderTitle", { name: deleteProviderTarget?.name ?? "" })}
+        message={t("deleteProviderMessage")}
+        confirmLabel={t("deleteAction")}
         danger
         busy={deleting}
         onConfirm={() => void handleDeleteProviderConfirmed()}
@@ -599,11 +604,11 @@ function GatewayPageInner() {
       />
       <ConfirmDialog
         open={deleteModelTarget !== null}
-        title={`删除模型 ${
-          deleteModelTarget?.display_name || deleteModelTarget?.name || ""
-        }?`}
-        message={"此操作不可撤销。已绑定该模型的员工将回退到供应商默认模型。"}
-        confirmLabel="删除"
+        title={t("deleteModelTitle", {
+          name: deleteModelTarget?.display_name || deleteModelTarget?.name || "",
+        })}
+        message={t("deleteModelMessage")}
+        confirmLabel={t("deleteAction")}
         danger
         busy={deleting}
         onConfirm={() => void handleDeleteModelConfirmed()}
@@ -636,6 +641,7 @@ function GatewayHero({
   onTestAll: () => void;
   onAdd: () => void;
 }) {
+  const t = useTranslations("gateway.page");
   const defaultLabel =
     defaultProvider && defaultModel
       ? `${defaultProvider.name}/${defaultModel.name}`
@@ -678,41 +684,33 @@ function GatewayHero({
               id="gateway-hero-title"
               className="text-[22px] md:text-[26px] font-semibold tracking-tight text-text"
             >
-              模型网关
+              {t("title")}
             </h1>
             <span className="font-mono text-[11px] tabular-nums text-text-subtle">
-              · {providerCount} 供应商 · {modelCount} 模型
+              {t("heroCounter", { providers: providerCount, models: modelCount })}
             </span>
           </div>
           <p className="mt-1 text-[13px] text-text-muted leading-relaxed">
-            {defaultLabel ? (
-              <>
-                全局默认 ={" "}
-                <span className="font-medium text-text">{defaultLabel}</span>
-                ;员工 / 对话未指定模型时回退到这一对 · 在任意模型行点「设为默认」即可一键切换。
-              </>
-            ) : (
-              <>尚未选择默认模型 · 在任意模型行点「设为默认」即可指定。</>
-            )}
+            {defaultLabel ? t("heroDefaultLine", { label: defaultLabel }) : t("heroNoDefault")}
           </p>
 
           {/* stats chips */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <StatChip icon="server" label="供应商" value={providerCount} />
-            <StatChip icon="brain" label="模型" value={modelCount} />
+            <StatChip icon="server" label={t("statProviders")} value={providerCount} />
+            <StatChip icon="brain" label={t("statModels")} value={modelCount} />
             <StatChip
               icon="check-circle-2"
-              label="已启用"
+              label={t("statEnabled")}
               value={enabledCount}
               tone="success"
             />
             {defaultLabel && (
               <span
                 className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20"
-                title="未指定时所有对话回退到这一对 (供应商, 模型)"
+                title={t("globalDefaultTooltip")}
               >
                 <Icon name="star" size={11} />
-                全局默认 · {defaultLabel}
+                {t("statGlobalDefault", { label: defaultLabel ?? "" })}
               </span>
             )}
           </div>
@@ -728,12 +726,12 @@ function GatewayHero({
             {testAllBusy ? (
               <>
                 <Icon name="loader" size={13} className="animate-spin-slow" />
-                测试中…
+                {t("testAllRunning")}
               </>
             ) : (
               <>
                 <Icon name="activity" size={13} />
-                全部测试连通性
+                {t("testAll")}
               </>
             )}
           </button>
@@ -743,7 +741,7 @@ function GatewayHero({
             className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-primary text-primary-fg text-[12px] font-semibold shadow-soft hover:bg-primary-hover hover:-translate-y-px transition duration-base"
           >
             <Icon name="plus" size={13} />
-            添加供应商
+            {t("addProvider")}
           </button>
         </div>
       </div>
@@ -792,6 +790,7 @@ function EmptyGateway({
   presets: ProviderPreset[];
   onPickPreset: (kind: ProviderKind) => void;
 }) {
+  const t = useTranslations("gateway.page");
   return (
     <div
       data-testid="gateway-empty"
@@ -828,11 +827,10 @@ function EmptyGateway({
         </div>
 
         <h3 className="mt-6 text-[26px] md:text-[30px] font-semibold tracking-tight text-text">
-          Wire up your first LLM provider
+          {t("emptyHeadline")}
         </h3>
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-text-muted">
-          添加 OpenAI / Anthropic / DeepSeek / 阿里云百炼 / 本地 Ollama 等兼容端点,
-          给员工上模型。
+          {t("emptyDescription")}
         </p>
 
         <button
@@ -841,13 +839,13 @@ function EmptyGateway({
           className="mt-5 inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-primary text-primary-fg text-[13px] font-semibold shadow-soft hover:bg-primary-hover hover:-translate-y-px transition duration-base"
         >
           <Icon name="plus" size={14} />
-          添加第一个供应商 →
+          {t("addFirstProvider")}
         </button>
 
         {presets.length > 0 && (
           <div className="mt-8 w-full max-w-lg">
             <p className="font-mono text-[10px] uppercase tracking-wider text-text-subtle mb-2">
-              或从预设开始
+              {t("orStartFromPreset")}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {presets.map((p) => {
@@ -954,8 +952,9 @@ function ProviderFormDialog({
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const t = useTranslations("gateway.page");
   const currentPreset = presets.find((p) => p.kind === form.kind);
-  const keyPlaceholder = currentPreset?.key_hint || "sk-... (本地部署可留空)";
+  const keyPlaceholder = currentPreset?.key_hint || t("fieldApiKeyPlaceholderFallback");
   const baseUrlPlaceholder = currentPreset?.base_url || "https://api.openai.com/v1";
 
   function handleKindChange(nextKind: ProviderKind) {
@@ -978,28 +977,22 @@ function ProviderFormDialog({
   return (
     <Modal
       onClose={onCancel}
-      title={editing ? "编辑 LLM 供应商" : "添加 LLM 供应商"}
+      title={editing ? t("providerDialogEditTitle") : t("providerDialogCreateTitle")}
       subtitle={
-        editing
-          ? "修改 endpoint · 轮换 API key"
-          : "挑一种 API 格式,填入 endpoint 与凭证"
+        editing ? t("providerDialogEditSubtitle") : t("providerDialogCreateSubtitle")
       }
       iconName={editing ? "edit" : "plug"}
     >
       <FormSection
-        label="供应商格式"
-        hint={
-          editing
-            ? "已注册的供应商不支持切换格式(会破坏现有模型调用)。"
-            : undefined
-        }
+        label={t("sectionFormat")}
+        hint={editing ? t("formatLockedHint") : undefined}
       >
         {presets.length === 0 ? (
-          <p className="text-[11px] text-text-muted">加载预设中…</p>
+          <p className="text-[11px] text-text-muted">{t("presetsLoading")}</p>
         ) : (
           <div
             role="radiogroup"
-            aria-label="供应商格式"
+            aria-label={t("sectionFormat")}
             data-testid="provider-kind-radiogroup"
             className="grid grid-cols-3 gap-2"
           >
@@ -1056,15 +1049,15 @@ function ProviderFormDialog({
         )}
       </FormSection>
 
-      <FormSection label="连接">
+      <FormSection label={t("sectionConnection")}>
         <LabeledInput
-          label="名称"
-          placeholder="例: OpenAI / DeepSeek / 本地 Ollama"
+          label={t("fieldName")}
+          placeholder={t("fieldNamePlaceholder")}
           value={form.name}
           onChange={(v) => onChange({ ...form, name: v })}
         />
         <LabeledInput
-          label="Base URL"
+          label={t("fieldBaseUrl")}
           placeholder={baseUrlPlaceholder}
           mono
           value={form.base_url}
@@ -1072,14 +1065,14 @@ function ProviderFormDialog({
           icon="link"
         />
         <ApiKeyInput
-          label={editing ? "API Key (留空则不变)" : "API Key"}
+          label={editing ? t("fieldApiKeyEdit") : t("fieldApiKey")}
           placeholder={keyPlaceholder}
           value={form.api_key}
           onChange={(v) => onChange({ ...form, api_key: v })}
         />
       </FormSection>
 
-      {/* "默认" 字段已废弃 — 默认模型在保存供应商之后,通过模型行上的
+      {/* "默认模型" 字段已废弃 — 默认模型在保存供应商之后,通过模型行上的
           「设为默认」按钮一键指定。这里多一个提示告诉用户下一步去哪。 */}
       {!editing && (
         <p
@@ -1091,16 +1084,12 @@ function ProviderFormDialog({
             size={12}
             className="mt-0.5 shrink-0 text-text-subtle"
           />
-          <span>
-            保存后,在该供应商下注册一个或多个模型,然后点模型行右侧的
-            <span className="font-medium text-text"> 「设为默认」</span>
-            把它定为全局默认 (provider + model)。
-          </span>
+          <span>{t("providerFormDefaultHint")}</span>
         </p>
       )}
 
       <DialogFooter
-        saveLabel={saving ? "保存中" : "保存"}
+        saveLabel={saving ? t("saving") : t("save")}
         saveDisabled={saving || !form.name || !form.base_url}
         busy={saving}
         onCancel={onCancel}
@@ -1125,21 +1114,22 @@ function ModelFormDialog({
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const t = useTranslations("gateway.page");
   return (
     <Modal
       onClose={onCancel}
-      title={`注册模型`}
+      title={t("registerModelTitle")}
       subtitle={
         <>
-          归属供应商:
+          {t("registerModelOwner")}
           <span className="font-mono text-text ml-1">{providerName}</span>
         </>
       }
       iconName="brain"
     >
-      <FormSection label="标识">
+      <FormSection label={t("sectionIdentity")}>
         <LabeledInput
-          label="模型名称 (API 调用值)"
+          label={t("fieldModelName")}
           mono
           placeholder="gpt-4o-mini"
           value={form.name}
@@ -1147,15 +1137,15 @@ function ModelFormDialog({
           icon="terminal"
         />
         <LabeledInput
-          label="显示名称 (可选)"
+          label={t("fieldDisplayName")}
           placeholder="GPT-4o Mini"
           value={form.display_name}
           onChange={(v) => onChange({ ...form, display_name: v })}
         />
       </FormSection>
-      <FormSection label="能力">
+      <FormSection label={t("sectionCapability")}>
         <LabeledInput
-          label="上下文窗口 tokens (可选)"
+          label={t("fieldContextWindow")}
           placeholder="128000"
           value={String(form.context_window || "")}
           onChange={(v) => onChange({ ...form, context_window: Number(v) || 0 })}
@@ -1163,7 +1153,7 @@ function ModelFormDialog({
         />
       </FormSection>
       <DialogFooter
-        saveLabel={saving ? "保存中" : "保存"}
+        saveLabel={saving ? t("saving") : t("save")}
         saveDisabled={saving || !form.name}
         busy={saving}
         onCancel={onCancel}
@@ -1190,7 +1180,8 @@ function Modal({
   children: React.ReactNode;
   onClose: () => void;
 }) {
-  // ESC = 关闭 — Gateway 页面所有 ProviderFormDialog / ModelFormDialog 共用此入口
+  const t = useTranslations("gateway.page");
+  // ESC = close — shared by all ProviderFormDialog / ModelFormDialog on Gateway
   useDismissOnEscape(true, onClose);
   return (
     <div
@@ -1237,7 +1228,7 @@ function Modal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("modalClose")}
             className="shrink-0 grid h-7 w-7 place-items-center rounded-md text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast"
           >
             <Icon name="x" size={14} />
@@ -1297,6 +1288,7 @@ function DialogFooter({
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const t = useTranslations("gateway.page");
   return (
     <div className="flex gap-2 pt-2 justify-end border-t border-border -mx-5 px-5 pt-4 mt-1">
       <button
@@ -1304,7 +1296,7 @@ function DialogFooter({
         onClick={onCancel}
         className="h-9 px-3.5 rounded-lg bg-surface border border-border hover:border-border-strong hover:bg-surface-2 text-text-muted hover:text-text text-[12px] font-medium transition duration-base"
       >
-        取消
+        {t("cancel")}
       </button>
       <button
         type="button"
@@ -1378,6 +1370,7 @@ function ApiKeyInput({
   onChange: (v: string) => void;
   placeholder?: string;
 }) {
+  const t = useTranslations("gateway.page");
   const [visible, setVisible] = useState(false);
   return (
     <div>
@@ -1398,7 +1391,7 @@ function ApiKeyInput({
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
-          aria-label={visible ? "隐藏 API Key" : "显示 API Key"}
+          aria-label={visible ? t("apiKeyHide") : t("apiKeyShow")}
           aria-pressed={visible}
           className="absolute right-1.5 top-1/2 -translate-y-1/2 grid h-6 w-6 place-items-center rounded text-text-subtle hover:text-text hover:bg-surface-2 transition-colors duration-fast"
         >

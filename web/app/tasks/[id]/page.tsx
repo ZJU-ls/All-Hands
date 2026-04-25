@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState, ErrorState } from "@/components/state";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
@@ -41,6 +42,7 @@ type LoadStatus = "loading" | "ready" | "notfound" | "error";
  * All data-fetch / polling / mutation / navigation semantics preserved.
  */
 export default function TaskDetailPage() {
+  const t = useTranslations("tasks.detail");
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
 
@@ -92,10 +94,10 @@ export default function TaskDetailPage() {
 
   if (!id || loadStatus === "loading") {
     return (
-      <AppShell title="任务">
+      <AppShell title={t("shellTitle")}>
         <div className="h-full overflow-y-auto">
           <div className="mx-auto max-w-5xl px-8 py-8 animate-fade-up">
-            <LoadingState title="加载任务" />
+            <LoadingState title={t("loading")} />
           </div>
         </div>
       </AppShell>
@@ -104,7 +106,7 @@ export default function TaskDetailPage() {
 
   if (loadStatus === "notfound") {
     return (
-      <AppShell title="任务">
+      <AppShell title={t("shellTitle")}>
         <div className="h-full overflow-y-auto">
           <div className="mx-auto max-w-3xl px-8 py-10 animate-fade-up">
             <div
@@ -123,15 +125,15 @@ export default function TaskDetailPage() {
                 <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-surface-2 text-text-muted shadow-soft-sm">
                   <Icon name="alert-circle" size={24} />
                 </div>
-                <p className="mt-5 text-base font-semibold text-text">找不到任务</p>
+                <p className="mt-5 text-base font-semibold text-text">{t("notFound")}</p>
                 <p className="mt-1 font-mono text-[11px] text-text-subtle">{id}</p>
-                <p className="mt-2 text-sm text-text-muted">可能已经被取消或删除。</p>
+                <p className="mt-2 text-sm text-text-muted">{t("notFoundHint")}</p>
                 <Link
                   href="/tasks"
                   className="mt-6 inline-flex h-9 items-center gap-1.5 rounded-lg border border-border-strong bg-surface px-4 text-sm font-medium text-text shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
                 >
                   <Icon name="arrow-left" size={13} />
-                  回到收件箱
+                  {t("backToInbox")}
                 </Link>
               </div>
             </div>
@@ -143,13 +145,13 @@ export default function TaskDetailPage() {
 
   if (loadStatus === "error" || !task) {
     return (
-      <AppShell title="任务">
+      <AppShell title={t("shellTitle")}>
         <div className="h-full overflow-y-auto">
           <div className="mx-auto max-w-3xl px-8 py-8 animate-fade-up" data-testid="task-error">
             <ErrorState
-              title="加载任务失败"
+              title={t("loadFailed")}
               detail={error}
-              action={{ label: "重试", onClick: () => void load() }}
+              action={{ label: t("retry"), onClick: () => void load() }}
             />
           </div>
         </div>
@@ -204,7 +206,7 @@ export default function TaskDetailPage() {
 
   return (
     <AppShell
-      title={`任务 · ${task.title}`}
+      title={t("shellTitleWithName", { title: task.title })}
       actions={
         <div className="flex items-center gap-2">
           <Link
@@ -212,7 +214,7 @@ export default function TaskDetailPage() {
             className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] text-text-muted transition-colors duration-base hover:text-text hover:bg-surface-2"
           >
             <Icon name="arrow-left" size={12} />
-            收件箱
+            {t("inbox")}
           </Link>
           {canCancel && (
             <button
@@ -221,7 +223,7 @@ export default function TaskDetailPage() {
               className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-surface px-3 text-[12px] font-medium text-danger shadow-soft-sm transition-colors duration-base hover:bg-danger/10 hover:border-danger/50"
             >
               <Icon name="x" size={12} />
-              取消任务
+              {t("cancelTask")}
             </button>
           )}
         </div>
@@ -234,7 +236,7 @@ export default function TaskDetailPage() {
 
           {needsUser && task.status === "needs_input" && (
             <NeedsInputPanel
-              question={task.pending_input_question ?? "(无)"}
+              question={task.pending_input_question ?? t("noQuestion")}
               answer={answer}
               onChange={setAnswer}
               busy={busy === "answer"}
@@ -254,7 +256,7 @@ export default function TaskDetailPage() {
           )}
 
           {task.status === "completed" && task.result_summary && (
-            <Callout tone="success" title="完成摘要" icon="check-circle-2">
+            <Callout tone="success" title={t("completedSummary")} icon="check-circle-2">
               <MarkdownLike text={task.result_summary} />
             </Callout>
           )}
@@ -263,7 +265,7 @@ export default function TaskDetailPage() {
             task.error_summary && (
               <Callout
                 tone="danger"
-                title={task.status === "failed" ? "失败原因" : "取消原因"}
+                title={task.status === "failed" ? t("failedReason") : t("cancelledReason")}
                 icon="alert-circle"
               >
                 <MarkdownLike text={task.error_summary} />
@@ -271,10 +273,10 @@ export default function TaskDetailPage() {
             )}
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <Section title="目标" icon="sparkles">
+            <Section title={t("goal")} icon="sparkles">
               <MarkdownLike text={task.goal} />
             </Section>
-            <Section title="Definition of Done" icon="shield-check">
+            <Section title={t("dod")} icon="shield-check">
               <MarkdownLike text={task.dod} />
             </Section>
           </div>
@@ -283,11 +285,11 @@ export default function TaskDetailPage() {
             <LinkedConversation conversationId={task.conversation_id} />
           )}
 
-          <Section title="运行" icon="activity" count={task.run_ids.length}>
+          <Section title={t("runs")} icon="activity" count={task.run_ids.length}>
             {task.run_ids.length === 0 ? (
               <EmptyHint
                 icon="clock"
-                text="尚未分配 run · 一旦 TaskExecutor 起来就会出现。"
+                text={t("runsEmpty")}
               />
             ) : (
               <div className="flex flex-col gap-4">
@@ -298,9 +300,9 @@ export default function TaskDetailPage() {
             )}
           </Section>
 
-          <Section title="产出制品" icon="file" count={task.artifact_ids.length}>
+          <Section title={t("artifacts")} icon="file" count={task.artifact_ids.length}>
             {task.artifact_ids.length === 0 ? (
-              <EmptyHint icon="file" text="还没有产出。" />
+              <EmptyHint icon="file" text={t("artifactsEmpty")} />
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {task.artifact_ids.map((a) => (
@@ -319,7 +321,7 @@ export default function TaskDetailPage() {
             )}
           </Section>
 
-          <Section title="元数据" icon="database">
+          <Section title={t("metadata")} icon="database">
             <MetaGrid task={task} />
           </Section>
         </div>
@@ -327,9 +329,9 @@ export default function TaskDetailPage() {
 
       <ConfirmDialog
         open={confirmCancel}
-        title={`取消任务 ${task.title}?`}
-        message="取消会停止正在跑的 run。已产出的制品会保留,但任务不会继续。"
-        confirmLabel="取消任务"
+        title={t("cancelTaskTitle", { title: task.title })}
+        message={t("cancelTaskMessage")}
+        confirmLabel={t("cancelTaskConfirm")}
         danger
         busy={busy === "cancel"}
         onConfirm={() => void doCancel()}
@@ -370,6 +372,7 @@ const TONE_ACCENT: Record<HeroTone, string> = {
 };
 
 function TaskHero({ task }: { task: TaskDto }) {
+  const t = useTranslations("tasks.detail");
   const created = new Date(task.created_at).toLocaleString();
   const updated = new Date(task.updated_at).toLocaleString();
   const completed = task.completed_at ? new Date(task.completed_at).toLocaleString() : null;
@@ -400,23 +403,23 @@ function TaskHero({ task }: { task: TaskDto }) {
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-subtle">
             <span className="inline-flex items-center gap-1">
               <Icon name="clock" size={11} />
-              创建 {created}
+              {t("createdAt", { at: created })}
             </span>
             <span className="inline-flex items-center gap-1">
               <Icon name="refresh" size={11} />
-              更新 {updated}
+              {t("updatedAt", { at: updated })}
             </span>
             {completed && (
               <span className="inline-flex items-center gap-1">
                 <Icon name="check" size={11} />
-                {statusLabel(task.status)} 于 {completed}
+                {t("completedAt", { status: statusLabel(task.status), at: completed })}
               </span>
             )}
           </div>
         </div>
         <div className="shrink-0 text-right">
           <div className="text-[10px] font-mono uppercase tracking-wider text-text-subtle">
-            指派给
+            {t("assignedTo")}
           </div>
           <div className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1">
             <span
@@ -438,6 +441,7 @@ function TaskHero({ task }: { task: TaskDto }) {
 }
 
 function TaskKpiStrip({ task }: { task: TaskDto }) {
+  const t = useTranslations("tasks.detail");
   const duration = useMemo(() => {
     const start = new Date(task.created_at).getTime();
     const end = task.completed_at
@@ -452,36 +456,36 @@ function TaskKpiStrip({ task }: { task: TaskDto }) {
 
   const tokensHint =
     task.token_budget == null
-      ? "无预算上限"
-      : `预算 ${task.token_budget.toLocaleString()}`;
+      ? t("kpiTokenNoBudget")
+      : t("kpiTokenBudget", { budget: task.token_budget.toLocaleString() });
 
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <KpiCard
-        label="耗时"
+        label={t("kpiDuration")}
         value={duration}
-        hint={task.completed_at ? "已结束" : "进行中"}
+        hint={task.completed_at ? t("kpiDurationDone") : t("kpiDurationRunning")}
         icon="clock"
         tone="primary"
       />
       <KpiCard
-        label="Token"
+        label={t("kpiToken")}
         value={task.tokens_used.toLocaleString()}
         hint={tokensHint}
         icon="zap"
         tone="warning"
       />
       <KpiCard
-        label="Runs"
+        label={t("kpiRuns")}
         value={String(task.run_ids.length)}
-        hint={task.run_ids.length === 0 ? "未分配" : "已派发"}
+        hint={task.run_ids.length === 0 ? t("kpiRunsUnassigned") : t("kpiRunsDispatched")}
         icon="activity"
         tone="success"
       />
       <KpiCard
-        label="制品"
+        label={t("kpiArtifacts")}
         value={String(task.artifact_ids.length)}
-        hint={task.artifact_ids.length === 0 ? "暂无" : "可查看"}
+        hint={task.artifact_ids.length === 0 ? t("kpiArtifactsNone") : t("kpiArtifactsAvailable")}
         icon="file"
         tone="neutral"
       />
@@ -531,6 +535,7 @@ function KpiCard({
 }
 
 function LinkedConversation({ conversationId }: { conversationId: string }) {
+  const t = useTranslations("tasks.detail");
   return (
     <Link
       href={`/chat/${conversationId}`}
@@ -541,7 +546,7 @@ function LinkedConversation({ conversationId }: { conversationId: string }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[10px] font-mono uppercase tracking-wider text-text-subtle">
-          关联对话
+          {t("linkedConversation")}
         </div>
         <div className="mt-0.5 truncate font-mono text-[12px] text-text transition-colors duration-base group-hover:text-primary">
           {conversationId}
@@ -569,6 +574,7 @@ function NeedsInputPanel({
   busy: boolean;
   onSubmit: () => void;
 }) {
+  const t = useTranslations("tasks.detail");
   const isComposingRef = useRef(false);
 
   return (
@@ -586,7 +592,7 @@ function NeedsInputPanel({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-mono uppercase tracking-wider text-warning">
-            等你回答
+            {t("needsAnswer")}
           </p>
           <p className="mt-1.5 text-sm text-text">{question}</p>
           <textarea
@@ -600,7 +606,7 @@ function NeedsInputPanel({
               isComposingRef.current = false;
             }}
             rows={3}
-            placeholder="一两句话回给员工 · Enter 发送 / Shift+Enter 换行"
+            placeholder={t("answerPlaceholder")}
             onKeyDown={(e) => {
               if (
                 e.key === "Enter" &&
@@ -618,12 +624,12 @@ function NeedsInputPanel({
           <div className="mt-2 flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1 font-mono text-[10px] text-text-subtle">
               <KbdChip>Enter</KbdChip>
-              <span>发送</span>
+              <span>{t("kbdSend")}</span>
               <span className="mx-1 opacity-40">·</span>
               <KbdChip>Shift</KbdChip>
               <span>+</span>
               <KbdChip>Enter</KbdChip>
-              <span>换行</span>
+              <span>{t("kbdNewline")}</span>
             </span>
             <button
               data-testid="answer-submit"
@@ -636,7 +642,7 @@ function NeedsInputPanel({
               ) : (
                 <Icon name="send" size={12} />
               )}
-              {busy ? "发送中…" : "发送答复"}
+              {busy ? t("sending") : t("sendAnswer")}
             </button>
           </div>
         </div>
@@ -660,10 +666,11 @@ function NeedsApprovalPanel({
   onDeny: () => void;
   busy: boolean;
 }) {
+  const t = useTranslations("tasks.detail");
   const summary =
     payload && typeof payload.summary === "string"
       ? (payload.summary as string)
-      : "员工请求你对一次操作放行。";
+      : t("approvalDefaultSummary");
   const toolId =
     payload && typeof payload.tool_id === "string" ? (payload.tool_id as string) : null;
   return (
@@ -681,13 +688,13 @@ function NeedsApprovalPanel({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-mono uppercase tracking-wider text-warning">
-            等你审批
+            {t("needsApproval")}
           </p>
           <p className="mt-1.5 text-sm text-text">{summary}</p>
           {toolId && (
             <p className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-0.5 font-mono text-[11px] text-text-muted">
               <Icon name="terminal" size={10} />
-              tool: {toolId}
+              {t("approvalToolPrefix", { id: toolId })}
             </p>
           )}
           {payload && Object.keys(payload).length > 0 && (
@@ -702,7 +709,7 @@ function NeedsApprovalPanel({
             data-testid="approve-note"
             value={note}
             onChange={(e) => onNoteChange(e.target.value)}
-            placeholder="可选 · 给员工留一句话"
+            placeholder={t("approvalNotePlaceholder")}
             className="mt-3 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder-text-subtle transition-colors duration-base focus:border-warning focus:outline-none"
           />
           <div className="mt-3 flex items-center justify-end gap-2">
@@ -713,7 +720,7 @@ function NeedsApprovalPanel({
               className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-4 text-[12px] text-text-muted transition-colors duration-base hover:border-danger/40 hover:text-danger disabled:pointer-events-none disabled:opacity-40"
             >
               <Icon name="x" size={12} />
-              拒绝
+              {t("deny")}
             </button>
             <button
               data-testid="approve-button"
@@ -726,7 +733,7 @@ function NeedsApprovalPanel({
               ) : (
                 <Icon name="check" size={12} />
               )}
-              {busy ? "…" : "批准"}
+              {busy ? t("approveBusy") : t("approve")}
             </button>
           </div>
         </div>
@@ -845,6 +852,7 @@ function KbdChip({ children }: { children: React.ReactNode }) {
 }
 
 function MetaGrid({ task }: { task: TaskDto }) {
+  const t = useTranslations("tasks.detail");
   const rows: { k: string; v: string; icon: IconName }[] = [
     { k: "workspace", v: task.workspace_id, icon: "layout-grid" },
     { k: "created_by", v: task.created_by, icon: "user" },
@@ -853,7 +861,7 @@ function MetaGrid({ task }: { task: TaskDto }) {
     { k: "conversation", v: task.conversation_id ?? "—", icon: "message-square" },
     {
       k: "token_budget",
-      v: task.token_budget == null ? "无限制" : String(task.token_budget),
+      v: task.token_budget == null ? t("noLimit") : String(task.token_budget),
       icon: "sparkles",
     },
     { k: "tokens_used", v: String(task.tokens_used), icon: "activity" },

@@ -6,12 +6,13 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   fetchRunDetail,
   RunNotFoundError,
   type RunDetailDto,
 } from "@/lib/observatory-api";
-import { LoadingState, ErrorState } from "@/components/state";
+import { LoadingState, ErrorState, EmptyState } from "@/components/state";
 import { RunHeader } from "./RunHeader";
 import { RunTurnList } from "./RunTurnList";
 import { RunError } from "./RunError";
@@ -27,6 +28,7 @@ type State =
   | { status: "ready"; run: RunDetailDto };
 
 export function RunTracePanel(props: Props) {
+  const t = useTranslations("runs.tracePanel");
   const initialRun = "run" in props ? props.run : undefined;
   const runId = "runId" in props ? props.runId : undefined;
 
@@ -34,6 +36,7 @@ export function RunTracePanel(props: Props) {
     initialRun ? { status: "ready", run: initialRun } : { status: "idle" },
   );
 
+  const fallbackMsg = t("loadFailed");
   useEffect(() => {
     if (!runId) return;
     let cancelled = false;
@@ -49,30 +52,45 @@ export function RunTracePanel(props: Props) {
         setState({
           status: "error",
           message:
-            err instanceof Error ? err.message : "加载 trace 出错,请稍后重试",
+            err instanceof Error ? err.message : fallbackMsg,
           notFound,
         });
       });
     return () => {
       cancelled = true;
     };
-  }, [runId]);
+  }, [runId, fallbackMsg]);
 
   if (state.status === "idle" || state.status === "loading") {
     return (
       <div data-testid="run-trace-panel" data-state="loading">
-        <LoadingState title="加载 trace" variant="skeleton" />
+        <LoadingState title={t("loading")} variant="skeleton" />
       </div>
     );
   }
 
   if (state.status === "error") {
+    // Not-found is not an *error* — the run just isn't around anymore (TTL,
+    // cleanup, or never persisted). Use a neutral EmptyState so the drawer
+    // doesn't scream red at the user. Reserve ErrorState for real failures
+    // (network drop, parse error) where retry makes sense.
+    if (state.notFound) {
+      return (
+        <div data-testid="run-trace-panel" data-state="error">
+          <EmptyState
+            icon="clock"
+            title={t("notFoundTitle")}
+            description={t("notFoundDescription")}
+          />
+        </div>
+      );
+    }
     return (
       <div data-testid="run-trace-panel" data-state="error">
         <ErrorState
-          title={state.notFound ? "trace 取不到" : "trace 加载失败"}
-          description={state.notFound ? "这条 run 已经过期或不存在" : undefined}
-          detail={state.notFound ? undefined : state.message}
+          title={t("errorTitle")}
+          description={t("errorDescription")}
+          detail={state.message}
         />
       </div>
     );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { Select, type SelectGroup, type SelectOption } from "@/components/ui/Select";
 import {
@@ -87,6 +88,7 @@ export function ModelPicker({
   popoverAlign,
   className = "w-full",
 }: Props) {
+  const t = useTranslations("modelPicker");
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "ready"; providers: ProviderDto[]; models: ModelDto[] }
@@ -134,7 +136,7 @@ export function ModelPicker({
         data-testid={testId ?? "model-picker-loading"}
         className="py-2 font-mono text-[12px] text-text-subtle"
       >
-        加载模型列表…
+        {t("loading")}
       </div>
     );
   }
@@ -145,7 +147,7 @@ export function ModelPicker({
         data-testid={testId ? `${testId}-error` : "model-picker-error"}
         className="py-2 font-mono text-[12px] text-danger"
       >
-        加载模型失败 · {state.message}
+        {t("loadFailed", { message: state.message })}
       </div>
     );
   }
@@ -156,7 +158,7 @@ export function ModelPicker({
   if (inheritLabel !== undefined) {
     selectGroups.push({
       id: "_inherit",
-      label: "默认",
+      label: t("groupDefault"),
       options: [
         {
           value: "",
@@ -173,13 +175,16 @@ export function ModelPicker({
     const providerHostsDefault = models.some((m) => m.is_default);
     selectGroups.push({
       id: provider.id,
-      label: `${provider.name}${providerHostsDefault ? " · 默认" : ""}`,
+      // i18n suffix for "this provider hosts the workspace default model"
+      // — derived from `models.some(is_default)` post-2026-04-25, since the
+      // provider DTO no longer carries an `is_default` field of its own.
+      label: `${provider.name}${providerHostsDefault ? t("providerDefaultSuffix") : ""}`,
       options: models.map((m) => {
         const ref = buildModelRef(provider, m);
         return {
           value: ref,
           label: m.display_name || m.name,
-          hint: ref === defaultRef ? "默认" : undefined,
+          hint: ref === defaultRef ? t("defaultHint") : undefined,
         };
       }),
     });
@@ -190,7 +195,7 @@ export function ModelPicker({
   // uses that to inline the chip into a toolbar).
   const defaultRenderTrigger = (selected: SelectOption | null): React.ReactNode => {
     if (!selected) {
-      return <span className="text-text-subtle">选择模型…</span>;
+      return <span className="text-text-subtle">{t("triggerEmpty")}</span>;
     }
     const provider = findProviderByRef(state.providers, selected.value);
     return (
@@ -220,10 +225,10 @@ export function ModelPicker({
       disabled={disabled}
       groups={selectGroups}
       testId={testId ?? "model-picker"}
-      ariaLabel="选择模型"
+      ariaLabel={t("ariaLabel")}
       className={className}
       triggerClassName={triggerClassName}
-      placeholder="选择模型…"
+      placeholder={t("placeholder")}
       size={size}
       renderTrigger={renderTrigger ?? defaultRenderTrigger}
       popoverAlign={popoverAlign}

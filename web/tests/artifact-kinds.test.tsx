@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@/tests/test-utils/i18n-render";
 
 import { MarkdownView } from "@/components/artifacts/kinds/MarkdownView";
 import { CodeView } from "@/components/artifacts/kinds/CodeView";

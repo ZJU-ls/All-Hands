@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, use } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -67,20 +68,13 @@ const KIND_ICON: Record<ChannelKind, IconName> = {
   pushdeer: "zap",
 };
 
-const KIND_LABEL: Record<ChannelKind, string> = {
-  telegram: "Telegram",
-  bark: "Bark (iOS)",
-  wecom: "企业微信",
-  feishu: "飞书",
-  email: "邮件 (SMTP)",
-  pushdeer: "PushDeer",
-};
-
 export default function ChannelDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const t = useTranslations("channels.detail");
+  const tKindLabel = useTranslations("channels.detail.kindLabel");
   const { id } = use(params);
   const [channel, setChannel] = useState<Channel | null>(null);
   const [subs, setSubs] = useState<Subscription[]>([]);
@@ -133,7 +127,7 @@ export default function ChannelDetailPage({
         try {
           filter = JSON.parse(newFilter) as Record<string, unknown>;
         } catch {
-          setError("filter 不是合法 JSON");
+          setError(t("filterInvalid"));
           setAddingSub(false);
           return;
         }
@@ -157,12 +151,12 @@ export default function ChannelDetailPage({
   }
 
   return (
-    <AppShell title={channel ? channel.display_name : "渠道详情"}>
+    <AppShell title={channel ? channel.display_name : t("fallbackTitle")}>
       <div className="h-full overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
           <Breadcrumb name={channel?.display_name} />
 
-          {status === "loading" && <LoadingState title="加载渠道" />}
+          {status === "loading" && <LoadingState title={t("loading")} />}
 
           {status === "error" && (
             <div className="rounded-xl border border-danger/30 bg-danger-soft p-5">
@@ -172,7 +166,7 @@ export default function ChannelDetailPage({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-danger mb-1">
-                    加载失败
+                    {t("loadFailed")}
                   </p>
                   <p className="text-xs font-mono text-text-muted break-all">
                     {error}
@@ -186,13 +180,13 @@ export default function ChannelDetailPage({
             <>
               <Hero channel={channel} />
 
-              <Section title="基本信息" icon="info">
+              <Section title={t("sectionInfo")} icon="info">
                 <MetaGrid
                   items={[
-                    { k: "id", v: channel.id, mono: true },
-                    { k: "kind", v: KIND_LABEL[channel.kind], mono: true },
+                    { k: t("metaId"), v: channel.id, mono: true },
+                    { k: t("metaKind"), v: tKindLabel(channel.kind), mono: true },
                     {
-                      k: "inbound",
+                      k: t("metaInbound"),
                       v: (
                         <DirectionTag
                           enabled={channel.inbound_enabled}
@@ -201,7 +195,7 @@ export default function ChannelDetailPage({
                       ),
                     },
                     {
-                      k: "outbound",
+                      k: t("metaOutbound"),
                       v: (
                         <DirectionTag
                           enabled={channel.outbound_enabled}
@@ -210,7 +204,7 @@ export default function ChannelDetailPage({
                       ),
                     },
                     {
-                      k: "auto-approve outbound",
+                      k: t("metaAutoApprove"),
                       v: channel.auto_approve_outbound ? (
                         <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-warning/30 bg-warning-soft text-warning text-caption font-mono font-medium">
                           <Icon
@@ -218,22 +212,22 @@ export default function ChannelDetailPage({
                             size={10}
                             strokeWidth={2.25}
                           />
-                          是 · 跳过 Gate
+                          {t("autoApproveSkip")}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
                           <Icon name="lock" size={10} strokeWidth={2.25} />
-                          否
+                          {t("autoApproveNo")}
                         </span>
                       ),
                     },
                     {
-                      k: "webhook url",
+                      k: t("metaWebhookUrl"),
                       v: `/api/channels/${channel.id}/webhook`,
                       mono: true,
                     },
                     {
-                      k: "created at",
+                      k: t("metaCreatedAt"),
                       v: new Date(channel.created_at).toLocaleString(),
                       mono: true,
                     },
@@ -242,14 +236,14 @@ export default function ChannelDetailPage({
               </Section>
 
               <Section
-                title={`订阅 · ${subs.length}`}
+                title={t("sectionSubs", { count: subs.length })}
                 icon="bell"
-                subtitle={`按 topic 接收广播通知`}
+                subtitle={t("sectionSubsSubtitle")}
               >
                 <div className="flex flex-col gap-2">
                   {subs.length === 0 && (
                     <p className="text-sm text-text-muted leading-relaxed">
-                      无订阅 · 渠道不会接收按 topic 广播的通知
+                      {t("noSubs")}
                     </p>
                   )}
                   {subs.map((s) => (
@@ -263,7 +257,7 @@ export default function ChannelDetailPage({
                         </p>
                         {s.filter && (
                           <p className="font-mono text-caption text-text-subtle truncate mt-0.5">
-                            filter: {JSON.stringify(s.filter)}
+                            {t("filterPrefix")} {JSON.stringify(s.filter)}
                           </p>
                         )}
                       </div>
@@ -272,7 +266,7 @@ export default function ChannelDetailPage({
                         className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-caption font-medium text-danger hover:bg-danger-soft transition duration-base shrink-0"
                       >
                         <Icon name="trash-2" size={11} />
-                        移除
+                        {t("remove")}
                       </button>
                     </div>
                   ))}
@@ -281,14 +275,14 @@ export default function ChannelDetailPage({
                       type="text"
                       value={newTopic}
                       onChange={(e) => setNewTopic(e.target.value)}
-                      placeholder="topic 例如 stock.anomaly"
+                      placeholder={t("topicPlaceholder")}
                       className="flex-1 rounded-lg bg-surface border border-border px-3 py-2 text-sm font-mono text-text placeholder-text-subtle focus:outline-none focus:border-primary shadow-soft-sm transition duration-base"
                     />
                     <input
                       type="text"
                       value={newFilter}
                       onChange={(e) => setNewFilter(e.target.value)}
-                      placeholder='filter JSON {"severity": ["P0"]}'
+                      placeholder={t("filterPlaceholder")}
                       className="flex-1 rounded-lg bg-surface border border-border px-3 py-2 text-sm font-mono text-text placeholder-text-subtle focus:outline-none focus:border-primary shadow-soft-sm transition duration-base"
                     />
                     <button
@@ -303,12 +297,12 @@ export default function ChannelDetailPage({
                             size={12}
                             className="animate-spin-slow"
                           />
-                          添加中
+                          {t("addingSub")}
                         </>
                       ) : (
                         <>
                           <Icon name="plus" size={12} />
-                          添加
+                          {t("addSub")}
                         </>
                       )}
                     </button>
@@ -317,12 +311,12 @@ export default function ChannelDetailPage({
               </Section>
 
               <Section
-                title={`近 50 条消息`}
+                title={t("sectionMessages")}
                 icon="message-square"
-                subtitle="新 → 旧 · 入 / 出混合"
+                subtitle={t("sectionMessagesSubtitle")}
               >
                 <div className="flex flex-col gap-2">
-                  {messages.length === 0 && <EmptyState title="暂无消息" />}
+                  {messages.length === 0 && <EmptyState title={t("noMessages")} />}
                   {messages.map((m) => (
                     <MessageRow key={m.id} m={m} />
                   ))}
@@ -337,6 +331,7 @@ export default function ChannelDetailPage({
 }
 
 function Breadcrumb({ name }: { name?: string }) {
+  const t = useTranslations("channels.detail");
   return (
     <div className="flex items-center gap-1.5 font-mono text-caption uppercase tracking-wider text-text-subtle">
       <Link
@@ -344,7 +339,7 @@ function Breadcrumb({ name }: { name?: string }) {
         className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md text-text-muted hover:text-primary hover:bg-primary-muted transition duration-base"
       >
         <Icon name="arrow-left" size={11} strokeWidth={2} />
-        Channels
+        {t("breadcrumb")}
       </Link>
       <Icon name="chevron-right" size={11} className="text-text-subtle" />
       <span className="text-text truncate max-w-[30ch]">{name ?? "…"}</span>
@@ -353,6 +348,8 @@ function Breadcrumb({ name }: { name?: string }) {
 }
 
 function Hero({ channel }: { channel: Channel }) {
+  const t = useTranslations("channels.detail");
+  const tKindLabel = useTranslations("channels.detail.kindLabel");
   const icon = KIND_ICON[channel.kind];
   const enabledDot = channel.enabled ? "bg-success" : "bg-text-subtle";
   return (
@@ -388,7 +385,7 @@ function Hero({ channel }: { channel: Channel }) {
             </h1>
             <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
               <Icon name={icon} size={10} strokeWidth={2.25} />
-              {KIND_LABEL[channel.kind]}
+              {tKindLabel(channel.kind)}
             </span>
             <DirectionTag
               enabled={channel.inbound_enabled}
@@ -403,7 +400,7 @@ function Hero({ channel }: { channel: Channel }) {
             {channel.auto_approve_outbound && (
               <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-warning/30 bg-warning-soft text-warning text-caption font-mono font-medium">
                 <Icon name="shield-check" size={10} strokeWidth={2.25} />
-                auto-approve
+                {t("autoApproveBadge")}
               </span>
             )}
           </div>

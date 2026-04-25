@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useTranslations } from "next-intl";
 import { ApiError, compactConversation } from "@/lib/api";
 import { useChatStore } from "@/lib/store";
 import type { Message } from "@/lib/protocol";
@@ -38,6 +39,7 @@ export function CompactChip({
   keepLast,
   disabled = false,
 }: Props) {
+  const t = useTranslations("chat.compactChip");
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "running" }
@@ -80,15 +82,15 @@ export function CompactChip({
 
   const label =
     state.kind === "running"
-      ? "压缩中…"
+      ? t("running")
       : state.kind === "done"
-        ? `已压缩 · ${state.dropped}`
-        : "压缩上下文";
+        ? t("done", { n: state.dropped })
+        : t("idle");
 
   const title =
     state.kind === "error"
-      ? `压缩失败 · ${state.message}`
-      : "将较早的消息折叠成单条摘要,为后续对话腾出上下文窗口";
+      ? t("errorTitle", { message: state.message })
+      : t("tooltip");
 
   const tone =
     state.kind === "error"
@@ -104,7 +106,7 @@ export function CompactChip({
       type="button"
       onClick={onClick}
       disabled={disabled || state.kind === "running"}
-      aria-label="手动压缩对话上下文"
+      aria-label={t("ariaLabel")}
       data-testid="compact-chip"
       data-state={state.kind}
       title={title}

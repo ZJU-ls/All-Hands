@@ -53,7 +53,7 @@ class Employee(BaseModel):
     model_ref: str
     tool_ids: list[str] = Field(default_factory=list)
     skill_ids: list[str] = Field(default_factory=list)
-    max_iterations: int = Field(default=10, ge=1, le=100)
+    max_iterations: int = Field(default=10, ge=1, le=10000)
     is_lead_agent: bool = False
     status: EmployeeStatus = "published"
     created_by: str

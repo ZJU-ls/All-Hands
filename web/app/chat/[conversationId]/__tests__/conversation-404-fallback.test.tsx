@@ -21,7 +21,7 @@ import {
   vi,
   type MockInstance,
 } from "vitest";
-import { render, cleanup, screen, waitFor } from "@testing-library/react";
+import { render, cleanup, screen, waitFor } from "@/tests/test-utils/i18n-render";
 
 const paramsMock = { conversationId: "stale-uuid" };
 const replaceMock = vi.fn();

@@ -9,18 +9,20 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { TurnDto, TurnToolCallDto } from "@/lib/observatory-api";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { Icon, type IconName } from "@/components/ui/icon";
 
 export function RunTurnList({ turns }: { turns: TurnDto[] }) {
+  const t = useTranslations("runs.turnList");
   if (turns.length === 0) {
     return (
       <p
         data-testid="run-turns-empty"
         className="rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center text-caption text-text-muted"
       >
-        暂无轮次 · 此运行还没有产生消息
+        {t("empty")}
       </p>
     );
   }
@@ -65,6 +67,7 @@ function TurnIcon({
 }
 
 function TurnRow({ turn }: { turn: TurnDto }) {
+  const t = useTranslations("runs.turnList");
   switch (turn.kind) {
     case "user_input":
       return (
@@ -72,7 +75,7 @@ function TurnRow({ turn }: { turn: TurnDto }) {
           <div className="mb-1 flex items-center gap-2">
             <TurnIcon name="user" tone="user" />
             <p className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-              user
+              {t("user")}
             </p>
           </div>
           <p className="whitespace-pre-wrap text-sm text-text">{turn.content}</p>
@@ -88,7 +91,7 @@ function TurnRow({ turn }: { turn: TurnDto }) {
           <div className="mb-1 flex items-center gap-2">
             <TurnIcon name="message-square" tone="worker" />
             <p className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-              reply
+              {t("reply")}
             </p>
           </div>
           <AgentMarkdown
@@ -101,6 +104,7 @@ function TurnRow({ turn }: { turn: TurnDto }) {
 }
 
 function ThinkingTurn({ content }: { content: string }) {
+  const t = useTranslations("runs.turnList");
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-lg border border-border bg-surface">
@@ -113,7 +117,7 @@ function ThinkingTurn({ content }: { content: string }) {
       >
         <TurnIcon name="brain" tone="think" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-          thinking
+          {t("thinking")}
         </span>
         <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px]">
           {content.length}
@@ -140,6 +144,7 @@ function ThinkingTurn({ content }: { content: string }) {
 }
 
 function ToolCallTurn({ turn }: { turn: TurnToolCallDto }) {
+  const t = useTranslations("runs.turnList");
   const [expanded, setExpanded] = useState(false);
   const hasResult = turn.result !== null && turn.result !== undefined;
   const statusTone: "ok" | "err" | "wait" = turn.error
@@ -159,7 +164,7 @@ function ToolCallTurn({ turn }: { turn: TurnToolCallDto }) {
       : statusTone === "ok"
         ? "check-circle-2"
         : "clock";
-  const statusLabel =
+  const statusKey =
     statusTone === "err" ? "failed" : statusTone === "ok" ? "done" : "pending";
 
   return (
@@ -172,14 +177,14 @@ function ToolCallTurn({ turn }: { turn: TurnToolCallDto }) {
       >
         <TurnIcon name="terminal" tone="tool" />
         <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle shrink-0">
-          tool
+          {t("tool")}
         </span>
         <span className="truncate font-mono text-sm text-text">{turn.name}</span>
         <span
           className={`ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 font-mono text-[10px] ${statusChip}`}
         >
           <Icon name={statusIcon} size={10} />
-          {statusLabel}
+          {t(`status.${statusKey}`)}
         </span>
         <Icon
           name={expanded ? "chevron-down" : "chevron-right"}
@@ -191,7 +196,7 @@ function ToolCallTurn({ turn }: { turn: TurnToolCallDto }) {
         <div className="space-y-2 border-t border-border bg-surface-2/30 px-3 py-2.5">
           <div>
             <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-              args
+              {t("args")}
             </p>
             <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-surface p-2 text-[10px] text-text">
               {JSON.stringify(turn.args, null, 2)}
@@ -200,7 +205,7 @@ function ToolCallTurn({ turn }: { turn: TurnToolCallDto }) {
           {hasResult && (
             <div>
               <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-                result
+                {t("result")}
               </p>
               <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-surface p-2 text-[10px] text-text">
                 {JSON.stringify(turn.result, null, 2)}
@@ -210,7 +215,7 @@ function ToolCallTurn({ turn }: { turn: TurnToolCallDto }) {
           {turn.error && (
             <div>
               <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-danger">
-                error
+                {t("error")}
               </p>
               <pre className="whitespace-pre-wrap rounded-md border border-danger/30 bg-danger-soft p-2 text-[10px] text-danger">
                 {turn.error}

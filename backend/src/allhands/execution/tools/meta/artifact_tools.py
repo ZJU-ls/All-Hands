@@ -169,6 +169,29 @@ ARTIFACT_UPDATE_TOOL = Tool(
     requires_confirmation=True,
 )
 
+ARTIFACT_ROLLBACK_TOOL = Tool(
+    id="allhands.artifacts.rollback",
+    kind=ToolKind.META,
+    name="artifact_rollback",
+    description=(
+        "Revert an artifact to a previous version. Creates a NEW version "
+        "(v{N+1}) carrying the content of `to_version` — original history "
+        "is preserved. Use when the user says 'rollback to v2' / 'undo "
+        "the last change' / '回退到 v3'."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "artifact_id": {"type": "string"},
+            "to_version": {"type": "integer", "minimum": 1},
+        },
+        "required": ["artifact_id", "to_version"],
+    },
+    output_schema={"type": "object"},
+    scope=ToolScope.WRITE,
+    requires_confirmation=True,
+)
+
 ARTIFACT_DELETE_TOOL = Tool(
     id="allhands.artifacts.delete",
     kind=ToolKind.META,
@@ -239,6 +262,7 @@ ALL_ARTIFACT_TOOLS = [
     ARTIFACT_READ_TOOL,
     ARTIFACT_RENDER_TOOL,
     ARTIFACT_UPDATE_TOOL,
+    ARTIFACT_ROLLBACK_TOOL,
     ARTIFACT_DELETE_TOOL,
     ARTIFACT_PIN_TOOL,
     ARTIFACT_SEARCH_TOOL,

@@ -9,6 +9,7 @@
  * row without shouting.
  */
 
+import { useTranslations } from "next-intl";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { PingIndicator, type PingState } from "./PingIndicator";
@@ -40,6 +41,7 @@ export function ModelRow({
   /** Promote this model — atomically clears any prior default + sets this row. */
   onSetDefault: () => void;
 }) {
+  const t = useTranslations("gateway.modelRow");
   const running = pingState.status === "running";
   const title = model.display_name || model.name;
   const showAlias = model.display_name && model.display_name !== model.name;
@@ -73,7 +75,7 @@ export function ModelRow({
         {model.context_window > 0 && (
           <span
             className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border font-mono text-[10px] text-text-muted tabular-nums"
-            title={`上下文窗口 · ${model.context_window.toLocaleString()} tokens`}
+            title={t("contextWindowTitle", { tokens: model.context_window.toLocaleString() })}
           >
             {formatCtx(model.context_window)}
           </span>
@@ -81,7 +83,7 @@ export function ModelRow({
 
         {!model.enabled && (
           <span className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border text-[10px] text-text-muted">
-            已禁用
+            {t("disabled")}
           </span>
         )}
 
@@ -123,20 +125,20 @@ export function ModelRow({
         )}
         <RowIconButton
           icon="activity"
-          label="ping"
+          label={t("ping")}
           testId={`gateway-ping-${model.id}`}
           disabled={running}
           onClick={onPing}
         />
         <RowIconButton
           icon="message-square"
-          label="对话测试"
+          label={t("chatTest")}
           testId={`gateway-chat-test-${model.id}`}
           onClick={onChatTest}
         />
         <RowIconButton
           icon="trash-2"
-          label="删除"
+          label={t("delete")}
           onClick={onDelete}
           tone="danger"
         />

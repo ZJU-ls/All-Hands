@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import {
   createEmployee,
@@ -47,6 +48,7 @@ export function DesignForm({
    * (it's an identifier surface and renaming would break references). */
   initial?: EmployeeDto;
 }) {
+  const t = useTranslations("employees.designForm");
   const isEdit = Boolean(initial);
   // Skill IDs from initial's skill_ids; MCP IDs are stripped from the
   // ``mcp:<id>`` prefix pattern we push into tool_ids on save.
@@ -121,7 +123,7 @@ export function DesignForm({
         const body = await res.text();
         throw new Error(`${res.status} ${body || res.statusText}`);
       }
-      if (!res.body) throw new Error("生成失败:响应没有 body");
+      if (!res.body) throw new Error(t("composeNoBody"));
       const reader = res.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let acc = "";
@@ -216,43 +218,43 @@ export function DesignForm({
       }}
       className="flex flex-col gap-6"
     >
-      <Section title="基础信息">
+      <Section title={t("sectionBasics")}>
         <TextField
-          label="名称"
+          label={t("fieldName")}
           required
           testid="field-name"
           value={name}
           onChange={setName}
-          placeholder="例如 researcher-a"
+          placeholder={t("namePlaceholder")}
         />
         <TextField
-          label="描述"
+          label={t("fieldDescription")}
           testid="field-description"
           value={description}
           onChange={setDescription}
-          placeholder="一句话说明员工的职责"
+          placeholder={t("descriptionPlaceholder")}
         />
         <div className="flex flex-col gap-1 mb-3 last:mb-0">
-          <label className="text-[11px] text-text-muted">Model</label>
+          <label className="text-[11px] text-text-muted">{t("fieldModel")}</label>
           <ModelPicker
             value={modelRef}
             onChange={setModelRef}
             testId="field-model"
           />
           <p className="text-[10px] text-text-subtle">
-            默认沿用平台默认模型;下拉切换时会落到员工 profile 上。
+            {t("modelHint")}
           </p>
         </div>
       </Section>
 
       <Section
-        title="运转方式"
-        subtitle="选一种 · 落库时展开为 tool_ids / skill_ids / max_iterations(不存 preset)"
+        title={t("sectionPreset")}
+        subtitle={t("sectionPresetSubtitle")}
       >
         <PresetRadio value={preset} onChange={setPreset} />
       </Section>
 
-      <Section title="挂载技能" subtitle="preset 默认已勾选,可自由增减">
+      <Section title={t("sectionSkills")} subtitle={t("sectionSkillsSubtitle")}>
         <SkillMultiPicker
           skills={skills}
           selected={skillIds}
@@ -261,8 +263,8 @@ export function DesignForm({
       </Section>
 
       <Section
-        title="挂载 MCP 服务器"
-        subtitle="勾选的 MCP server 的工具会暴露给该员工"
+        title={t("sectionMcp")}
+        subtitle={t("sectionMcpSubtitle")}
       >
         <McpMultiPicker
           servers={mcpServers}
@@ -272,14 +274,14 @@ export function DesignForm({
       </Section>
 
       <Section
-        title="迭代上限"
-        subtitle="Agent 单次会话的最大工具调用轮次(1-50)"
+        title={t("sectionMaxIter")}
+        subtitle={t("sectionMaxIterSubtitle")}
       >
         <div className="flex items-center gap-3">
           <input
             type="number"
             min={1}
-            max={50}
+            max={10000}
             data-testid="field-max-iterations"
             value={String(maxIterations)}
             onChange={(e) => {
@@ -288,14 +290,14 @@ export function DesignForm({
             }}
             className="w-24 rounded-md bg-bg border border-border px-3 py-2 text-[12px] font-mono text-text focus:outline-none focus:border-primary transition-colors duration-base"
           />
-          <span className="text-[11px] text-text-muted">轮</span>
+          <span className="text-[11px] text-text-muted">{t("iterUnit")}</span>
         </div>
       </Section>
 
-      <Section title="系统提示词片段">
+      <Section title={t("sectionPrompt")}>
         <div className="flex items-center justify-between gap-3 mb-2">
           <p className="text-[11px] text-text-muted">
-            员工性格 / 风格 / 禁止事项 — 也可以让 AI 根据上方的名字 / 描述 / 技能 / MCP 起草一份
+            {t("promptHint")}
           </p>
           <div className="flex items-center gap-1.5 shrink-0">
             {/* Edit / preview toggle. Forced to "preview" while streaming
@@ -303,7 +305,7 @@ export function DesignForm({
                 wants to see the prompt shape forming live. */}
             <div
               role="tablist"
-              aria-label="编辑或预览"
+              aria-label={t("tabsAriaLabel")}
               className="inline-flex h-7 rounded-md border border-border bg-surface-2 p-0.5"
             >
               <button
@@ -320,7 +322,7 @@ export function DesignForm({
                     : "text-text-muted hover:text-text")
                 }
               >
-                编辑
+                {t("tabEdit")}
               </button>
               <button
                 type="button"
@@ -335,7 +337,7 @@ export function DesignForm({
                     : "text-text-muted hover:text-text")
                 }
               >
-                预览
+                {t("tabPreview")}
               </button>
             </div>
             <button
@@ -344,14 +346,14 @@ export function DesignForm({
               disabled={composeState === "loading"}
               data-testid="compose-prompt-trigger"
               className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-primary/30 bg-primary/5 text-[11px] font-medium text-primary hover:bg-primary/10 hover:border-primary/50 disabled:opacity-50 transition-colors duration-fast shrink-0"
-              title="根据当前表单内容,用 AI 起草一份系统提示词(会覆盖现有内容)"
+              title={t("aiTooltip")}
             >
               <Icon
                 name={composeState === "loading" ? "loader" : "sparkles"}
                 size={11}
                 className={composeState === "loading" ? "animate-spin-slow" : ""}
               />
-              {composeState === "loading" ? "生成中…" : "AI 生成"}
+              {composeState === "loading" ? t("aiGenerating") : t("aiGenerate")}
             </button>
           </div>
         </div>
@@ -366,7 +368,7 @@ export function DesignForm({
             data-testid="field-system-prompt"
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
-            placeholder="员工性格 / 风格 / 禁止事项"
+            placeholder={t("promptPlaceholder")}
             disabled={composeState === "loading"}
             aria-hidden={promptView !== "edit"}
             tabIndex={promptView === "edit" ? 0 : -1}
@@ -394,10 +396,10 @@ export function DesignForm({
                 className="ah-prose ah-prose-sm max-w-none"
               />
             ) : composeState === "loading" ? (
-              <p className="text-[11px] text-text-muted">等待第一段输出…</p>
+              <p className="text-[11px] text-text-muted">{t("waitingFirstChunk")}</p>
             ) : (
               <p className="text-[11px] text-text-subtle italic">
-                暂无内容 — 切到「编辑」手写,或点「AI 生成」
+                {t("previewEmpty")}
               </p>
             )}
           </div>
@@ -407,14 +409,14 @@ export function DesignForm({
             this is only a visual fallback for older a11y tools. */}
         {composeState === "error" && composeError && (
           <p className="mt-1.5 text-[11px] text-danger" data-testid="compose-prompt-error">
-            生成失败:{composeError}
+            {t("composeError", { error: composeError })}
           </p>
         )}
       </Section>
 
       <Section
-        title="Dry run 预览"
-        subtitle="展开后的三列 —— 与落库 payload 一致"
+        title={t("sectionDryRun")}
+        subtitle={t("sectionDryRunSubtitle")}
       >
         <DryRunPanel
           preset={preset}
@@ -437,7 +439,7 @@ export function DesignForm({
             onClick={onCancel}
             className="rounded-md border border-border px-4 py-2 text-[12px] text-text hover:bg-surface-2 transition-colors duration-base"
           >
-            取消
+            {t("cancel")}
           </button>
         )}
         <button
@@ -446,7 +448,7 @@ export function DesignForm({
           disabled={!canSave}
           className="rounded-md bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-40 px-4 py-2 text-[12px] font-medium transition-colors duration-base"
         >
-          {busy ? "招聘中…" : "招聘"}
+          {busy ? t("hiring") : t("hire")}
         </button>
       </div>
     </form>

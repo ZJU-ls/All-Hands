@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, screen } from "@testing-library/react";
+import { render, cleanup, screen } from "@/tests/test-utils/i18n-render";
 import {
   Table,
   KV,
@@ -184,7 +184,7 @@ describe("Viz.Code", () => {
     expect(screen.getByText("python")).toBeDefined();
     expect(screen.getByText(/print\(1\)/)).toBeDefined();
     // V2 (ADR 0016): copy action surfaces as an icon button (aria-label).
-    screen.getByLabelText("Copy code").click();
+    screen.getByLabelText("复制代码").click();
     expect(copySpy).toHaveBeenCalledWith("print(1)\nprint(2)");
   });
 });

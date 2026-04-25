@@ -15,6 +15,7 @@
  * - copy / payloads untouched so the existing test suite keeps passing.
  */
 
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { RenderInteraction, RenderProps } from "@/lib/component-registry";
 
@@ -31,12 +32,6 @@ type PlanCardPayload = {
   plan_id: string;
   title: string;
   steps: PlanCardStep[];
-};
-
-const STATUS_LABEL_ZH: Record<StepStatus, string> = {
-  pending: "待审批",
-  approved: "已批准",
-  rejected: "已驳回",
 };
 
 const STEP_ICON: Record<StepStatus, IconName> = {
@@ -82,9 +77,10 @@ function buttonVariant(label: string, idx: number): string {
 }
 
 export function PlanCard({ props, interactions }: RenderProps) {
+  const t = useTranslations("render.planCard");
   const p = props as Partial<PlanCardPayload>;
   const planId = typeof p.plan_id === "string" ? p.plan_id : "";
-  const title = typeof p.title === "string" && p.title ? p.title : "(未命名计划)";
+  const title = typeof p.title === "string" && p.title ? p.title : t("untitled");
   const steps = Array.isArray(p.steps)
     ? (p.steps as PlanCardStep[]).filter((s) => typeof s.id === "string")
     : [];
@@ -124,7 +120,7 @@ export function PlanCard({ props, interactions }: RenderProps) {
         <span
           className={`inline-flex h-6 shrink-0 items-center rounded-md px-2 text-[11px] font-semibold ${style.chip}`}
         >
-          {STATUS_LABEL_ZH[status]}
+          {t(`status.${status}`)}
         </span>
       </header>
 
@@ -155,7 +151,7 @@ export function PlanCard({ props, interactions }: RenderProps) {
             className="flex items-start gap-3 rounded-lg border border-border bg-surface-2/50 p-3"
           >
             <span
-              aria-label={STATUS_LABEL_ZH[step.status]}
+              aria-label={t(`status.${step.status}`)}
               className={`grid h-5 w-5 shrink-0 place-items-center rounded-md ${STEP_TILE_STYLE[step.status]}`}
             >
               <Icon name={STEP_ICON[step.status]} size={12} strokeWidth={2.25} />
@@ -183,7 +179,7 @@ export function PlanCard({ props, interactions }: RenderProps) {
         ))}
         {steps.length === 0 && (
           <li className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-[12px] text-text-muted">
-            (no steps)
+            {t("noSteps")}
           </li>
         )}
       </ol>

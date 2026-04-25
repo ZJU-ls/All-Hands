@@ -11,6 +11,7 @@
  * Preserves public API: { title, description?, steps, primaryAction?, secondaryAction? }.
  */
 
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 
 export type FirstRunStep = {
@@ -32,10 +33,11 @@ export function FirstRun({
   primaryAction?: { label: string; onClick: () => void };
   secondaryAction?: { label: string; onClick: () => void };
 }) {
+  const t = useTranslations("state.firstRun");
   return (
     <section
       role="region"
-      aria-label="首次使用引导"
+      aria-label={t("ariaLabel")}
       data-state="first-run"
       className="relative overflow-hidden rounded-2xl border border-border bg-surface px-8 py-8 shadow-soft-lg"
     >
@@ -65,7 +67,7 @@ export function FirstRun({
           </div>
           <div className="min-w-0 flex-1">
             <div className="font-mono text-caption uppercase tracking-wider text-text-subtle">
-              first-run · 欢迎
+              {t("eyebrow")}
             </div>
             <h2 className="mt-1 text-xl font-bold tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               {title}

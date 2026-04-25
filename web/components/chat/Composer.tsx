@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { isImeComposing } from "@/lib/ime";
 import { cn } from "@/lib/cn";
@@ -62,7 +63,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     onAbort,
     isStreaming = false,
     disabled = false,
-    placeholder = "输入消息…",
+    placeholder,
     rows = 2,
     controls,
     controlsTrailing,
@@ -71,6 +72,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   },
   ref,
 ) {
+  const t = useTranslations("chat.composer");
+  const resolvedPlaceholder = placeholder ?? t("placeholder");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const isComposingRef = useRef(false);
 
@@ -130,7 +133,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           }}
           onKeyDown={handleKeyDown}
           rows={rows}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           disabled={textareaDisabled}
           data-testid="composer-textarea"
           className="flex-1 resize-none bg-transparent text-[14px] leading-[1.55] text-text placeholder-text-subtle outline-none disabled:opacity-60"
@@ -167,10 +170,11 @@ function SendOrStopButton({
   canSend: boolean;
   onClick: () => void;
 }) {
+  const t = useTranslations("chat.composer");
   // One button, two glyphs. Solid primary fill when armed, surface-2 when
   // idle; stop variant keeps the primary so the user can abort easily.
   const disabled = !isStreaming && !canSend;
-  const label = isStreaming ? "停止" : "发送";
+  const label = isStreaming ? t("stop") : t("send");
 
   return (
     <button
@@ -208,7 +212,7 @@ function SendOrStopButton({
 export function ThinkingToggle({
   enabled,
   onChange,
-  label = "深度思考",
+  label,
   disabled = false,
 }: {
   enabled: boolean;
@@ -216,6 +220,8 @@ export function ThinkingToggle({
   label?: string;
   disabled?: boolean;
 }) {
+  const t = useTranslations("chat.composer");
+  const resolvedLabel = label ?? t("thinking");
   return (
     <button
       type="button"
@@ -237,7 +243,7 @@ export function ThinkingToggle({
         size={12}
         className={enabled ? "text-primary" : "text-text-subtle"}
       />
-      {label}
+      {resolvedLabel}
     </button>
   );
 }

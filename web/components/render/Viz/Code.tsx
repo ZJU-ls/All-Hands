@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import type { RenderProps } from "@/lib/component-registry";
 import { Icon } from "@/components/ui/icon";
+import { CopyButton } from "@/components/render/_shared/CopyButton";
 
 /**
  * Brand-Blue V2 (ADR 0016) · code block.
  *
- * Shell: rounded-xl · bg-surface-2 · overflow-hidden
- * Header: bg-surface-3/40 · mono caption · optional title + copy icon button
- * Body: font-mono text-caption leading-relaxed
+ * Interactions (2026-04-25):
+ *   - line-wrap toggle  · long lines no longer force horizontal scroll
+ *   - copy              · standardised on shared CopyButton
+ *   - line numbers      · always on
+ *   - highlight lines   · driven by props.highlightLines
  */
 export function Code({ props, interactions }: RenderProps) {
   const code = typeof props.code === "string" ? props.code : "";
@@ -18,39 +22,45 @@ export function Code({ props, interactions }: RenderProps) {
     ? (props.highlightLines as number[])
     : [];
 
+  const [wrap, setWrap] = useState(false);
+
   const lines = code.replace(/\n$/, "").split("\n");
   const safeInteractions = Array.isArray(interactions) ? interactions : [];
   const copyAction = safeInteractions.find((i) => i.action === "copy_to_clipboard");
+  const copyText = (copyAction?.payload?.text as string | undefined) ?? code;
   const lineNumWidth = String(lines.length).length;
 
   return (
     <div className="rounded-xl border border-border bg-surface-2 overflow-hidden shadow-soft-sm animate-fade-up">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-surface-3/40">
+      <div className="flex items-center gap-2 border-b border-border bg-surface-3/40 px-3 py-2">
         {filename && (
-          <span className="text-caption font-mono text-text truncate">
+          <span className="truncate text-caption font-mono text-text">
             {filename}
           </span>
         )}
         {language && (
-          <span className="text-caption font-mono text-text-muted uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface border border-border">
+          <span className="rounded border border-border bg-surface px-1.5 py-0.5 text-caption font-mono uppercase tracking-wider text-text-muted">
             {language}
           </span>
         )}
-        {copyAction && (
+        <div className="ml-auto flex items-center gap-1">
           <button
-            className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors duration-fast hover:text-primary hover:bg-surface"
-            onClick={() => {
-              navigator.clipboard
-                .writeText((copyAction.payload?.text as string) ?? code)
-                .catch(() => {});
-            }}
-            aria-label="Copy code"
+            type="button"
+            onClick={() => setWrap((v) => !v)}
+            aria-pressed={wrap}
+            title={wrap ? "关闭自动换行" : "开启自动换行"}
+            className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors duration-fast ${
+              wrap
+                ? "bg-primary-muted text-primary"
+                : "text-text-muted hover:bg-surface hover:text-text"
+            }`}
           >
-            <Icon name="copy" size={14} />
+            <Icon name="list" size={12} />
           </button>
-        )}
+          <CopyButton value={copyText} label="复制代码" />
+        </div>
       </div>
-      <pre className="overflow-x-auto text-caption font-mono leading-relaxed py-3">
+      <pre className={`overflow-x-auto py-3 text-caption font-mono leading-relaxed ${wrap ? "whitespace-pre-wrap" : ""}`}>
         <code className="block">
           {lines.map((line, i) => {
             const num = i + 1;
@@ -65,12 +75,16 @@ export function Code({ props, interactions }: RenderProps) {
                 }`}
               >
                 <span
-                  className="select-none pl-3 pr-3 text-text-subtle text-right tabular-nums"
+                  className="select-none pl-3 pr-3 text-right tabular-nums text-text-subtle"
                   style={{ minWidth: `${lineNumWidth + 2}ch` }}
                 >
                   {num}
                 </span>
-                <span className="pr-3 text-text whitespace-pre">{line || " "}</span>
+                <span
+                  className={`pr-3 text-text ${wrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
+                >
+                  {line || " "}
+                </span>
               </span>
             );
           })}

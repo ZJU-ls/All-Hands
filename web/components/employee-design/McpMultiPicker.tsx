@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import type { McpServerDto } from "@/lib/api";
 
@@ -17,10 +18,11 @@ export function McpMultiPicker({
   selected: string[];
   onToggle: (id: string) => void;
 }) {
+  const t = useTranslations("employees.mcpPicker");
   if (servers.length === 0) {
     return (
       <p className="text-[12px] text-text-muted">
-        还没有注册 MCP 服务器。先去「MCP 服务器」页注册,再回来挂载。
+        {t("empty")}
       </p>
     );
   }

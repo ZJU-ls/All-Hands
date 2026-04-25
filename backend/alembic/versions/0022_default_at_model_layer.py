@@ -1,12 +1,12 @@
 """Move "default" from LLMProvider (two-field state) to LLMModel (singleton).
 
-Revision ID: 0021
-Revises: 0020
+Revision ID: 0022
+Revises: 0021
 Create Date: 2026-04-25
 
 第一性原理重构 (2026-04-25):
-The pre-0021 schema represented "the workspace default" as TWO fields on
-``llm_providers`` — ``is_default: bool`` (which provider) and
+Pre-this-revision the schema represented "the workspace default" as TWO
+fields on ``llm_providers`` — ``is_default: bool`` (which provider) and
 ``default_model: str`` (which model on it). The pair could desync —
 typing a model name string that didn't actually exist as an enabled
 ``llm_models`` row produced silent broken state at chat time. Worse, the
@@ -33,8 +33,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0021"
-down_revision = "0020"
+revision = "0022"
+down_revision = "0021"
 branch_labels = None
 depends_on = None
 

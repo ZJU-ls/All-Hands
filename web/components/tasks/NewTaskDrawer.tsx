@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { Select } from "@/components/ui/Select";
 import type { EmployeeDto } from "@/lib/api";
@@ -21,11 +22,6 @@ const EMPTY: Draft = {
   dod: "",
   token_budget: "",
 };
-
-const DOD_PLACEHOLDER = `- 输出格式:(例如 markdown / PDF / Figma 链接)
-- 必须包含:(3-5 条关键内容)
-- 绝对不能包含:(常见的误区)
-- 验收信号:(我怎么一眼就知道 done 了)`;
 
 /**
  * V2 (ADR 0016) · right-side drawer: `w-[440px] bg-surface border-l shadow-soft-lg`,
@@ -51,6 +47,7 @@ export function NewTaskDrawer({
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
+  const t = useTranslations("tasks.newDrawer");
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
@@ -120,17 +117,17 @@ export function NewTaskDrawer({
                 id="new-task-title"
                 className="text-[15px] font-semibold text-text"
               >
-                新任务
+                {t("title")}
               </h3>
               <p className="mt-0.5 text-[12px] text-text-muted">
-                发起后可以关掉页面,员工会在后台跑。
+                {t("subtitle")}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("close")}
             className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text"
           >
             <Icon name="x" size={16} />
@@ -140,7 +137,7 @@ export function NewTaskDrawer({
         <div className="flex-1 overflow-y-auto p-5">
           <div className="flex flex-col gap-5">
             <Field
-              label="标题"
+              label={t("fieldTitle")}
               required
               htmlFor="task-title-input"
             >
@@ -149,16 +146,16 @@ export function NewTaskDrawer({
                 data-testid="task-title"
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                placeholder="下周发布日志整理"
+                placeholder={t("titlePlaceholder")}
                 className={INPUT_CLS}
               />
             </Field>
 
-            <Field label="指派给" required>
+            <Field label={t("fieldAssignee")} required>
               {employees.length === 0 ? (
                 <p className="flex items-center gap-1.5 rounded-md border border-warning/20 bg-warning-soft px-3 py-2 text-[12px] text-warning">
                   <Icon name="alert-triangle" size={13} />
-                  还没有员工 · 请先在&ldquo;员工&rdquo;里新建一位。
+                  {t("noEmployees")}
                 </p>
               ) : (
                 <Select
@@ -170,30 +167,30 @@ export function NewTaskDrawer({
                     hint: emp.id,
                   }))}
                   testId="task-assignee"
-                  ariaLabel="指派给"
+                  ariaLabel={t("fieldAssignee")}
                   className="w-full"
                 />
               )}
             </Field>
 
-            <Field label="目标(Goal)" required htmlFor="task-goal-input">
+            <Field label={t("fieldGoal")} required htmlFor="task-goal-input">
               <textarea
                 id="task-goal-input"
                 data-testid="task-goal"
                 value={draft.goal}
                 onChange={(e) => setDraft({ ...draft, goal: e.target.value })}
                 rows={4}
-                placeholder="把上周 release 的 PR 整理成给客户的中文 release note,重点突出 XYZ 功能。"
+                placeholder={t("goalPlaceholder")}
                 className={TEXTAREA_CLS}
               />
             </Field>
 
             <Field
-              label="Definition of Done(DoD)"
+              label={t("fieldDod")}
               required
               htmlFor="task-dod-input"
-              hint="员工以此判定&ldquo;做完了&rdquo;"
-              footer='写得越具体,员工越不容易跑偏。至少回答"输出什么 / 必须包含什么 / 不能包含什么"。'
+              hint={t("dodHint")}
+              footer={t("dodFooter")}
             >
               <textarea
                 id="task-dod-input"
@@ -201,12 +198,12 @@ export function NewTaskDrawer({
                 value={draft.dod}
                 onChange={(e) => setDraft({ ...draft, dod: e.target.value })}
                 rows={6}
-                placeholder={DOD_PLACEHOLDER}
+                placeholder={t("dodPlaceholder")}
                 className={TEXTAREA_CLS}
               />
             </Field>
 
-            <Field label="Token 预算(可选)" htmlFor="task-budget-input">
+            <Field label={t("fieldBudget")} htmlFor="task-budget-input">
               <input
                 id="task-budget-input"
                 data-testid="task-budget"
@@ -214,7 +211,7 @@ export function NewTaskDrawer({
                 min={1}
                 value={draft.token_budget}
                 onChange={(e) => setDraft({ ...draft, token_budget: e.target.value })}
-                placeholder="留空则无限制"
+                placeholder={t("budgetPlaceholder")}
                 className={`${INPUT_CLS} font-mono`}
               />
             </Field>
@@ -242,7 +239,7 @@ export function NewTaskDrawer({
 
         <footer className="flex items-center justify-between gap-2 border-t border-border bg-surface-2/40 p-4">
           <p className="text-[11px] text-text-subtle">
-            缺 DoD 的任务不会进入执行队列。
+            {t("footerHint")}
           </p>
           <div className="flex gap-2">
             <button
@@ -250,7 +247,7 @@ export function NewTaskDrawer({
               onClick={onClose}
               className="inline-flex h-9 items-center rounded-md border border-border bg-surface px-4 text-[13px] text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text"
             >
-              取消
+              {t("cancel")}
             </button>
             <button
               type="button"
@@ -262,7 +259,7 @@ export function NewTaskDrawer({
               {submitting && (
                 <span className="inline-block h-3 w-3 rounded-full border-2 border-primary-fg/30 border-t-primary-fg animate-spin" />
               )}
-              {submitting ? "创建中…" : "创建任务"}
+              {submitting ? t("creating") : t("submit")}
             </button>
           </div>
         </footer>

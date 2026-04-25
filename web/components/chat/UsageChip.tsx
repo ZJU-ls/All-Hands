@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   compactConversation,
   listModels,
@@ -97,6 +98,7 @@ function toMessage(dto: ChatMessageDto): Message {
 }
 
 export function UsageChip({ conversationId, employeeModelRef, disabled }: Props) {
+  const t = useTranslations("chat.usageChip");
   const messages = useChatStore((s) => s.messages);
   const streamingMessage = useChatStore((s) => s.streamingMessage);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
@@ -178,7 +180,7 @@ export function UsageChip({ conversationId, employeeModelRef, disabled }: Props)
       className="inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-2 font-mono text-[10px] tabular-nums"
       data-testid="usage-chip"
       data-tier={tier}
-      title={err ?? `${usedTokens} / ${window} tokens (估算)`}
+      title={err ?? t("tooltip", { used: usedTokens, total: window })}
     >
       <span
         aria-hidden="true"
@@ -205,7 +207,7 @@ export function UsageChip({ conversationId, employeeModelRef, disabled }: Props)
           ) : (
             <Icon name="sparkles" size={10} />
           )}
-          {busy ? "整理中…" : "整理"}
+          {busy ? t("compacting") : t("compact")}
         </button>
       )}
     </div>

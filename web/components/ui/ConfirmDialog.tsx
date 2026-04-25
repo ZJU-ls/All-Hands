@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 
 /**
@@ -19,8 +20,8 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = "确认",
-  cancelLabel = "取消",
+  confirmLabel,
+  cancelLabel,
   danger = false,
   busy = false,
   onConfirm,
@@ -36,6 +37,9 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useTranslations("ui.confirmDialog");
+  const resolvedConfirm = confirmLabel ?? t("confirm");
+  const resolvedCancel = cancelLabel ?? t("cancel");
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -91,7 +95,7 @@ export function ConfirmDialog({
             onClick={onCancel}
             disabled={busy}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-subtle hover:bg-surface-2 hover:text-text transition duration-fast disabled:opacity-40"
-            aria-label="关闭"
+            aria-label={t("closeAria")}
           >
             <Icon name="x" size={14} />
           </button>
@@ -105,7 +109,7 @@ export function ConfirmDialog({
             disabled={busy}
             className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-text-muted hover:bg-surface-2 hover:text-text transition duration-fast disabled:opacity-40"
           >
-            {cancelLabel}
+            {resolvedCancel}
             <span className="rounded border border-border bg-surface px-1 py-0.5 font-mono text-[10px] text-text-subtle">
               Esc
             </span>
@@ -122,7 +126,7 @@ export function ConfirmDialog({
             {busy && (
               <span className="h-3.5 w-3.5 animate-spin-slow rounded-full border-2 border-primary-fg/30 border-t-primary-fg" />
             )}
-            {busy ? "处理中…" : confirmLabel}
+            {busy ? t("processing") : resolvedConfirm}
           </button>
         </div>
       </div>

@@ -14,6 +14,7 @@
  * overrides.
  */
 
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { RenderProps } from "@/lib/component-registry";
 
@@ -24,14 +25,6 @@ type PlanStep = {
   title: string;
   status: StepStatus;
   note?: string | null;
-};
-
-const STATUS_LABEL: Record<StepStatus, string> = {
-  pending: "待办",
-  running: "进行中",
-  done: "已完成",
-  skipped: "跳过",
-  failed: "失败",
 };
 
 const DOT_CLASS: Record<StepStatus, string> = {
@@ -59,7 +52,8 @@ const TITLE_CLASS: Record<StepStatus, string> = {
 };
 
 export function PlanTimeline({ props }: RenderProps) {
-  const title = (props.title as string) ?? "计划";
+  const t = useTranslations("render.planTimeline");
+  const title = (props.title as string) ?? t("title");
   const steps = Array.isArray(props.steps)
     ? (props.steps as PlanStep[]).filter((s) => typeof s.index === "number")
     : [];
@@ -117,7 +111,7 @@ export function PlanTimeline({ props }: RenderProps) {
             >
               <span
                 className={`relative z-10 mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full ${DOT_CLASS[step.status]}`}
-                aria-label={STATUS_LABEL[step.status]}
+                aria-label={t(`status.${step.status}`)}
               >
                 {icon && (
                   <Icon
@@ -143,7 +137,7 @@ export function PlanTimeline({ props }: RenderProps) {
           );
         })}
         {steps.length === 0 && (
-          <li className="text-sm text-text-muted">(no steps)</li>
+          <li className="text-sm text-text-muted">{t("noSteps")}</li>
         )}
       </ol>
     </div>

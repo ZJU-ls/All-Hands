@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@/tests/test-utils/i18n-render";
 import { useState } from "react";
 import { Composer, ThinkingToggle } from "../Composer";
 

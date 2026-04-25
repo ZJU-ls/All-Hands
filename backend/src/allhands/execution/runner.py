@@ -345,6 +345,8 @@ def _facade_stream(
     model_ref_override: str | None,
     messages: list[dict[str, Any]],
     overrides: RunOverrides | None,
+    plan_repo: Any = None,
+    conversation_id: str = "",
 ) -> AsyncIterator[AgentEvent]:
     """Run the new AgentLoop, translate its InternalEvent stream into the
     legacy AgentEvent surface, yield. Async generator factory.
@@ -376,11 +378,21 @@ def _facade_stream(
         spawn_subagent_service=spawn_subagent_service,
         model_ref_override=model_ref_override,
         confirmation_signal=confirmation_signal,
+        plan_repo=plan_repo,
+        conversation_id=conversation_id,
     )
 
     async def _gen() -> AsyncIterator[AgentEvent]:
         projector = _LegacyProjector()
-        async for ev in loop.stream(messages=messages, overrides=overrides):
+        # Forward the employee's stored max_iterations · AgentLoop's stream()
+        # has its own default=10, which silently overrode whatever the user
+        # configured. Reproducer: bump Lead Agent's max_iterations to 100 in
+        # /employees/{id} → next turn still hits MAX_ITERATIONS at iter 11.
+        async for ev in loop.stream(
+            messages=messages,
+            max_iterations=employee.max_iterations,
+            overrides=overrides,
+        ):
             for legacy in projector.project(ev):
                 yield legacy
 
@@ -508,6 +520,8 @@ class AgentRunner:
         spawn_subagent_service: SpawnSubagentService | None = None,
         model_ref_override: str | None = None,
         checkpointer: Any | None = None,  # accepted for back-compat; unused
+        plan_repo: Any = None,
+        conversation_id: str = "",
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
@@ -532,6 +546,9 @@ class AgentRunner:
         # restarts. MessageRepo remains the user-visible ledger (ADR 0014 R2);
         # this is **only** for graph-internal state.
         self._checkpointer = checkpointer
+        # ADR 0019 C1 · plan tools · per-conversation AgentPlanRepo binding
+        self._plan_repo = plan_repo
+        self._conversation_id = conversation_id
 
     def _active_tool_ids(self) -> list[str]:
         """Contract § 8.2 · base + flatten(resolved_skills.values())."""
@@ -589,6 +606,8 @@ class AgentRunner:
             model_ref_override=self._model_ref_override,
             messages=messages,
             overrides=overrides,
+            plan_repo=self._plan_repo,
+            conversation_id=self._conversation_id,
         ):
             yield legacy_event
         return

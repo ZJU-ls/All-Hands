@@ -65,7 +65,7 @@ class EmployeeCreateRequest(BaseModel):
     model_ref: str = "openai/gpt-4o-mini"
     tool_ids: list[str] = Field(default_factory=list)
     skill_ids: list[str] = Field(default_factory=list)
-    max_iterations: int = Field(default=10, ge=1, le=100)
+    max_iterations: int = Field(default=10, ge=1, le=10000)
     # New employees POSTed from the UI / Meta Tool default to ``draft`` so
     # they can be iterated on in /employees/design without surfacing on the
     # roster. The Lead Agent may override to ``published`` when it creates
@@ -81,7 +81,7 @@ class EmployeeUpdateRequest(BaseModel):
     model_ref: str | None = None
     tool_ids: list[str] | None = None
     skill_ids: list[str] | None = None
-    max_iterations: int | None = Field(default=None, ge=1, le=100)
+    max_iterations: int | None = Field(default=None, ge=1, le=10000)
 
 
 Preset = Literal["execute", "plan", "plan_with_subagent"]

@@ -1,12 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import type { RenderProps } from "@/lib/component-registry";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { CopyButton } from "@/components/render/_shared/CopyButton";
 
 type Kind = "info" | "warn" | "success" | "error";
 
-// Tone classes — tinted background + tone border + tone text. Signals kind
-// at a glance without a left bar.
 const TONE: Record<Kind, { bg: string; title: string; tile: string; icon: IconName }> = {
   info: {
     bg: "bg-primary-soft border-primary/30",
@@ -49,18 +49,29 @@ function normKind(raw: unknown): Kind {
 /**
  * Brand-Blue V2 (ADR 0016) · tone-tinted callout.
  *
- * rounded-xl + tinted tone background + tone border. Leading icon tile on
- * the left carries the kind; colored title carries it again. No left bar.
+ * Interactions (2026-04-25):
+ *   - dismiss   · session-only (re-renders restore visibility unless the
+ *                 host stores the dismissed state)
+ *   - copy body · hover-revealed when content is non-trivial (>20 chars)
+ *
+ * Dismiss is opt-in via `props.dismissable`. Default off so existing
+ * agent outputs don't lose their callouts after a misclick.
  */
 export function Callout({ props }: RenderProps) {
   const kind = normKind(props.kind);
   const title = typeof props.title === "string" ? props.title : undefined;
   const content = typeof props.content === "string" ? props.content : "";
+  const dismissable = props.dismissable === true;
   const tone = TONE[kind];
+
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+
+  const showCopy = content.trim().length > 20;
 
   return (
     <div
-      className={`relative flex gap-3 rounded-xl border px-4 py-3.5 animate-fade-up ${tone.bg}`}
+      className={`group relative flex gap-3 rounded-xl border px-4 py-3.5 animate-fade-up ${tone.bg}`}
     >
       <span
         aria-hidden
@@ -80,6 +91,24 @@ export function Callout({ props }: RenderProps) {
           {content}
         </div>
       </div>
+      {(showCopy || dismissable) ? (
+        <div className="ml-2 flex shrink-0 items-start gap-1 opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-within:opacity-100">
+          {showCopy ? (
+            <CopyButton value={title ? `${title}\n\n${content}` : content} label="复制内容" />
+          ) : null}
+          {dismissable ? (
+            <button
+              type="button"
+              onClick={() => setDismissed(true)}
+              aria-label="关闭"
+              title="关闭"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text"
+            >
+              <Icon name="x" size={12} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
