@@ -485,6 +485,8 @@ function TextField({
   mono,
   required,
   testid,
+  hint,
+  error,
 }: {
   label: string;
   value: string;
@@ -493,7 +495,17 @@ function TextField({
   mono?: boolean;
   required?: boolean;
   testid?: string;
+  /** Inline helper, shown muted below the field. */
+  hint?: string;
+  /** Inline danger message — replaces hint when set. */
+  error?: string;
 }) {
+  // Inline validation: required + empty (after touch) → red ring + message,
+  // so users see the rule before clicking save and getting a global toast.
+  const [touched, setTouched] = useState(false);
+  const showRequiredError =
+    required && touched && value.trim().length === 0 && !error;
+  const isInvalid = Boolean(error) || showRequiredError;
   return (
     <div className="flex flex-col gap-1 mb-3 last:mb-0">
       <label className="text-[11px] text-text-muted">
@@ -504,11 +516,26 @@ function TextField({
         data-testid={testid}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setTouched(true)}
+        aria-invalid={isInvalid || undefined}
         placeholder={placeholder}
-        className={`w-full rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text placeholder-text-subtle focus:outline-none focus:border-primary transition-colors duration-base ${
+        className={`w-full rounded-md bg-bg border px-3 py-2 text-[12px] text-text placeholder-text-subtle focus:outline-none transition-colors duration-base ${
           mono ? "font-mono" : ""
+        } ${
+          isInvalid
+            ? "border-danger/60 focus:border-danger ring-2 ring-danger/15"
+            : "border-border focus:border-primary"
         }`}
       />
+      {(error || showRequiredError || hint) && (
+        <p
+          className={`text-[10.5px] leading-snug ${
+            isInvalid ? "text-danger" : "text-text-subtle"
+          }`}
+        >
+          {error || (showRequiredError ? "必填字段不能为空" : hint)}
+        </p>
+      )}
     </div>
   );
 }
