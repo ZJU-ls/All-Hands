@@ -91,9 +91,11 @@ class ObservatoryService:
     async def get_status(self) -> ObservabilityConfig:
         return await self._config.load()
 
-    async def get_summary(self, *, now: datetime | None = None) -> ObservatorySummary:
+    async def get_summary(
+        self, *, now: datetime | None = None, window_hours: int = 24
+    ) -> ObservatorySummary:
         ts_now = now or datetime.now(UTC)
-        day_start = ts_now - timedelta(hours=24)
+        day_start = ts_now - timedelta(hours=window_hours)
 
         cfg = await self._config.load()
 
@@ -316,7 +318,10 @@ class ObservatoryService:
             for k in sorted(err_counts, key=lambda k: -err_counts[k])
         ]
 
-        # ── 24-hour latency histogram for the heatmap card ──────────────
+        # ── Latency histogram for the heatmap card ───────────────────────
+        # Always covers the last 24 hours regardless of the summary window
+        # — a 7-day heatmap would compress everything into illegible cells.
+        heatmap_start = ts_now - timedelta(hours=24)
         # Inspired by Honeycomb's heatmap-of-duration view. We bucket by
         # (hour-of-window, log-bucket-of-latency) so the front-end can
         # render a 24x8 grid showing where the long tails live.
@@ -340,8 +345,10 @@ class ObservatoryService:
             dur = e.payload.get("duration_s")
             if not isinstance(dur, (int, float)):
                 continue
+            if e.published_at < heatmap_start:
+                continue
             # hour index 0..23 from oldest to newest
-            seconds_into = (e.published_at - day_start).total_seconds()
+            seconds_into = (e.published_at - heatmap_start).total_seconds()
             h = int(seconds_into // 3600)
             if h < 0 or h >= n_hours:
                 continue

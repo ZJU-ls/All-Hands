@@ -26,8 +26,14 @@ router = APIRouter(prefix="/observatory", tags=["observatory"])
 @router.get("/summary")
 async def get_summary(
     svc: ObservatoryService = Depends(get_observatory_service),
+    hours: int = Query(default=24, ge=1, le=720),
 ) -> dict[str, object]:
-    summary = await svc.get_summary()
+    """Aggregated observatory summary for the last ``hours`` hours.
+
+    The page sends 1 / 24 / 168 (7d) when the user clicks a time-range
+    pill. Defaults to 24 for legacy callers that don't pass a window.
+    """
+    summary = await svc.get_summary(window_hours=hours)
     return summary.model_dump(mode="json")
 
 

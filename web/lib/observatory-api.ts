@@ -77,10 +77,15 @@ export type TraceSummaryDto = {
   started_at: string;
 };
 
-export async function fetchObservatorySummary(): Promise<ObservatorySummaryDto> {
-  const res = await fetch(`${BASE}/api/observatory/summary`, {
-    cache: "no-store",
-  });
+export async function fetchObservatorySummary(
+  hours = 24,
+): Promise<ObservatorySummaryDto> {
+  const q = new URLSearchParams();
+  q.set("hours", String(hours));
+  const res = await fetch(
+    `${BASE}/api/observatory/summary?${q.toString()}`,
+    { cache: "no-store" },
+  );
   if (!res.ok) {
     throw new Error(`observatory summary failed: ${res.status}`);
   }

@@ -538,8 +538,9 @@ export default function ObservatoryPage() {
     setState("loading");
     setError(null);
     try {
+      const hours = range === "1h" ? 1 : range === "7d" ? 168 : 24;
       const [s, t, runs, fr, lat, tok] = await Promise.all([
-        fetchObservatorySummary(),
+        fetchObservatorySummary(hours),
         fetchTraces({ limit: 50 }),
         fetchMetricSeries({ metric: "runs", bucket: "1h" }),
         fetchMetricSeries({ metric: "failure_rate", bucket: "1h" }),
@@ -563,7 +564,8 @@ export default function ObservatoryPage() {
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range]);
 
   const incidents = useMemo(
     () => traces.filter((t) => t.status === "failed").slice(0, 5),
