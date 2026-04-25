@@ -166,6 +166,7 @@ def _row_to_message(row: MessageRow) -> Message:
         trace_ref=row.trace_ref,
         parent_run_id=row.parent_run_id,
         reasoning=row.reasoning,
+        interrupted=row.interrupted,
         created_at=_utc(row.created_at),
     )
 
@@ -338,6 +339,7 @@ class SqlConversationRepo:
             trace_ref=message.trace_ref,
             parent_run_id=message.parent_run_id,
             reasoning=message.reasoning,
+            interrupted=message.interrupted,
             created_at=_naive(message.created_at),
         )
         self._s.add(row)
@@ -1373,6 +1375,7 @@ class SqlObservabilityConfigRepo:
             bootstrap_error=row.bootstrap_error,
             bootstrapped_at=_utc(row.bootstrapped_at) if row.bootstrapped_at else None,
             updated_at=_utc(row.updated_at) if row.updated_at else None,
+            auto_title_enabled=bool(row.auto_title_enabled),
         )
 
     async def save(self, config: ObservabilityConfig) -> ObservabilityConfig:
@@ -1393,6 +1396,7 @@ class SqlObservabilityConfigRepo:
         row.bootstrap_status = config.bootstrap_status.value
         row.bootstrap_error = config.bootstrap_error
         row.bootstrapped_at = _naive(config.bootstrapped_at) if config.bootstrapped_at else None
+        row.auto_title_enabled = config.auto_title_enabled
         row.updated_at = now
         await self._s.flush()
         return config

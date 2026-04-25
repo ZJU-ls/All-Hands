@@ -4,6 +4,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
+import { AutoTitleToggle } from "@/components/settings/AutoTitleToggle";
 import Link from "next/link";
 
 type CardKey = "providers" | "models" | "mcp" | "notifications";
@@ -41,6 +42,8 @@ export default function SettingsPage() {
               </div>
             </div>
           </section>
+
+          <AutoTitleToggle />
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {CARD_DEFS.map((c) => (

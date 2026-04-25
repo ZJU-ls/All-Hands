@@ -13,7 +13,6 @@ type Props = { conversationId: string };
 const STICK_THRESHOLD_PX = 64;
 
 export function MessageList({ conversationId }: Props) {
-  const t = useTranslations("chat.messageList");
   const { messages, streamingMessage, streamError, isStreaming } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
@@ -145,82 +144,114 @@ export function MessageList({ conversationId }: Props) {
         )}
       </div>
 
-      {/* Stream liveness chip · always visible during a turn so the user
-          can see we're alive, with elapsed seconds + a stalled-state warning
-          after 8s of no new tokens. Sits above 回到最新 so they don't fight
-          for the same anchor. */}
-      {isStreaming && streamStartAt !== null ? (
-        <StreamStatusChip
-          elapsedMs={now - streamStartAt}
-          silentMs={now - lastProgressAt}
-        />
-      ) : null}
-      {!stickToBottom && hasAnything && (
-        <button
-          type="button"
-          onClick={() => {
+      {/* Single combined chip · merges 回到最新 with the stream liveness
+          beacon so they don't stack as two competing pills.
+            • streaming + at bottom        → status only (info)
+            • streaming + scrolled away    → status, clickable to scroll down
+            • idle      + scrolled away    → "回到最新" jump button
+            • idle      + at bottom        → hidden
+      */}
+      {(isStreaming && streamStartAt !== null) || (!stickToBottom && hasAnything) ? (
+        <ChatStatusChip
+          isStreaming={isStreaming && streamStartAt !== null}
+          elapsedMs={streamStartAt !== null ? now - streamStartAt : 0}
+          silentMs={streamStartAt !== null ? now - lastProgressAt : 0}
+          atBottom={stickToBottom}
+          onJumpToBottom={() => {
             scrollToBottom("smooth");
             setStickToBottom(true);
           }}
-          data-testid="jump-to-bottom"
-          aria-label={t("jumpToLatest")}
-          className={`absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[11px] font-medium text-text-muted shadow-soft-sm transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2 ${
-            isStreaming ? "bottom-14" : "bottom-4"
-          }`}
-        >
-          <Icon name="arrow-down" size={12} />
-          {t("backToLatest")}
-        </button>
-      )}
+        />
+      ) : null}
     </div>
   );
 }
 
 /**
- * StreamStatusChip · always-on liveness beacon during a streaming turn.
+ * ChatStatusChip · single floating chip combining stream liveness +
+ * jump-to-bottom. Replaces what used to be two stacked pills.
  *
- * Shows elapsed seconds since the user hit send, with a pulsing primary
- * dot. After 8s with no new tokens / tool-call activity / render payload,
- * shifts to a warning tone + "等待响应" label so users distinguish "model
- * is thinking" from "stuck / network silent".
+ * State machine (rendered when at least one is true):
+ *   • streaming  +  at bottom    → status only · plain primary chip
+ *   • streaming  +  away         → status + ↓ glyph · clickable scroll
+ *   • idle       +  away         → 回到最新 button · neutral surface
+ *   • idle       +  at bottom    → not rendered (caller guards)
  *
- * Floats fixed bottom-center over the message list — visible regardless
- * of where the user is scrolled.
+ * After 8s of no new tokens / tool-call updates / render payloads while
+ * streaming, the tone shifts to warning so "thinking" vs "stuck" is
+ * distinguishable at a glance.
  */
-function StreamStatusChip({
+function ChatStatusChip({
+  isStreaming,
   elapsedMs,
   silentMs,
+  atBottom,
+  onJumpToBottom,
 }: {
+  isStreaming: boolean;
   elapsedMs: number;
   silentMs: number;
+  atBottom: boolean;
+  onJumpToBottom: () => void;
 }) {
   const t = useTranslations("chat.messageList");
   const SILENT_WARN_MS = 8000;
-  const stalled = silentMs >= SILENT_WARN_MS;
+  const stalled = isStreaming && silentMs >= SILENT_WARN_MS;
   const seconds = Math.max(0, Math.floor(elapsedMs / 100) / 10).toFixed(1);
   const silentSeconds = Math.max(0, Math.round(silentMs / 1000));
+  const isClickable = !atBottom;
+
+  // Three tones · streaming-stalled (warning) · streaming-fine (primary) ·
+  // idle-away (neutral surface, like the old jump-to-bottom).
   const tone = stalled
     ? "border-warning/30 bg-warning-soft text-warning"
-    : "border-primary/25 bg-primary-muted text-primary";
-  const dot = stalled ? "bg-warning" : "bg-primary";
+    : isStreaming
+    ? "border-primary/25 bg-primary-muted text-primary"
+    : "border-border bg-surface text-text-muted hover:text-text hover:border-border-strong hover:bg-surface-2";
+  const dotTone = stalled ? "bg-warning" : "bg-primary";
+
+  const labelText = isStreaming
+    ? stalled
+      ? t("streamStalled")
+      : t("streamProcessing")
+    : t("backToLatest");
+
+  const Element = isClickable ? "button" : "div";
+
   return (
-    <div
-      data-testid="stream-status-chip"
-      role="status"
-      aria-live="polite"
-      className={`absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-mono shadow-soft-sm tabular-nums transition-colors duration-base ${tone}`}
+    <Element
+      type={isClickable ? "button" : undefined}
+      onClick={isClickable ? onJumpToBottom : undefined}
+      data-testid={isStreaming ? "stream-status-chip" : "jump-to-bottom"}
+      role={isStreaming ? "status" : undefined}
+      aria-live={isStreaming ? "polite" : undefined}
+      aria-label={isClickable ? t("jumpToLatest") : undefined}
+      title={isClickable ? t("jumpToLatest") : undefined}
+      className={`absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-mono shadow-soft-sm tabular-nums transition-colors duration-base ${tone} ${isClickable ? "cursor-pointer" : ""}`}
     >
-      <span className="relative inline-flex h-2 w-2">
-        <span className={`absolute inset-0 rounded-full ${dot} animate-pulse-ring`} />
-        <span className={`absolute inset-0 rounded-full ${dot}`} />
-      </span>
-      <span>{stalled ? t("streamStalled") : t("streamProcessing")}</span>
-      <span className="text-[11px] opacity-70">·</span>
-      <span>{seconds}s</span>
-      {stalled ? (
-        <span className="ml-1 text-[10px] opacity-80">{t("streamSilent", { s: silentSeconds })}</span>
-      ) : null}
-    </div>
+      {isStreaming ? (
+        <>
+          <span className="relative inline-flex h-2 w-2">
+            <span className={`absolute inset-0 rounded-full ${dotTone} animate-pulse-ring`} />
+            <span className={`absolute inset-0 rounded-full ${dotTone}`} />
+          </span>
+          <span>{labelText}</span>
+          <span className="text-[11px] opacity-70">·</span>
+          <span>{seconds}s</span>
+          {stalled ? (
+            <span className="ml-1 text-[10px] opacity-80">
+              {t("streamSilent", { s: silentSeconds })}
+            </span>
+          ) : null}
+          {isClickable ? <Icon name="arrow-down" size={11} className="ml-1 opacity-80" /> : null}
+        </>
+      ) : (
+        <>
+          <Icon name="arrow-down" size={12} />
+          <span>{labelText}</span>
+        </>
+      )}
+    </Element>
   );
 }
 

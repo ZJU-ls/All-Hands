@@ -1,7 +1,7 @@
 """Move "default" from LLMProvider (two-field state) to LLMModel (singleton).
 
-Revision ID: 0022
-Revises: 0021
+Revision ID: 0023
+Revises: 0022
 Create Date: 2026-04-25
 
 第一性原理重构 (2026-04-25):
@@ -33,8 +33,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0022"
-down_revision = "0021"
+revision = "0023"
+down_revision = "0022"
 branch_labels = None
 depends_on = None
 
@@ -89,8 +89,11 @@ def upgrade() -> None:
             )
 
     # 3. Drop the legacy fields. SQLite needs batch_alter_table to do this
-    #    safely (it rebuilds the table).
+    #    safely (it rebuilds the table). Drop the index referencing is_default
+    #    first; batch_alter_table reflects existing indexes and would otherwise
+    #    try to recreate it on the new table that no longer has the column.
     with op.batch_alter_table("llm_providers") as batch:
+        batch.drop_index("ix_llm_providers_is_default")
         batch.drop_column("default_model")
         batch.drop_column("is_default")
 

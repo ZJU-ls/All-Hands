@@ -13,8 +13,12 @@ import { cn } from "@/lib/cn";
 
 type Props = {
   value: string;
-  /** Visible label · accessibility + tooltip. Default: "复制". */
+  /** Tooltip + aria-label. Default: "复制". */
   label?: string;
+  /** Visible inline text when variant="button". Falls back to `label`.
+   *  Use this to keep tooltips descriptive (e.g. "复制原文") while the
+   *  chip's visible text stays short (e.g. "原"). */
+  short?: string;
   /** Pixel size of the icon (button is icon + padding). Default: 12. */
   size?: number;
   className?: string;
@@ -25,6 +29,7 @@ type Props = {
 export function CopyButton({
   value,
   label = "复制",
+  short,
   size = 12,
   className,
   variant = "inline",
@@ -70,7 +75,7 @@ export function CopyButton({
     >
       <Icon name={copied ? "check" : "copy"} size={size} />
       {variant === "button" ? (
-        <span>{copied ? "已复制" : label}</span>
+        <span>{copied ? "已复制" : short ?? label}</span>
       ) : null}
     </button>
   );

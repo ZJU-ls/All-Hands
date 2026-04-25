@@ -141,4 +141,76 @@ describe("chat store · segments order", () => {
     const msgs = useChatStore.getState().messages;
     expect(msgs[0]!.segments).toBeUndefined();
   });
+
+  // ---------------------------------------------------------------
+  // 2026-04-25 · cancelStreaming preserves partial (Claude Code parity).
+  // Original behaviour wiped streamingMessage; users lost the partial
+  // bubble the moment they clicked 中止 / SSE dropped, even though the
+  // backend persisted the bytes. Now finalize-with-interrupt keeps the
+  // partial in messages[] with interrupted=true so MessageBubble can
+  // render the 「已中止」 tail.
+  describe("cancelStreaming preserves partial (interrupt parity)", () => {
+    it("commits partial content with interrupted=true", () => {
+      const s = useChatStore.getState();
+      s.setConversationId("conv_1");
+      s.beginTurn();
+      s.startStreaming("msg_1");
+      s.appendToken("msg_1", "Hello, I'll fetch ");
+      s.appendToken("msg_1", "the weather forecast for ");
+      s.cancelStreaming();
+
+      const state = useChatStore.getState();
+      expect(state.messages).toHaveLength(1);
+      const msg = state.messages[0]!;
+      expect(msg.role).toBe("assistant");
+      expect(msg.content).toBe("Hello, I'll fetch the weather forecast for ");
+      expect(msg.interrupted).toBe(true);
+      expect(state.streamingMessage).toBeNull();
+      expect(state.isStreaming).toBe(false);
+    });
+
+    it("seals pending tool_calls as failed/interrupted", () => {
+      const s = useChatStore.getState();
+      s.setConversationId("conv_1");
+      s.beginTurn();
+      s.startStreaming("msg_1");
+      s.updateToolCall({
+        ...mkTool("c1", "fetch_weather"),
+        status: "running",
+      });
+      s.cancelStreaming();
+
+      const msg = useChatStore.getState().messages[0]!;
+      const tc = msg.tool_calls.find((t) => t.id === "c1")!;
+      expect(tc.status).toBe("failed");
+      expect(tc.error).toBe("interrupted");
+      expect(msg.interrupted).toBe(true);
+    });
+
+    it("drops empty bubble (no tokens, no reasoning, no tool_calls)", () => {
+      const s = useChatStore.getState();
+      s.setConversationId("conv_1");
+      s.beginTurn();
+      s.startStreaming("msg_1");
+      s.cancelStreaming();
+
+      const state = useChatStore.getState();
+      expect(state.messages).toHaveLength(0);
+      expect(state.streamingMessage).toBeNull();
+      expect(state.isStreaming).toBe(false);
+    });
+
+    it("keeps reasoning-only partials (thinking before any text)", () => {
+      const s = useChatStore.getState();
+      s.setConversationId("conv_1");
+      s.beginTurn();
+      s.appendReasoning("msg_1", "let me think about this…");
+      s.cancelStreaming();
+
+      const msg = useChatStore.getState().messages[0]!;
+      expect(msg.content).toBe("");
+      expect(msg.reasoning).toContain("let me think");
+      expect(msg.interrupted).toBe(true);
+    });
+  });
 });

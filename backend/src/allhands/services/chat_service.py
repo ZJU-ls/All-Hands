@@ -50,6 +50,7 @@ if TYPE_CHECKING:
         LLMModelRepo,
         LLMProviderRepo,
         MCPServerRepo,
+        ObservabilityConfigRepo,
         SkillRuntimeRepo,
     )
 
@@ -121,6 +122,7 @@ class ChatService:
         event_repo: ConversationEventRepo | None = None,
         plan_repo: Any = None,
         user_input_signal: Any = None,
+        observability_config_repo: ObservabilityConfigRepo | None = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -185,6 +187,10 @@ class ChatService:
         # build_llm_context so long conversations stay within the model's
         # context window.
         self._auto_compact = AutoCompactManager(config=CompactionConfig())
+        # System-config singleton; read on every send_message to decide
+        # whether to upgrade the auto-title from a literal truncation to an
+        # LLM-summarised version. Optional — None keeps legacy tests green.
+        self._observability_config_repo = observability_config_repo
 
     async def _compute_platform_snapshot(self) -> str:
         """Fresh DB-verified snapshot of platform capabilities, injected into
@@ -484,6 +490,23 @@ class ChatService:
         )
         await self._conversations.append_message(user_msg)
 
+        # Auto-title on the very first user message of a conversation: the
+        # cheap-path (truncated literal) lands first so the sidebar always
+        # gets a label, and — when ``auto_title_enabled`` is on — we
+        # re-summarise via the model below once the provider is resolved.
+        # Skipped on subsequent messages and on conversations that already
+        # carry an explicit title.
+        first_message_for_title = conv.title is None
+        if first_message_for_title:
+            try:
+                conv.title = _auto_title_from_user_content(user_content)
+                await self._conversations.update(conv)
+            except Exception:
+                log.exception(
+                    "auto_title.literal.failed",
+                    extra={"conversation_id": conversation_id},
+                )
+
         # ADR 0017 · also write the USER event to the event log when wired.
         # The Message row stays as a projection cache for the frontend
         # /messages API; the event log is the authoritative source we read
@@ -563,6 +586,9 @@ class ChatService:
         resolved = await self.resolve_model_for_conversation(conv, employee)
         provider = resolved.provider if resolved is not None else None
         effective_model_ref = resolved.ref if resolved is not None else conv.model_ref_override
+
+        if first_message_for_title:
+            await self._maybe_llm_title(conv, user_content, employee, provider, effective_model_ref)
 
         if self._event_repo is not None:
             # P2.B · auto-compact before projecting the context. If the
@@ -785,6 +811,16 @@ class ChatService:
         persisted = False
         run_finalized = False
         error_payload: dict[str, object] | None = None
+        # 2026-04-25 · Claude-Code-style interrupt preservation. The tap
+        # records partial bytes always; the interrupted flag distinguishes
+        # "we made it to a clean done" from "the stream was cut" so:
+        #   1. Frontend renders the saved row with an 「已中止」 marker
+        #   2. build_llm_context synthesizes "Interrupted by user"
+        #      tool_results for any tool_use blocks the model committed
+        #      before the cut (next-turn wire shape stays valid).
+        # done_seen flips on the runner's terminal "done" event; absence
+        # at flush() time means client disconnect / runner abort.
+        done_seen = False
 
         async def flush() -> None:
             nonlocal persisted
@@ -793,6 +829,11 @@ class ChatService:
             persisted = True
             content = "".join(buffer)
             reasoning_text = "".join(reasoning_buffer) or None
+            # interrupted = stream did not deliver a clean done. Captures
+            # both the explicit error path (error_payload set above) and
+            # the silent client-disconnect path (CancelledError raised
+            # inside ``async for``, lands here via the finally tap).
+            interrupted = error_payload is not None or not done_seen
             msg = Message(
                 id=message_id,
                 conversation_id=conversation_id,
@@ -802,6 +843,7 @@ class ChatService:
                 parent_run_id=run_id,
                 render_payloads=list(render_payloads),
                 tool_calls=list(tool_calls_by_id.values()),
+                interrupted=interrupted,
                 created_at=first_seen or datetime.now(UTC),
             )
             try:
@@ -831,6 +873,7 @@ class ChatService:
                                 "tool_calls": [tc.model_dump() for tc in tool_calls_by_id.values()],
                                 "render_payloads": [rp.model_dump() for rp in render_payloads],
                                 "run_id": run_id,
+                                "interrupted": interrupted,
                             },
                             created_at=first_seen or datetime.now(UTC),
                         )
@@ -999,6 +1042,7 @@ class ChatService:
                                 extra={"conversation_id": conversation_id},
                             )
                 elif event.kind == "done":
+                    done_seen = True
                     await flush()
                 yield event
         finally:
@@ -1076,6 +1120,67 @@ class ChatService:
             log.exception(
                 "interrupt.confirmation.save.failed",
                 extra={"interrupt_id": getattr(event, "interrupt_id", None)},
+            )
+
+    async def _maybe_llm_title(
+        self,
+        conv: Conversation,
+        user_content: str,
+        employee: Employee,
+        provider: Any,
+        effective_model_ref: str | None,
+    ) -> None:
+        """Best-effort: replace the literal title with an LLM-summarised one.
+
+        Triggered only on the very first user message of a conversation
+        (``conv.title`` was ``None`` before the literal fallback ran) and
+        only when ``observability_config.auto_title_enabled`` is True. Any
+        failure is swallowed — the literal title already on disk is fine.
+        """
+        if self._observability_config_repo is None or provider is None:
+            return
+        try:
+            cfg = await self._observability_config_repo.load()
+        except Exception:
+            log.exception("auto_title.config.load.failed")
+            return
+        if not cfg.auto_title_enabled:
+            return
+
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        from allhands.execution.runner import _build_model
+
+        model_ref = effective_model_ref or employee.model_ref
+        try:
+            model = _build_model(model_ref, provider)
+            prompt_text = (
+                "你是一个会话标题生成器。读用户的第一条消息, "
+                "用同一种语言写一个不超过 20 个字符的简短标题, "
+                "概括这段会话讨论的主题。"
+                "只输出标题本身, 不要加引号、句号、前缀或任何额外解释。"
+            )
+            system = SystemMessage(content=prompt_text)
+            response = await model.ainvoke([system, HumanMessage(content=user_content)])
+            raw = getattr(response, "content", "")
+            if isinstance(raw, list):
+                raw = " ".join(
+                    b.get("text", "")
+                    for b in raw
+                    if isinstance(b, dict) and b.get("type") == "text"
+                )
+            title = " ".join(str(raw).strip().split())
+            title = title.strip("\"'`「」“”《》")
+            if not title:
+                return
+            if len(title) > _AUTO_TITLE_MAX_CHARS:
+                title = title[: _AUTO_TITLE_MAX_CHARS - 1].rstrip() + "…"
+            conv.title = title
+            await self._conversations.update(conv)
+        except Exception:
+            log.exception(
+                "auto_title.llm.failed",
+                extra={"conversation_id": conv.id, "model_ref": model_ref},
             )
 
     def _build_summarizer(self, provider: Any, employee: Employee) -> Any:

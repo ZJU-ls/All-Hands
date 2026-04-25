@@ -402,11 +402,11 @@ function Header({
           { key: "split", label: "Split" },
         ]}
       />
-      {/* Explicit labels · two identical clipboard icons read as "copy what?".
-          variant="button" surfaces the text inline so the affordance is
-          unambiguous. */}
-      <CopyButton value={before} label="复制旧版" variant="button" />
-      <CopyButton value={after} label="复制新版" variant="button" />
+      {/* Tooltip is descriptive Chinese; visible chip text uses the
+          conventional Before / After labels developers already recognize
+          from GitHub diffs — cleaner than awkward 旧版/新版 or 原/改. */}
+      <CopyButton value={before} label="复制 Before" short="Before" variant="button" />
+      <CopyButton value={after} label="复制 After" short="After" variant="button" />
     </div>
   );
 }
