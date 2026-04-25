@@ -97,8 +97,6 @@ class ArtifactContentMissing(ArtifactError):
     instead of a 500.
     """
 
-    pass
-
 
 class ArtifactService:
     def __init__(

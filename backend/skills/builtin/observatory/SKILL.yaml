@@ -6,7 +6,6 @@ builtin: true
 
 tool_ids:
   - allhands.meta.observatory.get_status
-  - allhands.meta.observatory.bootstrap_now
   - allhands.meta.observatory.query_traces
   - allhands.meta.observatory.get_trace
 
