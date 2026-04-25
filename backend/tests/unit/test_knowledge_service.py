@@ -131,17 +131,17 @@ async def test_create_kb_honors_explicit_embedding_ref(svc: KnowledgeService) ->
     assert kb.embedding_dim == 128
 
 
-def test_list_embedding_models_marks_mock_available_and_default(
+async def test_list_embedding_models_marks_mock_available_and_default(
     svc: KnowledgeService,
 ) -> None:
-    opts = svc.list_embedding_models()
+    opts = await svc.list_embedding_models()
     refs = [o.ref for o in opts]
     # Mock dims always present
     assert "mock:hash-64" in refs
     assert "mock:hash-256" in refs
-    # OpenAI / bailian present but conditional on env keys
+    # OpenAI / aliyun present but conditional on creds
     assert any(o.ref.startswith("openai:") for o in opts)
-    assert any(o.ref.startswith("bailian:") for o in opts)
+    assert any(o.ref.startswith("aliyun:") for o in opts)
     # Mock is always available
     assert all(o.available for o in opts if o.ref.startswith("mock:"))
     # Default surfaces; in test env it's mock:hash-64

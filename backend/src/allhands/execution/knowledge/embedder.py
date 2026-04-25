@@ -35,7 +35,7 @@ import logging
 import struct
 from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -201,62 +201,140 @@ class Embedder:
 # ----------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class _ProviderCreds:
+    """What the resolver needs from a single LLMProvider DB row."""
+
+    api_key: str
+    base_url: str
+
+
+@dataclass(frozen=True)
+class CredsLookup:
+    """Two-source credential resolver passed into ``resolve_provider``.
+
+    Source 1 (preferred): the LLMProvider table — populated via the
+    `/gateway` UI. Lets non-developers add an embedding-capable provider
+    without editing .env. The lookup is keyed by `kind` (``openai`` /
+    ``aliyun``) since `model_ref` already encodes it.
+
+    Source 2 (fallback): env vars on `Settings`. Kept so dev / CI / docker
+    images that pre-bake a key still work without touching the DB.
+    """
+
+    db_lookup: Callable[[str], _ProviderCreds | None] | None = None
+    env_lookup: Callable[[], object] | None = None
+
+
 def resolve_provider(
-    model_ref: str, *, settings_lookup: Callable[[], object] | None = None
+    model_ref: str,
+    *,
+    settings_lookup: Callable[[], object] | None = None,
+    creds: CredsLookup | None = None,
 ) -> EmbeddingProvider:
-    settings: object
-    """Parse a `<scheme>:<rest>` ref into an EmbeddingProvider.
+    """Parse a ``<scheme>:<rest>`` ref into an EmbeddingProvider.
 
     Supported schemes:
 
-    - ``mock:hash-<dim>`` — synchronous, dependency-free
-    - ``openai:<model>``  — needs settings.openai_api_key
-    - ``bailian:<model>`` — needs settings.dashscope_api_key
+    - ``mock:hash-<dim>``    — synchronous, no creds
+    - ``openai:<model>``     — DB-configured OpenAI-kind provider, or
+                               ``ALLHANDS_OPENAI_API_KEY`` fallback
+    - ``aliyun:<model>``     — DB-configured aliyun-kind provider, or
+                               ``ALLHANDS_DASHSCOPE_API_KEY`` fallback
+    - ``bailian:<model>``    — alias for ``aliyun:`` (kept for back-compat)
+
+    The two-source resolution lets the UI add a provider via /gateway
+    without an .env edit, while keeping a key in env still works for
+    docker / CI bootstrapping.
     """
     scheme, _, rest = model_ref.partition(":")
     if scheme == "mock":
-        # `hash-64` → 64
         if not rest.startswith("hash-"):
             raise ValueError(f"unsupported mock ref: {model_ref!r}")
         dim = int(rest.removeprefix("hash-"))
         return EmbeddingProvider(name=model_ref, dim=dim, embed=_hash_embed(dim))
 
-    # Real providers: settings holds the API key.
-    if settings_lookup is None:
-        from allhands.config.settings import get_settings as _gs
+    if scheme not in {"openai", "aliyun", "bailian"}:
+        raise ValueError(f"unknown embedding model_ref scheme: {scheme!r}")
 
-        settings = _gs()
+    # Normalize bailian → aliyun for DB lookup (provider_presets uses aliyun)
+    db_kind = "aliyun" if scheme in {"aliyun", "bailian"} else "openai"
+    creds = creds or CredsLookup()
+    found: _ProviderCreds | None = None
+
+    # Source 1: DB
+    if creds.db_lookup is not None:
+        found = creds.db_lookup(db_kind)
+
+    # Source 2: env fallback
+    if found is None:
+        settings_obj: object
+        if creds.env_lookup is not None:
+            settings_obj = creds.env_lookup()
+        elif settings_lookup is not None:
+            settings_obj = settings_lookup()
+        else:
+            from allhands.config.settings import get_settings as _gs
+
+            settings_obj = _gs()
+
+        if scheme == "openai":
+            api_key = getattr(settings_obj, "openai_api_key", None)
+            base_url = getattr(settings_obj, "openai_base_url", None) or "https://api.openai.com/v1"
+        else:
+            api_key = getattr(settings_obj, "dashscope_api_key", None)
+            base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+        if not api_key:
+            hint = (
+                "ALLHANDS_OPENAI_API_KEY 或在 /gateway 配置 OpenAI provider"
+                if scheme == "openai"
+                else "ALLHANDS_DASHSCOPE_API_KEY 或在 /gateway 配置阿里云 provider"
+            )
+            raise ValueError(f"{scheme} embedder needs credentials: set {hint}")
+        found = _ProviderCreds(api_key=api_key, base_url=base_url)
+
+    base = found.base_url.rstrip("/")
+    dim = _OPENAI_DIMS.get(rest, 1536) if scheme == "openai" else _BAILIAN_DIMS.get(rest, 1024)
+    return EmbeddingProvider(
+        name=model_ref,
+        dim=dim,
+        embed=_openai_compat_embed(f"{base}/embeddings", found.api_key, rest),
+    )
+
+
+async def fetch_provider_creds_from_db(session_maker: Any, kind: str) -> _ProviderCreds | None:
+    """Async DB read for the first enabled, key-bearing LLMProvider of
+    a given kind. Caller (KnowledgeService) awaits this once at startup
+    or on KB create, then hands the result to ``resolve_provider`` via
+    ``CredsLookup(db_lookup=lambda _: creds)``.
+
+    First-fit is good enough for v0 — typical user has 0 or 1 of each
+    kind. Per-KB pinning to a specific provider id is a v1 follow-up.
+    """
+    from allhands.persistence.sql_repos import SqlLLMProviderRepo
+
+    async with session_maker() as s:
+        repo = SqlLLMProviderRepo(s)
+        all_providers = await repo.list_all()
+    for p in all_providers:
+        if p.kind == kind and p.enabled and p.api_key:
+            return _ProviderCreds(api_key=p.api_key, base_url=p.base_url)
+    return None
+
+
+async def resolve_provider_with_db(model_ref: str, session_maker: Any) -> EmbeddingProvider:
+    """Async wrapper that does the DB lookup + dispatches to the sync
+    resolver. Use this from the service layer; raw ``resolve_provider``
+    is kept sync for tests + the env-only path."""
+    scheme, _, _ = model_ref.partition(":")
+    if scheme in {"openai", "aliyun", "bailian"}:
+        db_kind = "aliyun" if scheme in {"aliyun", "bailian"} else "openai"
+        creds_obj = await fetch_provider_creds_from_db(session_maker, db_kind)
     else:
-        settings = settings_lookup()
-
-    if scheme == "openai":
-        api_key = getattr(settings, "openai_api_key", None)
-        if not api_key:
-            raise ValueError("openai embedder requires ALLHANDS_OPENAI_API_KEY")
-        base = (getattr(settings, "openai_base_url", None) or "https://api.openai.com/v1").rstrip(
-            "/"
-        )
-        # OpenAI dim defaults
-        dim = _OPENAI_DIMS.get(rest, 1536)
-        return EmbeddingProvider(
-            name=model_ref,
-            dim=dim,
-            embed=_openai_compat_embed(f"{base}/embeddings", api_key, rest),
-        )
-
-    if scheme == "bailian":
-        api_key = getattr(settings, "dashscope_api_key", None)
-        if not api_key:
-            raise ValueError("bailian embedder requires ALLHANDS_DASHSCOPE_API_KEY")
-        base = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        dim = _BAILIAN_DIMS.get(rest, 1024)
-        return EmbeddingProvider(
-            name=model_ref,
-            dim=dim,
-            embed=_openai_compat_embed(f"{base}/embeddings", api_key, rest),
-        )
-
-    raise ValueError(f"unknown embedding model_ref scheme: {scheme!r}")
+        creds_obj = None
+    creds = CredsLookup(db_lookup=(lambda _k: creds_obj) if creds_obj else None)
+    return resolve_provider(model_ref, creds=creds)
 
 
 _OPENAI_DIMS: dict[str, int] = {

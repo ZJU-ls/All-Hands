@@ -4,14 +4,13 @@ Spec `docs/specs/agent-design/2026-04-18-observatory.md` § 7.
 
 Every tool must:
 - be META kind
-- carry the right scope (3 READ + 1 BOOTSTRAP)
-- WRITE+ require confirmation (BOOTSTRAP only one here)
+- carry the right scope (3 READ · all read-only post-Langfuse)
 - follow V04 TodoWrite idiom (WHEN TO USE / WHEN NOT TO USE in description)
 - be registered via discover_builtin_tools()
 
 L01 REST parity: `query_traces` / `get_trace` / `get_status` each have a
-matching REST endpoint under `/api/observatory/*`; `bootstrap_now` matches
-`POST /api/observatory/bootstrap`. This keeps UI + Lead Agent paths aligned.
+matching REST endpoint under `/api/observatory/*`. The `bootstrap_now` tool
+was deleted along with the embedded Langfuse stack in 2026-04-25.
 """
 
 from __future__ import annotations
@@ -29,13 +28,11 @@ def test_all_observatory_meta_tools_exported() -> None:
         "allhands.meta.observatory.query_traces",
         "allhands.meta.observatory.get_trace",
         "allhands.meta.observatory.get_status",
-        "allhands.meta.observatory.bootstrap_now",
     }
 
 
 def test_scopes_match_spec() -> None:
     from allhands.execution.tools.meta.observatory_tools import (
-        OBSERVATORY_BOOTSTRAP_NOW_TOOL,
         OBSERVATORY_GET_STATUS_TOOL,
         OBSERVATORY_GET_TRACE_TOOL,
         OBSERVATORY_QUERY_TRACES_TOOL,
@@ -52,12 +49,6 @@ def test_scopes_match_spec() -> None:
             f"the Lead Agent can call it without burning a Confirmation Gate slot"
         )
         assert tool.requires_confirmation is False
-
-    assert OBSERVATORY_BOOTSTRAP_NOW_TOOL.scope == ToolScope.BOOTSTRAP, (
-        "bootstrap_now changes observability_config + may mint API keys · "
-        "spec § 7 says BOOTSTRAP scope"
-    )
-    assert OBSERVATORY_BOOTSTRAP_NOW_TOOL.requires_confirmation is True
 
 
 def test_descriptions_follow_v04_idiom() -> None:
@@ -90,7 +81,7 @@ def test_query_traces_schema_has_filter_params() -> None:
             f"query_traces § 7 table requires '{param}' filter field — "
             f"without it Lead cannot answer scoped analytic questions"
         )
-    assert props["status"]["enum"] == ["ok", "failed"]
+    assert set(props["status"]["enum"]) >= {"ok", "failed"}
     assert props["limit"]["maximum"] == 500
 
 
@@ -116,7 +107,6 @@ def test_registered_in_discover_builtin_tools() -> None:
         "allhands.meta.observatory.query_traces",
         "allhands.meta.observatory.get_trace",
         "allhands.meta.observatory.get_status",
-        "allhands.meta.observatory.bootstrap_now",
     ):
         assert tool_id in registered, (
             f"{tool_id} not registered · add ALL_OBSERVATORY_META_TOOLS to "

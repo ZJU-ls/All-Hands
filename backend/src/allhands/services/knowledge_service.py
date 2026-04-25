@@ -50,7 +50,12 @@ from allhands.core import (
 )
 from allhands.core.errors import DomainError
 from allhands.execution.knowledge.chunker import Chunker, ChunkerConfig
-from allhands.execution.knowledge.embedder import Embedder, resolve_provider
+from allhands.execution.knowledge.embedder import (
+    Embedder,
+    fetch_provider_creds_from_db,
+    resolve_provider,
+    resolve_provider_with_db,
+)
 from allhands.execution.knowledge.ingest import IngestOrchestrator
 from allhands.execution.knowledge.parsers import detect_mime
 from allhands.execution.knowledge.retriever import HybridRetriever
@@ -179,35 +184,45 @@ class KnowledgeService:
     # Embedding model registry — what's installable in this process
     # ------------------------------------------------------------------
 
-    def list_embedding_models(self) -> list[EmbeddingModelOption]:
+    async def list_embedding_models(self) -> list[EmbeddingModelOption]:
         """Return options the create-KB form can render in a dropdown.
 
-        Discovery is deliberately static: we know the three schemes the
-        embedder supports + the per-scheme prerequisites (api keys). We do
-        NOT round-trip provider HTTP here — UI render must be cheap and
-        free of external dependencies.
+        Availability resolution (per scheme):
+          1. DB lookup — first enabled LLMProvider of matching kind with
+             a non-empty api_key. Means the user configured it via /gateway.
+          2. Env fallback — ALLHANDS_OPENAI_API_KEY / _DASHSCOPE_API_KEY.
+
+        Reason strings now nudge users toward the UI (`/gateway`) rather
+        than asking them to edit `.env` — that was the bad UX cited in
+        v0 review.
         """
         settings = get_settings()
         default_ref = (
             getattr(settings, "kb_default_embedding_model_ref", None) or _FALLBACK_EMBEDDING_REF
         )
+
+        # Probe both kinds via the unified resolver (DB first, env second)
+        openai_creds = await fetch_provider_creds_from_db(self._session_maker, "openai")
+        aliyun_creds = await fetch_provider_creds_from_db(self._session_maker, "aliyun")
+        openai_key = openai_creds is not None or bool(getattr(settings, "openai_api_key", None))
+        aliyun_key = aliyun_creds is not None or bool(getattr(settings, "dashscope_api_key", None))
+
         options: list[EmbeddingModelOption] = []
 
-        # Mock — always on, two common dims
+        # Mock — always available, two common dims
         for dim in (64, 256):
             ref = f"mock:hash-{dim}"
             options.append(
                 EmbeddingModelOption(
                     ref=ref,
-                    label=f"Mock · hash-{dim} (deterministic, dev only)",
+                    label=f"Mock · hash-{dim} (演示用 · 不懂语义)",
                     dim=dim,
                     available=True,
                     is_default=ref == default_ref,
                 )
             )
 
-        # OpenAI
-        openai_key = getattr(settings, "openai_api_key", None)
+        # OpenAI — UI hint when missing
         for model, dim in (
             ("text-embedding-3-small", 1536),
             ("text-embedding-3-large", 3072),
@@ -218,26 +233,27 @@ class KnowledgeService:
                     ref=ref,
                     label=f"OpenAI · {model}",
                     dim=dim,
-                    available=bool(openai_key),
-                    reason=None if openai_key else "set ALLHANDS_OPENAI_API_KEY",
+                    available=openai_key,
+                    reason=None if openai_key else "去 /gateway 添加 OpenAI provider",
                     is_default=ref == default_ref,
                 )
             )
 
-        # Bailian (DashScope)
-        dash_key = getattr(settings, "dashscope_api_key", None)
+        # 阿里云百炼 (DashScope OpenAI-compat) — accept both `aliyun:` and
+        # `bailian:` for back-compat. UI shows the new "aliyun" form so
+        # it lines up with /gateway 's preset list.
         for model, dim in (
             ("text-embedding-v3", 1024),
             ("text-embedding-v4", 1024),
         ):
-            ref = f"bailian:{model}"
+            ref = f"aliyun:{model}"
             options.append(
                 EmbeddingModelOption(
                     ref=ref,
-                    label=f"百炼 · {model}",
+                    label=f"阿里云百炼 · {model}",
                     dim=dim,
-                    available=bool(dash_key),
-                    reason=None if dash_key else "set ALLHANDS_DASHSCOPE_API_KEY",
+                    available=aliyun_key,
+                    reason=None if aliyun_key else "去 /gateway 添加 阿里云 百炼 provider",
                     is_default=ref == default_ref,
                 )
             )
@@ -267,7 +283,9 @@ class KnowledgeService:
         workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> KnowledgeBase:
         ref = embedding_model_ref or self._embedder.model_ref
-        provider = resolve_provider(ref)
+        # Resolve via DB-first creds (UI-configured /gateway) → env fallback.
+        # Lets the UI's "add provider" path work without an .env edit.
+        provider = await resolve_provider_with_db(ref, self._session_maker)
         now = datetime.now(UTC)
         kb = KnowledgeBase(
             id=str(uuid.uuid4()),
@@ -431,6 +449,10 @@ class KnowledgeService:
         except OSError as exc:  # missing file (someone wiped data dir?)
             raise DocumentNotFound(f"file for {document_id!r} missing: {exc}") from exc
 
+    async def list_chunks_for_document(self, document_id: str) -> list[Chunk]:
+        async with self._session_maker() as s:
+            return await SqlChunkRepo(s).list_for_document(document_id)
+
     async def list_documents(
         self,
         kb_id: str,
@@ -469,7 +491,38 @@ class KnowledgeService:
         cfg = kb.retrieval_config
         if top_k is not None:
             cfg = RetrievalConfig.model_validate({**cfg.model_dump(), "top_k": top_k})
-        return await self._retriever.search(kb_id, query, cfg)
+        import time
+
+        t0 = time.monotonic()
+        results = await self._retriever.search(kb_id, query, cfg)
+        latency_ms = (time.monotonic() - t0) * 1000.0
+        _record_search_stat(kb_id, query, latency_ms, len(results))
+        return results
+
+    async def diagnose_search(
+        self, kb_id: str, query: str, *, top_k: int = 8
+    ) -> dict[str, list[ScoredChunk]]:
+        """Run the same query under three lens for the recall-test UI:
+          - bm25_only: vector_weight=0
+          - vector_only: bm25_weight=0
+          - hybrid: 1.0 / 1.0
+        All share the same top_k. Useful for "为什么这条没召回" analyses
+        and for showing users why hybrid > either lens alone.
+        """
+        await self.get_kb(kb_id)  # validate
+        bm25_cfg = RetrievalConfig(bm25_weight=1.0, vector_weight=0.0, top_k=top_k)
+        vec_cfg = RetrievalConfig(bm25_weight=0.0, vector_weight=1.0, top_k=top_k)
+        hyb_cfg = RetrievalConfig(bm25_weight=1.0, vector_weight=1.0, top_k=top_k)
+        bm25 = await self._retriever.search(kb_id, query, bm25_cfg)
+        vec = await self._retriever.search(kb_id, query, vec_cfg)
+        hybrid = await self._retriever.search(kb_id, query, hyb_cfg)
+        return {"bm25_only": bm25, "vector_only": vec, "hybrid": hybrid}
+
+    def get_search_stats(self, kb_id: str) -> SearchStatsSummary:
+        """In-memory ring buffer summary for the past N searches against
+        this KB. v0 only; not persisted, lost on restart. Cheap and good
+        enough to surface "本周 N 次检索 / 平均 X ms" in the sidebar."""
+        return _summarize_stats(kb_id)
 
     # ------------------------------------------------------------------
     # Grants
@@ -546,6 +599,60 @@ class KnowledgeService:
     async def _chunk_lookup(self, chunk_ids: list[int]) -> list[Chunk]:
         async with self._session_maker() as s:
             return await SqlChunkRepo(s).get_many(chunk_ids)
+
+
+# ----------------------------------------------------------------------
+# In-memory search stats (v0 ring buffer)
+# ----------------------------------------------------------------------
+
+# Per-KB ring buffer of (timestamp, query, latency_ms, hit_count).
+# Lives in-process; lost on restart. Cap per KB so it can't grow unbounded
+# under hot loops. A future v1 with proper analytics can land an event
+# log + percentiles + per-day rollup.
+_STATS_CAP = 50
+_stats: dict[str, list[tuple[datetime, str, float, int]]] = {}
+
+
+def _record_search_stat(kb_id: str, query: str, latency_ms: float, hit_count: int) -> None:
+    bucket = _stats.setdefault(kb_id, [])
+    bucket.append((datetime.now(UTC), query, latency_ms, hit_count))
+    if len(bucket) > _STATS_CAP:
+        del bucket[0 : len(bucket) - _STATS_CAP]
+
+
+@dataclass(frozen=True)
+class SearchStatRecent:
+    at: str
+    query: str
+    latency_ms: float
+    hits: int
+
+
+@dataclass(frozen=True)
+class SearchStatsSummary:
+    count: int
+    avg_latency_ms: float | None
+    recent: list[SearchStatRecent]
+
+
+def _summarize_stats(kb_id: str) -> SearchStatsSummary:
+    bucket = _stats.get(kb_id, [])
+    if not bucket:
+        return SearchStatsSummary(count=0, avg_latency_ms=None, recent=[])
+    avg = sum(b[2] for b in bucket) / len(bucket)
+    return SearchStatsSummary(
+        count=len(bucket),
+        avg_latency_ms=round(avg, 1),
+        recent=[
+            SearchStatRecent(
+                at=ts.isoformat(),
+                query=q,
+                latency_ms=round(lat, 1),
+                hits=hits,
+            )
+            for ts, q, lat, hits in reversed(bucket[-10:])
+        ],
+    )
 
 
 __all__ = [

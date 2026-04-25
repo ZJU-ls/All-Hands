@@ -226,7 +226,7 @@ async def list_embedding_models() -> list[EmbeddingModelOut]:
     out options where ``available=false`` and surfaces ``reason`` so the
     user knows which env var to set.
     """
-    opts = _service().list_embedding_models()
+    opts = await _service().list_embedding_models()
     return [
         EmbeddingModelOut(
             ref=o.ref,
@@ -363,6 +363,43 @@ async def get_document_text(kb_id: str, doc_id: str) -> dict[str, str]:
     return {"document_id": doc_id, "content": text}
 
 
+class ChunkOut(BaseModel):
+    id: int
+    ordinal: int
+    text: str
+    token_count: int
+    section_path: str | None
+    span_start: int
+    span_end: int
+    page: int | None
+
+
+@router.get("/{kb_id}/documents/{doc_id}/chunks")
+async def list_document_chunks(kb_id: str, doc_id: str) -> list[ChunkOut]:
+    """All chunks of a document in ordinal order. Used by the doc drawer
+    "分片" tab so users can verify how the chunker split their file."""
+    try:
+        doc = await _service().get_document(doc_id)
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if doc.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail="document not in this kb")
+    chunks = await _service().list_chunks_for_document(doc_id)
+    return [
+        ChunkOut(
+            id=c.id,
+            ordinal=c.ordinal,
+            text=c.text,
+            token_count=c.token_count,
+            section_path=c.section_path,
+            span_start=c.span_start,
+            span_end=c.span_end,
+            page=c.page,
+        )
+        for c in chunks
+    ]
+
+
 @router.delete("/{kb_id}/documents/{doc_id}", status_code=204)
 async def delete_document(kb_id: str, doc_id: str) -> None:
     await _service().soft_delete_document(doc_id)
@@ -380,6 +417,54 @@ async def search_kb(kb_id: str, payload: SearchPayload = Body(...)) -> list[Scor
     except KBNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return [_scored_out(r) for r in results]
+
+
+class DiagnoseOut(BaseModel):
+    bm25_only: list[ScoredChunkOut]
+    vector_only: list[ScoredChunkOut]
+    hybrid: list[ScoredChunkOut]
+
+
+@router.post("/{kb_id}/search/diagnose")
+async def diagnose_search(kb_id: str, payload: SearchPayload = Body(...)) -> DiagnoseOut:
+    """Same query under three lenses (BM25-only / vector-only / hybrid).
+    For the recall-test UI side-by-side comparison."""
+    try:
+        out = await _service().diagnose_search(kb_id, payload.query, top_k=payload.top_k or 8)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return DiagnoseOut(
+        bm25_only=[_scored_out(r) for r in out["bm25_only"]],
+        vector_only=[_scored_out(r) for r in out["vector_only"]],
+        hybrid=[_scored_out(r) for r in out["hybrid"]],
+    )
+
+
+class StatsRecent(BaseModel):
+    at: str
+    query: str
+    latency_ms: float
+    hits: int
+
+
+class StatsOut(BaseModel):
+    count: int
+    avg_latency_ms: float | None
+    recent: list[StatsRecent]
+
+
+@router.get("/{kb_id}/stats")
+async def get_kb_stats(kb_id: str) -> StatsOut:
+    """In-process search stats (this process only · ring buffer of 50)."""
+    s = _service().get_search_stats(kb_id)
+    return StatsOut(
+        count=s.count,
+        avg_latency_ms=s.avg_latency_ms,
+        recent=[
+            StatsRecent(at=r.at, query=r.query, latency_ms=r.latency_ms, hits=r.hits)
+            for r in s.recent
+        ],
+    )
 
 
 # ----------------------------------------------------------------------

@@ -37,7 +37,7 @@ type RailItem = {
 
 function countBadHealth(summary: WorkspaceSummaryDto): number {
   const h = summary.health;
-  return [h.gateway, h.mcp_servers, h.langfuse, h.db, h.triggers].filter(
+  return [h.gateway, h.mcp_servers, h.db, h.triggers].filter(
     (c) => c.status !== "ok",
   ).length;
 }

@@ -310,7 +310,6 @@ async def test_active_runs_and_health_come_from_providers(
     health = HealthSnapshot(
         gateway=ComponentStatus(name="gateway", status="degraded", detail="3/4 online"),
         mcp_servers=ComponentStatus(name="mcp", status="ok"),
-        langfuse=ComponentStatus(name="langfuse", status="degraded", detail="paused"),
         db=ComponentStatus(name="db", status="ok"),
         triggers=ComponentStatus(name="triggers", status="ok", detail="1 paused"),
     )
@@ -329,7 +328,6 @@ async def test_active_runs_and_health_come_from_providers(
     assert summary.runs_active == 1
     assert summary.active_runs == [card]
     assert summary.health.gateway.status == "degraded"
-    assert summary.health.langfuse.detail == "paused"
     assert summary.paused is True
     assert summary.paused_reason == "emergency"
 

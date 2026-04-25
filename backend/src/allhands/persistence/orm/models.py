@@ -360,19 +360,15 @@ class TaskRow(Base):
 
 
 class ObservabilityConfigRow(Base):
+    """Singleton system-config row · post-Langfuse (2026-04-25).
+
+    The langfuse credential + bootstrap columns were dropped via migration
+    0023 once self-instrumentation became the only path.
+    """
+
     __tablename__ = "observability_config"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    public_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    secret_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    host: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    org_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    project_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    admin_email: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    admin_password: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    bootstrap_status: Mapped[str] = mapped_column(String(32), default="pending")
-    bootstrap_error: Mapped[str | None] = mapped_column(String, nullable=True)
-    bootstrapped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
     auto_title_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
