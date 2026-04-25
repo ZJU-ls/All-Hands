@@ -203,6 +203,7 @@ class AgentLoop:
         spawn_subagent_service: Any = None,
         model_ref_override: str | None = None,
         confirmation_signal: DeferredSignal | None = None,
+        user_input_signal: DeferredSignal | None = None,
         plan_repo: Any = None,
         conversation_id: str = "",
         **_unused: Any,
@@ -228,6 +229,10 @@ class AgentLoop:
         # production wiring (B3) injects a ConfirmationDeferred backed
         # by ConfirmationRepo.
         self._confirmation_signal = confirmation_signal
+        # ADR 0019 C3 · clarification signal. None = ask_user_question
+        # tools fall through to a straight Allow (the executor receives
+        # an empty `answers` dict and echoes back).
+        self._user_input_signal = user_input_signal
 
     # --- public stream ----------------------------------------------------
 
@@ -640,6 +645,22 @@ class AgentLoop:
           * sub-agent → executor itself does the recursion; the pipeline
             doesn't need to defer at this layer
         """
+        # ADR 0019 C3 · clarification path runs BEFORE the confirmation
+        # check. ask_user_question is ToolScope.READ + requires_user_input,
+        # so it would otherwise fall through to Allow.
+        if getattr(tool, "requires_user_input", False) and self._user_input_signal is not None:
+            raw_questions = block.input.get("questions") or []
+            questions_list: list[Any] = (
+                list(raw_questions) if isinstance(raw_questions, list) else []
+            )
+            return Defer(
+                signal=self._user_input_signal,
+                publish_kwargs={
+                    "tool_use_id": block.id,
+                    "questions": questions_list,
+                },
+            )
+
         needs_confirm = (
             tool.scope
             in (

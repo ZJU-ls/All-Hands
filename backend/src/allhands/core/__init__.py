@@ -102,6 +102,11 @@ from allhands.core.trigger import (
     TriggerFireStatus,
     TriggerKind,
 )
+from allhands.core.user_input import (
+    UserInput,
+    UserInputQuestion,
+    UserInputStatus,
+)
 
 __all__ = [
     "ACTIVE_STATUSES",
@@ -192,6 +197,9 @@ __all__ = [
     "TurnThinking",
     "TurnToolCall",
     "TurnUserInput",
+    "UserInput",
+    "UserInputQuestion",
+    "UserInputStatus",
     "WorkspaceSummary",
     "is_legal_transition",
 ]

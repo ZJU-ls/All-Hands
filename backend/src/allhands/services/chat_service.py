@@ -120,6 +120,7 @@ class ChatService:
         confirmation_repo: ConfirmationRepo | None = None,
         event_repo: ConversationEventRepo | None = None,
         plan_repo: Any = None,
+        user_input_signal: Any = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -166,6 +167,9 @@ class ChatService:
         # ADR 0019 C1 · per-conversation plan persistence. Optional so
         # legacy test constructions (no plan tools exercised) keep working.
         self._plan_repo = plan_repo
+        # ADR 0019 C3 · clarification signal forwarded to AgentRunner
+        # so ask_user_question tool defers via the polling UserInputDeferred.
+        self._user_input_signal = user_input_signal
         # ADR 0017 · append-only event log. The authoritative SoT for
         # conversation history; ``messages`` table becomes a projection
         # cache. None keeps pre-ADR-0017 tests compiling — when unset the
@@ -630,6 +634,7 @@ class ChatService:
             model_ref_override=effective_model_ref,
             plan_repo=self._plan_repo,
             conversation_id=conversation_id,
+            user_input_signal=self._user_input_signal,
         )
         # ADR 0017 · per-turn thread_id. Claude Code invariant (V02 § 1.3):
         # each query() gets a fresh in-memory messages array; there's no
@@ -1161,6 +1166,7 @@ class ChatService:
                 # service knows the conversation it's targeting and can
                 # supply it through the runner kwargs path if needed.
                 plan_repo=self._plan_repo,
+                user_input_signal=self._user_input_signal,
             )
 
         return factory

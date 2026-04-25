@@ -7,6 +7,12 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from allhands.core import Tool
     from allhands.execution.registry import ToolExecutor, ToolRegistry
+from allhands.execution.tools.builtin.ask_user_question import (
+    TOOL as ASK_USER_QUESTION_TOOL,
+)
+from allhands.execution.tools.builtin.ask_user_question import (
+    execute as ask_user_question_execute,
+)
 from allhands.execution.tools.builtin.fetch_url import TOOL as FETCH_URL_TOOL
 from allhands.execution.tools.builtin.fetch_url import execute as fetch_url_execute
 from allhands.execution.tools.builtin.write_file import TOOL as WRITE_FILE_TOOL
@@ -130,6 +136,7 @@ def discover_builtin_tools(
 
     registry.register(FETCH_URL_TOOL, fetch_url_execute)
     registry.register(WRITE_FILE_TOOL, write_file_execute)
+    registry.register(ASK_USER_QUESTION_TOOL, ask_user_question_execute)
     for tool, executor in _RENDER_TOOLS:
         registry.register(tool, executor)
     for meta_tool, meta_executor in _META_TOOLS_WITH_EXECUTORS:

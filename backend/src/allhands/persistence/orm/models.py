@@ -163,6 +163,20 @@ class ConfirmationRow(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
 
+class UserInputRow(Base):
+    """ADR 0019 C3 · clarification request persistence (ask_user_question)."""
+
+    __tablename__ = "user_inputs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tool_call_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    questions_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    answers_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
 class LLMProviderRow(Base):
     __tablename__ = "llm_providers"
 
