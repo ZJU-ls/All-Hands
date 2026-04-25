@@ -69,15 +69,23 @@ class LLMModelService:
         name: str,
         display_name: str = "",
         context_window: int = 0,
+        max_input_tokens: int | None = None,
+        max_output_tokens: int | None = None,
     ) -> LLMModel | None:
-        # I-0002: a zero / negative context window cascades into garbage
-        # downstream — the Agent's token budget becomes `ctx - max_output`
-        # which is negative, and the UI shows "0 tokens". Force a positive
-        # integer at the service boundary so bad values never reach the DB.
-        if context_window <= 0:
+        # 2026-04-25: token caps are optional advanced settings. Registration
+        # only requires (provider, name) — caps default to None ("use model
+        # default") and the composer falls back to a sane denominator. Reject
+        # negative caps explicitly so bad values can't reach the DB; zero is
+        # treated as "unset" to keep CSV bulk-import scripts simple.
+        if context_window < 0:
+            raise ModelConfigError(f"context_window must be >= 0 (got {context_window}).")
+        if max_input_tokens is not None and max_input_tokens <= 0:
             raise ModelConfigError(
-                f"context_window must be > 0 (got {context_window}); "
-                "provide the model's real context window (e.g. 128000)."
+                f"max_input_tokens must be > 0 when provided (got {max_input_tokens})."
+            )
+        if max_output_tokens is not None and max_output_tokens <= 0:
+            raise ModelConfigError(
+                f"max_output_tokens must be > 0 when provided (got {max_output_tokens})."
             )
         provider = await self._providers.get(provider_id)
         if provider is None:
@@ -88,6 +96,8 @@ class LLMModelService:
             name=name,
             display_name=display_name or name,
             context_window=context_window,
+            max_input_tokens=max_input_tokens,
+            max_output_tokens=max_output_tokens,
         )
         return await self._models.upsert(model)
 
@@ -107,10 +117,20 @@ class LLMModelService:
         name: str | None = None,
         display_name: str | None = None,
         context_window: int | None = None,
+        max_input_tokens: int | None = None,
+        max_output_tokens: int | None = None,
         enabled: bool | None = None,
     ) -> LLMModel | None:
-        if context_window is not None and context_window <= 0:
-            raise ModelConfigError(f"context_window must be > 0 (got {context_window}).")
+        if context_window is not None and context_window < 0:
+            raise ModelConfigError(f"context_window must be >= 0 (got {context_window}).")
+        if max_input_tokens is not None and max_input_tokens <= 0:
+            raise ModelConfigError(
+                f"max_input_tokens must be > 0 when provided (got {max_input_tokens})."
+            )
+        if max_output_tokens is not None and max_output_tokens <= 0:
+            raise ModelConfigError(
+                f"max_output_tokens must be > 0 when provided (got {max_output_tokens})."
+            )
         model = await self._models.get(model_id)
         if model is None:
             return None
@@ -121,6 +141,8 @@ class LLMModelService:
                     "name": name,
                     "display_name": display_name,
                     "context_window": context_window,
+                    "max_input_tokens": max_input_tokens,
+                    "max_output_tokens": max_output_tokens,
                     "enabled": enabled,
                 }.items()
                 if v is not None

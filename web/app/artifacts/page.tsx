@@ -8,13 +8,14 @@
  * the list.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Select } from "@/components/ui/Select";
 import { LoadingState, ErrorState } from "@/components/state";
 import { ArtifactList } from "@/components/artifacts/ArtifactList";
+import { ArtifactGrid } from "@/components/artifacts/ArtifactGrid";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
 import {
   artifactStreamUrl,
@@ -83,6 +84,17 @@ export default function ArtifactsGlobalPage() {
   const [q, setQ] = useState("");
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>("all");
+  // localStorage-backed view mode · sticks across page visits so the user's
+  // preferred density stays put. SSR-safe: lazy initial.
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    if (typeof window === "undefined") return "list";
+    return (localStorage.getItem("allhands.artifacts.viewMode") as "list" | "grid" | null) ?? "list";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("allhands.artifacts.viewMode", viewMode);
+    }
+  }, [viewMode]);
 
   const createdAfter = useMemo(() => {
     if (dateRange === "all") return undefined;
@@ -99,6 +111,62 @@ export default function ArtifactsGlobalPage() {
     setPinnedOnly(false);
     setDateRange("all");
   }
+
+  // Keyboard navigation · j/k (or ↓/↑) move selection through the visible
+  // list, Enter is a no-op since selecting already opens detail (the right
+  // pane subscribes to selectedId), / focuses the search input, Esc clears
+  // search when focused or otherwise drops selection. Same shortcuts that
+  // power Linear's issue list / GitHub's PR list — keyboard-first users
+  // get full coverage without touching the mouse.
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    function isTypingTarget(el: EventTarget | null): boolean {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        el.isContentEditable
+      );
+    }
+    function onKey(e: KeyboardEvent) {
+      // `/` focuses search · always honored, even from inside other inputs
+      // would be too invasive · skip when already typing somewhere.
+      if (e.key === "/" && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      // Esc · if search is focused, blur + clear; else drop selection.
+      if (e.key === "Escape") {
+        if (document.activeElement === searchInputRef.current) {
+          if (q) setQ("");
+          else searchInputRef.current?.blur();
+        } else if (selectedId) {
+          setSelectedId(null);
+        }
+        return;
+      }
+      // j/k or arrow up/down · skip when typing.
+      if (isTypingTarget(e.target)) return;
+      const isDown = e.key === "j" || e.key === "ArrowDown";
+      const isUp = e.key === "k" || e.key === "ArrowUp";
+      if (!isDown && !isUp) return;
+      if (items.length === 0) return;
+      e.preventDefault();
+      const currentIdx = selectedId
+        ? items.findIndex((a) => a.id === selectedId)
+        : -1;
+      const nextIdx = isDown
+        ? Math.min(items.length - 1, currentIdx + 1)
+        : Math.max(0, currentIdx - 1);
+      const next = items[nextIdx === -1 ? 0 : nextIdx];
+      if (next) setSelectedId(next.id);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [items, selectedId, q]);
 
   // Refetch list when filters move; throttled-by-React-batch is fine here.
   useEffect(() => {
@@ -183,7 +251,12 @@ export default function ArtifactsGlobalPage() {
           onPickKind={(k) => setKind(k === kind ? "" : k)}
         />
 
-        {/* Filter row · search + Select + range pills + pinned toggle + count */}
+        {/* Sticky toolbar · filter row + active-chip strip in one band that
+            sticks at top while scrolling so search/filters stay reachable
+            after the hero scrolls away. The `-mx-6 px-6` extends the band
+            edge-to-edge under the page padding; backdrop-blur softens the
+            content scrolling underneath. z-10 keeps it above chart fills. */}
+        <div className="sticky top-0 z-10 -mx-6 border-y border-border bg-bg/80 px-6 py-2 backdrop-blur-md">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[240px]">
             <Icon
@@ -192,11 +265,20 @@ export default function ArtifactsGlobalPage() {
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
             />
             <input
+              ref={searchInputRef}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t("search")}
-              className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+              className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-12 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
             />
+            {!q ? (
+              <kbd
+                aria-hidden
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-text-subtle"
+              >
+                {t("kbd.search")}
+              </kbd>
+            ) : null}
             {q ? (
               <button
                 type="button"
@@ -244,37 +326,94 @@ export default function ArtifactsGlobalPage() {
             {t("filters.pinnedOnly")}
           </button>
 
-          <span className="ml-auto font-mono text-[11px] text-text-subtle">
+          {/* List / grid view toggle · localStorage-backed so the user's
+              density preference sticks across visits. */}
+          <div className="ml-auto inline-flex h-9 items-center rounded-xl border border-border bg-surface p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              aria-pressed={viewMode === "list"}
+              aria-label={t("view.listAria")}
+              title={t("view.list")}
+              className={`inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[12px] transition-colors duration-fast ${
+                viewMode === "list"
+                  ? "bg-primary-muted text-primary"
+                  : "text-text-muted hover:text-text"
+              }`}
+            >
+              <Icon name="list" size={12} />
+              <span className="hidden md:inline">{t("view.list")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              aria-pressed={viewMode === "grid"}
+              aria-label={t("view.gridAria")}
+              title={t("view.grid")}
+              className={`inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[12px] transition-colors duration-fast ${
+                viewMode === "grid"
+                  ? "bg-primary-muted text-primary"
+                  : "text-text-muted hover:text-text"
+              }`}
+            >
+              <Icon name="layout-grid" size={12} />
+              <span className="hidden md:inline">{t("view.grid")}</span>
+            </button>
+          </div>
+
+          <span className="font-mono text-[11px] text-text-subtle">
             {t("count", { n: items.length })}
           </span>
         </div>
 
         {/* Active filter chip strip · removable individual chips + clear-all
-            button. Only renders when at least one filter is active. */}
+            button. Only renders when at least one filter is active. Lives
+            inside the sticky toolbar so chips stay glued under the filter
+            row even after scrolling. */}
         {hasActiveFilters ? (
-          <ActiveFilterChips
-            t={t}
-            q={q}
-            kind={kind}
-            pinnedOnly={pinnedOnly}
-            dateRange={dateRange}
-            onClearQ={() => setQ("")}
-            onClearKind={() => setKind("")}
-            onClearPinned={() => setPinnedOnly(false)}
-            onClearDate={() => setDateRange("all")}
-            onClearAll={clearAllFilters}
-          />
+          <div className="mt-2">
+            <ActiveFilterChips
+              t={t}
+              q={q}
+              kind={kind}
+              pinnedOnly={pinnedOnly}
+              dateRange={dateRange}
+              onClearQ={() => setQ("")}
+              onClearKind={() => setKind("")}
+              onClearPinned={() => setPinnedOnly(false)}
+              onClearDate={() => setDateRange("all")}
+              onClearAll={clearAllFilters}
+            />
+          </div>
         ) : null}
+        </div>
 
-        {/* List + detail · stays as 4/8 split on lg */}
+        {/* List + detail · proportions vary by view mode:
+              · list  · sidebar 4/12  · detail 8/12   (dense)
+              · grid  · gallery 8/12  · detail 4/12   (gallery-first)
+                  if nothing selected, gallery takes all 12 cols */}
         <div className="grid min-h-[60vh] flex-1 grid-cols-12 gap-4">
-          <aside className="col-span-12 overflow-y-auto rounded-xl border border-border bg-surface lg:col-span-4 xl:col-span-3">
+          <aside
+            className={
+              viewMode === "list"
+                ? "col-span-12 overflow-y-auto rounded-xl border border-border bg-surface lg:col-span-4 xl:col-span-3"
+                : selectedId
+                ? "col-span-12 overflow-y-auto rounded-xl border border-border bg-surface lg:col-span-8"
+                : "col-span-12 overflow-y-auto rounded-xl border border-border bg-surface"
+            }
+          >
             {state === "loading" ? (
               <LoadingState title={t("title")} description={t("subtitle")} />
             ) : state === "error" && error ? (
               <ErrorState title={t("loadFailed", { error })} />
             ) : items.length === 0 ? (
               <EmptyList q={q} kind={kind} t={t} />
+            ) : viewMode === "grid" ? (
+              <ArtifactGrid
+                artifacts={items}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
             ) : (
               <ArtifactList
                 artifacts={items}
@@ -284,13 +423,21 @@ export default function ArtifactsGlobalPage() {
             )}
           </aside>
 
-          <main className="col-span-12 overflow-hidden rounded-xl border border-border bg-surface lg:col-span-8 xl:col-span-9">
-            {selectedId ? (
-              <ArtifactDetail artifactId={selectedId} />
-            ) : (
-              <DetailPlaceholder t={t} />
-            )}
-          </main>
+          {(viewMode === "list" || selectedId) && (
+            <main
+              className={
+                viewMode === "list"
+                  ? "col-span-12 overflow-hidden rounded-xl border border-border bg-surface lg:col-span-8 xl:col-span-9"
+                  : "col-span-12 overflow-hidden rounded-xl border border-border bg-surface lg:col-span-4"
+              }
+            >
+              {selectedId ? (
+                <ArtifactDetail artifactId={selectedId} />
+              ) : (
+                <DetailPlaceholder t={t} />
+              )}
+            </main>
+          )}
         </div>
       </div>
     </AppShell>

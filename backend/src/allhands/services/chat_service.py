@@ -586,6 +586,16 @@ class ChatService:
         resolved = await self.resolve_model_for_conversation(conv, employee)
         provider = resolved.provider if resolved is not None else None
         effective_model_ref = resolved.ref if resolved is not None else conv.model_ref_override
+        # 2026-04-25 · per-model output cap. If the registered LLMModel has
+        # max_output_tokens set, thread it into AgentLoop so build_llm bakes
+        # it into the LangChain ctor (Anthropic's max_tokens is ctor-time
+        # only). None when not registered or not configured → stay opt-in.
+        effective_max_output_tokens: int | None = None
+        if resolved is not None and self._models is not None:
+            for m in await self._models.list_all():
+                if m.provider_id == resolved.provider.id and m.name == resolved.model_name:
+                    effective_max_output_tokens = m.max_output_tokens
+                    break
 
         if first_message_for_title:
             await self._maybe_llm_title(conv, user_content, employee, provider, effective_model_ref)
@@ -662,6 +672,7 @@ class ChatService:
             conversation_id=conversation_id,
             user_input_signal=self._user_input_signal,
             run_id=run_id,
+            max_output_tokens=effective_max_output_tokens,
         )
         # ADR 0017 · per-turn thread_id. Claude Code invariant (V02 § 1.3):
         # each query() gets a fresh in-memory messages array; there's no

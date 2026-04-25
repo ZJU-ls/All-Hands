@@ -14,6 +14,7 @@ import { useChatStore } from "@/lib/store";
 import type { Message } from "@/lib/protocol";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
+import { formatTokens } from "@/lib/format";
 
 /**
  * UsageChip · context accounting for the chat composer (Track ε).
@@ -61,11 +62,6 @@ function estimateTokens(messages: Message[]): number {
   return Math.round(chars / CHARS_PER_TOKEN);
 }
 
-function formatK(n: number): string {
-  if (n < 1000) return `${n}`;
-  return `${(n / 1000).toFixed(1)}k`;
-}
-
 function resolveContextWindow(
   modelRef: string,
   providers: ProviderDto[],
@@ -81,8 +77,14 @@ function resolveContextWindow(
   const model = models.find(
     (m) => m.provider_id === provider.id && m.name === modelName,
   );
-  if (!model || !model.context_window) return FALLBACK_CONTEXT_WINDOW;
-  return model.context_window;
+  if (!model) return FALLBACK_CONTEXT_WINDOW;
+  // Priority: explicit max_input_tokens (user's "real prompt budget") wins
+  // over the conflated context_window total. context_window is fallback when
+  // the user only set the total. Both null/0 → FALLBACK so the bar still
+  // renders something usable instead of vanishing.
+  if (model.max_input_tokens && model.max_input_tokens > 0) return model.max_input_tokens;
+  if (model.context_window > 0) return model.context_window;
+  return FALLBACK_CONTEXT_WINDOW;
 }
 
 function toMessage(dto: ChatMessageDto): Message {
@@ -192,7 +194,7 @@ export function UsageChip({ conversationId, employeeModelRef, disabled }: Props)
         <Icon name="activity" size={10} />
       </span>
       <span className={tierTextClass}>
-        {formatK(usedTokens)}/{formatK(window)}
+        {formatTokens(usedTokens)}/{formatTokens(window)}
       </span>
       {showCompact && (
         <button
