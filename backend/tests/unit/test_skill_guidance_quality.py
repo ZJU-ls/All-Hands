@@ -30,12 +30,20 @@ NEW_PACKS = (
     "market_data",
     "observatory",
     "review_gates",
-    # 2026-04-26 round-17 升格的 5 个老 admin 包(原本格式不统一)
+    # 2026-04-26 round-17 升格的 5 个老 admin 包
     "team_management",
     "model_management",
     "skill_management",
     "mcp_management",
     "cockpit_admin",
+    # 2026-04-26 round-21 升格的剩余 7 个常用 pack
+    "artifacts",
+    "render",
+    "planner",
+    "kb_researcher",
+    "stock_assistant",
+    "executor-spawn",
+    "drawio-creator",
 )
 
 SKILLS_ROOT = Path(__file__).resolve().parents[2] / "skills" / "builtin"

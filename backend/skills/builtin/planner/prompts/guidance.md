@@ -5,7 +5,7 @@
 用户在 ProgressPanel 上看实时进度,但**不需要审批**。设计参考 Claude Code
 的 TodoWrite,Anthropic Agent SDK 的官方契约。
 
-## 何时用
+## 何时调用 · 何时用
 
 主动激活 `update_plan` 的时机:
 
@@ -15,7 +15,7 @@
 4. 用户明确让你"做个计划 / 列个 todo / show 你的计划能力"
 5. 收到新指令后
 
-## 何时**不用**
+## 不要用 · 常见坑 ·
 
 - 单步任务("现在几点 / 帮我翻译这句话 / 解释这段代码")
 - 1-2 个动作就能搞定的琐事
@@ -130,3 +130,18 @@ update_plan(todos=[
 不是看你说。
 
 ❌ 错误 5:为单步任务用 update_plan —— "解释这段代码"不需要 plan,直接答。
+
+## 典型工作流 · TLDR
+
+1. 任务 ≥ 3 步 → 第一轮就 `update_plan` 全量 todos · 第 1 步标 in_progress
+2. 每完成一步,同一次 `update_plan` 把 N 标 completed · N+1 标 in_progress
+3. 真的全完了 → 最后一次 `update_plan` 把所有都标 completed
+
+## 失败时怎么办
+
+| 现象 | 做什么 |
+|---|---|
+| executor 拒「2 个 in_progress」 | 检查 todos · 同时刻只能 1 个 in_progress |
+| 被卡住但用户在等 | 别 mark completed · 留 in_progress + 加 pending todo 描述 blocker |
+| 自己忘了进度 | 调 `view_plan()` 拉一次 · 但正常情况 ProgressPanel 已显示 |
+| 用户说「这个不算完」 | 把那一步从 completed 改回 in_progress · 加补救 todo |
