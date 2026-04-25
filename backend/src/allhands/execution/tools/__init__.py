@@ -28,6 +28,7 @@ from allhands.execution.tools.meta.employee_tools import (
     CREATE_EMPLOYEE_TOOL,
     execute_create_employee,
 )
+from allhands.execution.tools.meta.knowledge_tools import ALL_KB_META_TOOLS
 from allhands.execution.tools.meta.market_tools import (  # single-line register: Wave 2 market-data
     ALL_MARKET_META_TOOLS,
 )
@@ -169,6 +170,7 @@ def discover_builtin_tools(
         *ALL_STOCK_ASSISTANT_TOOLS,  # single-line register: Wave 2 stock-assistant
         *ALL_REVIEW_META_TOOLS,
         *ALL_OBSERVATORY_META_TOOLS,
+        *ALL_KB_META_TOOLS,
     ):
         if tool.id in _META_EXECUTOR_TOOL_IDS:
             continue

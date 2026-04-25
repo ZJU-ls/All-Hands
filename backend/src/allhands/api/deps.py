@@ -72,15 +72,17 @@ def get_tool_registry() -> ToolRegistry:
     # update / delete / market browse). These factories live in ``api/``
     # because they close over SkillService; the execution layer is
     # forbidden from importing services/ by the import-linter contract.
+    from allhands.api.knowledge_executors import kb_executors_for
     from allhands.api.skill_executors import build_skill_management_executors
+    from allhands.services.knowledge_service import KnowledgeService
 
     maker = get_sessionmaker()
     reg = ToolRegistry()
-    discover_builtin_tools(
-        reg,
-        session_maker=maker,
-        extra_executors=build_skill_management_executors(maker),
-    )
+    extras = {
+        **build_skill_management_executors(maker),
+        **kb_executors_for(KnowledgeService(maker)),
+    }
+    discover_builtin_tools(reg, session_maker=maker, extra_executors=extras)
     return reg
 
 
