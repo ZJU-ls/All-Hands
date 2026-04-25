@@ -142,6 +142,21 @@
     "autoTitleSaving": "保存中…",
     "autoTitleError": "保存失败,请重试",
     "footnote": "更多偏好项(时区、快捷键覆盖、AP 长循环预算等)即将加入。主题切换仍在右上角 sun/moon 按钮。",
+    "storage": {
+      "title": "存储位置",
+      "subtitle": "运行时实际使用的磁盘路径 · 修改需在 .env 设环境变量后重启后端 · 桌面壳上线后会支持原地迁移",
+      "loading": "正在读取路径…",
+      "loadFailed": "路径加载失败:{error}",
+      "notSet": "(未配置)",
+      "readonly": "只读",
+      "copy": "复制",
+      "copied": "已复制",
+      "copyTitle": "复制完整路径到剪贴板",
+      "open": "打开",
+      "opened": "已打开",
+      "openTitle": "在文件管理器中打开(仅桌面壳支持 · 浏览器下退化为复制)",
+      "footnote": "覆盖路径:在 .env 设置 ALLHANDS_DATA_DIR / ALLHANDS_SKILLS_DIR / ALLHANDS_ARTIFACTS_DIR 后重启后端 · 现有数据需要手动 mv 过去。"
+    },
     "cards": {
       "providers": {
         "title": "供应商",

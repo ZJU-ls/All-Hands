@@ -101,7 +101,9 @@
     "ttft": "首词",
     "ttftThinking": "思考首词",
     "ttftAnswer": "答案首词",
-    "tokIO": "词数 输/出/合",
+    "tokInput": "输入词数",
+    "tokOutput": "输出词数",
+    "tokTotal": "总词数",
     "tokPerSec": "词/秒"
   }
 }
