@@ -100,11 +100,11 @@ PING_MODEL_TOOL = Tool(
     kind=ToolKind.META,
     name="ping_model",
     description=(
-        "Fast connectivity + health ping for a single model. Sends one "
-        "`ping` prompt with max_tokens=4 and a short timeout, then returns "
-        "`{ok, model, latency_ms, error?, error_category?}`. Use this to "
-        "probe whether a registered (provider, model) pair is reachable "
-        "before a full chat test."
+        "Two-layer health probe. Returns `{endpoint, model_probe, status, "
+        "ok, latency_ms, ...}`: endpoint = GET /v1/models reach + auth, "
+        "model_probe = minimal chat call (max_tokens=1) classified by "
+        "whitelist (only network/auth/model_not_found mark unusable; "
+        "400/429/5xx still count as connected). Use before a full chat test."
     ),
     input_schema=_MODEL_ID_REQUIRED,
     output_schema={"type": "object"},

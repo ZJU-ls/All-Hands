@@ -1,21 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useChatStore } from "@/lib/store";
 import { resolveConfirmation } from "@/lib/api";
 import { Icon } from "@/components/ui/icon";
+import { useDismissOnEscape } from "@/lib/use-dismiss-on-escape";
 
 export function ConfirmationDialog() {
   const { pendingConfirmations, removeConfirmation } = useChatStore();
   const [loading, setLoading] = useState(false);
 
   const current = pendingConfirmations[0];
-  if (!current) return null;
 
   // Capture in local const so TypeScript knows it's defined inside the async closure
   const conf = current;
 
   async function handle(decision: "approve" | "reject") {
+    if (!conf) return;
     setLoading(true);
     try {
       // ADR 0018 · single round-trip resume.
@@ -35,6 +36,19 @@ export function ConfirmationDialog() {
       setLoading(false);
     }
   }
+
+  // ESC = 显式 reject — 跟全局对话框契约对齐(ConfirmDialog / Modal 都是 ESC 取消)。
+  // 这里把 ESC 视作"我不同意",而非简单关闭,因为 confirmation gate 必须有
+  // 明确决策才能让挂起的 turn 继续。loading 中(请求飞着)则忽略。
+  const handleEscape = useCallback(() => {
+    if (loading) return;
+    void handle("reject");
+    // handle 是稳定的闭包,但 React 不会知道;依赖列表加 conf 即可。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, conf]);
+  useDismissOnEscape(Boolean(current), handleEscape);
+
+  if (!current) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">

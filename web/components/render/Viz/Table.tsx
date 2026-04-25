@@ -3,6 +3,15 @@
 import { useMemo, useState } from "react";
 import type { RenderProps } from "@/lib/component-registry";
 import { Icon } from "@/components/ui/icon";
+import {
+  SearchInput,
+  matchesQuery,
+} from "@/components/render/_shared/SearchInput";
+import {
+  Toolbar,
+  SegmentedControl,
+} from "@/components/render/_shared/Toolbar";
+import { CopyButton } from "@/components/render/_shared/CopyButton";
 
 type Column = {
   key: string;
@@ -13,12 +22,17 @@ type Column = {
 
 type Row = Record<string, unknown>;
 
+type Density = "cozy" | "compact";
+
 /**
  * Brand-Blue V2 (ADR 0016) · data table.
  *
- * Shell: rounded-xl + border + bg-surface + shadow-soft-sm
- * Header: bg-surface-2/60 · font-mono · uppercase · wide tracking · text-caption
- * Rows: border-b · hover:bg-surface-2/40 · numeric columns auto-right
+ * Interactions (2026-04-25 · whole-row interactions sweep):
+ *   - sort by column · click header (asc/desc/clear cycle)
+ *   - free-text filter · matches across all columns
+ *   - density toggle · cozy / compact
+ *   - copy as CSV · entire visible table
+ *   - auto-right-align numeric columns
  */
 export function Table({ props }: RenderProps) {
   const rawColumns = props.columns;
@@ -31,14 +45,25 @@ export function Table({ props }: RenderProps) {
   }, [rawColumns]);
   const rawRowsRaw = Array.isArray(props.rows) ? (props.rows as Row[]) : undefined;
   const caption = typeof props.caption === "string" ? props.caption : undefined;
+  const title = typeof props.title === "string" ? props.title : undefined;
 
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
+  const [query, setQuery] = useState("");
+  const [density, setDensity] = useState<Density>("cozy");
+
+  // Filter first · then sort · so result counts reflect the visible set.
+  const filteredRows = useMemo(() => {
+    const all = rawRowsRaw ?? [];
+    if (!query) return all;
+    return all.filter((row) =>
+      columns.some((c) => matchesQuery(row[c.key], query)),
+    );
+  }, [rawRowsRaw, columns, query]);
 
   const rows = useMemo(() => {
-    const rawRows = rawRowsRaw ?? [];
-    if (!sortKey) return rawRows;
-    const out = [...rawRows];
+    if (!sortKey) return filteredRows;
+    const out = [...filteredRows];
     out.sort((a, b) => {
       const av = a[sortKey];
       const bv = b[sortKey];
@@ -49,11 +74,17 @@ export function Table({ props }: RenderProps) {
       return 0;
     });
     return out;
-  }, [rawRowsRaw, sortKey, sortAsc]);
+  }, [filteredRows, sortKey, sortAsc]);
 
   function toggleSort(key: string) {
     if (sortKey === key) {
-      setSortAsc((v) => !v);
+      // asc → desc → clear
+      if (sortAsc) {
+        setSortAsc(false);
+      } else {
+        setSortKey(null);
+        setSortAsc(true);
+      }
     } else {
       setSortKey(key);
       setSortAsc(true);
@@ -84,10 +115,46 @@ export function Table({ props }: RenderProps) {
     return c.align ?? autoAlign.get(c.key) ?? "left";
   }
 
+  // Build CSV of currently-visible rows · respects sort + filter.
+  const csv = useMemo(() => {
+    const escape = (v: unknown): string => {
+      if (v == null) return "";
+      const s = String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = columns.map((c) => escape(c.label)).join(",");
+    const body = rows
+      .map((r) => columns.map((c) => escape(r[c.key])).join(","))
+      .join("\n");
+    return body ? `${header}\n${body}` : header;
+  }, [columns, rows]);
+
+  const cellPadding = density === "compact" ? "px-2.5 py-1" : "px-3 py-2";
+  const totalRows = rawRowsRaw?.length ?? 0;
+  const filteredHint =
+    query && rows.length !== totalRows
+      ? `${rows.length}/${totalRows}`
+      : undefined;
+
   return (
-    <div
-      className="rounded-xl border border-border bg-surface overflow-hidden shadow-soft-sm animate-fade-up"
-    >
+    <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-soft-sm animate-fade-up">
+      <Toolbar title={title}>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="筛选行…"
+          hint={filteredHint}
+        />
+        <SegmentedControl<Density>
+          value={density}
+          onChange={setDensity}
+          options={[
+            { key: "cozy", label: "宽" },
+            { key: "compact", label: "紧" },
+          ]}
+        />
+        <CopyButton value={csv} label="复制为 CSV" />
+      </Toolbar>
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
@@ -98,7 +165,7 @@ export function Table({ props }: RenderProps) {
                 return (
                   <th
                     key={c.key}
-                    className="sticky top-0 px-3 py-2 text-caption font-mono font-semibold uppercase tracking-[0.18em] bg-surface-2/60 text-text-muted border-b border-border"
+                    className={`sticky top-0 ${cellPadding} text-caption font-mono font-semibold uppercase tracking-[0.18em] bg-surface-2/60 text-text-muted border-b border-border`}
                     style={{ width: c.width, textAlign: align }}
                   >
                     <button
@@ -139,7 +206,7 @@ export function Table({ props }: RenderProps) {
                   return (
                     <td
                       key={c.key}
-                      className={`px-3 py-2 border-b border-border ${
+                      className={`${cellPadding} border-b border-border ${
                         isNumeric
                           ? "font-mono tabular-nums text-text"
                           : "text-text"
@@ -162,7 +229,7 @@ export function Table({ props }: RenderProps) {
                   colSpan={columns.length}
                   className="px-3 py-6 text-center text-caption text-text-muted"
                 >
-                  No rows
+                  {query ? "没有匹配的行" : "No rows"}
                 </td>
               </tr>
             )}
