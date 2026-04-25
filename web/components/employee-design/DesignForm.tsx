@@ -355,22 +355,24 @@ export function DesignForm({
             </button>
           </div>
         </div>
+        {/* Both views share the same height so the page doesn't jump when
+            the user toggles. 320px = the textarea's natural rows={10}
+            after the 12px / 1.65 line-height we picked for ah-prose-sm. */}
         {promptView === "edit" ? (
           <textarea
             ref={textareaRef}
             data-testid="field-system-prompt"
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
-            rows={8}
             placeholder="员工性格 / 风格 / 禁止事项"
             disabled={composeState === "loading"}
-            className="w-full rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-70 transition-colors duration-base"
+            className="w-full h-[320px] resize-none rounded-md bg-bg border border-border px-3 py-2 text-[12px] leading-[1.65] text-text placeholder-text-subtle focus:outline-none focus:border-primary disabled:opacity-70 transition-colors duration-base"
           />
         ) : (
           <div
             ref={previewRef}
             data-testid="prompt-preview"
-            className="w-full min-h-[180px] max-h-[400px] overflow-y-auto rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text"
+            className="w-full h-[320px] overflow-y-auto rounded-md bg-bg border border-border px-3 py-2 text-[12px] text-text"
           >
             {systemPrompt ? (
               <AgentMarkdown
