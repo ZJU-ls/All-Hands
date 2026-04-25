@@ -77,7 +77,11 @@
       "ping": "ping",
       "chatTest": "Chat test",
       "edit": "Edit model",
-      "delete": "Delete"
+      "delete": "Delete",
+      "defaultBadge": "Default",
+      "defaultBadgeTitle": "Workspace default model · Lead Agent and AI explainer route through this (provider, model) pair",
+      "setDefault": "Set as default",
+      "setDefaultTitle": "Set as the workspace default (provider + model both switch)"
     },
     "modelTest": {
       "errorTimeout": "Timeout",

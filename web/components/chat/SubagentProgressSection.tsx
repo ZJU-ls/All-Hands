@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 import { TRACE_QUERY_KEY } from "@/components/runs/TraceChip";
@@ -21,6 +22,7 @@ const STORAGE_KEY = "allhands.progress.subagent.expanded";
 type Props = { subagents: ActiveSubagent[] };
 
 export function SubagentProgressSection({ subagents }: Props) {
+  const t = useTranslations("chat.subagent");
   const [expanded, setExpanded] = useState<boolean>(true);
   const router = useRouter();
   const pathname = usePathname();
@@ -75,12 +77,12 @@ export function SubagentProgressSection({ subagents }: Props) {
           <Icon name="users" size={11} />
         </span>
         <span className="min-w-0 flex-1 text-[12.5px] font-semibold text-text">
-          活跃子代理
+          {t("title")}
         </span>
         <span className="shrink-0 font-mono text-[11px] text-text-muted">
           {subagents.length}
           {running > 0 && (
-            <span className="ml-1.5 text-primary">· {running} running</span>
+            <span className="ml-1.5 text-primary">{t("runningCount", { n: running })}</span>
           )}
         </span>
       </button>
@@ -110,7 +112,7 @@ export function SubagentProgressSection({ subagents }: Props) {
                   data-testid={`subagent-trace-${s.toolCallId}`}
                   className="shrink-0 rounded-md border border-primary/30 bg-primary-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-primary transition-colors duration-fast hover:bg-primary-muted hover:border-primary/50"
                 >
-                  查看链路 ↗
+                  {t("viewTrace")}
                 </button>
               ) : (
                 <span className="w-[68px] shrink-0" aria-hidden />

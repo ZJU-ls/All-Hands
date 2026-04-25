@@ -111,14 +111,15 @@ export function MessageBubble({ message, isStreaming }: Props) {
 }
 
 function InterruptedTail() {
+  const t = useTranslations("chat.messageBubble");
   return (
     <div
       data-testid="message-interrupted-tail"
       className="mt-3 flex items-center gap-1.5 border-t border-dashed border-warning/30 pt-2 text-[11px] text-warning"
-      title="该回复未完成 — 用户中止 / 网络断开 / 后端错误。已保留中断前的内容。"
+      title={t("interruptedTitle")}
     >
       <Icon name="alert-triangle" size={11} strokeWidth={2} />
-      <span>已中止 · 内容不完整</span>
+      <span>{t("interrupted")}</span>
     </div>
   );
 }
@@ -229,6 +230,7 @@ function LegacyAgentBody({
   message: Message;
   showCursor: boolean;
 }) {
+  const t = useTranslations("chat.messageBubble");
   // Mid-stream the model can call several tools in a row without emitting any
   // text. Without an indicator the bubble collapses to a thin tool-chip strip,
   // reading as "broken / empty" — show a small typing pulse next to the
@@ -255,7 +257,7 @@ function LegacyAgentBody({
             <BubbleDot delay={160} />
             <BubbleDot delay={320} />
           </span>
-          <span>正在执行工具…</span>
+          <span>{t("toolPulse")}</span>
         </div>
       )}
       {message.tool_calls.length > 0 && (
