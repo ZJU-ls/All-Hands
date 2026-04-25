@@ -54,6 +54,10 @@ const KIND_ICON: Record<ArtifactKind, IconName> = {
   mermaid: "activity",
   drawio: "layout-grid",
   pptx: "file",
+  pdf: "file",
+  xlsx: "file",
+  csv: "file",
+  docx: "file",
   video: "play-circle",
 };
 

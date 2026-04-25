@@ -56,10 +56,7 @@ def render_pptx(*, slides: list[Any]) -> tuple[bytes, list[str]]:
             if layout_name == "title":
                 slide = prs.slides.add_slide(title_layout)
                 slide.shapes.title.text = title_text
-                if (
-                    spec.get("subtitle")
-                    and len(slide.placeholders) > 1
-                ):
+                if spec.get("subtitle") and len(slide.placeholders) > 1:
                     slide.placeholders[1].text = str(spec["subtitle"])
             elif layout_name == "bullets":
                 slide = prs.slides.add_slide(bullets_layout)
@@ -87,9 +84,7 @@ def render_pptx(*, slides: list[Any]) -> tuple[bytes, list[str]]:
                 # Image fetch is out of scope (sandbox / network risk);
                 # skipped with a warning so the deck still ships.
                 if spec.get("image_url"):
-                    warnings.append(
-                        f"slides[{idx}] image_url ignored — fetch deferred to v1"
-                    )
+                    warnings.append(f"slides[{idx}] image_url ignored — fetch deferred to v1")
             else:
                 warnings.append(f"slides[{idx}] unknown layout {layout_name!r} — bullets fallback")
                 slide = prs.slides.add_slide(bullets_layout)
@@ -131,9 +126,11 @@ def extract_slide_text(blob: bytes) -> list[dict[str, Any]]:
                 if not text:
                     continue
                 # placeholder index 0 is the title in default layouts
-                if not title and getattr(shape, "is_placeholder", False) and getattr(
-                    shape.placeholder_format, "idx", -1
-                ) == 0:
+                if (
+                    not title
+                    and getattr(shape, "is_placeholder", False)
+                    and getattr(shape.placeholder_format, "idx", -1) == 0
+                ):
                     title = text
                 else:
                     body.append(text)

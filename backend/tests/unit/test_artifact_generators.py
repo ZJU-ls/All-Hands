@@ -27,6 +27,7 @@ def _weasyprint_available() -> bool:
     PDF tests there — the production docker image installs the libs."""
     try:
         import weasyprint  # noqa: F401
+
         return True
     except (ImportError, OSError):
         return False

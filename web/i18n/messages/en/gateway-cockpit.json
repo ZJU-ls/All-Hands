@@ -53,7 +53,8 @@
       "sectionCapability": "Capability",
       "fieldModelName": "Model name (API value)",
       "fieldDisplayName": "Display name (optional)",
-      "fieldContextWindow": "Context window tokens (optional)",
+      "fieldContextWindow": "Context window tokens · prompt + completion (optional)",
+      "fieldContextWindowHint": "Total tokens the model can handle per call (prompt + completion). The composer's budget chip uses this as the denominator: \"input used / context window\". Use the model's documented context window — not the max output cap.",
       "apiKeyShow": "Show API Key",
       "apiKeyHide": "Hide API Key"
     },
