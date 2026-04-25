@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ADR 0018 · Claude Code Loop · 终态化设计速读</title>
+    <style>
+      :root {
+        --bg: #0a0f1c;
+        --surface: #111a2e;
+        --surface-2: #16223c;
+        --surface-3: #1d2c4d;
+        --border: #243152;
+        --border-strong: #324468;
+        --text: #e6edf7;
+        --muted: #8a9bbf;
+        --subtle: #5e7299;
+        --primary: #4f8cff;
+        --primary-soft: rgba(79, 140, 255, 0.18);
+        --success: #34d399;
+        --success-soft: rgba(52, 211, 153, 0.15);
+        --danger: #f87171;
+        --danger-soft: rgba(248, 113, 113, 0.15);
+        --warning: #fbbf24;
+        --warning-soft: rgba(251, 191, 36, 0.15);
+        --accent: #a78bfa;
+        --accent-soft: rgba(167,139,250,0.15);
+        --pink: #f9a8d4;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 40px 24px 80px;
+        background:
+          radial-gradient(1100px 600px at 12% -8%, #1a2748, transparent),
+          radial-gradient(800px 480px at 88% 4%, #2a1d4d, transparent),
+          var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.65;
+      }
+      .wrap { max-width: 1240px; margin: 0 auto; }
+      header { margin-bottom: 36px; }
+      h1 {
+        font-size: 32px; font-weight: 700; margin: 0 0 8px;
+        background: linear-gradient(90deg, #93c5fd, #c4b5fd, #f9a8d4);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        letter-spacing: -0.01em;
+      }
+      .meta { color: var(--muted); font-size: 13px; }
+      .meta code { color: var(--text); font-family: var(--mono); font-size: 12px; padding: 1px 6px; background: var(--surface); border-radius: 4px; }
+      h2 {
+        font-size: 18px; font-weight: 600; margin: 38px 0 14px;
+        padding-left: 12px; border-left: 3px solid var(--primary);
+        display: flex; align-items: baseline; gap: 12px;
+      }
+      h2 .num {
+        font-family: var(--mono); font-size: 11px;
+        color: var(--primary);
+        padding: 2px 8px;
+        background: var(--primary-soft);
+        border-radius: 4px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+      }
+      h3 {
+        font-size: 14px; font-weight: 600; margin: 0 0 10px;
+        color: var(--text);
+      }
+      p { margin: 0 0 10px; }
+      code { font-family: var(--mono); font-size: 12.5px; }
+      pre {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin: 10px 0;
+        overflow-x: auto;
+        font-family: var(--mono); font-size: 12.5px;
+        line-height: 1.55;
+      }
+      pre code { color: var(--text); }
+      .key { color: var(--accent); }
+      .kw { color: var(--pink); }
+      .str { color: var(--success); }
+      .com { color: var(--subtle); font-style: italic; }
+      .num-lit { color: #fbbf24; }
+
+      .lead {
+        background: linear-gradient(135deg, rgba(79,140,255,0.08), rgba(167,139,250,0.06));
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px 24px;
+        font-size: 14.5px;
+      }
+      .lead b { color: #c4b5fd; }
+      .lead.alert {
+        background: linear-gradient(135deg, rgba(167,139,250,0.1), rgba(249,168,212,0.06));
+        border-color: rgba(167,139,250,0.3);
+      }
+
+      .axioms {
+        display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+        margin: 14px 0;
+      }
+      @media (max-width: 1100px) { .axioms { grid-template-columns: repeat(2, 1fr); } }
+      @media (max-width: 600px) { .axioms { grid-template-columns: 1fr; } }
+      .axiom {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        position: relative;
+      }
+      .axiom-num {
+        position: absolute; top: -10px; left: 14px;
+        font-family: var(--mono); font-size: 10px; font-weight: 600;
+        background: var(--primary);
+        color: var(--bg);
+        padding: 2px 8px; border-radius: 4px;
+        letter-spacing: 0.06em;
+      }
+      .axiom h4 {
+        margin: 6px 0 6px; font-size: 13px;
+        color: var(--text); font-weight: 600;
+      }
+      .axiom p {
+        margin: 0; font-size: 12px; color: var(--muted); line-height: 1.55;
+      }
+
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+      @media (max-width: 880px) {
+        .grid2, .grid3 { grid-template-columns: 1fr; }
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px 20px;
+      }
+      .card.bad { border-color: rgba(248,113,113,0.35); background: linear-gradient(180deg, rgba(248,113,113,0.05), var(--surface)); }
+      .card.good { border-color: rgba(52,211,153,0.4); background: linear-gradient(180deg, rgba(52,211,153,0.06), var(--surface)); }
+      .card.note { border-color: rgba(251,191,36,0.4); background: linear-gradient(180deg, rgba(251,191,36,0.05), var(--surface)); }
+      .card.accent { border-color: rgba(167,139,250,0.4); background: linear-gradient(180deg, rgba(167,139,250,0.07), var(--surface)); }
+      .card h3 { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+      .tag {
+        font-family: var(--mono); font-size: 10px;
+        padding: 2px 7px; border-radius: 4px;
+        letter-spacing: 0.05em; text-transform: uppercase;
+      }
+      .tag.bad { background: var(--danger-soft); color: var(--danger); }
+      .tag.good { background: var(--success-soft); color: var(--success); }
+      .tag.note { background: var(--warning-soft); color: var(--warning); }
+      .tag.primary { background: var(--primary-soft); color: var(--primary); }
+      .tag.accent { background: var(--accent-soft); color: var(--accent); }
+
+      ul.bare, ol.bare { margin: 6px 0; padding-left: 20px; }
+      ul.bare li, ol.bare li { margin-bottom: 5px; color: var(--muted); }
+      ul.bare li b, ol.bare li b { color: var(--text); }
+
+      table.compare {
+        width: 100%; border-collapse: collapse;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 10px 0;
+        font-size: 13px;
+      }
+      table.compare th, table.compare td {
+        padding: 10px 14px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid var(--border);
+      }
+      table.compare th {
+        background: var(--surface-2);
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      table.compare td:first-child { font-family: var(--mono); font-size: 12px; color: var(--accent); white-space: nowrap; }
+      table.compare tr:last-child td { border-bottom: none; }
+
+      .pipeline-fig {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px 22px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+      }
+      .pipeline-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; }
+      .pipeline-step {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        padding: 6px 11px;
+        border-radius: 6px;
+        white-space: nowrap;
+      }
+      .pipeline-step.primary { border-color: rgba(79,140,255,0.5); color: var(--primary); }
+      .pipeline-step.warn { border-color: rgba(251,191,36,0.5); color: var(--warning); }
+      .pipeline-step.good { border-color: rgba(52,211,153,0.5); color: var(--success); }
+      .pipeline-step.bad { border-color: rgba(248,113,113,0.5); color: var(--danger); }
+      .pipeline-step.accent { border-color: rgba(167,139,250,0.5); color: var(--accent); }
+      .pipeline-arrow { color: var(--subtle); }
+
+      .deferred-fan {
+        display: grid; grid-template-columns: 1fr; gap: 10px;
+        margin: 14px 0;
+      }
+      .deferred-fan .root {
+        background: linear-gradient(135deg, rgba(167,139,250,0.18), rgba(79,140,255,0.1));
+        border: 1px solid rgba(167,139,250,0.4);
+        border-radius: 10px;
+        padding: 14px 18px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--text);
+        text-align: center;
+      }
+      .deferred-fan .branches {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      }
+      @media (max-width: 880px) { .deferred-fan .branches { grid-template-columns: repeat(2, 1fr); } }
+      .deferred-fan .leaf {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 11px 13px;
+        position: relative;
+      }
+      .deferred-fan .leaf::before {
+        content: ""; position: absolute; left: 50%; top: -10px; width: 1px; height: 10px;
+        background: var(--border-strong);
+      }
+      .deferred-fan .leaf h4 {
+        margin: 0 0 4px; font-size: 12px; color: var(--accent); font-weight: 600;
+      }
+      .deferred-fan .leaf p {
+        margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.5;
+      }
+      .deferred-fan .leaf code { font-size: 11px; }
+
+      .events-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+        margin: 12px 0;
+      }
+      @media (max-width: 880px) { .events-grid { grid-template-columns: 1fr; } }
+      .event-col {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+      .event-col h4 {
+        margin: 0 0 8px;
+        display: flex; align-items: center; gap: 8px;
+        font-size: 13px;
+      }
+      .event-col ul { padding-left: 18px; margin: 6px 0; }
+      .event-col li {
+        font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 4px;
+      }
+      .event-col li b { color: var(--text); font-family: var(--mono); }
+
+      .lifecycle {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px 20px;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      .lifecycle .step-row {
+        display: grid; grid-template-columns: 100px 1fr; gap: 14px; align-items: start;
+        padding: 10px 0;
+        border-bottom: 1px dashed var(--border);
+      }
+      .lifecycle .step-row:last-child { border-bottom: none; }
+      .lifecycle .who {
+        color: var(--subtle); text-transform: uppercase; letter-spacing: 0.06em;
+        font-size: 10.5px; font-weight: 600;
+      }
+      .lifecycle .what { color: var(--text); }
+      .lifecycle .what em { color: var(--accent); font-style: normal; }
+
+      .timeline {
+        margin: 10px 0; padding: 0; list-style: none; counter-reset: phase;
+      }
+      .timeline li {
+        position: relative; padding: 14px 16px 14px 60px;
+        margin-bottom: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        counter-increment: phase;
+      }
+      .timeline li::before {
+        content: "B" counter(phase, decimal);
+        position: absolute; left: 14px; top: 14px;
+        width: 32px; height: 32px;
+        border-radius: 50%;
+        background: var(--primary-soft);
+        color: var(--primary);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 600;
+        display: grid; place-items: center;
+        border: 1px solid rgba(79,140,255,0.3);
+      }
+      .timeline .title {
+        font-weight: 600; color: var(--text); margin-bottom: 4px;
+        display: flex; align-items: center; gap: 10px;
+      }
+      .timeline .desc { color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+
+      .footer-cta {
+        margin-top: 40px;
+        padding: 22px 26px;
+        background: linear-gradient(135deg, rgba(79,140,255,0.1), rgba(167,139,250,0.08));
+        border: 1px solid var(--border-strong);
+        border-radius: 14px;
+      }
+      .footer-cta h2 { margin-top: 0; border: none; padding-left: 0; }
+      .footer-cta p { color: var(--muted); }
+      .footer-cta strong { color: var(--text); }
+
+      .quote {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--muted);
+        background: var(--bg);
+        border-left: 2px solid var(--accent);
+        padding: 8px 12px;
+        margin: 8px 0;
+        border-radius: 0 6px 6px 0;
+      }
+      .quote .src {
+        color: var(--subtle); font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Phase B · Claude Code Loop 全面对齐</h1>
+        <div class="meta">
+          ADR 0018 · 终态化(Terminal-State)设计 · 一切围绕 Tool 构建 · 计划 v2 · 替代 ADR 0014
+          <br />完整计划 <code>docs/superpowers/plans/2026-04-25-claude-code-loop-alignment.md</code>
+          · 源码参考 <code>/Volumes/Storage/code/claude-code-analysis/src/</code>
+        </div>
+      </header>
+
+      <div class="lead alert">
+        <b>核心思想升级 · 我从源码里学到的:</b> 不是"自己写循环替代 LangGraph 这么简单"。Claude Code 的真正洞察是 ——
+        <b>系统里所有"等外部信号"的能力(审批 / 问用户 / 调子代理 / 进退 plan mode / 长任务)都被建模成同一个原语:deferred tool</b>。loop 主体永远是一个 while-true,没有平行状态机。这条思想已沉淀进 memory 作为后续设计公理。
+      </div>
+
+      <h2><span class="num">§ 1</span> 5 条设计公理 · 这次重写的根</h2>
+
+      <div class="axioms">
+        <div class="axiom">
+          <span class="axiom-num">A1</span>
+          <h4>没有平行状态机</h4>
+          <p>"等外部信号"全部经由 deferred tool 表达。loop body 永远是同一个 while-true。</p>
+        </div>
+        <div class="axiom">
+          <span class="axiom-num">A2</span>
+          <h4>State 是终态化的</h4>
+          <p>Conversation = messages + mode + repos · 全部可从 DB 重建 · 没有内存里藏的状态。</p>
+        </div>
+        <div class="axiom">
+          <span class="axiom-num">A3</span>
+          <h4>AG-UI 是适配层</h4>
+          <p>不是内部 SoT。<code>execution/</code> 内事件按 Claude Code 风格,出 SSE 时翻译成 AG-UI。</p>
+        </div>
+        <div class="axiom">
+          <span class="axiom-num">A4</span>
+          <h4>Deferred tool 一等公民</h4>
+          <p>"挂起等外部信号 → 唤醒"是显式协议。confirmation/clarification/sub-agent 共用同一段代码。</p>
+        </div>
+        <div class="axiom">
+          <span class="axiom-num">A5</span>
+          <h4>Tool-as-everything</h4>
+          <p>新需求起手式:先问"这能做成 tool 吗?"。能就做成 tool。这是 §3.1 Tool First 的内化扩展版。</p>
+        </div>
+      </div>
+
+      <h2><span class="num">§ 2</span> Deferred Tool · 一个原语承载四件事</h2>
+
+      <p style="color: var(--muted);">
+        Tool 的 <code>call()</code> 中途挂起、等外部信号才返回。从 agent loop 看,它就是个普通 tool · 只是花了点时间。
+        Loop 不暂停,只有这个 tool 调用在 await。
+      </p>
+
+      <pre><code><span class="kw">class</span> <span class="key">DeferredTool</span>(Tool):
+    <span class="kw">async def</span> <span class="key">call</span>(self, args, ctx):
+        signal_id = <span class="kw">await</span> ctx.publish_request(...)   <span class="com"># 把请求发出去</span>
+        result = <span class="kw">await</span> ctx.signals.wait(signal_id)   <span class="com"># 等 channel 回执 · 自然 await</span>
+        <span class="kw">return</span> self.unpack(result)
+</code></pre>
+
+      <div class="deferred-fan">
+        <div class="root">
+          <b style="color: var(--accent);">DeferredSignal</b> · ABC · <code>publish() → wait()</code>
+        </div>
+        <div class="branches">
+          <div class="leaf">
+            <h4>Confirmation</h4>
+            <p>写 ConfirmationRepo 行,轮询直到 status 翻 approved/rejected/expired。<br />本次 Phase B 落地。</p>
+          </div>
+          <div class="leaf">
+            <h4>Clarification</h4>
+            <p>问用户问题,等下一条 user message 到达 UserInputRepo。<br /><span class="tag accent">anchor 预留</span></p>
+          </div>
+          <div class="leaf">
+            <h4>Sub-agent</h4>
+            <p>递归调主 loop · stream-through 子事件到父流。<br /><span class="tag accent">anchor 预留</span></p>
+          </div>
+          <div class="leaf">
+            <h4>长任务</h4>
+            <p>触发 job · job_id 入队 · 完成后回执 channel 唤醒。<br /><span class="tag accent">未来扩展</span></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="quote">
+        <b>源码佐证 · </b>
+        Plan mode 在 Claude Code 里不是新状态机,是 <code>ToolPermissionContext.mode = 'plan'</code> 的标记 + permission rules 按 mode 过滤。<code>EnterPlanModeTool</code> / <code>ExitPlanModeTool</code> 是普通 tool 翻 flag。
+        <span class="src">— EnterPlanModeTool.ts:77-94</span>
+      </div>
+
+      <h2><span class="num">§ 3</span> Tool Execution Pipeline · 唯一一条路</h2>
+
+      <p style="color: var(--muted);">
+        所有 tool 执行走同一条流水线。<code>maybe_defer</code> 是统一暂停点。审批 / 问用户 / 等子 agent 等所有"等外部信号"语义都从这里入口。
+      </p>
+
+      <div class="pipeline-fig">
+        <div class="pipeline-row">
+          <span class="pipeline-step">ToolUseBlock from AssistantMessage</span>
+        </div>
+        <div class="pipeline-row" style="padding-left: 20px;">
+          <span class="pipeline-arrow">↓</span>
+          <span class="pipeline-step primary">validate</span>
+          <span style="color: var(--subtle); font-size: 11px;">schema · scope · mode-allowed</span>
+        </div>
+        <div class="pipeline-row" style="padding-left: 20px;">
+          <span class="pipeline-arrow">↓</span>
+          <span class="pipeline-step primary">permission_check</span>
+          <span style="color: var(--subtle); font-size: 11px;">→ Allow(executor) | Defer(signal,...) | Deny(reason)</span>
+        </div>
+        <div class="pipeline-row" style="padding-left: 20px;">
+          <span class="pipeline-arrow">↓</span>
+          <span class="pipeline-step warn">maybe_defer</span>
+          <span style="color: var(--subtle); font-size: 11px;">if Defer: signal.publish() → ConfirmationRequested → signal.wait() → outcome</span>
+        </div>
+        <div class="pipeline-row" style="padding-left: 20px;">
+          <span class="pipeline-arrow">↓</span>
+          <span class="pipeline-step good">execute</span>
+          <span class="pipeline-arrow">|</span>
+          <span class="pipeline-step bad">skip(rejected/expired)</span>
+        </div>
+        <div class="pipeline-row" style="padding-left: 20px;">
+          <span class="pipeline-arrow">↓</span>
+          <span class="pipeline-step accent">record · ToolMessage(tool_use_id, content)</span>
+        </div>
+      </div>
+
+      <h2><span class="num">§ 4</span> 内部事件 · 终态层 + 预览层</h2>
+
+      <div class="events-grid">
+        <div class="event-col">
+          <h4><span class="tag accent">TERMINAL</span> 终态事件 · 持久化 · 驱动状态</h4>
+          <ul>
+            <li><b>AssistantMessageCommitted</b>(message)</li>
+            <li><b>ToolMessageCommitted</b>(message)</li>
+            <li><b>ConfirmationRequested</b>(confirmation_id, ...)</li>
+            <li><b>LoopExited</b>(reason: completed | max_iterations | aborted | prompt_too_long | stopped_by_hook)</li>
+          </ul>
+          <p style="color: var(--muted); font-size: 11.5px; margin-top: 8px;">
+            commit 后不可变。services/chat_service.py 直接消费这一层做持久化。
+          </p>
+        </div>
+        <div class="event-col">
+          <h4><span class="tag note">PREVIEW</span> 预览事件 · 临时 · 仅 UX</h4>
+          <ul>
+            <li><b>AssistantMessagePartial</b>(message_id, text_delta, reasoning_delta)</li>
+            <li><b>ToolCallProgress</b>(tool_use_id, args_delta)</li>
+          </ul>
+          <p style="color: var(--muted); font-size: 11.5px; margin-top: 8px;">
+            掉包 / 重连可丢。仅前端流式渲染用。最终一致性由 terminal 事件保证。
+          </p>
+        </div>
+      </div>
+
+      <div class="quote">
+        <b>翻译边界 · </b>
+        <code>api/ag_ui_translator.py</code> 把内部事件翻译成 AG-UI wire 事件(TOOL_CALL_START 等)。
+        <code>execution/</code> 不直接 import AG-UI 类型 · AG-UI 只在 <code>api/</code> 出现。<span class="src">— A3 公理</span>
+      </div>
+
+      <h2><span class="num">§ 5</span> Tool 并发分组 · partition 复刻</h2>
+
+      <pre><code><span class="com"># 来自 toolOrchestration.ts:91-116 的 partitionToolCalls</span>
+<span class="kw">def</span> <span class="key">partition_tool_uses</span>(uses, registry) -> <span class="kw">list</span>[Batch]:
+    <span class="com"># 连续 read-only(scope=READ 且 not requires_confirmation)合并为一个并发批</span>
+    <span class="com"># 任何 write/deferred tool 单独一批 · 顺序保留</span>
+    <span class="com"># 同一并发批:asyncio.gather + 按输入序录 transcript(不是按完成序)</span>
+</code></pre>
+
+      <div class="grid2">
+        <div class="card good">
+          <h3>批内并发 <span class="tag good">read-only</span></h3>
+          <p>同批所有 tool 用 <code>asyncio.gather</code> 一起跑 · 但 ToolMessageCommitted 按输入顺序 emit 到流里 · 保证 transcript 可重放。</p>
+        </div>
+        <div class="card warn note">
+          <h3>批间串行 <span class="tag note">write/deferred</span></h3>
+          <p>每个 write 是自己的批 · 一个一个 await · UX 上同一轮多个写 tool 会顺序弹 confirm 对话框,不会一起弹。</p>
+        </div>
+      </div>
+
+      <h2><span class="num">§ 6</span> 终态视角 · 一次完整 turn 的生命</h2>
+
+      <div class="lifecycle">
+        <div class="step-row">
+          <div class="who">user</div>
+          <div class="what">POST /messages → SSE open · message saved to MessageRepo as terminal <em>UserMessage</em></div>
+        </div>
+        <div class="step-row">
+          <div class="who">loop iter 1</div>
+          <div class="what">model.astream → emit <em>AssistantMessagePartial</em> · 流末组装 → emit <em>AssistantMessageCommitted</em>(text + 2 tool_use blocks)</div>
+        </div>
+        <div class="step-row">
+          <div class="who">pipeline</div>
+          <div class="what">partition([tool_use_a (read), tool_use_b (write)]) → batch 1: [a] read-only · batch 2: [b] write</div>
+        </div>
+        <div class="step-row">
+          <div class="who">batch 1</div>
+          <div class="what">a 直接 execute → emit <em>ToolMessageCommitted</em>(tool_use_id=a, content={...})</div>
+        </div>
+        <div class="step-row">
+          <div class="who">batch 2</div>
+          <div class="what">b permission_check → Defer(ConfirmationDeferred) · publish() 写 row → emit <em>ConfirmationRequested</em> · wait() 在轮询</div>
+        </div>
+        <div class="step-row">
+          <div class="who">user</div>
+          <div class="what">前端弹 confirm dialog · POST /resume {decision: approve} → DB row.status = APPROVED</div>
+        </div>
+        <div class="step-row">
+          <div class="who">batch 2</div>
+          <div class="what">wait() 下个 tick 看到 → execute → emit <em>ToolMessageCommitted</em>(tool_use_id=b, content={...})</div>
+        </div>
+        <div class="step-row">
+          <div class="who">loop iter 2</div>
+          <div class="what">把 assistant + tool_results 拼回 messages · 再调 model · 这次没 tool_calls → emit <em>AssistantMessageCommitted</em>(text only)</div>
+        </div>
+        <div class="step-row">
+          <div class="who">loop exit</div>
+          <div class="what">emit <em>LoopExited</em>(reason="completed") → translator → AG-UI RUN_FINISHED → SSE close</div>
+        </div>
+      </div>
+
+      <h2><span class="num">§ 7</span> 现状 vs 目标 · 一图看清</h2>
+
+      <div class="grid2">
+        <div class="card bad">
+          <h3>现状 <span class="tag bad">LangGraph 三件套</span></h3>
+          <table class="compare" style="margin: 0; background: transparent; border: none;">
+            <tr><td style="color: var(--muted)">orchestration</td><td><code>create_react_agent</code> 黑盒</td></tr>
+            <tr><td style="color: var(--muted)">state</td><td><code>AsyncSqliteSaver</code> + MessageRepo 双 SoT</td></tr>
+            <tr><td style="color: var(--muted)">suspend</td><td><code>InterruptConfirmationGate.interrupt()</code></td></tr>
+            <tr><td style="color: var(--muted)">resume</td><td><code>Command(resume=...)</code> 重开 SSE</td></tr>
+            <tr><td style="color: var(--muted)">事件</td><td>chunk-level <code>tool_calls</code> → 幽灵</td></tr>
+            <tr><td style="color: var(--muted)">扩展</td><td>plan/clarify/subagent 各自加状态机</td></tr>
+          </table>
+        </div>
+        <div class="card good">
+          <h3>目标 <span class="tag good">claude-code 风格</span></h3>
+          <table class="compare" style="margin: 0; background: transparent; border: none;">
+            <tr><td style="color: var(--muted)">orchestration</td><td><code>AgentLoop</code> while-true async generator</td></tr>
+            <tr><td style="color: var(--muted)">state</td><td>messages + mode + repos · 唯一 SoT</td></tr>
+            <tr><td style="color: var(--muted)">suspend</td><td>tool 内部 <code>await deferred.wait()</code> · 协程级</td></tr>
+            <tr><td style="color: var(--muted)">resume</td><td>翻 DB row · 同一协程下个 tick 醒</td></tr>
+            <tr><td style="color: var(--muted)">事件</td><td>terminal commit + preview delta · 协议级无幽灵</td></tr>
+            <tr><td style="color: var(--muted)">扩展</td><td>四个能力共用 deferred tool 一个原语</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <h2><span class="num">§ 8</span> 文件改动 · 23 个 task 跨 6 阶段</h2>
+
+      <ol class="timeline">
+        <li>
+          <div class="title">ADR 0018 + 计划锁定 <span class="tag primary">B0 · Task 1</span></div>
+          <div class="desc">写 ADR 0018(5 axioms 写明)· 0014 顶部加 superseded · 提交计划。</div>
+        </li>
+        <li>
+          <div class="title">基础原语 + AG-UI 翻译层 <span class="tag primary">B1 · Task 2-5</span></div>
+          <div class="desc">
+            internal_events.py(终态/预览) · ag_ui_translator.py(出口适配)<br />
+            content_blocks(TextBlock/ToolUseBlock/ReasoningBlock 加到 core/conversation.py)<br />
+            DeferredSignal ABC + ConfirmationDeferred 实装 · tool_pipeline.py(validate/permission_check/maybe_defer/execute/record + partition)
+          </div>
+        </li>
+        <li>
+          <div class="title">AgentLoop 完整实装 <span class="tag primary">B2 · Task 6-12</span></div>
+          <div class="desc">
+            text-only turn → while-true with tools → deferred 流 → 并发分组 → 幽灵防御 → skill/dispatch/subagent → max_iter/abort 退出。每 task TDD,中间有大量单元测试。
+          </div>
+        </li>
+        <li>
+          <div class="title">Facade + 翻译层接生产 <span class="tag primary">B3 · Task 13-15</span></div>
+          <div class="desc">
+            AgentRunner 变薄壳 · 投影内部事件到 legacy AgentEvent(向后兼容)· chat router 加 feature flag 直接走 AG-UI translator · flag 翻 true 默认。
+          </div>
+        </li>
+        <li>
+          <div class="title">InterruptGate 退场 <span class="tag primary">B4 · Task 16</span></div>
+          <div class="desc">
+            删 InterruptConfirmationGate · ConfirmationGate 变成 DeferredSignal 工厂 · deps.py 永远走 deferred 路径 · 删 test_interrupt_resume。
+          </div>
+        </li>
+        <li>
+          <div class="title">Checkpointer + LangGraph 一并退场 <span class="tag primary">B5 · Task 17-20</span></div>
+          <div class="desc">
+            拔 _checkpointer 字段 · main.py 删 lifespan · 删 test_checkpointer · 删 langgraph 依赖 · import-linter 全局 forbid · 删 runner.py · AgentLoop 别名 AgentRunner · ./scripts/check.sh 全绿。
+          </div>
+        </li>
+        <li>
+          <div class="title">验证 + 文档 <span class="tag primary">B6 · Task 21-23</span></div>
+          <div class="desc">
+            9 个 E2E 场景 · token 延迟 bench(回归 ≥ 10ms 不合并)· 同步 product/00-north-star.md / 04-architecture.md / CLAUDE.md 加 "Tool-as-everything" 公理。
+          </div>
+        </li>
+      </ol>
+
+      <h2><span class="num">§ 9</span> 前端 · 故意不动</h2>
+
+      <div class="card note">
+        <p style="margin: 0; color: var(--muted);">
+          按你 Q3 的指示:<b style="color: var(--text);">本次 Phase B 后端改动 · 前端零改动</b>。AG-UI translator 出的线协议跟现在前端在用的完全兼容(TOOL_CALL_START/ARGS/END/RESULT、CUSTOM allhands.confirm_required 等)。<code>/resume</code> 端点保留 SSE 形态,内部只翻 DB · 前端原有 dual-SSE 路径表现等价。
+        </p>
+        <p style="margin: 8px 0 0; color: var(--muted);">
+          后端进 main 稳定后 · <b style="color: var(--text);">Phase B7 单独 PR</b> 清理:删 <code>pendingResumeRequest</code> · 删第二条 SSE 订阅 · <code>requestResume</code> 改成普通 fetch。
+        </p>
+      </div>
+
+      <h2><span class="num">§ 10</span> 待你确认 · 4 个 open question</h2>
+
+      <div class="card">
+        <ol class="bare">
+          <li><b>Plan mode</b> 留 anchor 不实装,作单独后续计划?(我默认 yes)</li>
+          <li><b><code>thread_id</code></b> 字段 — 删 / 改名 <code>trace_id</code> 留作 trace 锚?(我默认改名留)</li>
+          <li><b>子 agent stream-through</b> — 现在 dispatch_employee 只回最终结果。本次 PR 改成把子 events 流回父?(我默认不,留作单独设计)</li>
+          <li><b><code>run_id</code> 关系</b> — chat_service 已经有 run_id · AgentLoop 接收它当唯一 trace 关联?(我默认 yes)</li>
+        </ol>
+      </div>
+
+      <div class="footer-cta">
+        <h2 style="margin: 0 0 8px;">点头后我开工</h2>
+        <p>
+          <strong>推荐执行方式:Subagent-Driven</strong> ——
+          每个 task 用独立 subagent 跑 · 跑完两阶段 review · 主对话窗口保持干净 ·
+          <strong>23 个 task 跨 6 个阶段</strong> · 每阶段结束跑全套 <code>./scripts/check.sh</code> 才进下一阶段。
+        </p>
+        <p style="margin-bottom: 0;">
+          <strong>预期结果:</strong> 协议级消除幽灵 tool_call · LangGraph 从 dep tree 拿掉 · 4 个未来能力(plan / clarify / subagent / 长任务)有清晰 anchor · 内部事件 / AG-UI 协议清晰分层 · ADR 0018 落地。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

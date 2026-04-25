@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ToolCall 生命周期 · 修复后逻辑</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --surface: #111a2e;
+        --surface-2: #16223c;
+        --border: #243152;
+        --text: #e6edf7;
+        --muted: #8a9bbf;
+        --primary: #4f8cff;
+        --success: #34d399;
+        --danger: #f87171;
+        --warning: #fbbf24;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: radial-gradient(1200px 600px at 20% -10%, #1a2748, var(--bg));
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif;
+        line-height: 1.6;
+      }
+      .wrap { max-width: 1080px; margin: 0 auto; }
+      h1 {
+        font-size: 26px; font-weight: 700; margin: 0 0 4px;
+        background: linear-gradient(90deg, #93c5fd, #c4b5fd);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+      h2 {
+        font-size: 16px; font-weight: 600; color: var(--text);
+        margin: 28px 0 12px; padding-left: 10px;
+        border-left: 3px solid var(--primary);
+      }
+      .lane {
+        display: grid;
+        grid-template-columns: 100px 1fr;
+        gap: 16px;
+        align-items: stretch;
+        margin-bottom: 12px;
+      }
+      .lane-label {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        display: flex; align-items: center;
+        padding-right: 8px;
+        border-right: 1px dashed var(--border);
+      }
+      .row {
+        display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+        padding: 8px 0;
+      }
+      .node {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 10px; border-radius: 8px;
+        font-family: var(--mono); font-size: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      .node.event { background: var(--surface-2); }
+      .node.ok { border-color: rgba(52,211,153,0.45); color: var(--success); }
+      .node.bad { border-color: rgba(248,113,113,0.5); color: var(--danger); }
+      .node.warn { border-color: rgba(251,191,36,0.45); color: var(--warning); }
+      .node.primary { border-color: rgba(79,140,255,0.55); color: var(--primary); }
+      .arrow { color: var(--muted); font-family: var(--mono); }
+      .arrow.down { display: block; padding-left: 116px; color: var(--border); }
+      .pill {
+        display: inline-block; padding: 2px 7px; border-radius: 999px;
+        font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em;
+      }
+      .pill.pending { background: rgba(138,155,191,0.15); color: var(--muted); }
+      .pill.running { background: rgba(79,140,255,0.18); color: var(--primary); }
+      .pill.succeeded { background: rgba(52,211,153,0.18); color: var(--success); }
+      .pill.failed { background: rgba(248,113,113,0.18); color: var(--danger); }
+
+      .grid2 {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+        margin-top: 14px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+      }
+      .card.bad { border-color: rgba(248,113,113,0.35); }
+      .card.good { border-color: rgba(52,211,153,0.4); }
+      .card h3 {
+        font-size: 13px; margin: 0 0 8px; font-weight: 600;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .card h3 .tag {
+        font-family: var(--mono); font-size: 10px;
+        padding: 2px 6px; border-radius: 4px;
+      }
+      .card.bad h3 .tag { background: rgba(248,113,113,0.2); color: var(--danger); }
+      .card.good h3 .tag { background: rgba(52,211,153,0.2); color: var(--success); }
+      .card p { margin: 0; color: var(--muted); font-size: 12.5px; }
+      .card code {
+        font-family: var(--mono); font-size: 11.5px;
+        background: var(--bg); padding: 1px 5px; border-radius: 4px;
+        color: var(--text);
+      }
+      .legend {
+        margin-top: 28px; padding: 14px 18px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 12px; color: var(--muted);
+      }
+      .legend code { color: var(--text); font-family: var(--mono); }
+      .step-num {
+        display: inline-flex; width: 18px; height: 18px;
+        border-radius: 50%; background: var(--primary); color: white;
+        font-size: 11px; align-items: center; justify-content: center;
+        font-weight: 600;
+      }
+      .branch {
+        margin-top: 6px; padding: 10px 14px;
+        border-left: 2px solid var(--border);
+        background: rgba(255,255,255,0.02);
+        border-radius: 0 8px 8px 0;
+      }
+      .branch.happy { border-left-color: var(--success); }
+      .branch.sad   { border-left-color: var(--warning); }
+      .branch h4 {
+        margin: 0 0 6px; font-size: 12px; font-weight: 600;
+        font-family: var(--mono); letter-spacing: 0.04em;
+      }
+      .branch.happy h4 { color: var(--success); }
+      .branch.sad   h4 { color: var(--warning); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>ToolCall 生命周期 · 修复后逻辑</h1>
+      <div class="sub">
+        修复 commit <code style="font-family: var(--mono); color: var(--muted);">de6deef</code>
+        · 文件 <code style="font-family: var(--mono); color: var(--muted);">backend/.../runner.py</code> + <code style="font-family: var(--mono); color: var(--muted);">web/lib/store.ts</code>
+      </div>
+
+      <h2>事件流 · 三个角色三条泳道</h2>
+
+      <div class="lane">
+        <div class="lane-label">LangGraph<br />agent node</div>
+        <div class="row">
+          <span class="node">user 输入</span>
+          <span class="arrow">→</span>
+          <span class="node">LLM 流式产出</span>
+          <span class="arrow">→</span>
+          <span class="node primary">tool_calls 出现</span>
+        </div>
+      </div>
+
+      <div class="lane">
+        <div class="lane-label">runner.py<br />SSE 编码</div>
+        <div class="row">
+          <span class="node event">TokenEvent</span>
+          <span class="arrow">·</span>
+          <span class="node event primary">ToolCallStartEvent <span class="pill running">running</span></span>
+        </div>
+      </div>
+
+      <div class="lane">
+        <div class="lane-label">前端 store<br />UI 状态</div>
+        <div class="row">
+          <span class="node">streamingMessage 追加文字</span>
+          <span class="arrow">·</span>
+          <span class="node primary">ToolCallCard 占位 <span class="pill pending">pending</span></span>
+        </div>
+      </div>
+
+      <div class="arrow down">↓ 这里有两条岔路 ↓</div>
+
+      <div class="branch happy">
+        <h4>✓ 正常路径 · tools 节点执行</h4>
+        <div class="lane" style="margin-bottom: 4px;">
+          <div class="lane-label">tools node</div>
+          <div class="row">
+            <span class="node">ToolNode 执行</span>
+            <span class="arrow">→</span>
+            <span class="node">返回 ToolMessage</span>
+          </div>
+        </div>
+        <div class="lane" style="margin-bottom: 4px;">
+          <div class="lane-label">runner.py</div>
+          <div class="row">
+            <span class="node event ok">ToolCallEndEvent <span class="pill succeeded">succeeded</span></span>
+            <span class="arrow">·</span>
+            <span class="node event">DoneEvent</span>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-label">前端</div>
+          <div class="row">
+            <span class="node ok">ToolCallCard <span class="pill succeeded">succeeded</span></span>
+            <span class="arrow">→</span>
+            <span class="node">finalizeStreaming · 直接落库</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="branch sad">
+        <h4>⚠ 异常路径 · 模型把 tool_call 丢了(gpt-4o-mini 高发)</h4>
+        <div class="lane" style="margin-bottom: 4px;">
+          <div class="lane-label">tools node</div>
+          <div class="row">
+            <span class="node bad">从未触发</span>
+            <span class="arrow">·</span>
+            <span class="node" style="color: var(--muted)">无 ToolMessage</span>
+          </div>
+        </div>
+        <div class="lane" style="margin-bottom: 4px;">
+          <div class="lane-label">runner.py<br /><b style="color: var(--warning)">兜底 #1</b></div>
+          <div class="row">
+            <span class="node event warn">合成 ToolCallEndEvent <span class="pill failed">failed</span></span>
+            <span class="arrow">·</span>
+            <span class="node" style="color: var(--muted); font-size: 11px;">error="tool_call_dropped"</span>
+            <span class="arrow">→</span>
+            <span class="node event">DoneEvent</span>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-label">前端 store<br /><b style="color: var(--warning)">兜底 #2</b></div>
+          <div class="row">
+            <span class="node">finalizeStreaming 扫一遍 tool_calls</span>
+            <span class="arrow">→</span>
+            <span class="node bad">残留 pending/running → <span class="pill failed">failed</span></span>
+          </div>
+        </div>
+      </div>
+
+      <h2>为什么要双层兜底</h2>
+      <div class="grid2">
+        <div class="card bad">
+          <h3>修复前 <span class="tag">BUG</span></h3>
+          <p>
+            前端只在收到 <code>TOOL_CALL_END</code> / <code>TOOL_CALL_RESULT</code> 时才把状态改为 succeeded。
+            一旦后端没产出这两个事件,<code>ToolCallCard</code> 永远停在 <code>pending</code>,
+            刷新页面也不会变 — 因为持久化的消息里 <code>status</code> 字段就是 <code>pending</code>。
+          </p>
+        </div>
+        <div class="card good">
+          <h3>修复后 <span class="tag">FIX</span></h3>
+          <p>
+            <b>后端兜底</b> 处理"事件流本身就缺 end"的来源问题(主修);
+            <b>前端兜底</b> 防御未来任何 SSE 中断 / 客户端断网 / 后端漏发的可能性。
+            两层独立,任何一层先生效都不会留下永久 pending。
+          </p>
+        </div>
+      </div>
+
+      <h2>关键代码点</h2>
+      <div class="grid2">
+        <div class="card">
+          <h3>backend · runner.py</h3>
+          <p>
+            维护 <code>seen_tool_call_ids</code>(start 时填)与 <code>ended_tool_call_ids</code>(收到 ToolMessage 时填)。
+            stream 主循环退出后、<code>DoneEvent</code> 之前,对差集每个 id 合成一条
+            <code>ToolCallEndEvent(status=FAILED)</code>。
+          </p>
+        </div>
+        <div class="card">
+          <h3>web · store.ts <code>finalizeStreaming</code></h3>
+          <p>
+            把 <code>streamingMessage</code> 搬到 <code>messages</code> 之前,
+            <code>map</code> 一遍 tool_calls,把状态为 <code>pending</code> 或 <code>running</code> 的强制改成
+            <code>failed</code> + <code>error: "tool_call_dropped"</code>。
+            <code>awaiting_confirmation</code> 不动(它是合法挂起状态)。
+          </p>
+        </div>
+      </div>
+
+      <div class="legend">
+        <b style="color: var(--text)">回归测试</b> ·
+        后端 <code>tests/unit/test_runner.py::test_runner_emits_failed_end_when_tool_call_never_executes</code> ·
+        前端 <code>web/lib/__tests__/store-segments.test.ts</code> 新增"seals dangling pending/running tool_calls as failed on finalize"。
+      </div>
+    </div>
+  </body>
+</html>
