@@ -222,7 +222,35 @@
     },
     "drawio": {
       "title": "drawio diagram",
-      "loading": "Loading drawio editor…"
+      "loading": "Loading drawio editor…",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "saveFailed": "Save failed"
+    },
+    "pdf": {
+      "loading": "Loading PDF…",
+      "loadFailed": "PDF load failed: {error}"
+    },
+    "csv": {
+      "empty": "(no data)",
+      "loadFailed": "CSV parse failed: {error}"
+    },
+    "xlsx": {
+      "loading": "Loading Excel…",
+      "empty": "(empty sheet)",
+      "loadFailed": "xlsx parse failed: {error}"
+    },
+    "docx": {
+      "loading": "Rendering Word document…",
+      "loadFailed": "docx render failed: {error}"
+    },
+    "pptx": {
+      "loading": "Parsing PowerPoint…",
+      "loadFailed": "pptx parse failed: {error}",
+      "empty": "(no slide text could be extracted · please download)",
+      "untitledSlide": "(untitled)",
+      "count": "{n} slides",
+      "download": "Download .pptx"
     },
     "page": {
       "title": "Artifacts",

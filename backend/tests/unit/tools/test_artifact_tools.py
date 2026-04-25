@@ -71,14 +71,15 @@ def test_create_schema_shape() -> None:
     schema = ARTIFACT_CREATE_TOOL.input_schema
     assert schema["required"] == ["name", "kind"]
     props = schema["properties"]
-    assert set(props["kind"]["enum"]) == {
-        "markdown",
-        "code",
-        "html",
-        "image",
-        "data",
-        "mermaid",
-    }
+    # 2026-04-25 · enum extended for drawio + office family. The lower-bound
+    # set check (must include the original 6) keeps the regression coverage
+    # while letting future kinds slot in without test churn.
+    assert {"markdown", "code", "html", "image", "data", "mermaid"} <= set(
+        props["kind"]["enum"]
+    )
+    assert {"drawio", "pdf", "xlsx", "csv", "docx", "pptx"} <= set(
+        props["kind"]["enum"]
+    )
     assert "content" in props
     assert "content_base64" in props
 

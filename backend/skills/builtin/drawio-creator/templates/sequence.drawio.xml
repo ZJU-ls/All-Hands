@@ -1,0 +1,46 @@
+<mxfile host="app.diagrams.net" agent="allhands">
+  <diagram id="sequence" name="__TITLE__">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="actorA" value="__NODE_1__" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="80" y="40" width="40" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="laneA" value="" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="40" height="320" as="geometry"/>
+        </mxCell>
+        <mxCell id="actorB" value="__NODE_2__" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="320" y="40" width="40" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="laneB" value="" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="320" y="120" width="40" height="320" as="geometry"/>
+        </mxCell>
+        <mxCell id="actorC" value="__NODE_3__" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="560" y="40" width="40" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="laneC" value="" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="560" y="120" width="40" height="320" as="geometry"/>
+        </mxCell>
+        <mxCell id="m1" value="__EDGE_1__" style="html=1;verticalAlign=bottom;startSize=8;endSize=8;align=left;edgeStyle=elbowEdgeStyle;elbow=vertical;startArrow=oval;startFill=1;endArrow=block;endFill=1;" edge="1" parent="1" source="laneA" target="laneB">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="100" y="180" as="sourcePoint"/>
+            <mxPoint x="340" y="180" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m2" value="__EDGE_2__" style="html=1;verticalAlign=bottom;startSize=8;endSize=8;align=left;edgeStyle=elbowEdgeStyle;elbow=vertical;endArrow=block;endFill=1;" edge="1" parent="1" source="laneB" target="laneC">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="340" y="240" as="sourcePoint"/>
+            <mxPoint x="580" y="240" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m3" value="__EDGE_3__" style="html=1;verticalAlign=bottom;startSize=8;endSize=8;align=left;edgeStyle=elbowEdgeStyle;elbow=vertical;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="laneC" target="laneA">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="580" y="320" as="sourcePoint"/>
+            <mxPoint x="100" y="320" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

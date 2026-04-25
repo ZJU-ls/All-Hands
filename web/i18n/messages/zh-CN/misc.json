@@ -224,7 +224,35 @@
     },
     "drawio": {
       "title": "drawio 流程图",
-      "loading": "正在加载 drawio 编辑器…"
+      "loading": "正在加载 drawio 编辑器…",
+      "saving": "保存中…",
+      "saved": "已保存",
+      "saveFailed": "保存失败"
+    },
+    "pdf": {
+      "loading": "加载 PDF…",
+      "loadFailed": "PDF 加载失败:{error}"
+    },
+    "csv": {
+      "empty": "(无数据)",
+      "loadFailed": "CSV 解析失败:{error}"
+    },
+    "xlsx": {
+      "loading": "加载 Excel…",
+      "empty": "(空表)",
+      "loadFailed": "xlsx 解析失败:{error}"
+    },
+    "docx": {
+      "loading": "渲染 Word 文档…",
+      "loadFailed": "docx 渲染失败:{error}"
+    },
+    "pptx": {
+      "loading": "解析 PowerPoint…",
+      "loadFailed": "pptx 解析失败:{error}",
+      "empty": "(没有可解析的幻灯片文本 · 请下载查看)",
+      "untitledSlide": "(无标题)",
+      "count": "{n} 张幻灯片",
+      "download": "下载 .pptx"
     },
     "page": {
       "title": "制品库",
