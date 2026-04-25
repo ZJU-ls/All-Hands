@@ -167,10 +167,13 @@ async def ping_model(
     120s. Shares the `run_chat_test` code path so error categorisation
     matches the rest of the gateway surface.
 
-    Reasoning models (Qwen3 thinking · GLM-4.5 thinking · DeepSeek-R1) are
-    explicitly pinged with `enable_thinking=False` — a healthcheck doesn't
-    need a chain-of-thought, and 4 max_tokens is not enough budget for the
-    reasoning pass anyway. Non-thinking providers ignore the flag.
+    Notes on the 15s budget: most non-thinking models reply in 2-5s; the
+    larger margin covers DashScope coding-plan cold-starts that 5s missed.
+    We deliberately do NOT pass `enable_thinking=False`: that bool is
+    additive on top of `thinking: {"type": "disabled"}` (B02 contract) and
+    multi-tenant gateways like DashScope coding-plan reject the unknown
+    root field for non-Qwen routes (MiniMax / Kimi). The model's own
+    default thinking mode is what we want for a healthcheck.
     """
     svc = await get_model_service(session)
     pair = await svc.resolve_with_provider(model_id)
@@ -183,7 +186,6 @@ async def ping_model(
             model.name,
             prompt="ping",
             max_tokens=PING_MAX_TOKENS,
-            enable_thinking=False,
             http_client=client,
         )
 
