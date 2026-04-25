@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createConversation } from "@/lib/api";
 import { AppShell } from "@/components/shell/AppShell";
+import { hasCompletedFirstRun } from "@/lib/first-run";
+import { FIRST_RUN_SCOPE as WELCOME_SCOPE } from "@/app/welcome/page";
 
 // Same key the conversation page reads when cleaning up a stale pointer (B05).
 const CONVERSATION_STORAGE_KEY = "allhands_conversation_id";
@@ -15,6 +17,12 @@ export default function ChatPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
+        // First-run gate: send brand-new visitors through /welcome so they
+        // get a one-time hello before being dropped into a fresh conversation.
+        if (!hasCompletedFirstRun(WELCOME_SCOPE)) {
+          router.replace("/welcome");
+          return;
+        }
         const existingId = localStorage.getItem(CONVERSATION_STORAGE_KEY);
         if (existingId) {
           router.replace(`/chat/${existingId}`);
