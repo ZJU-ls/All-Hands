@@ -226,7 +226,6 @@
       "statusDown": "DOWN",
       "healthGateway": "Model gateway",
       "healthMcp": "MCP servers",
-      "healthLangfuse": "Langfuse",
       "healthDb": "Database",
       "healthTriggers": "Trigger scheduler",
       "costTitle": "Estimated cost · 24h",

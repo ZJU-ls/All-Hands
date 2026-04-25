@@ -100,16 +100,16 @@ OBSERVATORY_GET_STATUS_TOOL = Tool(
     kind=ToolKind.META,
     name="observatory.get_status",
     description=(
-        "Return the current observability bootstrap state: status "
-        "(pending/ok/failed/external), host, last error, observability_enabled "
-        "(derived).\n\n"
-        "**WHEN TO USE**: Before answering 'am I being traced' / 'is "
-        "Langfuse set up' / 'why is query_traces empty'. Also useful as "
-        "a pre-flight for observatory.bootstrap_now so Lead can skip the "
-        "call when status is already 'ok' or 'external'.\n\n"
-        "**WHEN NOT TO USE**: The user asked a broader health question — "
-        "use cockpit.get_workspace_summary, which already surfaces "
-        "Langfuse status in the component list.\n\n"
+        "Return the observability flags currently in effect:\n"
+        "- observability_enabled (always True · self-instrumented)\n"
+        "- auto_title_enabled (LLM-summarised conversation titles)\n\n"
+        "**WHEN TO USE**: Before answering 'is auto-title on' or 'are "
+        "we tracing'. Self-instrumentation runs unconditionally so the "
+        "answer to the latter is always yes; the field stays in the "
+        "response for forward-compat.\n\n"
+        "**WHEN NOT TO USE**: Broader 'is the platform healthy' questions "
+        "— call cockpit.get_workspace_summary instead, which surfaces "
+        "gateway / MCP / db / triggers component health alongside metrics.\n\n"
         "**PARAMS**: none."
     ),
     input_schema={
@@ -123,39 +123,8 @@ OBSERVATORY_GET_STATUS_TOOL = Tool(
 )
 
 
-OBSERVATORY_BOOTSTRAP_NOW_TOOL = Tool(
-    id="allhands.meta.observatory.bootstrap_now",
-    kind=ToolKind.META,
-    name="observatory.bootstrap_now",
-    description=(
-        "Idempotent: kick the 8-step Langfuse bootstrap (admin, org, "
-        "project, API keys, hot-reload callback). Safe to call when "
-        "status is already 'ok' (fast no-op verify). Never resets "
-        "passwords, never deletes data.\n\n"
-        "**WHEN TO USE**: Status is 'pending' / 'failed' and the user "
-        "wants to recover (typical after Langfuse container came up "
-        "late or was restarted). Or the user explicitly asked 'retry "
-        "bootstrap'. Confirmation Gate runs first because bootstrap writes "
-        "to `observability_config` and may mint new API keys.\n\n"
-        "**WHEN NOT TO USE**: status is 'external' (user supplied their "
-        "own Langfuse via .env — we must not touch it). observability_enabled "
-        "already True and user didn't ask for a retry — call is pure noise.\n\n"
-        "**PARAMS**: none (idempotent on config singleton)."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {},
-        "additionalProperties": False,
-    },
-    output_schema={"type": "object"},
-    scope=ToolScope.BOOTSTRAP,
-    requires_confirmation=True,
-)
-
-
 ALL_OBSERVATORY_META_TOOLS = [
     OBSERVATORY_QUERY_TRACES_TOOL,
     OBSERVATORY_GET_TRACE_TOOL,
     OBSERVATORY_GET_STATUS_TOOL,
-    OBSERVATORY_BOOTSTRAP_NOW_TOOL,
 ]
