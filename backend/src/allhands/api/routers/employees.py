@@ -168,7 +168,11 @@ async def compose_employee_prompt(
         except DomainError as exc:
             yield f"\n\n[错误] {exc}".encode()
 
-    return StreamingResponse(_gen(), media_type="text/plain; charset=utf-8")
+    return StreamingResponse(
+        _gen(),
+        media_type="text/plain; charset=utf-8",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
 
 
 @router.post("/preview", response_model=EmployeePreviewResponse)

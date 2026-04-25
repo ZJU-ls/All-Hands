@@ -174,13 +174,10 @@ async def explain_skill_stream(
     prompt_text = _build_skill_explain_prompt(
         skill, _format_tool_block(skill.tool_ids, tool_registry)
     )
-    llm = build_llm(provider, provider.default_model)
-    # Cap output per-call. ChatAnthropic + ChatOpenAI both honour
-    # `.bind(max_tokens=...)`; this matters more for cost than latency.
-    llm = llm.bind(max_tokens=_MAX_OUTPUT_TOKENS)
+    llm = _build_explainer_llm(provider, provider.default_model)
 
     chunks: list[str] = []
-    async for chunk in llm.astream([HumanMessage(content=prompt_text)]):
+    async for chunk in llm.astream([HumanMessage(content=prompt_text)]):  # type: ignore[attr-defined]
         # LangChain's chunk objects carry .content which is either a string
         # or a list of content blocks (Anthropic). We surface plain text
         # only — the explainer doesn't need tool_use / thinking blocks.
@@ -234,12 +231,48 @@ async def compose_employee_prompt_stream(
     prompt_text = _build_compose_prompt_prompt(
         name=name, description=description, skills=skills, mcp_servers=mcp_servers
     )
-    llm = build_llm(provider, provider.default_model).bind(max_tokens=_MAX_OUTPUT_TOKENS)
+    llm = _build_explainer_llm(provider, provider.default_model)
 
-    async for chunk in llm.astream([HumanMessage(content=prompt_text)]):
+    async for chunk in llm.astream([HumanMessage(content=prompt_text)]):  # type: ignore[attr-defined]
         text = _chunk_text(chunk)
         if text:
             yield text
+
+
+def _build_explainer_llm(provider: object, model_name: str) -> object:
+    """Build an LLM bound for explainer use — thinking explicitly OFF.
+
+    Without this, models with reasoning channels (Anthropic Extended
+    Thinking, Qwen3, DeepSeek-R1, GLM-Z1) stream a long ``thinking`` /
+    ``reasoning_content`` block first that we don't surface. The user
+    sees a blank panel for 20-60s and assumes it hung. The explainer
+    surfaces are short paraphrase tasks — reasoning is wasted latency.
+
+    For Anthropic-kind providers we wire ``thinking=False`` into the
+    constructor (``ChatAnthropic.thinking`` is read at payload-build
+    time; .bind() doesn't propagate — see llm_factory docstring).
+    For OpenAI-compat providers we ``.bind(extra_body=...)`` since the
+    enable_thinking flag is a vendor extension that travels via
+    ``extra_body`` (Qwen / DashScope) or ``reasoning_effort`` (DeepSeek).
+    Setting both is harmless on providers that ignore the field.
+    """
+    # Duck-typed `provider` keeps this helper callable from unit tests
+    # without dragging the full LLMProvider domain dance into them.
+    kind = getattr(provider, "kind", "openai")
+    if kind == "anthropic":
+        return build_llm(provider, model_name, thinking=False).bind(  # type: ignore[arg-type]
+            max_tokens=_MAX_OUTPUT_TOKENS
+        )
+    base = build_llm(provider, model_name)  # type: ignore[arg-type]
+    return base.bind(
+        max_tokens=_MAX_OUTPUT_TOKENS,
+        # Qwen3 / DashScope: enable_thinking lives in extra_body.
+        # DeepSeek-R1 honours reasoning_effort="none". OpenAI-classic
+        # ignores both. Belt-and-braces for the heterogeneous
+        # OpenAI-compat fleet our users plug in.
+        extra_body={"enable_thinking": False},
+        reasoning_effort="none",
+    )
 
 
 def _chunk_text(chunk: object) -> str:

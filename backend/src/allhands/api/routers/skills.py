@@ -219,7 +219,15 @@ async def explain_skill(
     # text/plain so a fetch().getReader() in the browser hands chunks back
     # as the stream lands. Not text/event-stream because we don't need the
     # SSE framing (no client-side EventSource — the chip uses fetch()).
-    return StreamingResponse(_gen(), media_type="text/plain; charset=utf-8")
+    return StreamingResponse(
+        _gen(),
+        media_type="text/plain; charset=utf-8",
+        # Belt-and-braces against intermediate proxies (nginx · Next dev
+        # rewrite path) that buffer text/* responses by default and turn
+        # this into "20s blank → big drop". Keep both — different proxies
+        # honour different headers.
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
 
 
 class InstallGithubResponse(BaseModel):
