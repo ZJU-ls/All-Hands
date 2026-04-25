@@ -171,7 +171,12 @@ def test_preview_custom_max_iterations_wins(client: TestClient) -> None:
 
 
 def test_preview_max_iterations_range(client: TestClient) -> None:
-    """UI bound: 1 ≤ max_iterations ≤ 10000 (raised from 50 per origin/main 9fb682c)."""
+    """UI input bound: 1 ≤ max_iterations ≤ 10000.
+
+    Original Q7 signoff capped at 50; user feedback (2026-04-25) loosened
+    the cap to 10000 so power users can run long-running orchestrators.
+    The DesignForm number input enforces the same range.
+    """
     r_low = client.post(
         "/api/employees/preview", json={"preset": "execute", "custom_max_iterations": 0}
     )
