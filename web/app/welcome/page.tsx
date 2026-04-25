@@ -10,7 +10,7 @@
  * variants — the theme pack handles light/dark via CSS variables.
  */
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -138,93 +138,85 @@ export default function WelcomePage() {
       </div>
 
       <div className="relative mx-auto max-w-[1200px] px-6 pb-20 pt-12 sm:px-10 sm:pt-16">
-        {/* ─── Hero ─── */}
-        <section className="animate-fade-up">
-          {/* Eyebrow chip · live-pulse dot */}
-          <div className="inline-flex h-7 items-center gap-2 rounded-full border border-border bg-surface px-3 shadow-soft-sm">
-            <span className="relative h-2 w-2">
-              <span className="absolute inset-0 animate-pulse-soft rounded-full bg-primary opacity-60" />
-              <span className="absolute inset-0 rounded-full bg-primary" />
-            </span>
-            <span className="text-caption font-mono uppercase tracking-wider text-text-muted">
-              v0 · Open Source · Self-hosted
-            </span>
-          </div>
+        {/* ─── Hero · two-col on lg · text left, brand mark right ─── */}
+        <section className="grid animate-fade-up items-center gap-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-16">
+          <div>
+            {/* Eyebrow chip · live-pulse dot */}
+            <div className="inline-flex h-7 items-center gap-2 rounded-full border border-border bg-surface px-3 shadow-soft-sm">
+              <span className="relative h-2 w-2">
+                <span className="absolute inset-0 animate-pulse-soft rounded-full bg-primary opacity-60" />
+                <span className="absolute inset-0 rounded-full bg-primary" />
+              </span>
+              <span className="text-caption font-mono uppercase tracking-wider text-text-muted">
+                v0 · Open Source · Self-hosted
+              </span>
+            </div>
 
-          {/* Hero brand mark · the origami fold-in animation lives here so
-              first-time visitors actually catch it. ~112px is large enough
-              to read the seam draw + face slide + disc pop sequence. */}
-          <div className="relative mt-9">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -inset-6 rounded-3xl bg-primary-glow/20 blur-2xl"
-            />
-            <AllhandsLogo
-              size={112}
-              animateIn
-              className="relative rounded-2xl shadow-glow-lg"
-            />
-          </div>
+            {/* Massive h1 · gradient on the second line */}
+            <h1 className="mt-7 text-[44px] font-bold leading-[0.98] tracking-[-0.04em] text-text sm:text-[60px] lg:text-[72px]">
+              欢迎来到 allhands。
+              <br />
+              <span className="bg-gradient-to-r from-primary via-accent to-primary-glow bg-clip-text text-transparent">
+                一个 Lead Agent · 搞定一切。
+              </span>
+            </h1>
 
-          {/* Massive h1 · gradient on the second line */}
-          <h1 className="mt-7 max-w-5xl text-[44px] font-bold leading-[0.98] tracking-[-0.04em] text-text sm:text-[64px] lg:text-[80px]">
-            欢迎来到 allhands。
-            <br />
-            <span className="bg-gradient-to-r from-primary via-accent to-primary-glow bg-clip-text text-transparent">
-              一个 Lead Agent · 搞定一切。
-            </span>
-          </h1>
+            {/* Subtitle */}
+            <p className="mt-7 max-w-2xl text-lg leading-relaxed text-text-muted">
+              和你的首席数字员工对话,把「会写代码、查数据、推消息」的一支团队
+              搭起来 —— 不写工作流、不点表单、不加枚举字段。
+            </p>
 
-          {/* Subtitle */}
-          <p className="mt-7 max-w-2xl text-lg leading-relaxed text-text-muted">
-            和你的首席数字员工对话,把「会写代码、查数据、推消息」的一支团队
-            搭起来 —— 不写工作流、不点表单、不加枚举字段。
-          </p>
+            {/* CTAs */}
+            <div className="mt-9 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                data-testid="welcome-start"
+                onClick={handleStart}
+                className="group inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-primary via-primary-glow to-accent px-6 text-base font-semibold text-primary-fg shadow-glow transition-transform duration-base hover:-translate-y-px"
+              >
+                <Icon name="sparkles" size={16} />
+                开始使用
+                <Icon
+                  name="arrow-right"
+                  size={16}
+                  className="transition-transform duration-base group-hover:translate-x-0.5"
+                />
+              </button>
+              <Link
+                href="/design-lab"
+                className="inline-flex h-12 items-center gap-2 rounded-xl border border-border-strong bg-surface px-6 text-base font-medium text-text shadow-soft-sm transition-colors duration-fast hover:bg-surface-2"
+              >
+                <Icon name="layout-grid" size={16} className="text-primary" />
+                浏览设计系统
+              </Link>
+            </div>
 
-          {/* CTAs */}
-          <div className="mt-9 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              data-testid="welcome-start"
-              onClick={handleStart}
-              className="group inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-primary via-primary-glow to-accent px-6 text-base font-semibold text-primary-fg shadow-glow transition-transform duration-base hover:-translate-y-px"
-            >
-              <Icon name="sparkles" size={16} />
-              开始使用
-              <Icon
-                name="arrow-right"
-                size={16}
-                className="transition-transform duration-base group-hover:translate-x-0.5"
-              />
-            </button>
-            <Link
-              href="/design-lab"
-              className="inline-flex h-12 items-center gap-2 rounded-xl border border-border-strong bg-surface px-6 text-base font-medium text-text shadow-soft-sm transition-colors duration-fast hover:bg-surface-2"
-            >
-              <Icon name="layout-grid" size={16} className="text-primary" />
-              浏览设计系统
-            </Link>
-          </div>
-
-          {/* Mini stat strip · numbers count up on first paint */}
-          <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3">
-            {STATS.map((s, i) => (
-              <div key={s.label} className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold tracking-tight text-text tabular-nums">
-                  {typeof s.value === "number" ? (
-                    <CountUp value={s.value} />
-                  ) : (
-                    s.value
-                  )}
-                </span>
-                <span className="text-caption text-text-muted">{s.label}</span>
-                {i < STATS.length - 1 ? (
-                  <span aria-hidden className="ml-2 text-text-subtle">
-                    ·
+            {/* Mini stat strip · numbers count up on first paint */}
+            <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3">
+              {STATS.map((s, i) => (
+                <div key={s.label} className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold tracking-tight text-text tabular-nums">
+                    {typeof s.value === "number" ? (
+                      <CountUp value={s.value} />
+                    ) : (
+                      s.value
+                    )}
                   </span>
-                ) : null}
-              </div>
-            ))}
+                  <span className="text-caption text-text-muted">{s.label}</span>
+                  {i < STATS.length - 1 ? (
+                    <span aria-hidden className="ml-2 text-text-subtle">
+                      ·
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Brand mark column · click to replay the fold-in animation. */}
+          <div className="hidden lg:block">
+            <ReplayableHeroLogo />
           </div>
         </section>
 
@@ -336,5 +328,40 @@ export default function WelcomePage() {
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * Hero brand mark · click anywhere on the tile to replay the origami
+ * fold-in animation. Cursor-pointer + a soft halo + a tiny "click to
+ * replay" hint chip make the interaction discoverable without screaming.
+ */
+function ReplayableHeroLogo() {
+  const [playKey, setPlayKey] = useState(0);
+  return (
+    <div className="relative flex flex-col items-center gap-3">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -inset-10 rounded-[40px] bg-primary-glow/25 blur-3xl"
+      />
+      <button
+        type="button"
+        onClick={() => setPlayKey((k) => k + 1)}
+        title="点击回放折纸动画"
+        aria-label="回放品牌动画"
+        className="group relative cursor-pointer rounded-2xl transition-transform duration-base hover:-translate-y-0.5"
+      >
+        <AllhandsLogo
+          key={playKey}
+          size={168}
+          animateIn
+          className="rounded-2xl shadow-glow-lg"
+        />
+      </button>
+      <span className="relative inline-flex items-center gap-1.5 text-caption text-text-subtle">
+        <Icon name="refresh" size={11} />
+        点 logo 可回放
+      </span>
+    </div>
   );
 }
