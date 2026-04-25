@@ -62,9 +62,22 @@ _MAX_OUTPUT_TOKENS = 1200
 _explain_cache: dict[str, str] = {}
 
 
+# Market explanations live under their own keyspace ("market:<slug>") so
+# the installed-skill cache stays clean and a market preview cache hit
+# survives even if the user later installs the skill (we'll regenerate
+# from richer data once installed).
+def _market_cache_key(slug: str) -> str:
+    return f"market:{slug}"
+
+
 def invalidate_skill_explanation(skill_id: str) -> None:
     """Drop any cached explanation for this skill — call on update / reinstall."""
     _explain_cache.pop(skill_id, None)
+
+
+def invalidate_market_explanation(slug: str) -> None:
+    """Drop any cached explanation for this market entry."""
+    _explain_cache.pop(_market_cache_key(slug), None)
 
 
 def _format_tool_block(tool_ids: list[str], tool_registry: ToolRegistry | None) -> str:
@@ -112,6 +125,54 @@ def _build_skill_explain_prompt(skill: Skill, tool_block: str) -> str:
         "(1-2 个。让用户清楚边界,而不是无脑给员工挂这个技能)\n\n"
         "### 工作机制\n"
         "(1-2 句。这个技能内部依赖哪些关键工具或外部服务,普通用户能听懂的层级)"
+    )
+
+
+_SKILL_MD_BODY_CAP = 6000
+
+
+def _build_market_explain_prompt(
+    *,
+    name: str,
+    description: str,
+    version: str,
+    source_url: str,
+    skill_md: str,
+) -> str:
+    """Same four-section explainer contract as _build_skill_explain_prompt
+    but fed from a market preview instead of an installed Skill domain
+    object — we don't have tool_ids / prompt_fragment, only the raw
+    SKILL.md README the maintainer wrote. Cap body at ~6KB so a long
+    README doesn't blow the prompt budget; the model reads enough to
+    understand the skill's intent.
+    """
+    body = (skill_md or "").strip()
+    if len(body) > _SKILL_MD_BODY_CAP:
+        body = body[:_SKILL_MD_BODY_CAP] + "\n\n…(SKILL.md 已截断,只取前 6KB 用于解读)"
+    body_section = f"\n## SKILL.md 正文\n\n```markdown\n{body}\n```\n" if body else ""
+    return (
+        "你是 allhands 平台的 AI 助手。用户正在浏览**官方技能市场**,"
+        "想快速判断下面这份还**没安装**的技能值不值得装。"
+        "请用清晰、口语化的中文,帮 ta 一眼看懂它。\n\n"
+        "---\n\n"
+        f"## 市场元信息\n\n"
+        f"- **名称:** {name}\n"
+        f"- **版本:** {version}\n"
+        f"- **官方描述:** {description}\n"
+        f"- **来源:** {source_url}\n"
+        f"{body_section}"
+        "---\n\n"
+        "请用以下结构输出 Markdown(每段都要有,不要省略),控制在 280 字以内:\n\n"
+        "### 一句话作用\n"
+        "(用一句话告诉用户这个技能在干什么)\n\n"
+        "### 典型场景\n"
+        "(2-3 个具体的、能让用户产生'对,这就是我要的'感觉的场景)\n\n"
+        "### 不适合的情况\n"
+        "(1-2 个。让用户清楚边界)\n\n"
+        "### 装上之后能干啥\n"
+        "(1-2 句。装到员工身上后,员工实际能调用的工具 / 工作方式 — "
+        "从 SKILL.md 里能看出来什么就说什么,看不出来就说「安装后会引入若干工具,"
+        "具体在详情页查看」)"
     )
 
 
@@ -189,6 +250,58 @@ async def explain_skill_stream(
     full = "".join(chunks).strip()
     if full:
         _explain_cache[skill.id] = full
+
+
+async def explain_market_skill_stream(
+    *,
+    slug: str,
+    name: str,
+    description: str,
+    version: str,
+    source_url: str,
+    skill_md: str,
+    provider_repo: LLMProviderRepo,
+) -> AsyncIterator[str]:
+    """Stream a Markdown explanation for an **uninstalled** market skill.
+
+    Same contract as ``explain_skill_stream`` but sourced from the GitHub
+    market preview — we don't have tool_ids / prompt_fragment yet, only
+    the raw SKILL.md the maintainer wrote, so the prompt asks the model
+    to ground its answer in that body. Cached under ``market:<slug>``;
+    cache lifetime = process lifetime (no programmatic invalidation
+    upstream — market entries are fetched fresh from GitHub each time
+    so a true edit shows up after a process restart, which matches user
+    expectation for a list that's already 5-min-cached at the source).
+    """
+    key = _market_cache_key(slug)
+    cached = _explain_cache.get(key)
+    if cached:
+        yield cached
+        return
+
+    provider = await provider_repo.get_default()
+    if provider is None:
+        raise DomainError("尚未配置默认 LLM 供应商 — 请先到「模型网关」选一家供应商并标记为默认。")
+
+    prompt_text = _build_market_explain_prompt(
+        name=name,
+        description=description,
+        version=version,
+        source_url=source_url,
+        skill_md=skill_md,
+    )
+    llm = _build_explainer_llm(provider, provider.default_model)
+
+    chunks: list[str] = []
+    async for chunk in llm.astream([HumanMessage(content=prompt_text)]):  # type: ignore[attr-defined]
+        text = _chunk_text(chunk)
+        if text:
+            chunks.append(text)
+            yield text
+
+    full = "".join(chunks).strip()
+    if full:
+        _explain_cache[key] = full
 
 
 async def compose_employee_prompt_stream(
