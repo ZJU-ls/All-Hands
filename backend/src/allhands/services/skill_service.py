@@ -37,6 +37,7 @@ from allhands.services.github_market import (
 )
 
 if TYPE_CHECKING:
+    from allhands.execution.skills import SkillRegistry
     from allhands.persistence.repositories import SkillRepo
 
 
@@ -131,17 +132,39 @@ class SkillService:
         install_root: Path,
         market: GithubSkillMarket,
         cloner: SkillSourceCloner | None = None,
+        registry: SkillRegistry | None = None,
     ) -> None:
         self._repo = repo
         self._install_root = install_root
         self._market = market
         self._cloner = cloner or GitCloner()
+        # 2026-04-25 · 让 list_all 能把 in-memory builtin 也合并进来 ·
+        # 之前只读 DB,导致设置页「平台内建」永远显示 0(builtin 仅在
+        # SkillRegistry 里 register_lazy,从未持久化到 skills 表)。
+        # registry=None 时退化成原行为(测试夹具 / 局部场景)。
+        self._registry = registry
 
     async def list_all(self) -> list[Skill]:
-        return await self._repo.list_all()
+        installed = await self._repo.list_all()
+        if self._registry is None:
+            return installed
+        # Merge by id · DB row wins on collision so an installed/customized
+        # skill can shadow a builtin descriptor (current contract). Builtin
+        # entries from the registry surface as Skill rows with source=BUILTIN.
+        seen = {s.id for s in installed}
+        merged = list(installed)
+        for s in self._registry.list_all():
+            if s.id not in seen:
+                merged.append(s)
+        return merged
 
     async def get(self, skill_id: str) -> Skill | None:
-        return await self._repo.get(skill_id)
+        row = await self._repo.get(skill_id)
+        if row is not None:
+            return row
+        if self._registry is not None:
+            return self._registry.get_full(skill_id)
+        return None
 
     async def update(
         self,
