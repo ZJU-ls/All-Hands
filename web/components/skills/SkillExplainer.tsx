@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { cn } from "@/lib/cn";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/cn";
  */
 export function SkillExplainer({ skillId }: { skillId: string }) {
   const [text, setText] = useState("");
+  const bodyRef = useRef<HTMLDivElement>(null);
   // Tri-state: idle (no fetch yet) · loading (streaming chunks) · done · error.
   // P04 三态:loading 走 streaming 分支 · empty 不适用(单次解读不是列表) ·
   // error 显式渲染 errorMessage。
@@ -21,6 +22,15 @@ export function SkillExplainer({ skillId }: { skillId: string }) {
     "idle",
   );
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-scroll the panel to the latest content while streaming. Without
+  // this the new lines render below the fold and the user has to scroll
+  // by hand — a paper cut that makes the streaming feel inert. We only
+  // pin to the bottom while loading; once done, the user scrolls freely.
+  useEffect(() => {
+    if (state !== "loading" || !bodyRef.current) return;
+    bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [text, state]);
 
   const start = useCallback(async () => {
     setState("loading");
@@ -109,7 +119,10 @@ export function SkillExplainer({ skillId }: { skillId: string }) {
           </button>
         )}
       </header>
-      <div className="px-4 py-4">
+      <div
+        ref={bodyRef}
+        className="px-4 py-4 max-h-[480px] overflow-y-auto scroll-smooth"
+      >
         {state === "error" ? (
           <p
             data-testid="skill-explain-error"
