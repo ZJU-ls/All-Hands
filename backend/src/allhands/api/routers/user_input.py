@@ -57,6 +57,6 @@ async def answer_user_input(
     if row is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.user_input"))
     if row.status != UserInputStatus.PENDING:
-        raise HTTPException(status_code=409, detail="user_input is not pending")
+        raise HTTPException(status_code=409, detail=t("errors.user_input_not_pending"))
     await repo.update_status_with_answers(ui_id, UserInputStatus.ANSWERED, answers)
     return {"ok": True}

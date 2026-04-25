@@ -161,3 +161,27 @@ horizontal ellipsis "…",和其他 placeholder 不一致。
 - 1884 web tests · backend 11 i18n tests 全绿 · build 绿
 
 **commits**:待提交
+
+## Round 7 · 2026-04-26 03:30
+
+**主题**:回归网 + 残留扫描 + 美式拼写
+
+**碰到**:Round 5 的后端扫描漏了 user_input.py:60 "user_input is not pending"
+(因为 detail 在第 60 行新加的,grep 跑过早)。需要锁定回归。
+
+**做的事**:
+- 新加 backend 测试 tests/unit/test_no_hardcoded_chinese_in_routers.py:
+  扫所有 routers/*.py · 任何 `detail="..."` 或 `detail=f"..."` 字面量都
+  失败 · 只放过 `t(...)` / `str(exc)` / `repr(exc)` / 普通变量名。
+  ↓ 该测试找到上面的漏网之鱼,补 errors.user_input_not_pending key 后通过
+- 新加前端测试 tests/i18n-no-hardcoded-zh.test.ts:扫 app/components/*.tsx
+  · 剥掉 block / line / JSX 注释 · 中文 char count 必须为 0(allowlist
+  豁免 BrandMark / PlanCard 的 regex 模式)。当前通过 — 0 文件违规。
+- 修一处英式 → 美式拼写:settings.autoTitle "summarise" → "summarize" ·
+  autoTitleDescription "summarises" → "summarizes"
+
+**结果**:
+- 12 backend i18n + scan tests · 1885 web tests · build 全绿
+- 两个新 regression net 入 vitest / pytest,以后 PR 闭环
+
+**commits**:待提交
