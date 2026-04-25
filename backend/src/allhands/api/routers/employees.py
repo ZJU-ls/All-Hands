@@ -99,7 +99,7 @@ class EmployeePreviewRequest(BaseModel):
     preset: Preset
     custom_tool_ids: list[str] = Field(default_factory=list)
     custom_skill_ids: list[str] | None = None
-    custom_max_iterations: int | None = Field(default=None, ge=1, le=50)
+    custom_max_iterations: int | None = Field(default=None, ge=1, le=10000)
 
 
 class EmployeePreviewResponse(BaseModel):
