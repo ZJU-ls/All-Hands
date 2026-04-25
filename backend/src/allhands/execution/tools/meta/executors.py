@@ -918,9 +918,7 @@ async def _persist_office_artifact(
     _validate_artifact_name(name)
     size = len(blob)
     if size > _MAX_BINARY_BYTES:
-        raise _ArtifactExecutorError(
-            f"size {size}B exceeds binary ceiling {_MAX_BINARY_BYTES}B"
-        )
+        raise _ArtifactExecutorError(f"size {size}B exceeds binary ceiling {_MAX_BINARY_BYTES}B")
     mime = _ARTIFACT_DEFAULT_MIME[kind]
     now = datetime.now(UTC)
     artifact_id = str(uuid.uuid4())

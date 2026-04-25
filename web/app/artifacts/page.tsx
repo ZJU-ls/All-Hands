@@ -55,6 +55,10 @@ const KIND_ICON: Record<ArtifactKind, IconName> = {
   drawio: "layout-grid",
   pptx: "file",
   video: "play-circle",
+  csv: "database",
+  xlsx: "file",
+  docx: "file",
+  pdf: "file",
 };
 
 function formatBytes(n: number): string {

@@ -35,9 +35,7 @@ def render_xlsx(*, sheets: list[dict[str, Any]]) -> bytes:
     if not sheets:
         raise ArtifactGenerationError("xlsx requires at least one sheet.")
     if len(sheets) > _MAX_SHEETS:
-        raise ArtifactGenerationError(
-            f"too many sheets: {len(sheets)} > {_MAX_SHEETS}"
-        )
+        raise ArtifactGenerationError(f"too many sheets: {len(sheets)} > {_MAX_SHEETS}")
 
     try:
         from openpyxl import Workbook  # type: ignore[import-untyped]
@@ -79,9 +77,7 @@ def render_xlsx(*, sheets: list[dict[str, Any]]) -> bytes:
 
         for r_offset, row in enumerate(rows):
             if not isinstance(row, list):
-                raise ArtifactGenerationError(
-                    f"sheet[{idx}].rows[{r_offset}] must be a list."
-                )
+                raise ArtifactGenerationError(f"sheet[{idx}].rows[{r_offset}] must be a list.")
             for c, val in enumerate(row, start=1):
                 ws.cell(row=cursor + r_offset, column=c, value=_coerce_cell(val))
 
