@@ -46,11 +46,7 @@ SECTION_PATTERNS: dict[str, re.Pattern[str]] = {
 @pytest.mark.parametrize("pack", NEW_PACKS)
 def test_guidance_has_all_five_sections(pack: str) -> None:
     text = (SKILLS_ROOT / pack / "prompts" / "guidance.md").read_text()
-    missing = [
-        label
-        for label, pattern in SECTION_PATTERNS.items()
-        if not pattern.search(text)
-    ]
+    missing = [label for label, pattern in SECTION_PATTERNS.items() if not pattern.search(text)]
     assert not missing, (
         f"{pack}/prompts/guidance.md 缺少章节: {missing}. "
         f"每份 skill guidance 必须包含 5 大章节(何时调用 / 工作流 / "
@@ -66,8 +62,7 @@ def test_guidance_has_runnable_example(pack: str) -> None:
     has_code_block = "```" in text
     has_func_call = bool(re.search(r"\w+\([^)]*\)", text))
     assert has_code_block or has_func_call, (
-        f"{pack}: guidance.md 没有 code block 或 tool 调用样例 · "
-        f"加一段 ```...``` 让 LLM 照抄"
+        f"{pack}: guidance.md 没有 code block 或 tool 调用样例 · 加一段 ```...``` 让 LLM 照抄"
     )
 
 
@@ -78,9 +73,7 @@ def test_guidance_has_failure_table_or_list(pack: str) -> None:
     # locate the failure-handling section
     failure_idx = -1
     for line in text.splitlines():
-        if SECTION_PATTERNS["失败处理"].search(line) and (
-            line.startswith("##") or line.startswith("###")
-        ):
+        if SECTION_PATTERNS["失败处理"].search(line) and line.startswith(("##", "###")):
             failure_idx = text.find(line)
             break
     if failure_idx == -1:
@@ -89,6 +82,4 @@ def test_guidance_has_failure_table_or_list(pack: str) -> None:
     # accept markdown table OR bulleted list of cases
     has_table = "|" in after and "---" in after
     has_bullets = bool(re.search(r"^\s*[-*]\s", after, re.MULTILINE))
-    assert has_table or has_bullets, (
-        f"{pack}: 失败处理段落应该是表格或列表 · 帮 LLM 快速对症下药"
-    )
+    assert has_table or has_bullets, f"{pack}: 失败处理段落应该是表格或列表 · 帮 LLM 快速对症下药"

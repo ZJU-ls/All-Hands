@@ -82,6 +82,4 @@ def test_total_descriptor_count_at_or_above_baseline(registry: SkillRegistry) ->
     sk_* dev skill)· 任何掉包都会让这个数下降。"""
     all_skills = registry.list_all()
     builtin = [s for s in all_skills if s.source.value == "builtin"]
-    assert len(builtin) >= 18, (
-        f"builtin 数 {len(builtin)} < 18 · 大概率 seed_skills 漏读某个 yaml"
-    )
+    assert len(builtin) >= 18, f"builtin 数 {len(builtin)} < 18 · 大概率 seed_skills 漏读某个 yaml"
