@@ -22,9 +22,15 @@ def test_modes_registry_has_three_presets() -> None:
 
 
 def test_execute_preset_defaults() -> None:
+    """write_file dropped from execute preset (2026-04-25): its target dir
+    (data/reports/) is invisible to the user; user-facing outputs belong
+    in the Artifacts panel via allhands.artifacts skill. Keeping write_file
+    here taught weak models to default to filesystem writes for "give me X"
+    and skip artifact_create entirely.
+    """
     tools, skills, max_it = expand_preset("execute")
     assert "allhands.builtin.fetch_url" in tools
-    assert "allhands.builtin.write_file" in tools
+    assert "allhands.builtin.write_file" not in tools
     assert "allhands.meta.resolve_skill" in tools
     assert skills == ["sk_research", "sk_write"]
     assert max_it == 10

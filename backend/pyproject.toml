@@ -17,8 +17,6 @@ dependencies = [
     "langchain>=0.3.7",
     "langchain-openai>=0.2.5",
     "langchain-anthropic>=0.3.0",
-    "langgraph>=0.2.45",
-    "langgraph-checkpoint-sqlite>=2.0.0",
     "langfuse>=2.54.0",
     "mcp>=1.1.0",
     "structlog>=24.4.0",
@@ -82,7 +80,6 @@ module = [
     "langchain.*",
     "langchain_openai.*",
     "langchain_anthropic.*",
-    "langgraph.*",
     "apscheduler.*",
 ]
 ignore_missing_imports = true

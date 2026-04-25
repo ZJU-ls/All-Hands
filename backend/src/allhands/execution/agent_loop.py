@@ -42,13 +42,14 @@ from langchain_core.messages import (
     ToolMessage as LCToolMessage,
 )
 
-from allhands.core import Tool
+from allhands.core import Tool, ToolScope
 from allhands.core.conversation import (
     Message,
     ReasoningBlock,
     TextBlock,
     ToolUseBlock,
 )
+from allhands.execution.deferred import DeferredSignal
 from allhands.execution.internal_events import (
     AssistantMessageCommitted,
     AssistantMessagePartial,
@@ -66,6 +67,13 @@ from allhands.execution.tool_pipeline import (
     execute_tool_use_iter,
     partition_tool_uses,
 )
+
+# Special-case meta-tool ids (mirrors runner.py constants — kept here so
+# B5 cleanup can fully delete runner.py without breaking imports).
+RESOLVE_SKILL_TOOL_ID = "allhands.meta.resolve_skill"
+READ_SKILL_FILE_TOOL_ID = "allhands.meta.read_skill_file"
+DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
+SPAWN_SUBAGENT_TOOL_ID = "allhands.meta.spawn_subagent"
 
 if TYPE_CHECKING:
     from allhands.core import Employee
@@ -194,6 +202,7 @@ class AgentLoop:
         runtime: Any = None,
         spawn_subagent_service: Any = None,
         model_ref_override: str | None = None,
+        confirmation_signal: DeferredSignal | None = None,
         **_unused: Any,
     ) -> None:
         self._employee = employee
@@ -205,6 +214,12 @@ class AgentLoop:
         self._runtime = runtime
         self._spawn_subagent_service = spawn_subagent_service
         self._model_ref_override = model_ref_override
+        # Deferred suspend primitive used by _permission_check to gate
+        # WRITE+ / requires_confirmation tool execution. None = legacy
+        # auto-approve behaviour (matches old AutoApproveGate path);
+        # production wiring (B3) injects a ConfirmationDeferred backed
+        # by ConfirmationRepo.
+        self._confirmation_signal = confirmation_signal
 
     # --- public stream ----------------------------------------------------
 
@@ -227,7 +242,7 @@ class AgentLoop:
                 if lc_tools and hasattr(base_model, "bind_tools")
                 else base_model
             )
-            lc_messages = self._build_lc_messages(messages)
+            lc_messages = self._build_lc_messages(messages, overrides)
 
             iteration = 0
             while True:
@@ -356,15 +371,87 @@ class AgentLoop:
 
         Looks up each active tool_id in the registry; tools that
         aren't registered are silently dropped (the registry is the
-        SoT for what executors exist)."""
+        SoT for what executors exist).
+
+        Special-case meta tools have stub executors in the registry
+        (intentionally — they need per-turn services not available at
+        registration time). Substitute the real executor here:
+
+          * resolve_skill / read_skill_file → bound to skill_registry
+            + per-conversation runtime
+          * dispatch_employee → bound to dispatch_service
+          * spawn_subagent → bound to spawn_subagent_service
+
+        Mirrors runner.py:442-485. Tests for the executors themselves
+        live in their own modules; here we only verify the binding
+        substitution lands the right callable.
+        """
         out: dict[str, ToolBinding] = {}
         for tool_id in self._active_tool_ids():
             try:
                 tool, executor = self._tool_registry.get(tool_id)
             except KeyError:
                 continue
+            executor = self._maybe_substitute_executor(tool_id, executor)
             out[tool.name] = ToolBinding(tool=tool, executor=executor)
         return out
+
+    def _maybe_substitute_executor(self, tool_id: str, default: Any) -> Any:
+        """Replace the registry's stub for special meta tools with one
+        bound to this turn's services. Returns the default executor
+        unchanged if no substitution applies."""
+        if tool_id == RESOLVE_SKILL_TOOL_ID and self._skill_registry is not None:
+            from allhands.execution.tools.meta.resolve_skill import (
+                make_resolve_skill_executor,
+            )
+
+            return make_resolve_skill_executor(
+                employee=self._employee,
+                runtime=self._runtime,
+                skill_registry=self._skill_registry,
+            )
+        if tool_id == READ_SKILL_FILE_TOOL_ID and self._skill_registry is not None:
+            from allhands.execution.tools.meta.skill_files import (
+                make_read_skill_file_executor,
+            )
+
+            return make_read_skill_file_executor(
+                runtime=self._runtime,
+                skill_registry=self._skill_registry,
+            )
+        if tool_id == DISPATCH_TOOL_ID and self._dispatch_service is not None:
+            return self._build_dispatch_executor()
+        if tool_id == SPAWN_SUBAGENT_TOOL_ID and self._spawn_subagent_service is not None:
+            from allhands.execution.tools.meta.spawn_subagent import (
+                make_spawn_subagent_executor,
+            )
+
+            return make_spawn_subagent_executor(self._spawn_subagent_service)
+        return default
+
+    def _build_dispatch_executor(self) -> Any:
+        """The dispatch executor closes over self._dispatch_service.
+        Defined as a method so the closure has a clean reference; the
+        same shape as runner.py:_make_dispatch_executor."""
+        dispatch_service = self._dispatch_service
+
+        async def _dispatch(
+            employee_id: str,
+            task: str,
+            context_refs: list[str] | None = None,
+            timeout_seconds: int = 300,
+        ) -> dict[str, Any]:
+            assert dispatch_service is not None  # _maybe_substitute guard
+            result = await dispatch_service.dispatch(
+                employee_id=employee_id,
+                task=task,
+                context_refs=context_refs,
+                timeout_seconds=timeout_seconds,
+            )
+            dumped = result.model_dump()
+            return dict(dumped) if isinstance(dumped, dict) else {"result": dumped}
+
+        return _dispatch
 
     def _build_lc_tools(self, bindings: dict[str, ToolBinding]) -> list[Any]:
         """Build LangChain StructuredTool wrappers for `model.bind_tools`.
@@ -399,7 +486,40 @@ class AgentLoop:
             out.append(lc)
         return out
 
-    def _build_lc_messages(self, messages: list[dict[str, Any]]) -> list[Any]:
+    def _compose_system_prompt(self, overrides: Any = None) -> str:
+        """Build the per-turn system prompt: employee base + skill
+        descriptors + resolved skill fragments + optional override.
+
+        Mirrors runner.py:_compose_system_prompt but accepts overrides
+        directly so the loop body doesn't need to peek at AgentLoop
+        internals. Override prepends; descriptors are pure-function
+        rebuilt every turn (ADR 0011 principle 3).
+        """
+        parts: list[str] = []
+        # Per-turn override prepends — it's the most salient framing
+        if overrides is not None:
+            override_text = (getattr(overrides, "system_override", None) or "").strip()
+            if override_text:
+                parts.append(override_text)
+        base = (self._employee.system_prompt or "").strip()
+        if base:
+            parts.append(base)
+        if self._runtime is not None:
+            descriptors = getattr(self._runtime, "skill_descriptors", None)
+            if descriptors:
+                from allhands.execution.skills import render_skill_descriptors
+
+                parts.append(render_skill_descriptors(descriptors))
+            fragments = getattr(self._runtime, "resolved_fragments", None)
+            if fragments:
+                parts.append("\n\n".join(fragments))
+        return "\n\n".join(parts).strip()
+
+    def _build_lc_messages(
+        self,
+        messages: list[dict[str, Any]],
+        overrides: Any = None,
+    ) -> list[Any]:
         """Project chat history dicts into LangChain message instances.
 
         Faithful reconstruction matters for multi-turn tool replay:
@@ -409,8 +529,9 @@ class AgentLoop:
         role is 'tool'.
         """
         lc_messages: list[Any] = []
-        if self._employee.system_prompt:
-            lc_messages.append(SystemMessage(content=self._employee.system_prompt))
+        system_prompt = self._compose_system_prompt(overrides)
+        if system_prompt:
+            lc_messages.append(SystemMessage(content=system_prompt))
         for m in messages:
             role = m.get("role")
             content = m.get("content", "")
@@ -450,18 +571,42 @@ class AgentLoop:
         block: ToolUseBlock,
         tool: Tool,
     ) -> PermissionDecision:
-        """Default permission policy.
+        """Permission decision for one tool_use.
 
-        Task 7: everything Allowed (the gate is wired up in Task 8).
-        Future plan-mode support: return Deny() when conversation_mode
-        forbids the tool's scope. This method is the SINGLE place that
-        decision lives — tools never check permissions themselves.
+        Currently:
+          * WRITE / IRREVERSIBLE / BOOTSTRAP scope ∧ requires_confirmation
+            ∧ confirmation_signal wired → Defer (suspend, ask user)
+          * everything else → Allow
+
+        Future extensions plug in here:
+          * plan mode → Deny when conversation_mode == 'plan' and tool is
+            mutator
+          * clarification → Defer with UserInputDeferred when tool is
+            an ask_user_question
+          * sub-agent → executor itself does the recursion; the pipeline
+            doesn't need to defer at this layer
         """
-        # Task 8 will replace this stub with: WRITE+ or requires_confirmation
-        # → Defer(ConfirmationDeferred, summary=..., rationale=...).
-        # For Task 7 we keep everything Allow so the loop logic itself
-        # is testable without gate plumbing.
-        _ = (block, tool, Defer, Deny)  # silence unused-import linter
+        needs_confirm = (
+            tool.scope
+            in (
+                ToolScope.WRITE,
+                ToolScope.IRREVERSIBLE,
+                ToolScope.BOOTSTRAP,
+            )
+            and tool.requires_confirmation
+        )
+        if needs_confirm and self._confirmation_signal is not None:
+            return Defer(
+                signal=self._confirmation_signal,
+                publish_kwargs={
+                    "tool_use_id": block.id,
+                    "summary": f"Execute {tool.name} with args: {block.input}",
+                    "rationale": f"Tool {tool.name!r} requires confirmation.",
+                },
+            )
+        # No signal wired (test path / read-only) → straight allow.
+        # Deny is only used by future plan-mode hooks.
+        _ = Deny  # keep import live for future extension
         return Allow()
 
 

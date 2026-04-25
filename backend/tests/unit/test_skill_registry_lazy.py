@@ -102,8 +102,14 @@ def test_registry_lazy_loader_only_invoked_on_get_full() -> None:
     assert full_a is full_b or full_a == full_b
 
 
-def test_bootstrap_employee_runtime_skips_eager_expansion() -> None:
-    """bootstrap_employee_runtime returns descriptors only — resolved_skills empty at turn 0."""
+def test_bootstrap_employee_runtime_eager_resolves_mounted_skills() -> None:
+    """bootstrap_employee_runtime eager-resolves all mounted skills (2026-04-25).
+
+    LangGraph's create_react_agent binds the tool list at graph construction,
+    so a mid-turn resolve_skill couldn't make new tools callable in the same
+    turn. We now eager-resolve at conversation init for all employees.
+    resolve_skill becomes an idempotent no-op for models that still try.
+    """
     tool_reg = ToolRegistry()
     discover_builtin_tools(tool_reg)
     skill_reg = SkillRegistry()
@@ -117,9 +123,10 @@ def test_bootstrap_employee_runtime_skips_eager_expansion() -> None:
     # Descriptors for all mounted skills present.
     ids = {d.id for d in runtime.skill_descriptors}
     assert {"sk_research", "sk_write"} <= ids
-    # Nothing resolved yet — that happens only via resolve_skill meta tool.
-    assert runtime.resolved_skills == {}
-    assert runtime.resolved_fragments == []
+    # Skills eager-resolved — tools bound from turn 0 (was empty pre-fix).
+    assert set(runtime.resolved_skills.keys()) == {"sk_research", "sk_write"}
+    for tids in runtime.resolved_skills.values():
+        assert len(tids) > 0
 
 
 def test_token_budget_drops_from_3000_to_600() -> None:

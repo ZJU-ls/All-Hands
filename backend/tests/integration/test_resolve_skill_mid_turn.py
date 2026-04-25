@@ -71,24 +71,28 @@ def _build_harness(
 
 
 @pytest.mark.asyncio
-async def test_resolve_skill_injects_tools_next_turn() -> None:
-    """Contract § 8.3: resolve_skill mutates runtime → next lc_tools rebuild sees fetch_url."""
+async def test_resolve_skill_idempotent_after_eager_bootstrap() -> None:
+    """2026-04-25 update: bootstrap eagerly resolves all mounted skills
+    (LangGraph create_react_agent binds tools at graph construction; mid-
+    turn activation never made tools callable in the same turn). So
+    runtime.resolved_skills is already populated at turn 0 — calling
+    resolve_skill becomes an idempotent no-op for models that still try
+    to activate before use, returning already_loaded=True.
+    """
     emp, skill_reg, _tool_reg, runtime = _build_harness(skill_ids=["sk_research"])
     executor = make_resolve_skill_executor(employee=emp, runtime=runtime, skill_registry=skill_reg)
 
-    assert runtime.resolved_skills == {}
-    assert runtime.resolved_fragments == []
+    # Bootstrap already resolved this skill — verify and then re-call.
+    assert runtime.resolved_skills["sk_research"] == ["allhands.builtin.fetch_url"]
+    assert len(runtime.resolved_fragments) == 1
 
     result = await executor(skill_id="sk_research")
 
-    assert result["already_loaded"] is False
+    assert result["already_loaded"] is True
     assert "allhands.builtin.fetch_url" in result["tool_ids"]
-    assert "researcher" in result["prompt_fragment"].lower()
-    # Runtime now carries the injection; the agent_runner per-turn rebuild
-    # will see it.
+    # No duplicate injection — runtime unchanged.
     assert runtime.resolved_skills["sk_research"] == ["allhands.builtin.fetch_url"]
     assert len(runtime.resolved_fragments) == 1
-    assert "cite" in runtime.resolved_fragments[0].lower()
 
 
 @pytest.mark.asyncio
@@ -108,16 +112,23 @@ async def test_resolve_skill_idempotent() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_skill_whitelist_enforced() -> None:
-    """Contract § 5.1 · behavior 1: skill_id ∉ employee.skill_ids → error · no side effect."""
+    """Contract § 5.1 · behavior 1: skill_id ∉ employee.skill_ids → error · no side effect.
+
+    Bootstrap-resolved skills (sk_research, since it's in skill_ids) are
+    untouched by an unauthorized request for sk_write.
+    """
     emp, skill_reg, _tool_reg, runtime = _build_harness(skill_ids=["sk_research"])
     executor = make_resolve_skill_executor(employee=emp, runtime=runtime, skill_registry=skill_reg)
+    initial_resolved = dict(runtime.resolved_skills)
+    initial_fragments = list(runtime.resolved_fragments)
 
     result = await executor(skill_id="sk_write")
 
     assert "error" in result
-    # Runtime untouched.
-    assert runtime.resolved_skills == {}
-    assert runtime.resolved_fragments == []
+    # Runtime untouched (no new entries added; sk_write not in mount list).
+    assert runtime.resolved_skills == initial_resolved
+    assert runtime.resolved_fragments == initial_fragments
+    assert "sk_write" not in runtime.resolved_skills
 
 
 @pytest.mark.asyncio

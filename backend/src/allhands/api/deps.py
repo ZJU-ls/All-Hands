@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import (
 from allhands.config import get_settings
 from allhands.execution.gate import (
     BaseGate,
-    InterruptConfirmationGate,
     PersistentConfirmationGate,
 )
 from allhands.execution.mcp.adapter import RealMCPAdapter
@@ -118,17 +117,13 @@ async def get_confirmation_service(session: AsyncSession) -> ConfirmationService
     return ConfirmationService(SqlConfirmationRepo(session))
 
 
-async def get_gate(session: AsyncSession, *, use_interrupt: bool = False) -> BaseGate:
-    """Return the confirmation gate implementation (ADR 0014 Phase 4d).
+async def get_gate(session: AsyncSession) -> BaseGate:
+    """Return the polling confirmation gate (ADR 0018).
 
-    ``use_interrupt=True`` (default for chat paths that have a checkpointer
-    wired) selects ``InterruptConfirmationGate`` — pauses via LangGraph
-    interrupt(), DB row is written by the chat_service tap. Without a
-    checkpointer, interrupt() has nothing to resume from, so callers fall
-    back to the legacy ``PersistentConfirmationGate`` (polling + DB).
+    The InterruptConfirmationGate (LangGraph-based) was removed —
+    suspension flows through DeferredSignal in the tool pipeline, which
+    polls ConfirmationRepo. This factory now has a single implementation.
     """
-    if use_interrupt:
-        return InterruptConfirmationGate()
     queue = get_confirmation_queue()
     return PersistentConfirmationGate(
         confirmation_repo=SqlConfirmationRepo(session),
@@ -152,11 +147,9 @@ async def get_chat_service(
         # when startup failed — runner falls back to v0 pure-function path.
         checkpointer = getattr(request.app.state, "checkpointer", None)
 
-    # ADR 0014 Phase 4d: interrupt-gate when we have a checkpointer (the
-    # interrupt() primitive requires one). Otherwise fall back to the legacy
-    # polling gate so chat still works even if the checkpointer failed to
-    # start (e.g. disk full at boot).
-    gate = await get_gate(session, use_interrupt=checkpointer is not None)
+    # ADR 0018: single polling gate · suspend lives in DeferredSignal,
+    # not LangGraph interrupt().
+    gate = await get_gate(session)
 
     return ChatService(
         employee_repo=SqlEmployeeRepo(session),

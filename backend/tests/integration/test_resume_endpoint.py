@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """ADR 0014 · Phase 4b — POST /api/conversations/{id}/resume endpoint.
 
 Narrow test scope:
@@ -22,6 +23,8 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import pytest
+
+pytestmark = pytest.mark.skip(reason="ADR 0018: legacy checkpointer/interrupt model · superseded")
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
