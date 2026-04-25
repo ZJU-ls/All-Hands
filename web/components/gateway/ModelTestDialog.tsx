@@ -36,6 +36,7 @@ import { Composer, ThinkingToggle } from "@/components/chat/Composer";
 import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
 import { Icon } from "@/components/ui/icon";
 import { openStream, type StreamHandle } from "@/lib/stream-client";
+import { useDismissOnEscape } from "@/lib/use-dismiss-on-escape";
 
 const STICK_THRESHOLD_PX = 64;
 
@@ -221,6 +222,9 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
   useEffect(() => {
     return () => streamRef.current?.abort();
   }, []);
+
+  // ESC = 关闭对话框(测试中也允许直接关 — abort 由 unmount cleanup 接管)
+  useDismissOnEscape(true, onClose);
 
   function runStreaming(outbound: Message) {
     const history: Message[] = [...messages, outbound];

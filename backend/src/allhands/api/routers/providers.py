@@ -15,6 +15,12 @@ from allhands.core.provider_presets import (
     ProviderKind,
 )
 from allhands.execution.llm_factory import build_llm, probe_endpoint
+from allhands.services.connectivity import (
+    ENDPOINT_TIMEOUT_S,
+)
+from allhands.services.connectivity import (
+    probe_endpoint as probe_endpoint_health,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -186,3 +192,26 @@ async def test_provider(
         }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+@router.post("/{provider_id}/ping", response_model=dict)
+async def ping_provider(
+    provider_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object]:
+    """Endpoint-only health probe — auth + network reach.
+
+    Mirrors the endpoint half of `/api/models/{id}/ping` for the Provider
+    list view. No inference is performed: a single GET against the provider's
+    list-models endpoint is enough to tell the user "your key + base_url
+    can reach this provider" or fail with a structured reason.
+    """
+    import httpx as _httpx
+
+    svc = await get_provider_service(session)
+    provider = await svc.get(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail="Provider not found.")
+    async with _httpx.AsyncClient(timeout=ENDPOINT_TIMEOUT_S) as client:
+        result = await probe_endpoint_health(provider, http_client=client)
+    return result.to_dict()

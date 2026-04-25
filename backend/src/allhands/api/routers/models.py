@@ -15,10 +15,15 @@ from pydantic import BaseModel, Field
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_model_service, get_session
 from allhands.core.model import LLMModel
+from allhands.services.connectivity import (
+    ENDPOINT_TIMEOUT_S,
+    MODEL_TIMEOUT_S,
+    overall_status,
+    probe_endpoint,
+    probe_model,
+    to_legacy_shape,
+)
 from allhands.services.model_service import astream_chat_test, run_chat_test
-
-PING_TIMEOUT_SECONDS = 15.0
-PING_MAX_TOKENS = 4
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -160,34 +165,54 @@ async def ping_model(
     model_id: str,
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, object]:
-    """Fast connectivity ping for one model (I-0019).
+    """Two-layer connectivity ping (I-0019 · 第一性原理重构).
 
-    Fires a single chat call with prompt="ping", max_tokens=4 and a
-    dedicated 15s httpx client so a dead provider cannot hold the UI for
-    120s. Shares the `run_chat_test` code path so error categorisation
-    matches the rest of the gateway surface.
+    "连通" 拆成两个独立维度,分别返回:
 
-    Notes on the 15s budget: most non-thinking models reply in 2-5s; the
-    larger margin covers DashScope coding-plan cold-starts that 5s missed.
-    We deliberately do NOT pass `enable_thinking=False`: that bool is
-    additive on top of `thinking: {"type": "disabled"}` (B02 contract) and
-    multi-tenant gateways like DashScope coding-plan reject the unknown
-    root field for non-Qwen routes (MiniMax / Kimi). The model's own
-    default thinking mode is what we want for a healthcheck.
+    1. **endpoint** — 端点能否被这把 key 触达。GET `/v1/models`,不调推理。
+       亚秒级;只判网络 + auth 是否通过。
+    2. **model_probe** — 这个 model name 能否被这条 (provider, key) 路由。
+       最小 chat 调用 (max_tokens=1, 单条 user msg, 不带 thinking/temp/system)。
+       白名单分类 — 仅 NETWORK / TIMEOUT / AUTH / MODEL_NOT_FOUND 判 unusable;
+       400 / 422 / 429 / 5xx / 慢都视为"模型还在,只是这次调用本身有别的问题"。
+
+    Returns ``{endpoint, model_probe, status, ok, latency_ms, error?, error_category?}``
+    where the bottom 4 fields are kept for backward-compat with the existing
+    Gateway UI. Status ∈ ``ok | degraded | endpoint_unreachable | auth_failed
+    | model_unavailable``.
     """
     svc = await get_model_service(session)
     pair = await svc.resolve_with_provider(model_id)
     if pair is None:
         raise HTTPException(status_code=404, detail="Model or provider not found.")
     model, provider = pair
-    async with httpx.AsyncClient(timeout=PING_TIMEOUT_SECONDS) as client:
-        return await run_chat_test(
-            provider,
-            model.name,
-            prompt="ping",
-            max_tokens=PING_MAX_TOKENS,
-            http_client=client,
+
+    async with httpx.AsyncClient(timeout=ENDPOINT_TIMEOUT_S) as ec:
+        endpoint = await probe_endpoint(provider, http_client=ec)
+
+    # If we couldn't even reach the endpoint, skip the model probe — running
+    # a 12s chat probe against a dead host just doubles the user's wait.
+    if not endpoint.reachable or endpoint.auth_ok is False:
+        from allhands.services.connectivity import ModelProbe
+
+        skipped = ModelProbe(
+            usable=False,
+            classification="network" if not endpoint.reachable else "auth",
+            status_code=None,
+            latency_ms=0,
+            error="skipped: endpoint unreachable"
+            if not endpoint.reachable
+            else "skipped: auth failed",
         )
+        status = overall_status(endpoint, skipped)
+        return to_legacy_shape(
+            model_name=model.name, endpoint=endpoint, model=skipped, status=status
+        )
+
+    async with httpx.AsyncClient(timeout=MODEL_TIMEOUT_S) as mc:
+        m_probe = await probe_model(provider, model.name, http_client=mc)
+    status = overall_status(endpoint, m_probe)
+    return to_legacy_shape(model_name=model.name, endpoint=endpoint, model=m_probe, status=status)
 
 
 @router.post("/{model_id}/test", response_model=dict)
