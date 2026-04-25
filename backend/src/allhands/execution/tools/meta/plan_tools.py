@@ -21,11 +21,14 @@ PLAN_CREATE_TOOL = Tool(
     description=(
         "Create your own todo list for the current task — short title + ordered "
         "step descriptions (1-20). Returns plan_id. Use this for any non-trivial "
-        "request (3+ steps). After creating, IMMEDIATELY proceed to execute step 1; "
-        "do NOT wait for user approval. Mark steps with plan_update_step as you "
-        "work, and call plan_view occasionally so the user sees the timeline. "
-        "This is YOUR working memo — the user observes; they don't approve. "
-        "(For approval-gated plans use a confirmation tool, not this one.)"
+        "request (3+ steps). "
+        "CRITICAL: in the SAME assistant turn, immediately follow plan_create with "
+        "another tool_call — either plan_update_step(plan_id, 0, 'running') or the "
+        "first execution tool itself. Do NOT end the turn with text describing what "
+        "you will do; that produces a visibly stuck UI. "
+        "Do NOT wait for user approval — this is YOUR working memo; the user just "
+        "watches the timeline render. (For approval-gated plans use a confirmation "
+        "tool, not this one.)"
     ),
     input_schema={
         "type": "object",

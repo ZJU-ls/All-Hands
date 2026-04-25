@@ -53,12 +53,12 @@ const KIND_ICON: Record<ArtifactKind, IconName> = {
   data: "database",
   mermaid: "activity",
   drawio: "layout-grid",
-  pdf: "file",
-  xlsx: "database",
-  csv: "database",
-  docx: "file",
   pptx: "file",
   video: "play-circle",
+  csv: "database",
+  xlsx: "database",
+  docx: "file",
+  pdf: "file",
 };
 
 function formatBytes(n: number): string {

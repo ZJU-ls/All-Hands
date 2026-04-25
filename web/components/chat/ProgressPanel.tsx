@@ -41,8 +41,12 @@ export function ProgressPanel({ conversationId }: Props) {
       data-testid="progress-panel"
       className="border-t border-border bg-surface"
     >
-      {hasPlan && <PlanProgressSection plan={plan!} />}
-      {hasSubagents && <SubagentProgressSection subagents={subagents} />}
+      <div className="mx-auto w-full max-w-6xl px-4 py-2">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface-2">
+          {hasPlan && <PlanProgressSection plan={plan!} />}
+          {hasSubagents && <SubagentProgressSection subagents={subagents} />}
+        </div>
+      </div>
     </div>
   );
 }
