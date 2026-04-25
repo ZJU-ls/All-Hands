@@ -3,7 +3,6 @@
 Covers:
 - Summary aggregation (traces_total, failure_rate_24h, latency_p50, avg_tokens,
   by_employee breakdown) over the events table.
-- Config repo round-trip through get_status / bootstrap_now.
 - list_traces filtering by employee_id / status / since / until + limit cap.
 - get_trace by id returns None when missing.
 """
@@ -23,7 +22,6 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 from allhands.core import (
-    BootstrapStatus,
     Employee,
     EventEnvelope,
     ObservabilityConfig,
@@ -128,8 +126,6 @@ async def test_summary_is_empty_on_fresh_db(
     assert summary.traces_total == 0
     assert summary.failure_rate_24h == 0.0
     assert summary.avg_tokens_per_run == 0
-    assert summary.observability_enabled is False
-    assert summary.bootstrap_status == BootstrapStatus.PENDING
 
 
 @pytest.mark.asyncio
@@ -194,23 +190,17 @@ async def test_summary_aggregates_runs_and_failures(
 
 
 @pytest.mark.asyncio
-async def test_summary_exposes_bootstrap_status(
+async def test_summary_exposes_observability_enabled(
     maker: async_sessionmaker[AsyncSession],
 ) -> None:
-    await _seed(
-        maker,
-        config=ObservabilityConfig(
-            bootstrap_status=BootstrapStatus.OK,
-            host="http://langfuse:3000",
-            public_key="pk",
-            secret_key="sk",
-        ),
-    )
+    """Post-Langfuse · observability is unconditionally enabled because the
+    platform self-instruments via the events table."""
+    await _seed(maker, config=ObservabilityConfig(auto_title_enabled=True))
     async with maker() as s:
         summary = await _svc(s).get_summary()
-    assert summary.observability_enabled is True
-    assert summary.bootstrap_status == BootstrapStatus.OK
-    assert summary.host == "http://langfuse:3000"
+    # No bootstrap state to surface anymore. Summary just carries the
+    # self-instrumented metrics; status helpers live on /api/observatory/status.
+    assert summary.traces_total == 0
 
 
 @pytest.mark.asyncio
@@ -283,11 +273,12 @@ async def test_get_trace_returns_none_when_missing(
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_now_is_idempotent_noop(
+async def test_get_status_always_observability_enabled(
     maker: async_sessionmaker[AsyncSession],
 ) -> None:
+    """Post-Langfuse · ``observability_enabled`` is a constant True derived
+    from "self-instrumentation always runs". The legacy ``bootstrap_now``
+    method was deleted with the Langfuse stack."""
     async with maker() as s:
-        cfg = await _svc(s).bootstrap_now()
-    # v0 MVP: returns pending singleton without touching Langfuse
-    assert cfg.bootstrap_status == BootstrapStatus.PENDING
-    assert cfg.observability_enabled is False
+        cfg = await _svc(s).get_status()
+    assert cfg.observability_enabled is True

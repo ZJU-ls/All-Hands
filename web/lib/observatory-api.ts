@@ -1,7 +1,5 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-export type BootstrapStatus = "pending" | "ok" | "failed" | "external";
-
 export type ObservatoryEmployeeBreakdownDto = {
   employee_id: string;
   employee_name: string;
@@ -9,6 +7,7 @@ export type ObservatoryEmployeeBreakdownDto = {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
+  estimated_cost_usd: number;
 };
 
 export type ObservatoryModelBreakdownDto = {
@@ -17,23 +16,23 @@ export type ObservatoryModelBreakdownDto = {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
+  estimated_cost_usd: number;
 };
 
 export type ObservatorySummaryDto = {
   traces_total: number;
   failure_rate_24h: number;
   latency_p50_s: number;
+  latency_p95_s: number;
+  latency_p99_s: number;
   avg_tokens_per_run: number;
   input_tokens_total: number;
   output_tokens_total: number;
   total_tokens_total: number;
   llm_calls_total: number;
+  estimated_cost_usd: number;
   by_employee: ObservatoryEmployeeBreakdownDto[];
   by_model: ObservatoryModelBreakdownDto[];
-  observability_enabled: boolean;
-  bootstrap_status: BootstrapStatus;
-  bootstrap_error: string | null;
-  host: string | null;
 };
 
 export type RunTokenUsageDto = {
@@ -65,12 +64,8 @@ export async function fetchObservatorySummary(): Promise<ObservatorySummaryDto> 
 }
 
 export type SystemFlagsDto = {
-  bootstrap_status: BootstrapStatus;
-  bootstrap_error: string | null;
-  host: string | null;
   observability_enabled: boolean;
   auto_title_enabled: boolean;
-  bootstrapped_at: string | null;
 };
 
 export async function fetchSystemFlags(): Promise<SystemFlagsDto> {
@@ -81,27 +76,13 @@ export async function fetchSystemFlags(): Promise<SystemFlagsDto> {
 
 export async function patchSystemFlags(
   body: { auto_title_enabled?: boolean },
-): Promise<{ auto_title_enabled: boolean; bootstrap_status: BootstrapStatus; observability_enabled: boolean }> {
+): Promise<{ auto_title_enabled: boolean; observability_enabled: boolean }> {
   const res = await fetch(`${BASE}/api/observatory/config`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`observatory patch failed: ${res.status}`);
-  return res.json();
-}
-
-export async function retryBootstrap(): Promise<{
-  bootstrap_status: BootstrapStatus;
-  bootstrap_error: string | null;
-  observability_enabled: boolean;
-}> {
-  const res = await fetch(`${BASE}/api/observatory/bootstrap`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    throw new Error(`bootstrap retry failed: ${res.status}`);
-  }
   return res.json();
 }
 
@@ -183,6 +164,7 @@ export type RunDetailDto = {
   tokens: RunTokenUsageDto;
   llm_calls: number;
   model_ref: string | null;
+  estimated_cost_usd: number;
   error: RunErrorDto | null;
   turns: TurnDto[];
   artifacts: ArtifactSummaryDto[];

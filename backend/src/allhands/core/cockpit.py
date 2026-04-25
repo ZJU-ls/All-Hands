@@ -45,7 +45,6 @@ class ComponentStatus(BaseModel):
 class HealthSnapshot(BaseModel):
     gateway: ComponentStatus
     mcp_servers: ComponentStatus
-    langfuse: ComponentStatus
     db: ComponentStatus
     triggers: ComponentStatus
 

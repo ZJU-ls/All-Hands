@@ -95,7 +95,7 @@ export default function KnowledgePage() {
         ? data.find((k) => k.id === preserveActive.id)
         : null;
       if (target) setActiveKb(target);
-      else if (!activeKb && data.length > 0) setActiveKb(data[0]);
+      else if (!activeKb && data.length > 0) setActiveKb(data[0] ?? null);
     } catch (e) {
       setError(String(e));
     }
@@ -367,7 +367,7 @@ export default function KnowledgePage() {
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
                   {docs?.length === 0 && (
                     <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center text-[12px] text-text-muted">
-                      KB 为空 · 点右上角"上传"添加第一份文档
+                      KB 为空 · 点右上角「上传」添加第一份文档
                     </div>
                   )}
                   <ul className="space-y-2">

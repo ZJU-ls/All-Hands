@@ -221,7 +221,6 @@
       "statusDown": "DOWN",
       "healthGateway": "模型网关",
       "healthMcp": "MCP 服务器",
-      "healthLangfuse": "Langfuse",
       "healthDb": "数据库",
       "healthTriggers": "触发器调度",
       "costTitle": "估算成本 · 24h",

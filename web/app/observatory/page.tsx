@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState } from "@/components/state";
@@ -9,33 +9,12 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import {
   fetchObservatorySummary,
   fetchTraces,
-  retryBootstrap,
-  type BootstrapStatus,
   type ObservatorySummaryDto,
   type TraceSummaryDto,
 } from "@/lib/observatory-api";
 
 type LoadState = "idle" | "loading" | "ok" | "error";
 type TimeRange = "1h" | "24h" | "7d";
-
-function statusLabel(s: BootstrapStatus): string {
-  switch (s) {
-    case "ok":
-      return "ok";
-    case "external":
-      return "external";
-    case "pending":
-      return "pending";
-    case "failed":
-      return "failed";
-  }
-}
-
-function bootstrapTone(s: BootstrapStatus): "success" | "warning" | "danger" {
-  if (s === "ok" || s === "external") return "success";
-  if (s === "pending") return "warning";
-  return "danger";
-}
 
 function formatTokens(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return "0";
@@ -309,7 +288,6 @@ export default function ObservatoryPage() {
   const [traces, setTraces] = useState<TraceSummaryDto[]>([]);
   const [state, setState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [isRetrying, startRetry] = useTransition();
   const [range, setRange] = useState<TimeRange>("24h");
 
   async function load() {
@@ -333,33 +311,13 @@ export default function ObservatoryPage() {
     load();
   }, []);
 
-  function onRetry() {
-    startRetry(async () => {
-      try {
-        await retryBootstrap();
-        await load();
-      } catch (e) {
-        setError((e as Error).message);
-      }
-    });
-  }
-
   const incidents = useMemo(
     () => traces.filter((t) => t.status === "failed").slice(0, 5),
     [traces],
   );
 
-  const tone = summary ? bootstrapTone(summary.bootstrap_status) : "warning";
-  const toneDot =
-    tone === "success" ? "bg-success" : tone === "warning" ? "bg-warning" : "bg-danger";
-  const toneText =
-    tone === "success" ? "text-success" : tone === "warning" ? "text-warning" : "text-danger";
-  const toneSoft =
-    tone === "success"
-      ? "bg-success-soft"
-      : tone === "warning"
-        ? "bg-warning-soft"
-        : "bg-danger-soft";
+  // Self-instrumented · status pill is always success now that Langfuse is gone.
+  const toneDot = "bg-success";
 
   return (
     <AppShell title={t("title")}>
@@ -405,47 +363,6 @@ export default function ObservatoryPage() {
               </button>
             </div>
           </header>
-
-          {/* BOOTSTRAP BANNER */}
-          {summary && !summary.observability_enabled ? (
-            <div
-              role="alert"
-              className={`flex items-start gap-3 rounded-lg border border-border ${toneSoft} px-4 py-3`}
-            >
-              <div className={`mt-0.5 ${toneText}`}>
-                <Icon name="alert-triangle" size={16} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-text">
-                  {t("bootstrap.headlinePrefix")} {statusLabel(summary.bootstrap_status)} {t("bootstrap.headlineSuffix")}
-                </div>
-                <div className="mt-0.5 text-[12px] text-text-muted">
-                  {t("bootstrap.body")}
-                  {summary.bootstrap_error ? (
-                    <>
-                      {" "}
-                      <span className="text-text-subtle font-mono">
-                        {t("bootstrap.lastPrefix")} {summary.bootstrap_error}
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={onRetry}
-                disabled={isRetrying}
-                className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-surface border border-border hover:border-border-strong text-[12px] font-medium text-text transition-colors duration-fast disabled:opacity-50"
-              >
-                <Icon
-                  name="refresh"
-                  size={12}
-                  className={isRetrying ? "animate-spin" : ""}
-                />
-                {isRetrying ? t("bootstrap.retrying") : t("bootstrap.retry")}
-              </button>
-            </div>
-          ) : null}
 
           {/* ERROR BANNER */}
           {state === "error" && !summary ? (
@@ -566,22 +483,35 @@ export default function ObservatoryPage() {
               {/* SECONDARY GRID */}
               <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <HealthPanel
-                  title={t("panels.langfuse")}
+                  title={t("panels.telemetry")}
                   icon="shield-check"
                   rows={[
                     {
-                      label: t("panels.rows.bootstrap"),
-                      value: statusLabel(summary.bootstrap_status),
-                      tone: tone,
-                    },
-                    {
                       label: t("panels.rows.observability"),
-                      value: summary.observability_enabled ? t("panels.values.enabled") : t("panels.values.disabled"),
-                      tone: summary.observability_enabled ? "success" : "warning",
+                      value: t("panels.values.selfInstrumented"),
+                      tone: "success",
                     },
                     {
-                      label: t("panels.rows.host"),
-                      value: summary.host ?? "—",
+                      label: t("panels.rows.latencyP50"),
+                      value: formatDuration(summary.latency_p50_s),
+                      tone: "muted",
+                    },
+                    {
+                      label: t("panels.rows.latencyP95"),
+                      value: formatDuration(summary.latency_p95_s),
+                      tone: "muted",
+                    },
+                    {
+                      label: t("panels.rows.latencyP99"),
+                      value: formatDuration(summary.latency_p99_s),
+                      tone: "muted",
+                    },
+                    {
+                      label: t("panels.rows.estimatedCost"),
+                      value:
+                        summary.estimated_cost_usd > 0
+                          ? `$${summary.estimated_cost_usd.toFixed(4)}`
+                          : "—",
                       tone: "muted",
                     },
                     {
@@ -727,7 +657,7 @@ export default function ObservatoryPage() {
                   </h2>
                   <div className="inline-flex items-center gap-2 text-[11px] font-mono text-text-subtle">
                     <span className={`inline-block w-1.5 h-1.5 rounded-full ${toneDot}`} />
-                    {t("bootstrap.headlinePrefix")} {statusLabel(summary.bootstrap_status)}
+                    {t("traces.selfInstrumentedNote")}
                   </div>
                 </div>
 

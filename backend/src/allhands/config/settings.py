@@ -37,10 +37,6 @@ class Settings(BaseSettings):
         description="Path for LangGraph AsyncSqliteSaver. Separate from app DB on purpose.",
     )
 
-    langfuse_host: str | None = Field(default=None)
-    langfuse_public_key: str | None = Field(default=None)
-    langfuse_secret_key: str | None = Field(default=None)
-
     openai_api_key: str | None = Field(default=None)
     openai_base_url: str | None = Field(default=None)
     default_model_ref: str = Field(default="openai/gpt-4o-mini")

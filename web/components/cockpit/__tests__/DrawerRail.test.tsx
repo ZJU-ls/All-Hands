@@ -44,7 +44,6 @@ function makeSummary(overrides: Partial<WorkspaceSummaryDto> = {}): WorkspaceSum
     health: {
       gateway: { name: "gateway", status: "ok", detail: null },
       mcp_servers: { name: "mcp", status: "ok", detail: null },
-      langfuse: { name: "langfuse", status: "ok", detail: null },
       db: { name: "db", status: "ok", detail: null },
       triggers: { name: "triggers", status: "ok", detail: null },
     },
@@ -134,8 +133,7 @@ describe("DrawerRail", () => {
           health: {
             gateway: { name: "gateway", status: "ok", detail: null },
             mcp_servers: { name: "mcp", status: "degraded", detail: "slow" },
-            langfuse: { name: "langfuse", status: "down", detail: "unreachable" },
-            db: { name: "db", status: "ok", detail: null },
+            db: { name: "db", status: "down", detail: "down" },
             triggers: { name: "triggers", status: "ok", detail: null },
           },
         })}
