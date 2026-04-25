@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from allhands.api.deps import get_observatory_service
+from allhands.i18n import t
 
 if TYPE_CHECKING:
     from allhands.services.observatory_service import ObservatoryService
@@ -124,7 +125,7 @@ async def get_trace(
 ) -> dict[str, object]:
     trace = await svc.get_trace(trace_id)
     if trace is None:
-        raise HTTPException(status_code=404, detail=f"trace not found: {trace_id}")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.trace_id", id=trace_id))
     return trace.model_dump(mode="json")
 
 
@@ -141,5 +142,5 @@ async def get_run_detail(
     """
     detail = await svc.get_run_detail(run_id)
     if detail is None:
-        raise HTTPException(status_code=404, detail=f"run not found: {run_id}")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.run_id", id=run_id))
     return detail.model_dump(mode="json")

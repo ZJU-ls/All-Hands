@@ -181,6 +181,12 @@ def test_get_run_detail_returns_404_when_unknown(
     client: TestClient, maker: async_sessionmaker[AsyncSession]
 ) -> None:
     _seed(maker)
-    resp = client.get("/api/observatory/runs/run_does_not_exist")
+    resp = client.get(
+        "/api/observatory/runs/run_does_not_exist",
+        headers={"Accept-Language": "en"},
+    )
     assert resp.status_code == 404
-    assert "not found" in resp.json()["detail"].lower()
+    detail = resp.json()["detail"].lower()
+    # i18n'd via errors.not_found.run_id — id is included for traceability.
+    assert "run_does_not_exist" in detail
+    assert "not found" in detail

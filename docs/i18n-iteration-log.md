@@ -104,3 +104,35 @@ SubagentProgressSection / PlanProgressSection / ModelRow / DesignForm 残留
 - meta description 实测两 locale 切换正确
 
 **commits**:待提交
+
+## Round 5 · 2026-04-26 02:20
+
+**主题**:后端 router 残留错误 i18n + catalog audit 入测试
+
+**碰到**:Round 1-4 的后端 i18n 主要覆盖了 not_found 系列,但 origin/main
+后续给 employees / chat / observatory / knowledge / user_input / mcp_servers /
+artifacts 加了不少新的 HTTPException(动态 ID 拼接、unknown_kind、transport
+validation 等)未走 i18n。
+
+**做的事**:
+- backend i18n catalog 扩 11 个 keys:
+  errors.not_found.{employee_id,conversation_id,trace_id,run_id,document_in_kb,user_input}
+  · errors.unknown_{kind,preset} · errors.transport_invalid · errors.kb_fetch_failed
+  · errors.answers_not_dict · 都带 ICU `{id}/{kind}/{preset}/{raw}/{detail}` 占位符
+- 7 个 router 文件 import t · 替换 12 个 raise HTTPException 用 t():
+  employees(4) · chat(5) · observatory(2) · knowledge(3) · user_input(2) ·
+  artifacts(1) · mcp_servers(1) · providers(1)
+- backend test_i18n 加 2 个新测试:
+  · test_round_5_new_keys_have_both_locales — 11 个新 key 在两个 locale 都存在 + 非空
+  · test_catalog_zh_en_have_same_key_shape — backend catalog 形状对齐(防止半合并)
+- 前端新加 tests/i18n-catalog-audit.test.ts · 3 个 contract 测试:
+  · 形状对齐(missing_in_en / missing_in_zh)
+  · ICU 占位符两边一致
+  · 没有 empty value
+  这些测试现在跑在 pnpm test 里,以后每次 PR 都会自动 catch 漂移。
+
+**结果**:
+- 11 backend i18n tests + 1884 web tests passed · typecheck/lint/build 全绿
+- catalog audit 现在是回归测试的一部分,半合并永远不再悄悄过线
+
+**commits**:待提交
