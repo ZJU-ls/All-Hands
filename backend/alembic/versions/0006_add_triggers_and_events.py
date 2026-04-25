@@ -12,6 +12,7 @@ SQLite has no JSONB; dialect-agnostic for later Postgres port.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0006"

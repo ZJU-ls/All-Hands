@@ -17,6 +17,7 @@ populate it on finalize when the model streamed any thinking-channel text.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0017"

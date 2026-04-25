@@ -1,0 +1,13 @@
+id: allhands.skills.kb_researcher
+name: 知识库研究员
+description: 在工作区知识库里检索资料、引用原文回答问题
+version: 0.1.0
+builtin: true
+
+tool_ids:
+  - allhands.kb.list
+  - allhands.kb.browse_collection
+  - allhands.kb.search
+  - allhands.kb.read_document
+
+prompt_fragment_file: prompts/guidance.md

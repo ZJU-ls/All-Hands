@@ -16,6 +16,7 @@ get a sane value without a backfill.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0008"

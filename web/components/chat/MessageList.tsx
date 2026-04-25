@@ -89,9 +89,33 @@ export function MessageList({ conversationId }: Props) {
     if (stickToBottom) scrollToBottom("auto");
   }, [messages, streamingMessage, streamError, isPendingAssistant, stickToBottom, scrollToBottom]);
 
+  // Conversation switch · reset to bottom + force-stick. Without resetting
+  // stickToBottom, an inherited `false` from the previous conversation (e.g.
+  // user scrolled up before navigating away) would leave the new chat
+  // anchored at the top, which is the bug reported 2026-04-25.
   useEffect(() => {
+    setStickToBottom(true);
     scrollToBottom("auto");
   }, [conversationId, scrollToBottom]);
+
+  // Initial-load settle · markdown / images / mermaid render async after
+  // mount and grow the container. While we're still meant to be stuck to
+  // the bottom, observe content height and keep re-scrolling so late-arriving
+  // children don't leave the viewport pinned mid-conversation. Without this,
+  // a chat with images near the bottom paints once at the right scrollTop,
+  // images load 80ms later, scrollHeight grows by their pixel cost, and
+  // scrollTop is now stale → user lands above the last message.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (stickToBottom) scrollToBottom("auto");
+    });
+    // Watch every direct child — that's where messages land. Watching the
+    // container itself only fires on viewport resize, not content growth.
+    for (const child of Array.from(el.children)) ro.observe(child);
+    return () => ro.disconnect();
+  }, [stickToBottom, scrollToBottom, messages.length]);
 
   const hasAnything =
     messages.length > 0 || !!streamingMessage || !!streamError || isPendingAssistant;

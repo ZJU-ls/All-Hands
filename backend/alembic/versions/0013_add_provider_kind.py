@@ -12,6 +12,7 @@ to preserve current behavior — they've all been running ChatOpenAI up to now.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0013"
