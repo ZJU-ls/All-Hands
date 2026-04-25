@@ -275,3 +275,23 @@ def test_loop_exited_aborted_uses_reason_as_message_when_no_detail() -> None:
     assert out[0].type == "RUN_ERROR"
     assert out[0].code == "ABORTED"
     assert out[0].message == "aborted"
+
+
+def test_loop_exited_empty_response_surfaces_as_run_error() -> None:
+    """The "model said nothing" case must reach the UI as a real error,
+    not a silent run_finished. Pairs with the AgentLoop change that
+    distinguishes empty_response from completed."""
+    out = list(
+        translate_to_agui(
+            LoopExited(
+                reason="empty_response",
+                detail="model produced no text and no tool calls",
+            ),
+            thread_id=THREAD,
+            run_id=RUN,
+        )
+    )
+    assert len(out) == 1
+    assert out[0].type == "RUN_ERROR"
+    assert out[0].code == "EMPTY_RESPONSE"
+    assert "no text and no tool calls" in out[0].message
