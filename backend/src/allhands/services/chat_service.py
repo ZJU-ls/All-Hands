@@ -24,6 +24,7 @@ from allhands.core import (
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
 from allhands.execution.dispatch import DispatchService
+from allhands.execution.model_resolution import ResolvedModel, resolve_effective_model
 from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
 from allhands.execution.tools.meta.spawn_subagent import SpawnSubagentService
@@ -46,6 +47,7 @@ if TYPE_CHECKING:
         ConversationEventRepo,
         ConversationRepo,
         EmployeeRepo,
+        LLMModelRepo,
         LLMProviderRepo,
         MCPServerRepo,
         SkillRuntimeRepo,
@@ -110,6 +112,7 @@ class ChatService:
         skill_registry: SkillRegistry,
         gate: BaseGate,
         provider_repo: LLMProviderRepo | None = None,
+        model_repo: LLMModelRepo | None = None,
         bus: EventBus | None = None,
         skill_runtime_repo: SkillRuntimeRepo | None = None,
         mcp_repo: MCPServerRepo | None = None,
@@ -123,6 +126,12 @@ class ChatService:
         self._skills = skill_registry
         self._gate = gate
         self._providers = provider_repo
+        # Registered models per provider — used by ``resolve_effective_model``
+        # to validate that ``conversation.model_ref_override`` /
+        # ``employee.model_ref`` actually point at a configured binding before
+        # honouring them. Optional for legacy test constructions; when None
+        # the resolver treats the model registry as empty (pass-through).
+        self._models = model_repo
         # For the Lead capability-snapshot (L12 / E20). Optional because
         # unit tests don't always wire an MCP repo; snapshot degrades
         # gracefully with "mcp_servers: unknown".
@@ -251,6 +260,29 @@ class ChatService:
             "full detail of a specific item (e.g. the description of a skill, "
             "the health of an MCP, the system_prompt of an employee). "
             'Answering "0 of each" when this snapshot says otherwise is a bug.'
+        )
+
+    async def resolve_model_for_conversation(
+        self,
+        conv: Conversation,
+        employee: Employee,
+    ) -> ResolvedModel | None:
+        """Three-stage (override → employee → workspace default) resolution.
+
+        Returns ``None`` only when ``provider_repo`` is unwired (legacy tests);
+        callers fall back to whatever pre-existing handling they had. In
+        production the chat router always wires a provider repo, so the
+        ``None`` branch never fires.
+        """
+        if self._providers is None:
+            return None
+        providers = await self._providers.list_all()
+        models = await self._models.list_all() if self._models is not None else []
+        return resolve_effective_model(
+            conv_override=conv.model_ref_override,
+            employee_ref=employee.model_ref,
+            providers=providers,
+            models=models,
         )
 
     async def get_or_load_runtime(self, conversation_id: str, employee: Employee) -> SkillRuntime:
@@ -508,9 +540,16 @@ class ChatService:
         # Fallback (``event_repo is None``, legacy tests): read the
         # MessageRepo directly. This path is removed when P1.E completes
         # the migration.
-        provider = None
-        if self._providers is not None:
-            provider = await self._providers.get_default()
+        # Three-stage model resolution (override → employee → workspace
+        # default). The previous code path silently fell back to
+        # ``provider.default_model`` inside ``llm_factory`` when employee's
+        # ``model_ref`` pointed at a provider that wasn't actually configured
+        # (e.g. employee says ``openai/gpt-4o-mini`` while only CODINGPLAN is
+        # registered). We now pre-validate against the provider+model registry
+        # and surface the truthful binding to both the runner and the UI chip.
+        resolved = await self.resolve_model_for_conversation(conv, employee)
+        provider = resolved.provider if resolved is not None else None
+        effective_model_ref = resolved.ref if resolved is not None else conv.model_ref_override
 
         if self._event_repo is not None:
             # P2.B · auto-compact before projecting the context. If the
@@ -579,7 +618,7 @@ class ChatService:
             skill_registry=self._skills,
             runtime=runtime,
             spawn_subagent_service=spawn_subagent_service,
-            model_ref_override=conv.model_ref_override,
+            model_ref_override=effective_model_ref,
             checkpointer=self._checkpointer,
         )
         # ADR 0017 · per-turn thread_id. Claude Code invariant (V02 § 1.3):
@@ -648,9 +687,9 @@ class ChatService:
         run_started_at = datetime.now(UTC)
 
         runtime = await self.get_or_load_runtime(conversation_id, employee)
-        provider = None
-        if self._providers is not None:
-            provider = await self._providers.get_default()
+        resolved = await self.resolve_model_for_conversation(conv, employee)
+        provider = resolved.provider if resolved is not None else None
+        effective_model_ref = resolved.ref if resolved is not None else conv.model_ref_override
 
         runner_factory = self._build_runner_factory(provider)
         dispatch_service = DispatchService(
@@ -670,7 +709,7 @@ class ChatService:
             skill_registry=self._skills,
             runtime=runtime,
             spawn_subagent_service=spawn_subagent_service,
-            model_ref_override=conv.model_ref_override,
+            model_ref_override=effective_model_ref,
             checkpointer=self._checkpointer,
         )
         # Per-turn thread_id (see send_message). For resume we need the

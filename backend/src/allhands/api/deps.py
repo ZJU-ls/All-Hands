@@ -165,6 +165,7 @@ async def get_chat_service(
         skill_registry=get_skill_registry(),
         gate=gate,
         provider_repo=SqlLLMProviderRepo(session),
+        model_repo=SqlLLMModelRepo(session),
         bus=bus,
         skill_runtime_repo=SqlSkillRuntimeRepo(session),
         mcp_repo=SqlMCPServerRepo(session),

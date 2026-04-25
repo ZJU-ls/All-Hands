@@ -78,6 +78,8 @@ function makeConv(overrides: Partial<ConversationDto> = {}): ConversationDto {
     employee_id: "emp1",
     title: null,
     model_ref_override: null,
+    effective_model_ref: null,
+    effective_model_source: null,
     created_at: new Date().toISOString(),
     ...overrides,
   };

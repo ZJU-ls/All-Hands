@@ -45,6 +45,51 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/conversations", tags=["chat"])
 
 
+async def _to_conversation_response(
+    conv: object,
+    session: AsyncSession,
+    *,
+    message_count: int = 0,
+) -> ConversationResponse:
+    """Build a ConversationResponse with effective_model_ref populated.
+
+    The chip on the composer shows ``effective_model_ref`` so the user sees
+    what *will* run, not the raw override field. Any failure of the resolver
+    (e.g. no providers configured) degrades to ``None`` for those fields —
+    the legacy fields stay populated, so existing UI keeps working.
+
+    ``message_count`` is the history-panel "N 轮" badge value. Callers that
+    have a batched count from ``count_messages`` pass it in; single-record
+    callers compute it inline.
+    """
+    from allhands.core.errors import DomainError as _DomainError
+
+    chat_svc = await get_chat_service(session)
+    eff_ref: str | None = None
+    eff_source: str | None = None
+    try:
+        emp = await chat_svc._employees.get(conv.employee_id)  # type: ignore[attr-defined]
+        if emp is not None:
+            resolved = await chat_svc.resolve_model_for_conversation(conv, emp)  # type: ignore[arg-type]
+            if resolved is not None:
+                eff_ref = resolved.ref
+                eff_source = resolved.source
+    except _DomainError:
+        pass
+    except Exception:
+        log.exception("effective_model_ref resolution failed for conv=%s", getattr(conv, "id", "?"))
+    return ConversationResponse(
+        id=conv.id,  # type: ignore[attr-defined]
+        employee_id=conv.employee_id,  # type: ignore[attr-defined]
+        title=conv.title,  # type: ignore[attr-defined]
+        model_ref_override=conv.model_ref_override,  # type: ignore[attr-defined]
+        effective_model_ref=eff_ref,
+        effective_model_source=eff_source,
+        created_at=conv.created_at.isoformat(),  # type: ignore[attr-defined]
+        message_count=message_count,
+    )
+
+
 def _to_message_response(m: Message) -> ChatMessageResponse:
     """Serialize a domain Message into the wire shape with the render /
     tool-call / reasoning fields that rehydrate a prior turn's visuals.
@@ -76,13 +121,7 @@ async def create_conversation(
             status_code=404, detail=f"Employee {body.employee_id!r} not found."
         ) from exc
     conv = await chat_svc.create_conversation(body.employee_id)
-    return ConversationResponse(
-        id=conv.id,
-        employee_id=conv.employee_id,
-        title=conv.title,
-        model_ref_override=conv.model_ref_override,
-        created_at=conv.created_at.isoformat(),
-    )
+    return await _to_conversation_response(conv, session)
 
 
 @router.get("")
@@ -115,14 +154,7 @@ async def list_conversations(
         convs = await conv_repo.list_for_employee(lead.id)
     counts = await conv_repo.count_messages([c.id for c in convs])
     return [
-        ConversationResponse(
-            id=c.id,
-            employee_id=c.employee_id,
-            title=c.title,
-            model_ref_override=c.model_ref_override,
-            created_at=c.created_at.isoformat(),
-            message_count=counts.get(c.id, 0),
-        )
+        await _to_conversation_response(c, session, message_count=counts.get(c.id, 0))
         for c in convs
     ]
 
@@ -137,14 +169,7 @@ async def get_conversation(
     if conv is None:
         raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
     counts = await conv_repo.count_messages([conv.id])
-    return ConversationResponse(
-        id=conv.id,
-        employee_id=conv.employee_id,
-        title=conv.title,
-        model_ref_override=conv.model_ref_override,
-        created_at=conv.created_at.isoformat(),
-        message_count=counts.get(conv.id, 0),
-    )
+    return await _to_conversation_response(conv, session, message_count=counts.get(conv.id, 0))
 
 
 @router.delete("/{conversation_id}", status_code=204)
@@ -190,13 +215,7 @@ async def update_conversation(
     elif body.model_ref_override is not None:
         conv.model_ref_override = body.model_ref_override
     updated = await conv_repo.update(conv)
-    return ConversationResponse(
-        id=updated.id,
-        employee_id=updated.employee_id,
-        title=updated.title,
-        model_ref_override=updated.model_ref_override,
-        created_at=updated.created_at.isoformat(),
-    )
+    return await _to_conversation_response(updated, session)
 
 
 @router.get("/{conversation_id}/messages", response_model=list[ChatMessageResponse])
@@ -244,13 +263,7 @@ async def branch_conversation(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return ConversationResponse(
-        id=new_conv.id,
-        employee_id=new_conv.employee_id,
-        title=new_conv.title,
-        model_ref_override=new_conv.model_ref_override,
-        created_at=new_conv.created_at.isoformat(),
-    )
+    return await _to_conversation_response(new_conv, session)
 
 
 @router.post("/{conversation_id}/regenerate", response_model=ConversationResponse)
@@ -273,13 +286,7 @@ async def regenerate_conversation(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return ConversationResponse(
-        id=new_conv.id,
-        employee_id=new_conv.employee_id,
-        title=new_conv.title,
-        model_ref_override=new_conv.model_ref_override,
-        created_at=new_conv.created_at.isoformat(),
-    )
+    return await _to_conversation_response(new_conv, session)
 
 
 @router.post("/{conversation_id}/compact", response_model=CompactConversationResponse)
