@@ -17,9 +17,16 @@ from __future__ import annotations
 
 import math
 import struct
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    SessionMaker = async_sessionmaker[AsyncSession]
+else:
+    SessionMaker = Any
 
 Vector = list[float]
 
@@ -112,10 +119,11 @@ class BlobVecStore:
     searches each see a snapshot. No locking needed for the v0 path.
     """
 
-    def __init__(self, chunk_repo_factory) -> None:  # type: ignore[no-untyped-def]
-        # Factory because the repo is session-bound; we get a fresh session
-        # per search call from the orchestrator.
-        self._make_repo = chunk_repo_factory
+    def __init__(self, session_maker: SessionMaker) -> None:
+        # session_maker is an `async_sessionmaker[AsyncSession]`. We import
+        # SqlChunkRepo lazily inside the methods to keep this module free
+        # of persistence imports (preserves layered dependency direction).
+        self._session_maker = session_maker
         # Per-KB dim cache: filled lazily on first upsert. Used to validate
         # `query_vec` length matches what was indexed for this KB.
         self._dim: dict[str, int] = {}
@@ -136,14 +144,18 @@ class BlobVecStore:
                 f"kb {kb_id!r} dim mismatch: expected {self._dim[kb_id]}, got {first_dim}"
             )
         self._dim[kb_id] = first_dim
-        repo = self._make_repo()
-        for chunk_id, vec in items:
-            if len(vec) != first_dim:
-                raise ValueError(
-                    f"vector dim mismatch for chunk_id={chunk_id}: "
-                    f"expected {first_dim}, got {len(vec)}"
-                )
-            await repo.upsert_embedding(chunk_id, pack_vector(vec))
+        from allhands.persistence.knowledge_repos import SqlChunkRepo
+
+        async with self._session_maker() as s:
+            repo = SqlChunkRepo(s)
+            for chunk_id, vec in items:
+                if len(vec) != first_dim:
+                    raise ValueError(
+                        f"vector dim mismatch for chunk_id={chunk_id}: "
+                        f"expected {first_dim}, got {len(vec)}"
+                    )
+                await repo.upsert_embedding(chunk_id, pack_vector(vec))
+            await s.commit()
 
     async def search(
         self,
@@ -153,8 +165,11 @@ class BlobVecStore:
         top: int = 50,
         filter_ids: set[int] | None = None,
     ) -> list[VecHit]:
-        repo = self._make_repo()
-        rows = await repo.fetch_kb_vectors(kb_id)
+        from allhands.persistence.knowledge_repos import SqlChunkRepo
+
+        async with self._session_maker() as s:
+            repo = SqlChunkRepo(s)
+            rows = await repo.fetch_kb_vectors(kb_id)
         if not rows:
             return []
         dim = self._dim.get(kb_id) or len(query_vec)
