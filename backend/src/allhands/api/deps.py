@@ -240,10 +240,9 @@ def get_skill_market() -> GithubSkillMarket:
 
 async def get_skill_service(session: AsyncSession = Depends(get_session)) -> SkillService:
     settings = get_settings()
-    data_dir = Path(settings.data_dir)
     return SkillService(
         repo=SqlSkillRepo(session),
-        install_root=data_dir / "skills",
+        install_root=settings.resolved_skills_dir(),
         market=get_skill_market(),
     )
 
@@ -265,7 +264,12 @@ async def get_artifact_service(
     data_dir = Path(settings.data_dir)
     runtime = getattr(request.app.state, "trigger_runtime", None)
     bus = getattr(runtime, "bus", None) if runtime is not None else None
-    return ArtifactService(SqlArtifactRepo(session), data_dir, bus=bus)
+    return ArtifactService(
+        SqlArtifactRepo(session),
+        data_dir,
+        bus=bus,
+        artifacts_root=settings.resolved_artifacts_dir(),
+    )
 
 
 async def get_trigger_service(

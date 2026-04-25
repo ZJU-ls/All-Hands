@@ -83,14 +83,21 @@ class ArtifactService:
         repo: ArtifactRepo,
         data_dir: Path,
         bus: EventBus | None = None,
+        *,
+        artifacts_root: Path | None = None,
     ) -> None:
         self._repo = repo
         self._data_dir = data_dir
         self._bus = bus
+        # 2026-04-25 · explicit override path for desktop-shell installs
+        # that want artifacts on an external volume / iCloud / OneDrive.
+        # When None, derive the legacy <data_dir>/artifacts location so
+        # existing callers keep working.
+        self._artifacts_root_override = artifacts_root
 
     @property
     def _root(self) -> Path:
-        root = self._data_dir / "artifacts"
+        root = self._artifacts_root_override or (self._data_dir / "artifacts")
         root.mkdir(parents=True, exist_ok=True)
         return root
 
