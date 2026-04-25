@@ -107,7 +107,7 @@
     "usageChip": {
       "compacting": "整理中…",
       "compact": "整理",
-      "tooltip": "{used} / {total} tokens (估算)"
+      "tooltip": "已用输入估算 {used} tokens / 模型上下文窗口 {total} tokens · 即将达到上限时会提示整理"
     }
   }
 }

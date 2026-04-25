@@ -224,7 +224,7 @@ class SpawnSubagentService:
             "result": "".join(parts).strip(),
             "trace_id": trace_id,
             # v0: we don't yet track per-turn iterations inside the runner;
-            # leave 0 · Langfuse span still carries real counts (Track K UI).
+            # leave 0 · the events table records llm.call counts per run.
             "iterations_used": 0,
             "status": status,
             "parent_run_id": current_parent_run_id(),

@@ -70,7 +70,7 @@ const ENTRY_DEFS: EntryDef[] = [
   { key: "triggers", href: "/triggers", hint: "scheduled + webhook", icon: "zap", keywords: "triggers cron webhook schedule" },
   { key: "channels", href: "/channels", hint: "slack email webhook", icon: "bell", keywords: "channels notifications slack email webhook" },
   { key: "confirmations", href: "/confirmations", hint: "pending approvals", icon: "shield-check", keywords: "confirmations approvals gate" },
-  { key: "traces", href: "/traces", hint: "langfuse traces", icon: "activity", keywords: "traces observability langfuse" },
+  { key: "traces", href: "/traces", hint: "run traces", icon: "activity", keywords: "traces observability events runs" },
   { key: "observatory", href: "/observatory", hint: "platform observability", icon: "brain", keywords: "observatory metrics dashboard" },
   { key: "stockAssistant", href: "/stock-assistant", hint: "market anomaly demo", icon: "trending-up", keywords: "stock market demo" },
   { key: "review", href: "/review", hint: "agent review", icon: "check", keywords: "review approvals" },

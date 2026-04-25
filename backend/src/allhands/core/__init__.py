@@ -72,7 +72,6 @@ from allhands.core.mcp import MCPHealth, MCPServer, MCPTransport
 from allhands.core.model import LLMModel
 from allhands.core.observability import (
     ArtifactSummary,
-    BootstrapStatus,
     ObservabilityConfig,
     ObservatoryEmployeeBreakdown,
     ObservatoryModelBreakdown,
@@ -147,7 +146,6 @@ __all__ = [
     "ArtifactKind",
     "ArtifactSummary",
     "ArtifactVersion",
-    "BootstrapStatus",
     "Chunk",
     "Collection",
     "ComponentStatus",
