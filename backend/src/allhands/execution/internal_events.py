@@ -53,6 +53,30 @@ class ToolMessageCommitted:
 
 
 @dataclass
+class LLMCallFinished:
+    """One LLM ``model.astream`` round just finished.
+
+    Emitted by AgentLoop after every turn's accumulator closes — carries
+    the model identifier, wall-clock duration, and usage_metadata
+    (input / output / total tokens) the provider returned. Consumed by
+    ``chat_service`` to (a) accumulate run-level token totals for the
+    ``run.completed`` payload and (b) write a per-call ``llm.call``
+    event so the trace viewer can surface "LLM call #N · 3.2s · 1.5K tok".
+
+    All token counts are best-effort: a provider that doesn't populate
+    ``usage_metadata`` lands here with zeros — services treat zeros as
+    "unknown" and degrade the UI to "—" rather than rendering "0".
+    """
+
+    message_id: str
+    model_ref: str | None
+    duration_s: float
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
+@dataclass
 class ConfirmationRequested:
     """A deferred tool has published a confirmation request and is now
     awaiting the user's decision. The frontend MUST render a dialog;
@@ -137,6 +161,7 @@ InternalEvent = (
     | ToolMessageCommitted
     | ConfirmationRequested
     | UserInputRequested
+    | LLMCallFinished
     | LoopExited
     | AssistantMessagePartial
     | ToolCallProgress
@@ -148,6 +173,7 @@ __all__ = [
     "AssistantMessagePartial",
     "ConfirmationRequested",
     "InternalEvent",
+    "LLMCallFinished",
     "LoopExitReason",
     "LoopExited",
     "ToolCallProgress",

@@ -42,8 +42,11 @@ function makeRun(over: Partial<RunDetailDto> = {}): RunDetailDto {
     finished_at: "2026-04-21T00:00:02Z",
     duration_s: 2,
     tokens: { prompt: 1, completion: 1, total: 2 },
+    llm_calls: 1,
+    model_ref: null,
     error: null,
     turns: [],
+    artifacts: [],
     ...over,
   };
 }
