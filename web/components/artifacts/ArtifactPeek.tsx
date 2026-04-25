@@ -78,6 +78,19 @@ export function ArtifactPeek({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const anchorRef = useRef<HTMLSpanElement | null>(null);
 
+  // Skip peek entirely on coarse-pointer devices (touch). Hover with no
+  // mouse is a "tap-then-tap-away" exercise — the peek would just flash
+  // confusingly. Same heuristic Notion + GitHub use.
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(pointer: coarse)");
+    setCoarse(mq.matches);
+    const listener = (e: MediaQueryListEvent) => setCoarse(e.matches);
+    mq.addEventListener?.("change", listener);
+    return () => mq.removeEventListener?.("change", listener);
+  }, []);
+
   const cancelTimer = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -86,8 +99,9 @@ export function ArtifactPeek({
   }, []);
 
   const schedule = useCallback(() => {
-    if (disabled) return;
+    if (disabled || coarse) return;
     cancelTimer();
+    if (coarse) return; // belt-and-suspenders against schedule-during-toggle
     timerRef.current = setTimeout(() => {
       const el = anchorRef.current;
       if (!el) return;
@@ -107,7 +121,7 @@ export function ArtifactPeek({
       setPos({ left, top });
       setOpen(true);
     }, PEEK_DELAY_MS);
-  }, [disabled, cancelTimer]);
+  }, [disabled, coarse, cancelTimer]);
 
   const dismiss = useCallback(() => {
     cancelTimer();

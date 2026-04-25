@@ -419,6 +419,9 @@ export default function ArtifactsGlobalPage() {
             </button>
           </div>
 
+          <span className="hidden font-mono text-[11px] text-text-subtle md:inline">
+            {t("kbd.navHint")}
+          </span>
           <span className="font-mono text-[11px] text-text-subtle">
             {t("count", { n: items.length })}
           </span>

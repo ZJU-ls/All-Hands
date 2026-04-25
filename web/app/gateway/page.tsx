@@ -1335,7 +1335,7 @@ function Modal({
             type="button"
             onClick={onClose}
             aria-label={t("modalClose")}
-            className="shrink-0 grid h-7 w-7 place-items-center rounded-md text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast"
+            className="shrink-0 grid h-7 w-7 place-items-center rounded-md text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             <Icon name="x" size={14} />
           </button>
