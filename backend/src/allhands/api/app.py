@@ -50,7 +50,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     Same for `app.state.checkpointer` — None is the default (ADR 0014 Phase 1).
     """
     from allhands.api.deps import get_tool_registry
-    from allhands.config import get_settings
     from allhands.execution.triggers.runtime import TriggerRuntime
     from allhands.persistence.db import get_sessionmaker
 
@@ -137,28 +136,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         logger.exception("turn_lock.orphan_scan.failed")
 
-    # ADR 0014 · checkpointer is default-on after Phase 4. The context-manager
-    # lifetime is owned here so setup() + conn.close() happen in the right
-    # order even if the lifespan body throws. Factory lives in
-    # execution/checkpointer.py so this FastAPI module doesn't hold a direct
-    # dependency on langgraph.checkpoint.* (ADR 0014 R1 / import-linter
-    # "checkpointer-only-in-execution"). If startup fails (e.g. disk full),
-    # app.state.checkpointer stays None and the runner falls back to the
-    # v0 pure-function path — no chat breakage, just no resume.
-    settings = get_settings()
-    checkpointer_cm = None
-    try:
-        settings.ensure_data_dir()
-        from allhands.execution.checkpointer import make_async_sqlite_checkpointer
-
-        checkpointer_cm = make_async_sqlite_checkpointer(settings.checkpoint_db_path)
-        checkpointer = await checkpointer_cm.__aenter__()
-        app.state.checkpointer = checkpointer
-        logger.info("checkpointer.ready path=%s", settings.checkpoint_db_path)
-    except Exception:
-        logger.exception("checkpointer.start.failed")
-        app.state.checkpointer = None
-        checkpointer_cm = None
+    # ADR 0018: checkpointer removed. State lives in MessageRepo +
+    # ConfirmationRepo + SkillRuntimeRepo. Suspend / resume flows
+    # through DeferredSignal polling, not graph-level snapshots.
+    app.state.checkpointer = None
 
     try:
         yield
@@ -168,11 +149,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await runtime.shutdown()
             except Exception:
                 logger.exception("trigger.runtime.shutdown.failed")
-        if checkpointer_cm is not None:
-            try:
-                await checkpointer_cm.__aexit__(None, None, None)
-            except Exception:
-                logger.exception("checkpointer.shutdown.failed")
 
 
 def create_app() -> FastAPI:

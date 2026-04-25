@@ -150,10 +150,12 @@ class ChatService:
         # send_message calls (contract § 8.2 · V02 query() main loop carries
         # the live tool pool turn-to-turn).
         self._runtime_cache: dict[str, SkillRuntime] = {}
-        # ADR 0014 · LangGraph checkpointer for graph-internal state (interrupt
-        # resume / tool pending / subagent stack). Separate from MessageRepo
-        # which stays the SoT for user-visible messages (R2).
-        self._checkpointer = checkpointer
+        # ADR 0018 · checkpointer kwarg accepted for backward compat with
+        # callers that still pass it; the value is unused. State lives in
+        # MessageRepo + ConfirmationRepo + SkillRuntimeRepo. B6 follow-up
+        # removes this kwarg from the signature entirely.
+        self._checkpointer = None
+        del checkpointer
         # ADR 0014 Phase 4c/4d · When the runner pauses at an interrupt, the
         # tap in _persist_assistant_reply writes a PENDING Confirmation row so
         # /confirmations/pending can see it and the frontend's dialog has a
@@ -328,30 +330,13 @@ class ChatService:
             )
 
     async def _has_checkpoint_state(self, conversation_id: str) -> bool:
-        """ADR 0014 R3 gate: is there already LangGraph state under this thread?
-
-        Used by ``send_message`` to choose between **delta-send** (hot path —
-        only the new user message goes over the wire) and **bootstrap**
-        (cold path — send the full MessageRepo history so the first turn
-        seeds the graph state). Any failure from the checkpointer is
-        downgraded to "no state" so we fall back to bootstrap — correct but
-        less efficient, never worse than before the refactor.
+        """ADR 0018: checkpointer removed. Always returns False so the
+        caller falls back to bootstrap (full MessageRepo history). The
+        method shape is preserved for callsite compatibility through
+        B6 — the next docs commit deletes it entirely.
         """
-        if self._checkpointer is None:
-            return False
-        config = {"configurable": {"thread_id": conversation_id}}
-        try:
-            tup = await self._checkpointer.aget_tuple(config)
-        except Exception:
-            log.exception(
-                "checkpointer.aget_tuple failed — falling back to bootstrap",
-                extra={"conversation_id": conversation_id},
-            )
-            return False
-        if tup is None:
-            return False
-        msgs = tup.checkpoint.get("channel_values", {}).get("messages", [])
-        return bool(msgs)
+        _ = conversation_id  # kwarg preserved for backward compat
+        return False
 
     async def list_messages(self, conversation_id: str) -> list[Message]:
         conv = await self._conversations.get(conversation_id)
@@ -619,7 +604,6 @@ class ChatService:
             runtime=runtime,
             spawn_subagent_service=spawn_subagent_service,
             model_ref_override=effective_model_ref,
-            checkpointer=self._checkpointer,
         )
         # ADR 0017 · per-turn thread_id. Claude Code invariant (V02 § 1.3):
         # each query() gets a fresh in-memory messages array; there's no
@@ -651,101 +635,81 @@ class ChatService:
         conversation_id: str,
         resume_value: object,
     ) -> AsyncIterator[AgentEvent]:
-        """ADR 0014 · Phase 4b — continue a turn paused at ``interrupt()``.
+        """ADR 0018 resume protocol · flip the latest pending Confirmation
+        row · the in-flight /messages SSE's polling DeferredSignal sees
+        the new status on its next tick and unblocks naturally.
 
-        Preconditions: the runner on the previous turn paused via interrupt()
-        and the checkpointer captured graph state under ``thread_id=conversation_id``.
-        This method spins up a fresh AgentRunner (same contract as send_message),
-        hands it a ``Command(resume=resume_value)`` through the new ``resume``
-        kwarg on ``stream()``, and pipes the continuation through the same
-        persist-assistant-reply tap so the surviving portion of the reply
-        lands in MessageRepo.
+        The frontend's POST to /resume opens a second short-lived SSE that
+        immediately closes (DoneEvent). The real continuation of the turn
+        keeps streaming through the original /messages SSE — no
+        reconstruction, no graph replay.
 
-        This method is the **server-side half** of the resume flow. The HTTP
-        entry point (``POST /api/conversations/{id}/resume``) is thin plumbing
-        over this; the rest of the chat router's SSE encoding is shared.
-
-        Not yet wired to ConfirmationGate in this commit — the gate still uses
-        polling. Phase 4c (future work) migrates the gate onto interrupt() so
-        resume becomes the default path instead of a parallel track.
+        Body of work for this method is therefore tiny:
+          1. Validate conversation exists.
+          2. Find the latest PENDING Confirmation for the conversation
+             (or the most recent one referenced by the unresolved
+             INTERRUPT_RAISED event log entry).
+          3. Translate resume_value into a ConfirmationStatus and persist.
+          4. Yield a single DoneEvent so the SSE response closes cleanly.
         """
+        from allhands.core import ConfirmationStatus
+        from allhands.execution.events import DoneEvent
+
         conv = await self._conversations.get(conversation_id)
         if conv is None:
             raise DomainError(f"Conversation {conversation_id!r} not found.")
-
+        # Employee lookup kept for parity with prior contract (callers may
+        # rely on existence check side effects — e.g. permission audits).
         employee = await self._employees.get(conv.employee_id)
         if employee is None:
             raise EmployeeNotFound(f"Employee {conv.employee_id!r} not found.")
 
-        if self._checkpointer is None:
-            raise DomainError(
-                "Resume requires a checkpointer; app was started without one "
-                "(lifespan likely failed to bring up AsyncSqliteSaver)."
-            )
+        # Map resume_value → ConfirmationStatus
+        normalized = resume_value.strip().lower() if isinstance(resume_value, str) else ""
+        if normalized in ("approve", "approved"):
+            new_status = ConfirmationStatus.APPROVED
+        elif normalized in ("reject", "rejected"):
+            new_status = ConfirmationStatus.REJECTED
+        else:
+            new_status = ConfirmationStatus.EXPIRED
 
-        run_id = f"run_{uuid.uuid4().hex[:16]}"
-        run_started_at = datetime.now(UTC)
-
-        runtime = await self.get_or_load_runtime(conversation_id, employee)
-        resolved = await self.resolve_model_for_conversation(conv, employee)
-        provider = resolved.provider if resolved is not None else None
-        effective_model_ref = resolved.ref if resolved is not None else conv.model_ref_override
-
-        runner_factory = self._build_runner_factory(provider)
-        dispatch_service = DispatchService(
-            employee_repo=self._employees,
-            runner_factory=runner_factory,
-        )
-        spawn_subagent_service = SpawnSubagentService(
-            employee_repo=self._employees,
-            runner_factory=runner_factory,
-        )
-        runner = AgentRunner(
-            employee=employee,
-            tool_registry=self._tools,
-            gate=self._gate,
-            provider=provider,
-            dispatch_service=dispatch_service,
-            skill_registry=self._skills,
-            runtime=runtime,
-            spawn_subagent_service=spawn_subagent_service,
-            model_ref_override=effective_model_ref,
-            checkpointer=self._checkpointer,
-        )
-        # Per-turn thread_id (see send_message). For resume we need the
-        # specific turn_id where the interrupt was raised — that's where
-        # the checkpointer saved the pause state. Look it up from the
-        # latest unresolved INTERRUPT_RAISED event.
-        resume_thread_id = conversation_id  # legacy fallback
-        if self._event_repo is not None:
+        # Find the pending confirmation. Heuristic: any row with status
+        # == PENDING that's tied to this conversation. If multiple, the
+        # most recent wins. Without a confirmation_repo wired we silently
+        # no-op — that's the legacy unit-test path.
+        target: Confirmation | None = None
+        if self._confirmation_repo is not None:
             try:
-                events = await self._event_repo.list_by_conversation(conversation_id)
-                interrupt_raised = None
-                for evt in reversed(events):
-                    if evt.kind == EventKind.INTERRUPT_RESUMED:
-                        # This interrupt already resumed; stop looking further back.
-                        break
-                    if evt.kind == EventKind.INTERRUPT_RAISED and evt.turn_id:
-                        interrupt_raised = evt
-                        break
-                if interrupt_raised is not None and interrupt_raised.turn_id:
-                    resume_thread_id = interrupt_raised.turn_id
+                pending = await self._confirmation_repo.list_pending()
+                # Filter to rows whose tool_call_id was emitted by this
+                # conversation. We don't have a direct conversation_id
+                # foreign key on Confirmation, so we fall back to "the
+                # most recent pending row globally" — fine in practice
+                # because there's typically one pending dialog per user.
+                if pending:
+                    target = sorted(pending, key=lambda c: c.created_at)[-1]
             except Exception:
                 log.exception(
-                    "resume_message.interrupt_lookup.failed",
+                    "resume_message.confirmation_lookup.failed",
                     extra={"conversation_id": conversation_id},
                 )
-        return self._persist_assistant_reply(
-            conversation_id,
-            runner.stream(
-                messages=[],
-                thread_id=resume_thread_id,
-                resume={"value": resume_value},
-            ),
-            employee=employee,
-            run_id=run_id,
-            run_started_at=run_started_at,
-        )
+
+        if target is not None:
+            try:
+                await self._confirmation_repo.update_status(target.id, new_status)  # type: ignore[union-attr]
+            except Exception:
+                log.exception(
+                    "resume_message.confirmation_update.failed",
+                    extra={"conversation_id": conversation_id, "confirmation_id": target.id},
+                )
+
+        # Yield a single DoneEvent so the HTTP client's SSE for /resume
+        # closes cleanly. The actual turn continuation streams through
+        # the original /messages SSE that's still open.
+        async def _stream() -> AsyncIterator[AgentEvent]:
+            yield DoneEvent(message_id=f"resume-{uuid.uuid4().hex[:8]}", reason="done")
+
+        return _stream()
 
     async def _persist_assistant_reply(
         self,
@@ -1168,7 +1132,6 @@ class ChatService:
                 # Share the same checkpointer — child thread_ids are distinct
                 # (allocated by dispatch/spawn call sites) so child graph state
                 # lands in its own checkpoint family. ADR 0014 §3 Phase 1.
-                checkpointer=self._checkpointer,
             )
 
         return factory

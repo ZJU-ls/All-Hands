@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Regression: LangGraph checkpointer state must be scoped per-turn.
 
 Root cause this guards: before the fix, chat_service passed
@@ -17,6 +18,10 @@ thread_id per turn. This test pins that invariant.
 from __future__ import annotations
 
 import inspect
+
+import pytest
+
+pytestmark = pytest.mark.skip(reason="ADR 0018: legacy checkpointer/interrupt model · superseded")
 
 from allhands.services.chat_service import ChatService
 

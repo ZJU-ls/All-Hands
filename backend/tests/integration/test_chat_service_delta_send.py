@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """ADR 0014 R3 · ChatService `_has_checkpoint_state` gate regression.
 
 Unit-level coverage of the branch that picks between delta-send (hot turn)
@@ -19,6 +20,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+
+pytestmark = pytest.mark.skip(reason="ADR 0018: legacy checkpointer/interrupt model · superseded")
 
 from allhands.execution.gate import AutoApproveGate
 from allhands.execution.registry import ToolRegistry

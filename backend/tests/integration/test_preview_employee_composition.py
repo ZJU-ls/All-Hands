@@ -47,9 +47,11 @@ def client() -> TestClient:
 # --- contract expectations (mirror SIGNOFF Q6-Q10 + §4.1) -----------------
 
 EXPECTED_EXECUTE = {
+    # 2026-04-25: write_file removed from execute preset (see execute.py
+    # comment). User-facing outputs go through allhands.artifacts skill;
+    # data/reports/ writes were invisible and competed with artifact_create.
     "tool_ids": [
         "allhands.builtin.fetch_url",
-        "allhands.builtin.write_file",
         "allhands.meta.resolve_skill",
         "allhands.meta.read_skill_file",
     ],

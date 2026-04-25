@@ -116,7 +116,12 @@
     },
     "ctaHeading": "Ready to stand up your first team?",
     "ctaBody": "Next: tell the Lead Agent “hire me an X.” Take it from there.",
-    "ctaButton": "Enter workspace"
+    "ctaButton": "Enter workspace",
+    "replay": {
+      "title": "Click to replay the origami animation",
+      "aria": "Replay brand animation",
+      "hint": "Click the logo to replay"
+    }
   },
   "settings": {
     "title": "Settings",

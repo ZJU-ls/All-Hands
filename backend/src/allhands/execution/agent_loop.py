@@ -242,7 +242,7 @@ class AgentLoop:
                 if lc_tools and hasattr(base_model, "bind_tools")
                 else base_model
             )
-            lc_messages = self._build_lc_messages(messages)
+            lc_messages = self._build_lc_messages(messages, overrides)
 
             iteration = 0
             while True:
@@ -486,7 +486,40 @@ class AgentLoop:
             out.append(lc)
         return out
 
-    def _build_lc_messages(self, messages: list[dict[str, Any]]) -> list[Any]:
+    def _compose_system_prompt(self, overrides: Any = None) -> str:
+        """Build the per-turn system prompt: employee base + skill
+        descriptors + resolved skill fragments + optional override.
+
+        Mirrors runner.py:_compose_system_prompt but accepts overrides
+        directly so the loop body doesn't need to peek at AgentLoop
+        internals. Override prepends; descriptors are pure-function
+        rebuilt every turn (ADR 0011 principle 3).
+        """
+        parts: list[str] = []
+        # Per-turn override prepends — it's the most salient framing
+        if overrides is not None:
+            override_text = (getattr(overrides, "system_override", None) or "").strip()
+            if override_text:
+                parts.append(override_text)
+        base = (self._employee.system_prompt or "").strip()
+        if base:
+            parts.append(base)
+        if self._runtime is not None:
+            descriptors = getattr(self._runtime, "skill_descriptors", None)
+            if descriptors:
+                from allhands.execution.skills import render_skill_descriptors
+
+                parts.append(render_skill_descriptors(descriptors))
+            fragments = getattr(self._runtime, "resolved_fragments", None)
+            if fragments:
+                parts.append("\n\n".join(fragments))
+        return "\n\n".join(parts).strip()
+
+    def _build_lc_messages(
+        self,
+        messages: list[dict[str, Any]],
+        overrides: Any = None,
+    ) -> list[Any]:
         """Project chat history dicts into LangChain message instances.
 
         Faithful reconstruction matters for multi-turn tool replay:
@@ -496,8 +529,9 @@ class AgentLoop:
         role is 'tool'.
         """
         lc_messages: list[Any] = []
-        if self._employee.system_prompt:
-            lc_messages.append(SystemMessage(content=self._employee.system_prompt))
+        system_prompt = self._compose_system_prompt(overrides)
+        if system_prompt:
+            lc_messages.append(SystemMessage(content=system_prompt))
         for m in messages:
             role = m.get("role")
             content = m.get("content", "")

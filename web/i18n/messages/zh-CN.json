@@ -116,7 +116,12 @@
     },
     "ctaHeading": "准备好搭你的第一支团队了吗?",
     "ctaBody": "下一步:对 Lead Agent 说一句「帮我招一个 X」,剩下的它来。",
-    "ctaButton": "进入工作区"
+    "ctaButton": "进入工作区",
+    "replay": {
+      "title": "点击回放折纸动画",
+      "aria": "回放品牌动画",
+      "hint": "点 logo 可回放"
+    }
   },
   "settings": {
     "title": "设置",
