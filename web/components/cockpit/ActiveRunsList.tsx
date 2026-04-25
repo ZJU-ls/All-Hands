@@ -12,15 +12,16 @@
  */
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import type { ActiveRunCardDto, ActiveRunStatus } from "@/lib/cockpit-api";
 import { TraceChip } from "@/components/runs/TraceChip";
 
-const STATUS_LABEL: Record<ActiveRunStatus, string> = {
-  thinking: "思考",
-  calling_tool: "调工具",
-  waiting_confirmation: "等确认",
-  writing: "输出",
+const STATUS_KEYS: Record<ActiveRunStatus, string> = {
+  thinking: "statusThinking",
+  calling_tool: "statusCallingTool",
+  waiting_confirmation: "statusWaitingConfirmation",
+  writing: "statusWriting",
 };
 
 type PillTone = "primary" | "warning";
@@ -50,6 +51,7 @@ function shortRunId(id: string): string {
 }
 
 function RunRow({ r }: { r: ActiveRunCardDto }) {
+  const t = useTranslations("cockpit.activeRuns");
   const pill = statusPill(r.status);
   const pulse = shouldPulse(r.status);
   const iterPct = Math.max(
@@ -99,11 +101,11 @@ function RunRow({ r }: { r: ActiveRunCardDto }) {
                 <span
                   className={`inline-flex items-center gap-1 h-5 px-2 rounded-full border font-mono text-[10px] font-semibold uppercase tracking-wider ${pillBg}`}
                 >
-                  {STATUS_LABEL[r.status]}
+                  {t(STATUS_KEYS[r.status])}
                 </span>
                 {r.depth > 0 && (
                   <span className="font-mono text-caption text-text-subtle">
-                    depth {r.depth}
+                    {t("depth", { n: r.depth })}
                   </span>
                 )}
               </div>
@@ -139,6 +141,7 @@ function RunRow({ r }: { r: ActiveRunCardDto }) {
 }
 
 export function ActiveRunsList({ runs }: { runs: ActiveRunCardDto[] }) {
+  const t = useTranslations("cockpit.activeRuns");
   return (
     <section className="flex flex-col min-h-0 h-full rounded-xl border border-border bg-surface shadow-soft-sm overflow-hidden">
       <header className="flex items-center justify-between h-10 px-4 border-b border-border shrink-0 bg-surface-2/60">
@@ -147,11 +150,11 @@ export function ActiveRunsList({ runs }: { runs: ActiveRunCardDto[] }) {
             <Icon name="play-circle" size={12} strokeWidth={2} />
           </span>
           <span className="font-mono text-caption font-semibold uppercase tracking-wider text-text">
-            正在执行
+            {t("header")}
           </span>
         </span>
         <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-surface-3 font-mono text-[10px] tabular-nums text-text-muted">
-          {runs.length.toString().padStart(2, "0")} ACTIVE
+          {runs.length.toString().padStart(2, "0")} {t("active")}
         </span>
       </header>
       {runs.length === 0 ? (
@@ -163,7 +166,7 @@ export function ActiveRunsList({ runs }: { runs: ActiveRunCardDto[] }) {
             <Icon name="pause" size={16} strokeWidth={2} />
           </span>
           <p className="font-mono text-caption text-text-muted">
-            空闲 · 无进行中的 run
+            {t("empty")}
           </p>
         </div>
       ) : (

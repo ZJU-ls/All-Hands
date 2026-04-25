@@ -12,6 +12,7 @@
  */
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { EmptyState } from "@/components/state";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { ActivityEventDto } from "@/lib/cockpit-api";
@@ -56,11 +57,13 @@ function timeAgo(iso: string, now: Date = new Date()): string {
 
 export function ActivityFeed({
   events,
-  emptyTitle = "等待首条事件",
+  emptyTitle,
 }: {
   events: ActivityEventDto[];
   emptyTitle?: string;
 }) {
+  const t = useTranslations("cockpit.activity");
+  const resolvedEmptyTitle = emptyTitle ?? t("emptyTitle");
   return (
     <section className="flex flex-col min-h-0 h-full rounded-xl border border-border bg-surface shadow-soft-sm overflow-hidden">
       <header className="flex items-center justify-between h-10 px-4 border-b border-border shrink-0 bg-surface-2/60">
@@ -69,16 +72,16 @@ export function ActivityFeed({
             <Icon name="activity" size={12} strokeWidth={2} />
           </span>
           <span className="font-mono text-caption font-semibold uppercase tracking-wider text-text">
-            活动流 · 飞行记录
+            {t("header")}
           </span>
         </span>
         <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-surface-3 font-mono text-[10px] tabular-nums text-text-muted">
-          {events.length.toString().padStart(3, "0")} EV
+          {events.length.toString().padStart(3, "0")} {t("evCount")}
         </span>
       </header>
       {events.length === 0 ? (
         <div className="flex-1 flex items-center justify-center p-4">
-          <EmptyState title={emptyTitle} />
+          <EmptyState title={resolvedEmptyTitle} />
         </div>
       ) : (
         <ul className="flex-1 overflow-y-auto divide-y divide-border">

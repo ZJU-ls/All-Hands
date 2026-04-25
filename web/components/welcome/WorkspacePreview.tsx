@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 import { Icon, type IconName } from "@/components/ui/icon";
 import { AllhandsLogo } from "@/components/brand/AllhandsLogo";
@@ -21,16 +22,18 @@ import { cn } from "@/lib/cn";
 
 type SceneId = "chat" | "skills" | "gateway" | "traces";
 
-const SIDEBAR: Array<{ id: SceneId; label: string; icon: IconName }> = [
-  { id: "chat", label: "对话", icon: "message-square" },
-  { id: "skills", label: "技能", icon: "wand-2" },
-  { id: "gateway", label: "网关", icon: "plug" },
-  { id: "traces", label: "追踪", icon: "activity" },
+const SIDEBAR_DEFS: Array<{ id: SceneId; icon: IconName }> = [
+  { id: "chat", icon: "message-square" },
+  { id: "skills", icon: "wand-2" },
+  { id: "gateway", icon: "plug" },
+  { id: "traces", icon: "activity" },
 ];
 
 const ROTATE_MS = 5000;
 
 export function WorkspacePreview() {
+  const t = useTranslations("welcomeExtras.workspacePreview");
+  const SIDEBAR = SIDEBAR_DEFS.map((s) => ({ ...s, label: t(`sidebar.${s.id}`) }));
   const [activeId, setActiveId] = useState<SceneId>("chat");
   const startRef = useRef<number>(Date.now());
   const [progress, setProgress] = useState(0);
@@ -47,8 +50,8 @@ export function WorkspacePreview() {
       setProgress(ratio);
       if (ratio >= 1) {
         setActiveId((cur) => {
-          const idx = SIDEBAR.findIndex((s) => s.id === cur);
-          const next = SIDEBAR[(idx + 1) % SIDEBAR.length];
+          const idx = SIDEBAR_DEFS.findIndex((s) => s.id === cur);
+          const next = SIDEBAR_DEFS[(idx + 1) % SIDEBAR_DEFS.length];
           return next ? next.id : cur;
         });
         return; // effect re-runs on activeId change
@@ -77,11 +80,11 @@ export function WorkspacePreview() {
         <span className="h-3 w-3 rounded-full bg-warning/70" />
         <span className="h-3 w-3 rounded-full bg-success/70" />
         <span className="ml-3 text-caption font-mono text-text-muted">
-          allhands.local / {activeId}
+          {t("browser.host", { scene: activeId })}
         </span>
         <span className="ml-auto inline-flex items-center gap-1.5 text-caption text-text-subtle">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse-soft" />
-          点侧边栏切换 · 自动轮播
+          {t("browser.hint")}
         </span>
       </div>
 
@@ -173,6 +176,7 @@ function Scene({
 // ───────────────────────── Scenes ─────────────────────────
 
 function ChatScene() {
+  const t = useTranslations("welcomeExtras.workspacePreview.scenes.chat");
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -182,26 +186,26 @@ function ChatScene() {
             Lead Agent
           </h3>
           <span className="rounded bg-surface-2 px-1.5 py-0.5 text-caption font-mono text-text-subtle">
-            gpt-4o-mini
+            {t("modelTag")}
           </span>
         </div>
-        <StatusPill label="在线" />
+        <StatusPill label={t("online")} />
       </div>
 
       <div className="flex justify-end">
         <div className="max-w-md rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-fg shadow-soft-sm">
-          帮我招一个研究员,每天读 5 篇 Hacker News 头条。
+          {t("userMessage")}
         </div>
       </div>
 
       <div className="flex justify-start">
         <div className="max-w-xl space-y-2 rounded-2xl rounded-bl-sm border border-border bg-surface-2/70 px-4 py-3 text-sm text-text shadow-soft-sm">
           <p>
-            已为你创建员工{" "}
+            {t("agentReplyPrefix")}{" "}
             <span className="font-mono font-medium text-primary">hn-researcher</span>
-            ,挂上了 fetch_url + summarize 两个 Tool。
+            {t("agentReplySuffix")}
           </p>
-          <ToolRow tool="create_employee" duration="320ms" />
+          <ToolRow tool={t("toolName")} duration={t("toolDuration")} statusTemplate={t("toolStatus", { duration: t("toolDuration") })} />
         </div>
       </div>
     </div>
@@ -209,6 +213,7 @@ function ChatScene() {
 }
 
 function SkillsScene() {
+  const t = useTranslations("welcomeExtras.workspacePreview.scenes.skills");
   // Mirrors app/skills/page.tsx — KPI strip + 3-column skill cards.
   return (
     <div className="space-y-4">
@@ -216,43 +221,43 @@ function SkillsScene() {
         <div className="flex items-center gap-2">
           <span className="inline-flex h-5 items-center gap-1 rounded-full bg-primary-muted px-2 text-caption font-mono font-semibold uppercase tracking-wider text-primary">
             <Icon name="wand-2" size={10} />
-            Skills
+            {t("eyebrow")}
           </span>
           <h3 className="text-base font-semibold tracking-tight text-text">
-            技能
+            {t("title")}
           </h3>
-          <span className="font-mono text-caption text-text-subtle">· 24</span>
+          <span className="font-mono text-caption text-text-subtle">{t("count")}</span>
         </div>
         <span className="font-mono text-caption text-text-subtle">
-          capability packs
+          {t("subtitle")}
         </span>
       </div>
 
       <div className="grid grid-cols-4 gap-2">
-        <KpiCard label="Total" value="24" hint="6 自管 · 18 内建" />
-        <KpiCard label="Installed" value="6" hint="用户安装" />
-        <KpiCard label="Builtin" value="18" hint="平台内建" />
-        <KpiCard label="Latest" value="2h" hint="hn-digest" />
+        <KpiCard label={t("kpi.totalLabel")} value={t("kpi.totalValue")} hint={t("kpi.totalHint")} />
+        <KpiCard label={t("kpi.installedLabel")} value={t("kpi.installedValue")} hint={t("kpi.installedHint")} />
+        <KpiCard label={t("kpi.builtinLabel")} value={t("kpi.builtinValue")} hint={t("kpi.builtinHint")} />
+        <KpiCard label={t("kpi.latestLabel")} value={t("kpi.latestValue")} hint={t("kpi.latestHint")} />
       </div>
 
       <div className="grid grid-cols-3 gap-2">
         {[
           {
-            n: "web-fetch",
-            tag: "READ",
-            desc: "抓任意 URL · 文本 / JSON",
+            n: t("items.webFetch.name"),
+            tag: t("items.webFetch.tag"),
+            desc: t("items.webFetch.desc"),
             tagTone: "primary" as const,
           },
           {
-            n: "hn-digest",
-            tag: "READ",
-            desc: "Hacker News 头条摘要",
+            n: t("items.hnDigest.name"),
+            tag: t("items.hnDigest.tag"),
+            desc: t("items.hnDigest.desc"),
             tagTone: "primary" as const,
           },
           {
-            n: "slack-notify",
-            tag: "WRITE",
-            desc: "Slack channel · 需 confirm",
+            n: t("items.slackNotify.name"),
+            tag: t("items.slackNotify.tag"),
+            desc: t("items.slackNotify.desc"),
             tagTone: "warning" as const,
           },
         ].map((s) => (
@@ -289,25 +294,26 @@ function SkillsScene() {
 }
 
 function GatewayScene() {
+  const t = useTranslations("welcomeExtras.workspacePreview.scenes.gateway");
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="inline-flex h-5 items-center gap-1 rounded-full bg-primary-muted px-2 text-caption font-mono font-semibold uppercase tracking-wider text-primary">
             <Icon name="plug" size={10} />
-            Gateway
+            {t("eyebrow")}
           </span>
           <h3 className="text-base font-semibold tracking-tight text-text">
-            网关
+            {t("title")}
           </h3>
         </div>
-        <StatusPill label="5 connected" />
+        <StatusPill label={t("status")} />
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <KpiCard label="Providers" value="5" hint="OpenAI · Anthropic · …" />
-        <KpiCard label="Models" value="23" hint="across all providers" />
-        <KpiCard label="Default" value="gpt-4o-mini" mono />
+        <KpiCard label={t("kpi.providersLabel")} value={t("kpi.providersValue")} hint={t("kpi.providersHint")} />
+        <KpiCard label={t("kpi.modelsLabel")} value={t("kpi.modelsValue")} hint={t("kpi.modelsHint")} />
+        <KpiCard label={t("kpi.defaultLabel")} value={t("kpi.defaultValue")} mono />
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -331,7 +337,7 @@ function GatewayScene() {
                   ● {p.ms}
                 </span>
               </div>
-              <p className="text-caption text-text-muted">{p.m} models</p>
+              <p className="text-caption text-text-muted">{p.m} {t("modelsSuffix")}</p>
             </div>
           </div>
         ))}
@@ -341,6 +347,7 @@ function GatewayScene() {
 }
 
 function TracesScene() {
+  const t = useTranslations("welcomeExtras.workspacePreview.scenes.traces");
   // Mirrors components/traces/TraceTable.tsx headers (chinese · right-aligned ms).
   const ROWS = [
     { id: "trc_47b1", emp: "hn-researcher", op: "fetch_url", ms: 312, ok: true },
@@ -373,14 +380,14 @@ function TracesScene() {
         <div className="flex items-center gap-2">
           <span className="inline-flex h-5 items-center gap-1 rounded-full bg-primary-muted px-2 text-caption font-mono font-semibold uppercase tracking-wider text-primary">
             <Icon name="activity" size={10} />
-            Traces
+            {t("eyebrow")}
           </span>
           <h3 className="text-base font-semibold tracking-tight text-text">
-            执行追踪
+            {t("title")}
           </h3>
         </div>
         <span className="font-mono text-caption text-text-subtle">
-          last 24h · 214 runs
+          {t("summary")}
         </span>
       </div>
 
@@ -388,11 +395,11 @@ function TracesScene() {
         <table className="w-full text-left">
           <thead className="bg-surface-2/60 text-caption font-mono uppercase tracking-wider text-text-subtle backdrop-blur-sm">
             <tr>
-              <th className="px-3 py-2">trace</th>
-              <th className="px-3 py-2">员工</th>
-              <th className="px-3 py-2">工具</th>
-              <th className="px-3 py-2 text-right">ms</th>
-              <th className="px-3 py-2 text-right">状态</th>
+              <th className="px-3 py-2">{t("headers.trace")}</th>
+              <th className="px-3 py-2">{t("headers.employee")}</th>
+              <th className="px-3 py-2">{t("headers.tool")}</th>
+              <th className="px-3 py-2 text-right">{t("headers.ms")}</th>
+              <th className="px-3 py-2 text-right">{t("headers.status")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border text-sm">
@@ -413,11 +420,11 @@ function TracesScene() {
                 <td className="px-3 py-2 text-right">
                   {r.ok ? (
                     <span className="inline-flex items-center gap-1 text-caption text-success">
-                      <Icon name="check-circle-2" size={11} /> ok
+                      <Icon name="check-circle-2" size={11} /> {t("status.ok")}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-caption text-danger">
-                      <Icon name="alert-circle" size={11} /> err
+                      <Icon name="alert-circle" size={11} /> {t("status.err")}
                     </span>
                   )}
                 </td>
@@ -441,12 +448,19 @@ function StatusPill({ label }: { label: string }) {
   );
 }
 
-function ToolRow({ tool, duration }: { tool: string; duration: string }) {
+function ToolRow({
+  tool,
+  statusTemplate,
+}: {
+  tool: string;
+  duration: string;
+  statusTemplate: string;
+}) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
       <Icon name="check-circle-2" size={14} className="text-success" />
       <span className="text-caption font-mono text-text-muted">{tool}</span>
-      <span className="ml-auto text-caption text-success">ok · {duration}</span>
+      <span className="ml-auto text-caption text-success">{statusTemplate}</span>
     </div>
   );
 }

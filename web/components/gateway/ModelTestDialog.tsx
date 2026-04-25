@@ -31,6 +31,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslations } from "next-intl";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { Composer, ThinkingToggle } from "@/components/chat/Composer";
 import { DotGridAvatar, initialFromName } from "@/components/ui/DotGridAvatar";
@@ -114,15 +115,15 @@ type ErrorCategory =
   | "provider_error"
   | "unknown";
 
-const ERROR_LABEL: Record<ErrorCategory, string> = {
-  timeout: "超时",
-  auth: "认证失败",
-  rate_limit: "限流",
-  model_not_found: "模型不存在",
-  connection: "网络不通",
-  context_length: "上下文超限",
-  provider_error: "供应商错误",
-  unknown: "未知错误",
+const ERROR_KEYS: Record<ErrorCategory, string> = {
+  timeout: "errorTimeout",
+  auth: "errorAuth",
+  rate_limit: "errorRateLimit",
+  model_not_found: "errorModelNotFound",
+  connection: "errorConnection",
+  context_length: "errorContextLength",
+  provider_error: "errorProviderError",
+  unknown: "errorUnknown",
 };
 
 type LastRun = {
@@ -140,8 +141,9 @@ const DEFAULT_PARAMS = {
 };
 
 export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
+  const t = useTranslations("gateway.modelTest");
   const [messages, setMessages] = useState<Message[]>([]);
-  const [prompt, setPrompt] = useState("用一句话介绍你自己。");
+  const [prompt, setPrompt] = useState(t("defaultPrompt"));
   const [system, setSystem] = useState(DEFAULT_SYSTEM);
   const [temperature, setTemperature] = useState(DEFAULT_PARAMS.temperature);
   const [topP, setTopP] = useState(DEFAULT_PARAMS.top_p);
@@ -318,7 +320,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
               streaming: false,
               error: {
                 category: data.error_category ?? "unknown",
-                message: data.error ?? "失败",
+                message: data.error ?? t("failure"),
               },
               metrics: { latencyMs: data.latency_ms },
             });
@@ -333,7 +335,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
             streaming: false,
             error: {
               category: (err.code as ErrorCategory) ?? "unknown",
-              message: err.message || "失败",
+              message: err.message || t("failure"),
             },
           });
         },
@@ -414,7 +416,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-subtle shrink-0">
-                Test
+                {t("headerTest")}
               </span>
               <span aria-hidden="true" className="text-text-subtle shrink-0">
                 ·
@@ -454,7 +456,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
           <button
             type="button"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("close")}
             className="shrink-0 grid h-8 w-8 place-items-center rounded-md text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast"
           >
             <Icon name="x" size={14} />
@@ -477,7 +479,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] font-medium text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast"
               >
                 <Icon name="settings" size={12} />
-                高级参数
+                {t("advancedToggle")}
                 <Icon
                   name="chevron-down"
                   size={12}
@@ -493,13 +495,13 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 >
                   <div>
                     <label className="font-mono text-[10px] uppercase tracking-wider text-text-subtle block mb-1">
-                      System prompt
+                      {t("systemPrompt")}
                     </label>
                     <textarea
                       value={system}
                       onChange={(e) => setSystem(e.target.value)}
                       rows={2}
-                      placeholder="例：你是简洁精确的工程师助手。"
+                      placeholder={t("systemPlaceholder")}
                       className="w-full rounded-md bg-surface border border-border px-3 py-2 text-[12.5px] text-text placeholder:text-text-subtle focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary transition-colors duration-fast"
                     />
                   </div>
@@ -576,7 +578,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                     <Icon name="alert-circle" size={12} strokeWidth={2} />
                   </span>
                   <span className="inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold bg-danger/15 text-danger uppercase tracking-wide">
-                    {ERROR_LABEL[lastRun.error.category]}
+                    {t(ERROR_KEYS[lastRun.error.category])}
                   </span>
                   {lastRun.metrics?.latencyMs !== undefined && (
                     <span className="font-mono text-[11px] text-text-muted tabular-nums">
@@ -599,11 +601,11 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                   setStickToBottom(true);
                 }}
                 data-testid="model-test-jump-to-bottom"
-                aria-label="回到最新"
+                aria-label={t("jumpToLatest")}
                 className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 h-7 text-[11px] font-medium text-text-muted shadow-soft-sm hover:text-primary hover:border-primary/40 transition-colors duration-fast"
               >
                 <Icon name="arrow-down" size={12} />
-                回到最新
+                {t("jumpToLatest")}
               </button>
             )}
         </div>
@@ -615,7 +617,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
             onSend={onSubmit}
             onAbort={onAbort}
             isStreaming={isLoading}
-            placeholder="输入消息..."
+            placeholder={t("composerPlaceholder")}
             rows={2}
             testId="model-test-composer"
             controls={
@@ -623,7 +625,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 <ThinkingToggle
                   enabled={enableThinking}
                   onChange={setEnableThinking}
-                  label="深度思考"
+                  label={t("thinking")}
                 />
                 <button
                   type="button"
@@ -633,7 +635,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                   className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[11px] font-medium text-text-muted hover:text-text hover:border-border-strong disabled:opacity-40 transition-colors duration-fast"
                 >
                   <Icon name="refresh" size={11} />
-                  清空
+                  {t("clear")}
                 </button>
               </>
             }
@@ -642,20 +644,20 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 <span className="px-1 py-0.5 rounded-sm bg-surface-2 border border-border text-[10px] text-text-muted">
                   ↵
                 </span>
-                发送
+                {t("kbdSend")}
                 <span aria-hidden="true" className="mx-1">
                   ·
                 </span>
                 <span className="px-1 py-0.5 rounded-sm bg-surface-2 border border-border text-[10px] text-text-muted">
                   ⇧↵
                 </span>
-                换行
+                {t("kbdNewline")}
                 {messages.length > 0 && (
                   <>
                     <span aria-hidden="true" className="mx-1">
                       ·
                     </span>
-                    <span className="tabular-nums">{messages.length} 轮</span>
+                    <span className="tabular-nums">{t("rounds", { n: messages.length })}</span>
                   </>
                 )}
               </span>
@@ -668,6 +670,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
 }
 
 function EmptyTranscript() {
+  const t = useTranslations("gateway.modelTest");
   return (
     <div className="relative rounded-xl border border-dashed border-border bg-surface-2/30 px-6 py-8 text-center overflow-hidden">
       <div
@@ -686,24 +689,15 @@ function EmptyTranscript() {
         >
           <Icon name="sparkles" size={16} />
         </div>
-        <p className="text-[12.5px] text-text">开始一段测试对话</p>
-        <p className="mt-0.5 text-[11px] text-text-muted">
-          输入消息后按{" "}
-          <span className="inline-flex items-center px-1 py-0.5 rounded-sm bg-surface border border-border font-mono text-[10px] text-text">
-            ↵
-          </span>{" "}
-          或{" "}
-          <span className="inline-flex items-center px-1 py-0.5 rounded-sm bg-surface border border-border font-mono text-[10px] text-text">
-            ⌘↵
-          </span>{" "}
-          发送 · 多轮对话会保留上下文
-        </p>
+        <p className="text-[12.5px] text-text">{t("emptyTitle")}</p>
+        <p className="mt-0.5 text-[11px] text-text-muted">{t("emptyHint")}</p>
       </div>
     </div>
   );
 }
 
 function ThinkingPlaceholder({ elapsedMs }: { elapsedMs: number }) {
+  const t = useTranslations("gateway.modelTest");
   return (
     <div
       data-testid="model-test-thinking"
@@ -723,14 +717,14 @@ function ThinkingPlaceholder({ elapsedMs }: { elapsedMs: number }) {
       </div>
       <div className="flex-1 rounded-2xl rounded-tl-md border border-border bg-surface px-3.5 py-2.5 shadow-soft-sm">
         <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle block mb-1">
-          ASSISTANT · 思考中
+          {t("assistantThinking")}
         </span>
         <span className="inline-flex items-center gap-2 text-[12.5px] text-text-muted">
           <span
             aria-hidden="true"
             className="inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse-ring"
           />
-          <span className="italic">正在处理请求</span>
+          <span className="italic">{t("processing")}</span>
           {elapsedMs >= 1000 && (
             <span className="ml-1 font-mono not-italic text-[10.5px] tabular-nums text-text">
               {fmtDuration(elapsedMs)}
@@ -755,6 +749,7 @@ function MessageRow({
   streaming?: boolean;
   phase?: "idle" | "thinking" | "answering";
 }) {
+  const t = useTranslations("gateway.modelTest");
   const isUser = role === "user";
   const hasReasoning = Boolean(reasoning && reasoning.length > 0);
   // 思考过程是否仍在生成 — 与主聊天 ReasoningBlock 对齐:仅 streaming + thinking 阶段视为"活跃"
@@ -792,9 +787,9 @@ function MessageRow({
         <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle block mb-1">
           {streaming
             ? phase === "thinking"
-              ? "ASSISTANT · 思考中"
-              : "ASSISTANT · 流式"
-            : "ASSISTANT"}
+              ? t("assistantThinking")
+              : t("assistantStreaming")
+            : t("assistant")}
         </span>
         {hasReasoning && (
           <ReasoningBlock text={reasoning!} isStreaming={reasoningStreaming} />
@@ -804,7 +799,7 @@ function MessageRow({
             {content ? (
               <AgentMarkdown content={content} />
             ) : (
-              <span className="text-text-subtle italic">等待回复…</span>
+              <span className="text-text-subtle italic">{t("waitingReply")}</span>
             )}
             {streaming && (
               <span
@@ -842,6 +837,7 @@ function ReasoningBlock({
   text: string;
   isStreaming: boolean;
 }) {
+  const t = useTranslations("gateway.modelTest");
   const [open, setOpen] = useState(isStreaming);
   const userTouched = useRef(false);
   const prevStreamingRef = useRef(isStreaming);
@@ -884,10 +880,10 @@ function ReasoningBlock({
       >
         <span className="inline-flex items-center gap-1.5">
           <Icon name="brain" size={12} />
-          <span className="font-medium">思考过程{isStreaming ? "…" : ""}</span>
+          <span className="font-medium">{t("reasoningLabel")}{isStreaming ? "…" : ""}</span>
         </span>
         <span className="inline-flex items-center gap-1 font-mono text-[10px] text-primary/80">
-          {text.length} tokens
+          {text.length} {t("tokensSuffix")}
           <Icon name={open ? "chevron-up" : "chevron-down"} size={10} />
         </span>
       </button>

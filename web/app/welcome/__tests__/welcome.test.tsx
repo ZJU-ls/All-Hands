@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@/tests/test-utils/i18n-render";
 
 import WelcomePage, { FIRST_RUN_SCOPE } from "../page";
 import { hasCompletedFirstRun } from "@/lib/first-run";

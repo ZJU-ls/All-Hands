@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 export function MermaidView({ content }: { content: string }) {
+  const t = useTranslations("artifacts.mermaid");
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +33,7 @@ export function MermaidView({ content }: { content: string }) {
   if (error) {
     return (
       <div className="px-4 py-3 text-xs text-danger">
-        mermaid 渲染失败:{error}
+        {t("renderFailed", { error })}
       </div>
     );
   }

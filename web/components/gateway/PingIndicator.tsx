@@ -13,6 +13,7 @@
  *   fail     → danger-soft pill · alert-circle · "{category}" · hover=full err
  */
 
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 
 export type PingState =
@@ -21,33 +22,35 @@ export type PingState =
   | { status: "ok"; latencyMs: number }
   | { status: "fail"; category: string; error: string; latencyMs: number };
 
-const CATEGORY_LABEL: Record<string, string> = {
-  timeout: "超时",
-  auth: "认证失败",
-  rate_limit: "限流",
-  model_not_found: "模型不存在",
-  connection: "网络不通",
-  context_length: "上下文超限",
-  provider_error: "供应商错误",
-  unknown: "失败",
+const CATEGORY_KEYS: Record<string, string> = {
+  timeout: "categoryTimeout",
+  auth: "categoryAuth",
+  rate_limit: "categoryRateLimit",
+  model_not_found: "categoryModelNotFound",
+  connection: "categoryConnection",
+  context_length: "categoryContextLength",
+  provider_error: "categoryProviderError",
+  unknown: "categoryUnknown",
 };
 
 const BASE_PILL =
   "inline-flex items-center gap-1.5 h-6 px-2 rounded-full border text-[11px] font-mono tabular-nums";
 
 export function PingIndicator({ state }: { state: PingState }) {
+  const t = useTranslations("gateway.ping");
+
   if (state.status === "idle") {
     return (
       <span
         data-ping-state="idle"
-        aria-label="未测试"
+        aria-label={t("ariaUntested")}
         className={`${BASE_PILL} border-border bg-surface-2 text-text-subtle`}
       >
         <span
           aria-hidden="true"
           className="inline-block w-[6px] h-[6px] rounded-full bg-text-subtle/60"
         />
-        <span>待测</span>
+        <span>{t("labelPending")}</span>
       </span>
     );
   }
@@ -64,7 +67,7 @@ export function PingIndicator({ state }: { state: PingState }) {
           aria-hidden="true"
           className="inline-block w-[6px] h-[6px] rounded-full bg-primary animate-pulse-ring"
         />
-        <span>测试中</span>
+        <span>{t("labelRunning")}</span>
       </span>
     );
   }
@@ -73,7 +76,7 @@ export function PingIndicator({ state }: { state: PingState }) {
     return (
       <span
         data-ping-state="ok"
-        aria-label={`连通 · ${state.latencyMs}ms`}
+        aria-label={t("ariaOk", { ms: state.latencyMs })}
         className={`${BASE_PILL} border-success/25 bg-success-soft text-success`}
       >
         <Icon name="check-circle-2" size={11} strokeWidth={2} />
@@ -82,12 +85,13 @@ export function PingIndicator({ state }: { state: PingState }) {
     );
   }
 
-  const label = CATEGORY_LABEL[state.category] ?? CATEGORY_LABEL.unknown;
+  const labelKey = CATEGORY_KEYS[state.category] ?? CATEGORY_KEYS.unknown ?? "unknown";
+  const label = t(labelKey);
   return (
     <span
       data-ping-state="fail"
       title={state.error}
-      aria-label={`失败 · ${label} · ${state.error}`}
+      aria-label={t("ariaFail", { label, error: state.error })}
       className={`${BASE_PILL} border-danger/30 bg-danger-soft text-danger`}
     >
       <Icon name="alert-circle" size={11} strokeWidth={2} />

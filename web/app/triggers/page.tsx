@@ -20,6 +20,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -91,20 +92,22 @@ const EMPTY_DRAFT: CreateDraft = {
 
 type FilterKey = "all" | "timer" | "event" | "disabled";
 
-const ACTION_META: Record<ActionType, { label: string; icon: IconName }> = {
-  notify_user: { label: "通知用户", icon: "bell" },
-  invoke_tool: { label: "调用 Tool", icon: "zap" },
-  dispatch_employee: { label: "派发员工", icon: "users" },
-  continue_conversation: { label: "续会话", icon: "send" },
+const ACTION_ICON: Record<ActionType, IconName> = {
+  notify_user: "bell",
+  invoke_tool: "zap",
+  dispatch_employee: "users",
+  continue_conversation: "send",
 };
 
-const CRON_PRESETS: { cron: string; label: string; hint: string }[] = [
-  { cron: "0 8 * * *", label: "每天 08:00", hint: "daily" },
-  { cron: "0 9 * * 1", label: "每周一 09:00", hint: "weekly" },
-  { cron: "*/15 * * * *", label: "每 15 分钟", hint: "frequent" },
+const CRON_PRESETS: { cron: string; hint: "daily" | "weekly" | "frequent" }[] = [
+  { cron: "0 8 * * *", hint: "daily" },
+  { cron: "0 9 * * 1", hint: "weekly" },
+  { cron: "*/15 * * * *", hint: "frequent" },
 ];
 
 export default function TriggersPage() {
+  const t = useTranslations("triggers.list");
+  const tCommon = useTranslations("common");
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
@@ -236,7 +239,7 @@ export default function TriggersPage() {
 
   return (
     <AppShell
-      title="触发器"
+      title={t("title")}
       actions={
         <button
           onClick={() => openCreate()}
@@ -244,19 +247,19 @@ export default function TriggersPage() {
           className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3.5 text-[13px] font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:bg-primary-hover"
         >
           <Icon name="plus" size={14} />
-          新触发器
+          {t("newTrigger")}
         </button>
       }
     >
       <div className="h-full overflow-y-auto">
         <div className="mx-auto max-w-5xl space-y-6 px-8 py-8">
           <PageHeader
-            title="触发器"
+            title={t("title")}
             count={triggers.length || undefined}
             subtitle={
               <span className="inline-flex items-center gap-1.5">
                 <Icon name="sparkles" size={13} className="text-accent" />
-                定时或事件驱动自动执行 · 创建 / 启停 / 手动触发都可让 Lead Agent 代办
+                {t("subtitle")}
               </span>
             }
           />
@@ -276,7 +279,7 @@ export default function TriggersPage() {
             >
               <Icon name="alert-circle" size={16} className="mt-0.5 shrink-0 text-danger" />
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-danger">加载触发器失败</p>
+                <p className="text-[13px] font-medium text-danger">{t("loadFailed")}</p>
                 <p className="mt-0.5 truncate font-mono text-[11px] text-text-muted">
                   {error}
                 </p>
@@ -286,7 +289,7 @@ export default function TriggersPage() {
                 className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[12px] text-text transition-colors duration-fast hover:bg-surface-2"
               >
                 <Icon name="refresh" size={13} />
-                重试
+                {tCommon("retry")}
               </button>
             </div>
           )}
@@ -316,7 +319,7 @@ export default function TriggersPage() {
               {filtered.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center">
                   <p className="text-[13px] text-text-muted">
-                    当前筛选下没有触发器
+                    {t("emptyFilter")}
                   </p>
                 </div>
               ) : (
@@ -359,9 +362,9 @@ export default function TriggersPage() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`删除触发器 ${deleteTarget?.name ?? ""}?`}
-        message="此操作同时删除所有触发历史,不可撤销。"
-        confirmLabel="删除"
+        title={t("deleteConfirm.title", { name: deleteTarget?.name ?? "" })}
+        message={t("deleteConfirm.message")}
+        confirmLabel={t("deleteConfirm.confirm")}
         danger
         busy={deleting}
         onConfirm={() => void handleDeleteConfirmed()}
@@ -386,6 +389,7 @@ function SummaryStrip({
   firedToday: number;
   timers: number;
 }) {
+  const t = useTranslations("triggers.list.summary");
   return (
     <section
       data-testid="trigger-summary"
@@ -393,23 +397,23 @@ function SummaryStrip({
     >
       <HeroStat
         icon="zap"
-        label="触发器总数"
+        label={t("total")}
         value={total}
-        hint={total === 0 ? "尚未创建" : `${active} 活跃`}
+        hint={total === 0 ? t("totalEmpty") : t("totalActive", { count: active })}
       />
       <Stat
         icon="activity"
-        label="活跃"
+        label={t("active")}
         value={active}
-        hint={total > 0 ? `${Math.round((active / Math.max(total, 1)) * 100)}% 启用` : undefined}
+        hint={total > 0 ? t("activePct", { pct: Math.round((active / Math.max(total, 1)) * 100) }) : undefined}
       />
       <Stat
         icon="check-circle-2"
-        label="今日触发"
+        label={t("firedToday")}
         value={firedToday}
         tone="success"
       />
-      <Stat icon="clock" label="定时任务" value={timers} hint="timer 类型" />
+      <Stat icon="clock" label={t("timers")} value={timers} hint={t("timersHint")} />
     </section>
   );
 }
@@ -501,16 +505,17 @@ function FilterChips({
   counts: Record<FilterKey, number>;
   onChange: (v: FilterKey) => void;
 }) {
+  const t = useTranslations("triggers.list.filters");
   const items: { key: FilterKey; label: string; icon: IconName }[] = [
-    { key: "all", label: "全部", icon: "layout-grid" },
-    { key: "timer", label: "Timer", icon: "clock" },
-    { key: "event", label: "Event", icon: "zap" },
-    { key: "disabled", label: "停用", icon: "pause" },
+    { key: "all", label: t("all"), icon: "layout-grid" },
+    { key: "timer", label: t("timer"), icon: "clock" },
+    { key: "event", label: t("event"), icon: "zap" },
+    { key: "disabled", label: t("disabled"), icon: "pause" },
   ];
   return (
     <div
       role="tablist"
-      aria-label="触发器筛选"
+      aria-label={t("ariaLabel")}
       className="flex flex-wrap items-center gap-1.5"
     >
       {items.map((it) => {
@@ -551,7 +556,7 @@ function FilterChips({
 /* -------------------------------------------------------------------------- */
 
 function TriggerCard({
-  t,
+  t: trigger,
   busy,
   firing,
   onToggle,
@@ -565,18 +570,21 @@ function TriggerCard({
   onFire: () => void;
   onDelete: () => void;
 }) {
-  const actionMeta = ACTION_META[t.action.type];
-  const kindIcon: IconName = t.kind === "timer" ? "clock" : "zap";
-  const autoDisabled = !!t.auto_disabled_reason;
-  const active = t.enabled && !autoDisabled;
+  const t = useTranslations("triggers.list.card");
+  const tActions = useTranslations("triggers.list.actions");
+  const actionIcon = ACTION_ICON[trigger.action.type];
+  const actionLabel = tActions(trigger.action.type);
+  const kindIcon: IconName = trigger.kind === "timer" ? "clock" : "zap";
+  const autoDisabled = !!trigger.auto_disabled_reason;
+  const active = trigger.enabled && !autoDisabled;
   const scheduleText =
-    t.kind === "timer"
-      ? `${t.timer?.cron ?? ""} · ${t.timer?.timezone ?? "UTC"}`
-      : t.event?.type ?? "";
+    trigger.kind === "timer"
+      ? `${trigger.timer?.cron ?? ""} · ${trigger.timer?.timezone ?? "UTC"}`
+      : trigger.event?.type ?? "";
 
   return (
     <div
-      data-testid={`trigger-${t.id}`}
+      data-testid={`trigger-${trigger.id}`}
       className="group relative overflow-hidden rounded-lg border border-border bg-surface p-4 transition duration-base hover:-translate-y-px hover:shadow-soft"
     >
       {active && (
@@ -600,22 +608,22 @@ function TriggerCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <Link
-              href={`/triggers/${t.id}`}
+              href={`/triggers/${trigger.id}`}
               className="group/name min-w-0 flex-1"
-              data-testid={`trigger-link-${t.id}`}
+              data-testid={`trigger-link-${trigger.id}`}
             >
               <h3 className="truncate text-[14px] font-semibold text-text transition-colors duration-fast group-hover/name:text-primary">
-                {t.name}
+                {trigger.name}
               </h3>
               <p className="mt-0.5 truncate font-mono text-[11px] text-text-subtle">
                 {scheduleText}
               </p>
             </Link>
             <ToggleSwitch
-              enabled={t.enabled}
+              enabled={trigger.enabled}
               busy={busy}
               onChange={onToggle}
-              testId={`toggle-${t.id}`}
+              testId={`toggle-${trigger.id}`}
               disabled={autoDisabled}
             />
           </div>
@@ -623,25 +631,25 @@ function TriggerCard({
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-sm bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-text-muted">
               <Icon name={kindIcon} size={11} />
-              {t.kind}
+              {trigger.kind}
             </span>
             <span className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
-              <Icon name={actionMeta.icon} size={11} />
-              {actionMeta.label}
+              <Icon name={actionIcon} size={11} />
+              {actionLabel}
             </span>
             {autoDisabled && (
               <span
                 className="inline-flex items-center gap-1 rounded-sm bg-warning-soft px-1.5 py-0.5 text-[11px] font-medium text-warning"
-                title={t.auto_disabled_reason ?? ""}
+                title={trigger.auto_disabled_reason ?? ""}
               >
                 <Icon name="alert-triangle" size={11} />
-                自动停用
+                {t("autoDisabled")}
               </span>
             )}
-            {t.fires_failed_streak > 0 && (
+            {trigger.fires_failed_streak > 0 && (
               <span className="inline-flex items-center gap-1 rounded-sm bg-danger-soft px-1.5 py-0.5 text-[11px] font-medium text-danger">
                 <Icon name="alert-circle" size={11} />
-                连败 {t.fires_failed_streak}
+                {t("failedStreak", { count: trigger.fires_failed_streak })}
               </span>
             )}
           </div>
@@ -649,14 +657,14 @@ function TriggerCard({
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-muted">
             <span className="inline-flex items-center gap-1">
               <Icon name="activity" size={11} className="text-text-subtle" />
-              触发 <span className="font-mono tabular-nums text-text">{t.fires_total}</span> 次
+              {t("firesPrefix")} <span className="font-mono tabular-nums text-text">{trigger.fires_total}</span> {t("firesSuffix")}
             </span>
             <span className="inline-flex items-center gap-1">
               <Icon name="clock" size={11} className="text-text-subtle" />
-              {t.last_fired_at ? (
-                <>最近 <span className="font-mono text-text-subtle">{formatTime(t.last_fired_at)}</span></>
+              {trigger.last_fired_at ? (
+                <>{t("lastPrefix")} <span className="font-mono text-text-subtle">{formatTime(trigger.last_fired_at)}</span></>
               ) : (
-                "尚未触发"
+                t("neverFired")
               )}
             </span>
           </div>
@@ -668,28 +676,28 @@ function TriggerCard({
           <button
             onClick={onFire}
             disabled={firing || !active}
-            data-testid={`fire-${t.id}`}
+            data-testid={`fire-${trigger.id}`}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] text-text transition-colors duration-fast hover:border-border-strong hover:bg-surface-2 disabled:opacity-40"
           >
             <Icon name={firing ? "loader" : "play-circle"} size={13} className={firing ? "animate-spin" : ""} />
-            {firing ? "触发中" : "立即触发"}
+            {firing ? t("firing") : t("fireNow")}
           </button>
           <Link
-            href={`/triggers/${t.id}`}
-            data-testid={`edit-${t.id}`}
+            href={`/triggers/${trigger.id}`}
+            data-testid={`edit-${trigger.id}`}
             className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text"
           >
             <Icon name="edit" size={13} />
-            编辑
+            {t("edit")}
           </Link>
         </div>
         <button
           onClick={onDelete}
-          data-testid={`delete-${t.id}`}
+          data-testid={`delete-${trigger.id}`}
           className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] text-text-muted transition-colors duration-fast hover:bg-danger-soft hover:text-danger"
         >
           <Icon name="trash-2" size={13} />
-          删除
+          {t("delete")}
         </button>
       </div>
     </div>
@@ -709,11 +717,12 @@ function ToggleSwitch({
   testId?: string;
   disabled?: boolean;
 }) {
+  const t = useTranslations("triggers.list.card");
   return (
     <button
       role="switch"
       aria-checked={enabled}
-      aria-label={enabled ? "停用触发器" : "启用触发器"}
+      aria-label={enabled ? t("switchOn") : t("switchOff")}
       data-testid={testId}
       onClick={onChange}
       disabled={busy || disabled}
@@ -744,6 +753,8 @@ function EmptyTriggers({
 }: {
   onCreate: (preset?: Partial<CreateDraft>) => void;
 }) {
+  const t = useTranslations("triggers.list.empty");
+  const tCron = useTranslations("triggers.list.cron");
   return (
     <section
       data-testid="triggers-empty"
@@ -771,33 +782,35 @@ function EmptyTriggers({
           <Icon name="zap" size={24} />
         </div>
         <h2 className="text-[18px] font-semibold tracking-tight text-text">
-          添加第一个触发器
+          {t("title")}
         </h2>
         <p className="mx-auto mt-2 max-w-sm text-[13px] text-text-muted">
-          按 cron 表达式或事件类型自动执行动作。从下面的预设开始,或跟 Lead Agent
-          说「帮我每天早上 8 点通知今日日程」。
+          {t("description")}
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          {CRON_PRESETS.map((p) => (
-            <button
-              key={p.cron}
-              data-testid={`preset-${p.hint}`}
-              onClick={() =>
-                onCreate({ kind: "timer", cron: p.cron, name: p.label })
-              }
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[12px] text-text transition duration-base hover:-translate-y-px hover:border-primary/40 hover:shadow-soft-sm"
-            >
-              <Icon name="clock" size={13} className="text-accent" />
-              {p.label}
-            </button>
-          ))}
+          {CRON_PRESETS.map((p) => {
+            const label = tCron(p.hint);
+            return (
+              <button
+                key={p.cron}
+                data-testid={`preset-${p.hint}`}
+                onClick={() =>
+                  onCreate({ kind: "timer", cron: p.cron, name: label })
+                }
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[12px] text-text transition duration-base hover:-translate-y-px hover:border-primary/40 hover:shadow-soft-sm"
+              >
+                <Icon name="clock" size={13} className="text-accent" />
+                {label}
+              </button>
+            );
+          })}
           <button
             onClick={() => onCreate({ kind: "event" })}
             data-testid="preset-event"
             className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[12px] text-text transition duration-base hover:-translate-y-px hover:border-primary/40 hover:shadow-soft-sm"
           >
             <Icon name="zap" size={13} className="text-accent" />
-            事件触发
+            {t("eventPreset")}
           </button>
         </div>
         <div className="mt-5">
@@ -807,7 +820,7 @@ function EmptyTriggers({
             className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-[13px] font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:bg-primary-hover"
           >
             <Icon name="plus" size={14} />
-            自定义创建
+            {t("customCreate")}
           </button>
         </div>
       </div>
@@ -830,6 +843,8 @@ function CreateDrawer({
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
+  const t = useTranslations("triggers.list.create");
+  const tActions = useTranslations("triggers.list.actions");
   const [draft, setDraft] = useState<CreateDraft>(initial);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
@@ -913,18 +928,18 @@ function CreateDrawer({
         <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0">
             <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-text-subtle">
-              Triggers
+              {t("eyebrow")}
             </p>
             <h3
               id="create-trigger-title"
               className="mt-0.5 text-[16px] font-semibold tracking-tight text-text"
             >
-              新建触发器
+              {t("title")}
             </h3>
           </div>
           <button
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("close")}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text"
           >
             <Icon name="x" size={14} />
@@ -932,31 +947,31 @@ function CreateDrawer({
         </header>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
-          <Section label="基础">
+          <Section label={t("sectionBasic")}>
             <Field
-              label="名称"
+              label={t("fieldName")}
               value={draft.name}
               onChange={(v) => setDraft({ ...draft, name: v })}
-              placeholder="每日日报"
+              placeholder={t("fieldNamePlaceholder")}
             />
 
             <div>
-              <MicroLabel>类型</MicroLabel>
+              <MicroLabel>{t("fieldKind")}</MicroLabel>
               <div className="grid grid-cols-2 gap-2">
                 <KindRadio
                   testId="kind-timer"
                   active={draft.kind === "timer"}
                   icon="clock"
-                  title="Timer"
-                  hint="cron 定时触发"
+                  title={t("kindTimerTitle")}
+                  hint={t("kindTimerHint")}
                   onClick={() => setDraft({ ...draft, kind: "timer" })}
                 />
                 <KindRadio
                   testId="kind-event"
                   active={draft.kind === "event"}
                   icon="zap"
-                  title="Event"
-                  hint="事件类型匹配"
+                  title={t("kindEventTitle")}
+                  hint={t("kindEventHint")}
                   onClick={() => setDraft({ ...draft, kind: "event" })}
                 />
               </div>
@@ -965,14 +980,14 @@ function CreateDrawer({
             {draft.kind === "timer" ? (
               <div className="grid grid-cols-2 gap-3">
                 <Field
-                  label="cron 表达式"
+                  label={t("fieldCron")}
                   mono
                   value={draft.cron}
                   onChange={(v) => setDraft({ ...draft, cron: v })}
                   placeholder="0 8 * * *"
                 />
                 <Field
-                  label="时区"
+                  label={t("fieldTimezone")}
                   mono
                   value={draft.timezone}
                   onChange={(v) => setDraft({ ...draft, timezone: v })}
@@ -981,7 +996,7 @@ function CreateDrawer({
               </div>
             ) : (
               <Field
-                label="事件类型"
+                label={t("fieldEventType")}
                 mono
                 value={draft.event_type}
                 onChange={(v) => setDraft({ ...draft, event_type: v })}
@@ -990,38 +1005,38 @@ function CreateDrawer({
             )}
           </Section>
 
-          <Section label="动作">
+          <Section label={t("sectionAction")}>
             <div>
-              <MicroLabel>执行类型</MicroLabel>
+              <MicroLabel>{t("fieldActionType")}</MicroLabel>
               <Select
                 value={draft.action_type}
                 onChange={(v) =>
                   setDraft({ ...draft, action_type: v as ActionType })
                 }
                 options={[
-                  { value: "notify_user", label: "通知用户", hint: "notify_user" },
-                  { value: "invoke_tool", label: "调用 Tool", hint: "invoke_tool" },
-                  { value: "dispatch_employee", label: "派发员工", hint: "dispatch_employee" },
-                  { value: "continue_conversation", label: "续会话", hint: "continue_conversation" },
+                  { value: "notify_user", label: tActions("notify_user"), hint: "notify_user" },
+                  { value: "invoke_tool", label: tActions("invoke_tool"), hint: "invoke_tool" },
+                  { value: "dispatch_employee", label: tActions("dispatch_employee"), hint: "dispatch_employee" },
+                  { value: "continue_conversation", label: tActions("continue_conversation"), hint: "continue_conversation" },
                 ]}
                 testId="action-type"
-                ariaLabel="触发动作"
+                ariaLabel={t("fieldActionAria")}
                 className="w-full"
               />
             </div>
 
             {draft.action_type === "notify_user" && (
               <Field
-                label="消息模板(支持 {{event.*}} / {{@today}})"
+                label={t("fieldMessage")}
                 value={draft.message}
                 onChange={(v) => setDraft({ ...draft, message: v })}
-                placeholder="今日日程已生成"
+                placeholder={t("fieldMessagePlaceholder")}
                 textarea
               />
             )}
             {draft.action_type === "invoke_tool" && (
               <Field
-                label="Tool ID"
+                label={t("fieldToolId")}
                 mono
                 value={draft.tool_id}
                 onChange={(v) => setDraft({ ...draft, tool_id: v })}
@@ -1031,17 +1046,17 @@ function CreateDrawer({
             {draft.action_type === "dispatch_employee" && (
               <>
                 <Field
-                  label="员工 ID"
+                  label={t("fieldEmployeeId")}
                   mono
                   value={draft.employee_id}
                   onChange={(v) => setDraft({ ...draft, employee_id: v })}
                   placeholder="emp_xxx"
                 />
                 <Field
-                  label="任务模板"
+                  label={t("fieldTaskTemplate")}
                   value={draft.task_template}
                   onChange={(v) => setDraft({ ...draft, task_template: v })}
-                  placeholder="汇总 {{@yesterday}} 的所有 artifact"
+                  placeholder={t("fieldTaskTemplatePlaceholder")}
                   textarea
                 />
               </>
@@ -1049,26 +1064,26 @@ function CreateDrawer({
             {draft.action_type === "continue_conversation" && (
               <>
                 <Field
-                  label="会话 ID"
+                  label={t("fieldConversationId")}
                   mono
                   value={draft.conversation_id}
                   onChange={(v) => setDraft({ ...draft, conversation_id: v })}
                   placeholder="conv_xxx"
                 />
                 <Field
-                  label="消息模板"
+                  label={t("fieldMessageTemplate")}
                   value={draft.message_template}
                   onChange={(v) => setDraft({ ...draft, message_template: v })}
-                  placeholder="请更新进展"
+                  placeholder={t("fieldMessageTemplatePlaceholder")}
                   textarea
                 />
               </>
             )}
           </Section>
 
-          <Section label="节流">
+          <Section label={t("sectionThrottle")}>
             <div>
-              <MicroLabel>最小触发间隔(秒,≥ 60)</MicroLabel>
+              <MicroLabel>{t("fieldMinInterval")}</MicroLabel>
               <input
                 type="number"
                 min={60}
@@ -1105,7 +1120,7 @@ function CreateDrawer({
             onClick={onClose}
             className="inline-flex h-9 items-center rounded-md px-3 text-[13px] text-text-muted transition-colors duration-fast hover:bg-surface-2 hover:text-text"
           >
-            取消
+            {t("cancel")}
           </button>
           <button
             onClick={() => void submit()}
@@ -1118,7 +1133,7 @@ function CreateDrawer({
               size={14}
               className={submitting ? "animate-spin" : ""}
             />
-            {submitting ? "创建中…" : "创建触发器"}
+            {submitting ? t("submitting") : t("submit")}
           </button>
         </footer>
       </div>

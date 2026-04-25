@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { render, cleanup, screen, fireEvent } from "@testing-library/react";
+import { render, cleanup, screen, fireEvent } from "@/tests/test-utils/i18n-render";
 import { NestedRunBlock } from "@/components/chat/NestedRunBlock";
 
 afterEach(cleanup);

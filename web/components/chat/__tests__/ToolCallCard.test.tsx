@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@/tests/test-utils/i18n-render";
 import { ToolCallCard } from "../ToolCallCard";
 import type { ToolCall } from "@/lib/protocol";
 

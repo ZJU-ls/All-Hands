@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -18,26 +19,35 @@ import {
 
 type FilterKey = "inbox" | "active" | "needs_user" | "done" | "failed" | "all";
 
+type FilterLabelKey =
+  | "filterInbox"
+  | "filterNeedsUser"
+  | "filterActive"
+  | "filterDone"
+  | "filterFailed"
+  | "filterAll";
+
 const FILTER_DEFS: {
   key: FilterKey;
-  label: string;
+  labelKey: FilterLabelKey;
   icon: IconName;
   statuses: TaskStatus[] | null;
 }[] = [
   {
     key: "inbox",
-    label: "收件箱",
+    labelKey: "filterInbox",
     icon: "layout-grid",
     statuses: ["queued", "running", "needs_input", "needs_approval"],
   },
-  { key: "needs_user", label: "等你", icon: "user", statuses: ["needs_input", "needs_approval"] },
-  { key: "active", label: "执行中", icon: "loader", statuses: ["running"] },
-  { key: "done", label: "已完成", icon: "check-circle-2", statuses: ["completed"] },
-  { key: "failed", label: "失败/取消", icon: "alert-circle", statuses: ["failed", "cancelled"] },
-  { key: "all", label: "全部", icon: "list", statuses: null },
+  { key: "needs_user", labelKey: "filterNeedsUser", icon: "user", statuses: ["needs_input", "needs_approval"] },
+  { key: "active", labelKey: "filterActive", icon: "loader", statuses: ["running"] },
+  { key: "done", labelKey: "filterDone", icon: "check-circle-2", statuses: ["completed"] },
+  { key: "failed", labelKey: "filterFailed", icon: "alert-circle", statuses: ["failed", "cancelled"] },
+  { key: "all", labelKey: "filterAll", icon: "list", statuses: null },
 ];
 
 export default function TasksPage() {
+  const t = useTranslations("tasks.list");
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [employees, setEmployees] = useState<EmployeeDto[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -94,45 +104,41 @@ export default function TasksPage() {
 
   return (
     <AppShell
-      title="任务"
+      title={t("shellTitle")}
       actions={
         <button
           onClick={() => setDrawerOpen(true)}
           data-testid="new-task"
           className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-glow-sm"
         >
-          <Icon name="plus" size={14} /> 新任务
+          <Icon name="plus" size={14} /> {t("newTask")}
         </button>
       }
     >
       <div className="h-full overflow-y-auto">
         <div className="mx-auto max-w-6xl space-y-8 p-8 animate-fade-up">
           <PageHeader
-            title="任务"
+            title={t("pageTitle")}
             count={tasks.length || undefined}
-            subtitle={
-              <>
-                异步工作单元 · 发起后可以关掉页面,员工在后台跑完后你回来看结果。让 Lead Agent 在对话里派,或右上角 &ldquo;新任务&rdquo; 手动建。
-              </>
-            }
+            subtitle={t("subtitle")}
           />
 
           {/* KPI strip */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <HeroStat
-              label="收件箱"
+              label={t("kpiInbox")}
               value={counts.inbox}
-              hint={counts.inbox > 0 ? "有待处理" : "全部清空"}
+              hint={counts.inbox > 0 ? t("kpiInboxHasPending") : t("kpiInboxAllClear")}
               icon="layout-grid"
             />
-            <Stat label="等你" value={counts.needs_user} icon="user" tone="warning" />
-            <Stat label="执行中" value={counts.active} icon="loader" tone="primary" />
-            <Stat label="已完成" value={counts.done} icon="check-circle-2" tone="success" />
+            <Stat label={t("kpiNeedsUser")} value={counts.needs_user} icon="user" tone="warning" />
+            <Stat label={t("kpiActive")} value={counts.active} icon="loader" tone="primary" />
+            <Stat label={t("kpiDone")} value={counts.done} icon="check-circle-2" tone="success" />
           </div>
 
           {/* Filter pills (V2: bg-surface-2 wrapper, bg-surface shadow-soft-sm active) */}
           <nav
-            aria-label="任务筛选"
+            aria-label={t("filterAriaLabel")}
             className="inline-flex items-center gap-0.5 rounded-xl border border-border bg-surface-2 p-1"
           >
             {FILTER_DEFS.map((f) => {
@@ -150,7 +156,7 @@ export default function TasksPage() {
                   }
                 >
                   <Icon name={f.icon} size={12} />
-                  {f.label}
+                  {t(f.labelKey)}
                   {count > 0 && (
                     <span
                       className={
@@ -187,13 +193,13 @@ export default function TasksPage() {
                 <Icon name="alert-circle" size={18} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-danger">加载任务失败</div>
+                <div className="text-sm font-semibold text-danger">{t("loadFailed")}</div>
                 <div className="mt-1 truncate font-mono text-caption text-danger/80">{error}</div>
                 <button
                   onClick={() => void load()}
                   className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-danger/30 bg-surface px-3 text-caption font-medium text-danger hover:bg-danger/10 transition duration-fast"
                 >
-                  <Icon name="refresh" size={12} /> 重试
+                  <Icon name="refresh" size={12} /> {t("retry")}
                 </button>
               </div>
             </div>
@@ -207,7 +213,7 @@ export default function TasksPage() {
             <ul
               data-testid="tasks-list"
               className="flex flex-col gap-3"
-              aria-label="任务列表"
+              aria-label={t("listAriaLabel")}
             >
               {tasks.map((t) => (
                 <TaskRow
@@ -316,13 +322,14 @@ function EmptyHint({
   filter: FilterKey;
   onCreate: () => void;
 }) {
+  const t = useTranslations("tasks.list");
   const msg: Record<FilterKey, string> = {
-    inbox: "收件箱是空的",
-    active: "现在没有执行中的任务",
-    needs_user: "没有任务在等你回答或审批",
-    done: "还没有已完成的任务",
-    failed: "没有失败或取消的任务",
-    all: "还没有任务",
+    inbox: t("emptyInbox"),
+    active: t("emptyActive"),
+    needs_user: t("emptyNeedsUser"),
+    done: t("emptyDone"),
+    failed: t("emptyFailed"),
+    all: t("emptyAll"),
   };
   return (
     <div
@@ -359,20 +366,20 @@ function EmptyHint({
         </div>
         <h3 className="mt-6 text-lg font-semibold tracking-tight">{msg[filter]}</h3>
         <p className="mt-2 text-sm leading-relaxed text-text-muted">
-          让 Lead Agent 在对话里派一个,或直接手动创建。
+          {t("emptyBody")}
         </p>
         <div className="mt-6 flex items-center justify-center gap-2">
           <button
             onClick={onCreate}
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-fg shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-glow-sm"
           >
-            <Icon name="plus" size={14} /> 新建任务
+            <Icon name="plus" size={14} /> {t("newTaskCta")}
           </button>
           <Link
             href="/chat"
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border-strong bg-surface px-5 text-sm font-medium text-text shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
           >
-            <Icon name="sparkles" size={14} className="text-primary" /> 找 Lead 派
+            <Icon name="sparkles" size={14} className="text-primary" /> {t("askLead")}
           </Link>
         </div>
       </div>
@@ -381,6 +388,7 @@ function EmptyHint({
 }
 
 function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }) {
+  const t = useTranslations("tasks.list");
   const urgent = task.status === "needs_input" || task.status === "needs_approval";
   const updated = new Date(task.updated_at);
   const running = task.status === "running";
@@ -449,7 +457,7 @@ function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1 text-right">
             <div className="text-[10px] font-mono uppercase tracking-wider text-text-subtle">
-              指派给
+              {t("assignedTo")}
             </div>
             <div className="max-w-[10rem] truncate text-sm font-medium text-text">
               {assigneeName}

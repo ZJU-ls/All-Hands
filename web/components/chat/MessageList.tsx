@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useChatStore } from "@/lib/store";
 import { MessageBubble } from "./MessageBubble";
 import { Icon } from "@/components/ui/icon";
@@ -12,6 +13,7 @@ type Props = { conversationId: string };
 const STICK_THRESHOLD_PX = 64;
 
 export function MessageList({ conversationId }: Props) {
+  const t = useTranslations("chat.messageList");
   const { messages, streamingMessage, streamError, isStreaming } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
@@ -106,11 +108,11 @@ export function MessageList({ conversationId }: Props) {
             setStickToBottom(true);
           }}
           data-testid="jump-to-bottom"
-          aria-label="回到最新消息"
+          aria-label={t("jumpToLatest")}
           className="absolute bottom-4 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[11px] font-medium text-text-muted shadow-soft-sm transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2"
         >
           <Icon name="arrow-down" size={12} />
-          回到最新
+          {t("backToLatest")}
         </button>
       )}
     </div>
@@ -118,14 +120,15 @@ export function MessageList({ conversationId }: Props) {
 }
 
 function EmptyState() {
+  const t = useTranslations("chat.messageList");
   return (
     <div className="flex h-full items-center justify-center px-6">
       <div className="text-center">
         <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-primary-muted text-primary">
           <Icon name="sparkles" size={22} />
         </div>
-        <p className="text-[14px] font-medium text-text">准备就绪</p>
-        <p className="mt-1 text-[12px] text-text-muted">发一条消息,开始这次对话。</p>
+        <p className="text-[14px] font-medium text-text">{t("ready")}</p>
+        <p className="mt-1 text-[12px] text-text-muted">{t("emptyHint")}</p>
       </div>
     </div>
   );
@@ -137,11 +140,12 @@ function EmptyState() {
  * matches the live agent bubble so the transition into real tokens doesn't
  * reflow. */
 function PendingAssistantBubble() {
+  const t = useTranslations("chat.messageList");
   return (
     <div
       data-testid="pending-assistant-bubble"
       role="status"
-      aria-label="模型正在处理"
+      aria-label={t("modelProcessing")}
       className="flex justify-start gap-3"
     >
       <span
@@ -190,9 +194,10 @@ function StreamErrorBanner({
   message: string;
   code?: string;
 }) {
+  const t = useTranslations("chat.messageList");
   const hint =
     code === "INTERNAL" || code === undefined
-      ? "多半是模型凭证没配好或上游拒绝。去 /gateway 核对 provider 的 API Key 与 base_url。"
+      ? t("internalHint")
       : null;
   return (
     <div
@@ -204,7 +209,7 @@ function StreamErrorBanner({
         <Icon name="alert-triangle" size={14} />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-semibold text-danger">助手没能完成这次回复。</div>
+        <div className="text-[13px] font-semibold text-danger">{t("assistantFailed")}</div>
         <div className="mt-1 break-all font-mono text-[11px] text-danger/80">
           {message}
           {code ? <span className="ml-2 text-danger/60">[{code}]</span> : null}

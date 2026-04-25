@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon } from "@/components/ui/icon";
 import { Sparkline } from "@/components/ui/Sparkline";
@@ -60,6 +61,7 @@ export default function SymbolDetailPage({
 }: {
   params: Promise<{ symbol: string }>;
 }) {
+  const t = useTranslations("market.detail");
   const { symbol } = use(params);
   const decoded = decodeURIComponent(symbol);
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -112,7 +114,7 @@ export default function SymbolDetailPage({
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition-colors duration-fast"
         >
           <Icon name="arrow-left" size={12} />
-          返回行情
+          {t("backToMarket")}
         </Link>
       }
     >
@@ -129,16 +131,16 @@ export default function SymbolDetailPage({
 
           <Section
             icon="activity"
-            title={`价格曲线 · ${interval}`}
+            title={t("priceCurve", { interval })}
             subtitle={
               bars.length > 0
-                ? `${bars.length} 根 K 线 · 关闭价走势`
-                : "等待 provider 返回数据"
+                ? t("priceCurveSubtitle", { count: bars.length })
+                : t("priceCurveAwaiting")
             }
             actions={
               <div
                 role="tablist"
-                aria-label="时间范围"
+                aria-label={t("intervalLabel")}
                 className="inline-flex items-center gap-1 rounded-lg bg-surface-2 p-1 border border-border"
               >
                 {INTERVALS.map((iv) => (
@@ -169,8 +171,8 @@ export default function SymbolDetailPage({
           </Section>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <NewsCard icon="book-open" title="近期新闻" rows={news} />
-            <NewsCard icon="bell" title="公告" rows={announcements} />
+            <NewsCard icon="book-open" title={t("newsTitle")} rows={news} />
+            <NewsCard icon="bell" title={t("announcementsTitle")} rows={announcements} />
           </div>
 
           <FooterActions decoded={decoded} />
@@ -193,6 +195,7 @@ function QuoteHero({
   quote: Quote | null;
   loading: boolean;
 }) {
+  const t = useTranslations("market.detail");
   const positive = quote ? quote.change >= 0 : false;
   return (
     <section
@@ -223,14 +226,14 @@ function QuoteHero({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-primary-muted text-primary text-caption font-mono font-semibold uppercase tracking-wider">
-              Ticker
+              {t("ticker")}
             </span>
             <span className="font-mono text-caption text-text-subtle uppercase tracking-wider">
               {symbol.startsWith("SSE:")
-                ? "Shanghai"
+                ? t("exchangeShanghai")
                 : symbol.startsWith("SZSE:")
-                  ? "Shenzhen"
-                  : "exchange"}
+                  ? t("exchangeShenzhen")
+                  : t("exchangeOther")}
             </span>
           </div>
           <h1 className="mt-1 text-[28px] md:text-[32px] font-semibold tracking-tight text-text font-mono">
@@ -264,30 +267,30 @@ function QuoteHero({
             </div>
           ) : (
             <p className="mt-3 text-[13px] text-text-muted">
-              暂无报价 · provider 未缓存。
+              {t("noQuote")}
             </p>
           )}
           {quote && (
             <p className="mt-3 font-mono text-caption text-text-subtle">
-              src: {quote.source} · {new Date(quote.ts).toLocaleString()}
+              {t("quoteSource", { source: quote.source, time: new Date(quote.ts).toLocaleString() })}
             </p>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link
-            href={`/chat?prefill=${encodeURIComponent(`问老张:${symbol} 为什么异动`)}`}
+            href={`/chat?prefill=${encodeURIComponent(t("askExpertPrefill", { symbol }))}`}
             data-testid="market-symbol-ask"
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary hover:bg-primary-hover text-primary-fg text-[13px] font-semibold shadow-soft hover:-translate-y-px transition duration-base"
           >
             <Icon name="sparkles" size={14} />
-            问老张
+            {t("askExpert")}
           </Link>
           <Link
             href="/market"
             className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
           >
             <Icon name="eye" size={14} />
-            自选
+            {t("watched")}
           </Link>
         </div>
       </div>
@@ -342,6 +345,7 @@ function Section({
 // ---------------------------------------------------------------------------
 
 function PriceChart({ bars }: { bars: Bar[] }) {
+  const t = useTranslations("market.detail");
   const closes = bars.map((b) => b.close);
   const min = Math.min(...closes);
   const max = Math.max(...closes);
@@ -361,7 +365,7 @@ function PriceChart({ bars }: { bars: Bar[] }) {
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <p className="font-mono text-caption uppercase tracking-wider text-text-subtle">
-            区间涨跌
+            {t("rangeChange")}
           </p>
           <div
             className={`mt-1 text-[20px] font-semibold tabular-nums font-mono ${
@@ -377,9 +381,9 @@ function PriceChart({ bars }: { bars: Bar[] }) {
           </div>
         </div>
         <div className="flex items-center gap-4 font-mono text-caption text-text-muted">
-          <span>min {min.toFixed(2)}</span>
-          <span>max {max.toFixed(2)}</span>
-          <span>{bars.length} bars</span>
+          <span>{t("min")} {min.toFixed(2)}</span>
+          <span>{t("max")} {max.toFixed(2)}</span>
+          <span>{bars.length} {t("bars")}</span>
         </div>
       </div>
       <div
@@ -392,7 +396,7 @@ function PriceChart({ bars }: { bars: Bar[] }) {
           height={180}
           strokeWidth={2}
           filled
-          ariaLabel={`${bars.length} bar price chart`}
+          ariaLabel={t("barsAria", { count: bars.length })}
         />
       </div>
     </div>
@@ -408,6 +412,7 @@ function ChartSkeleton() {
 }
 
 function EmptyChart() {
+  const t = useTranslations("market.detail");
   return (
     <div className="relative overflow-hidden rounded-lg border border-dashed border-border bg-surface px-6 py-10 text-center">
       <div
@@ -423,9 +428,9 @@ function EmptyChart() {
         <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-primary-muted text-primary">
           <Icon name="activity" size={20} strokeWidth={2} />
         </div>
-        <p className="text-[14px] text-text">暂无 K 线数据</p>
+        <p className="text-[14px] text-text">{t("emptyChartTitle")}</p>
         <p className="mt-1 text-[12px] text-text-muted">
-          provider 未返回该区间 / 未缓存 · 切换时间范围再试一次。
+          {t("emptyChartHint")}
         </p>
       </div>
     </div>
@@ -445,18 +450,19 @@ function NewsCard({
   title: string;
   rows: News[];
 }) {
+  const t = useTranslations("market.detail");
   return (
     <Section
       icon={icon}
-      title={`${title} · ${rows.length}`}
-      subtitle={rows.length === 0 ? "暂无" : `最新 ${Math.min(rows.length, 10)} 条`}
+      title={t("newsCount", { title, count: rows.length })}
+      subtitle={rows.length === 0 ? t("newsEmpty") : t("newsLatest", { count: Math.min(rows.length, 10) })}
     >
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center">
           <div className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-xl bg-primary-muted text-primary">
             <Icon name={icon} size={14} />
           </div>
-          <p className="text-[13px] text-text-muted">暂无内容</p>
+          <p className="text-[13px] text-text-muted">{t("newsCardEmpty")}</p>
         </div>
       ) : (
         <ul className="space-y-2">
@@ -476,7 +482,7 @@ function NewsCard({
                     {n.title}
                   </p>
                   <p className="mt-0.5 font-mono text-caption text-text-subtle truncate">
-                    {new Date(n.published_at).toLocaleString()} · {n.source}
+                    {t("newsTimestamp", { time: new Date(n.published_at).toLocaleString(), source: n.source })}
                   </p>
                 </div>
                 <Icon
@@ -498,21 +504,22 @@ function NewsCard({
 // ---------------------------------------------------------------------------
 
 function FooterActions({ decoded }: { decoded: string }) {
+  const t = useTranslations("market.detail");
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <Link
-        href={`/chat?prefill=${encodeURIComponent(`为 ${decoded} 写一段研究纪要`)}`}
+        href={`/chat?prefill=${encodeURIComponent(t("researchPrefill", { symbol: decoded }))}`}
         className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
       >
         <Icon name="file-code-2" size={12} />
-        生成研究纪要
+        {t("generateResearch")}
       </Link>
       <Link
         href="/market"
         className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
       >
         <Icon name="plus" size={12} />
-        加到持仓
+        {t("addToHoldings")}
       </Link>
     </div>
   );

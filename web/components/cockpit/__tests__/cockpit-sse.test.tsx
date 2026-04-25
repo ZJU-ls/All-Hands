@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, cleanup, screen, act } from "@testing-library/react";
+import { render, cleanup, screen, act } from "@/tests/test-utils/i18n-render";
 import type { WorkspaceSummaryDto } from "@/lib/cockpit-api";
 
 // ---------- module mocks ---------------------------------------------------

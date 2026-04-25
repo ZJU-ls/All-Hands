@@ -1,0 +1,106 @@
+{
+  "chat": {
+    "page": {
+      "shellTitle": "对话",
+      "backendNotReady": "后端未就绪,请确认服务已启动。",
+      "connectionError": "连接错误",
+      "initializing": "正在初始化对话…"
+    },
+    "conversation": {
+      "shellTitle": "One for All · 一个 Lead Agent 搞定一切",
+      "backendOffline": "后端未就绪 · 正在自动重连",
+      "attempt": "尝试 {n}",
+      "retryNow": "立即重试",
+      "loadFailedTitle": "对话加载失败",
+      "loadFailedDescription": "可能是 backend 还在重启,或会话状态损坏。",
+      "retry": "重试",
+      "toggleArtifacts": "切换制品区",
+      "artifactsTooltip": "制品区 · Cmd/Ctrl+J",
+      "artifacts": "制品"
+    },
+    "compactChip": {
+      "running": "压缩中…",
+      "done": "已压缩 · {n}",
+      "idle": "压缩上下文",
+      "errorTitle": "压缩失败 · {message}",
+      "tooltip": "将较早的消息折叠成单条摘要,为后续对话腾出上下文窗口",
+      "ariaLabel": "手动压缩对话上下文"
+    },
+    "composer": {
+      "placeholder": "输入消息…",
+      "stop": "停止",
+      "send": "发送",
+      "thinking": "深度思考"
+    },
+    "header": {
+      "loading": "加载中…",
+      "viewEmployee": "查看员工 {name} 主页",
+      "modelOverridden": "本对话覆盖为 {ref}",
+      "modelInherited": "跟随员工默认 · {ref}"
+    },
+    "switcher": {
+      "loading": "加载中…",
+      "newAriaLabel": "新建对话",
+      "newTooltipEmpty": "当前对话还是空的 · 直接在下方输入即可",
+      "newTooltipDefault": "为当前员工新建一个空白对话",
+      "new": "新建",
+      "historyAriaLabel": "历史会话",
+      "historyTooltip": "切换到这位员工的其他会话",
+      "history": "历史",
+      "loadHistoryFailed": "读取历史失败：{error}",
+      "noOther": "还没有其他会话",
+      "untitled": "未命名 · {id}",
+      "justNow": "刚刚",
+      "minutesAgo": "{n}分钟前",
+      "hoursAgo": "{n}小时前",
+      "daysAgo": "{n}天前"
+    },
+    "inputBar": {
+      "placeholder": "输入消息…",
+      "assistantFailed": "助手没能完成这次回复。",
+      "hint": "↵ 发送 · ⇧↵ 换行"
+    },
+    "messageBubble": {
+      "thinkingProcess": "思考过程",
+      "thinkingProcessLive": "思考过程…"
+    },
+    "messageList": {
+      "jumpToLatest": "回到最新消息",
+      "backToLatest": "回到最新",
+      "ready": "准备就绪",
+      "emptyHint": "发一条消息,开始这次对话。",
+      "modelProcessing": "模型正在处理",
+      "assistantFailed": "助手没能完成这次回复。",
+      "internalHint": "多半是模型凭证没配好或上游拒绝。去 /gateway 核对 provider 的 API Key 与 base_url。"
+    },
+    "modelOverride": {
+      "defaultModel": "默认模型",
+      "switchFailed": "切换失败 · {error}",
+      "overrideTitle": "本对话覆盖为 {effective} · 员工默认 {employee}",
+      "fallbackToGlobalTitle": "员工配置 {employee} 在当前供应商未找到 · 已落到全局默认 {effective}",
+      "inheritTitle": "跟随员工默认 · {effective}",
+      "inheritFallbackLabel": "跟随默认 · {effective}（员工 {employee} 未配置)",
+      "inheritLabel": "跟随员工默认 · {effective}"
+    },
+    "nestedRun": {
+      "running": "运行中",
+      "done": "已完成",
+      "error": "失败",
+      "unknown": "—"
+    },
+    "systemTool": {
+      "pending": "等待",
+      "awaitingConfirmation": "等待审批",
+      "running": "运行中",
+      "failed": "失败",
+      "rejected": "被拒绝",
+      "itemSuffix": "{n} 项",
+      "rowSuffix": "{n} 条"
+    },
+    "usageChip": {
+      "compacting": "整理中…",
+      "compact": "整理",
+      "tooltip": "{used} / {total} tokens (估算)"
+    }
+  }
+}

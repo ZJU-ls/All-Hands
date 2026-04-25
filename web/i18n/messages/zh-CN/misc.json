@@ -1,0 +1,401 @@
+{
+  "pages": {
+    "about": {
+      "title": "关于",
+      "tagline": "One for All — 开源自部署的数字员工组织平台。",
+      "description": "通过与 Lead Agent 对话来设计、调度并观测一支员工团队。所有能力以 Tool 的形式注册,前端菜单只是入口,后端遵循 Tool First 原则。",
+      "version": "v0 · mvp",
+      "facts": {
+        "principles": {
+          "label": "核心原则",
+          "body": "Tool First · 统一 React Agent · Pure Query Loop · Skill 渐进加载 · Subagent 组合 · L4 护栏"
+        },
+        "employees": {
+          "label": "数字员工",
+          "body": "每个 agent 都是配置 (model · skills · tools · system prompt) · 没有 mode 字段"
+        },
+        "guardrails": {
+          "label": "护栏可控",
+          "body": "Tool 必须声明 scope · WRITE 默认要确认 · IRREVERSIBLE 走双重确认"
+        }
+      }
+    },
+    "review": {
+      "title": "Review",
+      "headerTitle": "Review · 3 级交付闸门",
+      "headerSubtitle": "这 3 个闸门把 spec 从“写完了”推到“可以交给用户”。每个都有独立的人格、产物和退出条件。点下面的 Meta Tool 名称,可以在对话里让 Lead 触发(需确认)。",
+      "orderNote": "所有 feature spec 全交付后,按 self-review → walkthrough-acceptance → harness-review 的顺序跑;任一前序未完成,后续是垃圾证据。",
+      "footer": {
+        "gateNote": "触发 Meta Tool 走 Confirmation Gate · 所有 WRITE 工具都需要用户显式确认。",
+        "lintRulesPrefix": "规则引擎(Round 1 mechanical checks)运行方式 ·",
+        "harnessAuditPrefix": "Harness Step 1 docs drift draft ·"
+      },
+      "fields": {
+        "persona": "人格",
+        "rounds": "轮次",
+        "metaTool": "Meta Tool"
+      },
+      "docs": {
+        "spec": "spec",
+        "artifacts": "产物目录",
+        "history": "history"
+      },
+      "gates": {
+        "selfReview": {
+          "title": "自审 · Self-Review",
+          "persona": "3 人格 · 不重叠 · 好看 / 好用 / 爱不释手",
+          "rounds": "Round 1 · 2 · 3",
+          "duration": "~ 1-2h wall clock"
+        },
+        "walkthroughAcceptance": {
+          "title": "走查验收 · Walkthrough Acceptance",
+          "persona": "新用户第一次打开 · 修 - 评闭环",
+          "rounds": "W1 → W7 · 修-评循环(≤ 5 iterations)",
+          "duration": "~ 2-4h wall clock"
+        },
+        "harnessReview": {
+          "title": "工具链自审 · Harness Review",
+          "persona": "冷却 ≥ 7 天后回看 · 没用过的陌生人",
+          "rounds": "Step 1 (docs drift) · Step 2 (fix) · Step 3 (fresh eyes)",
+          "duration": "~ 30min-2h · 加 7 天冷却"
+        }
+      }
+    },
+    "observatory": {
+      "title": "观测中心",
+      "eyebrow": "Observatory",
+      "heading": "Platform health at a glance",
+      "subtitle": "聚合 traces · runs · latency · cost · 一屏看清员工运行状态。",
+      "range": {
+        "lastHour": "Last hour",
+        "h24": "24h",
+        "d7": "7d"
+      },
+      "refreshing": "刷新中…",
+      "refresh": "刷新",
+      "bootstrap": {
+        "headlinePrefix": "Langfuse",
+        "headlineSuffix": "· 追踪未连上",
+        "body": "Agent 运行照常,但每次 run 的 trace 会被丢弃。下方 Trace 列表读的是本地 events 表的 run.* 事件,不是 Langfuse。",
+        "lastPrefix": "last ·",
+        "retrying": "重试中…",
+        "retry": "重试 bootstrap"
+      },
+      "loadFailed": {
+        "title": "加载失败",
+        "fallback": "无法拉取观测数据,点右侧重试。",
+        "action": "重试"
+      },
+      "kpi": {
+        "uptime": "Uptime · 24h",
+        "uptimeDelta": "+0.2% vs yesterday",
+        "latency": "Latency p50",
+        "latencyDelta": "快于上周",
+        "failure": "Failure rate",
+        "failureWarn": "警戒",
+        "failureStable": "稳定",
+        "tokens": "Avg tokens · run",
+        "tokensDelta": "{count} total traces"
+      },
+      "panels": {
+        "langfuse": "Langfuse · 追踪后端",
+        "topEmployees": "Top employees · 24h",
+        "noData": "还没有数据",
+        "moreLabel": "{title} more",
+        "rows": {
+          "bootstrap": "Bootstrap status",
+          "observability": "Observability",
+          "host": "Host",
+          "totalTraces": "Total traces"
+        },
+        "values": {
+          "enabled": "enabled",
+          "disabled": "disabled",
+          "runs": "{count} runs"
+        }
+      },
+      "incidents": {
+        "title": "Recent incidents",
+        "count": "{count} failed",
+        "tokensSuffix": "tok"
+      },
+      "traces": {
+        "title": "近 50 条 trace",
+        "empty": {
+          "title": "还没有 run 事件",
+          "description": "和 Lead 对话发起第一条任务,这里会出现 trace 摘要。"
+        },
+        "headers": {
+          "trace": "trace",
+          "employee": "employee",
+          "status": "status",
+          "duration": "duration",
+          "tokens": "tokens",
+          "started": "started"
+        },
+        "status": {
+          "ok": "ok",
+          "failed": "failed"
+        }
+      }
+    },
+    "conversations": {
+      "title": "历史会话",
+      "subtitle": "按员工分组 · 最新对话在顶部 · 点击进入对话记录",
+      "loadFailed": "加载失败",
+      "unknownEmployee": "未知员工",
+      "leadBadge": "Lead",
+      "conversationCount": "· {count} 条对话",
+      "untitled": "(无标题)",
+      "empty": {
+        "title": "还没有任何对话",
+        "description": "打开一个员工主页 · 创建新对话开始。所有与数字员工的交流都会记录在这里。",
+        "openEmployees": "打开员工列表",
+        "openChat": "直接开对话"
+      }
+    },
+    "confirmations": {
+      "title": "审批",
+      "description": "查看和处理待审批的 L4 工具调用。"
+    }
+  },
+  "artifacts": {
+    "detail": {
+      "loadFailed": "制品加载失败:{error}",
+      "loadingMeta": "读取中…",
+      "loadingContent": "读取内容…",
+      "download": "下载",
+      "unsupportedKind": "kind {kind} 暂不支持在面板内预览。"
+    },
+    "list": {
+      "pinned": "置顶",
+      "empty": "还没有制品。让员工产出一份文档、代码或图。"
+    },
+    "panel": {
+      "title": "制品区",
+      "ariaLabel": "制品区",
+      "offlineTitle": "实时流中断 · 浏览器会自动重连",
+      "offline": "offline",
+      "closeAria": "关闭制品区",
+      "closeTitle": "关闭 · Cmd/Ctrl+J",
+      "back": "返回列表",
+      "loading": {
+        "title": "加载制品区",
+        "description": "正在拉取工作区的制品列表"
+      },
+      "error": {
+        "title": "制品列表加载失败",
+        "retry": "重试"
+      },
+      "empty": {
+        "title": "还没有制品",
+        "description": "让员工产出一份文档、代码或图,制品会实时出现在这里。"
+      }
+    },
+    "versionSwitcher": {
+      "ariaLabel": "版本切换"
+    },
+    "mermaid": {
+      "renderFailed": "mermaid 渲染失败:{error}"
+    }
+  },
+  "brand": {
+    "mark": {}
+  },
+  "render": {
+    "preview": {
+      "missingId": "Artifact.Preview 缺少 artifact_id",
+      "loadFailed": "制品加载失败:{error}",
+      "loading": "读取制品…",
+      "unsupportedKind": "kind {kind} 暂不支持预览"
+    },
+    "employeeCard": {
+      "untitled": "(未命名员工)",
+      "chat": "Chat",
+      "status": {
+        "draft": "draft",
+        "active": "active",
+        "paused": "paused"
+      }
+    },
+    "planCard": {
+      "untitled": "(未命名计划)",
+      "noSteps": "(no steps)",
+      "status": {
+        "pending": "待审批",
+        "approved": "已批准",
+        "rejected": "已驳回"
+      }
+    },
+    "planTimeline": {
+      "title": "计划",
+      "noSteps": "(no steps)",
+      "status": {
+        "pending": "待办",
+        "running": "进行中",
+        "done": "已完成",
+        "skipped": "跳过",
+        "failed": "失败"
+      }
+    }
+  },
+  "state": {
+    "firstRun": {
+      "ariaLabel": "首次使用引导",
+      "eyebrow": "first-run · 欢迎"
+    },
+    "loading": {
+      "defaultTitle": "加载中"
+    }
+  },
+  "ui": {
+    "coachmark": {
+      "dismissDefault": "知道了",
+      "closeAria": "关闭引导"
+    },
+    "commandPalette": {
+      "ariaLabel": "命令面板",
+      "placeholder": "跳转到页面 · 搜索员工 · 技能 · 模型",
+      "noMatch": "没有匹配的入口 · 试试别的关键词",
+      "suggestions": "Suggestions · {count}",
+      "footer": {
+        "navigate": "navigate",
+        "open": "open",
+        "toggle": "toggle"
+      },
+      "entries": {
+        "cockpit": "驾驶舱",
+        "chat": "对话",
+        "conversations": "历史会话",
+        "tasks": "任务",
+        "employees": "员工",
+        "employeeDesign": "员工设计",
+        "skills": "技能",
+        "mcp": "MCP 服务器",
+        "gateway": "供应商与模型",
+        "market": "技能市场",
+        "triggers": "触发器",
+        "channels": "通知渠道",
+        "confirmations": "审批",
+        "traces": "追踪",
+        "observatory": "观测中心",
+        "stockAssistant": "股票助手",
+        "review": "Review",
+        "settings": "设置",
+        "about": "关于"
+      }
+    },
+    "confirmDialog": {
+      "confirm": "确认",
+      "cancel": "取消",
+      "processing": "处理中…",
+      "closeAria": "关闭"
+    },
+    "dotGridAvatar": {},
+    "dotGridBackdrop": {},
+    "select": {
+      "placeholder": "选择…",
+      "empty": "没有可选项"
+    }
+  },
+  "shellExtras": {
+    "placeholder": {
+      "defaultNote": "此模块正在建设中。未来通过与 Lead Agent 对话或本页面进行管理。"
+    }
+  },
+  "welcomeExtras": {
+    "workspacePreview": {
+      "browser": {
+        "host": "allhands.local / {scene}",
+        "hint": "点侧边栏切换 · 自动轮播"
+      },
+      "sidebar": {
+        "chat": "对话",
+        "skills": "技能",
+        "gateway": "网关",
+        "traces": "追踪"
+      },
+      "scenes": {
+        "chat": {
+          "modelTag": "gpt-4o-mini",
+          "online": "在线",
+          "userMessage": "帮我招一个研究员,每天读 5 篇 Hacker News 头条。",
+          "agentReplyPrefix": "已为你创建员工",
+          "agentReplySuffix": ",挂上了 fetch_url + summarize 两个 Tool。",
+          "toolName": "create_employee",
+          "toolDuration": "320ms",
+          "toolStatus": "ok · {duration}"
+        },
+        "skills": {
+          "eyebrow": "Skills",
+          "title": "技能",
+          "count": "· 24",
+          "subtitle": "capability packs",
+          "kpi": {
+            "totalLabel": "Total",
+            "totalValue": "24",
+            "totalHint": "6 自管 · 18 内建",
+            "installedLabel": "Installed",
+            "installedValue": "6",
+            "installedHint": "用户安装",
+            "builtinLabel": "Builtin",
+            "builtinValue": "18",
+            "builtinHint": "平台内建",
+            "latestLabel": "Latest",
+            "latestValue": "2h",
+            "latestHint": "hn-digest"
+          },
+          "items": {
+            "webFetch": {
+              "name": "web-fetch",
+              "tag": "READ",
+              "desc": "抓任意 URL · 文本 / JSON"
+            },
+            "hnDigest": {
+              "name": "hn-digest",
+              "tag": "READ",
+              "desc": "Hacker News 头条摘要"
+            },
+            "slackNotify": {
+              "name": "slack-notify",
+              "tag": "WRITE",
+              "desc": "Slack channel · 需 confirm"
+            }
+          }
+        },
+        "gateway": {
+          "eyebrow": "Gateway",
+          "title": "网关",
+          "status": "5 connected",
+          "kpi": {
+            "providersLabel": "Providers",
+            "providersValue": "5",
+            "providersHint": "OpenAI · Anthropic · …",
+            "modelsLabel": "Models",
+            "modelsValue": "23",
+            "modelsHint": "across all providers",
+            "defaultLabel": "Default",
+            "defaultValue": "gpt-4o-mini"
+          },
+          "modelsSuffix": "models"
+        },
+        "traces": {
+          "eyebrow": "Traces",
+          "title": "执行追踪",
+          "summary": "last 24h · 214 runs",
+          "headers": {
+            "trace": "trace",
+            "employee": "员工",
+            "tool": "工具",
+            "ms": "ms",
+            "status": "状态"
+          },
+          "status": {
+            "ok": "ok",
+            "err": "err"
+          }
+        }
+      }
+    }
+  }
+}

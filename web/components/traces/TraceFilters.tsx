@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { Select, type SelectOption } from "@/components/ui/Select";
 import type { EmployeeDto } from "@/lib/api";
@@ -21,19 +22,11 @@ export const DEFAULT_FILTERS: TraceFilterState = {
   keyword: "",
 };
 
-const RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
-  { value: "1h", label: "1h" },
-  { value: "24h", label: "24h" },
-  { value: "7d", label: "7d" },
-  { value: "30d", label: "30d" },
-  { value: "all", label: "全部" },
-];
-
-const STATUS_OPTIONS: { value: TraceStatusFilter; label: string; tone: string }[] = [
-  { value: "all", label: "全部", tone: "bg-surface-2 text-text-muted" },
-  { value: "ok", label: "成功", tone: "bg-success-soft text-success" },
-  { value: "failed", label: "失败", tone: "bg-danger-soft text-danger" },
-];
+const STATUS_TONE: Record<TraceStatusFilter, string> = {
+  all: "bg-surface-2 text-text-muted",
+  ok: "bg-success-soft text-success",
+  failed: "bg-danger-soft text-danger",
+};
 
 export function rangeToSinceISO(range: TimeRange, now: Date = new Date()): string | undefined {
   if (range === "all") return undefined;
@@ -73,11 +66,26 @@ export function TraceFilters({
   onChange: (next: TraceFilterState) => void;
   onRefresh: () => void;
 }) {
+  const t = useTranslations("traces.filters");
   const update = (patch: Partial<TraceFilterState>) =>
     onChange({ ...filters, ...patch });
 
+  const rangeOptions: { value: TimeRange; label: string }[] = [
+    { value: "1h", label: "1h" },
+    { value: "24h", label: "24h" },
+    { value: "7d", label: "7d" },
+    { value: "30d", label: "30d" },
+    { value: "all", label: t("rangeAll") },
+  ];
+
+  const statusOptions: { value: TraceStatusFilter; label: string; tone: string }[] = [
+    { value: "all", label: t("statusAll"), tone: STATUS_TONE.all },
+    { value: "ok", label: t("statusOk"), tone: STATUS_TONE.ok },
+    { value: "failed", label: t("statusFailed"), tone: STATUS_TONE.failed },
+  ];
+
   const employeeOptions: SelectOption[] = [
-    { value: "all", label: "全部员工" },
+    { value: "all", label: t("employeeAll") },
     ...employees.map((emp) => ({ value: emp.id, label: emp.name })),
   ];
 
@@ -90,9 +98,9 @@ export function TraceFilters({
             <Icon name="search" size={14} />
           </span>
           <input
-            aria-label="关键词"
+            aria-label={t("keywordAria")}
             type="search"
-            placeholder="搜索 trace_id / 员工名…"
+            placeholder={t("keywordPlaceholder")}
             value={filters.keyword}
             onChange={(e) => update({ keyword: e.target.value })}
             className="h-9 w-full rounded-md border border-border bg-surface-2 pl-9 pr-3 text-[12px] text-text placeholder:text-text-subtle transition-colors duration-fast hover:border-border-strong focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:border-primary"
@@ -101,7 +109,7 @@ export function TraceFilters({
 
         {/* time-range pills */}
         <div className="flex items-center gap-1 rounded-md border border-border bg-surface-2 p-0.5">
-          {RANGE_OPTIONS.map((o) => {
+          {rangeOptions.map((o) => {
             const active = filters.range === o.value;
             return (
               <button
@@ -128,13 +136,13 @@ export function TraceFilters({
           value={filters.employeeId}
           onChange={(v) => update({ employeeId: v })}
           options={employeeOptions}
-          ariaLabel="员工"
+          ariaLabel={t("employeeAria")}
         />
 
         {/* status chips */}
         <div className="flex items-center gap-1.5">
-          <span className={FIELD_LABEL}>状态</span>
-          {STATUS_OPTIONS.map((o) => {
+          <span className={FIELD_LABEL}>{t("statusLabel")}</span>
+          {statusOptions.map((o) => {
             const active = filters.status === o.value;
             return (
               <button
@@ -158,14 +166,14 @@ export function TraceFilters({
         <div className="ml-auto flex items-center gap-3">
           <span className="font-mono text-[10px] tabular-nums text-text-subtle">
             {loadedCount === totalCount
-              ? `${totalCount} 条`
-              : `${loadedCount} / ${totalCount}`}
+              ? t("countTotal", { count: totalCount })
+              : t("countLoaded", { loaded: loadedCount, total: totalCount })}
           </span>
           <button
             type="button"
             onClick={onRefresh}
             disabled={busy}
-            aria-label="刷新"
+            aria-label={t("refreshAria")}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[12px] font-medium text-text transition-colors duration-fast hover:border-border-strong hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon
@@ -173,7 +181,7 @@ export function TraceFilters({
               size={12}
               className={busy ? "animate-spin" : undefined}
             />
-            {busy ? "刷新中…" : "刷新"}
+            {busy ? t("refreshing") : t("refresh")}
           </button>
         </div>
       </div>

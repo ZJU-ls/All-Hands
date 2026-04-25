@@ -9,6 +9,7 @@
  */
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import type { ArtifactDto } from "@/lib/artifacts-api";
 import { ArtifactListItem } from "./ArtifactListItem";
@@ -34,6 +35,7 @@ export function ArtifactList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const t = useTranslations("artifacts.list");
   const grouped = useMemo(() => {
     const pinned = artifacts.filter((a) => a.pinned);
     const rest = artifacts.filter((a) => !a.pinned);
@@ -44,13 +46,13 @@ export function ArtifactList({
       byKind.set(a.kind, bucket);
     }
     const sections: { title: string; items: ArtifactDto[] }[] = [];
-    if (pinned.length > 0) sections.push({ title: "置顶", items: pinned });
+    if (pinned.length > 0) sections.push({ title: t("pinned"), items: pinned });
     for (const kind of KIND_ORDER) {
       const items = byKind.get(kind);
       if (items && items.length > 0) sections.push({ title: kind, items });
     }
     return sections;
-  }, [artifacts]);
+  }, [artifacts, t]);
 
   if (artifacts.length === 0) {
     return (
@@ -59,7 +61,7 @@ export function ArtifactList({
           <Icon name="folder" size={18} />
         </span>
         <p className="text-[12px] text-text-muted">
-          还没有制品。让员工产出一份文档、代码或图。
+          {t("empty")}
         </p>
       </div>
     );

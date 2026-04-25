@@ -16,6 +16,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { WorkspaceSummaryDto } from "@/lib/cockpit-api";
 import type { DrawerPanel } from "./CockpitDrawer";
@@ -48,6 +49,7 @@ function budgetTone(summary: WorkspaceSummaryDto): "warn" | undefined {
 }
 
 export function DrawerRail({ summary }: { summary: WorkspaceSummaryDto }) {
+  const t = useTranslations("cockpit.drawerRail");
   const [open, setOpen] = useState<DrawerPanel | null>(null);
   const [mountedOnce, setMountedOnce] = useState(false);
 
@@ -59,20 +61,20 @@ export function DrawerRail({ summary }: { summary: WorkspaceSummaryDto }) {
   const items: RailItem[] = [
     {
       panel: "health",
-      label: "健康",
+      label: t("health"),
       icon: "shield-check",
       badge: countBadHealth(summary),
       tone: countBadHealth(summary) > 0 ? "warn" : undefined,
     },
     {
       panel: "budget",
-      label: "消耗",
+      label: t("budget"),
       icon: "database",
       tone: budgetTone(summary),
     },
     {
       panel: "convs",
-      label: "对话",
+      label: t("convs"),
       icon: "message-square",
       badge: summary.recent_conversations.length,
     },
@@ -83,7 +85,7 @@ export function DrawerRail({ summary }: { summary: WorkspaceSummaryDto }) {
       <aside
         className="relative z-30 shrink-0 w-11 border-l border-border bg-surface flex flex-col"
         data-testid="cockpit-drawer-rail"
-        aria-label="Secondary panels"
+        aria-label={t("secondaryAria")}
       >
         <ul className="flex-1 py-2 flex flex-col items-center gap-1.5">
           {items.map((it) => {
@@ -139,8 +141,8 @@ export function DrawerRail({ summary }: { summary: WorkspaceSummaryDto }) {
           <li>
             <Link
               href="/observatory"
-              title="观测中心"
-              aria-label="观测中心"
+              title={t("observatory")}
+              aria-label={t("observatory")}
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-muted transition duration-base hover:text-text hover:bg-surface-2"
               data-testid="rail-observatory"
             >

@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import {
   artifactStreamUrl,
@@ -23,6 +24,7 @@ type LoadState = "loading" | "ok" | "error";
 type StreamConnection = "connecting" | "open" | "error";
 
 export function ArtifactPanel({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("artifacts.panel");
   const [artifacts, setArtifacts] = useState<ArtifactDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("loading");
@@ -116,7 +118,7 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <aside
-      aria-label="制品区"
+      aria-label={t("ariaLabel")}
       className="flex h-full w-[360px] shrink-0 flex-col border-l border-border bg-surface shadow-soft-lg"
     >
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface-2/60 px-3">
@@ -127,7 +129,7 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
           <Icon name="folder" size={14} strokeWidth={2} />
         </span>
         <span className="text-[13px] font-semibold tracking-tight text-text">
-          制品区
+          {t("title")}
         </span>
         <span className="inline-flex h-5 items-center rounded-md bg-surface-2 px-1.5 font-mono text-[10px] text-text-muted">
           {artifacts.length}
@@ -135,18 +137,18 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
         {streamConn === "error" && (
           <span
             className="inline-flex items-center gap-1 font-mono text-[10px] text-warning"
-            title="实时流中断 · 浏览器会自动重连"
+            title={t("offlineTitle")}
           >
             <Icon name="alert-circle" size={10} />
-            offline
+            {t("offline")}
           </span>
         )}
         <button
           type="button"
           onClick={onClose}
-          aria-label="关闭制品区"
+          aria-label={t("closeAria")}
           className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors duration-fast ease-out hover:border-border-strong hover:text-text"
-          title="关闭 · Cmd/Ctrl+J"
+          title={t("closeTitle")}
         >
           <Icon name="x" size={14} />
         </button>
@@ -160,7 +162,7 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
             className="inline-flex h-8 shrink-0 items-center gap-1.5 border-b border-border px-3 text-left font-mono text-[11px] text-text-muted transition-colors duration-fast ease-out hover:bg-surface-2 hover:text-text"
           >
             <Icon name="arrow-left" size={12} />
-            返回列表
+            {t("back")}
           </button>
           <div className="min-h-0 flex-1 overflow-hidden">
             <ArtifactDetail artifactId={selectedId} />
@@ -170,19 +172,19 @@ export function ArtifactPanel({ onClose }: { onClose: () => void }) {
         <div className="flex-1 overflow-y-auto p-2">
           {state === "loading" ? (
             <LoadingState
-              title="加载制品区"
-              description="正在拉取工作区的制品列表"
+              title={t("loading.title")}
+              description={t("loading.description")}
             />
           ) : state === "error" && artifacts.length === 0 ? (
             <ErrorState
-              title="制品列表加载失败"
+              title={t("error.title")}
               detail={error ?? undefined}
-              action={{ label: "重试", onClick: () => void refresh() }}
+              action={{ label: t("error.retry"), onClick: () => void refresh() }}
             />
           ) : artifacts.length === 0 ? (
             <EmptyState
-              title="还没有制品"
-              description="让员工产出一份文档、代码或图,制品会实时出现在这里。"
+              title={t("empty.title")}
+              description={t("empty.description")}
             />
           ) : (
             <ArtifactList

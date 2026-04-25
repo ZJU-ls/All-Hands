@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@/tests/test-utils/i18n-render";
 import type { TraceSummaryDto } from "@/lib/observatory-api";
 import type { EmployeeDto } from "@/lib/api";
 

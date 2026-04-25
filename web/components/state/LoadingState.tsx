@@ -11,10 +11,11 @@
  * Preserves public API: { title?, description?, variant?: "dots" | "skeleton" }.
  */
 
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 
 export function LoadingState({
-  title = "加载中",
+  title,
   description,
   variant = "dots",
 }: {
@@ -22,6 +23,8 @@ export function LoadingState({
   description?: string;
   variant?: "dots" | "skeleton";
 }) {
+  const t = useTranslations("state.loading");
+  const resolvedTitle = title ?? t("defaultTitle");
   if (variant === "skeleton") {
     return (
       <div
@@ -31,7 +34,7 @@ export function LoadingState({
         data-variant="skeleton"
         className="rounded-xl border border-border bg-surface px-4 py-4 space-y-2.5 shadow-soft-sm"
       >
-        <span className="sr-only">{title}</span>
+        <span className="sr-only">{resolvedTitle}</span>
         <ShimmerBar width="60%" />
         <ShimmerBar width="40%" />
         <ShimmerBar width="75%" />
@@ -54,7 +57,7 @@ export function LoadingState({
         <Icon name="loader" size={20} className="animate-spin-slow" />
       </span>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-text">{title}</p>
+        <p className="text-sm font-medium text-text">{resolvedTitle}</p>
         {description && (
           <p className="mt-1 text-caption text-text-muted">{description}</p>
         )}

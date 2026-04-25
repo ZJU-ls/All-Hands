@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -65,6 +66,7 @@ type Fire = {
 };
 
 export default function TriggerDetailPage() {
+  const t = useTranslations("triggers.detail");
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
 
@@ -158,14 +160,14 @@ export default function TriggerDetailPage() {
   }
 
   return (
-    <AppShell title={trigger?.name ?? "触发器"}>
+    <AppShell title={trigger?.name ?? t("fallbackTitle")}>
       <div className="h-full overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
           <Breadcrumb name={trigger?.name} />
 
           {status === "loading" && (
             <div data-testid="detail-loading">
-              <LoadingState title="加载触发器" />
+              <LoadingState title={t("loading")} />
             </div>
           )}
 
@@ -178,7 +180,7 @@ export default function TriggerDetailPage() {
                 <Icon name="alert-circle" size={22} />
               </span>
               <p className="text-sm font-semibold text-text mb-1">
-                触发器不存在或已被删除
+                {t("notFound")}
               </p>
               <p className="font-mono text-caption text-text-subtle">{id}</p>
             </div>
@@ -195,7 +197,7 @@ export default function TriggerDetailPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-danger mb-1">
-                    加载失败
+                    {t("loadFailed")}
                   </p>
                   <p className="text-xs font-mono text-text-muted break-all mb-3">
                     {error}
@@ -205,7 +207,7 @@ export default function TriggerDetailPage() {
                     className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
                   >
                     <Icon name="refresh" size={12} />
-                    重试
+                    {t("retry")}
                   </button>
                 </div>
               </div>
@@ -230,31 +232,31 @@ export default function TriggerDetailPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-warning mb-1">
-                        自动停用
+                        {t("autoDisabledTitle")}
                       </p>
                       <p className="text-[12px] text-text-muted leading-relaxed">
                         {trigger.auto_disabled_reason}
                       </p>
                       <p className="font-mono text-caption text-text-subtle mt-1">
-                        手动启用会清空失败计数。
+                        {t("autoDisabledHint")}
                       </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              <Section title="触发条件" icon="clock">
+              <Section title={t("sectionCondition")} icon="clock">
                 {trigger.kind === "timer" ? (
                   <MetaGrid
                     items={[
-                      { k: "cron", v: trigger.timer?.cron ?? "—", mono: true },
+                      { k: t("metaCron"), v: trigger.timer?.cron ?? "—", mono: true },
                       {
-                        k: "timezone",
+                        k: t("metaTimezone"),
                         v: trigger.timer?.timezone ?? "—",
                         mono: true,
                       },
                       {
-                        k: "min interval",
+                        k: t("metaMinInterval"),
                         v: `${trigger.min_interval_seconds} s`,
                         mono: true,
                       },
@@ -264,17 +266,17 @@ export default function TriggerDetailPage() {
                   <MetaGrid
                     items={[
                       {
-                        k: "event kind",
+                        k: t("metaEventKind"),
                         v: trigger.event?.type ?? "—",
                         mono: true,
                       },
                       {
-                        k: "filter",
+                        k: t("metaFilter"),
                         v: JSON.stringify(trigger.event?.filter ?? {}),
                         mono: true,
                       },
                       {
-                        k: "min interval",
+                        k: t("metaMinInterval"),
                         v: `${trigger.min_interval_seconds} s`,
                         mono: true,
                       },
@@ -283,19 +285,19 @@ export default function TriggerDetailPage() {
                 )}
               </Section>
 
-              <Section title="动作" icon="play-circle">
+              <Section title={t("sectionAction")} icon="play-circle">
                 <ActionPreview t={trigger} />
               </Section>
 
               <Section
-                title={`最近触发记录 · ${fires.length}`}
+                title={t("sectionFires", { count: fires.length })}
                 icon="activity"
               >
                 {fires.length === 0 ? (
                   <div data-testid="fires-empty">
                     <EmptyState
-                      title="还没有触发记录"
-                      description="触发后会列出最近的调度执行"
+                      title={t("firesEmptyTitle")}
+                      description={t("firesEmptyDescription")}
                     />
                   </div>
                 ) : (
@@ -316,9 +318,9 @@ export default function TriggerDetailPage() {
 
       <ConfirmDialog
         open={confirmFire}
-        title={`手动触发 ${trigger?.name ?? ""}?`}
-        message="会立即执行一次。5 条防爆规则(paused / rate-limit / cycle / global-limit)仍然生效。"
-        confirmLabel="触发"
+        title={t("fireConfirmTitle", { name: trigger?.name ?? "" })}
+        message={t("fireConfirmMessage")}
+        confirmLabel={t("fireConfirmLabel")}
         busy={busy === "fire"}
         onConfirm={() => void handleFireNow()}
         onCancel={() => setConfirmFire(false)}
@@ -326,9 +328,9 @@ export default function TriggerDetailPage() {
 
       <ConfirmDialog
         open={confirmDelete}
-        title={`删除触发器 ${trigger?.name ?? ""}?`}
-        message="此操作同时删除所有触发历史,不可撤销。"
-        confirmLabel="删除"
+        title={t("deleteConfirmTitle", { name: trigger?.name ?? "" })}
+        message={t("deleteConfirmMessage")}
+        confirmLabel={t("deleteConfirmLabel")}
         danger
         onConfirm={() => void handleDelete()}
         onCancel={() => setConfirmDelete(false)}
@@ -338,6 +340,7 @@ export default function TriggerDetailPage() {
 }
 
 function Breadcrumb({ name }: { name?: string }) {
+  const t = useTranslations("triggers.detail");
   return (
     <div className="flex items-center gap-1.5 font-mono text-caption uppercase tracking-wider text-text-subtle">
       <Link
@@ -345,7 +348,7 @@ function Breadcrumb({ name }: { name?: string }) {
         className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md text-text-muted hover:text-primary hover:bg-primary-muted transition duration-base"
       >
         <Icon name="arrow-left" size={11} strokeWidth={2} />
-        Triggers
+        {t("breadcrumb")}
       </Link>
       <Icon name="chevron-right" size={11} className="text-text-subtle" />
       <span className="text-text truncate max-w-[30ch]">{name ?? "…"}</span>
@@ -354,7 +357,7 @@ function Breadcrumb({ name }: { name?: string }) {
 }
 
 function Hero({
-  t,
+  t: trigger,
   busy,
   onToggle,
   onFire,
@@ -366,25 +369,26 @@ function Hero({
   onFire: () => void;
   onDelete: () => void;
 }) {
-  const kindIcon: IconName = t.kind === "timer" ? "clock" : "zap";
-  const dotClass = t.auto_disabled_reason
+  const t = useTranslations("triggers.detail");
+  const kindIcon: IconName = trigger.kind === "timer" ? "clock" : "zap";
+  const dotClass = trigger.auto_disabled_reason
     ? "bg-warning"
-    : t.enabled
+    : trigger.enabled
       ? "bg-success"
       : "bg-text-subtle";
-  const stateChip = t.auto_disabled_reason
+  const stateChip = trigger.auto_disabled_reason
     ? "text-warning border-warning/30 bg-warning-soft"
-    : t.enabled
+    : trigger.enabled
       ? "text-success border-success/30 bg-success-soft"
       : "text-text-muted border-border bg-surface-2";
-  const stateLabel = t.auto_disabled_reason
-    ? "auto-disabled"
-    : t.enabled
-      ? "enabled"
-      : "disabled";
-  const stateIcon: IconName = t.auto_disabled_reason
+  const stateLabel = trigger.auto_disabled_reason
+    ? t("stateAutoDisabled")
+    : trigger.enabled
+      ? t("stateEnabled")
+      : t("stateDisabled");
+  const stateIcon: IconName = trigger.auto_disabled_reason
     ? "alert-triangle"
-    : t.enabled
+    : trigger.enabled
       ? "check-circle-2"
       : "pause";
 
@@ -418,11 +422,11 @@ function Hero({
                 aria-hidden="true"
               />
               <h1 className="text-xl font-bold tracking-tight text-text truncate">
-                {t.name}
+                {trigger.name}
               </h1>
               <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
                 <Icon name={kindIcon} size={10} strokeWidth={2.25} />
-                {t.kind}
+                {trigger.kind}
               </span>
               <span
                 className={`inline-flex items-center gap-1 h-5 px-1.5 rounded-md border text-caption font-mono font-medium ${stateChip}`}
@@ -432,22 +436,22 @@ function Hero({
               </span>
               <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-border bg-surface-2 text-text-muted text-caption font-mono">
                 <Icon name="activity" size={10} strokeWidth={2.25} />
-                {t.fires_total} 次
+                {t("firesCount", { count: trigger.fires_total })}
               </span>
-              {t.fires_failed_streak > 0 && (
+              {trigger.fires_failed_streak > 0 && (
                 <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded-md border border-danger/30 bg-danger-soft text-danger text-caption font-mono font-medium">
                   <Icon name="alert-circle" size={10} strokeWidth={2.25} />
-                  失败 × {t.fires_failed_streak}
+                  {t("failedStreak", { count: trigger.fires_failed_streak })}
                 </span>
               )}
             </div>
             <p className="text-[12px] text-text-muted leading-relaxed mb-1">
-              {t.last_fired_at
-                ? `最近触发 ${formatTime(t.last_fired_at)}`
-                : "尚未触发"}
+              {trigger.last_fired_at
+                ? t("lastFired", { time: formatTime(trigger.last_fired_at) })
+                : t("neverFired")}
             </p>
             <p className="font-mono text-caption text-text-subtle truncate">
-              {t.id}
+              {trigger.id}
             </p>
           </div>
         </div>
@@ -461,12 +465,12 @@ function Hero({
             {busy === "fire" ? (
               <>
                 <Icon name="loader" size={12} className="animate-spin-slow" />
-                触发中
+                {t("firing")}
               </>
             ) : (
               <>
                 <Icon name="play" size={12} />
-                手动触发
+                {t("fireNow")}
               </>
             )}
           </button>
@@ -481,15 +485,15 @@ function Hero({
                 <Icon name="loader" size={12} className="animate-spin-slow" />
                 …
               </>
-            ) : t.enabled ? (
+            ) : trigger.enabled ? (
               <>
                 <Icon name="pause" size={12} />
-                停用
+                {t("disable")}
               </>
             ) : (
               <>
                 <Icon name="play" size={12} />
-                启用
+                {t("enable")}
               </>
             )}
           </button>
@@ -499,7 +503,7 @@ function Hero({
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/30 bg-danger-soft text-[12px] font-semibold text-danger hover:bg-danger/15 transition duration-base"
           >
             <Icon name="trash-2" size={12} />
-            删除
+            {t("delete")}
           </button>
         </div>
       </div>
@@ -564,20 +568,21 @@ function MetaGrid({
   );
 }
 
-function ActionPreview({ t }: { t: Trigger }) {
-  const a = t.action;
+function ActionPreview({ t: trigger }: { t: Trigger }) {
+  const t = useTranslations("triggers.detail");
+  const a = trigger.action;
   if (a.type === "notify_user") {
     return (
       <div className="space-y-4">
         <MetaGrid
           items={[
-            { k: "type", v: "notify_user", mono: true },
-            { k: "channel", v: a.channel ?? "cockpit", mono: true },
+            { k: t("metaType"), v: "notify_user", mono: true },
+            { k: t("metaChannel"), v: a.channel ?? "cockpit", mono: true },
           ]}
         />
         <div>
           <p className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold mb-2">
-            message template
+            {t("metaMessageTemplate")}
           </p>
           <pre className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-3 whitespace-pre-wrap break-words leading-relaxed">
             {a.message ?? "—"}
@@ -591,13 +596,13 @@ function ActionPreview({ t }: { t: Trigger }) {
       <div className="space-y-4">
         <MetaGrid
           items={[
-            { k: "type", v: "invoke_tool", mono: true },
-            { k: "tool_id", v: a.tool_id ?? "—", mono: true },
+            { k: t("metaType"), v: "invoke_tool", mono: true },
+            { k: t("metaToolId"), v: a.tool_id ?? "—", mono: true },
           ]}
         />
         <div>
           <p className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold mb-2">
-            args
+            {t("metaArgs")}
           </p>
           <pre className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-3 whitespace-pre-wrap break-words leading-relaxed">
             {JSON.stringify(a.args_template ?? {}, null, 2)}
@@ -611,13 +616,13 @@ function ActionPreview({ t }: { t: Trigger }) {
       <div className="space-y-4">
         <MetaGrid
           items={[
-            { k: "type", v: "dispatch_employee", mono: true },
-            { k: "employee_id", v: a.employee_id ?? "—", mono: true },
+            { k: t("metaType"), v: "dispatch_employee", mono: true },
+            { k: t("metaEmployeeId"), v: a.employee_id ?? "—", mono: true },
           ]}
         />
         <div>
           <p className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold mb-2">
-            task template
+            {t("metaTaskTemplate")}
           </p>
           <pre className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-3 whitespace-pre-wrap break-words leading-relaxed">
             {a.task_template ?? "—"}
@@ -630,13 +635,13 @@ function ActionPreview({ t }: { t: Trigger }) {
     <div className="space-y-4">
       <MetaGrid
         items={[
-          { k: "type", v: "continue_conversation", mono: true },
-          { k: "conversation_id", v: a.conversation_id ?? "—", mono: true },
+          { k: t("metaType"), v: "continue_conversation", mono: true },
+          { k: t("metaConversationId"), v: a.conversation_id ?? "—", mono: true },
         ]}
       />
       <div>
         <p className="font-mono text-caption uppercase tracking-wider text-text-subtle font-semibold mb-2">
-          message template
+          {t("metaMessageTemplate")}
         </p>
         <pre className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-3 whitespace-pre-wrap break-words leading-relaxed">
           {a.message_template ?? "—"}

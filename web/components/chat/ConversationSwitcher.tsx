@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   createConversation,
   listConversations,
@@ -23,10 +24,6 @@ type Props = {
   currentConversationId: string;
 };
 
-// Inline in a JS expression (not raw JSXText) so the no-raw-state-literal
-// lint rule — which targets bare "加载中…" text in JSX — doesn't trip.
-const LOADING_LABEL = "加载中…";
-
 /**
  * Top-right header actions for the chat workspace:
  *   - "新建" spins up a fresh conversation for the current employee and
@@ -44,6 +41,7 @@ const LOADING_LABEL = "加载中…";
  */
 export function ConversationSwitcher({ employeeId, currentConversationId }: Props) {
   const router = useRouter();
+  const t = useTranslations("chat.switcher");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ConversationDto[] | null>(null);
@@ -146,11 +144,11 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
         type="button"
         onClick={handleNew}
         disabled={disabled || busy || currentIsEmpty}
-        aria-label="新建对话"
+        aria-label={t("newAriaLabel")}
         title={
           currentIsEmpty
-            ? "当前对话还是空的 · 直接在下方输入即可"
-            : "为当前员工新建一个空白对话"
+            ? t("newTooltipEmpty")
+            : t("newTooltipDefault")
         }
         data-testid="chat-new-conversation"
         className={baseBtn}
@@ -160,7 +158,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
         ) : (
           <Icon name="plus" size={12} className="text-text-subtle" />
         )}
-        新建
+        {t("new")}
       </button>
       <button
         ref={triggerRef}
@@ -169,13 +167,13 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
         disabled={disabled}
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-label="历史会话"
-        title="切换到这位员工的其他会话"
+        aria-label={t("historyAriaLabel")}
+        title={t("historyTooltip")}
         data-testid="chat-history-trigger"
         className={baseBtn}
       >
         <Icon name="clock" size={12} className="text-text-subtle" />
-        历史
+        {t("history")}
         <Icon
           name={open ? "chevron-up" : "chevron-down"}
           size={12}
@@ -195,7 +193,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
           {loadError && (
             <div className="flex items-start gap-2 rounded-md bg-danger-soft px-3 py-2 text-[11px] text-danger">
               <Icon name="alert-circle" size={12} className="mt-0.5 shrink-0" />
-              <span className="min-w-0 break-words">读取历史失败：{loadError}</span>
+              <span className="min-w-0 break-words">{t("loadHistoryFailed", { error: loadError })}</span>
             </div>
           )}
           {!loadError && items === null && (
@@ -204,20 +202,20 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
             // doubly framed.
             <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-text-muted">
               <Icon name="loader" size={12} className="animate-spin" />
-              {LOADING_LABEL}
+              {t("loading")}
             </div>
           )}
           {!loadError && items !== null && items.length === 0 && (
             <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-text-muted">
               <Icon name="message-square" size={12} className="text-text-subtle" />
-              还没有其他会话
+              {t("noOther")}
             </div>
           )}
           {!loadError && items !== null && items.length > 0 && (
             <ul className="flex flex-col gap-0.5">
               {items.map((c) => {
                 const isCurrent = c.id === currentConversationId;
-                const label = c.title ?? `未命名 · ${c.id.slice(0, 8)}`;
+                const label = c.title ?? t("untitled", { id: c.id.slice(0, 8) });
                 return (
                   <li key={c.id}>
                     <button
@@ -253,7 +251,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
                       />
                       <span className="min-w-0 flex-1 truncate">{label}</span>
                       <span className="shrink-0 font-mono text-[10px] text-text-subtle">
-                        {formatRelative(c.created_at)}
+                        {formatRelative(c.created_at, t)}
                       </span>
                       {!isCurrent && (
                         <Icon
@@ -274,16 +272,19 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
   );
 }
 
-function formatRelative(iso: string): string {
+function formatRelative(
+  iso: string,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
   const diff = Date.now() - then;
   const min = Math.round(diff / 60_000);
-  if (min < 1) return "刚刚";
-  if (min < 60) return `${min}分钟前`;
+  if (min < 1) return t("justNow");
+  if (min < 60) return t("minutesAgo", { n: min });
   const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}小时前`;
+  if (hr < 24) return t("hoursAgo", { n: hr });
   const day = Math.round(hr / 24);
-  if (day < 30) return `${day}天前`;
+  if (day < 30) return t("daysAgo", { n: day });
   return new Date(iso).toLocaleDateString();
 }

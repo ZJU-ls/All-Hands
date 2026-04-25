@@ -15,13 +15,14 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { hasSeenCoachmark, markCoachmarkSeen } from "@/lib/first-run";
 
 export function Coachmark({
   id,
   title,
   description,
-  dismissLabel = "知道了",
+  dismissLabel,
   align = "top",
   children,
 }: {
@@ -32,6 +33,8 @@ export function Coachmark({
   align?: "top" | "bottom";
   children?: React.ReactNode;
 }) {
+  const t = useTranslations("ui.coachmark");
+  const resolvedDismiss = dismissLabel ?? t("dismissDefault");
   // Always render hidden on the first client tick so SSR + initial hydration
   // match, then reveal only if the user hasn't dismissed it yet. This avoids
   // a flash-of-coachmark on repeat visits.
@@ -84,10 +87,10 @@ export function Coachmark({
           <button
             type="button"
             onClick={onDismiss}
-            aria-label="关闭引导"
+            aria-label={t("closeAria")}
             className="shrink-0 rounded-md border border-border bg-surface-2/40 px-2 py-0.5 text-[11px] text-text-muted transition-colors duration-base hover:border-border-strong hover:bg-surface-2 hover:text-text"
           >
-            {dismissLabel}
+            {resolvedDismiss}
           </button>
         </div>
       </div>

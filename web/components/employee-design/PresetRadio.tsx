@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 
 /**
@@ -19,26 +20,26 @@ export type Preset = "execute" | "plan" | "plan_with_subagent";
 
 const OPTIONS: Array<{
   id: Preset;
-  label: string;
-  caption: string;
+  labelKey: "executeLabel" | "planLabel" | "planSubagentLabel";
+  captionKey: "executeCaption" | "planCaption" | "planSubagentCaption";
   icon: IconName;
 }> = [
   {
     id: "execute",
-    label: "标准执行",
-    caption: "直接干活 · fetch + write · 10 轮上限",
+    labelKey: "executeLabel",
+    captionKey: "executeCaption",
     icon: "zap",
   },
   {
     id: "plan",
-    label: "先出计划",
-    caption: "只出结构化 plan · sk_planner · 3 轮上限",
+    labelKey: "planLabel",
+    captionKey: "planCaption",
     icon: "book-open",
   },
   {
     id: "plan_with_subagent",
-    label: "计划+派子代理",
-    caption: "出计划并派发 · spawn_subagent · 15 轮上限",
+    labelKey: "planSubagentLabel",
+    captionKey: "planSubagentCaption",
     icon: "users",
   },
 ];
@@ -50,10 +51,11 @@ export function PresetRadio({
   value: Preset;
   onChange: (next: Preset) => void;
 }) {
+  const t = useTranslations("employees.presetRadio");
   return (
     <div
       role="radiogroup"
-      aria-label="运转方式"
+      aria-label={t("ariaLabel")}
       className="grid gap-2 sm:grid-cols-3"
     >
       {OPTIONS.map((o) => {
@@ -102,9 +104,9 @@ export function PresetRadio({
                   (checked ? "text-primary" : "text-text")
                 }
               >
-                {o.label}
+                {t(o.labelKey)}
               </div>
-              <div className="text-[11px] text-text-muted">{o.caption}</div>
+              <div className="text-[11px] text-text-muted">{t(o.captionKey)}</div>
             </div>
           </label>
         );

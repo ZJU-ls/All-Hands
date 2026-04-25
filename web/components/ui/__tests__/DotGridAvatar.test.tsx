@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render } from "@testing-library/react";
+import { render } from "@/tests/test-utils/i18n-render";
 import { DotGridAvatar, initialFromName } from "../DotGridAvatar";
 
 describe("initialFromName", () => {

@@ -15,6 +15,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Sparkline } from "@/components/ui/Sparkline";
 import type {
@@ -26,12 +27,6 @@ import type {
 } from "@/lib/cockpit-api";
 
 export type DrawerPanel = "health" | "budget" | "convs";
-
-const TITLES: Record<DrawerPanel, string> = {
-  health: "系统健康",
-  budget: "今日消耗",
-  convs: "最近对话",
-};
 
 const PANEL_ICON: Record<DrawerPanel, IconName> = {
   health: "shield-check",
@@ -51,10 +46,10 @@ function statusTone(kind: ComponentStatusKind): {
   return { dot: "bg-danger", text: "text-danger", tile: "bg-danger-soft text-danger" };
 }
 
-function statusText(kind: ComponentStatusKind): string {
-  if (kind === "ok") return "OK";
-  if (kind === "degraded") return "DEGRADED";
-  return "DOWN";
+function statusText(t: (k: string) => string, kind: ComponentStatusKind): string {
+  if (kind === "ok") return t("statusOk");
+  if (kind === "degraded") return t("statusDegraded");
+  return t("statusDown");
 }
 
 function kFormat(n: number): string {
@@ -72,6 +67,7 @@ function HealthRow({
   icon: IconName;
   comp: ComponentStatusDto;
 }) {
+  const t = useTranslations("cockpit.drawer");
   const tone = statusTone(comp.status);
   return (
     <li className="flex items-start gap-3 px-4 py-3 border-b border-border last:border-b-0">
@@ -96,7 +92,7 @@ function HealthRow({
                   : { animation: "ah-dot 1600ms ease-in-out infinite" }
               }
             />
-            {statusText(comp.status)}
+            {statusText(t, comp.status)}
           </span>
         </div>
         {comp.detail && (
@@ -110,12 +106,13 @@ function HealthRow({
 }
 
 function HealthPanelBody({ health }: { health: HealthSnapshotDto }) {
+  const t = useTranslations("cockpit.drawer");
   const entries: { key: keyof HealthSnapshotDto; label: string; icon: IconName }[] = [
-    { key: "gateway", label: "模型网关", icon: "plug" },
-    { key: "mcp_servers", label: "MCP 服务器", icon: "server" },
-    { key: "langfuse", label: "Langfuse", icon: "activity" },
-    { key: "db", label: "数据库", icon: "database" },
-    { key: "triggers", label: "触发器调度", icon: "zap" },
+    { key: "gateway", label: t("healthGateway"), icon: "plug" },
+    { key: "mcp_servers", label: t("healthMcp"), icon: "server" },
+    { key: "langfuse", label: t("healthLangfuse"), icon: "activity" },
+    { key: "db", label: t("healthDb"), icon: "database" },
+    { key: "triggers", label: t("healthTriggers"), icon: "zap" },
   ];
   return (
     <ul>
@@ -127,6 +124,7 @@ function HealthPanelBody({ health }: { health: HealthSnapshotDto }) {
 }
 
 function BudgetPanelBody({ summary }: { summary: WorkspaceSummaryDto }) {
+  const t = useTranslations("cockpit.drawer");
   const total = summary.tokens_today_total;
   const promptPct =
     total > 0 ? Math.round((summary.tokens_today_prompt / total) * 100) : 0;
@@ -148,7 +146,7 @@ function BudgetPanelBody({ summary }: { summary: WorkspaceSummaryDto }) {
           style={{ background: "var(--color-accent)", opacity: 0.4 }}
         />
         <div className="relative font-mono text-caption uppercase tracking-wider opacity-85">
-          估算成本 · 24h
+          {t("costTitle")}
         </div>
         <div className="relative mt-2 flex items-baseline gap-2">
           <span className="text-xl font-bold tabular-nums leading-none">
@@ -158,7 +156,7 @@ function BudgetPanelBody({ summary }: { summary: WorkspaceSummaryDto }) {
         </div>
         {costPerK > 0 && (
           <div className="relative mt-1 font-mono text-caption opacity-85 tabular-nums">
-            ≈ ${costPerK.toFixed(4)} / 1k tokens
+            {t("costPerK", { rate: costPerK.toFixed(4) })}
           </div>
         )}
       </div>
@@ -167,7 +165,7 @@ function BudgetPanelBody({ summary }: { summary: WorkspaceSummaryDto }) {
       <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm">
         <div className="flex items-center justify-between">
           <span className="font-mono text-caption font-semibold uppercase tracking-wider text-text-subtle">
-            Tokens · 24h
+            {t("tokens24h")}
           </span>
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-primary-muted text-primary">
             <Icon name="brain" size={12} strokeWidth={2} />
@@ -177,13 +175,13 @@ function BudgetPanelBody({ summary }: { summary: WorkspaceSummaryDto }) {
           <span className="font-mono text-lg font-bold tabular-nums leading-none text-text">
             {kFormat(total)}
           </span>
-          <span className="font-mono text-caption text-text-subtle">total</span>
+          <span className="font-mono text-caption text-text-subtle">{t("tokensTotal")}</span>
         </div>
         {total > 0 && (
           <>
             <div
               className="mt-3 h-1.5 rounded-full bg-surface-3 overflow-hidden"
-              aria-label="prompt vs completion split"
+              aria-label={t("splitAria")}
             >
               <div
                 className="h-full rounded-full bg-primary"
@@ -192,10 +190,10 @@ function BudgetPanelBody({ summary }: { summary: WorkspaceSummaryDto }) {
             </div>
             <div className="mt-1 flex items-center justify-between font-mono text-caption text-text-subtle tabular-nums">
               <span>
-                <span className="text-text">prompt</span> {kFormat(summary.tokens_today_prompt)}
+                <span className="text-text">{t("promptLabel")}</span> {kFormat(summary.tokens_today_prompt)}
               </span>
               <span>
-                <span className="text-text">out</span> {kFormat(summary.tokens_today_completion)}
+                <span className="text-text">{t("outLabel")}</span> {kFormat(summary.tokens_today_completion)}
               </span>
             </div>
           </>
@@ -206,7 +204,7 @@ function BudgetPanelBody({ summary }: { summary: WorkspaceSummaryDto }) {
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-border bg-surface p-3 shadow-soft-sm">
           <div className="font-mono text-caption uppercase tracking-wider text-text-subtle">
-            活跃 run
+            {t("activeRun")}
           </div>
           <div className="mt-1 text-lg font-bold tabular-nums text-text leading-none">
             {summary.runs_active}
@@ -214,7 +212,7 @@ function BudgetPanelBody({ summary }: { summary: WorkspaceSummaryDto }) {
         </div>
         <div className="rounded-xl border border-border bg-surface p-3 shadow-soft-sm">
           <div className="font-mono text-caption uppercase tracking-wider text-text-subtle">
-            对话 · 24h
+            {t("convs24h")}
           </div>
           <div className="mt-1 text-lg font-bold tabular-nums text-text leading-none">
             {summary.conversations_today}
@@ -235,6 +233,7 @@ function BudgetPanelBody({ summary }: { summary: WorkspaceSummaryDto }) {
 }
 
 function ConvsPanelBody({ conversations }: { conversations: ConvCardDto[] }) {
+  const t = useTranslations("cockpit.drawer");
   if (conversations.length === 0) {
     return (
       <div className="p-6 text-center space-y-3">
@@ -245,11 +244,13 @@ function ConvsPanelBody({ conversations }: { conversations: ConvCardDto[] }) {
           <Icon name="message-square" size={18} strokeWidth={2} />
         </span>
         <p className="text-sm text-text-muted">
-          还没有对话 · 去{" "}
-          <Link href="/chat" className="text-primary hover:underline">
-            /chat
-          </Link>{" "}
-          起一段
+          {t.rich("convsEmpty", {
+            chatLink: (chunks) => (
+              <Link href="/chat" className="text-primary hover:underline">
+                {chunks}
+              </Link>
+            ),
+          })}
         </p>
       </div>
     );
@@ -272,7 +273,7 @@ function ConvsPanelBody({ conversations }: { conversations: ConvCardDto[] }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-text truncate">
-                    {c.title || "(无标题)"}
+                    {c.title || t("convsUntitled")}
                   </span>
                   <time className="font-mono text-caption text-text-subtle shrink-0 tabular-nums">
                     {shortDate(c.updated_at)}
@@ -280,7 +281,7 @@ function ConvsPanelBody({ conversations }: { conversations: ConvCardDto[] }) {
                 </div>
                 <div className="mt-0.5 flex items-center justify-between gap-2 font-mono text-caption text-text-subtle">
                   <span className="truncate">{c.employee_name}</span>
-                  <span className="tabular-nums">{c.message_count} 条</span>
+                  <span className="tabular-nums">{t("convsCount", { n: c.message_count })}</span>
                 </div>
               </div>
             </Link>
@@ -292,7 +293,7 @@ function ConvsPanelBody({ conversations }: { conversations: ConvCardDto[] }) {
           href="/conversations"
           className="flex items-center justify-center gap-1.5 rounded-lg py-2 font-mono text-caption text-text-muted transition-colors duration-base hover:text-text hover:bg-surface-2"
         >
-          查看全部
+          {t("viewAll")}
           <Icon name="arrow-right" size={12} />
         </Link>
       </div>
@@ -328,7 +329,9 @@ export function CockpitDrawer({
   summary: WorkspaceSummaryDto;
   onClose: () => void;
 }) {
+  const t = useTranslations("cockpit.drawer");
   const ref = useRef<HTMLDivElement | null>(null);
+  const title = t(panel);
 
   // ESC closes. Focus the drawer on mount so ESC routes to us before any
   // bubbling keyboard handler elsewhere steals it.
@@ -349,7 +352,7 @@ export function CockpitDrawer({
       ref={ref}
       role="dialog"
       aria-modal="false"
-      aria-label={TITLES[panel]}
+      aria-label={title}
       tabIndex={-1}
       data-testid={`cockpit-drawer-${panel}`}
       className="absolute top-0 bottom-0 right-11 z-20 w-80 border-l border-border bg-surface shadow-soft-lg outline-none flex flex-col animate-fade-up"
@@ -360,14 +363,14 @@ export function CockpitDrawer({
             <Icon name={PANEL_ICON[panel]} size={14} strokeWidth={2} />
           </span>
           <span className="text-sm font-semibold text-text tracking-tight">
-            {TITLES[panel]}
+            {title}
           </span>
         </span>
         <button
           type="button"
           onClick={onClose}
           className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors duration-base hover:text-text hover:bg-surface-2"
-          aria-label="关闭"
+          aria-label={t("close")}
           data-testid="cockpit-drawer-close"
         >
           <Icon name="x" size={14} />

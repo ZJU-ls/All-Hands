@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { openStream, type AgUiCallbacks, type StreamHandle } from "@/lib/stream-client";
 import { useChatStore } from "@/lib/store";
 import type { RenderPayload, ToolCall, ToolCallStatus } from "@/lib/protocol";
@@ -39,6 +40,7 @@ export function InputBar({
   employee,
   onConversationChange,
 }: Props) {
+  const t = useTranslations("chat.inputBar");
   const [value, setValue] = useState("");
   const [thinking, setThinking] = useState(false);
   const streamRef = useRef<StreamHandle | null>(null);
@@ -158,7 +160,7 @@ export function InputBar({
       },
       onRunError: (err) => {
         setStreamError({
-          message: err.message || "助手没能完成这次回复。",
+          message: err.message || t("assistantFailed"),
           code: err.code,
         });
         finalizeStreaming(conversationId);
@@ -187,6 +189,7 @@ export function InputBar({
     finalizeStreaming,
     cancelStreaming,
     setStreamError,
+    t,
   ]);
 
   const handleSend = useCallback(() => {
@@ -297,7 +300,7 @@ export function InputBar({
         onSend={handleSend}
         onAbort={handleAbort}
         isStreaming={isStreaming}
-        placeholder="输入消息…"
+        placeholder={t("placeholder")}
         rows={3}
         controls={
           <div className="flex items-center gap-2">
@@ -326,7 +329,7 @@ export function InputBar({
             />
           </div>
         }
-        controlsTrailing={<span className="font-mono">↵ 发送 · ⇧↵ 换行</span>}
+        controlsTrailing={<span className="font-mono">{t("hint")}</span>}
       />
     </div>
   );

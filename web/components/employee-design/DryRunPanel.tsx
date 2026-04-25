@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import {
   previewEmployeeComposition,
@@ -32,6 +33,7 @@ export function DryRunPanel({
   customSkillIds?: string[];
   customMaxIterations?: number;
 }) {
+  const t = useTranslations("employees.dryRun");
   const [preview, setPreview] = useState<EmployeePreviewResult | null>(null);
   const [err, setErr] = useState<string>("");
   const [status, setStatus] = useState<Status>("idle");
@@ -61,7 +63,7 @@ export function DryRunPanel({
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-muted text-primary">
             <Icon name="zap" size={14} />
           </span>
-          <h3 className="text-[13px] font-semibold text-text">Dry run 预览</h3>
+          <h3 className="text-[13px] font-semibold text-text">{t("title")}</h3>
           <StatusChip status={status} />
         </div>
         <button
@@ -74,12 +76,12 @@ export function DryRunPanel({
           {status === "loading" ? (
             <>
               <span className="inline-block h-3 w-3 rounded-full border-2 border-primary-fg/30 border-t-primary-fg animate-spin" />
-              computing…
+              {t("computing")}
             </>
           ) : (
             <>
               <Icon name="play" size={12} />
-              预览合成
+              {t("preview")}
             </>
           )}
         </button>
@@ -106,20 +108,19 @@ export function DryRunPanel({
 
       {preview === null && status !== "error" && (
         <p className="text-[12px] text-text-muted">
-          点「预览合成」看最终落库的三列(tool_ids / skill_ids /
-          max_iterations),不会真的建员工。
+          {t("intro")}
         </p>
       )}
 
       {preview && status !== "error" && (
         <div data-testid="dryrun-panel" className="flex flex-col gap-3">
-          <Row label={`tool_ids · ${preview.tool_ids.length}`}>
+          <Row label={t("rowToolIds", { count: preview.tool_ids.length })}>
             <IdChips ids={preview.tool_ids} />
           </Row>
-          <Row label={`skill_ids · ${preview.skill_ids.length}`}>
+          <Row label={t("rowSkillIds", { count: preview.skill_ids.length })}>
             <IdChips ids={preview.skill_ids} />
           </Row>
-          <Row label="max_iterations">
+          <Row label={t("rowMaxIter")}>
             <span className="font-mono text-[13px] font-medium text-text">
               {preview.max_iterations}
             </span>
@@ -131,11 +132,12 @@ export function DryRunPanel({
 }
 
 function StatusChip({ status }: { status: Status }) {
+  const t = useTranslations("employees.dryRun");
   if (status === "loading") {
     return (
       <span className="inline-flex items-center gap-1 rounded-sm bg-primary-muted px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-primary">
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-        running
+        {t("statusRunning")}
       </span>
     );
   }
@@ -143,7 +145,7 @@ function StatusChip({ status }: { status: Status }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-sm bg-success-soft px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-success">
         <Icon name="check" size={10} />
-        ok
+        {t("statusOk")}
       </span>
     );
   }
@@ -151,20 +153,21 @@ function StatusChip({ status }: { status: Status }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-danger">
         <Icon name="alert-circle" size={10} />
-        error
+        {t("statusError")}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center rounded-sm border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-text-subtle">
-      idle
+      {t("statusIdle")}
     </span>
   );
 }
 
 function IdChips({ ids }: { ids: string[] }) {
+  const t = useTranslations("employees.dryRun");
   if (ids.length === 0) {
-    return <span className="text-[11px] text-text-subtle">(空)</span>;
+    return <span className="text-[11px] text-text-subtle">{t("emptyChips")}</span>;
   }
   return (
     <ul className="flex flex-wrap gap-1">

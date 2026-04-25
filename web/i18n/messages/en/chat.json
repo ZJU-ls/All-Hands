@@ -1,0 +1,106 @@
+{
+  "chat": {
+    "page": {
+      "shellTitle": "Chat",
+      "backendNotReady": "Backend is not ready. Make sure the service is running.",
+      "connectionError": "Connection error",
+      "initializing": "Initializing conversation…"
+    },
+    "conversation": {
+      "shellTitle": "One for All · A single Lead Agent that does it all",
+      "backendOffline": "Backend offline · reconnecting automatically",
+      "attempt": "Attempt {n}",
+      "retryNow": "Retry now",
+      "loadFailedTitle": "Failed to load conversation",
+      "loadFailedDescription": "The backend may still be restarting, or the session state is corrupt.",
+      "retry": "Retry",
+      "toggleArtifacts": "Toggle artifacts panel",
+      "artifactsTooltip": "Artifacts · Cmd/Ctrl+J",
+      "artifacts": "Artifacts"
+    },
+    "compactChip": {
+      "running": "Compacting…",
+      "done": "Compacted · {n}",
+      "idle": "Compact context",
+      "errorTitle": "Compaction failed · {message}",
+      "tooltip": "Fold older messages into a single summary to free up the context window",
+      "ariaLabel": "Manually compact conversation context"
+    },
+    "composer": {
+      "placeholder": "Type a message…",
+      "stop": "Stop",
+      "send": "Send",
+      "thinking": "Deep thinking"
+    },
+    "header": {
+      "loading": "Loading…",
+      "viewEmployee": "View {name}'s profile",
+      "modelOverridden": "Overridden for this chat: {ref}",
+      "modelInherited": "Following employee default · {ref}"
+    },
+    "switcher": {
+      "loading": "Loading…",
+      "newAriaLabel": "New conversation",
+      "newTooltipEmpty": "This conversation is still empty · just type below",
+      "newTooltipDefault": "Start a new blank conversation with this employee",
+      "new": "New",
+      "historyAriaLabel": "Conversation history",
+      "historyTooltip": "Switch to another conversation with this employee",
+      "history": "History",
+      "loadHistoryFailed": "Failed to load history: {error}",
+      "noOther": "No other conversations yet",
+      "untitled": "Untitled · {id}",
+      "justNow": "just now",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago"
+    },
+    "inputBar": {
+      "placeholder": "Type a message…",
+      "assistantFailed": "The assistant couldn't finish this reply.",
+      "hint": "↵ send · ⇧↵ newline"
+    },
+    "messageBubble": {
+      "thinkingProcess": "Thinking",
+      "thinkingProcessLive": "Thinking…"
+    },
+    "messageList": {
+      "jumpToLatest": "Jump to latest",
+      "backToLatest": "Back to latest",
+      "ready": "Ready",
+      "emptyHint": "Send a message to start the conversation.",
+      "modelProcessing": "Model is working",
+      "assistantFailed": "The assistant couldn't finish this reply.",
+      "internalHint": "Likely a model credential issue or upstream rejection. Check the provider's API Key and base_url at /gateway."
+    },
+    "modelOverride": {
+      "defaultModel": "Default model",
+      "switchFailed": "Switch failed · {error}",
+      "overrideTitle": "Overridden for this chat: {effective} · employee default {employee}",
+      "fallbackToGlobalTitle": "Employee model {employee} is not registered with the current provider · falling back to global default {effective}",
+      "inheritTitle": "Following employee default · {effective}",
+      "inheritFallbackLabel": "Following default · {effective} (employee {employee} not configured)",
+      "inheritLabel": "Following employee default · {effective}"
+    },
+    "nestedRun": {
+      "running": "Running",
+      "done": "Done",
+      "error": "Failed",
+      "unknown": "—"
+    },
+    "systemTool": {
+      "pending": "Pending",
+      "awaitingConfirmation": "Awaiting approval",
+      "running": "Running",
+      "failed": "Failed",
+      "rejected": "Rejected",
+      "itemSuffix": "{n} items",
+      "rowSuffix": "{n} rows"
+    },
+    "usageChip": {
+      "compacting": "Compacting…",
+      "compact": "Compact",
+      "tooltip": "{used} / {total} tokens (estimated)"
+    }
+  }
+}

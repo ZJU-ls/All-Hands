@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState } from "@/components/state";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -25,8 +26,8 @@ import { deriveProfile, BADGE_LABEL } from "@/lib/employee-profile";
  * - `busyId` locks all cards while a conversation is being opened.
  */
 
-function modelDisplay(modelRef: string): string {
-  if (!modelRef) return "默认模型";
+function modelDisplay(modelRef: string, fallback: string): string {
+  if (!modelRef) return fallback;
   const idx = modelRef.indexOf("/");
   return idx >= 0 ? modelRef.slice(idx + 1) : modelRef;
 }
@@ -44,6 +45,7 @@ function avatarInitials(name: string): string {
 }
 
 export default function EmployeesPage() {
+  const t = useTranslations("employees.list");
   const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export default function EmployeesPage() {
 
   return (
     <AppShell
-      title="员工"
+      title={t("shellTitle")}
       actions={
         <Link
           href="/employees/design"
@@ -88,16 +90,16 @@ export default function EmployeesPage() {
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
         >
           <Icon name="wand-2" size={14} />
-          设计员工
+          {t("designAction")}
         </Link>
       }
     >
       <div className="h-full overflow-y-auto">
         <div className="max-w-6xl mx-auto p-6 space-y-5 animate-fade-up">
           <PageHeader
-            title="员工"
+            title={t("pageTitle")}
             count={employees?.length}
-            subtitle="按卡片浏览已发布员工 · 点头像直接起新对话 · 右上「设计员工」进入草稿工作区"
+            subtitle={t("subtitle")}
           />
           {error && (
             <div
@@ -145,6 +147,7 @@ function EmployeeCard({
   busy: boolean;
   anyBusy: boolean;
 }) {
+  const t = useTranslations("employees.list");
   const badges = deriveProfile(employee).filter((b) => b !== "react");
   const isLead = employee.is_lead_agent;
 
@@ -160,7 +163,7 @@ function EmployeeCard({
           data-testid="badge-lead"
         >
           <Icon name="sparkles" size={10} />
-          Lead
+          {t("leadBadge")}
         </span>
       )}
 
@@ -168,7 +171,7 @@ function EmployeeCard({
         type="button"
         onClick={() => onStartChat(employee.id)}
         disabled={anyBusy}
-        aria-label={`与 ${employee.name} 开始新对话`}
+        aria-label={t("startChatAria", { name: employee.name })}
         data-testid={`employee-card-start-${employee.name}`}
         className="flex items-start gap-3 text-left disabled:opacity-60"
       >
@@ -189,7 +192,7 @@ function EmployeeCard({
             </span>
           </div>
           <p className="font-mono text-[11px] text-text-subtle truncate mt-0.5">
-            {modelDisplay(employee.model_ref) || "跟随默认"}
+            {modelDisplay(employee.model_ref, t("defaultModel")) || t("fallbackModel")}
           </p>
         </div>
       </button>
@@ -200,7 +203,7 @@ function EmployeeCard({
         </p>
       ) : (
         <p className="text-[12px] text-text-subtle italic leading-snug min-h-[32px]">
-          暂无描述
+          {t("noDescription")}
         </p>
       )}
 
@@ -226,7 +229,7 @@ function EmployeeCard({
             data-testid={`employee-card-detail-${employee.name}`}
             className="inline-flex items-center h-7 px-2 rounded-md text-[11px] font-medium text-text-muted hover:text-text hover:bg-surface-2 transition duration-base"
           >
-            详情
+            {t("detail")}
           </Link>
           <button
             type="button"
@@ -238,11 +241,11 @@ function EmployeeCard({
             {busy ? (
               <>
                 <Icon name="loader" size={12} className="animate-spin-slow" />
-                打开中
+                {t("opening")}
               </>
             ) : (
               <>
-                对话
+                {t("chat")}
                 <Icon
                   name="arrow-right"
                   size={12}
@@ -280,6 +283,8 @@ function Stat({
 }
 
 function EmployeesSkeleton() {
+  const t = useTranslations("employees.list");
+  const loadingLabel = t("loadingEmployees");
   return (
     <div
       aria-hidden="true"
@@ -307,13 +312,14 @@ function EmployeesSkeleton() {
         </div>
       ))}
       <span className="sr-only">
-        <LoadingState title="加载员工" />
+        <LoadingState title={loadingLabel} />
       </span>
     </div>
   );
 }
 
 function EmptyEmployees() {
+  const t = useTranslations("employees.list");
   return (
     <div
       data-testid="employees-empty"
@@ -352,11 +358,12 @@ function EmptyEmployees() {
         </div>
 
         <h3 className="mt-6 text-display font-bold tracking-tight text-text">
-          Hire your first digital employee
+          {t("emptyHeading")}
         </h3>
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-text-muted">
-          和 Lead Agent 对话一句 <span className="font-mono text-text">create_employee</span>
-          ,给 Ta 一组 skill 和工具 —— 新员工立刻上岗。
+          {t("emptyBodyPrefix")}
+          <span className="font-mono text-text">create_employee</span>
+          {t("emptyBodySuffix")}
         </p>
 
         <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
@@ -366,7 +373,7 @@ function EmptyEmployees() {
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary text-primary-fg text-[13px] font-semibold shadow-soft hover:bg-primary-hover hover:-translate-y-px transition duration-base"
           >
             <Icon name="sparkles" size={14} />
-            Hire employee
+            {t("hireEmployee")}
           </Link>
           <Link
             href="/employees/design"
@@ -374,12 +381,12 @@ function EmptyEmployees() {
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-surface border border-border text-[13px] font-semibold text-text hover:border-primary hover:text-primary hover:-translate-y-px transition duration-base"
           >
             <Icon name="wand-2" size={14} />
-            打开设计器
+            {t("openDesigner")}
           </Link>
         </div>
 
         <div className="mt-8 flex items-center justify-center gap-2 text-[11px] text-text-subtle flex-wrap">
-          <span className="font-mono uppercase tracking-wider">Popular starts</span>
+          <span className="font-mono uppercase tracking-wider">{t("popularStarts")}</span>
           <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-surface-2 border border-border text-text-muted font-medium">
             Sales Analyst
           </span>

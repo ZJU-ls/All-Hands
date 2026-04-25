@@ -6,6 +6,7 @@
  * `bg-surface shadow-soft-sm text-primary`; inactive is `text-text-muted`.
  */
 
+import { useTranslations } from "next-intl";
 import type { ArtifactVersionDto } from "@/lib/artifacts-api";
 
 export function ArtifactVersionSwitcher({
@@ -17,11 +18,12 @@ export function ArtifactVersionSwitcher({
   current: number;
   onSelect: (v: number) => void;
 }) {
+  const t = useTranslations("artifacts.versionSwitcher");
   if (versions.length === 0) return null;
   return (
     <div
       role="tablist"
-      aria-label="版本切换"
+      aria-label={t("ariaLabel")}
       className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-surface-2 p-0.5"
     >
       {versions.map((v) => {

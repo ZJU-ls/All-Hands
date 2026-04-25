@@ -25,10 +25,13 @@
  * trace/observatory feature; the transcript should stay readable.
  */
 
+import { useTranslations } from "next-intl";
 import type { ToolCall } from "@/lib/protocol";
 import { shortToolName } from "@/lib/tool-kind";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/icon";
+
+type SystemToolT = (key: string, values?: Record<string, string | number>) => string;
 
 const STATUS_DOT: Record<string, string> = {
   pending: "bg-text-subtle",
@@ -39,14 +42,19 @@ const STATUS_DOT: Record<string, string> = {
   rejected: "bg-warning",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: "等待",
-  awaiting_confirmation: "等待审批",
-  running: "运行中",
-  succeeded: "",
-  failed: "失败",
-  rejected: "被拒绝",
+const STATUS_LABEL_KEY: Record<string, string> = {
+  pending: "pending",
+  awaiting_confirmation: "awaitingConfirmation",
+  running: "running",
+  failed: "failed",
+  rejected: "rejected",
 };
+
+function statusLabelFor(status: string, t: SystemToolT): string {
+  const key = STATUS_LABEL_KEY[status];
+  if (!key) return "";
+  return t(key);
+}
 
 const MAX_SUMMARY_LEN = 48;
 
@@ -66,22 +74,21 @@ function formatValue(v: unknown): string {
   }
 }
 
-function countSuffix(n: number, kind: "item" | "row" | "result" = "item"): string {
-  const label = kind === "row" ? "条" : kind === "result" ? "项" : "项";
-  return `${n} ${label}`;
+function countSuffix(n: number, t: SystemToolT, kind: "item" | "row" | "result" = "item"): string {
+  return kind === "row" ? t("rowSuffix", { n }) : t("itemSuffix", { n });
 }
 
-function summarizeResult(result: unknown): string {
+function summarizeResult(result: unknown, t: SystemToolT): string {
   if (result === undefined || result === null) return "";
-  if (Array.isArray(result)) return countSuffix(result.length);
+  if (Array.isArray(result)) return countSuffix(result.length, t);
   if (typeof result !== "object") return truncate(formatValue(result));
 
   const obj = result as Record<string, unknown>;
 
   // Prefer explicit `count` / `total` / known list fields — these are the
   // conventions our system executors follow (`{providers: [...], count: N}`).
-  if (typeof obj.count === "number") return countSuffix(obj.count);
-  if (typeof obj.total === "number") return countSuffix(obj.total);
+  if (typeof obj.count === "number") return countSuffix(obj.count, t);
+  if (typeof obj.total === "number") return countSuffix(obj.total, t);
   for (const listKey of [
     "providers",
     "models",
@@ -94,7 +101,7 @@ function summarizeResult(result: unknown): string {
     "triggers",
   ]) {
     const v = obj[listKey];
-    if (Array.isArray(v)) return countSuffix(v.length);
+    if (Array.isArray(v)) return countSuffix(v.length, t);
   }
   // Fall through: first kv pair as a hint.
   const entries = Object.entries(obj).filter(([, v]) => v !== undefined && v !== null);
@@ -104,12 +111,13 @@ function summarizeResult(result: unknown): string {
 }
 
 export function SystemToolLine({ toolCall }: { toolCall: ToolCall }) {
+  const t = useTranslations("chat.systemTool");
   const dotColor = STATUS_DOT[toolCall.status] ?? "bg-text-subtle";
   const name = shortToolName(toolCall.tool_id);
-  const statusLabel = STATUS_LABEL[toolCall.status] ?? "";
+  const statusLabel = statusLabelFor(toolCall.status, t);
   const summary =
     toolCall.status === "succeeded"
-      ? summarizeResult(toolCall.result)
+      ? summarizeResult(toolCall.result, t)
       : toolCall.status === "failed" && toolCall.error
         ? truncate(toolCall.error)
         : statusLabel;

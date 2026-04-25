@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   getArtifact,
   getArtifactTextContent,
@@ -42,6 +43,7 @@ function contentFromDto(dto: ArtifactContentDto): LoadedContent {
 function renderBody(
   artifact: ArtifactDto,
   loaded: LoadedContent,
+  unsupportedMsg: string,
 ): React.ReactNode {
   switch (artifact.kind) {
     case "markdown":
@@ -68,13 +70,14 @@ function renderBody(
     default:
       return (
         <div className="px-4 py-3 text-xs text-text-muted">
-          kind {artifact.kind} 暂不支持在面板内预览。
+          {unsupportedMsg}
         </div>
       );
   }
 }
 
 export function ArtifactDetail({ artifactId }: { artifactId: string }) {
+  const t = useTranslations("artifacts.detail");
   const [meta, setMeta] = useState<ArtifactDto | null>(null);
   const [versions, setVersions] = useState<ArtifactVersionDto[]>([]);
   const [currentVersion, setCurrentVersion] = useState<number | null>(null);
@@ -139,11 +142,11 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
 
   if (error) {
     return (
-      <div className="px-4 py-3 text-[12px] text-danger">制品加载失败:{error}</div>
+      <div className="px-4 py-3 text-[12px] text-danger">{t("loadFailed", { error })}</div>
     );
   }
   if (!meta) {
-    return <div className="px-4 py-3 text-[12px] text-text-muted">读取中…</div>;
+    return <div className="px-4 py-3 text-[12px] text-text-muted">{t("loadingMeta")}</div>;
   }
 
   return (
@@ -159,7 +162,7 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
           href={`${BASE}/api/artifacts/${meta.id}/content?download=true`}
           className="inline-flex h-7 items-center rounded-md border border-border px-3 text-[11px] text-text-muted transition-colors duration-base hover:text-text hover:border-border-strong"
         >
-          下载
+          {t("download")}
         </a>
       </div>
       <ArtifactVersionSwitcher
@@ -168,8 +171,8 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
         onSelect={(v) => setCurrentVersion(v)}
       />
       <div className="flex-1 overflow-y-auto">
-        {content ? renderBody(meta, content) : (
-          <div className="px-4 py-3 text-[12px] text-text-muted">读取内容…</div>
+        {content ? renderBody(meta, content, t("unsupportedKind", { kind: meta.kind })) : (
+          <div className="px-4 py-3 text-[12px] text-text-muted">{t("loadingContent")}</div>
         )}
       </div>
     </div>

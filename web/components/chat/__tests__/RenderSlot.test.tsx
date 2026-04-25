@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
-import { render, cleanup, screen } from "@testing-library/react";
+import { render, cleanup, screen } from "@/tests/test-utils/i18n-render";
 import type { RenderPayload } from "@/lib/protocol";
 import { RenderSlot } from "../RenderSlot";
 import { registerComponent } from "@/lib/component-registry";

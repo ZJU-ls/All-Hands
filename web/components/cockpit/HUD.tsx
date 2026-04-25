@@ -15,21 +15,23 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { Sparkline } from "@/components/ui/Sparkline";
 import type { ActivityEventDto, WorkspaceSummaryDto } from "@/lib/cockpit-api";
 
 type Connection = "connecting" | "open" | "error";
 
-function greeting(now: Date): string {
+function greetingKey(now: Date): "lateNight" | "morning" | "afternoon" | "evening" {
   const h = now.getHours();
-  if (h < 5) return "Late night";
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 5) return "lateNight";
+  if (h < 12) return "morning";
+  if (h < 18) return "afternoon";
+  return "evening";
 }
 
 function WallClock() {
+  const t = useTranslations("cockpit.hud");
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     setNow(new Date());
@@ -49,7 +51,7 @@ function WallClock() {
   return (
     <span
       className="font-mono text-caption tabular-nums text-text-muted"
-      aria-label="workspace time"
+      aria-label={t("wallClockAria")}
     >
       {hh}:{mm}:<span className="text-text">{ss}</span>
     </span>
@@ -57,14 +59,15 @@ function WallClock() {
 }
 
 function Greeting() {
+  const t = useTranslations("cockpit.hud");
   // Compute on the client so SSR doesn't lock a stale greeting.
-  const [label, setLabel] = useState<string | null>(null);
+  const [key, setKey] = useState<ReturnType<typeof greetingKey> | null>(null);
   useEffect(() => {
-    setLabel(greeting(new Date()));
+    setKey(greetingKey(new Date()));
   }, []);
   return (
     <span className="text-sm font-semibold text-text tracking-tight">
-      {label ?? "Welcome"}
+      {key ? t(key) : t("welcome")}
     </span>
   );
 }
@@ -151,18 +154,19 @@ export function HUD({
   onResume: () => void;
   onRefresh: () => void;
 }) {
+  const t = useTranslations("cockpit.hud");
   const rate = eventRateBuckets(summary.recent_events);
 
   const [statusKind, statusLabel]: [
     "live" | "paused" | "reconnecting" | "offline",
     string,
   ] = summary.paused
-    ? ["paused", "已暂停"]
+    ? ["paused", t("statusPaused")]
     : connection === "open"
-      ? ["live", "LIVE"]
+      ? ["live", t("statusLive")]
       : connection === "connecting"
-        ? ["reconnecting", "连接中"]
-        : ["offline", "离线"];
+        ? ["reconnecting", t("statusReconnecting")]
+        : ["offline", t("statusOffline")];
 
   return (
     <div
@@ -200,7 +204,7 @@ export function HUD({
       <div className="hidden md:flex items-center gap-3 min-w-0">
         <div className="flex items-center gap-2 h-8 px-2.5 rounded-lg bg-surface-2 border border-border">
           <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
-            EV/5M
+            {t("evRateLabel")}
           </span>
           <span
             className="font-mono text-caption tabular-nums text-text font-semibold"
@@ -214,7 +218,7 @@ export function HUD({
               height={16}
               strokeWidth={1.5}
               showEndpoint={rate.total > 0}
-              ariaLabel={`${rate.total} events in last 5 minutes`}
+              ariaLabel={t("evRateAria", { n: rate.total })}
             />
           </div>
         </div>
@@ -222,11 +226,11 @@ export function HUD({
           <Link
             href="/tasks?filter=needs_user"
             className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-warning-soft text-warning border border-warning/30 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
-            aria-label={`${summary.tasks_needs_user} 个任务等你处理`}
+            aria-label={t("tasksAria", { n: summary.tasks_needs_user })}
           >
             <Icon name="alert-circle" size={14} />
             <span className="font-mono text-[10px] tabular-nums font-semibold">
-              {summary.tasks_needs_user} 等你处理
+              {t("tasksLabel", { n: summary.tasks_needs_user })}
             </span>
           </Link>
         )}
@@ -234,11 +238,11 @@ export function HUD({
           <Link
             href="/confirmations"
             className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-warning-soft text-warning border border-warning/30 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
-            aria-label={`${summary.confirmations_pending} 个待确认 tool call`}
+            aria-label={t("confirmAria", { n: summary.confirmations_pending })}
           >
             <Icon name="shield-check" size={14} />
             <span className="font-mono text-[10px] tabular-nums font-semibold">
-              {summary.confirmations_pending} 待确认
+              {t("confirmLabel", { n: summary.confirmations_pending })}
             </span>
           </Link>
         )}
@@ -250,13 +254,13 @@ export function HUD({
           type="button"
           onClick={onRefresh}
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-text-muted shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft hover:text-text hover:border-border-strong"
-          title="立即刷新快照"
-          aria-label="刷新"
+          title={t("refreshTitle")}
+          aria-label={t("refreshAria")}
           data-testid="hud-refresh"
         >
           <Icon name="refresh" size={14} />
           <span className="hidden lg:inline font-mono text-[10px] uppercase tracking-wider font-semibold">
-            REFRESH
+            {t("refreshLabel")}
           </span>
         </button>
         {summary.paused ? (
@@ -268,7 +272,7 @@ export function HUD({
           >
             <Icon name="play" size={14} />
             <span className="font-mono text-[10px] font-semibold uppercase tracking-wider">
-              恢复运行
+              {t("resume")}
             </span>
           </button>
         ) : (
@@ -277,11 +281,11 @@ export function HUD({
             onClick={onPauseRequest}
             className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-danger-soft text-danger border border-danger/40 shadow-soft-sm transition duration-base hover:-translate-y-px hover:shadow-soft"
             data-testid="hud-pause"
-            aria-label="急停所有 run"
+            aria-label={t("pauseAria")}
           >
             <Icon name="pause" size={14} />
             <span className="font-mono text-[10px] font-semibold uppercase tracking-wider">
-              急停
+              {t("pause")}
             </span>
           </button>
         )}

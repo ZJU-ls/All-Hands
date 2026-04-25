@@ -19,7 +19,7 @@ import {
   vi,
   type MockInstance,
 } from "vitest";
-import { render, cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, cleanup, screen, fireEvent, waitFor } from "@/tests/test-utils/i18n-render";
 
 import { useChatStore } from "@/lib/store";
 import { ConfirmationDialog } from "@/components/chat/ConfirmationDialog";

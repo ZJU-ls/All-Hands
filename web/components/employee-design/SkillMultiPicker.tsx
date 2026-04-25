@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import type { SkillDto } from "@/lib/api";
 
@@ -17,10 +18,11 @@ export function SkillMultiPicker({
   selected: string[];
   onToggle: (id: string) => void;
 }) {
+  const t = useTranslations("employees.skillPicker");
   if (skills.length === 0) {
     return (
       <p className="text-[12px] text-text-muted">
-        还没有安装的 Skill。先在「技能」页安装,再回来挂载。
+        {t("empty")}
       </p>
     );
   }
@@ -58,7 +60,7 @@ export function SkillMultiPicker({
                   className="sr-only"
                   aria-hidden
                 >
-                  selected
+                  {t("selected")}
                 </span>
               )}
             </button>

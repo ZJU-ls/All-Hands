@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { cn } from "@/lib/cn";
@@ -13,6 +14,7 @@ import { cn } from "@/lib/cn";
  * per-skill so a second click is instant.
  */
 export function SkillExplainer({ skillId }: { skillId: string }) {
+  const t = useTranslations("skills.explainer");
   const [text, setText] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
   // Tri-state: idle (no fetch yet) · loading (streaming chunks) · done · error.
@@ -46,7 +48,7 @@ export function SkillExplainer({ skillId }: { skillId: string }) {
         throw new Error(`${res.status} ${body || res.statusText}`);
       }
       if (!res.body) {
-        throw new Error("解读失败:响应没有 body");
+        throw new Error(t("noBody"));
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder("utf-8");
@@ -64,7 +66,7 @@ export function SkillExplainer({ skillId }: { skillId: string }) {
       setError(e instanceof Error ? e.message : String(e));
       setState("error");
     }
-  }, [skillId]);
+  }, [skillId, t]);
 
   if (state === "idle") {
     return (
@@ -77,10 +79,10 @@ export function SkillExplainer({ skillId }: { skillId: string }) {
           "border border-primary/30 bg-primary/5 text-[12px] font-medium text-primary",
           "hover:bg-primary/10 hover:border-primary/50 transition-colors duration-fast",
         )}
-        title="用 AI 解读这个技能在干什么、什么时候用"
+        title={t("tooltip")}
       >
         <Icon name="sparkles" size={13} className="shrink-0" />
-        <span>AI 解读</span>
+        <span>{t("trigger")}</span>
       </button>
     );
   }
@@ -99,12 +101,12 @@ export function SkillExplainer({ skillId }: { skillId: string }) {
               className={state === "loading" ? "animate-spin-slow" : ""}
             />
           </span>
-          <h3 className="text-sm font-semibold text-text">AI 解读</h3>
+          <h3 className="text-sm font-semibold text-text">{t("panelTitle")}</h3>
           {state === "loading" && (
-            <span className="text-[11px] text-text-muted font-mono">生成中…</span>
+            <span className="text-[11px] text-text-muted font-mono">{t("generating")}</span>
           )}
           {state === "done" && (
-            <span className="text-[11px] text-success font-mono">已完成</span>
+            <span className="text-[11px] text-success font-mono">{t("done")}</span>
           )}
         </div>
         {(state === "done" || state === "error") && (
@@ -115,7 +117,7 @@ export function SkillExplainer({ skillId }: { skillId: string }) {
             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border bg-surface text-[11px] text-text-muted hover:border-primary/40 hover:text-primary transition-colors duration-fast"
           >
             <Icon name="refresh" size={11} />
-            重新解读
+            {t("regenerate")}
           </button>
         )}
       </header>
@@ -133,7 +135,7 @@ export function SkillExplainer({ skillId }: { skillId: string }) {
         ) : text ? (
           <AgentMarkdown content={text} />
         ) : (
-          <p className="text-[13px] text-text-muted">等待第一段输出…</p>
+          <p className="text-[13px] text-text-muted">{t("waiting")}</p>
         )}
       </div>
     </section>
