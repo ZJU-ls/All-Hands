@@ -50,7 +50,7 @@ async def test_anomaly_lands_in_events_table() -> None:
     maker = async_sessionmaker(engine, expire_on_commit=False)
 
     async def _publisher(ev: MarketAnomalyEvent) -> None:
-        async with maker() as session, session.begin():
+        async with maker() as session:
             envelope = EventEnvelope(
                 id=f"evt_{uuid.uuid4().hex[:16]}",
                 kind="market.anomaly",
@@ -78,7 +78,7 @@ async def test_anomaly_lands_in_events_table() -> None:
     assert len(events) == 1
     assert events[0].kind == "sudden_spike"
 
-    async with maker() as session, session.begin():
+    async with maker() as session:
         recent = await SqlEventRepo(session).list_recent(limit=10)
     anomalies = [e for e in recent if e.kind == "market.anomaly"]
     assert len(anomalies) == 1

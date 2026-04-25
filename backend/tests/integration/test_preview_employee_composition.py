@@ -32,7 +32,7 @@ def client() -> TestClient:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     async def _emp_service(session: AsyncSession = Depends(_session)) -> EmployeeService:
@@ -171,13 +171,18 @@ def test_preview_custom_max_iterations_wins(client: TestClient) -> None:
 
 
 def test_preview_max_iterations_range(client: TestClient) -> None:
-    """UI slider bound: 1 ≤ max_iterations ≤ 50 (SIGNOFF Q7)."""
+    """UI input bound: 1 ≤ max_iterations ≤ 10000.
+
+    Original Q7 signoff capped at 50; user feedback (2026-04-25) loosened
+    the cap to 10000 so power users can run long-running orchestrators.
+    The DesignForm number input enforces the same range.
+    """
     r_low = client.post(
         "/api/employees/preview", json={"preset": "execute", "custom_max_iterations": 0}
     )
     r_high = client.post(
         "/api/employees/preview",
-        json={"preset": "execute", "custom_max_iterations": 51},
+        json={"preset": "execute", "custom_max_iterations": 10001},
     )
     assert r_low.status_code == 422
     assert r_high.status_code == 422

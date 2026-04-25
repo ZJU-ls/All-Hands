@@ -349,6 +349,7 @@ def _facade_stream(
     plan_repo: Any = None,
     conversation_id: str = "",
     user_input_signal: Any = None,
+    run_id: str | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """Run the new AgentLoop, translate its InternalEvent stream into the
     legacy AgentEvent surface, yield. Async generator factory.
@@ -383,6 +384,7 @@ def _facade_stream(
         user_input_signal=user_input_signal,
         plan_repo=plan_repo,
         conversation_id=conversation_id,
+        run_id=run_id,
     )
 
     async def _gen() -> AsyncIterator[AgentEvent]:
@@ -536,6 +538,7 @@ class AgentRunner:
         plan_repo: Any = None,
         conversation_id: str = "",
         user_input_signal: Any = None,
+        run_id: str | None = None,
     ) -> None:
         self._employee = employee
         self._tool_registry = tool_registry
@@ -566,6 +569,10 @@ class AgentRunner:
         # ADR 0019 C3 · clarification signal forwarded to AgentLoop. None
         # = ask_user_question tool falls through Allow (no defer).
         self._user_input_signal = user_input_signal
+        # 2026-04-25 v2 · per-turn run_id for artifact provenance binding.
+        # ChatService mints it once per send_message and threads it down so
+        # AgentLoop can stamp Artifact / ArtifactVersion rows.
+        self._run_id = run_id
 
     def _active_tool_ids(self) -> list[str]:
         """Contract § 8.2 · base + flatten(resolved_skills.values())."""
@@ -626,6 +633,7 @@ class AgentRunner:
             plan_repo=self._plan_repo,
             conversation_id=self._conversation_id,
             user_input_signal=self._user_input_signal,
+            run_id=self._run_id,
         ):
             yield legacy_event
         return

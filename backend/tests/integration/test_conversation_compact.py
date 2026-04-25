@@ -83,7 +83,7 @@ async def _seed(engine: AsyncEngine, n_messages: int) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session, session.begin():
+    async with maker() as session:
         await SqlEmployeeRepo(session).upsert(_make_emp())
         conv_repo = SqlConversationRepo(session)
         await conv_repo.create(_make_conv())
@@ -104,7 +104,7 @@ def make_client():
 
         async def _session() -> AsyncIterator[AsyncSession]:
             maker = async_sessionmaker(engine, expire_on_commit=False)
-            async with maker() as s, s.begin():
+            async with maker() as s:
                 yield s
 
         app = create_app()
@@ -179,7 +179,7 @@ async def _seed_with_render_row(engine: AsyncEngine) -> tuple[str, str]:
     maker = async_sessionmaker(engine, expire_on_commit=False)
     msg_id = str(uuid.uuid4())
     tc_id = str(uuid.uuid4())
-    async with maker() as session, session.begin():
+    async with maker() as session:
         await SqlEmployeeRepo(session).upsert(_make_emp())
         conv_repo = SqlConversationRepo(session)
         await conv_repo.create(_make_conv())
@@ -224,7 +224,7 @@ def test_list_messages_endpoint_returns_render_payloads_and_tool_calls() -> None
 
     async def _session() -> AsyncIterator[AsyncSession]:
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     app = create_app()
@@ -265,7 +265,7 @@ def test_compact_response_preserves_render_payloads_on_kept_tail() -> None:
     maker = async_sessionmaker(engine, expire_on_commit=False)
 
     async def _pad() -> None:
-        async with maker() as session, session.begin():
+        async with maker() as session:
             repo = SqlConversationRepo(session)
             for i in range(10):
                 await repo.append_message(
@@ -281,7 +281,7 @@ def test_compact_response_preserves_render_payloads_on_kept_tail() -> None:
     asyncio.run(_pad())
 
     async def _session() -> AsyncIterator[AsyncSession]:
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     app = create_app()

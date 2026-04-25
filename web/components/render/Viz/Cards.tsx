@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import {
   SearchInput,
@@ -40,6 +41,7 @@ type SortMode = "original" | "title-asc" | "title-desc";
  * this?" preview doesn't grow noisy chrome.
  */
 export function Cards({ props }: RenderProps) {
+  const t = useTranslations("viz.cards");
   const rawCards = props.cards;
   const cards: Card[] = useMemo(
     () =>
@@ -81,7 +83,7 @@ export function Cards({ props }: RenderProps) {
   if (cards.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-surface p-3 text-caption text-text-muted">
-        No cards
+        {t("emptyAll")}
       </div>
     );
   }
@@ -95,10 +97,10 @@ export function Cards({ props }: RenderProps) {
       : "chevrons-up-down";
   const sortLabel =
     sortMode === "title-asc"
-      ? "标题 A→Z(再点切换)"
+      ? t("sortAToZ")
       : sortMode === "title-desc"
-      ? "标题 Z→A(再点恢复)"
-      : "标题排序(原序 · 点击切换)";
+      ? t("sortZToA")
+      : t("sortDefault");
 
   return (
     <div className="space-y-3">
@@ -107,7 +109,7 @@ export function Cards({ props }: RenderProps) {
           <SearchInput
             value={query}
             onChange={setQuery}
-            placeholder="搜索卡片…"
+            placeholder={t("searchPlaceholder")}
             hint={query && visible.length !== cards.length ? `${visible.length}/${cards.length}` : undefined}
           />
           <ToolButton
@@ -149,7 +151,7 @@ export function Cards({ props }: RenderProps) {
         })}
         {visible.length === 0 ? (
           <div className="col-span-full rounded-xl border border-dashed border-border bg-surface p-6 text-center text-caption text-text-muted">
-            没有匹配的卡片
+            {t("empty")}
           </div>
         ) : null}
       </div>

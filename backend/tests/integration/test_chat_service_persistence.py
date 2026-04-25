@@ -85,7 +85,7 @@ async def chat_svc() -> AsyncIterator[tuple[ChatService, SqlConversationRepo, as
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
 
-    async with maker() as session, session.begin():
+    async with maker() as session:
         await SqlEmployeeRepo(session).upsert(_make_emp())
         await SqlConversationRepo(session).create(_make_conv())
 
@@ -280,7 +280,7 @@ async def test_persisted_reply_appears_in_next_turn_history(chat_svc: tuple) -> 
 
     # Seed a user message (chat_service.send_message normally does this
     # before handing off to the runner).
-    async with maker() as session, session.begin():
+    async with maker() as session:
         repo = SqlConversationRepo(session)
         await repo.append_message(
             Message(

@@ -114,6 +114,18 @@ async def list_artifacts(
     pinned: bool = Query(default=False),
     include_deleted: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
+    # 2026-04-25 v2 — multi-dimensional filtering for /artifacts global page.
+    # ``scope`` is a UI convenience: scope=conversation requires conversation_id;
+    # scope=employee requires employee_id; scope=global / unset = no extra
+    # filter. The backend just pipes the values; scope itself is not a column.
+    conversation_id: str | None = Query(default=None),
+    employee_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    sort: str = Query(default="updated_at_desc"),
+    created_after: datetime | None = Query(default=None),
+    created_before: datetime | None = Query(default=None),
     svc: ArtifactService = Depends(get_artifact_service),
 ) -> list[ArtifactResponse]:
     parsed_kind: ArtifactKind | None = None
@@ -128,6 +140,14 @@ async def list_artifacts(
         pinned_only=pinned,
         include_deleted=include_deleted,
         limit=limit,
+        conversation_id=conversation_id,
+        employee_id=employee_id,
+        status=status,
+        tag=tag,
+        q=q,
+        sort=sort,
+        created_after=created_after,
+        created_before=created_before,
     )
     return [_to_response(a) for a in items]
 

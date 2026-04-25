@@ -25,6 +25,7 @@ import { HtmlView } from "@/components/artifacts/kinds/HtmlView";
 import { ImageView } from "@/components/artifacts/kinds/ImageView";
 import { DataView } from "@/components/artifacts/kinds/DataView";
 import { MermaidView } from "@/components/artifacts/kinds/MermaidView";
+import { DrawioView } from "@/components/artifacts/kinds/DrawioView";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -143,6 +144,9 @@ export function ArtifactPreview({ props }: RenderProps) {
         break;
       case "mermaid":
         body = <MermaidView content={text} />;
+        break;
+      case "drawio":
+        body = <DrawioView content={text} />;
         break;
       default:
         body = (

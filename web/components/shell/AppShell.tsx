@@ -37,6 +37,7 @@ const MENU: MenuSection[] = [
       { labelKey: "chat", href: "/chat", icon: "message-square" },
       { labelKey: "tasks", href: "/tasks", icon: "check-circle-2" },
       { labelKey: "conversations", href: "/conversations", icon: "clock" },
+      { labelKey: "artifacts", href: "/artifacts", icon: "folder" },
     ],
   },
   {

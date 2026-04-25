@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { cn } from "@/lib/cn";
 
@@ -31,12 +32,7 @@ const TITLE_COLOR: Record<Status, string> = {
   done: "text-text",
   failed: "text-danger",
 };
-const STATUS_LABEL: Record<Status, string> = {
-  pending: "待处理",
-  in_progress: "进行中",
-  done: "完成",
-  failed: "失败",
-};
+const STATUS_ORDER: readonly Status[] = ["pending", "in_progress", "done", "failed"];
 
 function normStatus(raw: unknown): Status {
   if (raw === "done" || raw === "complete" || raw === "completed" || raw === "success")
@@ -58,6 +54,13 @@ function normStatus(raw: unknown): Status {
  * minimalist.
  */
 export function Timeline({ props }: RenderProps) {
+  const t = useTranslations("viz.timeline");
+  const STATUS_LABEL: Record<Status, string> = {
+    pending: t("statusPending"),
+    in_progress: t("statusInProgress"),
+    done: t("statusDone"),
+    failed: t("statusFailed"),
+  };
   const itemsRaw = Array.isArray(props.items) ? (props.items as unknown[]) : [];
   const items: Item[] = itemsRaw
     .filter((it): it is Record<string, unknown> => !!it && typeof it === "object")
@@ -109,10 +112,10 @@ export function Timeline({ props }: RenderProps) {
             : "border-border bg-surface text-text-muted hover:border-border-strong hover:text-text",
         )}
       >
-        全部
+        {t("filterAll")}
         <span className="tabular-nums">{items.length}</span>
       </button>
-      {(Object.keys(STATUS_LABEL) as Status[])
+      {STATUS_ORDER
         .filter((s) => counts[s] > 0)
         .map((s) => {
           const active = filter !== null && filter.has(s);
@@ -143,7 +146,7 @@ export function Timeline({ props }: RenderProps) {
       <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm overflow-x-auto animate-fade-up">
         {FilterRow}
         {visible.length === 0 ? (
-          <div className="px-2 py-4 text-caption text-text-muted">没有匹配的事件</div>
+          <div className="px-2 py-4 text-caption text-text-muted">{t("empty")}</div>
         ) : (
           <ol className="flex items-start gap-6 min-w-max">
             {visible.map((item, i) => (
@@ -174,7 +177,7 @@ export function Timeline({ props }: RenderProps) {
     <div className="rounded-xl border border-border bg-surface p-4 shadow-soft-sm animate-fade-up">
       {FilterRow}
       {visible.length === 0 ? (
-        <div className="px-2 py-4 text-caption text-text-muted">没有匹配的事件</div>
+        <div className="px-2 py-4 text-caption text-text-muted">{t("empty")}</div>
       ) : (
         <ol className="relative space-y-2.5">
           {visible.length > 1 && (

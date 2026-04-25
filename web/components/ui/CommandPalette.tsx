@@ -111,7 +111,12 @@ export function CommandPalette({
 } = {}) {
   const t = useTranslations("ui.commandPalette");
   const ENTRIES = useMemo<Entry[]>(
-    () => ENTRY_DEFS.map((e) => ({ ...e, label: t(`entries.${e.key}`) })),
+    () =>
+      ENTRY_DEFS.map((e) => ({
+        ...e,
+        label: t(`entries.${e.key}`),
+        hint: t(`hints.${e.key}`),
+      })),
     [t],
   );
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);

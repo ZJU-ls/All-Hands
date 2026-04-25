@@ -286,7 +286,12 @@ export default function ConversationPage() {
             onConversationChange={setConv}
           />
         </div>
-        {panelOpen && <ArtifactPanel onClose={() => setPanelOpen(false)} />}
+        {panelOpen && (
+          <ArtifactPanel
+            onClose={() => setPanelOpen(false)}
+            conversationId={conversationId}
+          />
+        )}
       </div>
       <ConfirmationDialog />
       <UserInputDialog />

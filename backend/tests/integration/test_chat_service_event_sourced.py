@@ -71,7 +71,7 @@ async def chat_svc() -> AsyncIterator[tuple[ChatService, SqlConversationEventRep
     maker = async_sessionmaker(engine, expire_on_commit=False)
     emp = _emp()
     conv = _conv()
-    async with maker() as session, session.begin():
+    async with maker() as session:
         await SqlEmployeeRepo(session).upsert(emp)
         await SqlConversationRepo(session).create(conv)
 

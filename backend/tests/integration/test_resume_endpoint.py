@@ -72,7 +72,7 @@ async def _seed(engine) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session, session.begin():
+    async with maker() as session:
         await SqlEmployeeRepo(session).upsert(_make_emp())
         await SqlConversationRepo(session).create(_make_conv())
 
@@ -143,7 +143,7 @@ def test_resume_http_endpoint_is_mounted_and_accepts_body() -> None:
 
     async def _session() -> AsyncIterator[AsyncSession]:
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        async with maker() as s, s.begin():
+        async with maker() as s:
             yield s
 
     app = create_app()

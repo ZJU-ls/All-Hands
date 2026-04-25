@@ -109,7 +109,7 @@
       "sectionMcp": "挂载 MCP 服务器",
       "sectionMcpSubtitle": "勾选的 MCP server 的工具会暴露给该员工",
       "sectionMaxIter": "迭代上限",
-      "sectionMaxIterSubtitle": "Agent 单次会话的最大工具调用轮次(1-10000)",
+      "sectionMaxIterSubtitle": "Agent 单次会话的最大工具调用轮次 · 切换 preset 只是写默认值,可在此自由调(1-10000)",
       "iterUnit": "轮",
       "sectionPrompt": "系统提示词片段",
       "promptHint": "员工性格 / 风格 / 禁止事项 — 也可以让 AI 根据上方的名字 / 描述 / 技能 / MCP 起草一份",
@@ -150,11 +150,11 @@
     "presetRadio": {
       "ariaLabel": "运转方式",
       "executeLabel": "标准执行",
-      "executeCaption": "直接干活 · fetch + write · 10 轮上限",
+      "executeCaption": "直接干活 · 不做计划 · 不派子代理 · 默认 10 轮(可调)",
       "planLabel": "先出计划",
-      "planCaption": "只出结构化 plan · sk_planner · 3 轮上限",
+      "planCaption": "做计划 + 自己执行 · 不派子代理 · 默认 15 轮(可调)",
       "planSubagentLabel": "计划+派子代理",
-      "planSubagentCaption": "出计划并派发 · spawn_subagent · 15 轮上限"
+      "planSubagentCaption": "做计划 + 派子代理并行执行 · 默认 20 轮(可调)"
     },
     "skillPicker": {
       "empty": "还没有安装的 Skill。先在「技能」页安装,再回来挂载。",

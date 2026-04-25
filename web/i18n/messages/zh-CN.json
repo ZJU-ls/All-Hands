@@ -54,6 +54,7 @@
       "chat": "对话",
       "tasks": "任务",
       "conversations": "历史会话",
+      "artifacts": "制品库",
       "employees": "员工",
       "employeeDesign": "员工设计",
       "skills": "技能",
@@ -73,6 +74,11 @@
     "zh-CN": "简体中文",
     "en": "English",
     "label": "语言"
+  },
+  "healthBadge": {
+    "ok": "后端正常 · {version}",
+    "error": "后端不可达",
+    "pinging": "正在 ping 后端…"
   },
   "welcome": {
     "skip": "稍后再说 →",

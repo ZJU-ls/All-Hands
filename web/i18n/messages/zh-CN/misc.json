@@ -165,7 +165,27 @@
       "loadingMeta": "读取中…",
       "loadingContent": "读取内容…",
       "download": "下载",
-      "unsupportedKind": "kind {kind} 暂不支持在面板内预览。"
+      "unsupportedKind": "kind {kind} 暂不支持在面板内预览。",
+      "copyFailed": "复制失败:{error}",
+      "rollbackConfirm": "确认把当前版本回退到 v{target}?\n会创建一个新版本 v{next},内容来自 v{target}。",
+      "toolbarCopyTitle": "复制内容到剪贴板",
+      "toolbarEditTitle": "切到编辑模式",
+      "toolbarOpenNewTitle": "在新窗口打开 — 看全屏渲染",
+      "toolbarDownloadTitle": "下载到本地",
+      "copy": "复制",
+      "copied": "已复制",
+      "edit": "编辑",
+      "openNew": "新窗口",
+      "editMode": "编辑模式",
+      "editModeHint": "⌘S 保存 · Esc 取消",
+      "editCancelTitle": "不保存",
+      "editSaveTitle": "保存为新版本",
+      "cancel": "取消",
+      "save": "保存",
+      "saving": "保存中…"
+    },
+    "editor": {
+      "loading": "加载编辑器…"
     },
     "list": {
       "pinned": "置顶",
@@ -199,6 +219,28 @@
     },
     "mermaid": {
       "renderFailed": "mermaid 渲染失败:{error}"
+    },
+    "drawio": {
+      "title": "drawio 流程图",
+      "loading": "正在加载 drawio 编辑器…"
+    },
+    "page": {
+      "title": "制品库",
+      "subtitle": "全工作区产出的统一视图 · 按类型 · 员工 · 会话 · 标签筛选",
+      "search": "搜索名称 / 描述 / 摘要",
+      "all": "全部",
+      "allKinds": "所有类型",
+      "sort": {
+        "updated_at_desc": "最近更新",
+        "created_at_desc": "最近创建",
+        "created_at_asc": "最早创建",
+        "name_asc": "名称 A-Z",
+        "name_desc": "名称 Z-A",
+        "size_desc": "尺寸大→小"
+      },
+      "empty": "当前筛选下没有制品。",
+      "loadFailed": "制品列表加载失败:{error}",
+      "count": "{n} 个制品"
     }
   },
   "brand": {
@@ -259,11 +301,32 @@
       "ariaLabel": "命令面板",
       "placeholder": "跳转到页面 · 搜索员工 · 技能 · 模型",
       "noMatch": "没有匹配的入口 · 试试别的关键词",
-      "suggestions": "Suggestions · {count}",
+      "suggestions": "建议 · {count}",
       "footer": {
-        "navigate": "navigate",
-        "open": "open",
-        "toggle": "toggle"
+        "navigate": "上下移动",
+        "open": "打开",
+        "toggle": "开关"
+      },
+      "hints": {
+        "cockpit": "工作区快照",
+        "chat": "和 Lead Agent 对话",
+        "conversations": "历史会话",
+        "tasks": "异步任务",
+        "employees": "数字员工",
+        "employeeDesign": "设计新员工",
+        "skills": "技能包",
+        "mcp": "外部 MCP",
+        "gateway": "供应商与模型网关",
+        "market": "浏览技能市场",
+        "triggers": "定时与 webhook",
+        "channels": "Slack · 邮件 · webhook",
+        "confirmations": "待审批",
+        "traces": "LangFuse 追踪",
+        "observatory": "平台观测",
+        "stockAssistant": "市场异动 demo",
+        "review": "代理审查",
+        "settings": "系统设置",
+        "about": "关于 allhands"
       },
       "entries": {
         "cockpit": "驾驶舱",

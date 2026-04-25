@@ -1,0 +1,107 @@
+{
+  "viz": {
+    "barChart": {
+      "sortDesc": "排序 · 降序(再点切换)",
+      "sortAsc": "排序 · 升序(再点恢复)",
+      "sortDefault": "排序 · 原序(点击切换)",
+      "muted": "已隐藏 · 点击恢复",
+      "activeTooltip": "{value} · 占比 {pct}% · 点击隐藏",
+      "empty": "无数据"
+    },
+    "callout": {
+      "copyLabel": "复制内容",
+      "dismiss": "关闭"
+    },
+    "cards": {
+      "sortAToZ": "标题 A→Z(再点切换)",
+      "sortZToA": "标题 Z→A(再点恢复)",
+      "sortDefault": "标题排序(原序 · 点击切换)",
+      "searchPlaceholder": "搜索卡片…",
+      "empty": "没有匹配的卡片",
+      "emptyAll": "暂无卡片"
+    },
+    "code": {
+      "wrapOn": "开启自动换行 · 长行不再水平滚动",
+      "wrapOff": "关闭自动换行",
+      "wrap": "换行",
+      "wrapped": "已换行",
+      "copyLabel": "复制代码"
+    },
+    "diff": {
+      "expandUnchanged": "点击展开未变更的行",
+      "unchangedRow": "⋯ 折叠 {count} 行未变更 · L{startLine}",
+      "copyBefore": "复制 Before",
+      "copyAfter": "复制 After"
+    },
+    "kv": {
+      "searchPlaceholder": "筛选键…",
+      "empty": "暂无项",
+      "noMatch": "没有匹配的项",
+      "copyLabel": "复制 {label}"
+    },
+    "lineChart": {
+      "allHidden": "全部系列已隐藏 · 点底部图例恢复",
+      "empty": "暂无数据",
+      "legendHidden": "已隐藏 · 点击恢复",
+      "legendVisible": "点击隐藏"
+    },
+    "linkCard": {
+      "copyLabel": "复制链接"
+    },
+    "pieChart": {
+      "empty": "暂无数据",
+      "isolated": "已聚焦 · 点击恢复",
+      "tooltip": "{value} · {pct}% · 点击聚焦"
+    },
+    "stat": {
+      "copyLabel": "复制指标",
+      "directionUp": "上升",
+      "directionDown": "下降",
+      "directionFlat": "持平"
+    },
+    "steps": {
+      "empty": "暂无步骤",
+      "progress": "{done}/{total} · {pct}% 完成",
+      "showDone": "显示已完成步骤",
+      "hideDone": "隐藏已完成步骤",
+      "folded": "已折叠完成",
+      "fold": "折叠完成",
+      "foldedSummary": "⋯ {count} 个已完成 · 点击展开"
+    },
+    "table": {
+      "searchPlaceholder": "筛选行…",
+      "densityCozy": "宽",
+      "densityCompact": "紧",
+      "copyCsv": "复制为 CSV",
+      "noMatch": "没有匹配的行",
+      "empty": "暂无数据",
+      "sortBy": "按 {label} 排序"
+    },
+    "timeline": {
+      "statusPending": "待处理",
+      "statusInProgress": "进行中",
+      "statusDone": "完成",
+      "statusFailed": "失败",
+      "filterAll": "全部",
+      "empty": "没有匹配的事件"
+    }
+  },
+  "renderShared": {
+    "copyButton": {
+      "label": "复制",
+      "copied": "已复制"
+    },
+    "searchInput": {
+      "placeholder": "搜索…",
+      "clear": "清空"
+    }
+  },
+  "modelTestMetrics": {
+    "latency": "延迟",
+    "ttft": "首词",
+    "ttftThinking": "思考首词",
+    "ttftAnswer": "答案首词",
+    "tokIO": "词数 输/出/合",
+    "tokPerSec": "词/秒"
+  }
+}

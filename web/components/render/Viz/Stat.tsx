@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { RenderProps } from "@/lib/component-registry";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -69,6 +70,7 @@ const TONE_PILL: Record<Tone, string> = {
  * Accent hairline on top ties stat to its tone.
  */
 export function Stat({ props }: RenderProps) {
+  const t = useTranslations("viz.stat");
   const label = typeof props.label === "string" ? props.label : "";
   const value =
     typeof props.value === "string" || typeof props.value === "number"
@@ -119,7 +121,7 @@ export function Stat({ props }: RenderProps) {
       {/* Hover-revealed copy · single source for "give me this number". */}
       {value != null ? (
         <div className="absolute right-2 top-2 opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-within:opacity-100">
-          <CopyButton value={copyValue} label="复制指标" />
+          <CopyButton value={copyValue} label={t("copyLabel")} />
         </div>
       ) : null}
       <div className="text-caption font-mono uppercase tracking-wider text-text-muted">
@@ -135,7 +137,7 @@ export function Stat({ props }: RenderProps) {
         {delta && (
           <span
             className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-medium tabular-nums ${TONE_PILL[tone]}`}
-            title={`${direction === "up" ? "上升" : direction === "down" ? "下降" : "持平"} · ${delta.value}`}
+            title={`${direction === "up" ? t("directionUp") : direction === "down" ? t("directionDown") : t("directionFlat")} · ${delta.value}`}
           >
             <Icon name={DIRECTION_ICON[direction]} size={12} />
             {String(delta.value)}
