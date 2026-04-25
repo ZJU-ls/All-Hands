@@ -48,6 +48,9 @@ from allhands.core import (
     TriggerFireSource,
     TriggerFireStatus,
     TriggerKind,
+    UserInput,
+    UserInputQuestion,
+    UserInputStatus,
 )
 from allhands.persistence.orm.models import (
     AgentPlanRow,
@@ -68,6 +71,7 @@ from allhands.persistence.orm.models import (
     TaskRow,
     TriggerFireRow,
     TriggerRow,
+    UserInputRow,
 )
 
 
@@ -430,6 +434,69 @@ class SqlConfirmationRepo:
             row.status = status.value
             if status in (ConfirmationStatus.APPROVED, ConfirmationStatus.REJECTED):
                 row.resolved_at = _naive(datetime.now(UTC))
+            await self._s.flush()
+
+
+def _row_to_user_input(row: UserInputRow) -> UserInput:
+    questions = [UserInputQuestion.model_validate(q) for q in (row.questions_json or [])]
+    answers_raw = row.answers_json or {}
+    answers = {str(k): str(v) for k, v in answers_raw.items()}
+    return UserInput(
+        id=row.id,
+        tool_call_id=row.tool_call_id,
+        questions=questions,
+        answers=answers,
+        status=UserInputStatus(row.status),
+        created_at=_utc(row.created_at),
+        expires_at=_utc(row.expires_at),
+    )
+
+
+class SqlUserInputRepo:
+    """ADR 0019 C3 · clarification flow persistence (mirrors SqlConfirmationRepo)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, ui_id: str) -> UserInput | None:
+        row = await self._s.get(UserInputRow, ui_id)
+        return _row_to_user_input(row) if row else None
+
+    async def list_pending(self) -> list[UserInput]:
+        result = await self._s.execute(
+            select(UserInputRow).where(UserInputRow.status == UserInputStatus.PENDING.value)
+        )
+        return [_row_to_user_input(r) for r in result.scalars().all()]
+
+    async def save(self, ui: UserInput) -> None:
+        row = UserInputRow(
+            id=ui.id,
+            tool_call_id=ui.tool_call_id,
+            questions_json=[q.model_dump(mode="json") for q in ui.questions],
+            answers_json=dict(ui.answers),
+            status=ui.status.value,
+            created_at=_naive(ui.created_at),
+            expires_at=_naive(ui.expires_at),
+        )
+        self._s.add(row)
+        await self._s.flush()
+
+    async def update_status_with_answers(
+        self,
+        ui_id: str,
+        status: UserInputStatus,
+        answers: dict[str, str],
+    ) -> None:
+        row = await self._s.get(UserInputRow, ui_id)
+        if row is not None:
+            row.status = status.value
+            row.answers_json = dict(answers)
+            await self._s.flush()
+
+    async def update_status(self, ui_id: str, status: UserInputStatus) -> None:
+        row = await self._s.get(UserInputRow, ui_id)
+        if row is not None:
+            row.status = status.value
             await self._s.flush()
 
 

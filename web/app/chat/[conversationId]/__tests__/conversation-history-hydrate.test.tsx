@@ -51,6 +51,9 @@ vi.mock("@/components/chat/InputBar", () => ({
 vi.mock("@/components/chat/ConfirmationDialog", () => ({
   ConfirmationDialog: () => null,
 }));
+vi.mock("@/components/chat/UserInputDialog", () => ({
+  UserInputDialog: () => null,
+}));
 vi.mock("@/components/chat/ConversationHeader", () => ({
   ConversationHeader: () => <div data-testid="mock-header" />,
 }));

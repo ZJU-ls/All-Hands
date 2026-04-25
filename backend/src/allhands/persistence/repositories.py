@@ -28,6 +28,8 @@ if TYPE_CHECKING:
         TaskStatus,
         Trigger,
         TriggerFire,
+        UserInput,
+        UserInputStatus,
     )
 
 
@@ -71,6 +73,21 @@ class ConfirmationRepo(Protocol):
         confirmation_id: str,
         status: ConfirmationStatus,
     ) -> None: ...
+
+
+class UserInputRepo(Protocol):
+    """ADR 0019 C3 · clarification (ask_user_question) persistence."""
+
+    async def get(self, ui_id: str) -> UserInput | None: ...
+    async def list_pending(self) -> list[UserInput]: ...
+    async def save(self, ui: UserInput) -> None: ...
+    async def update_status_with_answers(
+        self,
+        ui_id: str,
+        status: UserInputStatus,
+        answers: dict[str, str],
+    ) -> None: ...
+    async def update_status(self, ui_id: str, status: UserInputStatus) -> None: ...
 
 
 class SkillRepo(Protocol):

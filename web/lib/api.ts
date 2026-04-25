@@ -251,6 +251,21 @@ export async function resolveConfirmation(
   throw new Error(`resolveConfirmation failed: ${res.status}`);
 }
 
+export async function answerUserInput(
+  userInputId: string,
+  answers: Record<string, string>,
+): Promise<void> {
+  const res = await fetch(`${BASE}/api/user-input/${userInputId}/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  });
+  if (res.ok || res.status === 204 || res.status === 404) {
+    return;
+  }
+  throw new Error(`answerUserInput failed: ${res.status}`);
+}
+
 export async function getPendingConfirmations(): Promise<unknown[]> {
   const res = await fetch(`${BASE}/api/confirmations/pending`);
   if (!res.ok) return [];

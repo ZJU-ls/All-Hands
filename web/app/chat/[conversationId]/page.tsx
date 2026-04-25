@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { MessageList } from "@/components/chat/MessageList";
 import { InputBar } from "@/components/chat/InputBar";
 import { ConfirmationDialog } from "@/components/chat/ConfirmationDialog";
+import { UserInputDialog } from "@/components/chat/UserInputDialog";
 import {
   ConversationHeader,
   type ConversationHeaderEmployee,
@@ -284,6 +285,7 @@ export default function ConversationPage() {
         {panelOpen && <ArtifactPanel onClose={() => setPanelOpen(false)} />}
       </div>
       <ConfirmationDialog />
+      <UserInputDialog />
     </AppShell>
   );
 }

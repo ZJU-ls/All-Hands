@@ -39,6 +39,7 @@ from allhands.execution.internal_events import (
     LoopExited,
     ToolCallProgress,
     ToolMessageCommitted,
+    UserInputRequested,
 )
 
 
@@ -97,6 +98,17 @@ def translate_to_agui(
         # Wire shape is the same as the post-commit ARGS event; UI
         # accumulates deltas if it sees both.
         yield tool_call_args(event.tool_use_id, event.args_delta)
+        return
+
+    if isinstance(event, UserInputRequested):
+        yield custom(
+            "allhands.user_input_required",
+            {
+                "user_input_id": event.user_input_id,
+                "tool_call_id": event.tool_use_id,
+                "questions": event.questions,
+            },
+        )
         return
 
     if isinstance(event, ConfirmationRequested):

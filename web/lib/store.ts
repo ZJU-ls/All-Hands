@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   Message,
   MessageSegment,
+  PendingUserInput,
   RenderPayload,
   ToolCall,
 } from "./protocol";
@@ -89,6 +90,7 @@ type ChatState = {
   messages: Message[];
   streamingMessage: StreamingMessage | null;
   pendingConfirmations: PendingConfirmation[];
+  pendingUserInputs: PendingUserInput[];
   isStreaming: boolean;
   streamError: StreamError | null;
 
@@ -118,6 +120,8 @@ type ChatState = {
   addRenderPayload: (messageId: string, payload: RenderPayload) => void;
   addConfirmation: (conf: PendingConfirmation) => void;
   removeConfirmation: (confirmationId: string) => void;
+  addUserInput: (ui: PendingUserInput) => void;
+  removeUserInput: (userInputId: string) => void;
   setStreamError: (err: StreamError | null) => void;
   reset: () => void;
 };
@@ -127,6 +131,7 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   streamingMessage: null,
   pendingConfirmations: [],
+  pendingUserInputs: [],
   isStreaming: false,
   streamError: null,
 
@@ -308,6 +313,18 @@ export const useChatStore = create<ChatState>((set) => ({
       ),
     })),
 
+  addUserInput: (ui) =>
+    set((state) => ({
+      pendingUserInputs: [...state.pendingUserInputs, ui],
+    })),
+
+  removeUserInput: (userInputId) =>
+    set((state) => ({
+      pendingUserInputs: state.pendingUserInputs.filter(
+        (u) => u.userInputId !== userInputId,
+      ),
+    })),
+
   setStreamError: (err) => set({ streamError: err }),
 
   reset: () =>
@@ -315,6 +332,7 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: [],
       streamingMessage: null,
       pendingConfirmations: [],
+      pendingUserInputs: [],
       isStreaming: false,
       streamError: null,
     }),

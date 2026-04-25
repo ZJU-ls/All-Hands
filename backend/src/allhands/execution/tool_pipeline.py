@@ -37,6 +37,7 @@ from allhands.execution.internal_events import (
     ConfirmationRequested,
     InternalEvent,
     ToolMessageCommitted,
+    UserInputRequested,
 )
 
 if TYPE_CHECKING:
@@ -294,21 +295,43 @@ async def execute_tool_use_iter(
         )
         return
 
+    exec_args: dict[str, Any] = dict(block.input)
+
     if isinstance(decision, Defer):
         kwargs = dict(decision.publish_kwargs)
         # Pipeline injects tool_use_id consistently — caller may rely
         # on it, but doesn't have to specify it in publish_kwargs.
         kwargs.setdefault("tool_use_id", block.id)
         request = await decision.signal.publish(**kwargs)
-        # Surface the request to the UI BEFORE awaiting wait(); the
-        # frontend dialog opens immediately.
-        yield ConfirmationRequested(
-            confirmation_id=request.confirmation_id or request.request_id,
-            tool_use_id=block.id,
-            summary=str(kwargs.get("summary", "")),
-            rationale=str(kwargs.get("rationale", "")),
-            diff=kwargs.get("diff"),
-        )
+        # Surface the request to the UI BEFORE awaiting wait(). Pick the
+        # right preview event variant based on the signal kind:
+        #   * UserInputDeferred → UserInputRequested (clarification dialog)
+        #   * everything else   → ConfirmationRequested (approve/reject)
+        # We import lazily to avoid a circular dependency with the deferred
+        # signal modules.
+        from allhands.execution.user_input_deferred import UserInputDeferred
+
+        if isinstance(decision.signal, UserInputDeferred):
+            raw_questions = kwargs.get("questions") or []
+            normalized_questions: list[dict[str, object]] = []
+            for q in raw_questions:
+                if isinstance(q, dict):
+                    normalized_questions.append(dict(q))
+                elif hasattr(q, "model_dump"):
+                    normalized_questions.append(q.model_dump(mode="json"))
+            yield UserInputRequested(
+                user_input_id=request.confirmation_id or request.request_id,
+                tool_use_id=block.id,
+                questions=normalized_questions,
+            )
+        else:
+            yield ConfirmationRequested(
+                confirmation_id=request.confirmation_id or request.request_id,
+                tool_use_id=block.id,
+                summary=str(kwargs.get("summary", "")),
+                rationale=str(kwargs.get("rationale", "")),
+                diff=kwargs.get("diff"),
+            )
         outcome = await decision.signal.wait(request)
         if outcome.kind not in ("approved", "answered", "completed"):
             yield ToolMessageCommitted(
@@ -319,10 +342,15 @@ async def execute_tool_use_iter(
                 )
             )
             return
+        # ADR 0019 C3 · merge answered payload into the executor's input
+        # so ``ask_user_question`` (and any future answer-carrying tool)
+        # sees the user's structured response on its `answers` kwarg.
+        if outcome.kind == "answered" and isinstance(outcome.payload, dict):
+            exec_args = {**exec_args, "answers": dict(outcome.payload)}
 
     # Allow path or post-approval Defer path: invoke executor.
     try:
-        result = await _invoke_executor(binding.executor, dict(block.input))
+        result = await _invoke_executor(binding.executor, exec_args)
     except Exception as exc:
         yield ToolMessageCommitted(
             message=_make_tool_message(
