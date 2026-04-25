@@ -127,6 +127,18 @@
           "modelsCount": "{n} 个模型 · 共 {calls} 次 LLM 调用"
         }
       },
+      "costPanel": {
+        "title": "成本面板 · 24h",
+        "today": "今日累计",
+        "dailyProjection": "日预估",
+        "monthlyProjection": "月预估",
+        "hint24h": "按近 24h 平均外推",
+        "hintMonthly": "按当前节奏跑满 30 天",
+        "topEmployees": "最贵员工 TOP",
+        "topModels": "最贵模型 TOP",
+        "noData": "本时段无成本数据",
+        "seeChart": "查看曲线"
+      },
       "heatmap": {
         "title": "延迟热力图 · 24h",
         "hint": "{runs} 次 run · 颜色越深表示该桶 run 越多",

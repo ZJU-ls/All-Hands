@@ -8,6 +8,7 @@ import { TraceChip } from "@/components/runs/TraceChip";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { MetricDrawer } from "@/components/observatory/MetricDrawer";
 import { LatencyHeatmap } from "@/components/observatory/LatencyHeatmap";
+import { CostPanel } from "@/components/observatory/CostPanel";
 import {
   fetchMetricSeries,
   fetchObservatorySummary,
@@ -915,6 +916,18 @@ export default function ObservatoryPage() {
                   <ErrorsPanel rows={summary.top_errors} />
                 </section>
               ) : null}
+
+              {/* COST PANEL · Helicone-style total + projections + drivers */}
+              <section>
+                <CostPanel
+                  totalUsd={summary.estimated_cost_usd}
+                  byEmployee={summary.by_employee}
+                  byModel={summary.by_model}
+                  onClickDrillDown={() =>
+                    openDrawer("cost", t("panels.rows.estimatedCost"))
+                  }
+                />
+              </section>
 
               {/* LATENCY HEATMAP · Honeycomb-style 24h x latency-bucket grid */}
               <section>

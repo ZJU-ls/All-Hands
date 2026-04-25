@@ -127,6 +127,18 @@
           "modelsCount": "{n} models · {calls} calls"
         }
       },
+      "costPanel": {
+        "title": "Cost panel · 24h",
+        "today": "Today",
+        "dailyProjection": "Daily projection",
+        "monthlyProjection": "Monthly projection",
+        "hint24h": "Extrapolated from last 24h",
+        "hintMonthly": "If the current pace held for 30 days",
+        "topEmployees": "Top employees by cost",
+        "topModels": "Top models by cost",
+        "noData": "No cost data in window",
+        "seeChart": "Open chart"
+      },
       "heatmap": {
         "title": "Latency heatmap · 24h",
         "hint": "{runs} runs · darker cell = more runs in that bucket",
