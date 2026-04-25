@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { Icon, type IconName } from "@/components/ui/icon";
-import { LogoDotgrid } from "@/components/ui/icons";
+import { AllhandsLogo, AllhandsWordmark } from "@/components/brand/AllhandsLogo";
 import { markFirstRunCompleted } from "@/lib/first-run";
 
 export const FIRST_RUN_SCOPE = "welcome";
@@ -120,12 +120,8 @@ export default function WelcomePage() {
       {/* ─── Top-right skip · low-emphasis but always reachable. ─── */}
       <div className="relative z-10 flex items-center justify-between px-6 pt-6 sm:px-10">
         <div className="inline-flex items-center gap-2.5">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent text-white shadow-glow-sm">
-            <LogoDotgrid size={18} />
-          </span>
-          <span className="text-sm font-semibold tracking-tight text-text">
-            allhands
-          </span>
+          <AllhandsLogo size={36} className="shadow-glow-sm rounded-lg" />
+          <AllhandsWordmark size={16} />
         </div>
         <button
           type="button"
@@ -257,9 +253,8 @@ export default function WelcomePage() {
               <div className="col-span-9 space-y-4 p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-primary to-accent text-primary-fg shadow-glow-sm">
-                      <LogoDotgrid size={13} />
-                    </span>
+                    <AllhandsLogo size={26} />
+
                     <h3 className="text-base font-semibold tracking-tight text-text">
                       Lead Agent
                     </h3>

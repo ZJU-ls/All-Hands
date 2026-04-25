@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "@/components/theme/ThemeProvider";
-import { LogoDotgrid } from "@/components/ui/icons";
+import { AllhandsLogo } from "@/components/brand/AllhandsLogo";
 import { Icon, type IconName } from "@/components/ui/icon";
 
 // Lazy-load the two global overlays so their module graph (DotGridBackdrop,
@@ -172,9 +172,7 @@ function WorkspaceSwitcher() {
       type="button"
       className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-transparent px-2 hover:border-border-strong hover:bg-surface-2 transition duration-fast"
     >
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-fg shadow-soft-sm">
-        <LogoDotgrid />
-      </span>
+      <AllhandsLogo size={32} className="shadow-soft-sm" />
       <div className="min-w-0 flex-1 text-left">
         <div className="truncate text-sm font-semibold leading-tight tracking-tight">
           allhands
