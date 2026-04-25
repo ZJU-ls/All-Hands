@@ -24,10 +24,15 @@ RESOLVE_SKILL_TOOL = Tool(
     kind=ToolKind.META,
     name="resolve_skill",
     description=(
-        "Activate one of the skills mounted on this employee. Adds the "
-        "skill's tools and prompt fragment to the current conversation "
-        "(next turn onwards). Idempotent — calling twice is a no-op. "
-        "Pass skill_id (one of the IDs in 'Available skills' list)."
+        "Activate one of the skills mounted on this employee, adding "
+        "its tools and prompt fragment to the conversation. **You must "
+        "actually invoke this tool — do not write `resolve_skill(...)` "
+        "as a chat message; the user will see only that text and nothing "
+        "happens.** Idempotent: calling twice is a no-op. Pass `skill_id` "
+        "(one of the IDs listed under 'Available Skills' in the system "
+        "prompt). Activation is the prerequisite for using a skill's "
+        "tools — until you call this, the skill's tools are NOT in your "
+        "tool list."
     ),
     input_schema={
         "type": "object",

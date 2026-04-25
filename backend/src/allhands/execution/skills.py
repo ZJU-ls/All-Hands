@@ -270,12 +270,39 @@ def bootstrap_employee_runtime(
 
 
 def render_skill_descriptors(descriptors: list[SkillDescriptor]) -> str:
-    """Format for injection into the system prompt at turn 0 (contract § 8.4)."""
+    """Format for injection into the system prompt at turn 0 (contract § 8.4).
+
+    Wording matters: weaker / Chinese-hosted models (Qwen / GLM /
+    DashScope) tend to **echo function-call-shaped strings as plain
+    text** when the prompt itself contains them. We previously had
+    ``call resolve_skill("<id>") to activate`` — every other turn the
+    model would write back ``resolve_skill("allhands.artifacts")`` as a
+    chat message instead of emitting a real ``tool_use`` block, and the
+    user saw a literal-looking pseudo-call where they expected the
+    artifact / file / etc. to actually be created.
+
+    This rewrite (a) avoids the literal ``name(args)`` mimicry trap,
+    (b) tells the model explicitly that ``resolve_skill`` is a registered
+    tool to *call*, and (c) lists the available ``skill_id`` values
+    clearly so the tool-call argument is obvious. The "DO NOT type the
+    call as text" sentence is the cheap belt-and-braces against models
+    that still try to.
+    """
     if not descriptors:
         return ""
-    lines = ['Available skills (call resolve_skill("<id>") to activate):']
+    lines = [
+        "## Available Skills",
+        "",
+        "When the user's request matches one of these, invoke the "
+        "**`resolve_skill` tool** (it is registered in your tools list) "
+        "with the matching `skill_id`. This activates the skill's tools "
+        "and prompt fragment for the rest of the conversation. Do NOT "
+        "write the call as plain text — emit a real tool call.",
+        "",
+        "Available skill_id values:",
+    ]
     for d in descriptors:
-        lines.append(f"- {d.id}: {d.description}")
+        lines.append(f"- `{d.id}` — {d.description}")
     return "\n".join(lines)
 
 
