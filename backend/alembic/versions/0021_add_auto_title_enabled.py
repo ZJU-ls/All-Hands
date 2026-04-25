@@ -17,8 +17,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0021"
-down_revision = "0020"
+revision = "0021_auto_title"
+down_revision = "0021_user_inputs"
 branch_labels = None
 depends_on = None
 
