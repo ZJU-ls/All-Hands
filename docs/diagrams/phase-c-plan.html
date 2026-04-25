@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phase C v2 · 基于现有基础设施 · 用户反馈调整</title>
+    <style>
+      :root {
+        --bg: #0a0f1c;
+        --surface: #111a2e;
+        --surface-2: #16223c;
+        --surface-3: #1d2c4d;
+        --border: #243152;
+        --border-strong: #324468;
+        --text: #e6edf7;
+        --muted: #8a9bbf;
+        --subtle: #5e7299;
+        --primary: #4f8cff;
+        --primary-soft: rgba(79, 140, 255, 0.18);
+        --success: #34d399;
+        --success-soft: rgba(52, 211, 153, 0.15);
+        --danger: #f87171;
+        --warning: #fbbf24;
+        --warning-soft: rgba(251, 191, 36, 0.15);
+        --accent: #a78bfa;
+        --accent-soft: rgba(167,139,250,0.15);
+        --pink: #f9a8d4;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 40px 24px 80px;
+        background:
+          radial-gradient(1100px 600px at 12% -8%, #1a2748, transparent),
+          radial-gradient(800px 480px at 88% 4%, #2a1d4d, transparent),
+          var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.65;
+      }
+      .wrap { max-width: 1240px; margin: 0 auto; }
+      h1 {
+        font-size: 28px; font-weight: 700; margin: 0 0 6px;
+        background: linear-gradient(90deg, #93c5fd, #c4b5fd, #f9a8d4);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .meta { color: var(--muted); font-size: 13px; margin-bottom: 30px; }
+      .meta code { color: var(--text); font-family: var(--mono); font-size: 12px; padding: 1px 5px; background: var(--surface); border-radius: 4px; }
+      h2 {
+        font-size: 18px; font-weight: 600; margin: 36px 0 14px;
+        padding-left: 12px; border-left: 3px solid var(--primary);
+        display: flex; align-items: baseline; gap: 12px;
+      }
+      h2 .num {
+        font-family: var(--mono); font-size: 11px;
+        color: var(--primary); padding: 2px 8px;
+        background: var(--primary-soft); border-radius: 4px;
+        font-weight: 500;
+      }
+      h3 { font-size: 14px; font-weight: 600; margin: 0 0 10px; color: var(--text); }
+      p { margin: 0 0 10px; }
+      code { font-family: var(--mono); font-size: 12.5px; }
+      pre {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin: 10px 0;
+        overflow-x: auto;
+        font-family: var(--mono); font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .diff-banner {
+        background: linear-gradient(135deg, rgba(251,191,36,0.1), rgba(167,139,250,0.06));
+        border: 1px solid rgba(251,191,36,0.3);
+        border-radius: 14px;
+        padding: 18px 22px;
+        font-size: 14px;
+        margin-bottom: 30px;
+      }
+      .diff-banner h3 {
+        margin-bottom: 8px;
+        color: var(--warning);
+        display: flex; align-items: center; gap: 8px;
+      }
+
+      table.exists {
+        width: 100%; border-collapse: collapse;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 10px 0;
+        font-size: 12.5px;
+      }
+      table.exists th, table.exists td {
+        padding: 9px 14px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      table.exists th {
+        background: var(--surface-2);
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      table.exists td:first-child {
+        font-family: var(--mono); font-size: 11.5px; color: var(--accent);
+        white-space: nowrap;
+      }
+      table.exists td:nth-child(2) {
+        text-align: center; white-space: nowrap;
+      }
+      table.exists tr:last-child td { border-bottom: none; }
+      .check { color: var(--success); font-weight: 600; }
+      .missing { color: var(--danger); font-weight: 600; }
+
+      .feature {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px 22px;
+        margin-bottom: 14px;
+      }
+      .feature.c1 { border-left: 4px solid var(--primary); }
+      .feature.c2 { border-left: 4px solid var(--success); }
+      .feature.c3 { border-left: 4px solid var(--accent); }
+      .feature h3 {
+        font-size: 15px;
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: 8px;
+      }
+      .feature h4 {
+        margin-top: 14px; margin-bottom: 6px;
+        font-size: 12px; font-weight: 600; color: var(--muted);
+        text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      .feature ul { margin: 4px 0 8px; padding-left: 18px; }
+      .feature li { color: var(--muted); font-size: 12.5px; margin-bottom: 4px; }
+      .feature li b { color: var(--text); }
+      .feature li code { font-size: 11.5px; background: var(--bg); padding: 1px 4px; border-radius: 3px; color: var(--accent); }
+      .tag {
+        font-family: var(--mono); font-size: 10px;
+        padding: 2px 7px; border-radius: 4px;
+        letter-spacing: 0.05em; text-transform: uppercase;
+      }
+      .tag.cc { background: rgba(255,255,255,0.06); color: var(--muted); }
+      .tag.exists { background: var(--success-soft); color: var(--success); }
+      .tag.missing { background: var(--danger-soft); color: var(--danger); }
+
+      .lifecycle {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      .lifecycle .step-row {
+        display: grid; grid-template-columns: 90px 1fr; gap: 12px; align-items: start;
+        padding: 8px 0;
+        border-bottom: 1px dashed var(--border);
+      }
+      .lifecycle .step-row:last-child { border-bottom: none; }
+      .lifecycle .who {
+        color: var(--subtle); text-transform: uppercase; letter-spacing: 0.05em;
+        font-size: 10px; font-weight: 600;
+      }
+      .lifecycle .what em { color: var(--accent); font-style: normal; font-weight: 500; }
+
+      .timeline {
+        margin: 10px 0; padding: 0; list-style: none;
+      }
+      .timeline li {
+        position: relative; padding: 14px 16px 14px 60px;
+        margin-bottom: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+      .timeline li::before {
+        content: attr(data-id);
+        position: absolute; left: 12px; top: 14px;
+        width: 36px; height: 30px;
+        border-radius: 6px;
+        background: var(--primary-soft);
+        color: var(--primary);
+        font-family: var(--mono);
+        font-size: 11px; font-weight: 600;
+        display: grid; place-items: center;
+      }
+      .timeline .title {
+        font-weight: 600; color: var(--text); margin-bottom: 4px;
+      }
+      .timeline .desc { color: var(--muted); font-size: 12.5px; }
+
+      .footer-cta {
+        margin-top: 36px;
+        padding: 22px 26px;
+        background: linear-gradient(135deg, rgba(79,140,255,0.1), rgba(167,139,250,0.08));
+        border: 1px solid var(--border-strong);
+        border-radius: 14px;
+      }
+      .footer-cta h2 { margin-top: 0; border: none; padding-left: 0; }
+
+      ul.bare { margin: 6px 0; padding-left: 20px; }
+      ul.bare li { margin-bottom: 4px; color: var(--muted); }
+      ul.bare li b { color: var(--text); }
+      ul.bare li code { font-size: 11.5px; background: var(--bg); padding: 1px 4px; border-radius: 3px; color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Phase C v2 · 基于现有基础设施</h1>
+      <div class="meta">
+        2 个用户反馈已采纳 · plan 不做 mode · subagent 加详情 drawer · 权限审查延后 ·
+        计划 <code>docs/superpowers/plans/2026-04-25-phase-c-deferred-features.md</code>
+      </div>
+
+      <div class="diff-banner">
+        <h3>⚠ v2 关键调整(基于你的反馈)</h3>
+        <ul class="bare">
+          <li>1. <b>Plan 不做 mode</b> · 做成普通 tool · agent CRUD · 用户在 UI 看到。<b>权限管理后期再审查</b>。</li>
+          <li>2. <b>子代理详情可视化</b> · ToolCallCard 加"查看详情"按钮 · 现有右侧 RunTraceDrawer 弹出。</li>
+          <li>结果:Phase C 工作量从 16 task 降到 <b>14 task</b> · 从 6.5 天降到 <b>~4.5 天</b> · 因为 70% 基础设施已经存在。</li>
+        </ul>
+      </div>
+
+      <h2><span class="num">§ 1</span> 现状盘点 · 70% 已经存在</h2>
+
+      <table class="exists">
+        <thead>
+          <tr><th>模块</th><th>状态</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>core/plan.py</td>
+            <td><span class="check">✅</span></td>
+            <td>AgentPlan + PlanStep + StepStatus enum</td>
+          </tr>
+          <tr>
+            <td>SqlAgentPlanRepo</td>
+            <td><span class="check">✅</span></td>
+            <td>完整持久化实现 + agent_plans 表</td>
+          </tr>
+          <tr>
+            <td>plan_create / plan_update_step / plan_complete_step / plan_view tools</td>
+            <td><span class="check">✅</span> declared</td>
+            <td>ToolRegistry 已注册 · 但 executor 是 no-op stub</td>
+          </tr>
+          <tr>
+            <td><b>Plan executors</b></td>
+            <td><span class="missing">❌</span></td>
+            <td><b>缺这一段 → C1 主要工作</b></td>
+          </tr>
+          <tr>
+            <td>web/PlanCard.tsx + PlanTimeline.tsx</td>
+            <td><span class="check">✅</span></td>
+            <td>渲染组件就绪</td>
+          </tr>
+          <tr>
+            <td>web/RunTraceDrawer.tsx</td>
+            <td><span class="check">✅</span></td>
+            <td>右侧 drawer · 监听 ?trace=&lt;run_id&gt; URL 参数</td>
+          </tr>
+          <tr>
+            <td>web/RunTracePanel.tsx · fetchRunDetail</td>
+            <td><span class="check">✅</span></td>
+            <td>能拉任何 run_id 的细节</td>
+          </tr>
+          <tr>
+            <td>Message.parent_run_id</td>
+            <td><span class="check">✅</span></td>
+            <td>子 run 关联父 run</td>
+          </tr>
+          <tr>
+            <td><b>ToolCallCard "查看详情"按钮</b></td>
+            <td><span class="missing">❌</span></td>
+            <td><b>缺 → C2 部分</b></td>
+          </tr>
+          <tr>
+            <td><b>子 agent 流式 yield</b></td>
+            <td><span class="missing">❌</span></td>
+            <td>现状:dispatch 等待最终 dict · <b>缺 → C2 主要</b></td>
+          </tr>
+          <tr>
+            <td><b>UserInputDeferred + ask_user_question</b></td>
+            <td><span class="missing">❌</span></td>
+            <td><b>全新 → C3 完整新建</b></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2><span class="num">§ 2</span> 三个特性 · 简化版</h2>
+
+      <div class="feature c1">
+        <h3>C1 · Plan Tool 补齐 <span class="tag exists">基础已有</span> <span class="tag missing">缺 executor</span></h3>
+        <p style="color: var(--muted); margin: 0;">
+          Plan 是 agent 的内部 memo · <code>scope=WRITE / requires_confirmation=False</code>(不动外部系统)· 用户在 chat 流里通过 PlanTimeline 看到进度。
+        </p>
+        <h4>需要做什么</h4>
+        <ul class="bare">
+          <li>新文件 <code>execution/tools/meta/plan_executors.py</code> · 4 个 executor(create / update_step / complete_step / view)</li>
+          <li>plan_view 返回 render envelope · component=<code>PlanTimeline</code> · props 含 steps</li>
+          <li>AgentLoop ctor 加 <code>plan_repo</code> + <code>conversation_id</code> 参数 · <code>_maybe_substitute_executor</code> 加 4 分支</li>
+          <li>ChatService <code>_build_runner_factory</code> 注入 plan_repo + conversation_id</li>
+        </ul>
+        <h4>不做什么</h4>
+        <ul class="bare">
+          <li>❌ <b>没有 plan mode</b> · 没有 conversation.permission_mode 字段</li>
+          <li>❌ <b>没有权限 gating</b> · 任何时候 agent 都能调 plan tools</li>
+          <li>❌ <b>没有 enter/exit 仪式</b> · 直接调用就行</li>
+        </ul>
+      </div>
+
+      <div class="feature c2">
+        <h3>C2 · Sub-Agent Stream + 详情 Drawer <span class="tag exists">drawer 基础已有</span> <span class="tag missing">缺流式 + 按钮</span></h3>
+        <p style="color: var(--muted); margin: 0;">
+          子 agent 实时 yield 事件到父流 · ToolCallCard 加按钮 · 点击通过 <code>?trace=&lt;run_id&gt;</code> 弹现有右侧 drawer。
+        </p>
+        <h4>后端流式</h4>
+        <ul class="bare">
+          <li>Tool 模型加 flag <code>streams_events: bool</code> · dispatch / spawn 设为 True</li>
+          <li>InternalEvent 加 optional <code>subagent_id</code> field</li>
+          <li>AgentLoop body 检测 streams_events:executor 是 async generator · yield-through 子事件</li>
+          <li>子 result 里塞 <code>run_id</code>(子 run 的 trace 锚)</li>
+        </ul>
+        <h4>前端按钮</h4>
+        <ul class="bare">
+          <li>ToolCallCard expand 区检测 <code>result.run_id</code> · 渲染"查看子代理细节 →"按钮</li>
+          <li>点击 → <code>router.push(?trace=&lt;run_id&gt;)</code> · 现有 RunTraceDrawer 监听并打开</li>
+          <li>RunTracePanel 已能 fetch + 渲染 · <b>不动</b></li>
+        </ul>
+      </div>
+
+      <div class="feature c3">
+        <h3>C3 · Clarification (ask_user_question) <span class="tag missing">全新</span></h3>
+        <p style="color: var(--muted); margin: 0;">
+          唯一全新的能力 · 复用 ADR 0018 留好的 DeferredSignal 原语 · 是 ConfirmationDeferred 之后的第二个 impl。
+        </p>
+        <h4>新建</h4>
+        <ul class="bare">
+          <li>core <code>UserInput</code> + <code>UserInputRepo</code> + alembic migration</li>
+          <li><code>UserInputDeferred(DeferredSignal)</code> · publish/wait 模式</li>
+          <li>tool <code>ask_user_question</code> · 新 flag <code>requires_user_input=True</code></li>
+          <li>HTTP <code>POST /api/user-input/{id}/answer</code></li>
+          <li>web <code>UserInputDialog.tsx</code> · 多问题表单</li>
+        </ul>
+        <h4>扩展</h4>
+        <ul class="bare">
+          <li>AgentLoop <code>_permission_check</code> · <code>requires_user_input</code> 走 Defer(UserInputDeferred)</li>
+          <li>tool_pipeline:<code>outcome.kind == "answered"</code> 时把 payload(answers dict)merge 进 block.input 再 invoke executor</li>
+          <li>ag_ui_translator 加 <code>allhands.user_input_required</code> custom event</li>
+        </ul>
+      </div>
+
+      <h2><span class="num">§ 3</span> Plan Tool 完整生命周期 · 用户视角</h2>
+
+      <div class="lifecycle">
+        <div class="step-row">
+          <div class="who">user</div>
+          <div class="what">"帮我重构 X 模块"</div>
+        </div>
+        <div class="step-row">
+          <div class="who">agent</div>
+          <div class="what">调 <em>plan_create(title="重构 X", steps=["阅读现有代码", "找出耦合点", "拆解成 3 个子模块", "写迁移测试"])</em></div>
+        </div>
+        <div class="step-row">
+          <div class="who">agent</div>
+          <div class="what">调 <em>plan_view()</em> · 返回 render envelope · 前端渲染 <em>PlanTimeline</em> · 用户在 chat 里看到 4 步进度</div>
+        </div>
+        <div class="step-row">
+          <div class="who">agent</div>
+          <div class="what">读代码... 调 <em>plan_update_step(step_index=0, status="done")</em></div>
+        </div>
+        <div class="step-row">
+          <div class="who">agent</div>
+          <div class="what">调 <em>plan_view()</em> 再渲染 · 第一步打勾 · 第二步 running</div>
+        </div>
+        <div class="step-row">
+          <div class="who">agent</div>
+          <div class="what">继续干活 · 完成所有步骤后 <em>plan_complete_step</em> 全部</div>
+        </div>
+        <div class="step-row">
+          <div class="who">user</div>
+          <div class="what">看到完整 plan + 进度时间线 · 心里有底</div>
+        </div>
+      </div>
+
+      <h2><span class="num">§ 4</span> Sub-Agent 详情 Drawer · 用户视角</h2>
+
+      <div class="lifecycle">
+        <div class="step-row">
+          <div class="who">user</div>
+          <div class="what">"让 OnPM employee 调研一下 X"</div>
+        </div>
+        <div class="step-row">
+          <div class="who">agent</div>
+          <div class="what">调 <em>dispatch_employee(employee_id="onpm", task="调研 X")</em> · ToolCallCard 出现 "running"</div>
+        </div>
+        <div class="step-row">
+          <div class="who">stream</div>
+          <div class="what">子 OnPM AgentLoop yield 事件 · 父流转发(带 subagent_id) · 用户看到子 agent 的 token / tool_call 流</div>
+        </div>
+        <div class="step-row">
+          <div class="who">agent</div>
+          <div class="what">子 agent 完成 · ToolCallCard 状态 "succeeded" · result 里有 <em>run_id</em></div>
+        </div>
+        <div class="step-row">
+          <div class="who">ui</div>
+          <div class="what">ToolCallCard expand 区显示 "查看子代理细节 →" 按钮</div>
+        </div>
+        <div class="step-row">
+          <div class="who">user</div>
+          <div class="what">点按钮 · URL 加 <em>?trace=&lt;sub_run_id&gt;</em> · 右侧 RunTraceDrawer 滑出 · 完整 RunTracePanel(已有)</div>
+        </div>
+      </div>
+
+      <h2><span class="num">§ 5</span> 14 task · 4 阶段</h2>
+
+      <ol class="timeline">
+        <li data-id="C0"><div class="title">ADR 0019 + 计划锁定 · 1 task</div><div class="desc">v2 调整文档化(plan 不做 mode · subagent 加 trace · 权限延后)。</div></li>
+        <li data-id="C1"><div class="title">Plan Tool 补 executor · 3 tasks · ~1 day</div><div class="desc">plan_executors.py · AgentLoop ctor 注入 plan_repo · ChatService 接线 · 集成测(create→view→update→view)。</div></li>
+        <li data-id="C2"><div class="title">Sub-Agent Stream + Trace · 4 tasks · ~1.5 days</div><div class="desc">streams_events flag · subagent_id event field · stream-through 实装 · ToolCallCard "查看详情"按钮。</div></li>
+        <li data-id="C3"><div class="title">Clarification · 4 tasks · ~1.5 days</div><div class="desc">UserInput repo + UserInputDeferred + ask_user_question tool + 前端 UserInputDialog。</div></li>
+        <li data-id="C4"><div class="title">验证 + 文档 · 2 tasks · ~0.5 day</div><div class="desc">3 个 E2E 场景 · CLAUDE.md / north-star 加 Phase C 章节。</div></li>
+      </ol>
+
+      <h2><span class="num">§ 6</span> 并行调度</h2>
+
+      <p style="color: var(--muted);">
+        C0 由我做 · C1/C2/C3 三个独立 subagent <b>并行</b> · 我 review + integration · C4 我做。<br/>
+        预计:并行 1.5 天而非串行 4.5 天。
+      </p>
+
+      <h2><span class="num">§ 7</span> 待你确认 · 3 个 question</h2>
+
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;">
+        <ol class="bare">
+          <li><b>子 agent 默认开流式</b> · 老 dispatch_employee 调用者看到子事件流 · <b>OK?</b></li>
+          <li><b>ask_user_question 通道限制</b> · 我们没有非 web 通道 · <b>不限制?</b></li>
+          <li><b>UserInputDeferred TTL</b> · 默认 <b>600s</b>(10 分钟思考时间)? 同 confirmation 的 300s?</li>
+        </ol>
+      </div>
+
+      <div class="footer-cta">
+        <h2 style="margin: 0 0 8px;">点头后开工</h2>
+        <p style="color: var(--muted);">
+          回复"开工"或"OK"我即开始 C0(写 ADR 0019)· 然后并行 dispatch 3 个 subagent 做 C1/C2/C3 · 完成后我做 C4。
+        </p>
+        <p style="color: var(--muted); margin-bottom: 0;">
+          完整方案:<code>docs/superpowers/plans/2026-04-25-phase-c-deferred-features.md</code>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
