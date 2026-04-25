@@ -23,6 +23,7 @@ from allhands.execution.skills import SkillRegistry, seed_skills
 from allhands.execution.tools import discover_builtin_tools
 from allhands.persistence.db import get_sessionmaker
 from allhands.persistence.sql_repos import (
+    SqlAgentPlanRepo,
     SqlArtifactRepo,
     SqlConfirmationRepo,
     SqlConversationEventRepo,
@@ -168,6 +169,9 @@ async def get_chat_service(
         # ASSISTANT / TURN_ABORTED events and build_llm_context reads
         # from it. Unset → fall back to pre-ADR-0017 MessageRepo path.
         event_repo=SqlConversationEventRepo(session),
+        # ADR 0019 C1 · per-conversation plan persistence so plan_create
+        # / plan_view / plan_update_step actually save & render.
+        plan_repo=SqlAgentPlanRepo(session),
     )
 
 
