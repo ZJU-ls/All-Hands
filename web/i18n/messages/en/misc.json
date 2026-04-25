@@ -237,8 +237,23 @@
         "size_desc": "Size large→small"
       },
       "empty": "No artifacts match the current filter.",
+      "emptyAll": "No artifacts in this workspace yet",
+      "emptyAllHint": "Once an employee produces a doc, code or diagram, it shows up here.",
       "loadFailed": "Failed to load artifacts: {error}",
-      "count": "{n} artifacts"
+      "count": "{n} artifacts",
+      "selectHint": "Pick an artifact on the left to see its detail",
+      "stats": {
+        "total": "Total",
+        "totalHint": "All artifacts",
+        "size": "Disk usage",
+        "sizeHint": "Sum across versions",
+        "pinned": "Pinned",
+        "pinnedHint": "Team favourites",
+        "last7d": "Last 7d",
+        "last7dHint": "Recently created",
+        "byKind": "By kind",
+        "topKindHint": "Largest kind · {kind}"
+      }
     }
   },
   "brand": {

@@ -51,7 +51,7 @@ export default function KnowledgePage() {
     try {
       const data = await listKBs();
       setKbs(data);
-      if (!activeKb && data.length > 0) {
+      if (!activeKb && data.length > 0 && data[0]) {
         setActiveKb(data[0]);
       }
     } catch (e) {
@@ -230,9 +230,10 @@ export default function KnowledgePage() {
                   <button
                     type="button"
                     onClick={() => setShowCfg((s) => !s)}
-                    className="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong"
                   >
-                    {showCfg ? "Close ⚙" : "⚙ Tune"}
+                    <Icon name="settings" size={12} />
+                    {showCfg ? "Close" : "Tune"}
                   </button>
                   <label className="px-3 py-1.5 text-xs rounded-md border border-hairline text-muted hover:text-strong cursor-pointer">
                     {uploading ? "Uploading…" : "+ 上传文档"}
@@ -348,7 +349,7 @@ export default function KnowledgePage() {
               </p>
               <p>
                 试试给一个 employee 挂上 <span className="kbd">allhands.skills.kb_researcher</span>{" "}
-                skill,然后问它："xxx 在我的笔记里讲过吗?"
+                skill,然后问它「xxx 在我的笔记里讲过吗?」
               </p>
             </div>
           )}
