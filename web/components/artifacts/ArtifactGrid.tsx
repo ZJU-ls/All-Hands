@@ -20,6 +20,8 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { ArtifactPeek } from "./ArtifactPeek";
 import type { ArtifactDto, ArtifactKind } from "@/lib/artifacts-api";
 
+// 2026-04-27 · video 已从 ArtifactKind 删除(对齐 backend enum)。
+// csv/xlsx 改用 table 图标,与 data(JSON 等)的 database 图标视觉区分。
 const KIND_ICON: Record<ArtifactKind, IconName> = {
   markdown: "file",
   code: "code",
@@ -29,11 +31,10 @@ const KIND_ICON: Record<ArtifactKind, IconName> = {
   mermaid: "activity",
   drawio: "layout-grid",
   pdf: "file",
-  xlsx: "database",
-  csv: "database",
-  docx: "file",
+  xlsx: "table",
+  csv: "table",
+  docx: "file-text",
   pptx: "file",
-  video: "play-circle",
 };
 
 const KIND_TONE: Record<ArtifactKind, string> = {
@@ -49,7 +50,6 @@ const KIND_TONE: Record<ArtifactKind, string> = {
   csv: "bg-success-soft text-success",
   docx: "bg-primary-muted text-primary",
   pptx: "bg-warning-soft text-warning",
-  video: "bg-surface-2 text-text-muted",
 };
 
 function formatBytes(n: number): string {

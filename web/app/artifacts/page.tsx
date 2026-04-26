@@ -60,6 +60,8 @@ const SORTS: ArtifactSort[] = [
   "size_desc",
 ];
 
+// 2026-04-27 · video 已从 ArtifactKind 删除(对齐 backend enum)。
+// office 三件套(csv/xlsx)用 table 图标替代 database,语义更精确。
 const KIND_ICON: Record<ArtifactKind, IconName> = {
   markdown: "file",
   code: "code",
@@ -69,10 +71,9 @@ const KIND_ICON: Record<ArtifactKind, IconName> = {
   mermaid: "activity",
   drawio: "layout-grid",
   pptx: "file",
-  video: "play-circle",
-  csv: "database",
-  xlsx: "database",
-  docx: "file",
+  csv: "table",
+  xlsx: "table",
+  docx: "file-text",
   pdf: "file",
 };
 

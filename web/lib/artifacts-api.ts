@@ -1,5 +1,11 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// 2026-04-27 · 严格对齐 backend ArtifactKind enum
+// (backend/src/allhands/core/artifact.py)。原前端含"video"是幽灵类型,
+// 后端从未支持 — 这种 frontend-only 类型一旦在 KIND_ICON / Record map
+// 里被消费,会让 TS 编译通过但运行时 backend 永远不会发送 → 死代码 +
+// 误导用户(filter 下拉里能选 video,但永远 0 个结果)。
+// 真正要支持视频时,先在后端加 enum,再扩前端。
 export type ArtifactKind =
   | "markdown"
   | "code"
@@ -12,8 +18,7 @@ export type ArtifactKind =
   | "xlsx"
   | "csv"
   | "docx"
-  | "pptx"
-  | "video";
+  | "pptx";
 
 export type ArtifactDto = {
   id: string;
@@ -51,14 +56,13 @@ export type ArtifactContentDto = {
 // drawio + csv are text-identity (XML / CSV both round-trip as utf-8). The
 // rest of the office family (pdf / xlsx / docx / pptx) lands as binary blobs
 // the LLM never reads back as raw text — viewers fetch via /content
-// directly. Image + video stay binary as before.
+// directly. Image stays binary.
 const BINARY: ReadonlySet<ArtifactKind> = new Set([
   "image",
   "pdf",
   "xlsx",
   "docx",
   "pptx",
-  "video",
 ]);
 
 export function isBinaryKind(kind: ArtifactKind): boolean {

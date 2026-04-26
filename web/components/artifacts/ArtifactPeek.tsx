@@ -38,11 +38,10 @@ const KIND_ICON: Record<ArtifactKind, IconName> = {
   mermaid: "activity",
   drawio: "layout-grid",
   pdf: "file",
-  xlsx: "database",
-  csv: "database",
-  docx: "file",
+  xlsx: "table",
+  csv: "table",
+  docx: "file-text",
   pptx: "file",
-  video: "play-circle",
 };
 
 function formatBytes(n: number): string {
