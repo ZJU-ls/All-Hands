@@ -140,11 +140,7 @@ def _summarise(value: Any, field: str) -> str:
         head = value.strip().splitlines()[0] if value.strip() else ""
         if len(head) > 80:
             head = head[:80] + "…"
-        return (
-            f"string ({len(value)} chars) starting with {head!r}"
-            if head
-            else "empty string"
-        )
+        return f"string ({len(value)} chars) starting with {head!r}" if head else "empty string"
     if isinstance(value, list):
         return f"array (length {len(value)})"
     if isinstance(value, dict):
@@ -209,9 +205,7 @@ def coerce_and_validate(tool: Tool, kwargs: dict[str, Any]) -> dict[str, Any]:
     """
     schema = tool.input_schema or {}
     properties_raw = schema.get("properties") or {}
-    properties: dict[str, Any] = (
-        properties_raw if isinstance(properties_raw, dict) else {}
-    )
+    properties: dict[str, Any] = properties_raw if isinstance(properties_raw, dict) else {}
     required_raw = schema.get("required") or []
     required: list[str] = list(required_raw) if isinstance(required_raw, list) else []
 
@@ -265,9 +259,7 @@ def coerce_and_validate(tool: Tool, kwargs: dict[str, Any]) -> dict[str, Any]:
                 received_summary = f"{received_summary} · JSON parse failed: {parse_err}"
             raise ToolArgError(
                 field=k,
-                expected=primary
-                if len(accepted) == 1
-                else " | ".join(accepted),
+                expected=primary if len(accepted) == 1 else " | ".join(accepted),
                 received=received_summary,
                 hint=_hint_for(k, primary, v, spec),
             )

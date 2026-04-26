@@ -491,9 +491,7 @@ async def test_concurrent_path_silently_coerces_valid_stringified_array() -> Non
         return {"ok": True}
 
     bindings = _bindings((tool, _ex))
-    block = ToolUseBlock(
-        id="tu3", name="build_xlsx", input={"sheets": '[{"name":"Q1"}]'}
-    )
+    block = ToolUseBlock(id="tu3", name="build_xlsx", input={"sheets": '[{"name":"Q1"}]'})
     msg = await execute_tool_use_concurrent(block, bindings)
     assert msg.content == {"ok": True}
     assert captured["sheets"] == [{"name": "Q1"}]
@@ -519,9 +517,7 @@ async def test_iter_path_arg_validation_yields_envelope_terminal() -> None:
         return Allow()
 
     events: list[Any] = []
-    async for ev in execute_tool_use_iter(
-        block, bindings, _allow, conversation_id="conv-1"
-    ):
+    async for ev in execute_tool_use_iter(block, bindings, _allow, conversation_id="conv-1"):
         events.append(ev)
     assert len(events) == 1
     terminal = events[0]

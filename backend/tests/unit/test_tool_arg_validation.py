@@ -70,9 +70,7 @@ def test_extra_args_pass_through() -> None:
 
 
 def test_open_property_no_type_passes_through() -> None:
-    tool = _tool(
-        {"type": "object", "properties": {"payload": {"description": "anything"}}}
-    )
+    tool = _tool({"type": "object", "properties": {"payload": {"description": "anything"}}})
     out = coerce_and_validate(tool, {"payload": {"k": "v"}})
     assert out["payload"] == {"k": "v"}
 
@@ -188,9 +186,7 @@ def test_enum_violation_raises_with_choices() -> None:
     tool = _tool(
         {
             "type": "object",
-            "properties": {
-                "source": {"type": "string", "enum": ["markdown", "html"]}
-            },
+            "properties": {"source": {"type": "string", "enum": ["markdown", "html"]}},
         }
     )
     with pytest.raises(ToolArgError) as ex:

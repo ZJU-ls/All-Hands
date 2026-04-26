@@ -59,7 +59,11 @@ def test_html_templates_carry_brand_signature_tokens() -> None:
     - var(--primary) / var(--text) (tokenised colors, no hardcoded hex everywhere)
     - linear-gradient(...primary...) (gradient signature)
     """
-    for rel in ("references/html-base.html", "references/landing.html", "references/dashboard.html"):
+    for rel in (
+        "references/html-base.html",
+        "references/landing.html",
+        "references/dashboard.html",
+    ):
         body = (SKILL_ROOT / rel).read_text(encoding="utf-8")
         assert "prefers-color-scheme: dark" in body, f"{rel}: missing dark mode block"
         assert "var(--primary)" in body, f"{rel}: missing var(--primary) usage"

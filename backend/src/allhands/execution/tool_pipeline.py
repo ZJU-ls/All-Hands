@@ -247,9 +247,7 @@ async def execute_tool_use_concurrent(
             conversation_id=conversation_id,
         )
     try:
-        result = await _invoke_executor(
-            binding.executor, dict(block.input), tool=binding.tool
-        )
+        result = await _invoke_executor(binding.executor, dict(block.input), tool=binding.tool)
     except ToolArgError as exc:
         # Self-explanatory envelope · LLM reads field/expected/received/hint
         # and corrects on the next turn (E22 · principle 9).
@@ -365,9 +363,7 @@ async def execute_tool_use_iter(
 
     # Allow path or post-approval Defer path: invoke executor.
     try:
-        result = await _invoke_executor(
-            binding.executor, exec_args, tool=binding.tool
-        )
+        result = await _invoke_executor(binding.executor, exec_args, tool=binding.tool)
     except ToolArgError as exc:
         yield ToolMessageCommitted(
             message=_make_tool_message(
