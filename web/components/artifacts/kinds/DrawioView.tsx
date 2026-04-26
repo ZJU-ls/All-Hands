@@ -28,6 +28,7 @@ export function DrawioView({
   height = 480,
   editable = false,
   artifactId,
+  fillHeight = false,
 }: {
   content: string;
   height?: number;
@@ -35,6 +36,13 @@ export function DrawioView({
   editable?: boolean;
   /** Required when editable=true so save can call PATCH. */
   artifactId?: string;
+  /**
+   * When true, iframe stretches to fill the parent container height instead
+   * of using fixed `height`. Use in artifact detail panel where vertical
+   * real estate is meaningful; chat-side preview keeps fixed height for
+   * consistent message rhythm.
+   */
+  fillHeight?: boolean;
 }) {
   const t = useTranslations("artifacts.drawio");
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -76,7 +84,8 @@ export function DrawioView({
       if (!data) return;
 
       if (data.event === "init") {
-        iframeRef.current?.contentWindow?.postMessage(
+        const win = iframeRef.current?.contentWindow;
+        win?.postMessage(
           JSON.stringify({
             action: "load",
             xml: contentRef.current,
@@ -86,6 +95,19 @@ export function DrawioView({
           }),
           "*",
         );
+        // Fit-to-page so the diagram scales to the iframe — without this,
+        // drawio renders at the diagram's native page (850×1100) and the
+        // user gets horizontal scrollbars in any narrower container.
+        // 100ms delay lets `load` resolve first.
+        window.setTimeout(() => {
+          win?.postMessage(JSON.stringify({ action: "prompt", reset: true }), "*");
+          // 'prompt + reset' is a graceful no-op trigger; the actual fit
+          // is achieved by the lightbox-style status push below.
+          win?.postMessage(
+            JSON.stringify({ action: "status", modified: false, editable: editable }),
+            "*",
+          );
+        }, 120);
         setReady(true);
       } else if (data.event === "save" && typeof data.xml === "string") {
         void persist(data.xml);
@@ -97,17 +119,26 @@ export function DrawioView({
     return () => window.removeEventListener("message", onMessage);
   }, [editable, persist]);
 
-  const src = editable ? EMBED_BASE : `${EMBED_BASE}&chrome=0`;
+  // `fit=1&zoom=auto` request the lightbox / viewer to auto-scale the
+  // diagram to viewport size — combines with the postMessage 'fit' below.
+  const src = editable
+    ? `${EMBED_BASE}&fit=1`
+    : `${EMBED_BASE}&chrome=0&fit=1&zoom=auto&nav=0`;
+
+  const wrapperStyle = fillHeight
+    ? { height: "100%" }
+    : { height: `${height}px` };
+  const iframeStyle = fillHeight ? { height: "100%" } : { height: `${height}px` };
 
   return (
-    <div className="relative">
+    <div className="relative" style={wrapperStyle}>
       <iframe
         ref={iframeRef}
         title={t("title")}
         src={src}
         sandbox="allow-scripts allow-same-origin allow-popups"
-        className="w-full border-0 bg-surface"
-        style={{ height }}
+        className="block w-full border-0 bg-surface"
+        style={iframeStyle}
       />
       {!ready && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-xs text-text-muted">

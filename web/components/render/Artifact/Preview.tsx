@@ -165,7 +165,11 @@ export function ArtifactPreview({ props }: RenderProps) {
         body = <MermaidView content={text} />;
         break;
       case "drawio":
-        body = <DrawioView content={text} />;
+        // Chat-side preview: 480px fits a typical message rhythm + the
+        // diagram auto-fits the iframe (fit=1&zoom=auto + postMessage
+        // 'fit' from DrawioView). Container width is whatever the
+        // message column gives — diagrams.net scales content.
+        body = <DrawioView content={text} height={480} />;
         break;
       case "csv":
         body = <CsvView content={text} />;
