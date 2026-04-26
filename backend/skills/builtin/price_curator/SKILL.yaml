@@ -1,0 +1,16 @@
+id: allhands.price_curator
+name: 模型价格管家
+description: 查厂商定价页 · 维护 model_prices 覆盖表 · 引用 source_url
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.builtin.web_search
+  - allhands.builtin.fetch_url
+  - allhands.meta.list_model_prices
+  - allhands.meta.upsert_model_price
+  - allhands.meta.delete_model_price_override
+  - allhands.meta.list_models
+  - allhands.meta.list_providers
+
+prompt_fragment_file: prompts/guidance.md

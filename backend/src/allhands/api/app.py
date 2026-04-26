@@ -31,6 +31,7 @@ from allhands.api.routers.mcp_servers import router as mcp_servers_router
 from allhands.api.routers.models import router as models_router
 from allhands.api.routers.observatory import router as observatory_router
 from allhands.api.routers.plans import router as plans_router
+from allhands.api.routers.pricing import router as pricing_router
 from allhands.api.routers.providers import router as providers_router
 from allhands.api.routers.skills import router as skills_router
 from allhands.api.routers.system import router as system_router
@@ -200,5 +201,6 @@ def create_app() -> FastAPI:
     app.include_router(market_router, prefix="/api")  # single-line register: Wave 2 market-data
     app.include_router(knowledge_router, prefix="/api")
     app.include_router(observatory_router, prefix="/api")
+    app.include_router(pricing_router, prefix="/api")
     app.include_router(system_router, prefix="/api")
     return app

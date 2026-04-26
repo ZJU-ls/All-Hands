@@ -21,6 +21,7 @@ if TYPE_CHECKING:
         LLMProvider,
         MCPServer,
         Message,
+        ModelPriceEntry,
         ObservabilityConfig,
         Skill,
         SkillRuntime,
@@ -260,3 +261,20 @@ class ConversationEventRepo(Protocol):
     async def next_sequence(self, conversation_id: str) -> int: ...
 
     async def mark_compacted(self, event_ids: list[str]) -> None: ...
+
+
+class ModelPriceRepo(Protocol):
+    """Runtime overlay for per-model token pricing.
+
+    The code-side seed (``services/model_pricing.py``) ships defaults; this
+    repo lets an Agent (or admin) override / extend that table without a
+    redeploy. Lookup order in callers: DB row → code seed → ``0.0``.
+    """
+
+    async def list_all(self) -> list[ModelPriceEntry]: ...
+
+    async def get(self, model_ref: str) -> ModelPriceEntry | None: ...
+
+    async def upsert(self, entry: ModelPriceEntry) -> ModelPriceEntry: ...
+
+    async def delete(self, model_ref: str) -> bool: ...

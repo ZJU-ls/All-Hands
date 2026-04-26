@@ -34,6 +34,7 @@ from allhands.persistence.sql_repos import (
     SqlLLMModelRepo,
     SqlLLMProviderRepo,
     SqlMCPServerRepo,
+    SqlModelPriceRepo,
     SqlObservabilityConfigRepo,
     SqlSkillRepo,
     SqlSkillRuntimeRepo,
@@ -306,6 +307,7 @@ async def get_observatory_service(
         conversation_repo=SqlConversationRepo(session),
         task_repo=SqlTaskRepo(session),
         artifact_repo=SqlArtifactRepo(session),
+        price_repo=SqlModelPriceRepo(session),
     )
 
 
