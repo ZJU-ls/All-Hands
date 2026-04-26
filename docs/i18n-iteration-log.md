@@ -1037,3 +1037,21 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 **结果**:1999 web tests · typecheck · lint 全绿
 
 **commits**:见 git log
+
+## Round 49 · 2026-04-27 06:13 (cron · 30m)
+
+**主题**:Round 48 后再扫一轮 iframe / native HTML 验证
+
+**做的事**:
+- iframe / img / video 的 title / alt 硬编码英文 → 0 处(R48 修干净)
+- `<input>` 的 native HTML5 validation(required / pattern / minLength /
+  maxLength)→ 0 处使用(都走自定义校验,避免 browser-locale 字符串)
+- document.title 使用 → 唯一一处是 lib/use-document-title.ts(R17 抽的
+  共享 hook),其它代码都通过 AppShell title prop 间接设置
+- layout.tsx → `<html lang={locale}>` + `description: t("description")` 都
+  正确 · `title: "allhands"` 是 brand,故意 locale-independent
+
+**结果**:1999 web tests + 13 backend i18n tests + regression net 全绿 ·
+本轮零代码改动
+
+**commits**:仅本条 log
