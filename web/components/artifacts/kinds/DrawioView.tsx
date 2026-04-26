@@ -95,19 +95,11 @@ export function DrawioView({
           }),
           "*",
         );
-        // Fit-to-page so the diagram scales to the iframe — without this,
-        // drawio renders at the diagram's native page (850×1100) and the
-        // user gets horizontal scrollbars in any narrower container.
-        // 100ms delay lets `load` resolve first.
-        window.setTimeout(() => {
-          win?.postMessage(JSON.stringify({ action: "prompt", reset: true }), "*");
-          // 'prompt + reset' is a graceful no-op trigger; the actual fit
-          // is achieved by the lightbox-style status push below.
-          win?.postMessage(
-            JSON.stringify({ action: "status", modified: false, editable: editable }),
-            "*",
-          );
-        }, 120);
+        // Fit-to-page is now driven by the URL params `&fit=1&zoom=auto&nav=0`
+        // (see `src` below). An earlier version postMessaged
+        // `{action:"prompt",reset:true}` to "graceful no-op trigger" a fit —
+        // turns out `prompt` actually opens drawio's prompt dialog (the
+        // 「文件名: __ undefined」 popup users hit). Don't do that.
         setReady(true);
       } else if (data.event === "save" && typeof data.xml === "string") {
         void persist(data.xml);
