@@ -9,6 +9,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { AllhandsLogo } from "@/components/brand/AllhandsLogo";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
+import { ToastProvider } from "@/components/ui/Toast";
 
 // Lazy-load the two global overlays so their module graph (DotGridBackdrop,
 // RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
@@ -291,6 +292,7 @@ export function AppShell({
   }, []);
 
   return (
+    <ToastProvider>
     <div className="flex h-screen w-full bg-bg text-text">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -339,5 +341,6 @@ export function AppShell({
       )}
       {hasTrace && <RunTraceDrawer />}
     </div>
+    </ToastProvider>
   );
 }
