@@ -77,6 +77,7 @@ type DateRange = "all" | "7d" | "30d";
 
 export default function ArtifactsGlobalPage() {
   const t = useTranslations("artifacts.page");
+  const tToast = useTranslations("artifacts.page.bulk.toast");
   const [items, setItems] = useState<ArtifactDto[]>([]);
   const [stats, setStats] = useState<ArtifactStatsDto | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
@@ -168,10 +169,13 @@ export default function ArtifactsGlobalPage() {
       }
       if (failed === 0) {
         toast.success(
-          `${targetPinned ? "Pinned" : "Unpinned"} ${targetIds.length} artifact${targetIds.length === 1 ? "" : "s"}`,
+          tToast(targetPinned ? "pinned" : "unpinned", { n: targetIds.length }),
         );
       } else {
-        toast.error(`${failed} of ${targetIds.length} failed`, "Reverted those rows");
+        toast.error(
+          tToast("pinPartial", { ok: failed, total: targetIds.length }),
+          tToast("pinPartialDesc"),
+        );
       }
     } finally {
       setBulkBusy(false);
@@ -200,11 +204,14 @@ export default function ArtifactsGlobalPage() {
       }
       clearBulk();
       if (failed === 0) {
-        toast.success(`Deleted ${targetCount} artifact(s)`, "Soft delete · still recoverable");
+        toast.success(
+          tToast("deletedAll", { n: targetCount }),
+          tToast("deletedAllDesc"),
+        );
       } else if (failed < targetCount) {
-        toast.warning(`Deleted ${targetCount - failed} · ${failed} failed`);
+        toast.warning(tToast("deletedPartial", { ok: targetCount - failed, failed }));
       } else {
-        toast.error(`Failed to delete ${failed} artifact(s)`);
+        toast.error(tToast("deletedNone", { n: failed }));
       }
     } finally {
       setBulkBusy(false);
@@ -382,7 +389,7 @@ export default function ArtifactsGlobalPage() {
               <button
                 type="button"
                 onClick={() => setQ("")}
-                aria-label="clear search"
+                aria-label={t("clearSearchAria")}
                 className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded text-text-subtle hover:text-text-muted"
               >
                 <Icon name="x" size={11} />
@@ -591,14 +598,16 @@ function BulkActionBar({
   onDelete: () => void;
   onClear: () => void;
 }) {
+  const t = useTranslations("artifacts.page");
+  const tBulk = useTranslations("artifacts.page.bulk");
   return (
     <div
       role="toolbar"
-      aria-label="bulk actions"
+      aria-label={t("bulkActionsAria")}
       className="fixed bottom-6 left-1/2 z-30 inline-flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-border bg-surface px-3 py-2 shadow-soft-lg animate-fade-up"
     >
       <span className="font-mono text-[11px] text-text-muted">
-        {count} selected
+        {tBulk("selected", { n: count })}
       </span>
       <span className="h-4 w-px bg-border" aria-hidden />
       <button
@@ -608,7 +617,7 @@ function BulkActionBar({
         className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text disabled:opacity-50"
       >
         <Icon name="check" size={12} />
-        {allPinned ? "Unpin" : "Pin"}
+        {allPinned ? tBulk("unpin") : tBulk("pin")}
       </button>
       <button
         type="button"
@@ -617,13 +626,13 @@ function BulkActionBar({
         className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-danger-soft px-2.5 text-[12px] text-danger transition-colors duration-fast hover:border-danger/50 disabled:opacity-50"
       >
         <Icon name="trash-2" size={12} />
-        Delete
+        {tBulk("delete")}
       </button>
       <button
         type="button"
         onClick={onClear}
-        aria-label="clear selection"
-        title="clear selection"
+        aria-label={t("clearSelectionAria")}
+        title={t("clearSelectionAria")}
         className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-subtle transition-colors duration-fast hover:bg-surface-2 hover:text-text"
       >
         <Icon name="x" size={12} />

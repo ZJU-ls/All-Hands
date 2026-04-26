@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   createConversation,
   listConversations,
@@ -42,6 +42,7 @@ type Props = {
 export function ConversationSwitcher({ employeeId, currentConversationId }: Props) {
   const router = useRouter();
   const t = useTranslations("chat.switcher");
+  const locale = useLocale();
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ConversationDto[] | null>(null);
@@ -252,7 +253,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
                       />
                       <span className="min-w-0 flex-1 truncate">{label}</span>
                       <span className="shrink-0 font-mono text-[10px] text-text-subtle">
-                        {formatRelative(c.created_at, t)}
+                        {formatRelative(c.created_at, t, locale)}
                       </span>
                       {!isCurrent && (
                         <Icon
@@ -276,6 +277,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
 function formatRelative(
   iso: string,
   t: (key: string, values?: Record<string, string | number>) => string,
+  locale: string,
 ): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -287,5 +289,5 @@ function formatRelative(
   if (hr < 24) return t("hoursAgo", { n: hr });
   const day = Math.round(hr / 24);
   if (day < 30) return t("daysAgo", { n: day });
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString(locale);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { TraceSummaryDto } from "@/lib/observatory-api";
@@ -52,10 +52,10 @@ function formatDuration(s: number | null): string {
   return `${s.toFixed(2)}s`;
 }
 
-function formatStartedAt(iso: string): string {
+function formatStartedAt(iso: string, locale: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("zh-CN", {
+  return d.toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -112,6 +112,7 @@ export function TraceTable({
   onSelect: (trace: TraceSummaryDto) => void;
 }) {
   const t = useTranslations("traces.table");
+  const locale = useLocale();
   const toggleSort = (key: TraceSortKey) => {
     if (sort.key === key) {
       onSort({ key, dir: sort.dir === "asc" ? "desc" : "asc" });
@@ -240,7 +241,7 @@ export function TraceTable({
                 {row.tokens.total > 0 ? row.tokens.total.toLocaleString() : "—"}
               </td>
               <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted">
-                {formatStartedAt(row.started_at)}
+                {formatStartedAt(row.started_at, locale)}
               </td>
             </tr>
           );

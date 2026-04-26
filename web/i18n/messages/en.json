@@ -1,4 +1,7 @@
 {
+  "toast": {
+    "ariaLabel": "Notifications"
+  },
   "common": {
     "loading": "Loading…",
     "save": "Save",
@@ -40,7 +43,9 @@
       "themeAriaLight": "Switch to light theme",
       "themeAriaDark": "Switch to dark theme",
       "languageTitle": "Change language",
-      "languageAria": "Change language"
+      "languageAria": "Change language",
+      "shortcutsAria": "Keyboard shortcuts",
+      "shortcutsTitle": "? · Keyboard shortcuts"
     },
     "sidebar": {
       "collapse": "Collapse sidebar",
@@ -105,6 +110,7 @@
     "pinging": "pinging backend…"
   },
   "welcome": {
+    "docTitle": "Welcome",
     "skip": "Maybe later →",
     "eyebrow": "v0 · Open Source · Self-hosted",
     "h1Line1": "Welcome to allhands.",

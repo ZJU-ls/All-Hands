@@ -20,6 +20,7 @@ import { AllhandsLogo, AllhandsWordmark } from "@/components/brand/AllhandsLogo"
 import { WorkspacePreview } from "@/components/welcome/WorkspacePreview";
 import { CountUp, Tilt } from "@/components/welcome/effects";
 import { markFirstRunCompleted } from "@/lib/first-run";
+import { useDocumentTitle } from "@/lib/use-document-title";
 
 export const FIRST_RUN_SCOPE = "welcome";
 
@@ -42,6 +43,7 @@ export default function WelcomePage() {
   const t = useTranslations("welcome");
   const tStats = useTranslations("welcome.stats");
   const tH = useTranslations("welcome.highlights");
+  useDocumentTitle(t("docTitle"));
 
   const handleStart = useCallback(() => {
     markFirstRunCompleted(FIRST_RUN_SCOPE);

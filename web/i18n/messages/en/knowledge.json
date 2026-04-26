@@ -133,6 +133,35 @@
       "explainBm25Only": "Lexical hit only (#{bm25}) · vector retriever did not surface this chunk",
       "explainVecOnly": "Semantic hit only (#{vec}) · keywords did not match"
     },
+    "docTags": {
+      "addPlaceholder": "+ add tag…",
+      "removeAria": "Remove #{tag}",
+      "suggestCta": "AI suggest",
+      "suggesting": "Thinking…",
+      "acceptOneHint": "Click to accept this tag",
+      "acceptAll": "Accept all ({count})",
+      "noSuggestions": "AI returned nothing useful — chat provider may be unconfigured"
+    },
+    "stale": {
+      "body": "{missing}/{total} chunks have no vector (BM25 still works; vector recall will miss them)",
+      "cta": "Re-embed all",
+      "running": "Working…"
+    },
+    "reembed": {
+      "summary": "Re-embed done · {processed} processed · {succeeded} ok · {failed} failed"
+    },
+    "health": {
+      "sectionLabel": "Health",
+      "lastActivity": "{when}",
+      "never": "—",
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activityHeader": "Last {days}-day ingest",
+      "activityHint": "1 bar = docs added that day",
+      "topTagsHeader": "Top tags",
+      "dominantMime": "Dominant · {mime} ({count})"
+    },
     "starters": {
       "label": "Try one of these",
       "hint": "Generated from this KB's titles and headings · click to ask"
@@ -149,7 +178,11 @@
       "newConversation": "New thread",
       "followUpPlaceholder": "Ask a follow-up · same citation numbers carry over…",
       "followUpSubmit": "Follow up",
-      "followUpHint": "Press Enter to send · the same retrieved snippets are kept across turns"
+      "followUpHint": "Press Enter to send · the same retrieved snippets are kept across turns",
+      "copyAsCitation": "Copy",
+      "copyAsCitationTitle": "Copy markdown · question / answer / source list",
+      "copied": "Copied",
+      "copyFailed": "Copy failed · the browser may have blocked the clipboard API"
     },
     "bulkTags": {
       "title": "Tag {count} selected documents",

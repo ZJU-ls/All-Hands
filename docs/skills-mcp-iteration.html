@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Skills · MCP · Picker 体验重塑 · allhands</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --surface-2: #f3f5f9;
+      --surface-3: #ebeef5;
+      --border: #e2e6ee;
+      --border-strong: #c8cedd;
+      --text: #0f1115;
+      --text-muted: #4a5160;
+      --text-subtle: #87909e;
+      --primary: #2768ff;
+      --primary-hover: #1a55e8;
+      --primary-soft: #e9efff;
+      --success: #149563;
+      --success-soft: #defcec;
+      --warning: #b85d00;
+      --warning-soft: #fff1de;
+      --danger: #b8264a;
+      --danger-soft: #ffe4ec;
+      --accent: #6b46c1;
+      --accent-soft: #efe9ff;
+      --shadow-sm: 0 1px 2px rgba(15,17,21,.05), 0 1px 3px rgba(15,17,21,.04);
+      --shadow: 0 4px 16px rgba(15,17,21,.08);
+      --shadow-lg: 0 12px 40px rgba(39,104,255,.18);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    main { max-width: 1080px; margin: 0 auto; padding: 48px 28px 96px; }
+    .hero {
+      background: linear-gradient(135deg, #2768ff 0%, #6b46c1 100%);
+      color: #fff;
+      padding: 36px 36px 32px;
+      border-radius: 20px;
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      width: 360px;
+      height: 360px;
+      right: -80px;
+      top: -140px;
+      background: radial-gradient(circle, rgba(255,255,255,.2), transparent 60%);
+      filter: blur(20px);
+    }
+    .hero h1 { font-size: 30px; font-weight: 700; margin: 0 0 10px; letter-spacing: -.02em; }
+    .hero .subtitle { margin: 0 0 18px; opacity: .9; font-size: 15px; }
+    .hero .meta {
+      display: flex; flex-wrap: wrap; gap: 18px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+    }
+    .hero .meta b { font-weight: 600; }
+    .stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 36px;
+    }
+    .stat {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px 18px; box-shadow: var(--shadow-sm);
+    }
+    .stat .num { font-size: 28px; font-weight: 700; color: var(--primary); letter-spacing: -.02em; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .stat .label { font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .08em; margin-top: 2px; }
+    h2 {
+      font-size: 22px; letter-spacing: -.01em; margin: 44px 0 16px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+    .principle-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px 20px; box-shadow: var(--shadow-sm);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+    .round {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px 22px; margin-bottom: 14px; box-shadow: var(--shadow-sm);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .round:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+    .round-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .round-head .num {
+      display: inline-grid; place-items: center; width: 28px; height: 28px;
+      border-radius: 8px; background: var(--primary-soft); color: var(--primary);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; font-weight: 700;
+    }
+    .round-head h3 { font-size: 16px; flex: 1; }
+    .round-head .tag {
+      display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+      border-radius: 6px; font-size: 11px; font-weight: 500;
+      letter-spacing: .04em; text-transform: uppercase;
+    }
+    .tag.feat { background: var(--success-soft); color: var(--success); }
+    .tag.fix { background: var(--primary-soft); color: var(--primary); }
+    .tag.refactor { background: var(--accent-soft); color: var(--accent); }
+    .round p { margin: 6px 0; color: var(--text-muted); font-size: 13.5px; }
+    .round ul { margin: 6px 0; padding-left: 22px; color: var(--text-muted); font-size: 13.5px; }
+    .round ul li + li { margin-top: 4px; }
+    .why {
+      margin-top: 12px; padding: 10px 14px;
+      background: linear-gradient(180deg, var(--primary-soft) 0%, transparent 100%);
+      border-left: 3px solid var(--primary); border-radius: 0 6px 6px 0;
+      font-size: 13px; color: var(--text);
+    }
+    .files {
+      margin-top: 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px; color: var(--text-subtle); display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .files code {
+      background: var(--surface-2); padding: 3px 7px; border-radius: 5px; border: 1px solid var(--border);
+    }
+    table {
+      width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background: var(--surface-2); font-weight: 600; font-size: 12px; color: var(--text-muted); }
+    tr:last-child td { border-bottom: 0; }
+    .heat-3 { color: var(--danger); font-weight: 600; }
+    .heat-2 { color: var(--warning); font-weight: 600; }
+    .heat-1 { color: var(--text-muted); }
+    .ascii-block {
+      background: #0d1117; color: #e8edf5; padding: 16px 18px; border-radius: 10px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+      line-height: 1.55; overflow-x: auto; margin: 14px 0;
+    }
+    .pill {
+      display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px;
+      border-radius: 11px; font-size: 11.5px; font-weight: 500;
+    }
+    .pill.success { background: var(--success-soft); color: var(--success); }
+    .pill.warning { background: var(--warning-soft); color: var(--warning); }
+    .pill.danger { background: var(--danger-soft); color: var(--danger); }
+    .pill.primary { background: var(--primary-soft); color: var(--primary); }
+    .pill.muted { background: var(--surface-2); color: var(--text-muted); }
+    .compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0;
+    }
+    .compare > div {
+      padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border);
+    }
+    .compare .before { background: var(--danger-soft); border-color: rgba(184,38,74,.25); }
+    .compare .after { background: var(--success-soft); border-color: rgba(20,149,99,.25); }
+    .compare h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    .compare .before h4 { color: var(--danger); }
+    .compare .after h4 { color: var(--success); }
+    .compare p { margin: 0; font-size: 13px; color: var(--text); }
+    .footer {
+      margin-top: 56px; padding: 18px 0 0; border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--text-subtle); display: flex;
+      justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    }
+    code.inline {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px; background: var(--surface-2); padding: 1px 6px;
+      border-radius: 4px; border: 1px solid var(--border);
+    }
+    blockquote {
+      margin: 14px 0; padding: 12px 16px; background: var(--surface);
+      border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0;
+      color: var(--text); font-size: 13px;
+    }
+    @media (max-width: 720px) {
+      .stats, .principle-grid, .compare { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>Skills · MCP · Picker 体验重塑</h1>
+      <p class="subtitle">11 轮微优化合集 · 数量上来后用户找不过来这件事 · 业界先进方案对照</p>
+      <div class="meta">
+        <span><b>分支</b> feat/ui-tweaks</span>
+        <span><b>日期</b> 2026-04-26</span>
+        <span><b>策略</b> 每轮 1 个杠杆 · ≤ 3 文件 · 测+提+推</span>
+        <span><b>双向同步</b> feat/ui-tweaks + main</span>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><div class="num">11</div><div class="label">轮次</div></div>
+      <div class="stat"><div class="num">2</div><div class="label">新单件</div></div>
+      <div class="stat"><div class="num">~30</div><div class="label">i18n 新增 key</div></div>
+      <div class="stat"><div class="num">1794</div><div class="label">vitest 通过</div></div>
+    </section>
+
+    <h2>0 · 起点观察 — 数量大时哪里崩溃</h2>
+
+    <table>
+      <thead>
+        <tr><th>页面</th><th>破裂阈值</th><th>卡顿现象</th><th>杀伤力</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>MCP Servers 页</b></td>
+          <td>&gt; 10 servers</td>
+          <td>零搜索 + 零排序 → 失败 server 混在中间,选健康的得肉眼扫</td>
+          <td class="heat-3">🔥🔥🔥</td>
+        </tr>
+        <tr>
+          <td><b>Skill / MCP 选择器</b></td>
+          <td>&gt; 20 chips</td>
+          <td>平铺 chip cloud,无搜索无分组 → 滚 6 行屏幕找</td>
+          <td class="heat-3">🔥🔥🔥</td>
+        </tr>
+        <tr>
+          <td><b>Skills 列表</b></td>
+          <td>&gt; 30 skills</td>
+          <td>无排序 + 无分页 → 找不到刚装的;tag 12 个上限</td>
+          <td class="heat-2">🔥🔥</td>
+        </tr>
+        <tr>
+          <td><b>MCP 工具展开</b></td>
+          <td>&gt; 50 tools/server</td>
+          <td>单选展开 + 内部无搜索 → "auth_*" 只能滚屏</td>
+          <td class="heat-2">🔥🔥</td>
+        </tr>
+        <tr>
+          <td><b>chip 视觉信号</b></td>
+          <td>任意</td>
+          <td>title attribute hover 文本 → 不能选中、不能展开</td>
+          <td class="heat-1">🔥</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>1 · 设计原则 — 业界先进方案合集</h2>
+
+    <p>每一轮都对照下面这张参考矩阵做选择,而不是"看着合理"拍脑袋。</p>
+
+    <table>
+      <thead>
+        <tr><th>体验维度</th><th>采纳的样板</th><th>反例</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><b>即输入即过滤</b></td><td>Linear 列表 / Raycast launcher / Algolia</td><td>"先输入再点搜索"按钮</td></tr>
+        <tr><td><b>count chip 反馈</b></td><td>GitHub Issues / Notion Database</td><td>无"M / N"过滤效果可见性</td></tr>
+        <tr><td><b>键盘 / 全局聚焦</b></td><td>GitHub <code class="inline">/</code> · Slack <code class="inline">⌘K</code></td><td>鼠标唯一交互</td></tr>
+        <tr><td><b>hover-peek 详情</b></td><td>Notion / GitHub linked-issue / Linear</td><td>title attribute 纯文本</td></tr>
+        <tr><td><b>分组而非平铺</b></td><td>Apple Settings / Linear inbox</td><td>100 项一字排开</td></tr>
+        <tr><td><b>失败置后</b></td><td>Datadog Alerts / Linear closed issues</td><td>失败混在列表中段</td></tr>
+        <tr><td><b>可控分页</b></td><td>GitHub Marketplace / VSCode Extensions</td><td>无限滚动(无回头路)</td></tr>
+        <tr><td><b>关键词命中高亮</b></td><td>Linear / Algolia</td><td>列表显示但用户得肉眼比对</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 24px;">心智模型:Picker / 长列表 = Search → Filter → Sort → Render 四段管线</h3>
+
+    <div class="ascii-block">
+search box        → "M / N" count chip(过滤效果可见)
+filter pills      → toggle/active 高亮(系统当前在用)
+sort pills        → radio group(选了哪档清楚)
+render            → 高亮命中 + groupBy + lazy load
+    </div>
+
+    <h2>2 · 11 轮迭代摘要</h2>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R1</span>
+        <h3>共享 SearchInput 单件</h3>
+        <span class="tag refactor">refactor</span>
+      </div>
+      <p>一份实现,五处调用(SkillPicker / McpPicker / Skills 页 / MCP 页 / MCP 工具内搜索)。集成业界四个 ergonomic 默认行为:count chip · "/" 全局聚焦 · compact / default 双密度 · loading spinner。</p>
+      <div class="why">✅ 杜绝下游各页"自己实现 input + 自己写 ×"的样式漂移。</div>
+      <div class="files"><code>web/components/ui/SearchInput.tsx (new · 135 LOC)</code></div>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R2</span>
+        <h3>SkillMultiPicker 搜索 + 分组</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>扁平 chip cloud → search 顶 + groupBy(已选 / 内建 / 市场 / GitHub / 上传 / 其他)。</p>
+      <ul>
+        <li><b>"已选"组永远在顶,与 search 解耦</b> — 用户随时审计已挂载的样子</li>
+        <li>命中 ≤ 6 时分组自动展开,省一次手动展开</li>
+        <li>SkillDto 补 source / version / installed_at(后端早就吐,前端之前丢掉)</li>
+      </ul>
+      <div class="files"><code>web/components/employee-design/SkillMultiPicker.tsx</code> · <code>web/lib/api.ts</code> · <code>i18n × 2</code></div>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R3</span>
+        <h3>McpMultiPicker 搜索 + health 分组</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>同 R2 模式,分组按 health 切片:<b>已选 / 在线 / 不健康</b>。不健康默认折叠 — 失败 server 不该影响"选健康的"决策路径。chip 上加红色边框暗示 + status dot + tooltip 解释。</p>
+      <div class="files"><code>web/components/employee-design/McpMultiPicker.tsx</code></div>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R4</span>
+        <h3>Skill chip hover-peek</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>新增 <code class="inline">HoverPeek</code> 通用单件。Notion / GitHub linked-issue 风格的 popover · 200ms enter delay + 120ms leave delay 防快划闪烁 · 触摸设备(no-hover MQ)直接禁用避免误触 · 浮层内部 onMouseEnter 取消 leave timer 让用户能选中文字 · 自动避让(超出右下边界翻转锚定)。</p>
+      <p>Skill peek 内容:完整描述 / source / version / tool 数 chip / <code class="inline">&lt;details&gt;</code> 折叠 tool_ids 列表(max-h-32 内滚)。</p>
+      <div class="why">✅ 用户挂载 skill 前能审"它带哪些工具",不必跳出 modal 回 Skills 页查。</div>
+      <div class="files"><code>web/components/ui/HoverPeek.tsx (new · 165 LOC)</code> · <code>web/components/employee-design/SkillMultiPicker.tsx</code></div>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R5</span>
+        <h3>MCP chip hover-peek</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>同 R4 模板。peek 显示:server id / transport / health / enabled 三状态 chip。失败 server 在 peek 底部加红字解释影响 — 不止 chip 上的红边。</p>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R6</span>
+        <h3>Skills 列表搜索 + 三档排序 + 命中高亮</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>SearchInput 顶部接入 · 模糊匹配 name + description + id。SortPills 三档(radio group):</p>
+      <ul>
+        <li><b>recent</b> — 安装时间倒序,builtin 押后 + 字母序</li>
+        <li><b>name</b> — A-Z</li>
+        <li><b>tools</b> — 工具数倒序(挑"重量级"skill 直观)</li>
+      </ul>
+      <p>命中关键词在卡片标题 + 描述里 <code class="inline">&lt;mark&gt;</code> 高亮 — Highlight 组件按 lowercase indexOf 切片,无正则注入风险。</p>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R7</span>
+        <h3>MCP servers 列表 — 三件套</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>零搜索 / 零排序 / 不健康混排 → 三件套补齐:</p>
+      <ul>
+        <li>SearchInput · count chip · "/" 全局聚焦</li>
+        <li>4 档 SortPills(<b>health</b> / name / tools / recent),默认 health(在线优先 + tool 数)</li>
+        <li>"只看不健康"红色 toggle:仅在存在不健康 server 时显示</li>
+        <li>不再让"在线 + tool 多"的 server 在非 health 排序模式下随机戴 gradient 头部 — 视觉等级与排序对齐</li>
+      </ul>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R8</span>
+        <h3>Skill Market 分页 / load-more</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>一次性渲染 100+ entry → 默认 24 + 底部"再加载 24 · 还剩 N"。query / activeTag 变化时自动重置。</p>
+      <div class="why"><b>Why 可控分页 vs 无限滚动:</b>用户能掌控加载节奏,不会一不小心翻过了找不到回头路。GitHub Marketplace / VSCode Extensions 通用做法。</div>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R9</span>
+        <h3>市场 tag 过滤"显示全部"</h3>
+        <span class="tag fix">fix</span>
+      </div>
+      <p>打破 hard-coded <code class="inline">slice(0, 12)</code>。默认折叠 12 个高频 tag · "+ 更多 N"展开全部 · "− 收起"回到紧凑。</p>
+      <div class="why"><b>关键护栏:</b>activeTag 即便排在 12 之后也会出现在 folded 列表里 — 否则刷新后 user 看不到自己的选中态。</div>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R10</span>
+        <h3>MCP 工具 panel 多 server 同时展开 + 内部搜索</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <ul>
+        <li><code class="inline">expanded: string</code> → <code class="inline">Set&lt;string&gt;</code>:能同时看 github vs filesystem 工具,无切换损耗</li>
+        <li>ToolsList 子组件:tools &gt; 6 时顶上插 compact SearchInput;tools &gt; 12 时 ul max-h-72 内滚</li>
+        <li>e2e <code class="inline">tool-{server}-{name}</code> testid 完全保留,e2e 不破</li>
+      </ul>
+      <p>业界对照:GitHub repo files panel 内部 search · VSCode Extension command palette。</p>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R11</span>
+        <h3>Skills 卡片关键词高亮(并入 R6)</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>命中关键词在卡片标题 + 描述里 <code class="inline">&lt;mark&gt;</code> 高亮 — 与 SortPills 紧挨着,体验上一气呵成。Linear inbox / Algolia results 通用做法。</p>
+    </div>
+
+    <h2>3 · 体验杠杆量化</h2>
+
+    <div class="compare">
+      <div class="before">
+        <h4>改造前</h4>
+        <p>Picker 找特定 skill ≈ 6 行屏幕滚</p>
+      </div>
+      <div class="after">
+        <h4>改造后</h4>
+        <p>搜索 + 分组 = O(1) 找到</p>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="before">
+        <h4>改造前</h4>
+        <p>MCP 列表选健康 server = 肉眼扫红绿</p>
+      </div>
+      <div class="after">
+        <h4>改造后</h4>
+        <p>默认按 health 排 + 不健康折叠</p>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="before">
+        <h4>改造前</h4>
+        <p>市场页初切 tab ≈ 600ms 卡顿(100+ DOM 节点)</p>
+      </div>
+      <div class="after">
+        <h4>改造后</h4>
+        <p>24 项首屏渲染,余量 lazy</p>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="before">
+        <h4>改造前</h4>
+        <p>chip 上看不到 skill 描述,要回 Skills 页查</p>
+      </div>
+      <div class="after">
+        <h4>改造后</h4>
+        <p>hover-peek 完整文档 + tool 列表</p>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="before">
+        <h4>改造前</h4>
+        <p>同时对比两 server 工具 = 反复切换</p>
+      </div>
+      <div class="after">
+        <h4>改造后</h4>
+        <p>多展开 + 内部搜索</p>
+      </div>
+    </div>
+
+    <h2>4 · 工程账</h2>
+
+    <div class="card">
+      <ul>
+        <li><b>新增组件</b>:<code class="inline">SearchInput.tsx</code> (135 LOC) · <code class="inline">HoverPeek.tsx</code> (165 LOC)</li>
+        <li><b>i18n 增量</b>:zh-CN + en 各 ~30 个 key</li>
+        <li><b>提交粒度</b>:11 个独立 commit · 每轮 ≤ 3 文件 · 每轮跑通 typecheck + vitest(1794 passed)</li>
+        <li><b>双向同步</b>:每轮推 feat/ui-tweaks + main · 共 11 次 fast-forward 推送</li>
+        <li><b>e2e 安全</b>:所有 data-testid 保留,e2e 不破</li>
+      </ul>
+    </div>
+
+    <h2>5 · 设计沉淀</h2>
+
+    <div class="principle-grid">
+      <div class="card">
+        <h3>三条心智模型</h3>
+        <p style="margin-top:8px;"><b>1. 列表 = 四段管线</b><br/>
+        Search → Filter → Sort → Render。每段都要有视觉反馈。</p>
+        <p><b>2. 已选 / 已用永远在顶</b><br/>
+        Picker 类列表不论搜索/排序如何变,"已挂载的"分组永远固定在最上。这是 affordance 维度的"我能把它取消挂载吗"的视觉锚点。</p>
+        <p><b>3. 失败状态置后 + 折叠</b><br/>
+        失败的 server / item 不该混在中间影响主流程。要么独立分组(默认折叠),要么由排序规则压到底。</p>
+      </div>
+
+      <div class="card">
+        <h3>三个常见错误</h3>
+        <p style="margin-top:8px;"><b>1. title attribute 当详情卡用</b><br/>
+        title 不能选中文字,不能展开,不能放结构化内容,移动端完全失效。Notion / GitHub 早就用 popover 替代。</p>
+        <p><b>2. hard-coded N 的"显示前 N"</b><br/>
+        Top 12 tag 是合理默认,但拒绝展开就是设计遗憾。展开按钮 + 折叠回路一对儿一起加,activeTag 在折叠态的可见性不能丢。</p>
+        <p><b>3. 单选展开</b><br/>
+        "同一时刻只能展一个"在低密度场景没问题,但 MCP 工具对比 / Skill 多 details 阅读时太耗心智。Set 化展开 + 内部搜索是更稳的组合。</p>
+      </div>
+    </div>
+
+    <h2>6 · 待办 / 后续</h2>
+
+    <div class="card">
+      <ul>
+        <li>🟡 SkillPicker / McpPicker 的 hover-peek 在小屏溢出右边界时的位置</li>
+        <li>🟡 Skills 详情 Drawer:点 chip 弹完整 SKILL.md 阅读 + "挂载/卸载"操作</li>
+        <li>🟡 Bulk select 模式("全选 builtin" / "选 5 项") · Linear 风格</li>
+        <li>🟡 视觉密度切换(Compact / Comfortable / Card) · 三档 segment</li>
+        <li>🟡 全局工具总览页(builtin + skill-derived + mcp 一屏看,反查"哪个员工挂载了我")</li>
+      </ul>
+    </div>
+
+    <blockquote>
+      <b>"长得啥样合理"应当先于"怎么实现"被画清楚。</b><br/>
+      这一轮的所有决策都先对着业界先进方案对照表,再开始改代码。设计参考是可复用的,实现细节是次要的。
+    </blockquote>
+
+    <div class="footer">
+      <span>分支 · feat/ui-tweaks</span>
+      <span>已推 main</span>
+      <span>2026-04-26 · GMT+8</span>
+    </div>
+  </main>
+</body>
+</html>

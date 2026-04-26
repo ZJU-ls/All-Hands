@@ -119,17 +119,30 @@
     "subagent": {
       "title": "Active subagents",
       "runningCount": "· {n} running",
-      "viewTrace": "View trace ↗"
+      "viewTrace": "View trace ↗",
+      "status": {
+        "running": "Running",
+        "succeeded": "Done",
+        "failed": "Failed"
+      }
     },
     "planProgress": {
       "runningCount": "· {n} running",
       "failedCount": "· {n} failed",
-      "fallbackTitle": "Plan"
+      "fallbackTitle": "Plan",
+      "step": {
+        "done": "Done",
+        "running": "Running",
+        "failed": "Failed",
+        "skipped": "Skipped",
+        "pending": "Pending"
+      }
     },
     "progressPanel": {
       "subagentTab": "Subagents",
       "runningSuffix": "· {n} running",
-      "failedSuffix": "· {n} failed"
+      "failedSuffix": "· {n} failed",
+      "ariaLabel": "Agent progress"
     }
   }
 }

@@ -884,6 +884,209 @@ class KnowledgeService:
             ref = preset_for(provider.kind).default_model
         return provider, ref
 
+    async def suggest_tags_for_document(
+        self,
+        document_id: str,
+        *,
+        max_tags: int = 3,
+        existing_tags: list[str] | None = None,
+        model_ref: str | None = None,
+    ) -> list[str]:
+        """Ask the chat LLM to propose ``max_tags`` short tags for a doc.
+
+        Inputs the LLM sees: doc title + first ~1500 chars of body (skips
+        full read on long PDFs · the head usually carries title / abstract
+        / TOC which is plenty for tagging). Tags returned as lowercase
+        kebab-case strings · we strip wrapping quotes and `#`. We also
+        pass any ``existing_tags`` so the LLM can prefer reusing the
+        user's vocabulary instead of inventing parallel synonyms.
+
+        Failure modes:
+        - no chat provider → return [] (UI hides "采纳" button)
+        - LLM error → log + return []
+        - empty doc text → fall back to title-derived tag
+        """
+        doc = await self.get_document(document_id)
+        try:
+            text = await self.read_document_text(document_id)
+        except DocumentNotFound:
+            text = ""
+        body = text[:1500].strip()
+        if not body:
+            body = doc.title
+
+        existing = ", ".join(sorted(set(existing_tags or doc.tags)))
+        existing_hint = f"\nUser's existing tag vocabulary: {existing}" if existing else ""
+
+        system = (
+            "You suggest short, useful tags for documents in a personal "
+            "knowledge base. Output ONE tag per line, no numbering, no "
+            "leading dash, no '#'. Lowercase. Prefer kebab-case for "
+            "multi-word tags. Reuse the user's existing vocabulary when "
+            "appropriate (don't invent synonyms). Match the document's "
+            "language (Chinese in → Chinese out)."
+        )
+        user = (
+            f"Document title: {doc.title}\n"
+            f"Body excerpt:\n{body}\n"
+            f"{existing_hint}\n\n"
+            f"Generate up to {max_tags} concise tags."
+        )
+
+        try:
+            text_out, _ = await self._call_chat_llm(system, user, model_ref=model_ref)
+        except _NoChatProvider:
+            return []
+        except Exception:
+            _logger.exception("kb.suggest_tags_for_document LLM error")
+            return []
+
+        tags: list[str] = []
+        for line in text_out.splitlines():
+            t = line.strip().lstrip("-•*0123456789.) #").strip().strip("\"'")
+            if not t:
+                continue
+            t = t.lower()
+            if t not in tags:
+                tags.append(t)
+            if len(tags) >= max_tags:
+                break
+        return tags
+
+    async def get_chunks_missing_embeddings(self, kb_id: str) -> int:
+        """Count of chunks in this KB whose ``embedding`` column is NULL.
+
+        A non-zero count means at least some retrieval will fall back to
+        BM25 only — the chunk physically exists but is invisible to the
+        vector lens. Causes:
+        - upload happened while no embedder was usable (missing API key)
+        - embedder swapped after some docs were already ingested
+        - reindex aborted mid-flight
+        Sidebar/banner uses this to surface a "Re-embed all" CTA.
+        """
+        from sqlalchemy import func, select
+
+        from allhands.persistence.orm.knowledge_orm import ChunkRow
+
+        async with self._session_maker() as s:
+            n = (
+                await s.execute(
+                    select(func.count(ChunkRow.id)).where(
+                        ChunkRow.kb_id == kb_id,
+                        ChunkRow.embedding.is_(None),
+                    )
+                )
+            ).scalar()
+        return int(n or 0)
+
+    async def reembed_all(self, kb_id: str) -> dict[str, int]:
+        """Re-run the ingest pipeline for every ready/failed document in
+        a KB. Useful after the user (a) gets the embedding provider
+        working and wants to backfill missing vectors or (b) changes the
+        KB embedding ref (later).
+
+        Returns ``{processed, succeeded, failed}``. Per-doc errors are
+        swallowed so one bad doc can't abort the whole batch — the
+        Document.state on each surfaces the failure to the user.
+        """
+        await self.get_kb(kb_id)
+        docs = await self.list_documents(kb_id, limit=1000)
+        succeeded = 0
+        failed = 0
+        for d in docs:
+            try:
+                refreshed = await self.reindex_document(d.id)
+                if refreshed.state == DocumentState.READY:
+                    succeeded += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+        return {"processed": len(docs), "succeeded": succeeded, "failed": failed}
+
+    async def get_kb_health(self, kb_id: str, *, days: int = 30) -> dict[str, Any]:
+        """Snapshot of a KB for the sidebar "health" card.
+
+        Returns:
+        - ``doc_count`` / ``chunk_count``: aggregates straight from KB row
+        - ``token_sum``: sum of ``chunk.token_count`` across all chunks (not
+          stored on KB so we sum on the fly — cheap because v0 KBs are small)
+        - ``last_activity``: ISO of latest ``updated_at`` across docs;
+          ``None`` for empty KB.
+        - ``daily_doc_counts``: ``[{date, count}, …]`` of length ``days``,
+          oldest day first. Today's bucket is the rightmost. Drives the
+          sparkline.
+        - ``top_tags``: ``[{tag, count}, …]`` top 5 by occurrence.
+        - ``mime_breakdown``: ``[{mime, count}, …]`` sorted desc.
+
+        Cheap enough to call on every sidebar render (≤ 1 select + a few
+        aggregations); we don't bother caching at this scale.
+        """
+        from collections import Counter
+        from datetime import timedelta
+
+        kb = await self.get_kb(kb_id)
+        docs = await self.list_documents(kb_id, limit=1000)
+
+        # Token sum needs chunk rows. One query per doc would be N round
+        # trips; instead do a single aggregate via the chunk repo for the
+        # whole KB.
+        async with self._session_maker() as s:
+            from sqlalchemy import func, select
+
+            from allhands.persistence.orm.knowledge_orm import ChunkRow
+
+            total_tokens = (
+                await s.execute(
+                    select(func.coalesce(func.sum(ChunkRow.token_count), 0)).where(
+                        ChunkRow.kb_id == kb_id
+                    )
+                )
+            ).scalar() or 0
+
+        last_activity = max((d.updated_at for d in docs), default=None)
+
+        today = datetime.now(UTC).date()
+        bucket_counts: Counter[str] = Counter()
+        for d in docs:
+            day = d.created_at.date()
+            delta = (today - day).days
+            if 0 <= delta < days:
+                bucket_counts[day.isoformat()] += 1
+        daily = [
+            {
+                "date": (today - timedelta(days=days - 1 - i)).isoformat(),
+                "count": bucket_counts.get((today - timedelta(days=days - 1 - i)).isoformat(), 0),
+            }
+            for i in range(days)
+        ]
+
+        tag_counter: Counter[str] = Counter()
+        for d in docs:
+            tag_counter.update(d.tags)
+        top_tags = [{"tag": tag, "count": count} for tag, count in tag_counter.most_common(5)]
+
+        mime_counter: Counter[str] = Counter()
+        for d in docs:
+            mime_counter[d.mime_type] += 1
+        mime_breakdown = [
+            {"mime": mime, "count": count}
+            for mime, count in sorted(mime_counter.items(), key=lambda kv: -kv[1])
+        ]
+
+        chunks_missing_emb = await self.get_chunks_missing_embeddings(kb_id)
+
+        return {
+            "doc_count": kb.document_count,
+            "chunk_count": kb.chunk_count,
+            "token_sum": int(total_tokens),
+            "last_activity": last_activity.isoformat() if last_activity else None,
+            "daily_doc_counts": daily,
+            "top_tags": top_tags,
+            "mime_breakdown": mime_breakdown,
+            "chunks_missing_embeddings": chunks_missing_emb,
+        }
+
     async def suggest_starter_questions(
         self, kb_id: str, *, limit: int = 4, model_ref: str | None = None
     ) -> list[str]:

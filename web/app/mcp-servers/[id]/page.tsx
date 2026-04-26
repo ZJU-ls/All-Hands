@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
@@ -540,6 +540,7 @@ function Overview({
   dependents: Employee[];
 }) {
   const t = useTranslations("mcp.detail.overview");
+  const locale = useLocale();
   return (
     <div data-testid="tab-panel-overview" className="space-y-5">
       <Section title={t("config")} icon="settings">
@@ -555,7 +556,7 @@ function Overview({
             {
               k: t("lastHandshake"),
               v: server.last_handshake_at
-                ? formatTime(server.last_handshake_at)
+                ? formatTime(server.last_handshake_at, locale)
                 : t("neverHandshake"),
               mono: true,
             },
@@ -780,6 +781,7 @@ function LogsTab() {
 function HealthTab({ server }: { server: Server }) {
   const tr = useTranslations("mcp.detail");
   const trH = useTranslations("mcp.detail.healthTab");
+  const locale = useLocale();
   const rows: {
     at: string | null;
     state: Health;
@@ -819,7 +821,7 @@ function HealthTab({ server }: { server: Server }) {
                 return (
                   <tr key={idx} className="border-t border-border">
                     <td className="py-2 px-3 font-mono text-[12px] text-text-muted">
-                      {r.at ? formatTime(r.at) : "—"}
+                      {r.at ? formatTime(r.at, locale) : "—"}
                     </td>
                     <td className="py-2 px-3">
                       <span
@@ -849,10 +851,10 @@ function HealthTab({ server }: { server: Server }) {
   );
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, locale: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString();
+    return d.toLocaleString(locale);
   } catch {
     return iso;
   }

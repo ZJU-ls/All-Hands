@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/icon";
@@ -71,6 +71,7 @@ type RemoveTarget = {
 
 export default function MarketPage() {
   const t = useTranslations("market.list");
+  const locale = useLocale();
   const [tab, setTab] = useState<Tab>("watched");
   const [watched, setWatched] = useState<Watched[]>([]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
@@ -246,7 +247,7 @@ export default function MarketPage() {
               icon="activity"
               hint={
                 status?.last_tick_at
-                  ? t("kpi.pollerTick", { time: new Date(status.last_tick_at).toLocaleTimeString() })
+                  ? t("kpi.pollerTick", { time: new Date(status.last_tick_at).toLocaleTimeString(locale) })
                   : t("kpi.pollerAwaiting")
               }
               pulse={status?.running ?? false}

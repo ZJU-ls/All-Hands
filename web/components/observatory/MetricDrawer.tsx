@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import {
   fetchMetricSeries,
@@ -263,6 +263,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function SeriesChart({ series }: { series: TimeSeriesDto }) {
   const t = useTranslations("pages.observatory.metricDrawer");
+  const locale = useLocale();
   const fmt = makeFormatter(series);
   const W = 580;
   const H = 220;
@@ -428,7 +429,7 @@ function SeriesChart({ series }: { series: TimeSeriesDto }) {
       {/* Inline tooltip readout */}
       {hoverIdx !== null && series.points[hoverIdx] ? (
         <div className="mt-2 flex items-center justify-between text-[11px] text-text-muted font-mono">
-          <span>{new Date(series.points[hoverIdx]!.ts).toLocaleString()}</span>
+          <span>{new Date(series.points[hoverIdx]!.ts).toLocaleString(locale)}</span>
           <span className="text-text">
             <span className="font-semibold">
               {fmt(series.points[hoverIdx]!.value)}

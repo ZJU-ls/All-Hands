@@ -106,16 +106,38 @@ export function ProgressPanel({ conversationId }: Props) {
   const subRunning = subagents.filter((s) => s.status === "running").length;
   const subFailed = subagents.filter((s) => s.status === "failed").length;
 
+  // Body comes BEFORE tabs in DOM order — when expanded, content sits ABOVE
+  // the tab strip so the input bar (which is anchored below this panel)
+  // doesn't jump around as the user toggles. Tab strip stays glued just
+  // above the input bar; the body grows upward into the chat scroll area.
   return (
     <div
       data-testid="progress-panel"
-      className="bg-surface-2"
+      className="bg-bg"
     >
-      <div className="mx-auto w-full max-w-6xl px-4 py-2">
-        {/* Tab bar — always visible · click to expand / collapse below */}
+      <div className="mx-auto w-full max-w-6xl px-4 pb-2 pt-2">
+        {/* Body · rendered ABOVE tabs so toggling doesn't shove the input. */}
+        {active && (
+          <div
+            data-testid={`progress-body-${active}`}
+            className="mb-2 overflow-hidden rounded-xl border border-border/70 bg-surface-2/60 backdrop-blur-sm"
+          >
+            {active === "plan" && hasPlan && plan && (
+              <PlanProgressSection plan={plan} embedded />
+            )}
+            {active === "subagent" && hasSubagents && (
+              <SubagentProgressSection subagents={subagents} embedded />
+            )}
+          </div>
+        )}
+
+        {/* Tab strip · always visible · summary badges still readable when
+           collapsed. Background blends with page bg; only the active tab gets
+           a subtle primary tint so the active state is unambiguous without
+           floating "white card" feel. */}
         <div
           role="tablist"
-          aria-label="agent progress"
+          aria-label={t("ariaLabel")}
           className="flex items-stretch gap-1.5"
         >
           {hasPlan && (
@@ -125,6 +147,7 @@ export function ProgressPanel({ conversationId }: Props) {
               label={plan?.title ?? tPlan("fallbackTitle")}
               active={active === "plan"}
               onClick={() => onTabClick("plan")}
+              bodyAbove
               badge={
                 planRunning > 0 ? (
                   <span className="text-warning">
@@ -150,6 +173,7 @@ export function ProgressPanel({ conversationId }: Props) {
               label={t("subagentTab")}
               active={active === "subagent"}
               onClick={() => onTabClick("subagent")}
+              bodyAbove
               badge={
                 <span
                   className={cn(
@@ -177,21 +201,6 @@ export function ProgressPanel({ conversationId }: Props) {
             />
           )}
         </div>
-
-        {/* Body — full chat width when expanded · matching surface tone */}
-        {active && (
-          <div
-            data-testid={`progress-body-${active}`}
-            className="mt-2 overflow-hidden rounded-xl border border-border bg-surface"
-          >
-            {active === "plan" && hasPlan && plan && (
-              <PlanProgressSection plan={plan} embedded />
-            )}
-            {active === "subagent" && hasSubagents && (
-              <SubagentProgressSection subagents={subagents} embedded />
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -204,6 +213,7 @@ function Tab({
   active,
   badge,
   onClick,
+  bodyAbove = false,
 }: {
   id: string;
   icon: string;
@@ -211,7 +221,18 @@ function Tab({
   active: boolean;
   badge: React.ReactNode;
   onClick: () => void;
+  bodyAbove?: boolean;
 }) {
+  // Chevron points TOWARD the body. With bodyAbove, the body is above the
+  // tab when active → chevron-down means "click to dismiss the body up
+  // there", chevron-up means "click to expand body upward".
+  const chevron = active
+    ? bodyAbove
+      ? "chevron-down"
+      : "chevron-up"
+    : bodyAbove
+      ? "chevron-up"
+      : "chevron-down";
   return (
     <button
       type="button"
@@ -222,15 +243,15 @@ function Tab({
       className={cn(
         "group flex flex-1 items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-[background-color,border-color,color] duration-fast",
         active
-          ? "border-primary/30 bg-primary-muted text-text"
-          : "border-border bg-surface text-text hover:border-border-strong hover:bg-surface-3",
+          ? "border-primary/40 bg-primary-muted/70 text-text"
+          : "border-border/70 bg-bg text-text-muted hover:border-border-strong hover:bg-surface-2/70 hover:text-text",
       )}
     >
       <span
         aria-hidden="true"
         className={cn(
           "grid h-5 w-5 shrink-0 place-items-center rounded-md transition-[background-color,color]",
-          active ? "bg-primary text-primary-fg" : "bg-primary-muted text-primary",
+          active ? "bg-primary text-primary-fg" : "bg-primary-muted/60 text-primary",
         )}
       >
         <Icon name={icon as never} size={11} />
@@ -240,7 +261,7 @@ function Tab({
       </span>
       <span className="shrink-0 font-mono text-[11px]">{badge}</span>
       <Icon
-        name={active ? "chevron-up" : "chevron-down"}
+        name={chevron}
         size={11}
         className="shrink-0 text-text-subtle"
       />
