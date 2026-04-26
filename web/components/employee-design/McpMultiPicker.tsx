@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { HoverPeek } from "@/components/ui/HoverPeek";
 import { cn } from "@/lib/cn";
 import type { McpServerDto } from "@/lib/api";
 
@@ -228,33 +229,95 @@ function McpChip({
   on: boolean;
   onToggle: () => void;
 }) {
-  const t = useTranslations("employees.mcpPicker");
   const isFailed = !HEALTHY_STATES.has(server.health.toLowerCase());
   const healthDot = isFailed ? "bg-danger" : "bg-success";
-  const title = isFailed ? t("chipFailedTitle", { health: server.health }) : undefined;
   return (
-    <button
-      type="button"
-      data-testid={`mcp-${server.id}`}
-      aria-pressed={on}
-      onClick={onToggle}
-      title={title}
-      className={cn(
-        "inline-flex max-w-[280px] items-center gap-1.5 rounded-md px-2.5 py-1 text-left transition-colors duration-fast",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-        on
-          ? "bg-primary-muted text-primary border border-primary/30"
-          : isFailed
-            ? "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text border border-danger/20"
-            : "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text border border-transparent",
+    <HoverPeek content={<McpPeekContent server={server} on={on} />}>
+      <button
+        type="button"
+        data-testid={`mcp-${server.id}`}
+        aria-pressed={on}
+        onClick={onToggle}
+        className={cn(
+          "inline-flex max-w-[280px] items-center gap-1.5 rounded-md px-2.5 py-1 text-left transition-colors duration-fast",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          on
+            ? "bg-primary-muted text-primary border border-primary/30"
+            : isFailed
+              ? "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text border border-danger/20"
+              : "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text border border-transparent",
+        )}
+      >
+        <Icon name={on ? "check" : "plug"} size={12} className="shrink-0" />
+        <span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full shrink-0", healthDot)} />
+        <span className="truncate text-[12px] font-medium">{server.name}</span>
+        <span className="shrink-0 font-mono text-[10px] text-text-subtle uppercase">
+          {server.transport}
+        </span>
+      </button>
+    </HoverPeek>
+  );
+}
+
+function McpPeekContent({ server, on }: { server: McpServerDto; on: boolean }) {
+  const t = useTranslations("employees.mcpPicker");
+  const isFailed = !HEALTHY_STATES.has(server.health.toLowerCase());
+  return (
+    <div className="space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[12.5px] font-semibold text-text truncate">
+            {server.name}
+          </p>
+          <p className="font-mono text-[10px] text-text-subtle truncate">
+            {server.id}
+          </p>
+        </div>
+        {on && (
+          <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-primary-muted text-primary font-mono text-[10px] shrink-0">
+            <Icon name="check" size={10} />
+            mounted
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 text-[10.5px] font-mono">
+        <span className="inline-flex items-center gap-1 px-1.5 h-5 rounded bg-surface-2 text-text-muted">
+          <Icon name="plug" size={10} />
+          {server.transport}
+        </span>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 px-1.5 h-5 rounded font-medium",
+            isFailed
+              ? "bg-danger-soft text-danger"
+              : "bg-success-soft text-success",
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              isFailed ? "bg-danger" : "bg-success",
+            )}
+          />
+          {server.health}
+        </span>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 px-1.5 h-5 rounded",
+            server.enabled
+              ? "bg-surface-2 text-text-muted"
+              : "bg-warning-soft text-warning",
+          )}
+        >
+          {server.enabled ? "enabled" : "disabled"}
+        </span>
+      </div>
+      {isFailed && (
+        <p className="text-[11.5px] leading-relaxed text-danger">
+          {t("chipFailedTitle", { health: server.health })}
+        </p>
       )}
-    >
-      <Icon name={on ? "check" : "plug"} size={12} className="shrink-0" />
-      <span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full shrink-0", healthDot)} />
-      <span className="truncate text-[12px] font-medium">{server.name}</span>
-      <span className="shrink-0 font-mono text-[10px] text-text-subtle uppercase">
-        {server.transport}
-      </span>
-    </button>
+    </div>
   );
 }

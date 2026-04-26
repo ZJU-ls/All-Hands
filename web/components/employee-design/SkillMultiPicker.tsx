@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { HoverPeek } from "@/components/ui/HoverPeek";
 import { cn } from "@/lib/cn";
 import type { SkillDto } from "@/lib/api";
 
@@ -275,29 +276,93 @@ function SkillChip({
   onToggle: () => void;
 }) {
   return (
-    <button
-      type="button"
-      data-testid={`skill-${skill.id}`}
-      aria-pressed={on}
-      onClick={onToggle}
-      title={skill.description ?? undefined}
-      className={cn(
-        "inline-flex max-w-[280px] items-center gap-1.5 rounded-md px-2.5 py-1 text-left transition-colors duration-fast",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-        on
-          ? "bg-primary-muted text-primary border border-primary/30"
-          : "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text border border-transparent",
+    <HoverPeek content={<SkillPeekContent skill={skill} on={on} />}>
+      <button
+        type="button"
+        data-testid={`skill-${skill.id}`}
+        aria-pressed={on}
+        onClick={onToggle}
+        className={cn(
+          "inline-flex max-w-[280px] items-center gap-1.5 rounded-md px-2.5 py-1 text-left transition-colors duration-fast",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          on
+            ? "bg-primary-muted text-primary border border-primary/30"
+            : "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text border border-transparent",
+        )}
+      >
+        <Icon
+          name={on ? "check" : "sparkles"}
+          size={12}
+          className="shrink-0"
+        />
+        <span className="truncate text-[12px] font-medium">{skill.name}</span>
+        <span className="shrink-0 font-mono text-[10px] text-text-subtle">
+          {skill.tool_ids.length}t
+        </span>
+      </button>
+    </HoverPeek>
+  );
+}
+
+function SkillPeekContent({ skill, on }: { skill: SkillDto; on: boolean }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[12.5px] font-semibold text-text truncate">
+            {skill.name}
+          </p>
+          <p className="font-mono text-[10px] text-text-subtle">{skill.id}</p>
+        </div>
+        {on && (
+          <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-primary-muted text-primary font-mono text-[10px] shrink-0">
+            <Icon name="check" size={10} />
+            mounted
+          </span>
+        )}
+      </div>
+      {skill.description && (
+        <p className="text-[12px] leading-relaxed text-text-muted">
+          {skill.description}
+        </p>
       )}
-    >
-      <Icon
-        name={on ? "check" : "sparkles"}
-        size={12}
-        className="shrink-0"
-      />
-      <span className="truncate text-[12px] font-medium">{skill.name}</span>
-      <span className="shrink-0 font-mono text-[10px] text-text-subtle">
-        {skill.tool_ids.length}t
-      </span>
-    </button>
+      <div className="flex flex-wrap items-center gap-1.5 text-[10.5px] font-mono text-text-subtle">
+        {skill.source && (
+          <span className="inline-flex items-center gap-1 px-1.5 h-4 rounded bg-surface-2">
+            {skill.source}
+          </span>
+        )}
+        {skill.version && (
+          <span className="inline-flex items-center gap-1 px-1.5 h-4 rounded bg-surface-2">
+            v{skill.version}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1 px-1.5 h-4 rounded bg-surface-2">
+          {skill.tool_ids.length} tools
+        </span>
+      </div>
+      {skill.tool_ids.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer list-none text-[10.5px] font-mono text-text-subtle hover:text-text-muted">
+            <Icon
+              name="chevron-down"
+              size={10}
+              className="inline-block -mt-0.5 mr-0.5 transition-transform group-open:rotate-0 -rotate-90"
+            />
+            tool_ids
+          </summary>
+          <ul className="mt-1.5 space-y-0.5 max-h-32 overflow-y-auto pl-2">
+            {skill.tool_ids.map((tid) => (
+              <li
+                key={tid}
+                className="font-mono text-[10.5px] text-text-muted truncate"
+              >
+                {tid}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
   );
 }
