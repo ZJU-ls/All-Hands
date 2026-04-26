@@ -106,8 +106,14 @@ SPAWN_SUBAGENT_TOOL = Tool(
             },
         },
     },
+    # Spawning a subagent is itself benign — it just hands a task to a
+    # child runner. The child has its own ConfirmationGate that fires for
+    # any real WRITE inside its scope, so confirming at the spawn boundary
+    # is a double-gate that produces "expired by user" when the user never
+    # sees a prompt for "may I think harder about this?". Mirrors
+    # `dispatch_employee` (employee_tools.py — also requires_confirmation=False).
     scope=ToolScope.WRITE,
-    requires_confirmation=True,
+    requires_confirmation=False,
 )
 
 

@@ -419,7 +419,7 @@ function buildKpis(servers: Server[], t: Translator, locale: string) {
     .filter((ts) => !Number.isNaN(ts));
   const latest = lastTimestamps.length > 0 ? Math.max(...lastTimestamps) : null;
   const lastSyncLabel = latest !== null ? formatRelative(latest, t) : "—";
-  const lastSyncSub = latest !== null ? formatAbsolute(latest, locale) : t("neverSynced");
+  const lastSyncSub = latest !== null ? formatAbsolute(latest, locale) : t("kpi.neverSynced");
   return { total, online, tools, lastSyncLabel, lastSyncSub };
 }
 

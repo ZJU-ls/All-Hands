@@ -503,11 +503,11 @@ def make_artifact_create_executor(
             return {"error": str(exc)}
         except Exception as exc:
             return {"error": f"artifact_create failed: {exc}"}
-        return {
-            "artifact_id": artifact.id,
-            "version": artifact.version,
-            "kind": artifact.kind.value,
-        }
+        return _artifact_create_result(
+            artifact_id=artifact.id,
+            version=artifact.version,
+            kind_value=artifact.kind.value,
+        )
 
     return _exec
 
@@ -900,6 +900,39 @@ def make_artifact_search_executor(
 # any of them.
 
 
+def _artifact_create_result(
+    *,
+    artifact_id: str,
+    version: int,
+    kind_value: str,
+    warnings: list[str] | None = None,
+) -> dict[str, Any]:
+    """Unified return shape for every artifact_create* tool.
+
+    Carries BOTH a render envelope (so the chat shows an Artifact.Preview
+    card automatically · the agent no longer needs a follow-up
+    artifact_render call · _as_render_envelope picks up component+props)
+    AND the flat artifact_id / version / kind keys (so downstream tools
+    like artifact_update / artifact_pin / agent prose can chain). Solves
+    user feedback 2026-04-26 「html 的卡片提醒呢? 现在啥都没有」 — agent
+    forgot the artifact_render second step. With auto-render, every
+    successful create posts a card, regardless of model discipline.
+    """
+    out: dict[str, Any] = {
+        "component": "Artifact.Preview",
+        "props": {"artifact_id": artifact_id, "version": version},
+        "interactions": [],
+        # Flat fields for agent ergonomics + backwards compat. Agents call
+        # `result["artifact_id"]` to chain into update/delete/pin.
+        "artifact_id": artifact_id,
+        "version": version,
+        "kind": kind_value,
+    }
+    if warnings:
+        out["warnings"] = warnings
+    return out
+
+
 async def _persist_office_artifact(
     *,
     maker: async_sessionmaker[AsyncSession],
@@ -965,11 +998,11 @@ async def _persist_office_artifact(
                 size_bytes=size,
             )
         )
-    return {
-        "artifact_id": artifact.id,
-        "version": 1,
-        "kind": kind.value,
-    }
+    return _artifact_create_result(
+        artifact_id=artifact.id,
+        version=1,
+        kind_value=kind.value,
+    )
 
 
 def make_artifact_create_pdf_executor(
@@ -1185,6 +1218,104 @@ def make_artifact_create_pptx_executor(
     return _exec
 
 
+_DRAWIO_WRAPPER_OPEN = (
+    '<mxfile host="app.diagrams.net" agent="allhands">'
+    '<diagram id="diagram" name="Diagram">'
+    '<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" '
+    'tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" '
+    'pageWidth="850" pageHeight="1100" math="0" shadow="0"><root>'
+    '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+)
+_DRAWIO_WRAPPER_CLOSE = "</root></mxGraphModel></diagram></mxfile>"
+
+
+def _normalize_drawio_xml(xml: str) -> str:
+    """Make agent-supplied XML render-ready.
+
+    drawio renders nothing if the outer ``<mxfile>`` envelope is missing
+    or if ``<mxCell id="0"/>`` / ``<mxCell id="1" parent="0"/>`` aren't
+    present. We accept three input shapes and normalize:
+
+    1. Full ``<mxfile>...`` — passed through.
+    2. Bare ``<mxGraphModel>...`` — wrap in mxfile/diagram.
+    3. Just a list of ``<mxCell>`` shapes — wrap in full scaffolding.
+    """
+    body = xml.strip()
+    if body.startswith("<mxfile"):
+        return body
+    if body.startswith("<diagram"):
+        return f'<mxfile host="app.diagrams.net" agent="allhands">{body}</mxfile>'
+    if body.startswith("<mxGraphModel"):
+        return (
+            '<mxfile host="app.diagrams.net" agent="allhands">'
+            '<diagram id="diagram" name="Diagram">'
+            f"{body}"
+            "</diagram></mxfile>"
+        )
+    return f"{_DRAWIO_WRAPPER_OPEN}{body}{_DRAWIO_WRAPPER_CLOSE}"
+
+
+def _normalize_drawio_name(name: str) -> str:
+    name = name.strip()
+    if not name.lower().endswith(".drawio"):
+        name = f"{name}.drawio"
+    return name
+
+
+def make_render_drawio_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    """Single-call drawio: persist XML as artifact AND return render envelope.
+
+    The product intent (2026-04-26): drop the four-step ritual
+    (read_skill_file → fill placeholders → artifact_create → artifact_render).
+    One tool · one call · the chat shows the diagram, the artifact panel
+    shows the file. XML auto-wraps if the model only sent the inner body.
+    """
+
+    async def _exec(
+        name: str,
+        xml: str = "",
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        if not xml or not xml.strip():
+            return {"error": "xml is empty — pass a mxfile or mxGraphModel body"}
+        try:
+            normalized_xml = _normalize_drawio_xml(xml)
+            normalized_name = _normalize_drawio_name(name)
+            blob = normalized_xml.encode("utf-8")
+            persisted = await _persist_office_artifact(
+                maker=maker,
+                name=normalized_name,
+                kind=ArtifactKind.DRAWIO,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+        except _ArtifactExecutorError as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"render_drawio failed: {exc}"}
+        # _persist_office_artifact already returns the unified shape
+        # (component + props + flat artifact_id/version/kind), so a bare
+        # passthrough is correct. Keeps drawio in lock-step with all the
+        # other artifact_create* tools — same auto-render contract.
+        return persisted
+
+    return _exec
+
+
 def _make_delete_conversation_exec_factory() -> Callable[
     [async_sessionmaker[AsyncSession]], ToolExecutor
 ]:
@@ -1227,6 +1358,7 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     "allhands.artifacts.create_csv": make_artifact_create_csv_executor,
     "allhands.artifacts.create_docx": make_artifact_create_docx_executor,
     "allhands.artifacts.create_pptx": make_artifact_create_pptx_executor,
+    "allhands.artifacts.render_drawio": make_render_drawio_executor,
     "allhands.artifacts.render": make_artifact_render_executor,
     "allhands.artifacts.list": make_artifact_list_executor,
     "allhands.artifacts.read": make_artifact_read_executor,

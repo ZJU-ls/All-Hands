@@ -517,3 +517,73 @@ date 格式化 0 处 navigator 默认
 **结果**:1928 web tests + backend i18n tests + regression net 全绿 · 本轮零代码改动
 
 **commits**:仅本条 log
+
+## Round 24 · 2026-04-26 11:43 (cron · 30m)
+
+**主题**:再次广度审计 · main 新增的 4 个文件零漏点
+
+**main 新增**:agent_loop / test_agent_loop / ProgressPanel(R20 R21 改动 +
+border-t 拆除) / HoverPeek 定位修复 — 都不引入新文案。
+
+**做的事**:
+- 跑 backend + web regression net + typecheck + lint → 全绿
+- 检查 agent_loop 新增中文(160-174 + 490) → 都是 LLM 检测词表 / nudge
+  SystemMessage,by-design 不翻译
+- 扫表单 type="submit" / required → submit 文案全 t()
+- HoverPeek + ProgressPanel 改动只动样式 / 几何,无文案变化
+
+**剩余可做但低 ROI**:18+ 处 number `.toLocaleString()`(observatory / tasks /
+traces / RunTurnList / ModelTestDialog / ModelRow)。zh-CN + en 两个 locale
+千分位分隔符都是 `,`,navigator-default 行为不会撕裂这两种用户。仅
+de-DE / fr-FR navigator + 应用切到 zh / en 时会显示 "1.234"。当前不修。
+
+**结果**:1928 web tests + backend i18n tests + regression net 全绿 · 零代码改动
+
+**commits**:仅本条 log
+
+## Round 25 · 2026-04-26 12:13 (cron · 30m)
+
+**主题**:把 R24 列在 backlog 的 18+ 处 number `.toLocaleString()` 一并收口
+
+**做的事**:
+- sed 批量替换 `.toLocaleString()` → `.toLocaleString(locale)`
+  在 app/observatory · app/tasks/[id] · components/traces/TraceTable
+- 给五个组件补 useLocale:
+  - app/tasks/[id] TaskKpiStrip · components/runs/RunTurnList LLMCallTurn ·
+    components/gateway/ModelRow · components/gateway/ModelTestDialog MetricsRow
+  - 后两个还要给 fmtCount(n, locale) 加 locale 参数 + 三个调用点
+- observatory(12 处)+ TraceTable(4 处)的 toLocaleString 都已经在
+  组件内 useLocale 范围里(R18 R19 已 wire),sed 后零编译错
+
+**验证**:`grep '\.toLocaleString()' app/ components/` 现在 0 行
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿 · 全栈
+任何 `.toLocaleString*()` 调用都跟随当前 locale,
+de-DE / fr-FR navigator 用户也不再撕裂
+
+**commits**:见 git log
+
+## Round 26 · 2026-04-26 12:43 (用户报错触发)
+
+**bug**:`/mcp-servers` 控制台报 `MISSING_MESSAGE: mcp.list.neverSynced
+in messages for locale zh-CN` · buildKpis 调 `t("neverSynced")`,t 是
+`useTranslations("mcp.list")`,但 catalog 把 key 嵌在 `mcp.list.kpi.neverSynced` 下。
+
+**根因**:命名空间 / key 路径不一致 · 现有 catalog-audit 测试只比较两个 locale
+的 shape 是否对齐(都缺也通过)· 没有验证「源码里 t(...) 引用的 key 必须在
+catalog 里存在」。
+
+**做的事**:
+- app/mcp-servers/page.tsx:422 改 `t("neverSynced")` → `t("kpi.neverSynced")`
+- 新增 web/tests/i18n-keys-resolve.test.ts(回归网):
+  - 加载所有 catalog key(root + 8 namespace 文件)成 Set
+  - 扫 app/ + components/ + lib/ 所有 .ts/.tsx,正则匹配
+    `useTranslations("ns")` 把它绑定的局部变量名记下
+  - 对每个 t-name 找 `t-name("a.b.c")` 调用,组合 `ns.a.b.c` 检查是否存在
+  - 反向验证:把修复 sed-undo 后跑一次,确认能 surface 这个 bug · 然后
+    再恢复
+
+**结果**:1929 web tests · typecheck · lint · regression 全绿。
+以后 PR 加错 namespace 或漏 key,这层会立刻挡住。
+
+**commits**:见 git log
