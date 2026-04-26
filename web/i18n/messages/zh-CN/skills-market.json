@@ -7,7 +7,8 @@
       "pageTitle": "技能",
       "subtitle": "技能包 = 工具 ID 列表 + 提示片段。从 GitHub、官方市场(<mono>anthropics/skills</mono>)或本地 .zip 安装,并分配给任意员工。",
       "tabs": {
-        "installed": "已安装",
+        "installed": "我安装的",
+        "builtin": "平台内建",
         "market": "官方市场",
         "github": "GitHub 安装",
         "upload": "上传 .zip"

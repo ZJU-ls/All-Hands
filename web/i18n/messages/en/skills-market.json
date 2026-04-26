@@ -7,7 +7,8 @@
       "pageTitle": "Skills",
       "subtitle": "A skill pack = list of tool IDs + a prompt fragment. Install from GitHub, the official market (<mono>anthropics/skills</mono>), or a local .zip, and assign to any employee.",
       "tabs": {
-        "installed": "Installed",
+        "installed": "User-installed",
+        "builtin": "Platform built-in",
         "market": "Official market",
         "github": "Install from GitHub",
         "upload": "Upload .zip"
