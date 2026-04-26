@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from allhands.api.deps import get_observatory_service
+from allhands.i18n import t
 
 if TYPE_CHECKING:
     from allhands.services.observatory_service import ObservatoryService
@@ -26,8 +27,14 @@ router = APIRouter(prefix="/observatory", tags=["observatory"])
 @router.get("/summary")
 async def get_summary(
     svc: ObservatoryService = Depends(get_observatory_service),
+    hours: int = Query(default=24, ge=1, le=720),
 ) -> dict[str, object]:
-    summary = await svc.get_summary()
+    """Aggregated observatory summary for the last ``hours`` hours.
+
+    The page sends 1 / 24 / 168 (7d) when the user clicks a time-range
+    pill. Defaults to 24 for legacy callers that don't pass a window.
+    """
+    summary = await svc.get_summary(window_hours=hours)
     return summary.model_dump(mode="json")
 
 
@@ -65,6 +72,30 @@ async def patch_config(
     }
 
 
+_METRICS_PATTERN = (
+    "^(runs|failure_rate|latency_p50|latency_p95|latency_p99|"
+    "tokens_total|tokens_input|tokens_output|llm_calls|cost)$"
+)
+
+
+@router.get("/series")
+async def get_series(
+    svc: ObservatoryService = Depends(get_observatory_service),
+    metric: str = Query(..., pattern=_METRICS_PATTERN),
+    since: datetime | None = Query(default=None),
+    until: datetime | None = Query(default=None),
+    bucket: str = Query(default="1h", pattern="^(5m|1h)$"),
+) -> dict[str, object]:
+    """Bucketed time-series for one observatory metric.
+
+    Drives the KPI-card / stat-row drilldown chart on the observatory page —
+    the user clicks a metric and we show the consumption curve over the
+    selected time window.
+    """
+    series = await svc.get_series(metric=metric, since=since, until=until, bucket=bucket)
+    return series.model_dump(mode="json")
+
+
 @router.get("/traces")
 async def list_traces(
     svc: ObservatoryService = Depends(get_observatory_service),
@@ -94,7 +125,7 @@ async def get_trace(
 ) -> dict[str, object]:
     trace = await svc.get_trace(trace_id)
     if trace is None:
-        raise HTTPException(status_code=404, detail=f"trace not found: {trace_id}")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.trace_id", id=trace_id))
     return trace.model_dump(mode="json")
 
 
@@ -111,5 +142,5 @@ async def get_run_detail(
     """
     detail = await svc.get_run_detail(run_id)
     if detail is None:
-        raise HTTPException(status_code=404, detail=f"run not found: {run_id}")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.run_id", id=run_id))
     return detail.model_dump(mode="json")

@@ -121,7 +121,7 @@ async def create_conversation(
         await emp_svc.get(body.employee_id)
     except EmployeeNotFound as exc:
         raise HTTPException(
-            status_code=404, detail=f"Employee {body.employee_id!r} not found."
+            status_code=404, detail=t("errors.not_found.employee_id", id=repr(body.employee_id))
         ) from exc
     conv = await chat_svc.create_conversation(body.employee_id)
     return await _to_conversation_response(conv, session)
@@ -147,7 +147,7 @@ async def list_conversations(
             await emp_svc.get(employee_id)
         except EmployeeNotFound as exc:
             raise HTTPException(
-                status_code=404, detail=f"Employee {employee_id!r} not found."
+                status_code=404, detail=t("errors.not_found.employee_id", id=repr(employee_id))
             ) from exc
         convs = await conv_repo.list_for_employee(employee_id)
     else:
@@ -170,7 +170,9 @@ async def get_conversation(
     conv_repo = await get_conversation_repo(session)
     conv = await conv_repo.get(conversation_id)
     if conv is None:
-        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.conversation_id", id=repr(conversation_id))
+        )
     counts = await conv_repo.count_messages([conv.id])
     return await _to_conversation_response(conv, session, message_count=counts.get(conv.id, 0))
 
@@ -189,7 +191,9 @@ async def delete_conversation(
     conv_repo = await get_conversation_repo(session)
     deleted = await conv_repo.delete(conversation_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.conversation_id", id=repr(conversation_id))
+        )
     return Response(status_code=204)
 
 
@@ -210,7 +214,9 @@ async def update_conversation(
     conv_repo = await get_conversation_repo(session)
     conv = await conv_repo.get(conversation_id)
     if conv is None:
-        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.conversation_id", id=repr(conversation_id))
+        )
     if body.title is not None:
         conv.title = body.title
     if body.clear_model_ref_override:

@@ -193,7 +193,9 @@ async def preview_employee_composition(
     §3.2 红线:request / response 都不出现 ``mode`` / ``preset`` 字样。
     """
     if body.preset not in PRESETS:
-        raise HTTPException(status_code=400, detail=f"Unknown preset {body.preset!r}")
+        raise HTTPException(
+            status_code=400, detail=t("errors.unknown_preset", preset=repr(body.preset))
+        )
     preview = compose_preview(
         PRESETS[body.preset],
         custom_tool_ids=list(body.custom_tool_ids),
@@ -266,7 +268,9 @@ async def publish_employee(
     try:
         emp = await svc.publish(employee_id)
     except EmployeeNotFound as exc:
-        raise HTTPException(status_code=404, detail=f"Employee {employee_id!r} not found.") from exc
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.employee_id", id=repr(employee_id))
+        ) from exc
     return _to_response(emp)
 
 
@@ -279,7 +283,9 @@ async def get_employee(
     try:
         emp = await svc.get(employee_id)
     except EmployeeNotFound as exc:
-        raise HTTPException(status_code=404, detail=f"Employee {employee_id!r} not found.") from exc
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.employee_id", id=repr(employee_id))
+        ) from exc
     return _to_response(emp)
 
 
@@ -301,7 +307,9 @@ async def update_employee(
             max_iterations=body.max_iterations,
         )
     except EmployeeNotFound as exc:
-        raise HTTPException(status_code=404, detail=f"Employee {employee_id!r} not found.") from exc
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.employee_id", id=repr(employee_id))
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _to_response(emp)
@@ -316,5 +324,7 @@ async def delete_employee(
     try:
         await svc.delete(employee_id)
     except EmployeeNotFound as exc:
-        raise HTTPException(status_code=404, detail=f"Employee {employee_id!r} not found.") from exc
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.employee_id", id=repr(employee_id))
+        ) from exc
     return Response(status_code=204)

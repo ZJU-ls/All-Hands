@@ -65,6 +65,36 @@ class ObservatoryModelBreakdown(BaseModel):
     model_config = {"frozen": True}
 
 
+class ObservatoryToolBreakdown(BaseModel):
+    """Per-tool rollup · keyed on ``tool_id`` from tool.invoked /
+    tool.returned events. Counts every invocation, surfaces the failure
+    rate and avg duration so the observatory can highlight unreliable or
+    slow tools (Honeycomb / Datadog parity).
+    """
+
+    tool_id: str
+    invocations: int = 0
+    failures: int = 0
+    failure_rate: float = 0.0
+    avg_duration_s: float = 0.0
+
+    model_config = {"frozen": True}
+
+
+class ObservatoryErrorBreakdown(BaseModel):
+    """Top error categories · groups failed runs by ``error_kind`` so
+    the observatory can show "the X kinds of failure happening right now"
+    the way Sentry does for exceptions.
+    """
+
+    error_kind: str
+    count: int = 0
+    last_message: str = ""
+    last_seen_at: datetime | None = None
+
+    model_config = {"frozen": True}
+
+
 class ObservatorySummary(BaseModel):
     """Left-pane summary rendered on `/observatory` (spec § 6.2).
 
@@ -84,8 +114,65 @@ class ObservatorySummary(BaseModel):
     total_tokens_total: int = 0
     llm_calls_total: int = 0
     estimated_cost_usd: float = 0.0
+    # Previous-period (yesterday's same window) deltas · used to render
+    # "+18% vs yesterday" stats with real data instead of placeholder text.
+    # Honeycomb / Datadog parity. Values are absolute differences from the
+    # previous period; ``*_pct`` is the relative change (None when the
+    # previous period had zero baseline to avoid div-by-zero).
+    runs_delta_pct: float | None = None
+    failure_rate_delta_pct: float | None = None
+    latency_p50_delta_pct: float | None = None
+    cost_delta_pct: float | None = None
     by_employee: list[ObservatoryEmployeeBreakdown] = Field(default_factory=list)
     by_model: list[ObservatoryModelBreakdown] = Field(default_factory=list)
+    by_tool: list[ObservatoryToolBreakdown] = Field(default_factory=list)
+    top_errors: list[ObservatoryErrorBreakdown] = Field(default_factory=list)
+    # 24xN latency heatmap (24 hourly columns x N latency buckets) for the
+    # Honeycomb-style "where do my long tails live" panel. cells[h][b] is
+    # the count of runs that landed in hour h with duration < buckets[b]
+    # (last bucket = >= buckets[-1]).
+    latency_heatmap: list[list[int]] = Field(default_factory=list)
+    latency_heatmap_buckets_s: list[float] = Field(default_factory=list)
+    # Anomaly callouts · short messages the UI surfaces above the dashboard
+    # ("p95 jumped 3x in last hour" · "12 failed runs from emp-coder").
+    # Computed by the service from the same recent events; the rule set is
+    # intentionally small + explainable — no ML.
+    anomalies: list[str] = Field(default_factory=list)
+
+
+class TimeSeriesPoint(BaseModel):
+    """One time-bucket of an observatory metric.
+
+    ``ts`` is the bucket start (UTC ISO). ``value`` is the metric value
+    aggregated over the bucket — meaning depends on which metric: latency
+    p-percentiles use the percentile within the bucket; counts (runs /
+    llm_calls) sum; tokens / cost sum; failure_rate is failed/total within
+    the bucket. ``count`` is the number of run.* events that contributed,
+    surfaced for UI tooltips ("48 runs in this hour").
+    """
+
+    ts: datetime
+    value: float = 0.0
+    count: int = 0
+
+    model_config = {"frozen": True}
+
+
+class TimeSeries(BaseModel):
+    """Bucketed series for the metric drilldown chart.
+
+    Returned by ``GET /api/observatory/series?metric=...&bucket=...``.
+    The frontend renders a single-line chart with hover tooltips; missing
+    buckets at the start/end of the window are filled with zero-value
+    points so the x-axis stays continuous.
+    """
+
+    metric: str
+    bucket: str  # "1h" | "5m"
+    since: datetime
+    until: datetime
+    points: list[TimeSeriesPoint] = Field(default_factory=list)
+    unit: str = ""  # "s" / "tokens" / "USD" / "%"
 
     model_config = {"frozen": True}
 
@@ -257,12 +344,16 @@ __all__ = [
     "ArtifactSummary",
     "ObservabilityConfig",
     "ObservatoryEmployeeBreakdown",
+    "ObservatoryErrorBreakdown",
     "ObservatoryModelBreakdown",
     "ObservatorySummary",
+    "ObservatoryToolBreakdown",
     "RunDetail",
     "RunError",
     "RunStatus",
     "RunTokenUsage",
+    "TimeSeries",
+    "TimeSeriesPoint",
     "TraceSummary",
     "Turn",
     "TurnLLMCall",

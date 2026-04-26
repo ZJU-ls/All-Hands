@@ -95,6 +95,9 @@
       "delete": "Delete"
     },
     "designForm": {
+      "field": {
+        "required": "Required field"
+      },
       "sectionBasics": "Basics",
       "fieldName": "Name",
       "namePlaceholder": "e.g. researcher-a",

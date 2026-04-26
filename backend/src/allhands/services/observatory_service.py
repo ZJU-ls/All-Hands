@@ -20,12 +20,16 @@ from allhands.core import (
     Message,
     ObservabilityConfig,
     ObservatoryEmployeeBreakdown,
+    ObservatoryErrorBreakdown,
     ObservatoryModelBreakdown,
     ObservatorySummary,
+    ObservatoryToolBreakdown,
     RunDetail,
     RunError,
     RunStatus,
     RunTokenUsage,
+    TimeSeries,
+    TimeSeriesPoint,
     TraceSummary,
     Turn,
     TurnLLMCall,
@@ -87,9 +91,11 @@ class ObservatoryService:
     async def get_status(self) -> ObservabilityConfig:
         return await self._config.load()
 
-    async def get_summary(self, *, now: datetime | None = None) -> ObservatorySummary:
+    async def get_summary(
+        self, *, now: datetime | None = None, window_hours: int = 24
+    ) -> ObservatorySummary:
         ts_now = now or datetime.now(UTC)
-        day_start = ts_now - timedelta(hours=24)
+        day_start = ts_now - timedelta(hours=window_hours)
 
         cfg = await self._config.load()
 
@@ -232,6 +238,168 @@ class ObservatoryService:
         # but we still load() the row to surface the flush of any flag mutation.
         _ = cfg
 
+        # by_tool aggregation · sourced from tool.invoked + tool.returned
+        # events. tool.invoked counts invocations; tool.returned with
+        # status="failed" / non-empty error counts failures. Avg duration
+        # is derived from the gap between matching invoked / returned by
+        # tool_call_id within the same window.
+        tool_events = await self._events.list_recent(
+            limit=5000,
+            workspace_id=self._ws,
+            kind_prefixes=["tool."],
+            since=day_start,
+        )
+        tool_invocations: dict[str, int] = {}
+        tool_failures: dict[str, int] = {}
+        tool_invoked_at: dict[str, tuple[str, datetime]] = {}  # tool_call_id → (tool_id, ts)
+        tool_durations: dict[str, list[float]] = {}
+        for e in tool_events:
+            payload = e.payload
+            tid = payload.get("tool_id")
+            if not isinstance(tid, str) or not tid:
+                continue
+            tcid = payload.get("tool_call_id")
+            if e.kind == "tool.invoked":
+                tool_invocations[tid] = tool_invocations.get(tid, 0) + 1
+                if isinstance(tcid, str):
+                    tool_invoked_at[tcid] = (tid, e.published_at)
+            elif e.kind == "tool.returned":
+                status_v = payload.get("status")
+                err = payload.get("error")
+                failed = (status_v == "failed") or (err is not None and err != "")
+                if failed:
+                    tool_failures[tid] = tool_failures.get(tid, 0) + 1
+                if isinstance(tcid, str) and tcid in tool_invoked_at:
+                    started_tid, started_at = tool_invoked_at.pop(tcid)
+                    if started_tid == tid:
+                        delta = (e.published_at - started_at).total_seconds()
+                        if 0 <= delta < 600:
+                            tool_durations.setdefault(tid, []).append(delta)
+        by_tool = []
+        for tid, inv in sorted(tool_invocations.items(), key=lambda kv: -kv[1]):
+            fails = tool_failures.get(tid, 0)
+            durs = tool_durations.get(tid, [])
+            avg_dur = round(sum(durs) / len(durs), 3) if durs else 0.0
+            by_tool.append(
+                ObservatoryToolBreakdown(
+                    tool_id=tid,
+                    invocations=inv,
+                    failures=fails,
+                    failure_rate=round(fails / inv, 4) if inv else 0.0,
+                    avg_duration_s=avg_dur,
+                )
+            )
+
+        # top_errors aggregation · group failed runs by ``error_kind``.
+        err_counts: dict[str, int] = {}
+        err_last_msg: dict[str, str] = {}
+        err_last_seen: dict[str, datetime] = {}
+        for e in recent:
+            if e.kind != "run.failed":
+                continue
+            kind = e.payload.get("error_kind") or "unknown"
+            kind_str = str(kind)
+            err_counts[kind_str] = err_counts.get(kind_str, 0) + 1
+            msg = e.payload.get("error")
+            if isinstance(msg, str) and msg:
+                err_last_msg[kind_str] = msg
+            prev = err_last_seen.get(kind_str)
+            if prev is None or e.published_at > prev:
+                err_last_seen[kind_str] = e.published_at
+        top_errors = [
+            ObservatoryErrorBreakdown(
+                error_kind=k,
+                count=err_counts[k],
+                last_message=err_last_msg.get(k, "")[:200],
+                last_seen_at=err_last_seen.get(k),
+            )
+            for k in sorted(err_counts, key=lambda k: -err_counts[k])
+        ]
+
+        # ── Latency histogram for the heatmap card ───────────────────────
+        # Always covers the last 24 hours regardless of the summary window
+        # — a 7-day heatmap would compress everything into illegible cells.
+        heatmap_start = ts_now - timedelta(hours=24)
+        # Inspired by Honeycomb's heatmap-of-duration view. We bucket by
+        # (hour-of-window, log-bucket-of-latency) so the front-end can
+        # render a 24x8 grid showing where the long tails live.
+        # The lookup is local-only — no extra DB roundtrip.
+        latency_hist_buckets: list[float] = [
+            0.5,
+            1.0,
+            2.0,
+            5.0,
+            10.0,
+            30.0,
+            60.0,
+        ]  # seconds; cells: <0.5, <1, <2, <5, <10, <30, <60, >=60
+        # cells[hour_index][bucket_index]
+        n_hours = 24
+        n_lat = len(latency_hist_buckets) + 1
+        cells: list[list[int]] = [[0] * n_lat for _ in range(n_hours)]
+        for e in recent:
+            if e.kind not in ("run.completed", "run.failed"):
+                continue
+            dur = e.payload.get("duration_s")
+            if not isinstance(dur, (int, float)):
+                continue
+            if e.published_at < heatmap_start:
+                continue
+            # hour index 0..23 from oldest to newest
+            seconds_into = (e.published_at - heatmap_start).total_seconds()
+            h = int(seconds_into // 3600)
+            if h < 0 or h >= n_hours:
+                continue
+            # bucket index
+            b = n_lat - 1
+            for i, edge in enumerate(latency_hist_buckets):
+                if dur < edge:
+                    b = i
+                    break
+            cells[h][b] += 1
+        latency_heatmap = cells
+        latency_heatmap_buckets_s = list(latency_hist_buckets)
+
+        # Previous-period comparison: same 24h window starting 48h ago →
+        # ending 24h ago. Lets the UI render a real "vs yesterday" delta.
+        prev_start = ts_now - timedelta(hours=48)
+        prev_end = day_start
+        prev_recent = await self._events.list_recent(
+            limit=1000,
+            workspace_id=self._ws,
+            kind_prefixes=list(_RUN_KINDS),
+            since=prev_start,
+        )
+        prev_recent = [e for e in prev_recent if e.published_at < prev_end]
+        prev_runs = sum(1 for e in prev_recent if e.kind in ("run.completed", "run.failed"))
+        prev_failed = sum(1 for e in prev_recent if e.kind == "run.failed")
+        prev_failure_rate = (prev_failed / prev_runs) if prev_runs else 0.0
+        prev_durations = [
+            float(e.payload["duration_s"])
+            for e in prev_recent
+            if isinstance(e.payload.get("duration_s"), (int, float))
+        ]
+        prev_p50 = _percentile(prev_durations, 0.5) if prev_durations else 0.0
+        prev_cost = 0.0
+        for e in prev_recent:
+            tok = e.payload.get("tokens")
+            ti = to = 0
+            if isinstance(tok, dict):
+                ti = int(tok.get("input", 0) or 0)
+                to = int(tok.get("output", 0) or 0)
+            mr = e.payload.get("model_ref")
+            prev_cost += estimate_cost_usd(mr if isinstance(mr, str) else None, ti, to)
+
+        def _pct(curr: float, prev: float) -> float | None:
+            if prev <= 0:
+                return None
+            return round((curr - prev) / prev, 4)
+
+        runs_delta = _pct(float(runs_24h), float(prev_runs))
+        failure_delta = _pct(failure_rate, prev_failure_rate)
+        p50_delta = _pct(p50, prev_p50)
+        cost_delta = _pct(cost_total, prev_cost)
+
         return ObservatorySummary(
             traces_total=runs_total,
             failure_rate_24h=round(failure_rate, 4),
@@ -244,8 +412,25 @@ class ObservatoryService:
             total_tokens_total=total_total,
             llm_calls_total=llm_calls_total,
             estimated_cost_usd=round(cost_total, 6),
+            runs_delta_pct=runs_delta,
+            failure_rate_delta_pct=failure_delta,
+            latency_p50_delta_pct=p50_delta,
+            cost_delta_pct=cost_delta,
             by_employee=by_employee,
             by_model=by_model,
+            by_tool=by_tool,
+            top_errors=top_errors,
+            latency_heatmap=latency_heatmap,
+            latency_heatmap_buckets_s=latency_heatmap_buckets_s,
+            anomalies=_compute_anomalies(
+                p50,
+                prev_p50,
+                failure_rate,
+                prev_failure_rate,
+                runs_24h,
+                prev_runs,
+                top_errors,
+            ),
         )
 
     async def list_traces(
@@ -576,6 +761,143 @@ class ObservatoryService:
             cfg = await self._config.save(cfg)
         return cfg
 
+    async def get_series(
+        self,
+        *,
+        metric: str,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        bucket: str = "1h",
+    ) -> TimeSeries:
+        """Bucket run.* events into a time-series for the metric drilldown.
+
+        Metrics:
+        - ``runs`` · count of completed runs per bucket
+        - ``failure_rate`` · failed/total within bucket (0-1)
+        - ``latency_p50`` / ``latency_p95`` / ``latency_p99`` · seconds
+        - ``tokens_total`` · sum of total_tokens
+        - ``tokens_input`` / ``tokens_output`` · sum of in / out
+        - ``llm_calls`` · sum of per-run llm_calls
+        - ``cost`` · sum of estimated USD cost
+
+        Buckets: ``"5m"`` (5 min) or ``"1h"``. Empty leading/trailing
+        buckets are filled with zero points so the x-axis stays continuous
+        for the chart.
+        """
+        ts_now = until or datetime.now(UTC)
+        ts_start = since or (ts_now - timedelta(hours=24))
+        # Bucket size in seconds (kept as a small whitelist — the UI only
+        # ever asks for these; we reject anything else as 1h).
+        bucket_seconds = 300 if bucket == "5m" else 3600
+        bucket_size = timedelta(seconds=bucket_seconds)
+
+        events = await self._events.list_recent(
+            limit=5000,
+            workspace_id=self._ws,
+            kind_prefixes=list(_RUN_KINDS),
+            since=ts_start,
+        )
+        # Build empty buckets first so missing windows still render as 0.
+        bucket_count = max(1, int((ts_now - ts_start).total_seconds() // bucket_seconds))
+        bucket_ts: list[datetime] = [ts_start + bucket_size * i for i in range(bucket_count)]
+        durs: list[list[float]] = [[] for _ in range(bucket_count)]
+        runs = [0] * bucket_count
+        failed = [0] * bucket_count
+        tokens_in = [0] * bucket_count
+        tokens_out = [0] * bucket_count
+        tokens_total = [0] * bucket_count
+        llm_calls = [0] * bucket_count
+        cost = [0.0] * bucket_count
+
+        for e in events:
+            if e.published_at < ts_start or e.published_at > ts_now:
+                continue
+            idx = int((e.published_at - ts_start).total_seconds() // bucket_seconds)
+            if not (0 <= idx < bucket_count):
+                continue
+            payload = e.payload
+            if e.kind == "run.completed":
+                runs[idx] += 1
+            elif e.kind == "run.failed":
+                runs[idx] += 1
+                failed[idx] += 1
+            else:
+                continue
+            dur = payload.get("duration_s")
+            if isinstance(dur, (int, float)):
+                durs[idx].append(float(dur))
+            tok = payload.get("tokens")
+            ti = to = tt = 0
+            if isinstance(tok, dict):
+                ti = int(tok.get("input", 0) or 0)
+                to = int(tok.get("output", 0) or 0)
+                tt = int(tok.get("total", 0) or 0) or (ti + to)
+            elif isinstance(tok, int):
+                tt = int(tok)
+            tokens_in[idx] += ti
+            tokens_out[idx] += to
+            tokens_total[idx] += tt
+            lc = payload.get("llm_calls")
+            if isinstance(lc, int):
+                llm_calls[idx] += lc
+            mr = payload.get("model_ref")
+            cost[idx] += estimate_cost_usd(mr if isinstance(mr, str) else None, ti, to)
+
+        unit_by_metric = {
+            "runs": "",
+            "failure_rate": "%",
+            "latency_p50": "s",
+            "latency_p95": "s",
+            "latency_p99": "s",
+            "tokens_total": "tokens",
+            "tokens_input": "tokens",
+            "tokens_output": "tokens",
+            "llm_calls": "",
+            "cost": "USD",
+        }
+        unit = unit_by_metric.get(metric, "")
+
+        points: list[TimeSeriesPoint] = []
+        for i, ts_bucket in enumerate(bucket_ts):
+            n = runs[i]
+            value = 0.0
+            if metric == "runs":
+                value = float(n)
+            elif metric == "failure_rate":
+                value = float(failed[i]) / n if n else 0.0
+            elif metric == "latency_p50":
+                value = _percentile(durs[i], 0.5) if durs[i] else 0.0
+            elif metric == "latency_p95":
+                value = _percentile(durs[i], 0.95) if durs[i] else 0.0
+            elif metric == "latency_p99":
+                value = _percentile(durs[i], 0.99) if durs[i] else 0.0
+            elif metric == "tokens_total":
+                value = float(tokens_total[i])
+            elif metric == "tokens_input":
+                value = float(tokens_in[i])
+            elif metric == "tokens_output":
+                value = float(tokens_out[i])
+            elif metric == "llm_calls":
+                value = float(llm_calls[i])
+            elif metric == "cost":
+                value = cost[i]
+            points.append(
+                TimeSeriesPoint(
+                    ts=ts_bucket,
+                    value=round(value, 6),
+                    count=n,
+                )
+            )
+
+        return TimeSeries(
+            metric=metric,
+            bucket=bucket if bucket in ("5m", "1h") else "1h",
+            since=ts_start,
+            until=ts_now,
+            points=points,
+            unit=unit,
+        )
+
 
 def _compose_turns(
     messages: list[Message],
@@ -697,6 +1019,50 @@ def _percentile(values: list[float], pct: float) -> float:
     if idx >= len(s):
         idx = len(s) - 1
     return s[idx]
+
+
+def _compute_anomalies(
+    p50_now: float,
+    p50_prev: float,
+    failure_rate_now: float,
+    failure_rate_prev: float,
+    runs_now: int,
+    runs_prev: int,
+    top_errors: list[ObservatoryErrorBreakdown],
+) -> list[str]:
+    """Small explainable rule set for "things look off" callouts.
+
+    No ML, no black box — each rule is one comparison the user can audit
+    in the dashboard themselves. The strings are i18n-keys-not-yet so the
+    UI just renders them as informational chips for now.
+    """
+    out: list[str] = []
+    if p50_prev > 0 and p50_now > p50_prev * 2 and p50_now > 1.0:
+        out.append(
+            f"latency.p50 {p50_now:.2f}s vs {p50_prev:.2f}s yesterday "
+            f"(+{((p50_now - p50_prev) / p50_prev) * 100:.0f}%)"
+        )
+    if failure_rate_now > 0.10 and failure_rate_now > failure_rate_prev + 0.05:
+        out.append(
+            f"failure_rate {failure_rate_now * 100:.1f}% vs "
+            f"{failure_rate_prev * 100:.1f}% yesterday"
+        )
+    if runs_prev > 5 and runs_now < runs_prev * 0.5:
+        out.append(
+            f"runs/24h {runs_now} vs {runs_prev} yesterday "
+            f"(-{((runs_prev - runs_now) / runs_prev) * 100:.0f}%) — "
+            f"traffic dropped"
+        )
+    # Surface the top failure category if it dominates.
+    if top_errors:
+        top = top_errors[0]
+        total_err = sum(e.count for e in top_errors)
+        if total_err >= 5 and top.count / total_err > 0.6:
+            out.append(
+                f"top error '{top.error_kind}' = {top.count}/{total_err} "
+                f"failures (>60% concentration)"
+            )
+    return out
 
 
 __all__ = [

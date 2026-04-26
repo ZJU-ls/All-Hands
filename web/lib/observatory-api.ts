@@ -19,6 +19,21 @@ export type ObservatoryModelBreakdownDto = {
   estimated_cost_usd: number;
 };
 
+export type ObservatoryToolBreakdownDto = {
+  tool_id: string;
+  invocations: number;
+  failures: number;
+  failure_rate: number;
+  avg_duration_s: number;
+};
+
+export type ObservatoryErrorBreakdownDto = {
+  error_kind: string;
+  count: number;
+  last_message: string;
+  last_seen_at: string | null;
+};
+
 export type ObservatorySummaryDto = {
   traces_total: number;
   failure_rate_24h: number;
@@ -31,8 +46,17 @@ export type ObservatorySummaryDto = {
   total_tokens_total: number;
   llm_calls_total: number;
   estimated_cost_usd: number;
+  runs_delta_pct: number | null;
+  failure_rate_delta_pct: number | null;
+  latency_p50_delta_pct: number | null;
+  cost_delta_pct: number | null;
   by_employee: ObservatoryEmployeeBreakdownDto[];
   by_model: ObservatoryModelBreakdownDto[];
+  by_tool: ObservatoryToolBreakdownDto[];
+  top_errors: ObservatoryErrorBreakdownDto[];
+  latency_heatmap: number[][];
+  latency_heatmap_buckets_s: number[];
+  anomalies: string[];
 };
 
 export type RunTokenUsageDto = {
@@ -53,14 +77,64 @@ export type TraceSummaryDto = {
   started_at: string;
 };
 
-export async function fetchObservatorySummary(): Promise<ObservatorySummaryDto> {
-  const res = await fetch(`${BASE}/api/observatory/summary`, {
-    cache: "no-store",
-  });
+export async function fetchObservatorySummary(
+  hours = 24,
+): Promise<ObservatorySummaryDto> {
+  const q = new URLSearchParams();
+  q.set("hours", String(hours));
+  const res = await fetch(
+    `${BASE}/api/observatory/summary?${q.toString()}`,
+    { cache: "no-store" },
+  );
   if (!res.ok) {
     throw new Error(`observatory summary failed: ${res.status}`);
   }
   return res.json() as Promise<ObservatorySummaryDto>;
+}
+
+export type ObservatoryMetric =
+  | "runs"
+  | "failure_rate"
+  | "latency_p50"
+  | "latency_p95"
+  | "latency_p99"
+  | "tokens_total"
+  | "tokens_input"
+  | "tokens_output"
+  | "llm_calls"
+  | "cost";
+
+export type TimeSeriesPointDto = {
+  ts: string;
+  value: number;
+  count: number;
+};
+
+export type TimeSeriesDto = {
+  metric: ObservatoryMetric;
+  bucket: "5m" | "1h";
+  since: string;
+  until: string;
+  points: TimeSeriesPointDto[];
+  unit: string;
+};
+
+export async function fetchMetricSeries(params: {
+  metric: ObservatoryMetric;
+  since?: string;
+  until?: string;
+  bucket?: "5m" | "1h";
+}): Promise<TimeSeriesDto> {
+  const q = new URLSearchParams();
+  q.set("metric", params.metric);
+  if (params.since) q.set("since", params.since);
+  if (params.until) q.set("until", params.until);
+  if (params.bucket) q.set("bucket", params.bucket);
+  const res = await fetch(`${BASE}/api/observatory/series?${q.toString()}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`series failed: ${res.status}`);
+  return res.json() as Promise<TimeSeriesDto>;
 }
 
 export type SystemFlagsDto = {

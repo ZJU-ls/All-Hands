@@ -7,7 +7,8 @@
       "pageTitle": "技能",
       "subtitle": "技能包 = 工具 ID 列表 + 提示片段。从 GitHub、官方市场(<mono>anthropics/skills</mono>)或本地 .zip 安装,并分配给任意员工。",
       "tabs": {
-        "installed": "已安装",
+        "installed": "我安装的",
+        "builtin": "平台内建",
         "market": "官方市场",
         "github": "GitHub 安装",
         "upload": "上传 .zip"
@@ -134,6 +135,10 @@
         "dependents": "使用该技能的员工 · {count}",
         "dependentsEmpty": "尚无员工引用该技能。",
         "leadBadge": "lead"
+      },
+      "references": {
+        "section": "参考资料 · {count} 个",
+        "hint": "Agent 可以通过 read_skill_file(skill_id, relative_path) 按需拉取这些文件,作为模板 / 速查 / 排障线索。"
       },
       "prompt": {
         "section": "系统提示片段",

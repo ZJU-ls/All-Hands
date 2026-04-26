@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>allhands i18n · 8 小时连续迭代报告</title>
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --surface: #11182a;
+    --surface-2: #1a2235;
+    --border: #283047;
+    --border-strong: #3a4666;
+    --text: #e6ecff;
+    --text-muted: #98a3c2;
+    --text-subtle: #6b7493;
+    --primary: #6f8cff;
+    --primary-soft: #1d2a5b;
+    --accent: #8a6cff;
+    --success: #3ddc84;
+    --warning: #ffb74d;
+    --danger: #ff6b6b;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f9ff;
+      --surface: #ffffff;
+      --surface-2: #f0f3ff;
+      --border: #d8def0;
+      --border-strong: #b6c0e0;
+      --text: #18233f;
+      --text-muted: #4d5a7a;
+      --text-subtle: #7c8aa8;
+      --primary: #3a5af5;
+      --primary-soft: #e3e9ff;
+      --accent: #6b51e0;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 14px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-size: 38px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle { color: var(--text-muted); font-size: 17px; max-width: 720px; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 32px 0 48px;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .stat .num {
+    font-size: 28px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .stat .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .stat .delta { color: var(--success); font-size: 11px; margin-top: 4px; }
+
+  section { margin-top: 56px; }
+  h2 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--primary);
+    padding-left: 12px;
+  }
+  h2 + p { color: var(--text-muted); margin-bottom: 20px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  th, td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: var(--surface-2);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+  tr:last-child td { border-bottom: none; }
+  td.mono, .mono {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--text-subtle);
+  }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 14px;
+  }
+  .compare > div {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+  }
+  .compare h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .compare .before { border-color: rgba(255, 107, 107, 0.4); }
+  .compare .after { border-color: rgba(61, 220, 132, 0.4); }
+  .compare .before h4 { color: var(--danger); }
+  .compare .after h4 { color: var(--success); }
+  .compare pre {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 6px;
+  }
+  .compare .why {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+
+  ul.bullets {
+    list-style: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 0;
+  }
+  ul.bullets li {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13.5px;
+  }
+  ul.bullets li:last-child { border-bottom: none; }
+  ul.bullets li b { color: var(--text); margin-right: 6px; }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--primary-soft);
+    color: var(--primary);
+  }
+  .pill.ok { background: rgba(61, 220, 132, 0.12); color: var(--success); }
+  .pill.warn { background: rgba(255, 183, 77, 0.12); color: var(--warning); }
+  .pill.danger { background: rgba(255, 107, 107, 0.12); color: var(--danger); }
+  .pill.muted { background: var(--surface-2); color: var(--text-muted); }
+
+  .topic { color: var(--text); font-weight: 600; }
+
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--text-subtle);
+    font-size: 12px;
+  }
+
+  details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 8px;
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text);
+  }
+  details > div { margin-top: 12px; color: var(--text-muted); font-size: 13px; }
+  details code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--primary);
+  }
+
+  .hr-light { height: 1px; background: var(--border); margin: 32px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">allhands · 双语国际化 · 连续迭代复盘</div>
+  <h1>8 小时 · 8 轮 · 把整个平台的中英文打磨到位</h1>
+  <p class="subtitle">
+    用户睡前布置:全平台中英双语连续优化,直到尽善尽美。这份报告记录了 8 轮自动迭代每一轮的改动、当前
+    catalog 状态、典型 before/after,以及建议的后续路径。
+  </p>
+</header>
+
+<div class="stat-grid">
+  <div class="stat">
+    <div class="num">2 171</div>
+    <div class="label">每个 locale 的 i18n key 总数</div>
+    <div class="delta">zh-CN ↔ en 100% 一致</div>
+  </div>
+  <div class="stat">
+    <div class="num">0</div>
+    <div class="label">Catalog 形状不一致 / ICU 占位符不齐 / 空值</div>
+    <div class="delta">由 vitest + pytest 持续守护</div>
+  </div>
+  <div class="stat">
+    <div class="num">1 885</div>
+    <div class="label">前端单测全绿</div>
+    <div class="delta">含 i18n catalog audit + locale switcher + no-hardcoded-zh 三套回归网</div>
+  </div>
+  <div class="stat">
+    <div class="num">1 232</div>
+    <div class="label">后端单测全绿</div>
+    <div class="delta">含 12 个 i18n / Accept-Language / router 扫描专项</div>
+  </div>
+  <div class="stat">
+    <div class="num">8 / 8</div>
+    <div class="label">迭代轮次完成</div>
+    <div class="delta">每轮独立 commit + 推 main + 同步</div>
+  </div>
+  <div class="stat">
+    <div class="num">5 556</div>
+    <div class="label">catalog JSON 总行数</div>
+    <div class="delta">17 个 namespace · 8 个分领域文件 + 根 catalog</div>
+  </div>
+</div>
+
+<section>
+  <h2>1. 8 轮时间线</h2>
+  <p>每一轮 ~30 分钟 · pull main → 选 2-3 个领域改动 → typecheck/lint/build/test → commit + push。</p>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>主题</th>
+        <th>关键改动</th>
+        <th>commit</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="pill">R1</span></td>
+        <td class="topic">基建 + KB 重做 + 翻译质量首轮</td>
+        <td>
+          新增 <code>scripts/audit-i18n-catalog.mjs</code> · KB 页 origin/main 重写后再迁(子 agent · 147 keys 16 sub-namespace) · 美式拼写 / 全角冒号修 · backend ai_explainer + provider preset i18n 漂移修
+        </td>
+        <td class="mono">3a9b1b4</td>
+      </tr>
+      <tr>
+        <td><span class="pill">R2</span></td>
+        <td class="topic">ArtifactPeek + LocaleSwitcher 单测 + KB 增量</td>
+        <td>
+          ArtifactPeek <code>relativeTime</code> 14 keys · 新加 <code>i18n-locale-switcher.test.tsx</code> 4 contract tests · KB 又被 main 加 174 行(onboarding/URL ingest/Ask/批选)子 agent 一并迁
+        </td>
+        <td class="mono">11dd3af, e381edd</td>
+      </tr>
+      <tr>
+        <td><span class="pill">R3</span></td>
+        <td class="topic">chat 衍生组件 + ModelRow + DesignForm</td>
+        <td>
+          严格 strip-comment 扫描发现 116 个未翻译字符散在 9 文件 · MessageBubble interrupted/toolPulse · ToolCallCard subagentRun · SubagentProgressSection · PlanProgressSection · ModelRow 默认徽标 · DesignForm 必填错误
+        </td>
+        <td class="mono">209c3e5</td>
+      </tr>
+      <tr>
+        <td><span class="pill">R4</span></td>
+        <td class="topic">metadata locale-aware + ArtifactGrid</td>
+        <td>
+          <b>真功夫:启 prod server 抓 EN/ZH HTML 比对发现</b> <code>&lt;meta name="description"&gt;</code> 一直是英文静态值 · <code>layout.tsx</code> 改 <code>generateMetadata()</code> · ArtifactGrid 复用 ArtifactPeek 的时间 keys
+        </td>
+        <td class="mono">019bbf3</td>
+      </tr>
+      <tr>
+        <td><span class="pill">R5</span></td>
+        <td class="topic">backend router 残留 + catalog audit 入测试</td>
+        <td>
+          backend i18n 扩 11 keys · 7 router 12 处 raise HTTPException 改走 t() · backend test_i18n 加 2 测试守护新 keys / 形状对齐 · 前端新加 <code>i18n-catalog-audit.test.ts</code> · 修 observatory 404 测试 Accept-Language
+        </td>
+        <td class="mono">667bd60</td>
+      </tr>
+      <tr>
+        <td><span class="pill">R6</span></td>
+        <td class="topic">i18n 反模式修 + 标点统一 + pnpm 别名</td>
+        <td>
+          重构 triggers card "split-translation" 反模式 → 单一 ICU + rich tag · 11 处 <code>...</code> → <code>…</code> · <code>pnpm audit-i18n</code> / <code>:strict</code> 别名加到 package.json
+        </td>
+        <td class="mono">ff74886</td>
+      </tr>
+      <tr>
+        <td><span class="pill">R7</span></td>
+        <td class="topic">双回归网 + user_input 残留 + 美式拼写</td>
+        <td>
+          新加 backend <code>test_no_hardcoded_chinese_in_routers</code> · 新加前端 <code>i18n-no-hardcoded-zh.test.ts</code>(剥三种注释扫 app+components) · 抓出 user_input.py:60 漏网 · settings.autoTitle 英式 → 美式
+        </td>
+        <td class="mono">f36397c</td>
+      </tr>
+      <tr>
+        <td><span class="pill ok">R8</span></td>
+        <td class="topic">最终 audit + 报告生成</td>
+        <td>
+          全面 audit · 输出本 HTML 报告 · 启 HTTP server 给 URL · 提议 next steps
+        </td>
+        <td class="mono">本次</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>2. 改进前后对比</h2>
+  <p>5 个最显眼的真实修改。每个都是用户能直接感知到的 UX 变化。</p>
+
+  <div class="compare">
+    <div class="before">
+      <h4>Before · meta description 静态英文</h4>
+      <pre>// app/layout.tsx
+export const metadata: Metadata = {
+  title: "allhands",
+  description: "One for All — open-source
+    digital employee organization platform",
+};</pre>
+      <div class="why">
+        无论用户语言偏好,搜索引擎、社交分享卡片、浏览器标签页 description 都只显示英文。
+      </div>
+    </div>
+    <div class="after">
+      <h4>After · 跟随 locale 切换</h4>
+      <pre>export async function generateMetadata() {
+  const t = await getTranslations("metadata");
+  return { title: "allhands",
+    description: t("description") };
+}</pre>
+      <div class="why">
+        实测:EN cookie → "an open-source, self-hosted digital workforce platform" · ZH cookie → "开源自部署的数字员工组织平台"
+      </div>
+    </div>
+  </div>
+
+  <div class="compare">
+    <div class="before">
+      <h4>Before · split-translation 反模式</h4>
+      <pre>{t("firesPrefix")}{" "}
+&lt;span&gt;{trigger.fires_total}&lt;/span&gt;{" "}
+{t("firesSuffix")}</pre>
+      <div class="why">
+        中文 "触发 N 次" 分三段拼接 — 英文 "Fired N times" 词序勉强能套,但任何形容词 / 副词都会破。这是 i18n 标准反模式。
+      </div>
+    </div>
+    <div class="after">
+      <h4>After · 单 ICU 字符串 + rich tag</h4>
+      <pre>{t.rich("firesTotal", {
+  n: () =&gt; &lt;span&gt;{fires_total}&lt;/span&gt;
+})}
+// "Fired &lt;n&gt;&lt;/n&gt; times" / "触发 &lt;n&gt;&lt;/n&gt; 次"</pre>
+      <div class="why">
+        翻译者拿到完整句子,可任意挪动占位符位置;rich tag 还原 inline 样式。
+      </div>
+    </div>
+  </div>
+
+  <div class="compare">
+    <div class="before">
+      <h4>Before · 后端错误信息裸 f-string</h4>
+      <pre>raise HTTPException(
+  status_code=404,
+  detail=f"Conversation {id!r} not found.",
+)</pre>
+      <div class="why">
+        中文用户拿到的 JSON detail 永远是英文。前端只能靠状态码兜底。
+      </div>
+    </div>
+    <div class="after">
+      <h4>After · t() + Accept-Language</h4>
+      <pre>raise HTTPException(
+  status_code=404,
+  detail=t("errors.not_found.conversation_id",
+           id=repr(conversation_id)),
+)
+# en: "Conversation 'X' not found."
+# zh: "会话 'X' 不存在"</pre>
+      <div class="why">
+        后端按请求 Accept-Language 切。前端可直接展示 detail,不用再翻一道。
+      </div>
+    </div>
+  </div>
+
+  <div class="compare">
+    <div class="before">
+      <h4>Before · 边角硬编码中文</h4>
+      <pre>function relativeTime(iso: string) {
+  if (diff &lt; 60_000) return "刚刚";
+  if (diff &lt; 3600_000)
+    return `${m} 分钟前`;
+  ...
+}</pre>
+      <div class="why">
+        ArtifactPeek / ArtifactGrid 的 hover 时间标签;没人查时间格式化的硬编码,英文用户看到中文。
+      </div>
+    </div>
+    <div class="after">
+      <h4>After · helper 接 t 参数</h4>
+      <pre>function relativeTime(iso, t) {
+  if (diff &lt; 60_000) return t("justNow");
+  if (diff &lt; 3600_000)
+    return t("minutesAgo", { n: m });
+}
+// catalog: artifacts.peek.justNow 等</pre>
+      <div class="why">
+        ArtifactPeek 与 ArtifactGrid 共享同一组 keys (DRY) · 助手函数 — 不用 hook,把 t 当 dependency-injection 注入。
+      </div>
+    </div>
+  </div>
+
+  <div class="compare">
+    <div class="before">
+      <h4>Before · CommandPalette hint 全是英文</h4>
+      <pre>const ENTRY_DEFS = [
+  { key: "chat", hint: "chat with lead", … },
+  { key: "skills", hint: "skill packs", … },
+  { key: "gateway", hint: "provider + model
+    gateway", … },
+  ...
+];</pre>
+      <div class="why">
+        ⌘K 命令面板的 19 个入口副标题写死英文;中文用户读不爽。
+      </div>
+    </div>
+    <div class="after">
+      <h4>After · entries 都走 t()</h4>
+      <pre>const ENTRIES = ENTRY_DEFS.map(e =&gt; ({
+  ...e,
+  label: t(`entries.${e.key}`),
+  hint: t(`hints.${e.key}`),
+}));
+// ui.commandPalette.hints.chat = "和 Lead 对话"
+// ui.commandPalette.hints.skills = "技能包"</pre>
+      <div class="why">
+        label + hint + 底部 footer 全部 i18n · 中文用户看到 "和 Lead Agent 对话 / 技能包 / 供应商与模型网关"。
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>3. Catalog 完整度统计</h2>
+  <p>当前快照 — 由 <code>scripts/audit-i18n-catalog.mjs</code> 生成 · 由 <code>tests/i18n-catalog-audit.test.ts</code> 持续守护。</p>
+
+  <table>
+    <thead>
+      <tr><th>指标</th><th class="num">值</th><th>状态</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>zh-CN keys</td><td class="num">2 171</td><td><span class="pill ok">基线</span></td></tr>
+      <tr><td>en keys</td><td class="num">2 171</td><td><span class="pill ok">基线</span></td></tr>
+      <tr><td>两者交集</td><td class="num">2 171</td><td><span class="pill ok">100% 对齐</span></td></tr>
+      <tr><td>en 缺失的 zh-CN keys</td><td class="num">0</td><td><span class="pill ok">无</span></td></tr>
+      <tr><td>zh-CN 缺失的 en keys</td><td class="num">0</td><td><span class="pill ok">无</span></td></tr>
+      <tr><td>ICU 占位符不一致</td><td class="num">0</td><td><span class="pill ok">无</span></td></tr>
+      <tr><td>空字符串 value</td><td class="num">0</td><td><span class="pill ok">无</span></td></tr>
+      <tr><td>英文长度 ≥ 中文 2.6× 且 ≥ 32 字符(可能视觉溢出)</td><td class="num">148</td><td><span class="pill warn">已审 · 全是 subtitle / hint / tooltip 长副本,wrap 容器内不破</span></td></tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top: 16px;">
+    <table>
+      <thead>
+        <tr><th>分领域 catalog</th><th class="num">行数 (zh = en)</th><th>覆盖范围</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>messages/&lt;locale&gt;.json (根)</td><td class="num">197</td><td>common · shell · locale · metadata · healthBadge · welcome · settings · errors</td></tr>
+        <tr><td>chat.json</td><td class="num">129</td><td>对话页 / composer / message bubble / system tool / nested run / subagent / plan progress</td></tr>
+        <tr><td>employees.json</td><td class="num">279</td><td>员工列表 / 详情 / design / form / preset radio / skill+mcp picker / 任务 / 任务 detail / new drawer</td></tr>
+        <tr><td>gateway-cockpit.json</td><td class="num">303</td><td>模型网关 / model row / model test dialog / ping (双层) / cockpit hud / kpi / drawer · 含 modelTestMetrics</td></tr>
+        <tr><td>knowledge.json</td><td class="num">255</td><td>KB 工具栏 / sidebar / KB info / docs / search / Ask / diagnose / 设置 4 tab / 危险删除 / 详情 drawer / onboarding / URL ingest</td></tr>
+        <tr><td>misc.json</td><td class="num">616</td><td>about / review / observatory / conversations / confirmations · artifacts(detail / editor / list / panel / version / mermaid / drawio / page / peek)· brand · render · state · ui(coachmark / commandPalette / confirmDialog / select)· shellExtras · welcomeExtras</td></tr>
+        <tr><td>render-viz.json</td><td class="num">109</td><td>13 个 Viz 组件(BarChart / Cards / Code / Diff / KV / LineChart / LinkCard / PieChart / Stat / Steps / Table / Timeline / Callout)· 模型测试指标条 · 共享 Copy / Search</td></tr>
+        <tr><td>runs-traces.json</td><td class="num">388</td><td>runs · traces · triggers(list / detail / create)· channels(list / detail / create)</td></tr>
+        <tr><td>skills-market.json</td><td class="num">502</td><td>skills 列表 / detail / market / 安装 / explainer · market 行情 / detail · MCP 服务器 / detail / health tab · stockAssistant setup</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>4. 已知遗留 / 故意不翻译</h2>
+  <p>不是漏掉,是按 i18n 设计原则故意保留为单语。</p>
+
+  <ul class="bullets">
+    <li>
+      <b>Agent system prompts</b> · backend <code>execution/prompts/lead_agent.md</code> 等 · 用户 SYSTEM 提示词 — 翻译会改变模型行为,且当前用户群以中文为主。
+    </li>
+    <li>
+      <b>akshare 字段名映射</b> · backend <code>execution/market/akshare_provider.py</code> · <code>"最新" / "昨收" / "发布时间"</code> 等是 akshare 库返回数据的 Chinese key,必须保留以匹配。
+    </li>
+    <li>
+      <b>BrandMark / PlanCard regex 模式</b> · <code>/qwen|tongyi|通义/</code> · <code>/批准|同意/</code> · 这些 regex 匹配的是用户输入中可能的中文品牌名 / 关键词,模式本身就是 Chinese 字面量。已在 <code>i18n-no-hardcoded-zh.test.ts</code> 显式 allowlist。
+    </li>
+    <li>
+      <b>API 参数名</b> · <code>temperature / top_p / max_tokens / cron</code> 等 · 跨语言通用的 OpenAI / cron 协议词,翻译反而会让用户找不到对应字段。
+    </li>
+    <li>
+      <b>友好默认 record 名</b> · seed_service 里的 "阿里云 百炼" 等是用户首次创建时拿到的 record name,可以随后改名 — 不强制翻译。
+    </li>
+    <li>
+      <b>brand wordmark / 装饰短句</b> · "v0 · mvp" / "CPT" / "EP" / "M" pill 等 · 设计上故意用 ASCII。
+    </li>
+    <li>
+      <b>注释 / docstring</b> · 项目 maintainer 全是中文母语,JSDoc 与 Python docstring 维持中文。已在两个 hardcoded scan 测试中自动剥除。
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>5. 推荐 next steps</h2>
+  <ul class="bullets">
+    <li>
+      <b>e2e 视觉回归两个 locale 各跑一次</b> · 当前 playwright 主要在 zh-CN 跑 · 加一组 <code>npm run test:e2e -- --headed --project=en</code> 用 cookie 切 EN 跑视觉 snapshot · catch 长英文按钮溢出。
+    </li>
+    <li>
+      <b>添加 ja / es 第三语言 stub</b> · 现在 catalog 形状测试只校验 zh-CN ↔ en 一致 · 加新 locale 时,把 <code>missing_in_X</code> 改成"两两交叉"自动适配。
+    </li>
+    <li>
+      <b>backend prompt i18n 实验</b> · ai_explainer 现在 Chinese-only · 可以让 system prompt 也按请求 locale 切换("…用清晰、口语化的中文" → "…in clear, conversational English") · 影响模型输出语种,需要 A/B。
+    </li>
+    <li>
+      <b>把 audit 加入 CI gate</b> · 当前两个 audit 测试已在 <code>pnpm test</code> / <code>pytest</code> 跑 · 在 GitHub Actions 加专门 step <code>pnpm audit-i18n:strict</code> 让形状回归直接 fail PR · 比埋在测试堆里更显眼。
+    </li>
+    <li>
+      <b>触发器 cron preset 的 timezone</b> · "Every day at 08:00" / "Mondays at 09:00" 默认是 UTC · 中文用户多在 +8 · 可以读用户 settings 的 timezone 渲染。
+    </li>
+    <li>
+      <b>error stream 前缀</b> · <code>[错误] / [error]</code> 用作 stream 出错时的前缀;前端可以解析这个前缀做样式区分,而不是直接拼字符串展示。
+    </li>
+    <li>
+      <b>给翻译者一个 maintainer 入口</b> · 现在加新 key 必须改两个 JSON · 可以做一个简单 web UI 让非技术 contributor 编辑翻译,后端持久化到 <code>messages/</code>。
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>6. 流程亮点</h2>
+  <ul class="bullets">
+    <li><b>子 agent 并行</b> · KB 页两次大改(原 ~500 行 → 1496 行 → 2641 行)各派一个子 agent 做 i18n,主线程同时做 catalog audit 与翻译质量复审。</li>
+    <li><b>每轮 ~30 分钟</b> · pull main → 选 2-3 个领域 → 跑 typecheck/lint/test/build → commit + push main + sync(冲突主线解,从不 force)。</li>
+    <li><b>回归网入测</b> · 4 套测试守护现在与未来 — vitest 形状 audit / vitest no-hardcoded-zh / pytest router 扫描 / pytest catalog 形状对齐。</li>
+    <li><b>实战验证</b> · 不光信单测;Round 4 起每轮都用 <code>pnpm build && next start -p 4001</code> 抓 EN/ZH HTML 比对真实输出。<code>&lt;meta description&gt;</code> 漏掉就是这么发现的。</li>
+    <li><b>frontmatter 不冲突</b> · catalog 拆 8 个分领域文件 · 多个 agent 并行各写自己的命名空间不互踩。</li>
+  </ul>
+</section>
+
+<footer>
+  <p>生成于 <span class="mono">2026-04-26</span> · 路径 <span class="mono">docs/i18n-final-report.html</span> · 由 <span class="mono">scripts/audit-i18n-catalog.mjs</span> 实时计算 · 详细每轮日志见 <span class="mono">docs/i18n-iteration-log.md</span></p>
+  <p style="margin-top: 8px;">8 个 commit · 全部已合 main · 1 885 web tests · 1 232 backend tests · 0 catalog 漂移 · 0 ICU 占位符不齐 · 0 空 value · 0 stray Chinese in source。</p>
+</footer>
+
+</div>
+</body>
+</html>

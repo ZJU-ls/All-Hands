@@ -680,6 +680,7 @@ function TextField({
   /** Inline danger message — replaces hint when set. */
   error?: string;
 }) {
+  const tField = useTranslations("employees.designForm.field");
   // Inline validation: required + empty (after touch) → red ring + message,
   // so users see the rule before clicking save and getting a global toast.
   const [touched, setTouched] = useState(false);
@@ -713,7 +714,7 @@ function TextField({
             isInvalid ? "text-danger" : "text-text-subtle"
           }`}
         >
-          {error || (showRequiredError ? "必填字段不能为空" : hint)}
+          {error || (showRequiredError ? tField("required") : hint)}
         </p>
       )}
     </div>

@@ -52,9 +52,11 @@ type MarketPreview = {
   files: string[];
 };
 
-type Tab = "installed" | "market" | "github" | "upload";
+type Tab = "builtin" | "installed" | "market" | "github" | "upload";
 
-const TAB_KEYS: ReadonlyArray<Tab> = ["installed", "market", "github", "upload"];
+// 2026-04-26 · 平台内建 / 我安装的 拆成两个 tab(原本混在 「已安装」 一锅)
+// 默认进 「我安装的」 — 用户最关心自己装的那 N 个 · builtin 是只读参考
+const TAB_KEYS: ReadonlyArray<Tab> = ["installed", "builtin", "market", "github", "upload"];
 
 export default function SkillsPage() {
   const t = useTranslations("skills.list");
@@ -284,7 +286,15 @@ export default function SkillsPage() {
 
           {loadStatus === "ready" && tab === "installed" && (
             <InstalledList
-              skills={skills}
+              skills={skills.filter((s) => s.source !== "builtin")}
+              onDelete={(s) => setDeleteTarget(s)}
+              onBrowse={() => setTab("market")}
+            />
+          )}
+
+          {loadStatus === "ready" && tab === "builtin" && (
+            <InstalledList
+              skills={skills.filter((s) => s.source === "builtin")}
               onDelete={(s) => setDeleteTarget(s)}
               onBrowse={() => setTab("market")}
             />
@@ -345,8 +355,9 @@ export default function SkillsPage() {
   );
 }
 
-function tabIcon(t: Tab): "layout-grid" | "store" | "code" | "upload" {
+function tabIcon(t: Tab): "layout-grid" | "shield-check" | "store" | "code" | "upload" {
   if (t === "installed") return "layout-grid";
+  if (t === "builtin") return "shield-check";
   if (t === "market") return "store";
   if (t === "github") return "code";
   return "upload";

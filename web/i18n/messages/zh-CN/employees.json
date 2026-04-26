@@ -95,6 +95,9 @@
       "delete": "删除"
     },
     "designForm": {
+      "field": {
+        "required": "必填字段不能为空"
+      },
       "sectionBasics": "基础信息",
       "fieldName": "名称",
       "namePlaceholder": "例如 researcher-a",

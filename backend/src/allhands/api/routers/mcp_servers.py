@@ -73,7 +73,7 @@ def _parse_transport(raw: str) -> MCPTransport:
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail=f"transport must be one of stdio|sse|http (got {raw!r})",
+            detail=t("errors.transport_invalid", raw=repr(raw)),
         ) from exc
 
 
