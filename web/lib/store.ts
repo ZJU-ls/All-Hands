@@ -93,6 +93,12 @@ type ChatState = {
   pendingUserInputs: PendingUserInput[];
   isStreaming: boolean;
   streamError: StreamError | null;
+  /** Increments on every server-sent allhands.heartbeat (every 10s of
+   * agent-side silence). MessageList feeds this into the chip's silence
+   * signature so the「无响应」 计时不会在长 LLM thinking / tool execution
+   * 期间错误膨胀(2026-04-26 修复:thinking 模型填模板 25s+ 时 chip 错
+   * 误进入 「停止」 状态 · 用户误以为卡死按了停止)。 */
+  streamHeartbeatTick: number;
 
   setConversationId: (id: string) => void;
   addMessage: (msg: Message) => void;
@@ -123,6 +129,8 @@ type ChatState = {
   addUserInput: (ui: PendingUserInput) => void;
   removeUserInput: (userInputId: string) => void;
   setStreamError: (err: StreamError | null) => void;
+  /** Bump on each server heartbeat · feeds chip 「无响应」 计时 reset。 */
+  bumpHeartbeat: () => void;
   reset: () => void;
 };
 
@@ -134,6 +142,7 @@ export const useChatStore = create<ChatState>((set) => ({
   pendingUserInputs: [],
   isStreaming: false,
   streamError: null,
+  streamHeartbeatTick: 0,
 
   setConversationId: (id) => set({ conversationId: id }),
 
@@ -386,6 +395,8 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
 
   setStreamError: (err) => set({ streamError: err }),
+
+  bumpHeartbeat: () => set((s) => ({ streamHeartbeatTick: s.streamHeartbeatTick + 1 })),
 
   reset: () =>
     set({
