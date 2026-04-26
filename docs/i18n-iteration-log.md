@@ -517,3 +517,26 @@ date 格式化 0 处 navigator 默认
 **结果**:1928 web tests + backend i18n tests + regression net 全绿 · 本轮零代码改动
 
 **commits**:仅本条 log
+
+## Round 24 · 2026-04-26 11:43 (cron · 30m)
+
+**主题**:再次广度审计 · main 新增的 4 个文件零漏点
+
+**main 新增**:agent_loop / test_agent_loop / ProgressPanel(R20 R21 改动 +
+border-t 拆除) / HoverPeek 定位修复 — 都不引入新文案。
+
+**做的事**:
+- 跑 backend + web regression net + typecheck + lint → 全绿
+- 检查 agent_loop 新增中文(160-174 + 490) → 都是 LLM 检测词表 / nudge
+  SystemMessage,by-design 不翻译
+- 扫表单 type="submit" / required → submit 文案全 t()
+- HoverPeek + ProgressPanel 改动只动样式 / 几何,无文案变化
+
+**剩余可做但低 ROI**:18+ 处 number `.toLocaleString()`(observatory / tasks /
+traces / RunTurnList / ModelTestDialog / ModelRow)。zh-CN + en 两个 locale
+千分位分隔符都是 `,`,navigator-default 行为不会撕裂这两种用户。仅
+de-DE / fr-FR navigator + 应用切到 zh / en 时会显示 "1.234"。当前不修。
+
+**结果**:1928 web tests + backend i18n tests + regression net 全绿 · 零代码改动
+
+**commits**:仅本条 log
