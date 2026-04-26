@@ -111,8 +111,7 @@ async def test_execute_caps_max_results(monkeypatch: pytest.MonkeyPatch) -> None
     get_settings.cache_clear()
 
     one_hit = (
-        '<a class="result__a" href="https://example.com/1">A</a>'
-        '<a class="result__snippet">snip</a>'
+        '<a class="result__a" href="https://example.com/1">A</a><a class="result__snippet">snip</a>'
     ) * 30  # 30 hits but we ask for 2
 
     async def fake_post(self: Any, url: str, **kw: Any) -> httpx.Response:
