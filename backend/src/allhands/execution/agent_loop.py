@@ -675,6 +675,7 @@ class AgentLoop:
             "allhands.artifacts.create_csv",
             "allhands.artifacts.create_docx",
             "allhands.artifacts.create_pptx",
+            "allhands.artifacts.render_drawio",
             "allhands.artifacts.update",
             "allhands.artifacts.rollback",
         ):
@@ -687,6 +688,7 @@ class AgentLoop:
                 make_artifact_create_xlsx_executor,
                 make_artifact_rollback_executor,
                 make_artifact_update_executor,
+                make_render_drawio_executor,
             )
             from allhands.persistence.db import get_sessionmaker
 
@@ -703,6 +705,7 @@ class AgentLoop:
                 "allhands.artifacts.create_csv": make_artifact_create_csv_executor,
                 "allhands.artifacts.create_docx": make_artifact_create_docx_executor,
                 "allhands.artifacts.create_pptx": make_artifact_create_pptx_executor,
+                "allhands.artifacts.render_drawio": make_render_drawio_executor,
                 "allhands.artifacts.update": make_artifact_update_executor,
                 "allhands.artifacts.rollback": make_artifact_rollback_executor,
             }
