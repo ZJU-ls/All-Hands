@@ -65,7 +65,7 @@ details[open] > summary::after{transform:rotate(180deg);}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M4 7l8-4 8 4M4 7v10l8 4 8-4V7M4 7l8 4 8-4M12 11v10"/></svg>
       </div>
       <span class="text-strong font-semibold">KB · 迭代报告</span>
-      <span class="pill pill-primary"><span class="dot"></span>12 轮 · 两夜</span>
+      <span class="pill pill-primary"><span class="dot"></span>16 轮 · 两夜 + 一日</span>
     </div>
     <button id="themeToggle" class="px-3 py-1.5 rounded-md text-muted hover:text-strong border border-hairline text-sm">主题</button>
   </div>
@@ -88,10 +88,10 @@ details[open] > summary::after{transform:rotate(180deg);}
       可以挑感兴趣的看,也可以照清单一项项点。
     </p>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-      <div class="card p-3"><div class="text-xs text-faint">迭代轮数</div><div class="text-strong text-lg font-semibold">12 + 报告</div></div>
-      <div class="card p-3"><div class="text-xs text-faint">commit</div><div class="text-strong text-lg font-semibold">14</div></div>
-      <div class="card p-3"><div class="text-xs text-faint">代码</div><div class="text-strong text-lg font-semibold">~5.4k 行</div></div>
-      <div class="card p-3"><div class="text-xs text-faint">测试</div><div class="text-strong text-lg font-semibold">34/34 ✓</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">迭代轮数</div><div class="text-strong text-lg font-semibold">16 + 报告</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">commit</div><div class="text-strong text-lg font-semibold">18</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">代码</div><div class="text-strong text-lg font-semibold">~6.4k 行</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">测试</div><div class="text-strong text-lg font-semibold">40/40 ✓</div></div>
     </div>
   </div>
 </section>
@@ -420,6 +420,125 @@ details[open] > summary::after{transform:rotate(180deg);}
   </div>
 </section>
 
+<!-- ROUND 3 · ITER 13-16 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3" style="background:linear-gradient(90deg,var(--accent-cyan),var(--success));"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-1">Round 3 · 第 13-16 轮("继续做")</h2>
+  <p class="text-muted mb-6 text-sm">"继续做"。Round 2 把 Ask + 搜索打磨好了 · Round 3 转向 <strong class="text-strong">"看到自己 KB 的全貌"</strong>(健康卡)+ <strong class="text-strong">"不被卡住"</strong>(stale embedding 自愈)+ <strong class="text-strong">"AI 帮你做 grunt work"</strong>(自动打标签 / 复制为引用)。</p>
+
+  <!-- Iter 13 -->
+  <div class="card p-6 mb-4">
+    <div class="flex items-start gap-4">
+      <div class="iter-num" style="background:linear-gradient(135deg,var(--accent-cyan),var(--primary));color:white;">13</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">KB 健康卡 + 30 天 sparkline</h3>
+          <span class="pill pill-primary">摸底感</span>
+        </div>
+        <p class="text-sm text-muted mb-4">侧栏第二张卡 · 让用户对当前 KB 有 "里面有啥 / 上次什么时候动过 / 这个月节奏" 的直觉。</p>
+        <ul class="text-sm text-muted space-y-1">
+          <li>• <span class="mono">get_kb_health(kb_id, *, days=30)</span>:doc/chunk/token 总量(token 用 SQL <span class="mono">func.sum</span>)+ last_activity + 30 day 桶 + top tags + mime breakdown</li>
+          <li>• <span class="kbd">GET /api/kb/{id}/health?days=30</span></li>
+          <li>• <span class="mono">KBHealthCard</span> 组件:KPI 三格 + Sparkline + top tags chip + dominant mime · Sparkline 用 tiny SVG bars · 0 用 hairline · 单 doc 也保 2px 可见</li>
+          <li>• <span class="mono">formatCompact</span>(1.2k / 5k / 1.3M) · <span class="mono">formatRelativeTime</span>(now / 5m / 3h / 2d / iso)</li>
+          <li>• <span class="mono">refreshDocs</span> 并行拉 health · 失败静默不破坏 doc grid</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Iter 14 -->
+  <div class="card p-6 mb-4">
+    <div class="flex items-start gap-4">
+      <div class="iter-num" style="background:linear-gradient(135deg,var(--accent-cyan),var(--primary));color:white;">14</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">Ask 答案 "复制为引用"</h3>
+          <span class="pill">QoL</span>
+        </div>
+        <p class="text-sm text-muted mb-4">参考 NotebookLM Copy / Perplexity share-as-text · hover 出右上角"复制"按钮(group-hover 不打扰阅读)· 一键导出 markdown:</p>
+        <pre class="mono text-[11px] bg-soft p-3 rounded border border-hairline overflow-x-auto">&gt; **Q:** what is rrf?
+
+RRF is a fusion method [1] that combines BM25 and vector ranks [2].
+
+**Sources**
+- [1] doc abc · § RRF Fusion
+- [2] doc def · § Hybrid Retrieval
+
+*Generated with claude-sonnet-4-6*</pre>
+        <p class="mt-3 text-xs text-faint"><span class="mono">navigator.clipboard.writeText</span> · 失败用 alert 兜底 · 复制后 1.5s 内 icon 切 check + "已复制"。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Iter 15 -->
+  <div class="card p-6 mb-4">
+    <div class="flex items-start gap-4">
+      <div class="iter-num" style="background:linear-gradient(135deg,var(--accent-cyan),var(--primary));color:white;">15</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">Stale embedding 检测 + 一键 re-embed all</h3>
+          <span class="pill pill-warning">数据完整性</span>
+        </div>
+        <p class="text-sm text-muted mb-4">之前 chunk.embedding 是 NULL(provider 不通 / 配错)只能挨个重传 doc。现在自动检测 + 顶部 banner + 一键全 KB 重嵌入。</p>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div>
+            <div class="text-xs uppercase tracking-wide text-faint mb-2">后端</div>
+            <ul class="space-y-1 text-muted">
+              <li>• <span class="mono">get_chunks_missing_embeddings</span> · count NULL via SQL</li>
+              <li>• <span class="mono">reembed_all(kb_id)</span> · 遍历 reindex_document · 单失败不打断</li>
+              <li>• 返回 <span class="mono">{processed, succeeded, failed}</span></li>
+              <li>• <span class="kbd">POST /api/kb/{id}/reembed-all</span></li>
+            </ul>
+          </div>
+          <div>
+            <div class="text-xs uppercase tracking-wide text-faint mb-2">前端</div>
+            <ul class="space-y-1 text-muted">
+              <li>• <span class="mono">StaleEmbeddingBanner</span>:warning 顶条 · "{missing}/{total} chunks 没有向量"</li>
+              <li>• runReembedAll: busy 锁 · 完成后 4s 自清 summary toast</li>
+              <li>• 仅 missing &gt; 0 时出现 · 不打扰</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Iter 16 -->
+  <div class="card p-6">
+    <div class="flex items-start gap-4">
+      <div class="iter-num" style="background:linear-gradient(135deg,var(--accent-cyan),var(--primary));color:white;">16</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">AI 自动打标签 · 一键采纳</h3>
+          <span class="pill pill-primary">AI grunt-work</span>
+        </div>
+        <p class="text-sm text-muted mb-4">参考 Notion AI auto-tag · 给每个 doc 让 LLM 抽 ≤ 3 个短 tag · 用户一键采纳。Drawer Info tab 的 tag 区从只读 chip 列表升级成完整 editor:</p>
+        <ul class="text-sm text-muted space-y-1">
+          <li>• 现有 tag 行:每个 chip 带 <span class="mono">✕</span> 删除 · 末尾 <span class="mono">+ 内联输入</span> · Enter 即加</li>
+          <li>• <span class="kbd">✨ AI 推荐</span> 按钮 → <span class="mono">suggest_tags_for_document(doc_id, max_tags=3)</span></li>
+          <li>• 出 dashed primary chip 候选 · 单点采纳 / "全部采纳 (N)" 一键</li>
+          <li>• 后端喂 doc title + 头 1500 字 + 用户已有 tag 词汇 · prompt 让 LLM 复用现有词汇而非造同义词 · 中文 in 中文 out</li>
+          <li>• 失败 → [] 优雅(provider 没配也不会炸)</li>
+        </ul>
+        <p class="mt-3 text-xs text-faint"><span class="kbd">POST /api/kb/{id}/documents/{did}/suggest-tags</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Round 3 commits -->
+  <div class="card p-5 mt-6 mono text-[12px]">
+    <div class="text-xs uppercase tracking-wide text-faint mb-2">Round 3 commits</div>
+    <ul class="space-y-1.5 text-muted">
+      <li>· <span class="text-strong">3db6a19</span> feat(kb): AI 自动打标签 · 一键采纳(迭代 16)</li>
+      <li>· <span class="text-strong">db997d4</span> feat(kb): Stale embedding 检测 + 一键 re-embed all(迭代 15)</li>
+      <li>· <span class="text-strong">afd1a4d</span> feat(kb): Ask 答案 "复制为引用"(迭代 14)</li>
+      <li>· <span class="text-strong">ffede9d</span> feat(kb): KB 健康卡 + 30 天 sparkline(迭代 13)</li>
+    </ul>
+    <p class="mt-3 text-faint text-[11px]">Round 3 累计 4 commits / +926 行 / 6 个新单测全过(unit 总数 1245)。</p>
+  </div>
+</section>
+
 <!-- ACCEPTANCE -->
 <section class="max-w-6xl mx-auto px-6 py-10">
   <div class="accent-bar w-10 mb-3"></div>
@@ -541,6 +660,40 @@ details[open] > summary::after{transform:rotate(180deg);}
         </li>
       </ol>
     </div>
+
+    <div class="mt-6 pt-4 border-t border-hairline">
+      <div class="text-xs uppercase tracking-wide text-faint mb-3">Round 3 验收(13-16)</div>
+      <ol class="space-y-3 text-sm">
+        <li class="flex items-start gap-3">
+          <input type="checkbox" class="mt-1 accent-current text-primary"/>
+          <div class="flex-1">
+            <div class="text-strong font-medium">n) KB 健康卡 + sparkline(迭代 13)</div>
+            <div class="text-muted mt-0.5">侧栏 KB Info 卡下面应该多一张 <strong>Health</strong> 卡 · 三格 KPI(docs / chunks / tokens · k/M 缩写)+ 30 day SVG sparkline(每条 = 当天新增 doc · 0 是细线)+ top tags chip + dominant mime + 右上 "5m / 3h / 2d ago" 上次活跃。</div>
+          </div>
+        </li>
+        <li class="flex items-start gap-3">
+          <input type="checkbox" class="mt-1 accent-current text-primary"/>
+          <div class="flex-1">
+            <div class="text-strong font-medium">o) 复制为引用(迭代 14)</div>
+            <div class="text-muted mt-0.5">问完一轮 · hover 答案卡 · 右上角应该出 "复制" 按钮 · 点击复制 markdown 到剪贴板(<span class="kbd">&gt; **Q:** ...</span> + 答案 + sources 列表 + 模型名)· 1.5s 后按钮变 ✓ "已复制"。</div>
+          </div>
+        </li>
+        <li class="flex items-start gap-3">
+          <input type="checkbox" class="mt-1 accent-current text-primary"/>
+          <div class="flex-1">
+            <div class="text-strong font-medium">p) Stale embedding 自愈(迭代 15)</div>
+            <div class="text-muted mt-0.5">如果当前 KB 有 chunk.embedding=NULL(配 provider 出问题时常见)· 顶部应该出 warning 黄条 "{N}/{total} chunks 没有向量" + "重新嵌入全部" 按钮 · 点击后 4s 内顶部出 summary toast(processed/succeeded/failed 计数)· 修复后 banner 自动消失。</div>
+          </div>
+        </li>
+        <li class="flex items-start gap-3">
+          <input type="checkbox" class="mt-1 accent-current text-primary"/>
+          <div class="flex-1">
+            <div class="text-strong font-medium">q) AI 自动打标签(迭代 16)</div>
+            <div class="text-muted mt-0.5">点开任一 doc → Info tab → Tags 区:已有 chip 带 ✕ · 末尾 + 输入框 · 下面有 "AI 推荐" 按钮 · 点击后出 dashed 候选 chip · 单点采纳一条或 "全部采纳 (N)" 一键(没配 chat provider 会出 "AI 没给出新建议" 灰提示)。</div>
+          </div>
+        </li>
+      </ol>
+    </div>
   </div>
 </section>
 
@@ -578,6 +731,9 @@ details[open] > summary::after{transform:rotate(180deg);}
         <tr><td class="mono">POST</td><td class="mono">/api/kb/{id}/ask/stream</td><td class="text-muted">迭代 8 · SSE 流式 RAG QA</td></tr>
         <tr><td class="mono">GET</td><td class="mono">/api/kb/{id}/starter-questions?limit=4</td><td class="text-muted">迭代 9 · LLM 生成起手问题</td></tr>
         <tr><td class="mono">PATCH</td><td class="mono">/api/kb/{id}/documents/{did}/tags</td><td class="text-muted">迭代 11 · 批量打标签底层 PATCH</td></tr>
+        <tr><td class="mono">GET</td><td class="mono">/api/kb/{id}/health?days=30</td><td class="text-muted">迭代 13 · 侧栏健康卡数据</td></tr>
+        <tr><td class="mono">POST</td><td class="mono">/api/kb/{id}/reembed-all</td><td class="text-muted">迭代 15 · 一键全 KB 重嵌入</td></tr>
+        <tr><td class="mono">POST</td><td class="mono">/api/kb/{id}/documents/{did}/suggest-tags</td><td class="text-muted">迭代 16 · LLM 抽 ≤ 3 个标签</td></tr>
       </tbody>
     </table>
   </div>
