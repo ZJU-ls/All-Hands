@@ -366,6 +366,7 @@
       "pinned": "Pinned",
       "pinnedAria": "Pinned",
       "groupAria": "Artifacts",
+      "groupOther": "Other",
       "empty": "No artifacts yet. Have an employee produce a doc, code, or diagram."
     },
     "panel": {

@@ -781,3 +781,23 @@ node web/scripts/audit-i18n-dead-keys.mjs --list
 **结果**:1984 web tests + backend i18n + lint 全绿 · 仅加诊断脚本
 
 **commits**:见 git log
+
+## Round 37 · 2026-04-27 00:13 (cron · 30m)
+
+**主题**:ArtifactList 最近一次扩 12 kind 时漏译的 "other" fallback bucket
+
+**main 新动作**:
+- 用户报 csv 等类型在过滤面板里点击后空白 · main 修了 KIND_ORDER 加全 12 enum
+  + 加 FALLBACK_BUCKET = "other" 兜底新增 kind
+- 但 fallback 分组 title 直接用 "other" 字面量 · zh-CN 用户看到 "OTHER" 大写
+  英文 mono 标签
+
+**做的事**:
+- catalog 加 artifacts.list.groupOther("其他" / "Other")
+- ArtifactList.tsx fallback section title 走 t("groupOther")
+- 其它 11 个 kind 标签是技术 enum(markdown / csv / xlsx 等),保留英文
+  mono 风格,跨语言一致 · 不动
+
+**结果**:1984 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log

@@ -366,6 +366,7 @@
       "pinned": "置顶",
       "pinnedAria": "已置顶",
       "groupAria": "制品",
+      "groupOther": "其他",
       "empty": "还没有制品。让员工产出一份文档、代码或图。"
     },
     "panel": {
