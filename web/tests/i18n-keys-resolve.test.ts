@@ -69,10 +69,12 @@ function loadCatalogKeys(): Set<string> {
   return keys;
 }
 
-function extractFromFile(file: string): { ns: string; key: string; line: number }[] {
+type Call = { ns: string; key: string; line: number; kind: "literal" | "prefix" };
+
+function extractFromFile(file: string): Call[] {
   const src = readFileSync(file, "utf8");
   const lines = src.split("\n");
-  const out: { ns: string; key: string; line: number }[] = [];
+  const out: Call[] = [];
   // Track the most recent `useTranslations("ns")` / `getTranslations("ns")`
   // declaration's namespace, scoped per function block. We don't parse
   // braces — we just associate each t(...) call with the nearest preceding
@@ -91,25 +93,36 @@ function extractFromFile(file: string): { ns: string; key: string; line: number 
     }
   }
   if (decls.length === 0) return out;
-  // For each t-name, locate calls.
+  // For each t-name, locate calls (string-literal and template-prefix).
   const seen = new Set<string>();
   for (const d of decls) {
-    const re = new RegExp(`\\b${d.name}\\(\\s*"([a-zA-Z0-9_.]+)"`, "g");
+    // (1) Static string literal:    name("a.b.c"
+    const litRe = new RegExp(`\\b${d.name}\\(\\s*"([a-zA-Z0-9_.]+)"`, "g");
+    // (2) Template-literal prefix:   name(`a.b.${var}…`)
+    //   Capture the leading static prefix up to the first ${ — we'll
+    //   verify the catalog has at least one key matching `${ns}.${prefix}.*`.
+    const tplRe = new RegExp(
+      `\\b${d.name}\\(\\s*\`([a-zA-Z0-9_.]+)\\.\\$\\{`,
+      "g",
+    );
     for (let i = 0; i < lines.length; i++) {
-      re.lastIndex = 0;
+      const callLine = i + 1;
+      const candidates = decls.filter((c) => c.name === d.name && c.line <= callLine);
+      if (candidates.length === 0 || candidates[candidates.length - 1]! !== d) continue;
+      litRe.lastIndex = 0;
       let m: RegExpExecArray | null;
-      while ((m = re.exec(lines[i]!))) {
-        // Only trust this binding if it's the closest preceding decl with
-        // this name (handles shadowing across functions).
-        const callLine = i + 1;
-        const candidates = decls.filter((c) => c.name === d.name && c.line <= callLine);
-        if (candidates.length === 0) continue;
-        const closest = candidates[candidates.length - 1]!;
-        if (closest !== d) continue;
-        const id = `${file}:${callLine}:${d.ns}.${m[1]!}`;
+      while ((m = litRe.exec(lines[i]!))) {
+        const id = `${file}:${callLine}:lit:${d.ns}.${m[1]!}`;
         if (seen.has(id)) continue;
         seen.add(id);
-        out.push({ ns: d.ns, key: m[1]!, line: callLine });
+        out.push({ ns: d.ns, key: m[1]!, line: callLine, kind: "literal" });
+      }
+      tplRe.lastIndex = 0;
+      while ((m = tplRe.exec(lines[i]!))) {
+        const id = `${file}:${callLine}:tpl:${d.ns}.${m[1]!}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push({ ns: d.ns, key: m[1]!, line: callLine, kind: "prefix" });
       }
     }
   }
@@ -120,13 +133,27 @@ describe("i18n · every t() call resolves to a real catalog key", () => {
   it("scans app/ + components/ + lib/ for unresolved t-keys", () => {
     const catalog = loadCatalogKeys();
     const offences: { file: string; line: number; full: string }[] = [];
+    // Pre-compute prefix set: for each catalog key "a.b.c", record every
+    // sub-prefix ("a", "a.b") so prefix-style lookups can verify cheaply.
+    const prefixes = new Set<string>();
+    for (const k of catalog) {
+      const parts = k.split(".");
+      for (let i = 1; i < parts.length; i++) {
+        prefixes.add(parts.slice(0, i).join("."));
+      }
+    }
     for (const dir of ["app", "components", "lib"]) {
       const root = join(ROOT, dir);
       for (const file of walk(root)) {
-        for (const { ns, key, line } of extractFromFile(file)) {
+        for (const { ns, key, line, kind } of extractFromFile(file)) {
           const full = `${ns}.${key}`;
-          if (!catalog.has(full)) {
-            offences.push({ file: file.slice(ROOT.length + 1), line, full });
+          const ok = kind === "literal" ? catalog.has(full) : prefixes.has(full);
+          if (!ok) {
+            offences.push({
+              file: file.slice(ROOT.length + 1),
+              line,
+              full: kind === "prefix" ? `${full}.* (template prefix)` : full,
+            });
           }
         }
       }

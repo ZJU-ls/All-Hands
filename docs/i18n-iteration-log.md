@@ -641,3 +641,27 @@ catalog 里存在」。
 **结果**:本轮零代码改动 · 零回归
 
 **commits**:仅本条 log
+
+## Round 30 · 2026-04-26 14:43 (cron · 30m)
+
+**主题**:i18n-keys-resolve 回归网二期 · 覆盖 template-literal prefix
+
+**背景**:R26 写的回归网只验证 `t("static.literal.key")` · 跳过了
+`` t(`status.${var}`) `` 这种动态 key — 但代码里 21+ 处用这种模式
+(SubagentProgressSection / PlanCard / MetricDrawer / CommandPalette /
+artifacts page sort / review gates / skills+mcp tabs / KeyboardShortcutsModal …
+)。如果有人 typo 写错前缀,运行时才会爆。
+
+**做的事**:
+- web/tests/i18n-keys-resolve.test.ts 升级:
+  - 加第二条 regex `t(\`prefix.${...}\`)` 抓 template 模式
+  - 预计算 catalog 所有 sub-prefix(`a`, `a.b` 都进 set)
+  - prefix-style 调用要求 `${ns}.${prefix}` 在 prefix-set 里
+- 反向验证:把 `t(\`status.${...}\`)` sed 成 `t(\`xstatus.${...}\`)`,
+  test 立刻 surface `chat.subagent.xstatus.* (template prefix)` · 恢复后通过
+
+**结果**:1984 web tests · typecheck · lint 全绿 · 回归网现在静态阻挡
+两类 t() 漏 key:literal 和 template prefix · runtime MISSING_MESSAGE
+被本地测试挡掉
+
+**commits**:见 git log
