@@ -18,6 +18,7 @@ import { PresetRadio } from "./PresetRadio";
 import { DryRunPanel } from "./DryRunPanel";
 import { ModelPicker } from "@/components/model-picker/ModelPicker";
 import { Icon } from "@/components/ui/icon";
+import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 
 /**
  * 设计表单 · 受控 state 全部在这里,**无 mode 字段**(§3.2 红线)。
@@ -140,6 +141,8 @@ export function DesignForm({
   ]);
 
   const canSave = name.trim().length > 0 && !busy && (isEdit ? isDirty : true);
+  // Warn on tab-close when there are unsaved edits.
+  useUnsavedWarning(isEdit && isDirty && !busy);
 
   function toggle(list: string[], id: string, setter: (v: string[]) => void) {
     setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
