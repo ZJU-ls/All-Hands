@@ -625,3 +625,19 @@ catalog 里存在」。
 全栈再次 0 处 toLocaleString 不带 locale
 
 **commits**:见 git log
+
+## Round 29 · 2026-04-26 14:13 (cron · 30m)
+
+**main 新动作**:
+- ArtifactPanel + ArtifactDetail + DrawioView 调整(都不引入新文案)
+- 新增 backend test_spawn_subagent_render_forward.py(测试 fixtures 含中文 by-design)
+- 部分 catalog key 微调(menu / shortcuts 文案重排)
+
+**做的事**:
+- 跑完整 i18n 套件:web 1982 tests · backend 13 i18n tests · 全绿
+- 检查 4 个 main 新触碰的组件:零硬编码 · 零 toLocaleString 不带 locale
+- 全栈最后一次 grep `\.toLocaleString\(\)` → 0 匹配
+
+**结果**:本轮零代码改动 · 零回归
+
+**commits**:仅本条 log
