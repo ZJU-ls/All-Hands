@@ -135,6 +135,12 @@
       "anomalies": {
         "title": "{n} 项异常需关注 · 自动判定 · 不是 ML"
       },
+      "sessions": {
+        "title": "会话维度 · TOP 8",
+        "hint": "按成本排序的会话 · 类似 Langfuse Sessions",
+        "empty": "本时段没有会话维度数据",
+        "openConversation": "打开会话"
+      },
       "share": {
         "title": "复制当前视图链接 · 含时间窗与搜索词",
         "share": "分享视图",
@@ -166,6 +172,7 @@
       },
       "traces": {
         "title": "近 50 条 trace",
+        "openFullTrace": "打开完整 trace",
         "selfInstrumentedNote": "自建埋点 · 本地 events.run.*",
         "searchPlaceholder": "搜索 trace_id / 员工 / 模型 / 状态",
         "searchAria": "搜索 trace",

@@ -591,6 +591,7 @@ function ObservatoryPageInner() {
   }, [urlRange]);
   const [drawerMetric, setDrawerMetric] = useState<ObservatoryMetric | null>(null);
   const [drawerLabel, setDrawerLabel] = useState<string | undefined>(undefined);
+  const [expandedTrace, setExpandedTrace] = useState<string | null>(null);
   const [traceSearch, setTraceSearchState] = useState(urlQ);
   const setTraceSearch = (next: string) => {
     setTraceSearchState(next);
@@ -1088,6 +1089,80 @@ function ObservatoryPageInner() {
                 </section>
               ) : null}
 
+              {/* SESSIONS · per-conversation rollup (Langfuse Sessions inspiration) */}
+              {summary.by_conversation.length > 0 ? (
+                <section>
+                  <div className="flex items-baseline justify-between mb-3">
+                    <h2 className="text-[18px] font-semibold tracking-tight text-text flex items-center gap-2">
+                      <Icon name="message-square" size={16} className="text-primary" />
+                      {t("sessions.title")}
+                    </h2>
+                    <span className="text-[11px] font-mono text-text-subtle">
+                      {t("sessions.hint")}
+                    </span>
+                  </div>
+                  <div className="rounded-xl bg-surface border border-border shadow-soft-sm overflow-hidden">
+                    <table className="w-full border-collapse text-[12px]">
+                      <thead>
+                        <tr className="bg-surface-2 text-left text-text-subtle border-b border-border">
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium">
+                            conversation
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium">
+                            employee
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            runs
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            tokens
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            cost
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-right">
+                            last seen
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summary.by_conversation.map((row) => (
+                          <tr
+                            key={row.conversation_id}
+                            className="border-b border-border last:border-b-0 hover:bg-surface-2/40 cursor-pointer"
+                            onClick={() => {
+                              window.location.href = `/chat/${encodeURIComponent(row.conversation_id)}`;
+                            }}
+                            title={t("sessions.openConversation")}
+                          >
+                            <td className="py-2 px-4 font-mono text-[11px] text-primary truncate max-w-[200px]">
+                              {row.conversation_id.slice(0, 12)}…
+                            </td>
+                            <td className="py-2 px-4 text-[11px] text-text-muted truncate max-w-[180px]">
+                              {row.employee_name ?? row.employee_id ?? "—"}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {row.runs_count.toLocaleString()}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {formatTokens(row.total_tokens)}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {row.estimated_cost_usd > 0
+                                ? `$${row.estimated_cost_usd.toFixed(4)}`
+                                : "—"}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-subtle tabular-nums">
+                              {row.last_seen_at ? formatDate(row.last_seen_at) : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ) : null}
+
               {/* TOOLS + ERRORS · two-column row */}
               {summary.by_tool.length > 0 || summary.top_errors.length > 0 ? (
                 <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1234,16 +1309,42 @@ function ObservatoryPageInner() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredTraces.map((row) => (
+                        {filteredTraces.flatMap((row) => [
                           <tr
                             key={row.trace_id}
-                            className="border-b border-border last:border-b-0 hover:bg-surface-2 transition-colors duration-fast"
+                            onClick={() =>
+                              setExpandedTrace(
+                                expandedTrace === row.trace_id ? null : row.trace_id,
+                              )
+                            }
+                            className="border-b border-border last:border-b-0 hover:bg-surface-2 transition-colors duration-fast cursor-pointer"
                           >
                             <td className="py-2.5 px-4 font-mono text-[11px] text-text-muted truncate max-w-[220px]">
-                              <TraceChip runId={row.trace_id} label={row.trace_id} />
+                              <span className="inline-flex items-center gap-1">
+                                <Icon
+                                  name={
+                                    expandedTrace === row.trace_id
+                                      ? "chevron-down"
+                                      : "chevron-right"
+                                  }
+                                  size={11}
+                                  className="text-text-subtle"
+                                />
+                                <TraceChip runId={row.trace_id} label={row.trace_id} />
+                              </span>
                             </td>
                             <td className="py-2.5 px-4 text-text">
-                              {row.employee_name ?? row.employee_id ?? "—"}
+                              {row.employee_id ? (
+                                <Link
+                                  href={`/observatory/employees/${encodeURIComponent(row.employee_id)}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="hover:text-primary"
+                                >
+                                  {row.employee_name ?? row.employee_id}
+                                </Link>
+                              ) : (
+                                "—"
+                              )}
                             </td>
                             <td className="py-2.5 px-4">
                               {row.status === "failed" ? (
@@ -1279,8 +1380,50 @@ function ObservatoryPageInner() {
                             <td className="py-2.5 px-4 text-text-muted">
                               {formatDate(row.started_at)}
                             </td>
-                          </tr>
-                        ))}
+                          </tr>,
+                          expandedTrace === row.trace_id ? (
+                            <tr key={`${row.trace_id}-expand`} className="bg-surface-2/40">
+                              <td colSpan={6} className="px-6 py-4">
+                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11.5px]">
+                                  <span className="text-text-subtle">
+                                    {t("traces.headers.trace")}
+                                  </span>
+                                  <code className="font-mono text-text">{row.trace_id}</code>
+                                  {row.model_ref && (
+                                    <>
+                                      <span className="text-text-subtle">model</span>
+                                      <Link
+                                        href={`/observatory/models/${encodeURIComponent(row.model_ref)}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="font-mono text-primary hover:underline"
+                                      >
+                                        {row.model_ref}
+                                      </Link>
+                                    </>
+                                  )}
+                                  <span className="text-text-subtle">tokens</span>
+                                  <span className="font-mono text-text">
+                                    {row.tokens.total > 0
+                                      ? `${formatTokens(row.tokens.total)} (in ${formatTokens(row.tokens.prompt)} · out ${formatTokens(row.tokens.completion)})`
+                                      : "—"}
+                                  </span>
+                                  <span className="text-text-subtle">llm calls</span>
+                                  <span className="font-mono text-text">
+                                    {row.llm_calls > 0 ? row.llm_calls : "—"}
+                                  </span>
+                                  <Link
+                                    href={`/runs/${encodeURIComponent(row.trace_id)}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="ml-auto inline-flex items-center gap-1 text-primary hover:underline"
+                                  >
+                                    {t("traces.openFullTrace")}
+                                    <Icon name="arrow-right" size={11} />
+                                  </Link>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null,
+                        ])}
                       </tbody>
                     </table>
                   </div>

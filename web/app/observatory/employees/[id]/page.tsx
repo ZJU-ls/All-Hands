@@ -317,6 +317,7 @@ export default function EmployeeDetailPage({
         open={drawerMetric !== null}
         metric={drawerMetric}
         contextLabel={`${employeeName} · ${tEmp("scopedToEmployee")}`}
+        scope={{ employee_id: employeeId }}
         onClose={() => setDrawerMetric(null)}
       />
     </AppShell>

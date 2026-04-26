@@ -19,6 +19,16 @@ export type ObservatoryModelBreakdownDto = {
   estimated_cost_usd: number;
 };
 
+export type ObservatoryConversationBreakdownDto = {
+  conversation_id: string;
+  employee_id: string | null;
+  employee_name: string | null;
+  runs_count: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+  last_seen_at: string | null;
+};
+
 export type ObservatoryToolBreakdownDto = {
   tool_id: string;
   invocations: number;
@@ -54,6 +64,7 @@ export type ObservatorySummaryDto = {
   by_model: ObservatoryModelBreakdownDto[];
   by_tool: ObservatoryToolBreakdownDto[];
   top_errors: ObservatoryErrorBreakdownDto[];
+  by_conversation: ObservatoryConversationBreakdownDto[];
   latency_heatmap: number[][];
   latency_heatmap_buckets_s: number[];
   anomalies: string[];

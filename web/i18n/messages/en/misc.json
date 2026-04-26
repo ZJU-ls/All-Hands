@@ -135,6 +135,12 @@
       "anomalies": {
         "title": "{n} anomaly callouts · rule-based, no ML"
       },
+      "sessions": {
+        "title": "Sessions · top 8",
+        "hint": "Conversations sorted by cost · Langfuse Sessions inspired",
+        "empty": "No conversation-level data in window",
+        "openConversation": "Open conversation"
+      },
       "share": {
         "title": "Copy current view link · includes range + search",
         "share": "Share view",
@@ -166,6 +172,7 @@
       },
       "traces": {
         "title": "Latest 50 traces",
+        "openFullTrace": "Open full trace",
         "selfInstrumentedNote": "self-instrumented · local events.run.*",
         "searchPlaceholder": "Search trace_id / employee / model / status",
         "searchAria": "Search traces",

@@ -335,6 +335,7 @@ export default function ModelDetailPage({
         open={drawerMetric !== null}
         metric={drawerMetric}
         contextLabel={`${modelRef} · ${tMod("scopedToModel")}`}
+        scope={{ model_ref: modelRef }}
         onClose={() => setDrawerMetric(null)}
       />
     </AppShell>

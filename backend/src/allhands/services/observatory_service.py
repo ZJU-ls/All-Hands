@@ -19,6 +19,7 @@ from allhands.core import (
     ArtifactSummary,
     Message,
     ObservabilityConfig,
+    ObservatoryConversationBreakdown,
     ObservatoryEmployeeBreakdown,
     ObservatoryErrorBreakdown,
     ObservatoryModelBreakdown,
@@ -395,11 +396,7 @@ class ObservatoryService:
             kind_prefixes=list(_RUN_KINDS),
             since=prev_start,
         )
-        prev_recent = [
-            e
-            for e in prev_recent
-            if e.published_at < prev_end and _matches_filters(e)
-        ]
+        prev_recent = [e for e in prev_recent if e.published_at < prev_end and _matches_filters(e)]
         prev_runs = sum(1 for e in prev_recent if e.kind in ("run.completed", "run.failed"))
         prev_failed = sum(1 for e in prev_recent if e.kind == "run.failed")
         prev_failure_rate = (prev_failed / prev_runs) if prev_runs else 0.0
@@ -429,6 +426,51 @@ class ObservatoryService:
         p50_delta = _pct(p50, prev_p50)
         cost_delta = _pct(cost_total, prev_cost)
 
+        # by_conversation aggregation · group runs by payload.conversation_id
+        # so the UI can show "Sessions · top conversations" (Langfuse style).
+        # Separate parallel dicts (numbers vs employee_id vs last_seen_at)
+        # keep mypy happy without per-line type ignores.
+        conv_runs: dict[str, int] = {}
+        conv_tokens: dict[str, int] = {}
+        conv_cost: dict[str, float] = {}
+        conv_emp: dict[str, str] = {}
+        conv_last_seen: dict[str, datetime] = {}
+        for e in recent:
+            cid = e.payload.get("conversation_id") if isinstance(e.payload, dict) else None
+            if not isinstance(cid, str) or not cid:
+                continue
+            tok = e.payload.get("tokens")
+            ti = to_t = tt = 0
+            if isinstance(tok, dict):
+                ti = int(tok.get("input", 0) or 0)
+                to_t = int(tok.get("output", 0) or 0)
+                tt = int(tok.get("total", 0) or 0) or (ti + to_t)
+            elif isinstance(tok, int):
+                tt = int(tok)
+            mr = e.payload.get("model_ref") if isinstance(e.payload, dict) else None
+            run_cost = estimate_cost_usd(mr if isinstance(mr, str) else None, ti, to_t)
+            conv_runs[cid] = conv_runs.get(cid, 0) + 1
+            conv_tokens[cid] = conv_tokens.get(cid, 0) + tt
+            conv_cost[cid] = conv_cost.get(cid, 0.0) + run_cost
+            emp_id = e.payload.get("employee_id") or e.actor
+            if isinstance(emp_id, str) and cid not in conv_emp:
+                conv_emp[cid] = emp_id
+            prev_seen = conv_last_seen.get(cid)
+            if prev_seen is None or e.published_at > prev_seen:
+                conv_last_seen[cid] = e.published_at
+        by_conversation = [
+            ObservatoryConversationBreakdown(
+                conversation_id=cid,
+                employee_id=conv_emp.get(cid),
+                employee_name=name_by_id.get(conv_emp.get(cid, "")),
+                runs_count=conv_runs[cid],
+                total_tokens=conv_tokens[cid],
+                estimated_cost_usd=round(conv_cost[cid], 6),
+                last_seen_at=conv_last_seen.get(cid),
+            )
+            for cid in sorted(conv_cost, key=lambda c: -conv_cost[c])[:8]
+        ]
+
         return ObservatorySummary(
             traces_total=runs_total,
             failure_rate_24h=round(failure_rate, 4),
@@ -449,6 +491,7 @@ class ObservatoryService:
             by_model=by_model,
             by_tool=by_tool,
             top_errors=top_errors,
+            by_conversation=by_conversation,
             latency_heatmap=latency_heatmap,
             latency_heatmap_buckets_s=latency_heatmap_buckets_s,
             anomalies=_compute_anomalies(
