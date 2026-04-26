@@ -214,6 +214,16 @@ export interface KBHealthDto {
   daily_doc_counts: Array<{ date: string; count: number }>;
   top_tags: Array<{ tag: string; count: number }>;
   mime_breakdown: Array<{ mime: string; count: number }>;
+  chunks_missing_embeddings: number;
+}
+
+export async function reembedAll(
+  kbId: string,
+): Promise<{ processed: number; succeeded: number; failed: number }> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/reembed-all`, { method: "POST" }),
+    "reembedAll",
+  );
 }
 
 export async function getKBHealth(

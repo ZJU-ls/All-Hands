@@ -56,6 +56,7 @@ import {
   ingestUrl,
   listDocumentChunks,
   patchDocumentTags,
+  reembedAll,
   reindexDocument,
   createKB,
   deleteDocument,
@@ -177,6 +178,28 @@ export default function KnowledgePage() {
   // loading flag.
   const [health, setHealth] = useState<Record<string, KBHealthDto | null>>({});
   const healthForActive = activeKb ? (health[activeKb.id] ?? null) : null;
+  const [reembedBusy, setReembedBusy] = useState(false);
+  async function runReembedAll() {
+    if (!activeKb || reembedBusy) return;
+    setReembedBusy(true);
+    try {
+      const res = await reembedAll(activeKb.id);
+      setError(
+        t("reembed.summary", {
+          processed: res.processed,
+          succeeded: res.succeeded,
+          failed: res.failed,
+        }),
+      );
+      setTimeout(() => setError(null), 4000);
+      await refreshDocs(activeKb.id);
+      await refreshKbs(activeKb);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setReembedBusy(false);
+    }
+  }
   const [stateFilter, setStateFilter] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
@@ -581,6 +604,18 @@ export default function KnowledgePage() {
           </div>
         )}
 
+        {/* ─ Stale embedding banner — shown when at least one chunk in
+            the active KB has no vector. Lets the user one-click backfill
+            without touching individual docs. */}
+        {activeKb && (healthForActive?.chunks_missing_embeddings ?? 0) > 0 && (
+          <StaleEmbeddingBanner
+            missing={healthForActive?.chunks_missing_embeddings ?? 0}
+            chunkTotal={healthForActive?.chunk_count ?? 0}
+            busy={reembedBusy}
+            onReembed={runReembedAll}
+          />
+        )}
+
         {/* ─ Toolbar */}
         {pageState === "ok" && (
           <div className="flex flex-wrap items-center gap-2">
@@ -973,6 +1008,43 @@ function KBInfoCard({
           <span>{t("semanticEnabled")}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+// Stale embedding banner — fires when KB.health.chunks_missing_embeddings
+// > 0. Common cause: user ingested docs while the embedding provider
+// was misconfigured (missing API key) so chunk.embedding stayed NULL.
+// One-click backfill that re-runs the ingest pipeline for every doc.
+function StaleEmbeddingBanner({
+  missing,
+  chunkTotal,
+  busy,
+  onReembed,
+}: {
+  missing: number;
+  chunkTotal: number;
+  busy: boolean;
+  onReembed: () => void | Promise<void>;
+}) {
+  const t = useTranslations("knowledge.stale");
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning-soft px-4 py-2.5 text-[12px] text-warning">
+      <div className="flex items-center gap-2">
+        <Icon name="alert-triangle" size={13} />
+        <span className="text-text">
+          {t("body", { missing, total: chunkTotal })}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={() => void onReembed()}
+        disabled={busy}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-warning/40 bg-surface px-2.5 text-[11px] font-medium text-text hover:border-warning hover:text-warning disabled:opacity-40"
+      >
+        <Icon name="refresh" size={11} />
+        {busy ? t("running") : t("cta")}
+      </button>
     </div>
   );
 }
