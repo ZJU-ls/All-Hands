@@ -56,6 +56,7 @@ import {
   ingestUrl,
   listDocumentChunks,
   patchDocumentTags,
+  suggestTagsForDocument,
   reembedAll,
   reindexDocument,
   createKB,
@@ -856,6 +857,15 @@ export default function KnowledgePage() {
             kbId={activeKb.id}
             onClose={() => setOpenDoc(null)}
             onDelete={handleDeleteDoc}
+            onTagsChanged={async () => {
+              if (!activeKb) return;
+              await refreshDocs(activeKb.id);
+              // Pull the freshly-tagged version back into the drawer state
+              const refreshed = (await listDocuments(activeKb.id, { limit: 200 })).find(
+                (d) => d.id === openDoc.id,
+              );
+              if (refreshed) setOpenDoc(refreshed);
+            }}
           />
         )}
 
@@ -3442,11 +3452,13 @@ function DocDrawer({
   kbId,
   onClose,
   onDelete,
+  onTagsChanged,
 }: {
   doc: DocumentDto;
   kbId: string;
   onClose: () => void;
   onDelete: (d: DocumentDto) => void;
+  onTagsChanged: () => void | Promise<void>;
 }) {
   const t = useTranslations("knowledge.detail");
   type Tab = "info" | "text" | "chunks";
@@ -3562,20 +3574,9 @@ function DocDrawer({
                   value={new Date(doc.updated_at).toLocaleString()}
                 />
               </DocMetaSection>
-              {doc.tags.length > 0 && (
-                <DocMetaSection title={t("infoSectionTags")}>
-                  <div className="flex flex-wrap gap-1.5">
-                    {doc.tags.map((t) => (
-                      <span
-                        key={t}
-                        className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text-muted"
-                      >
-                        #{t}
-                      </span>
-                    ))}
-                  </div>
-                </DocMetaSection>
-              )}
+              <DocMetaSection title={t("infoSectionTags")}>
+                <DocTagsEditor doc={doc} kbId={kbId} onChanged={onTagsChanged} />
+              </DocMetaSection>
             </div>
           )}
 
@@ -3729,6 +3730,143 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+// Tag editor for a single doc, lives inside DocDrawer's Info tab.
+// Shows current tags · provides an AI suggest button (sparkles icon)
+// suggestTagsForDocument · pending suggestions appear as ghost chips
+// the user clicks to accept(adds via PATCH). Existing tags can be
+// removed by clicking ✕. The "+ tag" inline input adds custom tags.
+function DocTagsEditor({
+  doc,
+  kbId,
+  onChanged,
+}: {
+  doc: DocumentDto;
+  kbId: string;
+  onChanged: () => void | Promise<void>;
+}) {
+  const t = useTranslations("knowledge.docTags");
+  const [pending, setPending] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState("");
+
+  const suggestionsToShow = (pending ?? []).filter((p) => !doc.tags.includes(p));
+
+  async function runSuggest() {
+    setBusy(true);
+    try {
+      const tags = await suggestTagsForDocument(kbId, doc.id);
+      setPending(tags);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function applyTag(tag: string) {
+    await patchDocumentTags(kbId, doc.id, { add: [tag] });
+    setPending((prev) => prev?.filter((p) => p !== tag) ?? null);
+    await onChanged();
+  }
+
+  async function applyAll() {
+    if (suggestionsToShow.length === 0) return;
+    await patchDocumentTags(kbId, doc.id, { add: suggestionsToShow });
+    setPending(null);
+    await onChanged();
+  }
+
+  async function removeTag(tag: string) {
+    await patchDocumentTags(kbId, doc.id, { remove: [tag] });
+    await onChanged();
+  }
+
+  async function submitAdding() {
+    const tag = adding.trim();
+    if (!tag) return;
+    setAdding("");
+    if (doc.tags.includes(tag)) return;
+    await patchDocumentTags(kbId, doc.id, { add: [tag] });
+    await onChanged();
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {/* Existing tags */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {doc.tags.map((tag) => (
+          <span
+            key={tag}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 pl-2 pr-1 py-0.5 font-mono text-[10px] text-text-muted"
+          >
+            #{tag}
+            <button
+              type="button"
+              onClick={() => void removeTag(tag)}
+              className="text-text-subtle hover:text-danger"
+              aria-label={t("removeAria", { tag })}
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void submitAdding();
+            }
+          }}
+          placeholder={t("addPlaceholder")}
+          className="h-6 w-32 rounded-full border border-border bg-surface px-2 font-mono text-[10px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+        />
+      </div>
+
+      {/* AI suggestion row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void runSuggest()}
+          disabled={busy}
+          className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-surface px-2 font-mono text-[10px] text-text-muted hover:border-primary/40 hover:text-primary disabled:opacity-40"
+        >
+          <Icon name="sparkles" size={10} />
+          {busy ? t("suggesting") : t("suggestCta")}
+        </button>
+        {suggestionsToShow.length > 0 && (
+          <>
+            {suggestionsToShow.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => void applyTag(tag)}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-primary/40 bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary hover:border-primary"
+                title={t("acceptOneHint")}
+              >
+                + #{tag}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => void applyAll()}
+              className="inline-flex h-6 items-center gap-1 rounded-md bg-primary px-2 font-mono text-[10px] text-primary-fg hover:bg-primary-hover"
+            >
+              <Icon name="check" size={10} />
+              {t("acceptAll", { count: suggestionsToShow.length })}
+            </button>
+          </>
+        )}
+      </div>
+      {pending !== null && pending.length === 0 && suggestionsToShow.length === 0 && (
+        <p className="font-mono text-[10px] text-text-subtle">
+          {t("noSuggestions")}
+        </p>
+      )}
+    </div>
   );
 }
 

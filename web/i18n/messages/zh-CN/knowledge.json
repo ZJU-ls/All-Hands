@@ -133,6 +133,15 @@
       "explainBm25Only": "只有关键词命中(第 {bm25}) · 向量没召回到这条",
       "explainVecOnly": "只有向量命中(第 {vec}) · 关键词没匹上"
     },
+    "docTags": {
+      "addPlaceholder": "+ 加标签…",
+      "removeAria": "移除 #{tag}",
+      "suggestCta": "AI 推荐",
+      "suggesting": "推荐中…",
+      "acceptOneHint": "点击采纳这一条",
+      "acceptAll": "全部采纳 ({count})",
+      "noSuggestions": "AI 没给出新建议(可能 KB 里 chat provider 还没配)"
+    },
     "stale": {
       "body": "{missing}/{total} 个分片没有向量(BM25 还能搜 · 但向量召回会漏)",
       "cta": "重新嵌入全部",

@@ -443,6 +443,17 @@ async def reindex_document(kb_id: str, doc_id: str) -> DocOut:
     return _doc_out(doc)
 
 
+@router.post("/{kb_id}/documents/{doc_id}/suggest-tags")
+async def suggest_tags(kb_id: str, doc_id: str) -> dict[str, list[str]]:
+    """LLM-suggested tags for a document. Empty list means the LLM was
+    unreachable or returned nothing useful — UI hides the chip row."""
+    try:
+        tags = await _service().suggest_tags_for_document(doc_id, max_tags=3)
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"tags": tags}
+
+
 class TagPatchPayload(BaseModel):
     add: list[str] | None = None
     remove: list[str] | None = None

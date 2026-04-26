@@ -405,6 +405,19 @@ export async function uploadDocument(
   );
 }
 
+export async function suggestTagsForDocument(
+  kbId: string,
+  docId: string,
+): Promise<string[]> {
+  const r = await fetch(
+    `${BASE}/api/kb/${kbId}/documents/${docId}/suggest-tags`,
+    { method: "POST" },
+  );
+  if (!r.ok) return [];
+  const j = (await r.json()) as { tags: string[] };
+  return j.tags ?? [];
+}
+
 export async function patchDocumentTags(
   kbId: string,
   docId: string,
