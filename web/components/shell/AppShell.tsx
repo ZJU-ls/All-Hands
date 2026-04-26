@@ -12,6 +12,7 @@ import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
 import { ToastProvider } from "@/components/ui/Toast";
 import { KeyboardShortcutsModal } from "@/components/shell/KeyboardShortcutsModal";
 import { RouteProgress } from "@/components/shell/RouteProgress";
+import { useDocumentTitle } from "@/lib/use-document-title";
 
 // Lazy-load the two global overlays so their module graph (DotGridBackdrop,
 // RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
@@ -368,12 +369,8 @@ export function AppShell({
   const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
 
   // Sync browser tab title with the page-supplied title (locale-aware via
-  // the `title` prop the caller computed from useTranslations). Falls back
-  // to "allhands" when a page omits it.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    document.title = title ? `${title} · allhands` : "allhands";
-  }, [title]);
+  // the `title` prop the caller computed from useTranslations).
+  useDocumentTitle(title);
 
   // Hydrate sidebar collapsed pref from localStorage post-mount (avoids SSR mismatch).
   useEffect(() => {

@@ -105,6 +105,7 @@
     "pinging": "pinging backend…"
   },
   "welcome": {
+    "docTitle": "Welcome",
     "skip": "Maybe later →",
     "eyebrow": "v0 · Open Source · Self-hosted",
     "h1Line1": "Welcome to allhands.",

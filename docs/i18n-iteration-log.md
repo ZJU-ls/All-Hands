@@ -361,3 +361,20 @@ i18n 漏洞,留给独立 PR。
 **结果**:1928 web tests · typecheck · lint · regression net 全绿
 
 **commits**:见 git log
+
+## Round 17 · 2026-04-26 08:13 (cron · 30m)
+
+**主题**:抽 useDocumentTitle hook · 把没走 AppShell 的页面也包进来
+
+**做的事**:
+- 抽 lib/use-document-title.ts 共享 hook,把 R16 在 AppShell 里写的
+  useEffect 提取出来 · 公约一处定义
+- AppShell 改用该 hook,去掉重复 useEffect
+- 唯一不走 AppShell 的用户级页面是 /welcome(其它无 AppShell 的页面是
+  redirect / design-lab,不需要 i18n title)
+- /welcome 调 useDocumentTitle(t("docTitle")) · 加 welcome.docTitle key
+  ("欢迎" / "Welcome")到 zh-CN.json + en.json 根 catalog
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
