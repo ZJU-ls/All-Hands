@@ -23,7 +23,10 @@ from allhands.i18n import _MESSAGES, LOCALES
 SRC = Path(__file__).resolve().parents[2] / "src" / "allhands"
 
 CALL_RE = re.compile(r'\bt\(\s*"([a-zA-Z_][a-zA-Z0-9_.]*)"')
-ALLOWED_PARENT_PATHS = {"src/allhands/i18n/__init__.py"}  # the catalog itself
+# f-string template prefix:  t(f"a.b.{var}…")  — capture the leading static
+# prefix up to the first `{` and require the catalog to have at least one
+# key matching `prefix.*`.
+TPL_RE = re.compile(r'\bt\(\s*f"([a-zA-Z_][a-zA-Z0-9_.]*)\.\{')
 
 
 def _all_keys() -> set[str]:
@@ -33,24 +36,34 @@ def _all_keys() -> set[str]:
     return keys
 
 
+def _all_prefixes(keys: set[str]) -> set[str]:
+    out: set[str] = set()
+    for k in keys:
+        parts = k.split(".")
+        for i in range(1, len(parts)):
+            out.add(".".join(parts[:i]))
+    return out
+
+
 def test_every_t_call_resolves() -> None:
     catalog = _all_keys()
+    prefixes = _all_prefixes(catalog)
     offences: list[tuple[Path, int, str]] = []
     for path in SRC.rglob("*.py"):
         if path.name == "__init__.py" and path.parent.name == "i18n":
             continue
         text = path.read_text(encoding="utf-8")
+        if "from allhands.i18n import" not in text:
+            continue
         for lineno, line in enumerate(text.splitlines(), 1):
             for match in CALL_RE.finditer(line):
-                # Skip clearly-non-i18n callers — e.g. a local `t = ...` in
-                # a non-i18n context. We restrict to files that actually
-                # `from allhands.i18n import t` to avoid false positives
-                # from any unrelated single-letter `t(...)` helpers.
-                if "from allhands.i18n import" not in text:
-                    continue
                 key = match.group(1)
                 if key not in catalog:
                     offences.append((path, lineno, key))
+            for match in TPL_RE.finditer(line):
+                prefix = match.group(1)
+                if prefix not in prefixes:
+                    offences.append((path, lineno, f"{prefix}.* (f-string prefix)"))
     rendered = "\n".join(
         f"  {p.relative_to(SRC.parent.parent.parent)}:{n}  {k}" for p, n, k in offences
     )
