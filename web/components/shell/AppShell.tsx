@@ -10,6 +10,7 @@ import { AllhandsLogo } from "@/components/brand/AllhandsLogo";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
 import { ToastProvider } from "@/components/ui/Toast";
+import { KeyboardShortcutsModal } from "@/components/shell/KeyboardShortcutsModal";
 
 // Lazy-load the two global overlays so their module graph (DotGridBackdrop,
 // RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
@@ -361,6 +362,7 @@ export function AppShell({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteMounted, setPaletteMounted] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const searchParams = useSearchParams();
   const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
 
@@ -392,6 +394,19 @@ export function AppShell({
         ev.preventDefault();
         setPaletteMounted(true);
         setPaletteOpen((v) => !v);
+      } else if (ev.key === "?" && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+        // `?` (Shift+/) → open shortcuts cheat-sheet · skip while typing.
+        const target = ev.target as HTMLElement | null;
+        const tag = target?.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          target?.isContentEditable
+        ) {
+          return;
+        }
+        ev.preventDefault();
+        setShortcutsOpen(true);
       } else if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "b") {
         // Cmd/Ctrl+B → toggle sidebar (skip when typing in input/textarea/contenteditable).
         const target = ev.target as HTMLElement | null;
@@ -433,6 +448,15 @@ export function AppShell({
             <ThemeToggle />
             <button
               type="button"
+              onClick={() => setShortcutsOpen(true)}
+              className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text transition duration-base"
+              aria-label="Keyboard shortcuts"
+              title="? · keyboard shortcuts"
+            >
+              <Icon name="circle-help" size={15} />
+            </button>
+            <button
+              type="button"
               className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text transition duration-base"
               aria-label={t("notifications")}
               title={t("notifications")}
@@ -465,6 +489,10 @@ export function AppShell({
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       )}
       {hasTrace && <RunTraceDrawer />}
+      <KeyboardShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
     </div>
     </ToastProvider>
   );
