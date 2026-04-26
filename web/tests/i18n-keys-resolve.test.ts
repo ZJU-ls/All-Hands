@@ -38,8 +38,13 @@ function loadCatalogKeys(): Set<string> {
     if (obj && typeof obj === "object") {
       for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
         const next = [...path, k];
-        if (typeof v === "string") keys.add(next.join("."));
-        else visit(v, next);
+        // String + array (e.g. messages used via t.raw) both terminate as
+        // a real catalog entry — only walk into nested objects.
+        if (typeof v === "string" || Array.isArray(v)) {
+          keys.add(next.join("."));
+        } else {
+          visit(v, next);
+        }
       }
     }
   };
@@ -96,13 +101,15 @@ function extractFromFile(file: string): Call[] {
   // For each t-name, locate calls (string-literal and template-prefix).
   const seen = new Set<string>();
   for (const d of decls) {
+    // Allow `name(` and method-style `name.rich(` / `name.raw(` / `name.has(`.
+    const callPrefix = `\\b${d.name}(?:\\.(?:rich|raw|has))?`;
     // (1) Static string literal:    name("a.b.c"
-    const litRe = new RegExp(`\\b${d.name}\\(\\s*"([a-zA-Z0-9_.]+)"`, "g");
+    const litRe = new RegExp(`${callPrefix}\\(\\s*"([a-zA-Z0-9_.]+)"`, "g");
     // (2) Template-literal prefix:   name(`a.b.${var}…`)
     //   Capture the leading static prefix up to the first ${ — we'll
     //   verify the catalog has at least one key matching `${ns}.${prefix}.*`.
     const tplRe = new RegExp(
-      `\\b${d.name}\\(\\s*\`([a-zA-Z0-9_.]+)\\.\\$\\{`,
+      `${callPrefix}\\(\\s*\`([a-zA-Z0-9_.]+)\\.\\$\\{`,
       "g",
     );
     for (let i = 0; i < lines.length; i++) {
