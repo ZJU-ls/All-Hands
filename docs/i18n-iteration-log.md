@@ -890,3 +890,23 @@ welcome.highlights.* 那些动态 key 仍漏(因为 helper 函数参数别名,au
 heuristic 静态分析做不了)。继续保留作清理基线。
 
 **commits**:见 git log
+
+## Round 42 · 2026-04-27 02:43 (cron · 30m)
+
+**主题**:第一波小心翼翼的 dead-key 物理清理
+
+**做的事**:
+- 二次确认 5 个 catalog 残留 key 完全不被引用(grep app/+components+ts):
+  - `triggers.list.card.firesPrefix` / `firesSuffix` / `lastPrefix`
+    (R6 split-translation → ICU rich 之后留下的旧三段拼接 key)
+  - `viz.table.densityCompact` / `densityCozy`(table 组件密度切换被删后忘清)
+- 从 zh-CN/runs-traces.json + zh-CN/render-viz.json + en 同款两文件删除
+
+**结果**:catalog 2481 → 2476(-5)· 死 key 78 → 73(2.9%)· 1999 tests
+全绿 · 没有任何运行时回归(下次跑 audit 验证)
+
+**继续保留**:
+- `common.*` 21 个共享词 — 当公约 vocabulary 留作未来代码调用
+- 其它需要更细致 case-by-case 评估,后续轮次慢慢清
+
+**commits**:见 git log

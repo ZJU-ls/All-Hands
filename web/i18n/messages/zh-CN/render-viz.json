@@ -71,8 +71,6 @@
     },
     "table": {
       "searchPlaceholder": "筛选行…",
-      "densityCozy": "宽",
-      "densityCompact": "紧",
       "copyCsv": "复制为 CSV",
       "noMatch": "没有匹配的行",
       "empty": "暂无数据",

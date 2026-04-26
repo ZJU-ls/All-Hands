@@ -128,10 +128,7 @@
       "card": {
         "autoDisabled": "Auto-disabled",
         "failedStreak": "{count} failures",
-        "firesPrefix": "Fired",
-        "firesSuffix": "times",
         "firesTotal": "Fired <n></n> times",
-        "lastPrefix": "Last",
         "lastFiredAt": "Last fired <time></time>",
         "neverFired": "Never fired",
         "fireNow": "Fire now",
