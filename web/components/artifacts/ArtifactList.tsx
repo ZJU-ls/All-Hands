@@ -68,7 +68,7 @@ export function ArtifactList({
     }
     const fallback = byKind.get(FALLBACK_BUCKET);
     if (fallback && fallback.length > 0) {
-      sections.push({ title: FALLBACK_BUCKET, items: fallback });
+      sections.push({ title: t("groupOther"), items: fallback });
     }
     return sections;
   }, [artifacts, t]);
