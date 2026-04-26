@@ -517,7 +517,11 @@
       "loading": "Loading artifact…",
       "unsupportedKind": "Kind {kind} can't be previewed",
       "openInPanel": "Open in artifact panel",
-      "open": "Open"
+      "open": "Open",
+      "openInNewTab": "Open in new tab",
+      "download": "Download",
+      "copy": "Copy content",
+      "copied": "Copied"
     },
     "artifactCard": {
       "missingId": "Artifact.Card is missing artifact_id",

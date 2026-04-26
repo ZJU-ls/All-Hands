@@ -517,7 +517,11 @@
       "loading": "读取制品…",
       "unsupportedKind": "kind {kind} 暂不支持预览",
       "openInPanel": "在制品区打开",
-      "open": "打开"
+      "open": "打开",
+      "openInNewTab": "在新窗口打开",
+      "download": "下载",
+      "copy": "复制内容",
+      "copied": "已复制"
     },
     "artifactCard": {
       "missingId": "Artifact.Card 缺少 artifact_id",
