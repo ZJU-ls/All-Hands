@@ -362,6 +362,8 @@
         "delete": "Delete",
         "loadingTools": "Loading tools…",
         "emptyTools": "This server declares no tools.",
+        "toolsSearchPlaceholder": "Search tools…",
+        "toolsNoMatch": "No tool matches \"{query}\"",
         "featured": "featured"
       },
       "empty": {
