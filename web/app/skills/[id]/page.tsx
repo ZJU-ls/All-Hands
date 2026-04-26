@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
@@ -413,6 +413,7 @@ function Overview({
   dependents: Employee[];
 }) {
   const t = useTranslations("skills.detail.overview");
+  const locale = useLocale();
   return (
     <div data-testid="tab-panel-overview" className="space-y-5">
       <SkillExplainer skillId={skill.id} />
@@ -423,7 +424,7 @@ function Overview({
             { k: t("source"), v: skill.source, mono: true },
             {
               k: t("installedAt"),
-              v: skill.installed_at ? formatTime(skill.installed_at) : "—",
+              v: skill.installed_at ? formatTime(skill.installed_at, locale) : "—",
               mono: true,
             },
             { k: t("tools"), v: String(skill.tool_ids.length), mono: true },
@@ -641,6 +642,7 @@ function PromptTab({ skill }: { skill: Skill }) {
 
 function VersionsTab({ skill }: { skill: Skill }) {
   const t = useTranslations("skills.detail.versions");
+  const locale = useLocale();
   return (
     <div data-testid="tab-panel-versions" className="space-y-5">
       <Section title={t("section")} icon="clock">
@@ -649,7 +651,7 @@ function VersionsTab({ skill }: { skill: Skill }) {
             { k: t("version"), v: `v${skill.version}`, mono: true },
             {
               k: t("installedAt"),
-              v: skill.installed_at ? formatTime(skill.installed_at) : "—",
+              v: skill.installed_at ? formatTime(skill.installed_at, locale) : "—",
               mono: true,
             },
             {
@@ -751,10 +753,10 @@ function DependenciesTab({ skill }: { skill: Skill }) {
   );
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, locale: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString();
+    return d.toLocaleString(locale);
   } catch {
     return iso;
   }

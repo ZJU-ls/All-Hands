@@ -31,6 +31,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 
@@ -156,11 +157,31 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   // Tear down all pending timers on unmount.
   useEffect(() => {
+    const timers = timersRef.current;
     return () => {
-      for (const handle of timersRef.current.values()) clearTimeout(handle);
-      timersRef.current.clear();
+      for (const handle of timers.values()) clearTimeout(handle);
+      timers.clear();
     };
   }, []);
+
+  // Clear any in-flight toasts on route change — they were anchored to the
+  // previous page's action and the new page shouldn't inherit them. Errors
+  // are kept (longer duration) so the user still sees a server-side
+  // failure they may want to retry.
+  const pathname = usePathname();
+  useEffect(() => {
+    setToasts((prev) => {
+      const kept = prev.filter((t) => t.kind === "error");
+      for (const t of prev) {
+        if (t.kind !== "error") {
+          const tm = timersRef.current.get(t.id);
+          if (tm) clearTimeout(tm);
+          timersRef.current.delete(t.id);
+        }
+      }
+      return kept;
+    });
+  }, [pathname]);
 
   return (
     <ToastContext.Provider value={{ push, dismiss, success, error, info, warning }}>

@@ -131,6 +131,7 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
   // edit calls PATCH /artifacts/{id}, which bumps version on the server
   // and SSE-pushes the change back so the panel auto-refreshes.
   const [mode, setMode] = useState<ToolbarMode>("view");
+  const [contentScrolled, setContentScrolled] = useState(false);
   const [draft, setDraft] = useState<string>("");
   const [busy, setBusy] = useState<null | "save" | "rollback">(null);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
@@ -296,8 +297,14 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-3 py-1.5">
+      {/* Toolbar — sticky in flex column · scrolled = subtle elevation */}
+      <div
+        className={
+          contentScrolled
+            ? "flex shrink-0 items-center gap-1.5 border-b border-border bg-surface/90 px-3 py-1.5 shadow-soft-sm backdrop-blur-sm transition duration-base"
+            : "flex shrink-0 items-center gap-1.5 border-b border-border px-3 py-1.5 transition duration-base"
+        }
+      >
         {mode === "view" ? (
           <>
             {canCopy && (
@@ -402,7 +409,13 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
             disabled={busy != null}
           />
         ) : content ? (
-          <div className="h-full overflow-y-auto">
+          <div
+            className="h-full overflow-y-auto"
+            onScroll={(e) => {
+              const top = (e.currentTarget as HTMLDivElement).scrollTop;
+              setContentScrolled(top > 4);
+            }}
+          >
             {renderBody(
               meta,
               content,

@@ -133,6 +133,35 @@
       "explainBm25Only": "只有关键词命中(第 {bm25}) · 向量没召回到这条",
       "explainVecOnly": "只有向量命中(第 {vec}) · 关键词没匹上"
     },
+    "docTags": {
+      "addPlaceholder": "+ 加标签…",
+      "removeAria": "移除 #{tag}",
+      "suggestCta": "AI 推荐",
+      "suggesting": "推荐中…",
+      "acceptOneHint": "点击采纳这一条",
+      "acceptAll": "全部采纳 ({count})",
+      "noSuggestions": "AI 没给出新建议(可能 KB 里 chat provider 还没配)"
+    },
+    "stale": {
+      "body": "{missing}/{total} 个分片没有向量(BM25 还能搜 · 但向量召回会漏)",
+      "cta": "重新嵌入全部",
+      "running": "处理中…"
+    },
+    "reembed": {
+      "summary": "Re-embed 完成 · 共 {processed} · 成功 {succeeded} · 失败 {failed}"
+    },
+    "health": {
+      "sectionLabel": "Health",
+      "lastActivity": "{when}",
+      "never": "—",
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activityHeader": "近 {days} 天入库",
+      "activityHint": "每条 = 当天新增 doc 数",
+      "topTagsHeader": "热门标签",
+      "dominantMime": "主要类型 · {mime} ({count})"
+    },
     "starters": {
       "label": "试试这些问题",
       "hint": "AI 根据当前知识库的标题 / 章节自动生成 · 点一条即可问"
@@ -149,7 +178,11 @@
       "newConversation": "新对话",
       "followUpPlaceholder": "继续追问 · 上一轮的引用编号会沿用…",
       "followUpSubmit": "追问",
-      "followUpHint": "Enter 发送 · 答案沿用上一轮检索的同一份片段编号"
+      "followUpHint": "Enter 发送 · 答案沿用上一轮检索的同一份片段编号",
+      "copyAsCitation": "复制",
+      "copyAsCitationTitle": "复制 markdown · 含问题 / 答案 / 引用列表",
+      "copied": "已复制",
+      "copyFailed": "复制失败 · 浏览器可能屏蔽了 clipboard API"
     },
     "bulkTags": {
       "title": "给 {count} 个文档批量打标签",

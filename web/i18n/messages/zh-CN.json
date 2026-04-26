@@ -105,6 +105,7 @@
     "pinging": "正在 ping 后端…"
   },
   "welcome": {
+    "docTitle": "欢迎",
     "skip": "稍后再说 →",
     "eyebrow": "v0 · Open Source · Self-hosted",
     "h1Line1": "欢迎来到 allhands。",

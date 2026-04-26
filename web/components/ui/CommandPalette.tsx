@@ -140,8 +140,35 @@ export function CommandPalette({
   );
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [recents, setRecents] = useState<string[]>([]);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Hydrate recents on first open · ring of last 5 picked hrefs.
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const raw = window.localStorage.getItem("ah.cmdk.recents");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setRecents(arr.filter((s) => typeof s === "string").slice(0, 5));
+      }
+    } catch {
+      // ignore
+    }
+  }, [open]);
+
+  const pushRecent = useCallback((href: string) => {
+    setRecents((prev) => {
+      const next = [href, ...prev.filter((h) => h !== href)].slice(0, 5);
+      try {
+        window.localStorage.setItem("ah.cmdk.recents", JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     const scored = ENTRIES.map((e) => ({ e, score: fuzzyMatch(query, e) }))
@@ -179,11 +206,18 @@ export function CommandPalette({
 
   const pick = useCallback(
     (href: string) => {
+      pushRecent(href);
       setOpen(false);
       router.push(href);
     },
-    [router, setOpen],
+    [router, setOpen, pushRecent],
   );
+
+  const recentEntries = useMemo(() => {
+    if (query) return [];
+    const map = new Map(ENTRIES.map((e) => [e.href, e] as const));
+    return recents.map((h) => map.get(h)).filter((e): e is Entry => Boolean(e));
+  }, [query, recents, ENTRIES]);
 
   const onListKey = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -247,6 +281,34 @@ export function CommandPalette({
             </div>
           ) : (
             <>
+              {!query && recentEntries.length > 0 && (
+                <>
+                  <div className="px-3 pb-1.5 pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
+                    {t("recent", { count: recentEntries.length })}
+                  </div>
+                  <ul className="mb-2 space-y-0.5">
+                    {recentEntries.map((e) => (
+                      <li key={`recent-${e.href}`}>
+                        <Link
+                          href={e.href}
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            pick(e.href);
+                          }}
+                          className="relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-muted hover:bg-surface-2 hover:text-text transition duration-fast"
+                        >
+                          <Icon name="clock" size={13} className="text-text-subtle" />
+                          <span className="flex-1 truncate font-medium">{e.label}</span>
+                          <span className="font-mono text-[10px] text-text-subtle opacity-60">
+                            {e.href}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mx-1 mb-1 h-px bg-border/60" aria-hidden />
+                </>
+              )}
               {!query && (
                 <div className="px-3 pb-1.5 pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
                   {t("suggestions", { count: filtered.length })}

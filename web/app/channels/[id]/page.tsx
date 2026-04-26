@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, use } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -75,6 +75,7 @@ export default function ChannelDetailPage({
 }) {
   const t = useTranslations("channels.detail");
   const tKindLabel = useTranslations("channels.detail.kindLabel");
+  const locale = useLocale();
   const { id } = use(params);
   const [channel, setChannel] = useState<Channel | null>(null);
   const [subs, setSubs] = useState<Subscription[]>([]);
@@ -228,7 +229,7 @@ export default function ChannelDetailPage({
                     },
                     {
                       k: t("metaCreatedAt"),
-                      v: new Date(channel.created_at).toLocaleString(),
+                      v: new Date(channel.created_at).toLocaleString(locale),
                       mono: true,
                     },
                   ]}
@@ -520,6 +521,7 @@ function MetaGrid({
 }
 
 function MessageRow({ m }: { m: Message }) {
+  const locale = useLocale();
   const dirMeta =
     m.direction === "in"
       ? {
@@ -554,7 +556,7 @@ function MessageRow({ m }: { m: Message }) {
           {m.status}
         </span>
         <span className="ml-auto font-mono text-caption text-text-subtle">
-          {new Date(m.created_at).toLocaleTimeString()}
+          {new Date(m.created_at).toLocaleTimeString(locale)}
         </span>
       </div>
       <pre className="text-[11px] font-mono text-text-muted whitespace-pre-wrap break-all leading-relaxed">

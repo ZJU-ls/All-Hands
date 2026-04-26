@@ -297,6 +297,26 @@
       "cancel": "Cancel",
       "creating": "Creating…",
       "submit": "Create task"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "needs_input": "Needs answer",
+      "needs_approval": "Needs approval",
+      "completed": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "source": {
+      "user": "User",
+      "lead": "Lead",
+      "trigger": "Trigger",
+      "employee": "Employee"
     }
+  },
+  "employeeBadges": {
+    "react": "Executable",
+    "planner": "Plans ahead",
+    "coordinator": "Leads team"
   }
 }

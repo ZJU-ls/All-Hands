@@ -443,6 +443,17 @@ async def reindex_document(kb_id: str, doc_id: str) -> DocOut:
     return _doc_out(doc)
 
 
+@router.post("/{kb_id}/documents/{doc_id}/suggest-tags")
+async def suggest_tags(kb_id: str, doc_id: str) -> dict[str, list[str]]:
+    """LLM-suggested tags for a document. Empty list means the LLM was
+    unreachable or returned nothing useful — UI hides the chip row."""
+    try:
+        tags = await _service().suggest_tags_for_document(doc_id, max_tags=3)
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"tags": tags}
+
+
 class TagPatchPayload(BaseModel):
     add: list[str] | None = None
     remove: list[str] | None = None
@@ -581,6 +592,46 @@ async def ask_kb_stream(kb_id: str, payload: AskPayload) -> StreamingResponse:
             "X-Accel-Buffering": "no",  # disable nginx buffering when proxied
         },
     )
+
+
+class HealthOut(BaseModel):
+    doc_count: int
+    chunk_count: int
+    token_sum: int
+    last_activity: str | None
+    daily_doc_counts: list[dict[str, object]]
+    top_tags: list[dict[str, object]]
+    mime_breakdown: list[dict[str, object]]
+    chunks_missing_embeddings: int
+
+
+@router.get("/{kb_id}/health")
+async def kb_health(kb_id: str, days: int = 30) -> HealthOut:
+    """Sidebar "health" snapshot — totals, activity sparkline, top tags."""
+    try:
+        h = await _service().get_kb_health(kb_id, days=days)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return HealthOut(**h)
+
+
+class ReembedOut(BaseModel):
+    processed: int
+    succeeded: int
+    failed: int
+
+
+@router.post("/{kb_id}/reembed-all")
+async def reembed_all(kb_id: str) -> ReembedOut:
+    """Re-run ingest for every doc in the KB. Backfills missing vectors
+    (e.g. after fixing the embedding provider config). Synchronous in v0
+    — fine for small KBs (<100 docs); needs a BackgroundTasks queue when
+    we go bigger."""
+    try:
+        result = await _service().reembed_all(kb_id)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ReembedOut(**result)
 
 
 @router.get("/{kb_id}/starter-questions")

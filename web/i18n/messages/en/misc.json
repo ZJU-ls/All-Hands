@@ -457,6 +457,7 @@
       "placeholder": "Jump to a page · search employees · skills · models",
       "noMatch": "No matches · try a different keyword",
       "suggestions": "Suggestions · {count}",
+      "recent": "Recent · {count}",
       "footer": {
         "navigate": "navigate",
         "open": "open",

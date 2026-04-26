@@ -217,6 +217,108 @@ async def test_ask_stream_no_hits_yields_friendly_delta_then_done(
     assert frames[2]["used_model"] is None
 
 
+async def test_suggest_tags_returns_empty_when_no_provider(
+    svc: KnowledgeService,
+) -> None:
+    kb = await svc.create_kb(name="brain")
+    doc = await svc.upload_document(
+        kb.id, title="Hybrid Retrieval", content_bytes=_SAMPLE_MD, filename="t.md"
+    )
+    assert await svc.suggest_tags_for_document(doc.id) == []
+
+
+async def test_suggest_tags_parses_and_dedupes_llm_output(
+    svc: KnowledgeService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LLM output may have wrapping #, quotes, numbering and dups; the
+    service should normalise to a clean lowercase list ≤ max_tags."""
+    kb = await svc.create_kb(name="brain")
+    doc = await svc.upload_document(kb.id, title="t", content_bytes=_SAMPLE_MD, filename="t.md")
+
+    async def fake(self, system, user, *, model_ref=None, history=None):
+        return "1. #Retrieval\n- 'BM25'\nretrieval\n* re-ranking", "fake"
+
+    # monkeypatch auto-restores after the test → doesn't leak the fake
+    # method to the starter-questions / history tests below.
+    monkeypatch.setattr(KnowledgeService, "_call_chat_llm", fake)
+    tags = await svc.suggest_tags_for_document(doc.id, max_tags=3)
+    assert tags == ["retrieval", "bm25", "re-ranking"]
+
+
+async def test_reembed_all_processes_each_doc(svc: KnowledgeService) -> None:
+    """reembed_all hits every doc · returns processed/succeeded/failed
+    counters · per-doc errors don't abort the loop."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(kb.id, title="A", content_bytes=_SAMPLE_MD, filename="a.md")
+    await svc.upload_document(kb.id, title="B", content_bytes=b"# B\n\nbody", filename="b.md")
+    res = await svc.reembed_all(kb.id)
+    assert res["processed"] == 2
+    assert res["succeeded"] == 2  # mock embedder always succeeds
+    assert res["failed"] == 0
+
+
+async def test_chunks_missing_embeddings_is_zero_with_mock(
+    svc: KnowledgeService,
+) -> None:
+    """Mock embedder always populates `chunk.embedding`, so a freshly
+    ingested KB should have 0 chunks-missing-embeddings — the banner
+    won't fire in the happy path."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(kb.id, title="t", content_bytes=_SAMPLE_MD, filename="t.md")
+    assert await svc.get_chunks_missing_embeddings(kb.id) == 0
+
+
+async def test_get_kb_health_aggregates_and_buckets(
+    svc: KnowledgeService,
+) -> None:
+    """Health snapshot: totals match KB row · daily_doc_counts has the
+    requested length, oldest first, today rightmost · top_tags counts
+    occurrences across all docs · mime_breakdown sorted desc."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(
+        kb.id, title="A", content_bytes=_SAMPLE_MD, filename="a.md", tags=["x", "y"]
+    )
+    await svc.upload_document(
+        kb.id, title="B", content_bytes=b"# B\n\nbody", filename="b.md", tags=["x"]
+    )
+    h = await svc.get_kb_health(kb.id, days=7)
+
+    assert h["doc_count"] == 2
+    assert h["chunk_count"] >= 2  # at least one chunk per doc
+    assert h["token_sum"] > 0
+    assert h["last_activity"] is not None
+
+    daily = h["daily_doc_counts"]
+    assert len(daily) == 7
+    # Today bucket (rightmost) should hold both freshly-uploaded docs
+    assert daily[-1]["count"] == 2
+    # Oldest bucket should be empty
+    assert daily[0]["count"] == 0
+    # Bucket dates monotonically increasing
+    dates = [d["date"] for d in daily]
+    assert dates == sorted(dates)
+
+    # x appears in both docs → most frequent tag
+    assert h["top_tags"][0] == {"tag": "x", "count": 2}
+
+    # Both mime types present
+    mimes = {b["mime"] for b in h["mime_breakdown"]}
+    assert any("markdown" in m or "plain" in m for m in mimes)
+
+
+async def test_get_kb_health_empty_kb(svc: KnowledgeService) -> None:
+    kb = await svc.create_kb(name="empty")
+    h = await svc.get_kb_health(kb.id, days=14)
+    assert h["doc_count"] == 0
+    assert h["chunk_count"] == 0
+    assert h["token_sum"] == 0
+    assert h["last_activity"] is None
+    assert all(d["count"] == 0 for d in h["daily_doc_counts"])
+    assert h["top_tags"] == []
+    assert h["mime_breakdown"] == []
+
+
 async def test_update_document_tags_add_remove_replace(
     svc: KnowledgeService,
 ) -> None:
