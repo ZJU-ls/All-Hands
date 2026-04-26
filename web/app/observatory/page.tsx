@@ -701,6 +701,13 @@ function ObservatoryPageInner() {
             </div>
             <div className="flex items-center gap-2">
               <TimeRangePills value={range} onChange={setRange} />
+              <Link
+                href="/observatory/pricing"
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-surface border border-border hover:border-border-strong text-[12px] font-medium text-text transition-colors duration-fast"
+              >
+                <Icon name="tag" size={13} className="text-primary" />
+                {t("pricing.title")}
+              </Link>
               <ShareViewButton />
               <button
                 type="button"

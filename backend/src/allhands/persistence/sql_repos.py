@@ -31,6 +31,7 @@ from allhands.core import (
     MCPServer,
     MCPTransport,
     Message,
+    ModelPriceEntry,
     ObservabilityConfig,
     PlanStep,
     RenderPayload,
@@ -66,6 +67,7 @@ from allhands.persistence.orm.models import (
     LLMProviderRow,
     MCPServerRow,
     MessageRow,
+    ModelPriceRow,
     ObservabilityConfigRow,
     SkillRow,
     SkillRuntimeRow,
@@ -1687,3 +1689,65 @@ class SqlConversationEventRepo:
         )
         await self._s.execute(stmt)
         await self._s.commit()
+
+
+def _row_to_price(row: ModelPriceRow) -> ModelPriceEntry:
+    return ModelPriceEntry(
+        model_ref=row.model_ref,
+        input_per_million_usd=row.input_per_million_usd,
+        output_per_million_usd=row.output_per_million_usd,
+        source="db",
+        source_url=row.source_url,
+        note=row.note,
+        updated_at=_utc(row.updated_at),
+        updated_by_run_id=row.updated_by_run_id,
+    )
+
+
+class SqlModelPriceRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def list_all(self) -> list[ModelPriceEntry]:
+        result = await self._s.execute(select(ModelPriceRow))
+        return [_row_to_price(r) for r in result.scalars().all()]
+
+    async def get(self, model_ref: str) -> ModelPriceEntry | None:
+        row = await self._s.get(ModelPriceRow, model_ref)
+        return _row_to_price(row) if row else None
+
+    async def upsert(self, entry: ModelPriceEntry) -> ModelPriceEntry:
+        existing = await self._s.get(ModelPriceRow, entry.model_ref)
+        ts = (
+            _naive(entry.updated_at) if entry.updated_at else datetime.now(UTC).replace(tzinfo=None)
+        )
+        if existing:
+            existing.input_per_million_usd = entry.input_per_million_usd
+            existing.output_per_million_usd = entry.output_per_million_usd
+            existing.source_url = entry.source_url
+            existing.note = entry.note
+            existing.updated_at = ts
+            existing.updated_by_run_id = entry.updated_by_run_id
+        else:
+            self._s.add(
+                ModelPriceRow(
+                    model_ref=entry.model_ref,
+                    input_per_million_usd=entry.input_per_million_usd,
+                    output_per_million_usd=entry.output_per_million_usd,
+                    source_url=entry.source_url,
+                    note=entry.note,
+                    updated_at=ts,
+                    updated_by_run_id=entry.updated_by_run_id,
+                )
+            )
+        await self._s.commit()
+        # Re-read to ensure source/updated_at consistency
+        return entry.model_copy(update={"source": "db", "updated_at": _utc(ts)})
+
+    async def delete(self, model_ref: str) -> bool:
+        row = await self._s.get(ModelPriceRow, model_ref)
+        if not row:
+            return False
+        await self._s.delete(row)
+        await self._s.commit()
+        return True

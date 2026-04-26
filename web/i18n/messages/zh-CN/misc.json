@@ -146,6 +146,32 @@
         "share": "分享视图",
         "copied": "已复制"
       },
+      "pricing": {
+        "title": "模型价格表",
+        "subtitle": "驱动观测中心成本估算的 USD-per-1M 价格 · 代码内置默认 + DB 运行时覆盖",
+        "breadcrumb": {
+          "observatory": "平台观测",
+          "pricing": "价格表"
+        },
+        "curatorHint": "需要更新价格?去 <chat>对话</chat> 召唤<skill>price-curator</skill> 员工 · 它会查官网 + 写 DB 覆盖 + 留 source_url。",
+        "filter": {
+          "all": "全部",
+          "db": "DB 覆盖",
+          "code": "代码内置"
+        },
+        "searchPlaceholder": "搜 model_ref…",
+        "loading": "加载中…",
+        "loadFailed": "加载失败",
+        "empty": "本筛选下没有数据",
+        "col": {
+          "model": "模型",
+          "source": "来源",
+          "input": "输入价",
+          "output": "输出价",
+          "note": "备注",
+          "updated": "更新时间"
+        }
+      },
       "costPanel": {
         "title": "成本面板 · 24h",
         "today": "今日累计",

@@ -49,6 +49,7 @@ from allhands.persistence.sql_repos import (
     SqlLLMModelRepo,
     SqlLLMProviderRepo,
     SqlMCPServerRepo,
+    SqlModelPriceRepo,
     SqlSkillRepo,
 )
 
@@ -1361,6 +1362,116 @@ def make_render_drawio_executor(
     return _exec
 
 
+def make_list_model_prices_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    """List the merged price table (DB overlay + un-overridden code seed).
+
+    Inlines the merge instead of importing from ``services.model_pricing``
+    because ``execution/`` cannot depend on ``services/`` per the layered
+    contract. The merge here is intentionally a near-mirror of
+    ``model_pricing.list_all_with_source``; the divergence risk is low —
+    both read the same code seed via ``_PRICING_SEED_REFS``.
+    """
+
+    async def _exec(**_: Any) -> dict[str, Any]:
+        from allhands.execution.pricing_seed import iter_seed_entries
+
+        async with _session_context(maker) as session:
+            db_entries = await SqlModelPriceRepo(session).list_all()
+        seen = {e.model_ref.lower().strip() for e in db_entries}
+        rows: list[dict[str, Any]] = [
+            {
+                "model_ref": e.model_ref,
+                "input_per_million_usd": e.input_per_million_usd,
+                "output_per_million_usd": e.output_per_million_usd,
+                "source": e.source,
+                "source_url": e.source_url,
+                "note": e.note,
+                "updated_at": e.updated_at.isoformat() if e.updated_at else None,
+                "updated_by_run_id": e.updated_by_run_id,
+            }
+            for e in db_entries
+        ]
+        for ref, in_usd, out_usd in iter_seed_entries():
+            if ref in seen:
+                continue
+            rows.append(
+                {
+                    "model_ref": ref,
+                    "input_per_million_usd": in_usd,
+                    "output_per_million_usd": out_usd,
+                    "source": "code",
+                    "source_url": None,
+                    "note": None,
+                    "updated_at": None,
+                    "updated_by_run_id": None,
+                }
+            )
+        rows.sort(key=lambda r: (r["source"] == "code", r["model_ref"]))
+        return {
+            "prices": rows,
+            "count": len(rows),
+            "db_count": sum(1 for r in rows if r["source"] == "db"),
+            "code_count": sum(1 for r in rows if r["source"] == "code"),
+        }
+
+    return _exec
+
+
+def make_upsert_model_price_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(
+        model_ref: str,
+        input_per_million_usd: float,
+        output_per_million_usd: float,
+        source_url: str,
+        note: str | None = None,
+        # Confirmation pipeline injects these from the agent context:
+        _run_id: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        from datetime import UTC
+
+        from allhands.core import ModelPriceEntry
+
+        async with _session_context(maker) as session:
+            entry = ModelPriceEntry(
+                model_ref=model_ref,
+                input_per_million_usd=float(input_per_million_usd),
+                output_per_million_usd=float(output_per_million_usd),
+                source="db",
+                source_url=source_url,
+                note=note,
+                updated_at=datetime.now(UTC),
+                updated_by_run_id=_run_id,
+            )
+            saved = await SqlModelPriceRepo(session).upsert(entry)
+        return {
+            "model_ref": saved.model_ref,
+            "input_per_million_usd": saved.input_per_million_usd,
+            "output_per_million_usd": saved.output_per_million_usd,
+            "source": saved.source,
+            "source_url": saved.source_url,
+            "note": saved.note,
+            "updated_at": saved.updated_at.isoformat() if saved.updated_at else None,
+        }
+
+    return _exec
+
+
+def make_delete_model_price_override_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(model_ref: str, **_: Any) -> dict[str, Any]:
+        async with _session_context(maker) as session:
+            removed = await SqlModelPriceRepo(session).delete(model_ref)
+        return {"model_ref": model_ref, "removed": removed}
+
+    return _exec
+
+
 def _make_delete_conversation_exec_factory() -> Callable[
     [async_sessionmaker[AsyncSession]], ToolExecutor
 ]:
@@ -1414,4 +1525,9 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     "allhands.artifacts.search": make_artifact_search_executor,
     # History-panel conversation lifecycle (Tool First · L01).
     "allhands.meta.delete_conversation": _make_delete_conversation_exec_factory(),
+    # Model-pricing overlay (Tool First · L01) · paired with REST in
+    # api/routers/pricing.py.
+    "allhands.meta.list_model_prices": make_list_model_prices_executor,
+    "allhands.meta.upsert_model_price": make_upsert_model_price_executor,
+    "allhands.meta.delete_model_price_override": make_delete_model_price_override_executor,
 }
