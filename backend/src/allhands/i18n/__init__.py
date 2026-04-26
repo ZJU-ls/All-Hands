@@ -106,6 +106,12 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "providers.label.openai": "OpenAI 兼容",
         "providers.label.anthropic": "Anthropic",
         "providers.label.aliyun": "阿里云 百炼",
+        "knowledge.embedding.label.aliyun": "阿里云百炼 · {model}",
+        "knowledge.embedding.reason.add_openai": "去 /gateway 添加 OpenAI provider",
+        "knowledge.embedding.reason.add_aliyun": "去 /gateway 添加 阿里云 百炼 provider",
+        "knowledge.ask.no_hits": "知识库里没有跟这个问题相关的内容。换个说法,或者补一份资料试试。",
+        "knowledge.ask.no_chat_provider": "还没有可用的对话模型 · 去 /gateway 添加一个 OpenAI / 阿里云 / Anthropic provider",
+        "knowledge.ask.llm_failed": "模型调用失败:{detail}",
     },
     "en": {
         "errors.unknown": "Unknown error",
@@ -144,6 +150,12 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "providers.label.openai": "OpenAI-compatible",
         "providers.label.anthropic": "Anthropic",
         "providers.label.aliyun": "Aliyun Bailian",
+        "knowledge.embedding.label.aliyun": "Aliyun Bailian · {model}",
+        "knowledge.embedding.reason.add_openai": "Add an OpenAI provider in /gateway first.",
+        "knowledge.embedding.reason.add_aliyun": "Add an Aliyun Bailian provider in /gateway first.",
+        "knowledge.ask.no_hits": "Nothing in the knowledge base matches this question. Try rephrasing, or add a relevant document.",
+        "knowledge.ask.no_chat_provider": "No chat model is available — add an OpenAI / Aliyun / Anthropic provider in /gateway first.",
+        "knowledge.ask.llm_failed": "Model call failed: {detail}",
     },
 }
 
