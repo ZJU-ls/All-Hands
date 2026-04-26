@@ -42,6 +42,11 @@
       "languageTitle": "切换语言",
       "languageAria": "切换语言"
     },
+    "sidebar": {
+      "collapse": "收起侧边栏",
+      "expand": "展开侧边栏",
+      "toggleHint": "⌘B"
+    },
     "sections": {
       "workspace": "工作区",
       "team": "团队与能力",
