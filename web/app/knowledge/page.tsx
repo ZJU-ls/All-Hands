@@ -1845,50 +1845,255 @@ function SearchResultsView({
         )}
         {!searching &&
           results?.map((r, i) => (
-            <button
+            <SearchResultCard
               key={r.chunk_id}
-              type="button"
+              rank={i + 1}
+              query={query}
+              result={r}
               onClick={() => onChunkClick(r.document_id)}
-              className="block w-full rounded-xl border border-border bg-surface-2 p-4 text-left transition duration-fast hover:border-border-strong hover:shadow-soft-sm"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
-                    #{i + 1}
-                  </span>
-                  <span className="font-mono text-[11px] text-text-muted">
-                    {r.citation}
-                  </span>
-                  {r.bm25_rank != null && (
-                    <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      BM25 #{r.bm25_rank}
-                    </span>
-                  )}
-                  {r.vector_rank != null && (
-                    <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      vec #{r.vector_rank}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-col items-end font-mono text-[10px] text-text-subtle">
-                  <span>score</span>
-                  <span className="text-[12px] text-text">
-                    {r.score.toFixed(4)}
-                  </span>
-                </div>
-              </div>
-              {r.section_path && (
-                <div className="mt-2 font-mono text-[10px] text-text-subtle">
-                  {r.section_path}
-                </div>
-              )}
-              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-relaxed text-text">
-                {r.text}
-              </p>
-            </button>
+            />
           ))}
       </div>
     </div>
+  );
+}
+
+// One search-result card with an inline "Why?" expander explaining how
+// this chunk got its rank: BM25 vs vector contribution + which query
+// tokens matched the chunk text. Mirrors Perplexity's "show steps" and
+// Glean's relevance breakdown — surfacing the retrieval math turns hybrid
+// search from a black box into a debuggable pipeline.
+function SearchResultCard({
+  rank,
+  query,
+  result,
+  onClick,
+}: {
+  rank: number;
+  query: string;
+  result: ScoredChunkDto;
+  onClick: () => void;
+}) {
+  const t = useTranslations("knowledge.search");
+  const [open, setOpen] = useState(false);
+
+  const { tokens, matched } = useMemo(
+    () => analyseQueryMatch(query, result.text),
+    [query, result.text],
+  );
+  const hasBoth = result.bm25_rank != null && result.vector_rank != null;
+
+  return (
+    <div className="rounded-xl border border-border bg-surface-2 p-4 transition duration-fast hover:border-border-strong hover:shadow-soft-sm">
+      <button
+        type="button"
+        onClick={onClick}
+        className="block w-full text-left"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
+              #{rank}
+            </span>
+            <span className="font-mono text-[11px] text-text-muted">
+              {result.citation}
+            </span>
+            {result.bm25_rank != null && (
+              <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
+                BM25 #{result.bm25_rank}
+              </span>
+            )}
+            {result.vector_rank != null && (
+              <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
+                vec #{result.vector_rank}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col items-end font-mono text-[10px] text-text-subtle">
+            <span>{t("scoreLabel")}</span>
+            <span className="text-[12px] text-text">
+              {result.score.toFixed(4)}
+            </span>
+          </div>
+        </div>
+        {result.section_path && (
+          <div className="mt-2 font-mono text-[10px] text-text-subtle">
+            {result.section_path}
+          </div>
+        )}
+        <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-relaxed text-text">
+          {highlightTokens(result.text, matched)}
+        </p>
+      </button>
+
+      <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
+          className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle hover:text-text"
+          aria-expanded={open}
+        >
+          <Icon
+            name={open ? "chevron-up" : "chevron-down"}
+            size={11}
+          />
+          {t("explainLabel")}
+        </button>
+        {tokens.length > 0 && (
+          <span className="font-mono text-[10px] text-text-subtle">
+            {t("matchedTokens", { matched: matched.length, total: tokens.length })}
+          </span>
+        )}
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-3 rounded-lg border border-border bg-surface px-3 py-3 text-[12px]">
+          {/* BM25 vs Vector contribution bar — visualises which lens
+              this chunk leaned on. Equal-weight retrieval averages the
+              two ranks, so the bar is a heuristic readout, not the exact
+              fused score formula. Still useful to spot "lexical-heavy"
+              vs "semantic-heavy" hits at a glance. */}
+          <ContributionBar
+            bm25Rank={result.bm25_rank}
+            vectorRank={result.vector_rank}
+          />
+          {tokens.length > 0 && (
+            <div>
+              <div className={SECTION_LABEL}>{t("matchedHeader")}</div>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {tokens.map((tok) => {
+                  const hit = matched.includes(tok);
+                  return (
+                    <span
+                      key={tok}
+                      className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] ${
+                        hit
+                          ? "bg-success-soft text-success border border-success/30"
+                          : "border border-border bg-surface-2 text-text-subtle"
+                      }`}
+                    >
+                      {tok}
+                      {hit ? " ✓" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div className="font-mono text-[10px] leading-relaxed text-text-subtle">
+            {hasBoth
+              ? t("explainBoth", {
+                  bm25: result.bm25_rank ?? 0,
+                  vec: result.vector_rank ?? 0,
+                })
+              : result.bm25_rank != null
+                ? t("explainBm25Only", { bm25: result.bm25_rank })
+                : t("explainVecOnly", { vec: result.vector_rank ?? 0 })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContributionBar({
+  bm25Rank,
+  vectorRank,
+}: {
+  bm25Rank: number | null;
+  vectorRank: number | null;
+}) {
+  const t = useTranslations("knowledge.search");
+  // Lower rank = better. We invert into pseudo-strength in [0, 1] using
+  // 1/rank, then normalise the pair to sum to 1 so the bar reads as a
+  // share of contribution.
+  const bm = bm25Rank != null ? 1 / bm25Rank : 0;
+  const vc = vectorRank != null ? 1 / vectorRank : 0;
+  const total = bm + vc || 1;
+  const bmPct = Math.round((bm / total) * 100);
+  const vcPct = 100 - bmPct;
+  return (
+    <div>
+      <div className={SECTION_LABEL}>{t("contributionHeader")}</div>
+      <div className="mt-1.5 flex h-2 w-full overflow-hidden rounded-full bg-surface-2">
+        {bm > 0 && (
+          <div
+            className="h-full bg-primary"
+            style={{ width: `${bmPct}%` }}
+            title={t("bm25Pct", { pct: bmPct })}
+          />
+        )}
+        {vc > 0 && (
+          <div
+            className="h-full bg-accent"
+            style={{ width: `${vcPct}%` }}
+            title={t("vectorPct", { pct: vcPct })}
+          />
+        )}
+      </div>
+      <div className="mt-1 flex justify-between font-mono text-[10px] text-text-subtle">
+        <span>
+          BM25 {bmPct}%
+        </span>
+        <span>
+          {t("vectorPctLabel")} {vcPct}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Cheap query → token analysis. Splits on non-CJK / non-word boundaries,
+// drops stop-shorts (1-char ASCII), case-folds, then checks each token
+// against the chunk text. The "matched" set drives both the chip row
+// and the in-text highlights. This is a heuristic — the real BM25
+// scorer uses tokeniser + IDF — but it lets users *see* what their query
+// matched without a round-trip.
+function analyseQueryMatch(
+  query: string,
+  text: string,
+): { tokens: string[]; matched: string[] } {
+  const raw = query
+    .toLowerCase()
+    .split(/[\s,.;:!?'"()\[\]{}<>=*&|/\\]+/)
+    .filter((w) => w.length > 1 || /[\u4e00-\u9fff]/.test(w));
+  const seen = new Set<string>();
+  const tokens: string[] = [];
+  for (const w of raw) {
+    if (!seen.has(w)) {
+      seen.add(w);
+      tokens.push(w);
+    }
+  }
+  const lower = text.toLowerCase();
+  const matched = tokens.filter((tok) => lower.includes(tok));
+  return { tokens, matched };
+}
+
+function highlightTokens(text: string, matched: string[]): React.ReactNode {
+  if (matched.length === 0) return text;
+  // Build a single regex of all matched tokens, escaped for safety.
+  const re = new RegExp(
+    `(${matched
+      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|")})`,
+    "gi",
+  );
+  const parts = text.split(re);
+  return parts.map((part, i) =>
+    matched.some((m) => m.toLowerCase() === part.toLowerCase()) ? (
+      <mark
+        key={i}
+        className="rounded-sm bg-warning-soft px-0.5 text-text"
+      >
+        {part}
+      </mark>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
   );
 }
 
