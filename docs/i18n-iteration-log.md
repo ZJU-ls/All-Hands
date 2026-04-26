@@ -739,3 +739,20 @@ literal + template-prefix 两种 t() 形式
 **结果**:本轮零代码改动 · contextvar 链路完整 · 平台 i18n 健康
 
 **commits**:仅本条 log
+
+## Round 35 · 2026-04-26 17:13 (cron · 30m)
+
+**主题**:channel adapters / seed / outbound 内容审计
+
+**做的事**:
+- backend/src/allhands/execution/channels/(bark / email / feishu / pushdeer / telegram / wecom)
+  扫硬编码中文 → 0 处。各 adapter 透传 agent 给的 message,内容由调用层
+  决定 locale,符合 i18n 模式
+- services/channel_inbound · channel_service · seed_service(489 行)
+  扫硬编码中文 → 0 处
+- 全 backend 用户可见硬编码中文最后一遍扫:剩下的都是 LLM system prompts ·
+  artifact hallucination 检测词表 · DB seed 一次性写入字段 · by-design
+
+**结果**:web 1984 tests + backend i18n tests + regression 全绿 · 零代码改动
+
+**commits**:仅本条 log
