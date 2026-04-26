@@ -128,7 +128,13 @@
       "thinkingTitle": "正在思考…",
       "thinkingDesc": "检索片段 → 拼上下文 → LLM 答复",
       "sourcesLabel": "来源",
-      "sourcesCount": "{count} 条"
+      "sourcesCount": "{count} 条",
+      "turnsLabel": "{count} 轮",
+      "youAskedLabel": "你的提问 #{n}",
+      "newConversation": "新对话",
+      "followUpPlaceholder": "继续追问 · 上一轮的引用编号会沿用…",
+      "followUpSubmit": "追问",
+      "followUpHint": "Enter 发送 · 答案沿用上一轮检索的同一份片段编号"
     },
     "delete": {
       "confirm": "确认删除 \"{title}\"?(软删,30 天可恢复)",
