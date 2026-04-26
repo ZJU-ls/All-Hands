@@ -234,18 +234,26 @@ class KnowledgeService:
             vec_store = BlobVecStore(session_maker)
         self._vec_store = vec_store
 
+        # Per-KB embedder cache — keyed by model_ref so multiple KBs on
+        # the same ref share one Embedder instance (Provider connections
+        # are stateless but building each costs a DB round-trip for the
+        # API key). Filled lazily by _embedder_for_kb.
+        self._embedder_cache: dict[str, Embedder] = {self._embedder.model_ref: self._embedder}
+
         self._ingest = IngestOrchestrator(
             session_maker,
             chunker=self._chunker,
             embedder=self._embedder,
             vec_store=self._vec_store,
             data_root=self._data_dir,
+            embedder_for_kb=self._embedder_for_kb,
         )
         self._retriever = HybridRetriever(
             embedder=self._embedder,
             vec_store=self._vec_store,
             fts_search=self._fts_search_for_kb,
             chunk_lookup=self._chunk_lookup,
+            embedder_for_kb=self._embedder_for_kb,
         )
 
     # ------------------------------------------------------------------
@@ -1030,21 +1038,12 @@ class KnowledgeService:
             await self._vec_store.create_namespace(kb_id, provider.dim)
             await s.commit()
 
-        # 3. Swap service-level embedder + dependents in place
-        self._embedder = new_embedder
-        self._ingest = IngestOrchestrator(
-            self._session_maker,
-            chunker=self._chunker,
-            embedder=self._embedder,
-            vec_store=self._vec_store,
-            data_root=self._data_dir,
-        )
-        self._retriever = HybridRetriever(
-            embedder=self._embedder,
-            vec_store=self._vec_store,
-            fts_search=self._fts_search_for_kb,
-            chunk_lookup=self._chunk_lookup,
-        )
+        # 3. Cache the new embedder under its ref. The per-KB resolver
+        # (`_embedder_for_kb`) will pick this up on the next ingest /
+        # search for this KB — and *only* this KB, since lookup is keyed
+        # by `kb.embedding_model_ref`. Other KBs keep their own model.
+        # This is the proper "per-KB model" behaviour the user expects.
+        self._embedder_cache[new_ref] = new_embedder
 
         # 4. Re-embed every existing doc
         result = await self.reembed_all(kb_id)
@@ -1332,6 +1331,45 @@ class KnowledgeService:
     async def _chunk_lookup(self, chunk_ids: list[int]) -> list[Chunk]:
         async with self._session_maker() as s:
             return await SqlChunkRepo(s).get_many(chunk_ids)
+
+    async def _embedder_for_kb(self, kb_id: str) -> Embedder:
+        """Resolve the Embedder for one KB by reading its ``embedding_model_ref``.
+
+        This is what makes "model is per-KB" actually true at runtime —
+        before this resolver was wired, both ingest and retrieval used a
+        single service-level singleton regardless of what the KB row said.
+
+        Cached by ref:
+        - Two KBs on the same model share one Embedder (Provider connections
+          are stateless, but each construction costs a DB round-trip for
+          the API key).
+        - A KB whose ``embedding_model_ref`` is unresolvable (provider
+          deleted, key revoked) falls back to the service singleton with a
+          warning log — better than crashing every retrieval.
+        """
+        try:
+            kb = await self.get_kb(kb_id)
+        except KBError:
+            return self._embedder
+        ref = kb.embedding_model_ref
+        cached = self._embedder_cache.get(ref)
+        if cached is not None:
+            return cached
+        try:
+            provider = await resolve_provider_with_db(ref, self._session_maker)
+        except ValueError as exc:
+            _logger.warning(
+                "kb %s embedder_for_kb: ref %r unresolvable (%s) — "
+                "falling back to service-default embedder %r",
+                kb_id,
+                ref,
+                exc,
+                self._embedder.model_ref,
+            )
+            return self._embedder
+        emb = Embedder(model_ref=ref, provider=provider)
+        self._embedder_cache[ref] = emb
+        return emb
 
 
 # ----------------------------------------------------------------------

@@ -20,14 +20,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { updateArtifact } from "@/lib/artifacts-api";
 
-const EMBED_BASE =
+// Edit mode uses the full editor at embed.diagrams.net.
+// View mode uses viewer.diagrams.net which is purpose-built for read-only
+// embedding — no editor chrome, content fills the iframe naturally.
+const EMBED_EDIT_BASE =
   "https://embed.diagrams.net/?embed=1&proto=json&spin=1&ui=atlas&saveAndExit=0";
+const EMBED_VIEW_BASE = "https://viewer.diagrams.net/?embed=1&proto=json";
 
 export function DrawioView({
   content,
   height = 480,
   editable = false,
   artifactId,
+  fillHeight = false,
 }: {
   content: string;
   height?: number;
@@ -35,6 +40,13 @@ export function DrawioView({
   editable?: boolean;
   /** Required when editable=true so save can call PATCH. */
   artifactId?: string;
+  /**
+   * When true, iframe stretches to fill the parent container height instead
+   * of using fixed `height`. Use in artifact detail panel where vertical
+   * real estate is meaningful; chat-side preview keeps fixed height for
+   * consistent message rhythm.
+   */
+  fillHeight?: boolean;
 }) {
   const t = useTranslations("artifacts.drawio");
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -76,7 +88,8 @@ export function DrawioView({
       if (!data) return;
 
       if (data.event === "init") {
-        iframeRef.current?.contentWindow?.postMessage(
+        const win = iframeRef.current?.contentWindow;
+        win?.postMessage(
           JSON.stringify({
             action: "load",
             xml: contentRef.current,
@@ -86,6 +99,11 @@ export function DrawioView({
           }),
           "*",
         );
+        // Fit-to-page is now driven by the URL params `&fit=1&zoom=auto&nav=0`
+        // (see `src` below). An earlier version postMessaged
+        // `{action:"prompt",reset:true}` to "graceful no-op trigger" a fit —
+        // turns out `prompt` actually opens drawio's prompt dialog (the
+        // 「文件名: __ undefined」 popup users hit). Don't do that.
         setReady(true);
       } else if (data.event === "save" && typeof data.xml === "string") {
         void persist(data.xml);
@@ -97,17 +115,36 @@ export function DrawioView({
     return () => window.removeEventListener("message", onMessage);
   }, [editable, persist]);
 
-  const src = editable ? EMBED_BASE : `${EMBED_BASE}&chrome=0`;
+  // View mode (viewer.diagrams.net) URL params:
+  // - lightbox=1        read-only lightbox-style embed; content auto-fits
+  //                      iframe and the bottom zoom/print/camera toolbar is
+  //                      driven by `toolbar=`
+  // - toolbar=          empty value → no viewer toolbar (hides the
+  //                      noisy 「放大/缩小/适配/打印/相机」 strip the user flagged)
+  // - nav=0             no page navigation arrows
+  // - highlight=0       no edge highlighting on hover
+  // - max-fit-scale=4   let fit scale up past 100% so narrow diagrams
+  //                      actually fill the iframe (was leaving big gutters)
+  // - page=0            hide the white page boundary; content extends to
+  //                      fill the iframe instead of sitting on a centered page
+  const src = editable
+    ? `${EMBED_EDIT_BASE}&fit=1&max-fit-scale=4`
+    : `${EMBED_VIEW_BASE}&lightbox=1&toolbar=&nav=0&highlight=0&max-fit-scale=4&page=0&fit=1&zoom=auto`;
+
+  const wrapperStyle = fillHeight
+    ? { height: "100%" }
+    : { height: `${height}px` };
+  const iframeStyle = fillHeight ? { height: "100%" } : { height: `${height}px` };
 
   return (
-    <div className="relative">
+    <div className="relative" style={wrapperStyle}>
       <iframe
         ref={iframeRef}
         title={t("title")}
         src={src}
         sandbox="allow-scripts allow-same-origin allow-popups"
-        className="w-full border-0 bg-surface"
-        style={{ height }}
+        className="block w-full border-0 bg-surface"
+        style={iframeStyle}
       />
       {!ready && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-xs text-text-muted">

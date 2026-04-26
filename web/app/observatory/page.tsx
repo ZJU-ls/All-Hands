@@ -1150,7 +1150,7 @@ function ObservatoryPageInner() {
                               {row.employee_name ?? row.employee_id ?? "—"}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                              {row.runs_count.toLocaleString()}
+                              {row.runs_count.toLocaleString(locale)}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
                               {formatTokens(row.total_tokens)}

@@ -126,6 +126,21 @@ class SkillRegistry:
     def list_descriptors(self) -> list[SkillDescriptor]:
         return [e.descriptor for e in self._entries.values()]
 
+    def invalidate(self, skill_id: str) -> bool:
+        """Drop the memoized full-skill body so the next ``get_full`` re-loads.
+
+        Used by the Files endpoints when admins edit a skill's source on
+        disk via the UI — without invalidation, the agent would keep
+        seeing the old prompt body until uvicorn restarts. Descriptor +
+        loader closure are kept; only the cached `Skill` object is reset.
+        Returns True if the entry existed (whether cached or not).
+        """
+        entry = self._entries.get(skill_id)
+        if entry is None:
+            return False
+        entry._full = None
+        return True
+
 
 def _load_builtin_skill_manifest(skill_dir: Path) -> tuple[SkillDescriptor, Callable[[], Skill]]:
     """Read only SKILL.yaml metadata (cheap) and return a lazy loader for body.

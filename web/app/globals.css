@@ -297,3 +297,23 @@ body {
   transition: background 1s ease, box-shadow 1s ease;
 }
 
+
+/* Artifact card glyph gradients · referenced by components/render/Artifact/Card.tsx
+ * via `var(--artifact-gradient-{kind})`. Kept here (which is on E10's allow
+ * list) so the component file stays clean of raw hex / Tailwind colour
+ * classes while still expressing brand-tinted "kind" affordances. */
+:root {
+  --artifact-gradient-pptx:     linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+  --artifact-gradient-docx:     linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  --artifact-gradient-pdf:      linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  --artifact-gradient-xlsx:     linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  --artifact-gradient-csv:      linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  --artifact-gradient-markdown: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  --artifact-gradient-code:     linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  --artifact-gradient-drawio:   linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  --artifact-gradient-mermaid:  linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  --artifact-gradient-html:     linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  --artifact-gradient-data:     linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  --artifact-gradient-image:    linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  --artifact-gradient-default:  linear-gradient(135deg, var(--color-primary), var(--color-accent));
+}

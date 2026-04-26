@@ -264,8 +264,29 @@ async def test_switch_embedding_model_updates_kb_and_reembeds(
     assert kb_after["embedding_dim"] == 128
     assert reembed["processed"] == 2
     assert reembed["succeeded"] == 2
-    # Service singleton was actually swapped — future ingests use new model
-    assert svc._embedder.model_ref == "mock:hash-128"
+    # Per-KB resolver picks up the new ref on next ingest; the service-level
+    # singleton is unchanged so other KBs keep their own model.
+    assert svc._embedder.model_ref == "mock:hash-64"
+    resolved = await svc._embedder_for_kb(kb.id)
+    assert resolved.model_ref == "mock:hash-128"
+
+
+async def test_two_kbs_use_their_own_embedding_model(
+    svc: KnowledgeService,
+) -> None:
+    """KB-A on mock-64 and KB-B on mock-128 must each resolve to their
+    own embedder via _embedder_for_kb — switching one doesn't pollute
+    the other. This is the property the user reasonably expects from
+    the per-KB ``embedding_model_ref`` field."""
+    kb_a = await svc.create_kb(name="A", embedding_model_ref="mock:hash-64")
+    kb_b = await svc.create_kb(name="B", embedding_model_ref="mock:hash-128")
+    emb_a = await svc._embedder_for_kb(kb_a.id)
+    emb_b = await svc._embedder_for_kb(kb_b.id)
+    assert emb_a.model_ref == "mock:hash-64"
+    assert emb_b.model_ref == "mock:hash-128"
+    # Cache shares a single Embedder per ref
+    assert (await svc._embedder_for_kb(kb_a.id)) is emb_a
+    assert (await svc._embedder_for_kb(kb_b.id)) is emb_b
 
 
 async def test_switch_embedding_model_noop_on_same_ref(

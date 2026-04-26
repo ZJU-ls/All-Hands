@@ -122,6 +122,7 @@
       "tabs": {
         "overview": "Overview",
         "prompt": "Prompt / template",
+        "files": "Files",
         "versions": "Version history",
         "dependencies": "Dependencies"
       },
@@ -172,6 +173,29 @@
         "thIndex": "#",
         "thToolId": "tool_id",
         "thKind": "kind"
+      },
+      "files": {
+        "loading": "Loading file tree",
+        "loadingHint": "Fetching every file in this skill's directory…",
+        "loadFailed": "Load failed · {error}",
+        "loadingFile": "Reading",
+        "readFailed": "Read failed · {error}",
+        "treeEmpty": "Empty directory",
+        "treeEmptyHint": "This skill ships no files.",
+        "noSelection": "Pick a file to view / edit",
+        "noSelectionHint": "Select a file on the left; the editor opens on the right.",
+        "editable": "editable",
+        "readOnly": "read-only",
+        "binary": "binary",
+        "binaryNotPreviewable": "Binary file · preview not supported.",
+        "saved": "Saved",
+        "unsaved": "Unsaved",
+        "saving": "Saving",
+        "saveBtn": "Save",
+        "deleteBtn": "Delete",
+        "deleteTooltip": "Remove this file from disk",
+        "deleteConfirm": "Delete \"{path}\"? This writes to disk and cannot be undone.",
+        "builtinWarning": "This is a builtin skill (shipped with the backend code). Edits take effect in memory immediately, but the next git checkout / docker rebuild will overwrite them. Commit the change to the repo to keep it permanent."
       }
     },
     "explainer": {

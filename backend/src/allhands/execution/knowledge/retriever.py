@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
-from collections.abc import Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any
 
@@ -123,12 +123,19 @@ class HybridRetriever:
         fts_search: FtsSearchFn,
         chunk_lookup: ChunkLookupFn,
         query_cache: QueryEmbeddingCache | None = None,
+        embedder_for_kb: Callable[[str], Awaitable[Embedder]] | None = None,
     ) -> None:
         self.embedder = embedder
         self.vec_store = vec_store
         self.fts_search = fts_search
         self.chunk_lookup = chunk_lookup
         self.query_cache = query_cache or QueryEmbeddingCache()
+        # Per-KB resolver (same shape as IngestOrchestrator) — when set,
+        # search() picks the embedder for the queried KB rather than the
+        # constructor-provided default. Keeps query and ingest aligned
+        # so a switched KB's vectors are encoded *and* queried with the
+        # same model.
+        self.embedder_for_kb = embedder_for_kb
 
     async def search(
         self,
@@ -144,12 +151,15 @@ class HybridRetriever:
             return []
 
         # 1. Query embedding (cache → embedder)
-        cached = self.query_cache.get(query, self.embedder.model_ref)
+        embedder = (
+            await self.embedder_for_kb(kb_id) if self.embedder_for_kb is not None else self.embedder
+        )
+        cached = self.query_cache.get(query, embedder.model_ref)
         if cached is not None:
             q_vec = cached
         else:
-            q_vec = (await self.embedder.embed_texts([query]))[0]
-            self.query_cache.put(query, self.embedder.model_ref, q_vec)
+            q_vec = (await embedder.embed_texts([query]))[0]
+            self.query_cache.put(query, embedder.model_ref, q_vec)
 
         # 2. Run BM25 + vector concurrently
         bm25_task = asyncio.create_task(self.fts_search(kb_id, query, 50))

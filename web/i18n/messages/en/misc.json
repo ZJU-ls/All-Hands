@@ -361,6 +361,7 @@
       "copyFailed": "Copy failed: {error}",
       "rollbackConfirm": "Roll back the current version to v{target}?\nA new version v{next} will be created with content from v{target}.",
       "toolbarCopyTitle": "Copy content to clipboard",
+      "toolbarCopyIdTitle": "Click to copy artifact ID (debugging / feedback)",
       "toolbarEditTitle": "Switch to edit mode",
       "toolbarOpenNewTitle": "Open in a new window — full-screen render",
       "toolbarDownloadTitle": "Download to local",
@@ -392,6 +393,7 @@
       "pinned": "Pinned",
       "pinnedAria": "Pinned",
       "groupAria": "Artifacts",
+      "groupOther": "Other",
       "empty": "No artifacts yet. Have an employee produce a doc, code, or diagram."
     },
     "panel": {
@@ -401,6 +403,8 @@
       "offline": "offline",
       "closeAria": "Close artifacts panel",
       "closeTitle": "Close · Cmd/Ctrl+J",
+      "resizeAria": "Drag to resize artifacts panel",
+      "resizeTitle": "Drag to resize",
       "back": "Back to list",
       "loading": {
         "title": "Loading artifacts",
@@ -445,7 +449,8 @@
     },
     "docx": {
       "loading": "Rendering Word document…",
-      "loadFailed": "docx render failed: {error}"
+      "loadFailed": "In-browser preview doesn't support some feature in this doc ({error}).",
+      "downloadFallback": "Download · open in Word / WPS"
     },
     "pptx": {
       "loading": "Parsing PowerPoint…",
@@ -472,6 +477,15 @@
       "empty": "No artifacts match the current filter.",
       "emptyAll": "No artifacts in this workspace yet",
       "emptyAllHint": "Once an employee produces a doc, code or diagram, it shows up here.",
+      "emptyKind": "No {kind} artifacts",
+      "emptyQuery": "Nothing matches \"{query}\"",
+      "emptyKindAndQ": "No {kind} artifact matches \"{query}\"",
+      "emptyClearHint": "Clear the filter to see all · or try a different keyword",
+      "detailErrorTitle": "Couldn't render this artifact",
+      "detailErrorHint": "Parsing may have failed because the file is corrupted, the format isn't supported by the frontend viewer, or the browser ran out of memory. The raw bytes are still downloadable.",
+      "detailErrorShow": "Show error detail",
+      "detailErrorRetry": "Retry render",
+      "detailErrorDownload": "Download raw",
       "loadFailed": "Failed to load artifacts: {error}",
       "count": "{n} artifacts",
       "selectHint": "Pick an artifact on the left to see its detail",
@@ -541,7 +555,11 @@
       "loading": "Loading artifact…",
       "unsupportedKind": "Kind {kind} can't be previewed",
       "openInPanel": "Open in artifact panel",
-      "open": "Open"
+      "open": "Open",
+      "openInNewTab": "Open in new tab",
+      "download": "Download",
+      "copy": "Copy content",
+      "copied": "Copied"
     },
     "artifactCard": {
       "missingId": "Artifact.Card is missing artifact_id",
@@ -630,7 +648,7 @@
       },
       "entries": {
         "cockpit": "Cockpit",
-        "chat": "Chat",
+        "chat": "Lead chat",
         "conversations": "Conversations",
         "tasks": "Tasks",
         "employees": "Employees",

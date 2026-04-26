@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { use } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -29,6 +29,7 @@ export default function ToolDetailPage({
   const toolId = decodeURIComponent(encoded);
   const t = useTranslations("pages.observatory");
   const tTool = useTranslations("pages.observatory.toolDetail");
+  const locale = useLocale();
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
@@ -116,11 +117,11 @@ export default function ToolDetailPage({
                 <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <Tile
                     label={tTool("kpi.invocations")}
-                    value={meta.invocations.toLocaleString()}
+                    value={meta.invocations.toLocaleString(locale)}
                   />
                   <Tile
                     label={tTool("kpi.failures")}
-                    value={meta.failures.toLocaleString()}
+                    value={meta.failures.toLocaleString(locale)}
                     tone={meta.failures > 0 ? "danger" : undefined}
                   />
                   <Tile

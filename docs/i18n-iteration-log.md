@@ -604,3 +604,200 @@ catalog 里存在」。
 或漏 key,本地跑测就 fail · 不会落到运行时报 MISSING_MESSAGE。
 
 **commits**:见 git log
+
+## Round 28 · 2026-04-26 13:43 (cron · 30m)
+
+**main 新动作**:
+- 4 个新 observatory 子页(employees/[id] · errors/[kind] · models/[ref] · tools/[id])
+- 3 个新 skills 文件管理组件(SkillFileEditor / SkillFileTree / SkillFilesTab)
+  + lib/skill-files-api · @uiw/react-codemirror 新依赖
+- 大量新 catalog key(observatory.{employeeDetail,errorDetail,modelDetail,
+  toolDetail} 块,both locale 同步)
+
+**做的事**:
+- pnpm install 拉新依赖 · 解决 vite 测试 transform 失败
+- 4 个新 observatory 子页扫到 11 处 `new Date(...).toLocaleString()` /
+  `n.toLocaleString()` 没传 locale · 批量 sed + 给每页加 useLocale()
+- observatory/page.tsx:1146 (main 新代码) 也漏掉 row.runs_count.toLocaleString()
+- 全部 toLocaleString 调用 → toLocaleString(locale)
+
+**结果**:1982 web tests · typecheck · lint · regression net 全绿 ·
+全栈再次 0 处 toLocaleString 不带 locale
+
+**commits**:见 git log
+
+## Round 29 · 2026-04-26 14:13 (cron · 30m)
+
+**main 新动作**:
+- ArtifactPanel + ArtifactDetail + DrawioView 调整(都不引入新文案)
+- 新增 backend test_spawn_subagent_render_forward.py(测试 fixtures 含中文 by-design)
+- 部分 catalog key 微调(menu / shortcuts 文案重排)
+
+**做的事**:
+- 跑完整 i18n 套件:web 1982 tests · backend 13 i18n tests · 全绿
+- 检查 4 个 main 新触碰的组件:零硬编码 · 零 toLocaleString 不带 locale
+- 全栈最后一次 grep `\.toLocaleString\(\)` → 0 匹配
+
+**结果**:本轮零代码改动 · 零回归
+
+**commits**:仅本条 log
+
+## Round 30 · 2026-04-26 14:43 (cron · 30m)
+
+**主题**:i18n-keys-resolve 回归网二期 · 覆盖 template-literal prefix
+
+**背景**:R26 写的回归网只验证 `t("static.literal.key")` · 跳过了
+`` t(`status.${var}`) `` 这种动态 key — 但代码里 21+ 处用这种模式
+(SubagentProgressSection / PlanCard / MetricDrawer / CommandPalette /
+artifacts page sort / review gates / skills+mcp tabs / KeyboardShortcutsModal …
+)。如果有人 typo 写错前缀,运行时才会爆。
+
+**做的事**:
+- web/tests/i18n-keys-resolve.test.ts 升级:
+  - 加第二条 regex `t(\`prefix.${...}\`)` 抓 template 模式
+  - 预计算 catalog 所有 sub-prefix(`a`, `a.b` 都进 set)
+  - prefix-style 调用要求 `${ns}.${prefix}` 在 prefix-set 里
+- 反向验证:把 `t(\`status.${...}\`)` sed 成 `t(\`xstatus.${...}\`)`,
+  test 立刻 surface `chat.subagent.xstatus.* (template prefix)` · 恢复后通过
+
+**结果**:1984 web tests · typecheck · lint 全绿 · 回归网现在静态阻挡
+两类 t() 漏 key:literal 和 template prefix · runtime MISSING_MESSAGE
+被本地测试挡掉
+
+**commits**:见 git log
+
+## Round 31 · 2026-04-26 15:13 (cron · 30m)
+
+**主题**:回归网三期 · 覆盖 t.rich / t.raw / t.has + 数组型 catalog entry
+
+**做的事**:
+- web/tests/i18n-keys-resolve.test.ts:
+  - call regex 加 `\b${name}(?:\.(?:rich|raw|has))?\(` · 把 t.rich() / t.raw() /
+    t.has() 也纳入扫描(此前都漏)
+  - catalog loader 把 `Array.isArray(v)` 也认作终态 key(之前只认 string,
+    导致 t.raw("modelFormTips") 这种数组消息被误判为「key 不存在」)
+- 反向验证:扩展 regex 后第一次跑找到了 1 处真实问题 ——
+  app/gateway/page.tsx:1226 `t.raw("modelFormTips")` 的 key 是数组 ·
+  loader 漏识 · 修 loader 后通过
+
+**结果**:1984 web tests · typecheck · lint 全绿。
+回归网现在覆盖三类 t() 调用形式 × 三种值类型(string / array / nested object)。
+
+**commits**:见 git log
+
+## Round 32 · 2026-04-26 15:43 (cron · 30m)
+
+**主题**:backend resolver 升级 · 把 t(f"...{var}") f-string prefix 也纳入
+
+**做的事**:
+- backend/tests/unit/test_i18n_keys_resolve.py:
+  - 新加 `TPL_RE` 抓 `t(f"a.b.{var}…")` 模式 · 类型 web R30/R31 一致
+  - 加 `_all_prefixes()` 把 catalog 所有 sub-prefix 进 set
+  - f-string call 要求 prefix 在 set 里
+- 反向验证:把 `t(f"providers.label.{p.kind}")` sed 成 `t(f"xproviders.label.{p.kind}")` ·
+  test 立刻报 `xproviders.label.* (f-string prefix)` · 恢复后通过
+
+**结果**:backend i18n test 通过 · 现在 web + backend 双侧都覆盖
+literal + template-prefix 两种 t() 形式
+
+**commits**:见 git log
+
+## Round 33 · 2026-04-26 16:13 (cron · 30m)
+
+**主题**:full build + 二级别口袋检查
+
+**做的事**:
+- pnpm build → 全栈构建通过 · 0 warning / 0 error · 所有路由统计正常
+  (47+ 路由,大者 17 kB / 165 kB,小者 145 kB)
+- catalog 反向扫:
+  - en 目录里的中文字符 → 仅 `"zh-CN": "简体中文"` (locale name in own language · 故意)
+  - zh-CN 目录里 3 词以上英文短语 → 0 处(排除技术术语 / brand name 后)
+- backend Accept-Language 集成测试 → test_i18n.py + test_observatory_run_detail_api.py
+  覆盖 cookie / header 协商
+- t.has() / Set.has() 区分 → 当前 0 处 next-intl `t.has()` 调用,
+  全部都是 `Set.has()`(数据结构操作 · 与 i18n 无关)
+
+**结果**:本轮零代码改动 · 平台 i18n 状态良好 · 双侧 lint/type/build/test 全绿
+
+**commits**:仅本条 log
+
+## Round 34 · 2026-04-26 16:43 (cron · 30m)
+
+**主题**:async / contextvar 完整性 + middleware 注册校核
+
+**做的事**:
+- 校核 LocaleMiddleware 已经在 backend/api/app.py:177 `app.add_middleware`
+  注册 · 所有路由都过它
+- contextvar 作用域审计:
+  - asyncio.create_task 自动复制当前 ContextVar(Python 3.7+)· 4 个使用点
+    (event_bus / retriever / market poller / chat SSE / channel_inbound)
+    locale 都会跟过去
+  - SSE 流式 endpoint 在请求 scope 内,t() 调用拿到正确 locale
+  - startup / on_event 没有任何 user-facing 文案 · 不需要 i18n
+- 跑完整 i18n 套件:web 1984 + backend 13 全绿
+
+**结果**:本轮零代码改动 · contextvar 链路完整 · 平台 i18n 健康
+
+**commits**:仅本条 log
+
+## Round 35 · 2026-04-26 17:13 (cron · 30m)
+
+**主题**:channel adapters / seed / outbound 内容审计
+
+**做的事**:
+- backend/src/allhands/execution/channels/(bark / email / feishu / pushdeer / telegram / wecom)
+  扫硬编码中文 → 0 处。各 adapter 透传 agent 给的 message,内容由调用层
+  决定 locale,符合 i18n 模式
+- services/channel_inbound · channel_service · seed_service(489 行)
+  扫硬编码中文 → 0 处
+- 全 backend 用户可见硬编码中文最后一遍扫:剩下的都是 LLM system prompts ·
+  artifact hallucination 检测词表 · DB seed 一次性写入字段 · by-design
+
+**结果**:web 1984 tests + backend i18n tests + regression 全绿 · 零代码改动
+
+**commits**:仅本条 log
+
+## Round 36 · 2026-04-26 17:43 (cron · 30m)
+
+**主题**:dead-key 反向审计工具(诊断,不强制修)
+
+**做的事**:
+- 新增 web/scripts/audit-i18n-dead-keys.mjs · 反过来扫:把所有
+  `useTranslations("ns")` + `t("subkey")` 配对,组合 `ns.subkey` 集合 ·
+  catalog 里有但 source 引用不到的 → 候选死 key
+- 当前结果:catalog 2452 keys · live literal 8632(同一 key 被多处引用)·
+  live template prefix 38 · 可能死 key 259 个(10.6%)
+- 大头是 `common.*` 系列(loading / save / ok / yes / no…)和
+  `welcome.highlights.*` 一些子项 —— 各页面用了页内同义 key 而不
+  共享 common · 算冗余但不是 bug
+- **不删除**:工具是诊断性的 · 启发式可能漏掉 props-passed namespace 或
+  computed key,真删需要 case-by-case 评估 · 留作以后清理基线
+
+**用法**:
+```
+node web/scripts/audit-i18n-dead-keys.mjs --list
+```
+
+**结果**:1984 web tests + backend i18n + lint 全绿 · 仅加诊断脚本
+
+**commits**:见 git log
+
+## Round 37 · 2026-04-27 00:13 (cron · 30m)
+
+**主题**:ArtifactList 最近一次扩 12 kind 时漏译的 "other" fallback bucket
+
+**main 新动作**:
+- 用户报 csv 等类型在过滤面板里点击后空白 · main 修了 KIND_ORDER 加全 12 enum
+  + 加 FALLBACK_BUCKET = "other" 兜底新增 kind
+- 但 fallback 分组 title 直接用 "other" 字面量 · zh-CN 用户看到 "OTHER" 大写
+  英文 mono 标签
+
+**做的事**:
+- catalog 加 artifacts.list.groupOther("其他" / "Other")
+- ArtifactList.tsx fallback section title 走 t("groupOther")
+- 其它 11 个 kind 标签是技术 enum(markdown / csv / xlsx 等),保留英文
+  mono 风格,跨语言一致 · 不动
+
+**结果**:1984 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log

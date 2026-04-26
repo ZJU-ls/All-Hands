@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ArtifactList } from "@/components/artifacts/ArtifactList";
 import { ArtifactGrid } from "@/components/artifacts/ArtifactGrid";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import {
   artifactStreamUrl,
   deleteArtifact,
@@ -31,6 +32,11 @@ import {
   type ArtifactStatsDto,
 } from "@/lib/artifacts-api";
 
+// 2026-04-27 · KINDS array必须含全部 12 种(对齐 backend ArtifactKind enum)。
+// 之前只有 7 项 · 用户从顶部 stats 卡点 "csv · 2" 时,过滤面包屑显示 csv,
+// 但 ArtifactList 的 KIND_ORDER 也漏 csv → 整列分组 fallback 不渲染 →
+// 屏空。补全 + 把 csv/xlsx/docx/pdf/pptx 在 office 类别下单独排,不再
+// 与"其他"混。
 const KINDS: ArtifactKind[] = [
   "markdown",
   "code",
@@ -39,6 +45,11 @@ const KINDS: ArtifactKind[] = [
   "data",
   "mermaid",
   "drawio",
+  "csv",
+  "xlsx",
+  "docx",
+  "pdf",
+  "pptx",
 ];
 
 const SORTS: ArtifactSort[] = [
@@ -50,6 +61,8 @@ const SORTS: ArtifactSort[] = [
   "size_desc",
 ];
 
+// 2026-04-27 · video 已从 ArtifactKind 删除(对齐 backend enum)。
+// office 三件套(csv/xlsx)用 table 图标替代 database,语义更精确。
 const KIND_ICON: Record<ArtifactKind, IconName> = {
   markdown: "file",
   code: "code",
@@ -59,10 +72,9 @@ const KIND_ICON: Record<ArtifactKind, IconName> = {
   mermaid: "activity",
   drawio: "layout-grid",
   pptx: "file",
-  video: "play-circle",
-  csv: "database",
-  xlsx: "database",
-  docx: "file",
+  csv: "table",
+  xlsx: "table",
+  docx: "file-text",
   pdf: "file",
 };
 
@@ -274,24 +286,75 @@ export default function ArtifactsGlobalPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [items, selectedId, q]);
 
-  // Refetch list when filters move; throttled-by-React-batch is fine here.
+  // 2026-04-27 · 把 fetchList 抽出来,SSE artifact_changed 也能复用
+  // 同一份"用当前 filter 重拉列表"的逻辑。否则 backend 创建/删除/
+  // pin 后,顶部 stats 跳了但列表还是旧的 — count chip 与 list 失同步。
+  // useRef(filters) 的可读副本让 fetchList 不需要 deps:effect 触发会
+  // 重设 ref;SSE handler 调用时永远拿最新 filter。
+  const filtersRef = useRef({
+    kind: kind as ArtifactKind | "",
+    sort,
+    q,
+    pinnedOnly,
+    createdAfter,
+  });
+  filtersRef.current = { kind, sort, q, pinnedOnly, createdAfter };
+
+  const fetchList = useCallback(async () => {
+    const f = filtersRef.current;
+    return listArtifacts({
+      kind: f.kind || undefined,
+      q: f.q || undefined,
+      sort: f.sort,
+      pinned: f.pinnedOnly || undefined,
+      createdAfter: f.createdAfter,
+      limit: 200,
+    });
+  }, []);
+
+  // 2026-04-27 · 搜索 debounce 250ms。原实现每次按键都打一发 200-item
+  // 的 list 请求,即便 cancelled flag 防止了 stale write,backend 也吃了
+  // 一串无效请求(快速键入 6 个字符 → 6 个 query)。debouncedQ 让 effect
+  // 只在键入暂停 250ms 后才触发刷新。其他 filter(kind/sort/pinned/
+  // dateRange)是离散选择,不需要 debounce — 立即生效。
+  const [debouncedQ, setDebouncedQ] = useState(q);
+  useEffect(() => {
+    if (q === debouncedQ) return;
+    const id = window.setTimeout(() => setDebouncedQ(q), 250);
+    return () => window.clearTimeout(id);
+  }, [q, debouncedQ]);
+
+  // Refetch list when filters move. With debouncedQ, search keystrokes
+  // collapse to one query per pause;離散 filter 立即生效。
   useEffect(() => {
     let cancelled = false;
     setState("loading");
     void (async () => {
       try {
-        const next = await listArtifacts({
-          kind: kind || undefined,
-          q: q || undefined,
-          sort,
-          pinned: pinnedOnly || undefined,
-          createdAfter,
-          limit: 200,
-        });
+        const next = await fetchList();
         if (!cancelled) {
           setItems(next);
           setState("ok");
           setError(null);
+          // 2026-04-27 · selectedId 自洽回收。filter 切换后 next 里如果不
+          // 包含原 selectedId,详情面板会继续显示旧制品(filter csv 但
+          // 看到 drawio),违反"右侧永远是当前可见列表中的项"约束。
+          // 用 setSelectedId 函数式取值避免把 selectedId 加进 deps · 再
+          // 触发本 effect 的死循环。
+          setSelectedId((cur) => {
+            if (cur === null) return cur;
+            return next.some((a) => a.id === cur) ? cur : null;
+          });
+          // 同步:bulkSelected 里凡是不在新 list 里的也清掉。bulk 是隐式
+          // 状态(用户看不见),漂移到不可见项更危险(批量删时把"看不
+          // 见但勾选了"的也删掉)。
+          setBulkSelected((cur) => {
+            if (cur.size === 0) return cur;
+            const visibleIds = new Set(next.map((a) => a.id));
+            const filtered = new Set<string>();
+            for (const id of cur) if (visibleIds.has(id)) filtered.add(id);
+            return filtered.size === cur.size ? cur : filtered;
+          });
         }
       } catch (e) {
         if (!cancelled) {
@@ -303,7 +366,10 @@ export default function ArtifactsGlobalPage() {
     return () => {
       cancelled = true;
     };
-  }, [kind, sort, q, pinnedOnly, createdAfter]);
+    // debouncedQ 取代 q · fetchList 通过 filtersRef 读 q,但 effect 触发
+    // 节奏看 debouncedQ。filtersRef.current = { ..., q } 在每次 render 重
+    // 设,所以 fetchList 拿到的永远是最新 q —— debounce 只控发请求频率。
+  }, [kind, sort, debouncedQ, pinnedOnly, createdAfter, fetchList]);
 
   // Stats are filter-independent · they describe the whole workspace, not
   // the current view. Pull once on mount + on artifact_changed SSE so the
@@ -323,15 +389,51 @@ export default function ArtifactsGlobalPage() {
 
   useEffect(() => {
     const es = new EventSource(artifactStreamUrl());
-    const onChanged = () => {
-      void refreshStats();
+    // 2026-04-27 · 之前只刷 stats,导致列表与统计失同步:agent 在后台
+    // 创建一个新 csv,顶部 stats 立刻 +1,但 sidebar 列表里看不到。
+    // 现在同步 refresh list,配合 fetchList 用 filtersRef 不依赖 deps,
+    // 任何时刻调用都拿最新 filter 拉数据。
+    let busy = false;
+    const onChanged = async () => {
+      if (busy) return; // 简单的 inflight 防抖,避免 burst create 时连发
+      busy = true;
+      try {
+        // 并发刷新 stats 与 list — 它们独立查 backend,串行一遍意义不大
+        await Promise.all([
+          refreshStats(),
+          fetchList()
+            .then((next) => {
+              setItems(next);
+              // selectedId 自洽:SSE 后被删的项要从详情面板回收
+              setSelectedId((cur) =>
+                cur === null
+                  ? cur
+                  : next.some((a) => a.id === cur)
+                    ? cur
+                    : null,
+              );
+              setBulkSelected((cur) => {
+                if (cur.size === 0) return cur;
+                const visibleIds = new Set(next.map((a) => a.id));
+                const filtered = new Set<string>();
+                for (const id of cur) if (visibleIds.has(id)) filtered.add(id);
+                return filtered.size === cur.size ? cur : filtered;
+              });
+            })
+            .catch(() => {
+              /* SSE-driven refresh 失败时静默 · 不要遮罩当前列表 */
+            }),
+        ]);
+      } finally {
+        busy = false;
+      }
     };
-    es.addEventListener("artifact_changed", onChanged);
+    es.addEventListener("artifact_changed", () => void onChanged());
     return () => {
-      es.removeEventListener("artifact_changed", onChanged);
+      es.removeEventListener("artifact_changed", () => void onChanged());
       es.close();
     };
-  }, [refreshStats]);
+  }, [refreshStats, fetchList]);
 
   const kindOptions = useMemo(
     () => [
@@ -547,7 +649,23 @@ export default function ArtifactsGlobalPage() {
               }
             >
               {selectedId ? (
-                <ArtifactDetail artifactId={selectedId} />
+                // 2026-04-27 · 用 ErrorBoundary 包裹详情面板。一个解析失
+                // 败的 csv / 损坏的 drawio / 异常的 office 文件不应该让整
+                // 个面板崩溃,降级到"渲染失败 · 可下载原文件"。resetKey
+                // 用 selectedId,切换到别的制品时 boundary 自动 reset。
+                <ErrorBoundary
+                  resetKey={selectedId}
+                  fallback={({ error, reset }) => (
+                    <DetailErrorFallback
+                      artifactId={selectedId}
+                      error={error}
+                      onReset={reset}
+                      t={t}
+                    />
+                  )}
+                >
+                  <ArtifactDetail artifactId={selectedId} />
+                </ErrorBoundary>
               ) : (
                 <DetailPlaceholder t={t} />
               )}
@@ -1042,26 +1160,45 @@ function EmptyList({
   onClearAll: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  // Differentiate "no artifacts at all" vs "filtered to nothing" so the
-  // user knows whether to clear filters or seed work. The "filtered →
-  // nothing" branch gets a CTA reset button; the "fresh workspace"
-  // branch gets a quiet hint pointing at the chat.
-  const isFiltered = q.trim().length > 0 || kind !== "" || hasActiveFilters;
+  // 2026-04-27 · 空态文案与 filter context 联动。原来不论筛 csv 还是
+  // 筛 mermaid 都显示 "暂无制品",用户得自己回想"我筛了什么"。现在
+  // 按主导维度精确反馈:有 kind → "没有 csv 类型"· 有 q → "没找到
+  // \"foo\""· 仅 pinned → "没有置顶的"· 全空 → "工作区还没产出"。
+  const trimmedQ = q.trim();
+  const isFiltered = trimmedQ.length > 0 || kind !== "" || hasActiveFilters;
+  let headline: string;
+  let detail: string | null = null;
+  if (!isFiltered) {
+    headline = t("emptyAll");
+    detail = t("emptyAllHint");
+  } else if (kind && trimmedQ) {
+    headline = t("emptyKindAndQ", { kind, query: trimmedQ });
+    detail = t("emptyClearHint");
+  } else if (kind) {
+    headline = t("emptyKind", { kind });
+    detail = t("emptyClearHint");
+  } else if (trimmedQ) {
+    headline = t("emptyQuery", { query: trimmedQ });
+    detail = t("emptyClearHint");
+  } else {
+    // pinnedOnly / dateRange 触发的空态
+    headline = t("empty");
+    detail = t("emptyClearHint");
+  }
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-10 text-center">
       <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-muted text-primary">
         <Icon name="folder" size={20} />
       </span>
-      <p className="text-sm font-medium text-text">
-        {isFiltered ? t("empty") : t("emptyAll")}
-      </p>
-      {!isFiltered ? (
-        <p className="max-w-xs text-caption text-text-muted">{t("emptyAllHint")}</p>
-      ) : (
+      <p className="text-sm font-medium text-text">{headline}</p>
+      {detail && (
+        <p className="max-w-xs text-caption text-text-muted">{detail}</p>
+      )}
+      {isFiltered && (
         <button
           type="button"
           onClick={onClearAll}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-caption text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text"
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-caption text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           <Icon name="x" size={11} />
           {t("filters.clearAll")}
@@ -1129,6 +1266,66 @@ function DetailPlaceholder({
         <Icon name="eye" size={20} />
       </span>
       <p className="text-sm text-text-muted">{t("selectHint")}</p>
+    </div>
+  );
+}
+
+/**
+ * Detail panel fallback · 渲染崩溃时的友好降级 (R8)。
+ * 提供:错误信息(<details> 里折叠原始 stack,默认收起)+ "重试" +
+ * "下载原文件" 两个出口。下载用 /api/artifacts/{id}/content?download
+ * 原始字节流,即便前端 view 渲染挂了也能拿原始数据。
+ */
+function DetailErrorFallback({
+  artifactId,
+  error,
+  onReset,
+  t,
+}: {
+  artifactId: string;
+  error: Error;
+  onReset: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-danger-soft text-danger">
+        <Icon name="alert-triangle" size={22} />
+      </span>
+      <p className="text-sm font-medium text-text">{t("detailErrorTitle")}</p>
+      <p className="max-w-md text-caption text-text-muted leading-relaxed">
+        {t("detailErrorHint")}
+      </p>
+      <details className="max-w-md text-left">
+        <summary className="cursor-pointer text-[11px] font-mono text-text-subtle hover:text-text-muted">
+          <Icon
+            name="chevron-down"
+            size={10}
+            className="inline-block -mt-0.5 mr-0.5 transition-transform"
+          />
+          {t("detailErrorShow")}
+        </summary>
+        <pre className="mt-2 max-h-32 overflow-auto rounded bg-surface-2 px-3 py-2 text-[10.5px] leading-relaxed text-text-muted whitespace-pre-wrap break-all">
+          {error.message}
+        </pre>
+      </details>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onReset}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-caption text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          <Icon name="refresh" size={11} />
+          {t("detailErrorRetry")}
+        </button>
+        <a
+          href={`/api/artifacts/${artifactId}/content?download=1`}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-caption text-primary-fg shadow-soft-sm hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+        >
+          <Icon name="download" size={11} />
+          {t("detailErrorDownload")}
+        </a>
+      </div>
     </div>
   );
 }

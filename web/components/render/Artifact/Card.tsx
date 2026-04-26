@@ -34,20 +34,22 @@ const KIND_ICON: Record<string, IconName> = {
   pptx: "file",
 };
 
-const KIND_GLYPH_BG: Record<string, string> = {
-  // Brand-blue for default, warm for office docs, cyan for data
-  pptx: "linear-gradient(135deg, #f97316 0%, #ef4444 100%)",
-  docx: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-  pdf: "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)",
-  xlsx: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
-  csv: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
-  markdown: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-  code: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-  drawio: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
-  mermaid: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
-  html: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-  data: "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
-  image: "linear-gradient(135deg, #ec4899 0%, #db2777 100%)",
+// Glyph backgrounds live in app/globals.css as `--artifact-gradient-<kind>`
+// CSS variables (E10 · raw hex banned in component files). Map a known
+// kind to its var; unknowns fall back to the brand primary→accent gradient.
+const KIND_GRADIENT_VAR: Record<string, string> = {
+  pptx: "var(--artifact-gradient-pptx)",
+  docx: "var(--artifact-gradient-docx)",
+  pdf: "var(--artifact-gradient-pdf)",
+  xlsx: "var(--artifact-gradient-xlsx)",
+  csv: "var(--artifact-gradient-csv)",
+  markdown: "var(--artifact-gradient-markdown)",
+  code: "var(--artifact-gradient-code)",
+  drawio: "var(--artifact-gradient-drawio)",
+  mermaid: "var(--artifact-gradient-mermaid)",
+  html: "var(--artifact-gradient-html)",
+  data: "var(--artifact-gradient-data)",
+  image: "var(--artifact-gradient-image)",
 };
 
 function fmtSize(bytes: number): string {
@@ -83,9 +85,7 @@ export function ArtifactCard({ props }: RenderProps) {
 
   const kind = meta?.kind ?? presetKind ?? "file";
   const icon: IconName = KIND_ICON[kind] ?? "file";
-  const glyphBg =
-    KIND_GLYPH_BG[kind] ??
-    "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%)";
+  const glyphBg = KIND_GRADIENT_VAR[kind] ?? "var(--artifact-gradient-default)";
 
   const onOpen = () => {
     if (!artifactId) return;
@@ -118,7 +118,7 @@ export function ArtifactCard({ props }: RenderProps) {
     <button
       type="button"
       onClick={onOpen}
-      className="group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border border-border bg-surface px-4 py-3 text-left shadow-soft-sm transition-all duration-fast ease-out hover:-translate-y-px hover:border-border-strong hover:shadow-soft-md"
+      className="group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border border-border bg-surface px-4 py-3 text-left shadow-soft-sm transition-[transform,border-color,box-shadow] duration-fast ease-out hover:-translate-y-px hover:border-border-strong hover:shadow-soft-md"
       title={t("openInPanel")}
     >
       <span
