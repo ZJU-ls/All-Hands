@@ -212,5 +212,39 @@ describe("chat store · segments order", () => {
       expect(msg.reasoning).toContain("let me think");
       expect(msg.interrupted).toBe(true);
     });
+
+    it("seeds streaming message when render arrives before any text", () => {
+      // Regression for 「对话的时候没有,刷新页面才有」 (2026-04-26):
+      // tools (artifact_create / render_drawio) execute before the LLM
+      // produces text · the render envelope is the FIRST event the
+      // store sees · prior code dropped it because streamingMessage was
+      // null. Now we seed on first render.
+      const s = useChatStore.getState();
+      s.setConversationId("conv_1");
+      s.beginTurn();
+      s.addRenderPayload("msg_1", mkRender("Artifact.Preview"));
+      const sm = useChatStore.getState().streamingMessage;
+      expect(sm).not.toBeNull();
+      expect(sm!.render_payloads).toHaveLength(1);
+      expect(sm!.render_payloads[0]!.component).toBe("Artifact.Preview");
+      expect(sm!.segments).toEqual([{ kind: "render", index: 0 }]);
+    });
+
+    it("seeds streaming message when tool_call arrives before any text", () => {
+      // Same root cause as the render-before-text regression: tool_call_*
+      // events fire before LLM text · without seeding the chip wouldn't
+      // appear live (only after page reload).
+      const s = useChatStore.getState();
+      s.setConversationId("conv_1");
+      s.beginTurn();
+      s.updateToolCall(mkTool("call_1", "allhands.artifacts.render_drawio"));
+      const sm = useChatStore.getState().streamingMessage;
+      expect(sm).not.toBeNull();
+      expect(sm!.tool_calls).toHaveLength(1);
+      expect(sm!.tool_calls[0]!.id).toBe("call_1");
+      expect(sm!.segments).toEqual([
+        { kind: "tool_call", tool_call_id: "call_1" },
+      ]);
+    });
   });
 });
