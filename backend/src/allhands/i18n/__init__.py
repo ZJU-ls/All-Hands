@@ -72,6 +72,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "zh-CN": {
         "errors.unknown": "未知错误",
         "errors.invalid_request": "请求无效",
+        "errors.malformed_response": "服务返回结构异常",
         "errors.invalid_status_filter": "无效的状态过滤器: {detail}",
         "errors.invalid_source": "无效的来源: {detail}",
         "errors.from_event_id_required": "需要 from_event_id",
@@ -130,6 +131,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "en": {
         "errors.unknown": "Unknown error",
         "errors.invalid_request": "Invalid request",
+        "errors.malformed_response": "Malformed service response",
         "errors.invalid_status_filter": "Invalid status filter: {detail}",
         "errors.invalid_source": "Invalid source: {detail}",
         "errors.from_event_id_required": "from_event_id is required",

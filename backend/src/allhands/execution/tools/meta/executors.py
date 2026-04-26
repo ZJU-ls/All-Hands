@@ -507,6 +507,7 @@ def make_artifact_create_executor(
             artifact_id=artifact.id,
             version=artifact.version,
             kind_value=artifact.kind.value,
+            size_bytes=artifact.size_bytes,
         )
 
     return _exec
@@ -900,27 +901,70 @@ def make_artifact_search_executor(
 # any of them.
 
 
+# Inline-renderable kinds (聊天里直接显示完整内容)
+_INLINE_KINDS: frozenset[str] = frozenset({"html", "drawio", "mermaid", "image", "csv", "data"})
+# Always Card-only — 内联体验差(只能看占位)
+_CARD_ONLY_KINDS: frozenset[str] = frozenset({"pptx", "docx"})
+# Size threshold for text kinds (markdown / code / xlsx) — 超就降级 Card
+_INLINE_SIZE_LIMIT_BYTES = 200_000
+# PDF 单独阈值(2MB)— 小 PDF 仍内联,大 PDF 给卡片
+_PDF_INLINE_LIMIT_BYTES = 2_000_000
+
+
+def _pick_artifact_envelope(kind_value: str, size_bytes: int | None) -> str:
+    """Return "Artifact.Preview" or "Artifact.Card" based on kind + size.
+
+    See ADR-pending (artifacts unification 2026-04-26 §5):
+    - INLINE_KINDS (html, drawio, mermaid, image, csv, data) → Preview · 聊天里
+      直接显示完整内容
+    - CARD_ONLY_KINDS (pptx, docx) → Card · 点击在制品区打开
+    - markdown / code / xlsx → Preview if size ≤ 200KB else Card
+    - pdf → Preview if size ≤ 2MB else Card
+    Default: Card (safe — visible affordance, no broken inline)
+    """
+    if kind_value in _CARD_ONLY_KINDS:
+        return "Artifact.Card"
+    if kind_value in _INLINE_KINDS:
+        return "Artifact.Preview"
+    if kind_value == "pdf":
+        if size_bytes is None or size_bytes <= _PDF_INLINE_LIMIT_BYTES:
+            return "Artifact.Preview"
+        return "Artifact.Card"
+    if kind_value in {"markdown", "code", "xlsx"}:
+        if size_bytes is None or size_bytes <= _INLINE_SIZE_LIMIT_BYTES:
+            return "Artifact.Preview"
+        return "Artifact.Card"
+    return "Artifact.Card"
+
+
 def _artifact_create_result(
     *,
     artifact_id: str,
     version: int,
     kind_value: str,
+    size_bytes: int | None = None,
     warnings: list[str] | None = None,
 ) -> dict[str, Any]:
     """Unified return shape for every artifact_create* tool.
 
-    Carries BOTH a render envelope (so the chat shows an Artifact.Preview
+    Carries BOTH a render envelope (so the chat shows an Artifact preview
     card automatically · the agent no longer needs a follow-up
     artifact_render call · _as_render_envelope picks up component+props)
     AND the flat artifact_id / version / kind keys (so downstream tools
-    like artifact_update / artifact_pin / agent prose can chain). Solves
-    user feedback 2026-04-26 「html 的卡片提醒呢? 现在啥都没有」 — agent
-    forgot the artifact_render second step. With auto-render, every
-    successful create posts a card, regardless of model discipline.
+    like artifact_update / artifact_pin / agent prose can chain).
+
+    The component split (Preview vs Card) decides whether the chat
+    inlines the full content or shows a click-to-open card. See
+    `_pick_artifact_envelope` for the routing.
     """
+    component = _pick_artifact_envelope(kind_value, size_bytes)
     out: dict[str, Any] = {
-        "component": "Artifact.Preview",
-        "props": {"artifact_id": artifact_id, "version": version},
+        "component": component,
+        "props": {
+            "artifact_id": artifact_id,
+            "version": version,
+            "kind": kind_value,
+        },
         "interactions": [],
         # Flat fields for agent ergonomics + backwards compat. Agents call
         # `result["artifact_id"]` to chain into update/delete/pin.
@@ -1002,6 +1046,7 @@ async def _persist_office_artifact(
         artifact_id=artifact.id,
         version=1,
         kind_value=kind.value,
+        size_bytes=size,
     )
 
 

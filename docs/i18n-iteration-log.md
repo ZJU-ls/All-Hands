@@ -587,3 +587,20 @@ catalog 里存在」。
 以后 PR 加错 namespace 或漏 key,这层会立刻挡住。
 
 **commits**:见 git log
+
+## Round 27 · 2026-04-26 13:13 (cron · 30m)
+
+**主题**:把 R26 的 web key-resolver 复制到 backend
+
+**做的事**:
+- 新增 backend/tests/unit/test_i18n_keys_resolve.py:
+  - 扫所有 backend/src/allhands/**/*.py 里 `t("literal")` 调用(只在
+    `from allhands.i18n import t` 的文件)
+  - 检查每个 key 在 _MESSAGES 任一 locale dict 里存在
+  - 当前覆盖 17 个文件 / 61 处 t() 调用 · 全绿
+- web 侧 R26 的 i18n-keys-resolve 也跑了一遍,1929 web tests 全绿
+
+**结果**:web + backend 双侧都有 t() 漏 key 回归网。以后 PR 加错 namespace
+或漏 key,本地跑测就 fail · 不会落到运行时报 MISSING_MESSAGE。
+
+**commits**:见 git log

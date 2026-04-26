@@ -65,6 +65,24 @@ class ObservatoryModelBreakdown(BaseModel):
     model_config = {"frozen": True}
 
 
+class ObservatoryConversationBreakdown(BaseModel):
+    """Per-conversation rollup · groups runs by ``conversation_id`` so the
+    UI can show "Sessions · Top conversations by cost / runs / tokens"
+    (Langfuse Sessions inspiration). Conversation-level scores will land
+    when the eval system does — for now this is purely usage rollup.
+    """
+
+    conversation_id: str
+    employee_id: str | None = None
+    employee_name: str | None = None
+    runs_count: int = 0
+    total_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    last_seen_at: datetime | None = None
+
+    model_config = {"frozen": True}
+
+
 class ObservatoryToolBreakdown(BaseModel):
     """Per-tool rollup · keyed on ``tool_id`` from tool.invoked /
     tool.returned events. Counts every invocation, surfaces the failure
@@ -127,6 +145,7 @@ class ObservatorySummary(BaseModel):
     by_model: list[ObservatoryModelBreakdown] = Field(default_factory=list)
     by_tool: list[ObservatoryToolBreakdown] = Field(default_factory=list)
     top_errors: list[ObservatoryErrorBreakdown] = Field(default_factory=list)
+    by_conversation: list[ObservatoryConversationBreakdown] = Field(default_factory=list)
     # 24xN latency heatmap (24 hourly columns x N latency buckets) for the
     # Honeycomb-style "where do my long tails live" panel. cells[h][b] is
     # the count of runs that landed in hour h with duration < buckets[b]
@@ -343,6 +362,7 @@ class TraceSummary(BaseModel):
 __all__ = [
     "ArtifactSummary",
     "ObservabilityConfig",
+    "ObservatoryConversationBreakdown",
     "ObservatoryEmployeeBreakdown",
     "ObservatoryErrorBreakdown",
     "ObservatoryModelBreakdown",

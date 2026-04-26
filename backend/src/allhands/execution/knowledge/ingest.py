@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -70,12 +71,18 @@ class IngestOrchestrator:
         embedder: Embedder,
         vec_store: VectorStore,
         data_root: Path,
+        embedder_for_kb: Callable[[str], Awaitable[Embedder]] | None = None,
     ) -> None:
         self._session_maker = session_maker
         self.chunker = chunker
         self.embedder = embedder
         self.vec_store = vec_store
         self.data_root = data_root
+        # Per-KB resolver wins when present — the orchestrator looks up
+        # the embedder for *this* doc's KB instead of using the singleton.
+        # When omitted (tests / legacy callers) the static `embedder` is
+        # used unconditionally, preserving prior behaviour.
+        self.embedder_for_kb = embedder_for_kb
 
     async def ingest_document(self, document_id: str, *, file_path_abs: Path) -> None:
         """Run the full pipeline for one already-uploaded document.
@@ -221,9 +228,17 @@ class IngestOrchestrator:
                 texts = [c.text for c in chunks]
                 await s.commit()
 
-            # Phase B: embed + vec-store write outside of any open tx
+            # Phase B: embed + vec-store write outside of any open tx.
+            # When per-KB resolver is wired, fetch the right embedder for
+            # this doc's KB so each KB honours its own model_ref instead
+            # of sharing the service singleton.
+            embedder = (
+                await self.embedder_for_kb(kb_id)
+                if self.embedder_for_kb is not None
+                else self.embedder
+            )
             try:
-                vectors = await self.embedder.embed_texts(texts)
+                vectors = await embedder.embed_texts(texts)
             except Exception as exc:
                 async with self._session_maker() as s2:
                     await SqlEmbeddingJobRepo(s2).mark_failed(

@@ -73,6 +73,7 @@ from allhands.core.model import LLMModel
 from allhands.core.observability import (
     ArtifactSummary,
     ObservabilityConfig,
+    ObservatoryConversationBreakdown,
     ObservatoryEmployeeBreakdown,
     ObservatoryErrorBreakdown,
     ObservatoryModelBreakdown,
@@ -192,6 +193,7 @@ __all__ = [
     "Message",
     "MessageRole",
     "ObservabilityConfig",
+    "ObservatoryConversationBreakdown",
     "ObservatoryEmployeeBreakdown",
     "ObservatoryErrorBreakdown",
     "ObservatoryModelBreakdown",

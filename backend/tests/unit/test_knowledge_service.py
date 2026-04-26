@@ -246,6 +246,60 @@ async def test_suggest_tags_parses_and_dedupes_llm_output(
     assert tags == ["retrieval", "bm25", "re-ranking"]
 
 
+async def test_switch_embedding_model_updates_kb_and_reembeds(
+    svc: KnowledgeService,
+) -> None:
+    """Switching from mock-64 to mock-128 must update KB row · rebuild
+    self._embedder · re-run ingest for every existing doc."""
+    kb = await svc.create_kb(name="brain", embedding_model_ref="mock:hash-64")
+    await svc.upload_document(kb.id, title="A", content_bytes=_SAMPLE_MD, filename="a.md")
+    await svc.upload_document(kb.id, title="B", content_bytes=b"# B\n\nbody", filename="b.md")
+
+    out = await svc.switch_embedding_model(kb.id, "mock:hash-128")
+    kb_after = out["kb"]
+    reembed = out["reembed"]
+    assert isinstance(kb_after, dict)
+    assert isinstance(reembed, dict)
+    assert kb_after["embedding_model_ref"] == "mock:hash-128"
+    assert kb_after["embedding_dim"] == 128
+    assert reembed["processed"] == 2
+    assert reembed["succeeded"] == 2
+    # Per-KB resolver picks up the new ref on next ingest; the service-level
+    # singleton is unchanged so other KBs keep their own model.
+    assert svc._embedder.model_ref == "mock:hash-64"
+    resolved = await svc._embedder_for_kb(kb.id)
+    assert resolved.model_ref == "mock:hash-128"
+
+
+async def test_two_kbs_use_their_own_embedding_model(
+    svc: KnowledgeService,
+) -> None:
+    """KB-A on mock-64 and KB-B on mock-128 must each resolve to their
+    own embedder via _embedder_for_kb — switching one doesn't pollute
+    the other. This is the property the user reasonably expects from
+    the per-KB ``embedding_model_ref`` field."""
+    kb_a = await svc.create_kb(name="A", embedding_model_ref="mock:hash-64")
+    kb_b = await svc.create_kb(name="B", embedding_model_ref="mock:hash-128")
+    emb_a = await svc._embedder_for_kb(kb_a.id)
+    emb_b = await svc._embedder_for_kb(kb_b.id)
+    assert emb_a.model_ref == "mock:hash-64"
+    assert emb_b.model_ref == "mock:hash-128"
+    # Cache shares a single Embedder per ref
+    assert (await svc._embedder_for_kb(kb_a.id)) is emb_a
+    assert (await svc._embedder_for_kb(kb_b.id)) is emb_b
+
+
+async def test_switch_embedding_model_noop_on_same_ref(
+    svc: KnowledgeService,
+) -> None:
+    kb = await svc.create_kb(name="brain", embedding_model_ref="mock:hash-64")
+    await svc.upload_document(kb.id, title="t", content_bytes=_SAMPLE_MD, filename="t.md")
+    out = await svc.switch_embedding_model(kb.id, "mock:hash-64")
+    reembed = out["reembed"]
+    assert isinstance(reembed, dict)
+    assert reembed == {"processed": 0, "succeeded": 0, "failed": 0}
+
+
 async def test_reembed_all_processes_each_doc(svc: KnowledgeService) -> None:
     """reembed_all hits every doc · returns processed/succeeded/failed
     counters · per-doc errors don't abort the loop."""

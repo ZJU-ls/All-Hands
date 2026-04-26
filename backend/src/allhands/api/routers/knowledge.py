@@ -621,6 +621,39 @@ class ReembedOut(BaseModel):
     failed: int
 
 
+class SwitchEmbeddingPayload(BaseModel):
+    new_ref: str
+
+
+class SwitchEmbeddingOut(BaseModel):
+    kb: KBOut
+    reembed: ReembedOut
+
+
+@router.post("/{kb_id}/embedding-model")
+async def switch_embedding_model(kb_id: str, payload: SwitchEmbeddingPayload) -> SwitchEmbeddingOut:
+    """Re-bind a KB to a different embedding model + reindex all docs.
+
+    Synchronous in v0 — fine for small KBs. Returns the updated KB row and
+    the per-doc reembed result so the UI can show "switched + N docs
+    re-indexed" in one response.
+    """
+    try:
+        out = await _service().switch_embedding_model(kb_id, payload.new_ref)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KBError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    kb_dict = out["kb"]
+    reembed_dict = out["reembed"]
+    if not isinstance(kb_dict, dict) or not isinstance(reembed_dict, dict):
+        raise HTTPException(status_code=500, detail=t("errors.malformed_response"))
+    return SwitchEmbeddingOut(
+        kb=KBOut(**kb_dict),
+        reembed=ReembedOut(**reembed_dict),
+    )
+
+
 @router.post("/{kb_id}/reembed-all")
 async def reembed_all(kb_id: str) -> ReembedOut:
     """Re-run ingest for every doc in the KB. Backfills missing vectors

@@ -19,6 +19,7 @@ from allhands.core import (
     ArtifactSummary,
     Message,
     ObservabilityConfig,
+    ObservatoryConversationBreakdown,
     ObservatoryEmployeeBreakdown,
     ObservatoryErrorBreakdown,
     ObservatoryModelBreakdown,
@@ -92,8 +93,22 @@ class ObservatoryService:
         return await self._config.load()
 
     async def get_summary(
-        self, *, now: datetime | None = None, window_hours: int = 24
+        self,
+        *,
+        now: datetime | None = None,
+        window_hours: int = 24,
+        employee_id: str | None = None,
+        model_ref: str | None = None,
     ) -> ObservatorySummary:
+        """Aggregate the last ``window_hours`` of run.* events into a summary.
+
+        Optional ``employee_id`` / ``model_ref`` filters narrow the scope —
+        the per-employee detail page passes ``employee_id="emp-writer"``
+        and gets back the same shape but scoped to writer's runs only.
+        Filtering happens in-memory after the SQL pull (run.* volume is
+        small enough that the extra round-trip would cost more than the
+        scan).
+        """
         ts_now = now or datetime.now(UTC)
         day_start = ts_now - timedelta(hours=window_hours)
 
@@ -104,25 +119,35 @@ class ObservatoryService:
             workspace_id=self._ws,
             kind_prefixes=list(_RUN_KINDS),
         )
-        runs_24h = await self._events.count_since(
-            since=day_start,
+
+        recent_all = await self._events.list_recent(
+            limit=2000,
             workspace_id=self._ws,
             kind_prefixes=list(_RUN_KINDS),
-        )
-        failed_24h = await self._events.count_since(
             since=day_start,
-            workspace_id=self._ws,
-            kind_prefixes=list(_RUN_FAILED_KINDS),
         )
 
+        def _matches_filters(ev: object) -> bool:
+            payload = getattr(ev, "payload", {})
+            if employee_id is not None:
+                actor = getattr(ev, "actor", None)
+                eid = payload.get("employee_id") if isinstance(payload, dict) else None
+                if eid != employee_id and actor != employee_id:
+                    return False
+            if model_ref is not None:
+                mr = payload.get("model_ref") if isinstance(payload, dict) else None
+                if mr != model_ref:
+                    return False
+            return True
+
+        recent = [e for e in recent_all if _matches_filters(e)]
+        # Treat anything under the run.* prefix as a "run" for window counts —
+        # legacy seed data uses "run.finished"; production uses
+        # "run.completed". `count_since` was previously the source of truth
+        # but doesn't accept dimension filters, so we sum in-memory now.
+        runs_24h = sum(1 for e in recent if e.kind.startswith("run."))
+        failed_24h = sum(1 for e in recent if e.kind == "run.failed")
         failure_rate = (failed_24h / runs_24h) if runs_24h else 0.0
-
-        recent = await self._events.list_recent(
-            limit=1000,
-            workspace_id=self._ws,
-            kind_prefixes=list(_RUN_KINDS),
-            since=day_start,
-        )
         durations = [
             float(e.payload["duration_s"])
             for e in recent
@@ -249,6 +274,7 @@ class ObservatoryService:
             kind_prefixes=["tool."],
             since=day_start,
         )
+        tool_events = [e for e in tool_events if _matches_filters(e)]
         tool_invocations: dict[str, int] = {}
         tool_failures: dict[str, int] = {}
         tool_invoked_at: dict[str, tuple[str, datetime]] = {}  # tool_call_id → (tool_id, ts)
@@ -365,12 +391,12 @@ class ObservatoryService:
         prev_start = ts_now - timedelta(hours=48)
         prev_end = day_start
         prev_recent = await self._events.list_recent(
-            limit=1000,
+            limit=2000,
             workspace_id=self._ws,
             kind_prefixes=list(_RUN_KINDS),
             since=prev_start,
         )
-        prev_recent = [e for e in prev_recent if e.published_at < prev_end]
+        prev_recent = [e for e in prev_recent if e.published_at < prev_end and _matches_filters(e)]
         prev_runs = sum(1 for e in prev_recent if e.kind in ("run.completed", "run.failed"))
         prev_failed = sum(1 for e in prev_recent if e.kind == "run.failed")
         prev_failure_rate = (prev_failed / prev_runs) if prev_runs else 0.0
@@ -400,6 +426,51 @@ class ObservatoryService:
         p50_delta = _pct(p50, prev_p50)
         cost_delta = _pct(cost_total, prev_cost)
 
+        # by_conversation aggregation · group runs by payload.conversation_id
+        # so the UI can show "Sessions · top conversations" (Langfuse style).
+        # Separate parallel dicts (numbers vs employee_id vs last_seen_at)
+        # keep mypy happy without per-line type ignores.
+        conv_runs: dict[str, int] = {}
+        conv_tokens: dict[str, int] = {}
+        conv_cost: dict[str, float] = {}
+        conv_emp: dict[str, str] = {}
+        conv_last_seen: dict[str, datetime] = {}
+        for e in recent:
+            cid = e.payload.get("conversation_id") if isinstance(e.payload, dict) else None
+            if not isinstance(cid, str) or not cid:
+                continue
+            tok = e.payload.get("tokens")
+            ti = to_t = tt = 0
+            if isinstance(tok, dict):
+                ti = int(tok.get("input", 0) or 0)
+                to_t = int(tok.get("output", 0) or 0)
+                tt = int(tok.get("total", 0) or 0) or (ti + to_t)
+            elif isinstance(tok, int):
+                tt = int(tok)
+            mr = e.payload.get("model_ref") if isinstance(e.payload, dict) else None
+            run_cost = estimate_cost_usd(mr if isinstance(mr, str) else None, ti, to_t)
+            conv_runs[cid] = conv_runs.get(cid, 0) + 1
+            conv_tokens[cid] = conv_tokens.get(cid, 0) + tt
+            conv_cost[cid] = conv_cost.get(cid, 0.0) + run_cost
+            emp_id = e.payload.get("employee_id") or e.actor
+            if isinstance(emp_id, str) and cid not in conv_emp:
+                conv_emp[cid] = emp_id
+            prev_seen = conv_last_seen.get(cid)
+            if prev_seen is None or e.published_at > prev_seen:
+                conv_last_seen[cid] = e.published_at
+        by_conversation = [
+            ObservatoryConversationBreakdown(
+                conversation_id=cid,
+                employee_id=conv_emp.get(cid),
+                employee_name=name_by_id.get(conv_emp.get(cid, "")),
+                runs_count=conv_runs[cid],
+                total_tokens=conv_tokens[cid],
+                estimated_cost_usd=round(conv_cost[cid], 6),
+                last_seen_at=conv_last_seen.get(cid),
+            )
+            for cid in sorted(conv_cost, key=lambda c: -conv_cost[c])[:8]
+        ]
+
         return ObservatorySummary(
             traces_total=runs_total,
             failure_rate_24h=round(failure_rate, 4),
@@ -420,6 +491,7 @@ class ObservatoryService:
             by_model=by_model,
             by_tool=by_tool,
             top_errors=top_errors,
+            by_conversation=by_conversation,
             latency_heatmap=latency_heatmap,
             latency_heatmap_buckets_s=latency_heatmap_buckets_s,
             anomalies=_compute_anomalies(
@@ -437,9 +509,11 @@ class ObservatoryService:
         self,
         *,
         employee_id: str | None = None,
+        model_ref: str | None = None,
         status: str | None = None,
         since: datetime | None = None,
         until: datetime | None = None,
+        q: str | None = None,
         limit: int = 50,
     ) -> list[TraceSummary]:
         # Pull a generous window of events; each run produces ≥2 (started +
@@ -527,6 +601,23 @@ class ObservatoryService:
             total_tok = slot.get("total_tokens")
             mr_raw = slot.get("model_ref")
             model_ref_obj: str | None = mr_raw if isinstance(mr_raw, str) else None
+            if model_ref and model_ref_obj != model_ref:
+                continue
+            if q:
+                ql = q.lower()
+                hay = " ".join(
+                    s
+                    for s in (
+                        run_id,
+                        eid or "",
+                        name_by_id.get(eid, "") if eid else "",
+                        model_ref_obj or "",
+                        trace_status,
+                    )
+                    if s
+                ).lower()
+                if ql not in hay:
+                    continue
             llm_calls_obj = slot.get("llm_calls")
             tokens_summary = RunTokenUsage(
                 prompt=int(input_tok) if isinstance(input_tok, int) else 0,
@@ -768,6 +859,8 @@ class ObservatoryService:
         since: datetime | None = None,
         until: datetime | None = None,
         bucket: str = "1h",
+        employee_id: str | None = None,
+        model_ref: str | None = None,
     ) -> TimeSeries:
         """Bucket run.* events into a time-series for the metric drilldown.
 
@@ -797,6 +890,25 @@ class ObservatoryService:
             kind_prefixes=list(_RUN_KINDS),
             since=ts_start,
         )
+        # Optional dimension filters · enables per-employee / per-model
+        # drilldown charts on the detail pages.
+        if employee_id is not None:
+            events = [
+                e
+                for e in events
+                if (
+                    (e.payload.get("employee_id") if isinstance(e.payload, dict) else None)
+                    == employee_id
+                )
+                or e.actor == employee_id
+            ]
+        if model_ref is not None:
+            events = [
+                e
+                for e in events
+                if (e.payload.get("model_ref") if isinstance(e.payload, dict) else None)
+                == model_ref
+            ]
         # Build empty buckets first so missing windows still render as 0.
         bucket_count = max(1, int((ts_now - ts_start).total_seconds() // bucket_seconds))
         bucket_ts: list[datetime] = [ts_start + bucket_size * i for i in range(bucket_count)]

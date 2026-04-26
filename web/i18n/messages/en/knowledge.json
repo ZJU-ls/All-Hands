@@ -283,7 +283,13 @@
       "noModelsBody": "Head to the <gateway>Model Gateway</gateway> and add an OpenAI or Aliyun Bailian provider with an API key — usable models will show up here.",
       "goConfigure": "Configure now",
       "switchModelHint": "Switching a KB's embedding model requires recomputing every \"semantic fingerprint\" (reindex). v0 doesn't hot-swap yet — to switch, delete this KB and recreate it with the new model.",
-      "modelDimHint": "{dim}d"
+      "switchModelHintV2": "Click any model to switch · the backend reindexes every chunk in this KB. Model is scoped per KB — switching A does not affect B.",
+      "modelDimHint": "{dim}d",
+      "currentBadge": "current",
+      "switching": "switching…",
+      "switchConfirm": "Switching to {model} will reindex all {docs} documents in this KB. Proceed?",
+      "switchSummary": "Switched and re-embedded · {processed} processed · {succeeded} ok · {failed} failed",
+      "switchFailed": "Switch failed"
     },
     "danger": {
       "heading": "Delete knowledge base",
