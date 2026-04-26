@@ -11,6 +11,7 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
 import { ToastProvider } from "@/components/ui/Toast";
 import { KeyboardShortcutsModal } from "@/components/shell/KeyboardShortcutsModal";
+import { RouteProgress } from "@/components/shell/RouteProgress";
 
 // Lazy-load the two global overlays so their module graph (DotGridBackdrop,
 // RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
@@ -433,6 +434,7 @@ export function AppShell({
 
   return (
     <ToastProvider>
+    <RouteProgress />
     <div className="flex h-screen w-full bg-bg text-text">
       <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       <div className="flex min-w-0 flex-1 flex-col">
