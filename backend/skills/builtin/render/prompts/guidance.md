@@ -1,5 +1,7 @@
 # 可视化渲染指南 · allhands.render
 
+> 注: `render_*` 工具是 always-hot · 不需要 `resolve_skill('allhands.render')` —— 直接调即可。**不要写**「已激活 render 技能」「activated render skill」这种话(技能本来就在 toolset · 这种叙述是幻觉,用户最后只看到空话)。直接调工具。
+
 ## 何时调用
 
 向用户展示信息时优先用 `allhands.render.*` 工具,而不是写一大段 markdown。结构化工具让用户一眼看到关键数据。
