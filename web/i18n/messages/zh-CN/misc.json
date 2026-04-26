@@ -135,6 +135,11 @@
       "anomalies": {
         "title": "{n} 项异常需关注 · 自动判定 · 不是 ML"
       },
+      "share": {
+        "title": "复制当前视图链接 · 含时间窗与搜索词",
+        "share": "分享视图",
+        "copied": "已复制"
+      },
       "costPanel": {
         "title": "成本面板 · 24h",
         "today": "今日累计",

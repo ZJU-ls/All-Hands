@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState } from "@/components/state";
@@ -470,6 +471,35 @@ function ErrorsPanel({
   );
 }
 
+// ── Share-this-view button · copies window.location to clipboard ─────────
+
+function ShareViewButton() {
+  const t = useTranslations("pages.observatory.share");
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard API can fail in iframes / non-secure contexts.
+      // Silently no-op; user can copy URL from address bar.
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={t("title")}
+      aria-label={t("title")}
+      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-surface border border-border hover:border-border-strong text-[12px] font-medium text-text transition-colors duration-fast"
+    >
+      <Icon name={copied ? "check" : "link"} size={13} />
+      {copied ? t("copied") : t("share")}
+    </button>
+  );
+}
+
 function KpiSkeleton() {
   return (
     <div className="relative overflow-hidden rounded-xl bg-surface border border-border p-5 shadow-soft-sm">
@@ -523,15 +553,57 @@ function TimeRangePills({
 }
 
 export default function ObservatoryPage() {
+  // useSearchParams requires a Suspense boundary at the page level
+  // (Next 15 hard error otherwise) · the inner component does the work.
+  return (
+    <Suspense>
+      <ObservatoryPageInner />
+    </Suspense>
+  );
+}
+
+function ObservatoryPageInner() {
   const t = useTranslations("pages.observatory");
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [traces, setTraces] = useState<TraceSummaryDto[]>([]);
   const [state, setState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<TimeRange>("24h");
+  // Range + search are URL-state-driven so the dashboard view is shareable.
+  // ?range=1h|24h|7d&q=… — the source-of-truth lives in the query string;
+  // setters write to the URL and a useEffect mirrors them into local state.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlRange = (searchParams.get("range") as TimeRange | null) ?? "24h";
+  const urlQ = searchParams.get("q") ?? "";
+  const [range, setRangeState] = useState<TimeRange>(urlRange);
+  const setRange = (next: TimeRange) => {
+    setRangeState(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "24h") params.delete("range");
+    else params.set("range", next);
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "?", { scroll: false });
+  };
+  // Keep local in sync if the user navigates back/forward.
+  useEffect(() => {
+    if (urlRange !== range) setRangeState(urlRange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlRange]);
   const [drawerMetric, setDrawerMetric] = useState<ObservatoryMetric | null>(null);
   const [drawerLabel, setDrawerLabel] = useState<string | undefined>(undefined);
-  const [traceSearch, setTraceSearch] = useState("");
+  const [traceSearch, setTraceSearchState] = useState(urlQ);
+  const setTraceSearch = (next: string) => {
+    setTraceSearchState(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.trim() === "") params.delete("q");
+    else params.set("q", next);
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "?", { scroll: false });
+  };
+  useEffect(() => {
+    if (urlQ !== traceSearch) setTraceSearchState(urlQ);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQ]);
   const openDrawer = (metric: ObservatoryMetric, label?: string) => {
     setDrawerMetric(metric);
     setDrawerLabel(label);
@@ -627,6 +699,7 @@ export default function ObservatoryPage() {
             </div>
             <div className="flex items-center gap-2">
               <TimeRangePills value={range} onChange={setRange} />
+              <ShareViewButton />
               <button
                 type="button"
                 onClick={load}

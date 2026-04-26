@@ -135,6 +135,11 @@
       "anomalies": {
         "title": "{n} anomaly callouts · rule-based, no ML"
       },
+      "share": {
+        "title": "Copy current view link · includes range + search",
+        "share": "Share view",
+        "copied": "Copied"
+      },
       "costPanel": {
         "title": "Cost panel · 24h",
         "today": "Today",
