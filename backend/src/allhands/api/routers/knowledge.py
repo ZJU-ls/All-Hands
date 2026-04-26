@@ -560,6 +560,20 @@ async def ask_kb_stream(kb_id: str, payload: AskPayload) -> StreamingResponse:
     )
 
 
+@router.get("/{kb_id}/starter-questions")
+async def starter_questions(kb_id: str, limit: int = 4) -> dict[str, list[str]]:
+    """Return ``limit`` LLM-suggested starter questions for the KB.
+
+    Cached per (kb, updated_at, limit). Empty list when KB has no docs
+    or no chat provider is configured — UI hides the chip row gracefully.
+    """
+    try:
+        qs = await _service().suggest_starter_questions(kb_id, limit=limit)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"questions": qs}
+
+
 class DiagnoseOut(BaseModel):
     bm25_only: list[ScoredChunkOut]
     vector_only: list[ScoredChunkOut]

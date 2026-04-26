@@ -122,6 +122,10 @@
       "vecRank": "vec #{rank}",
       "scoreLabel": "score"
     },
+    "starters": {
+      "label": "Try one of these",
+      "hint": "Generated from this KB's titles and headings · click to ask"
+    },
     "ask": {
       "askingLabel": "Question",
       "answerLabel": "Answer",

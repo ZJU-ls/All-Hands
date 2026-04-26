@@ -206,6 +206,21 @@ export async function getKBStats(kbId: string): Promise<KBStatsDto> {
   return check(await fetch(`${BASE}/api/kb/${kbId}/stats`), "getKBStats");
 }
 
+// Starter questions — small list of LLM-suggested prompts for the Ask
+// blank state. Returns at most ``limit`` strings; an empty array means
+// "no docs yet" or "no chat provider configured" — caller hides the row.
+export async function getStarterQuestions(
+  kbId: string,
+  limit = 4,
+): Promise<string[]> {
+  const r = await fetch(
+    `${BASE}/api/kb/${kbId}/starter-questions?limit=${limit}`,
+  );
+  if (!r.ok) return [];
+  const j = (await r.json()) as { questions: string[] };
+  return j.questions ?? [];
+}
+
 export interface DocumentChunkDto {
   id: number;
   ordinal: number;

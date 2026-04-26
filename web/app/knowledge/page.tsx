@@ -47,6 +47,7 @@ import {
   type ScoredChunkDto,
   askKBStream,
   diagnoseSearch,
+  getStarterQuestions,
   getDocumentText,
   getKBStats,
   ingestUrl,
@@ -161,6 +162,11 @@ export default function KnowledgePage() {
   };
   const [askTurns, setAskTurns] = useState<AskTurn[]>([]);
   const askAbortRef = useRef<AbortController | null>(null);
+  // Starter questions cache, scoped to active KB id. Loaded lazily the
+  // first time Ask mode is opened on a KB; nullable distinguishes
+  // "not loaded yet" (skeleton) from "loaded but empty" (hide row).
+  const [starters, setStarters] = useState<Record<string, string[] | null>>({});
+  const startersForActive = activeKb ? (starters[activeKb.id] ?? null) : null;
   const [stateFilter, setStateFilter] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
@@ -214,6 +220,26 @@ export default function KnowledgePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKb?.id]);
+
+  // Lazy-load starter questions the first time Ask mode is opened on a
+  // KB. Backend caches by (kb, updated_at); refetching after an upload
+  // is cheap. We *don't* prefetch on KB switch — saves an LLM call when
+  // the user just wants to browse docs / search.
+  useEffect(() => {
+    if (!activeKb || mode !== "ask") return;
+    if (starters[activeKb.id] !== undefined) return;
+    const id = activeKb.id;
+    setStarters((prev) => ({ ...prev, [id]: null }));
+    void getStarterQuestions(id, 4)
+      .then((qs) => setStarters((prev) => ({ ...prev, [id]: qs })))
+      .catch(() => setStarters((prev) => ({ ...prev, [id]: [] })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKb?.id, mode]);
+
+  function pickStarter(q: string) {
+    setSearchQuery(q);
+    void runAskTurn(q, false);
+  }
 
   // Bulk upload — single file calls go through this too. Tracks per-file
   // status so the user can see N/M progress instead of one opaque spinner.
@@ -772,6 +798,8 @@ export default function KnowledgePage() {
                 onBulkDelete={bulkDelete}
                 tagFilter={tagFilter}
                 onClearTagFilter={() => setTagFilter(null)}
+                starters={mode === "ask" ? startersForActive : null}
+                onPickStarter={pickStarter}
               />
             )}
           </main>
@@ -1148,6 +1176,51 @@ function OnboardingWizard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Starter chips — LLM-suggested first questions, shown when Ask mode is
+// idle. Mirrors NotebookLM's "Suggested questions" strip and ChatGPT's
+// custom-GPT example prompts. Empty list (no docs / no provider) renders
+// nothing so the layout collapses cleanly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function StarterChips({
+  starters,
+  onPick,
+}: {
+  starters: string[];
+  onPick: (q: string) => void;
+}) {
+  const t = useTranslations("knowledge.starters");
+  return (
+    <div className="border-b border-border bg-gradient-to-b from-primary-muted/30 to-transparent px-5 py-4">
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-primary">
+        <Icon name="sparkles" size={11} />
+        <span>{t("label")}</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {starters.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => onPick(q)}
+            className="group inline-flex items-start gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left text-[12px] text-text-muted hover:border-primary/40 hover:bg-primary-muted/40 hover:text-text transition duration-fast"
+          >
+            <Icon
+              name="message-square"
+              size={12}
+              className="mt-0.5 text-text-subtle group-hover:text-primary"
+            />
+            <span className="max-w-[280px] leading-snug">{q}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+        {t("hint")}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Documents view (idle)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1164,6 +1237,8 @@ function DocumentsView({
   onBulkDelete,
   tagFilter,
   onClearTagFilter,
+  starters,
+  onPickStarter,
 }: {
   docs: DocumentDto[];
   allDocsCount: number;
@@ -1177,6 +1252,8 @@ function DocumentsView({
   onBulkDelete: () => Promise<void>;
   tagFilter: string | null;
   onClearTagFilter: () => void;
+  starters: string[] | null;
+  onPickStarter: (q: string) => void;
 }) {
   const t = useTranslations("knowledge.docs");
   if (allDocsCount === 0) {
@@ -1204,6 +1281,9 @@ function DocumentsView({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {starters && starters.length > 0 && (
+        <StarterChips starters={starters} onPick={onPickStarter} />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
