@@ -720,3 +720,22 @@ literal + template-prefix 两种 t() 形式
 **结果**:本轮零代码改动 · 平台 i18n 状态良好 · 双侧 lint/type/build/test 全绿
 
 **commits**:仅本条 log
+
+## Round 34 · 2026-04-26 16:43 (cron · 30m)
+
+**主题**:async / contextvar 完整性 + middleware 注册校核
+
+**做的事**:
+- 校核 LocaleMiddleware 已经在 backend/api/app.py:177 `app.add_middleware`
+  注册 · 所有路由都过它
+- contextvar 作用域审计:
+  - asyncio.create_task 自动复制当前 ContextVar(Python 3.7+)· 4 个使用点
+    (event_bus / retriever / market poller / chat SSE / channel_inbound)
+    locale 都会跟过去
+  - SSE 流式 endpoint 在请求 scope 内,t() 调用拿到正确 locale
+  - startup / on_event 没有任何 user-facing 文案 · 不需要 i18n
+- 跑完整 i18n 套件:web 1984 + backend 13 全绿
+
+**结果**:本轮零代码改动 · contextvar 链路完整 · 平台 i18n 健康
+
+**commits**:仅本条 log
