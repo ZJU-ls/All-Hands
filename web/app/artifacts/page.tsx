@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ArtifactList } from "@/components/artifacts/ArtifactList";
 import { ArtifactGrid } from "@/components/artifacts/ArtifactGrid";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import {
   artifactStreamUrl,
   deleteArtifact,
@@ -311,7 +312,20 @@ export default function ArtifactsGlobalPage() {
     });
   }, []);
 
-  // Refetch list when filters move; throttled-by-React-batch is fine here.
+  // 2026-04-27 · 搜索 debounce 250ms。原实现每次按键都打一发 200-item
+  // 的 list 请求,即便 cancelled flag 防止了 stale write,backend 也吃了
+  // 一串无效请求(快速键入 6 个字符 → 6 个 query)。debouncedQ 让 effect
+  // 只在键入暂停 250ms 后才触发刷新。其他 filter(kind/sort/pinned/
+  // dateRange)是离散选择,不需要 debounce — 立即生效。
+  const [debouncedQ, setDebouncedQ] = useState(q);
+  useEffect(() => {
+    if (q === debouncedQ) return;
+    const id = window.setTimeout(() => setDebouncedQ(q), 250);
+    return () => window.clearTimeout(id);
+  }, [q, debouncedQ]);
+
+  // Refetch list when filters move. With debouncedQ, search keystrokes
+  // collapse to one query per pause;離散 filter 立即生效。
   useEffect(() => {
     let cancelled = false;
     setState("loading");
@@ -352,7 +366,10 @@ export default function ArtifactsGlobalPage() {
     return () => {
       cancelled = true;
     };
-  }, [kind, sort, q, pinnedOnly, createdAfter]);
+    // debouncedQ 取代 q · fetchList 通过 filtersRef 读 q,但 effect 触发
+    // 节奏看 debouncedQ。filtersRef.current = { ..., q } 在每次 render 重
+    // 设,所以 fetchList 拿到的永远是最新 q —— debounce 只控发请求频率。
+  }, [kind, sort, debouncedQ, pinnedOnly, createdAfter, fetchList]);
 
   // Stats are filter-independent · they describe the whole workspace, not
   // the current view. Pull once on mount + on artifact_changed SSE so the
@@ -632,7 +649,23 @@ export default function ArtifactsGlobalPage() {
               }
             >
               {selectedId ? (
-                <ArtifactDetail artifactId={selectedId} />
+                // 2026-04-27 · 用 ErrorBoundary 包裹详情面板。一个解析失
+                // 败的 csv / 损坏的 drawio / 异常的 office 文件不应该让整
+                // 个面板崩溃,降级到"渲染失败 · 可下载原文件"。resetKey
+                // 用 selectedId,切换到别的制品时 boundary 自动 reset。
+                <ErrorBoundary
+                  resetKey={selectedId}
+                  fallback={({ error, reset }) => (
+                    <DetailErrorFallback
+                      artifactId={selectedId}
+                      error={error}
+                      onReset={reset}
+                      t={t}
+                    />
+                  )}
+                >
+                  <ArtifactDetail artifactId={selectedId} />
+                </ErrorBoundary>
               ) : (
                 <DetailPlaceholder t={t} />
               )}
@@ -1233,6 +1266,66 @@ function DetailPlaceholder({
         <Icon name="eye" size={20} />
       </span>
       <p className="text-sm text-text-muted">{t("selectHint")}</p>
+    </div>
+  );
+}
+
+/**
+ * Detail panel fallback · 渲染崩溃时的友好降级 (R8)。
+ * 提供:错误信息(<details> 里折叠原始 stack,默认收起)+ "重试" +
+ * "下载原文件" 两个出口。下载用 /api/artifacts/{id}/content?download
+ * 原始字节流,即便前端 view 渲染挂了也能拿原始数据。
+ */
+function DetailErrorFallback({
+  artifactId,
+  error,
+  onReset,
+  t,
+}: {
+  artifactId: string;
+  error: Error;
+  onReset: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-danger-soft text-danger">
+        <Icon name="alert-triangle" size={22} />
+      </span>
+      <p className="text-sm font-medium text-text">{t("detailErrorTitle")}</p>
+      <p className="max-w-md text-caption text-text-muted leading-relaxed">
+        {t("detailErrorHint")}
+      </p>
+      <details className="max-w-md text-left">
+        <summary className="cursor-pointer text-[11px] font-mono text-text-subtle hover:text-text-muted">
+          <Icon
+            name="chevron-down"
+            size={10}
+            className="inline-block -mt-0.5 mr-0.5 transition-transform"
+          />
+          {t("detailErrorShow")}
+        </summary>
+        <pre className="mt-2 max-h-32 overflow-auto rounded bg-surface-2 px-3 py-2 text-[10.5px] leading-relaxed text-text-muted whitespace-pre-wrap break-all">
+          {error.message}
+        </pre>
+      </details>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onReset}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-caption text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+          <Icon name="refresh" size={11} />
+          {t("detailErrorRetry")}
+        </button>
+        <a
+          href={`/api/artifacts/${artifactId}/content?download=1`}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-caption text-primary-fg shadow-soft-sm hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+        >
+          <Icon name="download" size={11} />
+          {t("detailErrorDownload")}
+        </a>
+      </div>
     </div>
   );
 }
