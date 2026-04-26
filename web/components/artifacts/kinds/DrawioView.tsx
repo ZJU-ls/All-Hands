@@ -20,8 +20,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { updateArtifact } from "@/lib/artifacts-api";
 
-const EMBED_BASE =
+// Edit mode uses the full editor at embed.diagrams.net.
+// View mode uses viewer.diagrams.net which is purpose-built for read-only
+// embedding — no editor chrome, content fills the iframe naturally.
+const EMBED_EDIT_BASE =
   "https://embed.diagrams.net/?embed=1&proto=json&spin=1&ui=atlas&saveAndExit=0";
+const EMBED_VIEW_BASE = "https://viewer.diagrams.net/?embed=1&proto=json";
 
 export function DrawioView({
   content,
@@ -111,11 +115,21 @@ export function DrawioView({
     return () => window.removeEventListener("message", onMessage);
   }, [editable, persist]);
 
-  // `fit=1&zoom=auto` request the lightbox / viewer to auto-scale the
-  // diagram to viewport size — combines with the postMessage 'fit' below.
+  // View mode (viewer.diagrams.net) URL params:
+  // - lightbox=1        read-only lightbox-style embed; content auto-fits
+  //                      iframe and the bottom zoom/print/camera toolbar is
+  //                      driven by `toolbar=`
+  // - toolbar=          empty value → no viewer toolbar (hides the
+  //                      noisy 「放大/缩小/适配/打印/相机」 strip the user flagged)
+  // - nav=0             no page navigation arrows
+  // - highlight=0       no edge highlighting on hover
+  // - max-fit-scale=4   let fit scale up past 100% so narrow diagrams
+  //                      actually fill the iframe (was leaving big gutters)
+  // - page=0            hide the white page boundary; content extends to
+  //                      fill the iframe instead of sitting on a centered page
   const src = editable
-    ? `${EMBED_BASE}&fit=1`
-    : `${EMBED_BASE}&chrome=0&fit=1&zoom=auto&nav=0`;
+    ? `${EMBED_EDIT_BASE}&fit=1&max-fit-scale=4`
+    : `${EMBED_VIEW_BASE}&lightbox=1&toolbar=&nav=0&highlight=0&max-fit-scale=4&page=0&fit=1&zoom=auto`;
 
   const wrapperStyle = fillHeight
     ? { height: "100%" }
