@@ -5,7 +5,7 @@ version: 1.0.0
 builtin: true
 
 tool_ids:
-  - allhands.artifacts.create
+  - allhands.artifacts.render_drawio
   - allhands.meta.read_skill_file
 
 prompt_fragment_file: prompts/guidance.md
