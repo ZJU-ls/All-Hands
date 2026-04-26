@@ -123,7 +123,13 @@
     },
     "planProgress": {
       "runningCount": "· {n} 进行中",
-      "failedCount": "· {n} 失败"
+      "failedCount": "· {n} 失败",
+      "fallbackTitle": "计划"
+    },
+    "progressPanel": {
+      "subagentTab": "子代理",
+      "runningSuffix": "· {n} 进行中",
+      "failedSuffix": "· {n} 失败"
     }
   }
 }

@@ -26,7 +26,7 @@
  * components. Right slide-over for doc detail.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
@@ -35,7 +35,9 @@ import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import {
-  type AskResponse,
+  type AskHistoryTurn,
+  type AskSource,
+  type AskStreamFrame,
   type DiagnoseDto,
   type DocumentChunkDto,
   type DocumentDto,
@@ -43,8 +45,9 @@ import {
   type KBDto,
   type KBStatsDto,
   type ScoredChunkDto,
-  askKB,
+  askKBStream,
   diagnoseSearch,
+  getStarterQuestions,
   getDocumentText,
   getKBStats,
   ingestUrl,
@@ -142,8 +145,28 @@ export default function KnowledgePage() {
   // Ask mode (RAG QA) lives in the same query bar as search; toggle picks
   // which path to fire on Enter.
   const [mode, setMode] = useState<"search" | "ask">("search");
-  const [asking, setAsking] = useState(false);
-  const [askResult, setAskResult] = useState<AskResponse | null>(null);
+  // Multi-turn Ask state — each turn captures the user question, the
+  // chunks retrieved for it, the streaming/final answer text, and per-turn
+  // telemetry. ``streaming`` flips off when the SSE stream emits a `done`
+  // (or `error`) frame; the UI uses that to swap the typing cursor for
+  // citation chips.
+  type AskTurn = {
+    id: string;
+    question: string;
+    sources: AskSource[];
+    answer: string;
+    streaming: boolean;
+    error: string | null;
+    usedModel: string | null;
+    latencyMs: number | null;
+  };
+  const [askTurns, setAskTurns] = useState<AskTurn[]>([]);
+  const askAbortRef = useRef<AbortController | null>(null);
+  // Starter questions cache, scoped to active KB id. Loaded lazily the
+  // first time Ask mode is opened on a KB; nullable distinguishes
+  // "not loaded yet" (skeleton) from "loaded but empty" (hide row).
+  const [starters, setStarters] = useState<Record<string, string[] | null>>({});
+  const startersForActive = activeKb ? (starters[activeKb.id] ?? null) : null;
   const [stateFilter, setStateFilter] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
@@ -197,6 +220,26 @@ export default function KnowledgePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKb?.id]);
+
+  // Lazy-load starter questions the first time Ask mode is opened on a
+  // KB. Backend caches by (kb, updated_at); refetching after an upload
+  // is cheap. We *don't* prefetch on KB switch — saves an LLM call when
+  // the user just wants to browse docs / search.
+  useEffect(() => {
+    if (!activeKb || mode !== "ask") return;
+    if (starters[activeKb.id] !== undefined) return;
+    const id = activeKb.id;
+    setStarters((prev) => ({ ...prev, [id]: null }));
+    void getStarterQuestions(id, 4)
+      .then((qs) => setStarters((prev) => ({ ...prev, [id]: qs })))
+      .catch(() => setStarters((prev) => ({ ...prev, [id]: [] })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKb?.id, mode]);
+
+  function pickStarter(q: string) {
+    setSearchQuery(q);
+    void runAskTurn(q, false);
+  }
 
   // Bulk upload — single file calls go through this too. Tracks per-file
   // status so the user can see N/M progress instead of one opaque spinner.
@@ -284,7 +327,7 @@ export default function KnowledgePage() {
     setSearching(true);
     setCommittedQuery(searchQuery.trim());
     setResults(null);
-    setAskResult(null);
+    setAskTurns([]);
     try {
       setResults(await searchKB(activeKb.id, searchQuery.trim()));
     } catch (e) {
@@ -294,26 +337,99 @@ export default function KnowledgePage() {
     }
   }
 
-  async function handleAsk() {
-    if (!activeKb || !searchQuery.trim()) return;
-    setAsking(true);
-    setCommittedQuery(searchQuery.trim());
-    setAskResult(null);
+  // Run one Ask turn. ``followUp`` keeps existing turns + their context
+  // window and appends a new turn; first-call mode resets the conversation.
+  async function runAskTurn(question: string, followUp: boolean) {
+    if (!activeKb || !question.trim()) return;
+    const q = question.trim();
     setResults(null);
+    setCommittedQuery(q);
+
+    const history: AskHistoryTurn[] = followUp
+      ? askTurns
+          .filter((t) => !t.error && t.answer)
+          .flatMap<AskHistoryTurn>((t) => [
+            { role: "user", content: t.question },
+            { role: "assistant", content: t.answer },
+          ])
+      : [];
+
+    const turnId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const blank: AskTurn = {
+      id: turnId,
+      question: q,
+      sources: [],
+      answer: "",
+      streaming: true,
+      error: null,
+      usedModel: null,
+      latencyMs: null,
+    };
+    setAskTurns((prev) => (followUp ? [...prev, blank] : [blank]));
+
+    // Cancel any prior in-flight stream — only one Ask at a time.
+    askAbortRef.current?.abort();
+    const ctl = new AbortController();
+    askAbortRef.current = ctl;
+
     try {
-      setAskResult(await askKB(activeKb.id, searchQuery.trim(), { topK: 5 }));
+      for await (const frame of askKBStream(activeKb.id, q, {
+        topK: 5,
+        history,
+        signal: ctl.signal,
+      })) {
+        applyAskFrame(turnId, frame);
+      }
     } catch (e) {
-      setError(String(e));
-    } finally {
-      setAsking(false);
+      if ((e as Error).name === "AbortError") return;
+      applyAskFrame(turnId, { event: "error", message: String(e) });
     }
   }
 
+  function applyAskFrame(turnId: string, frame: AskStreamFrame) {
+    setAskTurns((prev) =>
+      prev.map((t) => {
+        if (t.id !== turnId) return t;
+        switch (frame.event) {
+          case "sources":
+            return { ...t, sources: frame.sources };
+          case "delta":
+            return { ...t, answer: t.answer + frame.text };
+          case "done":
+            return {
+              ...t,
+              streaming: false,
+              usedModel: frame.used_model,
+              latencyMs: frame.latency_ms,
+            };
+          case "error":
+            return { ...t, streaming: false, error: frame.message };
+          default:
+            return t;
+        }
+      }),
+    );
+  }
+
+  async function handleAsk() {
+    await runAskTurn(searchQuery, false);
+  }
+
+  async function handleAskFollowUp(q: string) {
+    await runAskTurn(q, true);
+  }
+
+  function handleClearAsk() {
+    askAbortRef.current?.abort();
+    setAskTurns([]);
+  }
+
   async function handleClearSearch() {
+    askAbortRef.current?.abort();
     setSearchQuery("");
     setCommittedQuery("");
     setResults(null);
-    setAskResult(null);
+    setAskTurns([]);
   }
 
   async function handleDeleteDoc(d: DocumentDto) {
@@ -507,13 +623,15 @@ export default function KnowledgePage() {
                     mode === "ask" ? void handleAsk() : void handleSearch()
                   }
                   disabled={
-                    (mode === "ask" ? asking : searching) ||
+                    (mode === "ask" ? askTurns.some((t) => t.streaming) : searching) ||
                     !searchQuery.trim() ||
                     !activeKb
                   }
                   className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
                 >
-                  {(mode === "ask" ? asking : searching)
+                  {(mode === "ask"
+                    ? askTurns.some((t) => t.streaming)
+                    : searching)
                     ? t("toolbar.submitRunning")
                     : mode === "ask"
                       ? t("toolbar.submitAsk")
@@ -643,11 +761,11 @@ export default function KnowledgePage() {
               <div className="flex h-full items-center justify-center px-6 py-12 text-[12px] text-text-muted">
                 {t("sidebar.pickKbHint")}
               </div>
-            ) : pageState !== "ok" ? null : askResult || asking ? (
+            ) : pageState !== "ok" ? null : askTurns.length > 0 ? (
               <AskAnswerView
-                question={committedQuery}
-                result={askResult}
-                asking={asking}
+                turns={askTurns}
+                onFollowUp={handleAskFollowUp}
+                onClear={handleClearAsk}
                 onChunkClick={(docId) => {
                   const d = docs?.find((x) => x.id === docId);
                   if (d) setOpenDoc(d);
@@ -680,6 +798,8 @@ export default function KnowledgePage() {
                 onBulkDelete={bulkDelete}
                 tagFilter={tagFilter}
                 onClearTagFilter={() => setTagFilter(null)}
+                starters={mode === "ask" ? startersForActive : null}
+                onPickStarter={pickStarter}
               />
             )}
           </main>
@@ -1056,6 +1176,51 @@ function OnboardingWizard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Starter chips — LLM-suggested first questions, shown when Ask mode is
+// idle. Mirrors NotebookLM's "Suggested questions" strip and ChatGPT's
+// custom-GPT example prompts. Empty list (no docs / no provider) renders
+// nothing so the layout collapses cleanly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function StarterChips({
+  starters,
+  onPick,
+}: {
+  starters: string[];
+  onPick: (q: string) => void;
+}) {
+  const t = useTranslations("knowledge.starters");
+  return (
+    <div className="border-b border-border bg-gradient-to-b from-primary-muted/30 to-transparent px-5 py-4">
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-primary">
+        <Icon name="sparkles" size={11} />
+        <span>{t("label")}</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {starters.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => onPick(q)}
+            className="group inline-flex items-start gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left text-[12px] text-text-muted hover:border-primary/40 hover:bg-primary-muted/40 hover:text-text transition duration-fast"
+          >
+            <Icon
+              name="message-square"
+              size={12}
+              className="mt-0.5 text-text-subtle group-hover:text-primary"
+            />
+            <span className="max-w-[280px] leading-snug">{q}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+        {t("hint")}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Documents view (idle)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1072,6 +1237,8 @@ function DocumentsView({
   onBulkDelete,
   tagFilter,
   onClearTagFilter,
+  starters,
+  onPickStarter,
 }: {
   docs: DocumentDto[];
   allDocsCount: number;
@@ -1085,6 +1252,8 @@ function DocumentsView({
   onBulkDelete: () => Promise<void>;
   tagFilter: string | null;
   onClearTagFilter: () => void;
+  starters: string[] | null;
+  onPickStarter: (q: string) => void;
 }) {
   const t = useTranslations("knowledge.docs");
   if (allDocsCount === 0) {
@@ -1112,6 +1281,9 @@ function DocumentsView({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {starters && starters.length > 0 && (
+        <StarterChips starters={starters} onPick={onPickStarter} />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
@@ -1334,122 +1506,259 @@ function UploadProgressStrip({
  * the referenced source card. The full sources list sits below the answer
  * (Perplexity's "sources strip" + Cohere Coral's footnote pattern).
  */
+type AskTurnView = {
+  id: string;
+  question: string;
+  sources: AskSource[];
+  answer: string;
+  streaming: boolean;
+  error: string | null;
+  usedModel: string | null;
+  latencyMs: number | null;
+};
+
 function AskAnswerView({
-  question,
-  result,
-  asking,
+  turns,
+  onFollowUp,
+  onClear,
   onChunkClick,
 }: {
-  question: string;
-  result: AskResponse | null;
-  asking: boolean;
+  turns: AskTurnView[];
+  onFollowUp: (q: string) => void | Promise<void>;
+  onClear: () => void;
   onChunkClick: (docId: string) => void;
 }) {
   const t = useTranslations("knowledge.ask");
-  if (asking || !result) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
-          <Icon name="sparkles" size={13} className="text-primary" />
-          <div className={SECTION_LABEL}>{t("askingLabel")}</div>
-          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
-            &ldquo;{question}&rdquo;
-          </span>
-        </div>
-        <div className="flex flex-1 items-center justify-center p-8">
-          <LoadingState
-            title={t("thinkingTitle")}
-            description={t("thinkingDesc")}
-          />
-        </div>
-      </div>
-    );
-  }
+  const [followUpDraft, setFollowUpDraft] = useState("");
+  const tail = turns[turns.length - 1];
+  const anyStreaming = turns.some((tt) => tt.streaming);
 
-  // Inline cite renderer: split on [N] markers; numbers that match a
-  // source row become buttons, others stay as text.
-  const parts = renderAnswerWithCites(result.answer, result.sources, onChunkClick);
+  // Auto-scroll the conversation pane so the latest delta stays in view
+  // while streaming. Skipped when the user manually scrolls up (sentinel
+  // is the last turn — IntersectionObserver would over-engineer this).
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [turns]);
+
+  function submitFollowUp() {
+    const q = followUpDraft.trim();
+    if (!q || anyStreaming) return;
+    setFollowUpDraft("");
+    void onFollowUp(q);
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* Header — single bar carries conversation length + clear control */}
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <Icon name="sparkles" size={13} className="text-primary" />
           <div className={SECTION_LABEL}>{t("answerLabel")}</div>
-          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
-            &ldquo;{question}&rdquo;
+          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text">
+            {t("turnsLabel", { count: turns.length })}
           </span>
         </div>
-        <div className="flex items-center gap-2 font-mono text-[10px] text-text-subtle">
-          {result.used_model && <span>{result.used_model}</span>}
-          <span>·</span>
-          <span>{result.latency_ms.toFixed(0)} ms</span>
+        <div className="flex items-center gap-3 font-mono text-[10px] text-text-subtle">
+          {tail?.usedModel && <span>{tail.usedModel}</span>}
+          {tail?.latencyMs !== null && tail?.latencyMs !== undefined && (
+            <>
+              <span>·</span>
+              <span>{tail.latencyMs.toFixed(0)} ms</span>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={onClear}
+            className="ml-2 inline-flex h-6 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[10px] uppercase tracking-wider text-text-muted hover:border-border-strong hover:text-text"
+            disabled={anyStreaming}
+          >
+            <Icon name="refresh" size={10} />
+            {t("newConversation")}
+          </button>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        {/* Answer */}
-        <div className="rounded-xl border border-border bg-surface-2 p-5">
-          <p className="whitespace-pre-wrap text-[14px] leading-[1.7] text-text">
-            {parts}
-          </p>
-        </div>
-
-        {/* Sources list */}
-        {result.sources.length > 0 && (
-          <div className="mt-5">
-            <div className="mb-2 flex items-center justify-between">
-              <span className={SECTION_LABEL}>{t("sourcesLabel")}</span>
-              <span className="font-mono text-[10px] text-text-subtle">
-                {t("sourcesCount", { count: result.sources.length })}
-              </span>
-            </div>
-            <ul className="space-y-2">
-              {result.sources.map((s) => (
-                <li
-                  key={s.chunk_id}
-                  id={`src-${s.n}`}
-                  className="rounded-xl border border-border bg-surface-2 p-3"
-                >
-                  <button
-                    type="button"
-                    onClick={() => onChunkClick(s.doc_id)}
-                    className="flex w-full items-start justify-between gap-3 text-left"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
-                        [{s.n}]
-                      </span>
-                      <span className="font-mono text-[11px] text-text-muted">
-                        {s.citation}
-                      </span>
-                    </div>
-                    <span className="font-mono text-[10px] text-text-subtle">
-                      {s.score.toFixed(4)}
-                    </span>
-                  </button>
-                  {s.section_path && (
-                    <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
-                      {s.section_path}
-                    </div>
-                  )}
-                  <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[12px] leading-relaxed text-text">
-                    {s.text}
+      {/* Scrolling conversation log */}
+      <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <ul className="space-y-6">
+          {turns.map((turn, idx) => (
+            <li key={turn.id} className="space-y-3">
+              {/* User question bubble — kept compact, right-aligned-feeling
+                  but still left-anchored for legibility */}
+              <div className="flex items-start gap-2.5">
+                <div className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary-muted text-primary">
+                  <Icon name="user" size={11} />
+                </div>
+                <div className="flex-1">
+                  <div className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+                    {t("youAskedLabel", { n: idx + 1 })}
+                  </div>
+                  <p className="mt-1 text-[14px] leading-snug text-text">
+                    {turn.question}
                   </p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+                </div>
+              </div>
+
+              {/* Answer bubble */}
+              <div className="flex items-start gap-2.5">
+                <div className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-primary">
+                  <Icon name="sparkles" size={11} />
+                </div>
+                <div className="flex-1 space-y-3">
+                  <AskTurnAnswer turn={turn} onChunkClick={onChunkClick} />
+                  {turn.sources.length > 0 && (
+                    <AskTurnSources turn={turn} onChunkClick={onChunkClick} />
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
+
+      {/* Follow-up composer — pinned bottom; mirrors a chat input but
+          only fires the Ask path. Disabled while a turn is mid-stream
+          to keep server-side ordering simple. */}
+      <div className="border-t border-border bg-surface px-5 py-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={followUpDraft}
+            onChange={(e) => setFollowUpDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitFollowUp();
+              }
+            }}
+            placeholder={t("followUpPlaceholder")}
+            disabled={anyStreaming}
+            className="h-9 flex-1 rounded-xl border border-border bg-surface-2 px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={submitFollowUp}
+            disabled={anyStreaming || !followUpDraft.trim()}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-40"
+          >
+            <Icon name="sparkles" size={12} />
+            {t("followUpSubmit")}
+          </button>
+        </div>
+        <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+          {t("followUpHint")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// One turn's answer body. Splits on `[N]` markers; while ``streaming``,
+// shows a blinking caret so the user sees progress before sources lock in.
+function AskTurnAnswer({
+  turn,
+  onChunkClick,
+}: {
+  turn: AskTurnView;
+  onChunkClick: (docId: string) => void;
+}) {
+  const t = useTranslations("knowledge.ask");
+  if (turn.error) {
+    return (
+      <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-[13px] text-danger">
+        {turn.error}
+      </div>
+    );
+  }
+  if (turn.streaming && !turn.answer) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-4 py-3 text-[13px] text-text-muted">
+        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+        <span>{t("thinkingTitle")}</span>
+      </div>
+    );
+  }
+  const parts = renderAnswerWithCites(
+    turn.answer,
+    turn.sources,
+    onChunkClick,
+    turn.id,
+  );
+  return (
+    <div className="rounded-xl border border-border bg-surface-2 p-4">
+      <p className="whitespace-pre-wrap text-[14px] leading-[1.7] text-text">
+        {parts}
+        {turn.streaming && (
+          <span className="ml-0.5 inline-block h-[14px] w-[2px] animate-pulse bg-primary align-middle" />
+        )}
+      </p>
+    </div>
+  );
+}
+
+function AskTurnSources({
+  turn,
+  onChunkClick,
+}: {
+  turn: AskTurnView;
+  onChunkClick: (docId: string) => void;
+}) {
+  const t = useTranslations("knowledge.ask");
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <span className={SECTION_LABEL}>{t("sourcesLabel")}</span>
+        <span className="font-mono text-[10px] text-text-subtle">
+          {t("sourcesCount", { count: turn.sources.length })}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {turn.sources.map((s) => (
+          <li
+            key={s.chunk_id}
+            id={`src-${turn.id}-${s.n}`}
+            className="rounded-xl border border-border bg-surface p-3"
+          >
+            <button
+              type="button"
+              onClick={() => onChunkClick(s.doc_id)}
+              className="flex w-full items-start justify-between gap-3 text-left"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
+                  [{s.n}]
+                </span>
+                <span className="font-mono text-[11px] text-text-muted">
+                  {s.citation}
+                </span>
+              </div>
+              <span className="font-mono text-[10px] text-text-subtle">
+                {s.score.toFixed(4)}
+              </span>
+            </button>
+            {s.section_path && (
+              <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+                {s.section_path}
+              </div>
+            )}
+            <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[12px] leading-relaxed text-text">
+              {s.text}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
 function renderAnswerWithCites(
   answer: string,
-  sources: AskResponse["sources"],
+  sources: AskSource[],
   onClickSource: (docId: string) => void,
+  turnId?: string,
 ): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   const re = /\[(\d+)\]/g;
@@ -1469,7 +1778,8 @@ function renderAnswerWithCites(
           key={`c${key++}`}
           type="button"
           onClick={() => {
-            const el = document.getElementById(`src-${n}`);
+            const id = turnId ? `src-${turnId}-${n}` : `src-${n}`;
+            const el = document.getElementById(id);
             el?.scrollIntoView({ behavior: "smooth", block: "center" });
             onClickSource(src.doc_id);
           }}
@@ -1535,50 +1845,255 @@ function SearchResultsView({
         )}
         {!searching &&
           results?.map((r, i) => (
-            <button
+            <SearchResultCard
               key={r.chunk_id}
-              type="button"
+              rank={i + 1}
+              query={query}
+              result={r}
               onClick={() => onChunkClick(r.document_id)}
-              className="block w-full rounded-xl border border-border bg-surface-2 p-4 text-left transition duration-fast hover:border-border-strong hover:shadow-soft-sm"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
-                    #{i + 1}
-                  </span>
-                  <span className="font-mono text-[11px] text-text-muted">
-                    {r.citation}
-                  </span>
-                  {r.bm25_rank != null && (
-                    <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      BM25 #{r.bm25_rank}
-                    </span>
-                  )}
-                  {r.vector_rank != null && (
-                    <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      vec #{r.vector_rank}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-col items-end font-mono text-[10px] text-text-subtle">
-                  <span>score</span>
-                  <span className="text-[12px] text-text">
-                    {r.score.toFixed(4)}
-                  </span>
-                </div>
-              </div>
-              {r.section_path && (
-                <div className="mt-2 font-mono text-[10px] text-text-subtle">
-                  {r.section_path}
-                </div>
-              )}
-              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-relaxed text-text">
-                {r.text}
-              </p>
-            </button>
+            />
           ))}
       </div>
     </div>
+  );
+}
+
+// One search-result card with an inline "Why?" expander explaining how
+// this chunk got its rank: BM25 vs vector contribution + which query
+// tokens matched the chunk text. Mirrors Perplexity's "show steps" and
+// Glean's relevance breakdown — surfacing the retrieval math turns hybrid
+// search from a black box into a debuggable pipeline.
+function SearchResultCard({
+  rank,
+  query,
+  result,
+  onClick,
+}: {
+  rank: number;
+  query: string;
+  result: ScoredChunkDto;
+  onClick: () => void;
+}) {
+  const t = useTranslations("knowledge.search");
+  const [open, setOpen] = useState(false);
+
+  const { tokens, matched } = useMemo(
+    () => analyseQueryMatch(query, result.text),
+    [query, result.text],
+  );
+  const hasBoth = result.bm25_rank != null && result.vector_rank != null;
+
+  return (
+    <div className="rounded-xl border border-border bg-surface-2 p-4 transition duration-fast hover:border-border-strong hover:shadow-soft-sm">
+      <button
+        type="button"
+        onClick={onClick}
+        className="block w-full text-left"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
+              #{rank}
+            </span>
+            <span className="font-mono text-[11px] text-text-muted">
+              {result.citation}
+            </span>
+            {result.bm25_rank != null && (
+              <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
+                BM25 #{result.bm25_rank}
+              </span>
+            )}
+            {result.vector_rank != null && (
+              <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
+                vec #{result.vector_rank}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col items-end font-mono text-[10px] text-text-subtle">
+            <span>{t("scoreLabel")}</span>
+            <span className="text-[12px] text-text">
+              {result.score.toFixed(4)}
+            </span>
+          </div>
+        </div>
+        {result.section_path && (
+          <div className="mt-2 font-mono text-[10px] text-text-subtle">
+            {result.section_path}
+          </div>
+        )}
+        <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-relaxed text-text">
+          {highlightTokens(result.text, matched)}
+        </p>
+      </button>
+
+      <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
+          className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle hover:text-text"
+          aria-expanded={open}
+        >
+          <Icon
+            name={open ? "chevron-up" : "chevron-down"}
+            size={11}
+          />
+          {t("explainLabel")}
+        </button>
+        {tokens.length > 0 && (
+          <span className="font-mono text-[10px] text-text-subtle">
+            {t("matchedTokens", { matched: matched.length, total: tokens.length })}
+          </span>
+        )}
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-3 rounded-lg border border-border bg-surface px-3 py-3 text-[12px]">
+          {/* BM25 vs Vector contribution bar — visualises which lens
+              this chunk leaned on. Equal-weight retrieval averages the
+              two ranks, so the bar is a heuristic readout, not the exact
+              fused score formula. Still useful to spot "lexical-heavy"
+              vs "semantic-heavy" hits at a glance. */}
+          <ContributionBar
+            bm25Rank={result.bm25_rank}
+            vectorRank={result.vector_rank}
+          />
+          {tokens.length > 0 && (
+            <div>
+              <div className={SECTION_LABEL}>{t("matchedHeader")}</div>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {tokens.map((tok) => {
+                  const hit = matched.includes(tok);
+                  return (
+                    <span
+                      key={tok}
+                      className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] ${
+                        hit
+                          ? "bg-success-soft text-success border border-success/30"
+                          : "border border-border bg-surface-2 text-text-subtle"
+                      }`}
+                    >
+                      {tok}
+                      {hit ? " ✓" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div className="font-mono text-[10px] leading-relaxed text-text-subtle">
+            {hasBoth
+              ? t("explainBoth", {
+                  bm25: result.bm25_rank ?? 0,
+                  vec: result.vector_rank ?? 0,
+                })
+              : result.bm25_rank != null
+                ? t("explainBm25Only", { bm25: result.bm25_rank })
+                : t("explainVecOnly", { vec: result.vector_rank ?? 0 })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContributionBar({
+  bm25Rank,
+  vectorRank,
+}: {
+  bm25Rank: number | null;
+  vectorRank: number | null;
+}) {
+  const t = useTranslations("knowledge.search");
+  // Lower rank = better. We invert into pseudo-strength in [0, 1] using
+  // 1/rank, then normalise the pair to sum to 1 so the bar reads as a
+  // share of contribution.
+  const bm = bm25Rank != null ? 1 / bm25Rank : 0;
+  const vc = vectorRank != null ? 1 / vectorRank : 0;
+  const total = bm + vc || 1;
+  const bmPct = Math.round((bm / total) * 100);
+  const vcPct = 100 - bmPct;
+  return (
+    <div>
+      <div className={SECTION_LABEL}>{t("contributionHeader")}</div>
+      <div className="mt-1.5 flex h-2 w-full overflow-hidden rounded-full bg-surface-2">
+        {bm > 0 && (
+          <div
+            className="h-full bg-primary"
+            style={{ width: `${bmPct}%` }}
+            title={t("bm25Pct", { pct: bmPct })}
+          />
+        )}
+        {vc > 0 && (
+          <div
+            className="h-full bg-accent"
+            style={{ width: `${vcPct}%` }}
+            title={t("vectorPct", { pct: vcPct })}
+          />
+        )}
+      </div>
+      <div className="mt-1 flex justify-between font-mono text-[10px] text-text-subtle">
+        <span>
+          BM25 {bmPct}%
+        </span>
+        <span>
+          {t("vectorPctLabel")} {vcPct}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Cheap query → token analysis. Splits on non-CJK / non-word boundaries,
+// drops stop-shorts (1-char ASCII), case-folds, then checks each token
+// against the chunk text. The "matched" set drives both the chip row
+// and the in-text highlights. This is a heuristic — the real BM25
+// scorer uses tokeniser + IDF — but it lets users *see* what their query
+// matched without a round-trip.
+function analyseQueryMatch(
+  query: string,
+  text: string,
+): { tokens: string[]; matched: string[] } {
+  const raw = query
+    .toLowerCase()
+    .split(/[\s,.;:!?'"()\[\]{}<>=*&|/\\]+/)
+    .filter((w) => w.length > 1 || /[\u4e00-\u9fff]/.test(w));
+  const seen = new Set<string>();
+  const tokens: string[] = [];
+  for (const w of raw) {
+    if (!seen.has(w)) {
+      seen.add(w);
+      tokens.push(w);
+    }
+  }
+  const lower = text.toLowerCase();
+  const matched = tokens.filter((tok) => lower.includes(tok));
+  return { tokens, matched };
+}
+
+function highlightTokens(text: string, matched: string[]): React.ReactNode {
+  if (matched.length === 0) return text;
+  // Build a single regex of all matched tokens, escaped for safety.
+  const re = new RegExp(
+    `(${matched
+      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|")})`,
+    "gi",
+  );
+  const parts = text.split(re);
+  return parts.map((part, i) =>
+    matched.some((m) => m.toLowerCase() === part.toLowerCase()) ? (
+      <mark
+        key={i}
+        className="rounded-sm bg-warning-soft px-0.5 text-text"
+      >
+        {part}
+      </mark>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
   );
 }
 

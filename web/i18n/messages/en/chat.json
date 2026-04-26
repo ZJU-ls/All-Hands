@@ -123,7 +123,13 @@
     },
     "planProgress": {
       "runningCount": "· {n} running",
-      "failedCount": "· {n} failed"
+      "failedCount": "· {n} failed",
+      "fallbackTitle": "Plan"
+    },
+    "progressPanel": {
+      "subagentTab": "Subagents",
+      "runningSuffix": "· {n} running",
+      "failedSuffix": "· {n} failed"
     }
   }
 }

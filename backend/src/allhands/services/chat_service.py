@@ -657,6 +657,11 @@ class ChatService:
         spawn_subagent_service = SpawnSubagentService(
             employee_repo=self._employees,
             runner_factory=runner_factory,
+            # Inherit the parent's model_ref so preset subagents talk to the
+            # same gateway (fixes "tool_call_dropped" on deployments without an
+            # OpenAI provider — the previous hardcoded fallback was broken on
+            # qwen / glm / kimi gateways).
+            default_model_ref=effective_model_ref or employee.model_ref,
         )
         runner = AgentRunner(
             employee=employee,
@@ -1345,6 +1350,7 @@ class ChatService:
             nested_spawn = SpawnSubagentService(
                 employee_repo=employee_repo,
                 runner_factory=nested_factory,
+                default_model_ref=child.model_ref,
             )
             child_runtime = bootstrap_employee_runtime(child, skill_registry, tool_registry)
             return AgentRunner(

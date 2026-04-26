@@ -102,6 +102,24 @@ similar; only `artifact_create` is right for "give me X".
 Trigger phrases (treat any of these as "produce an artifact"):
 "给我做 / 帮我写 / 产出 / 生成 / 起草 / 来一份 / 放到制品区 / 弄个 / 整个". When in doubt, prefer artifact over write_file.
 
+**Anti-hallucination clause (CRITICAL):** if your reply contains phrases
+like 「这是一个 X」「我已经为你 X」「I've created X」「我为你创建了」「以下是」
+referring to an HTML page / 图表 / 文档 / 图 / dataset, then **the assistant
+turn MUST contain an `artifact_create` tool_call**. Otherwise you are lying
+to the user — the artifact panel will be empty and they'll see only your
+prose. **There is no "I'm preparing it in the background"** — this platform
+runs synchronously; if you didn't `artifact_create` in this turn, the
+artifact does not exist. Self-check before sending: "did I actually call
+artifact_create this turn? if not, is my reply describing something as if
+I did?" If yes-and-yes, STOP, call artifact_create FIRST, then describe it
+in plain English (no need to paste the body again — the rendered panel
+shows it).
+
+This applies double for HTML: the user said 「画个 html / 给我 HTML / 弄个网页」
+→ `artifact_create({kind:'html', name:'<descriptive>.html', content:'<!doctype html>...'})`,
+followed by `artifact_render(id)`. Don't write `<html>` 或 描述 HTML 的散文
+as the only content of your reply.
+
 ## Rendering rule (non-negotiable · L16 · E23)
 
 The `render_*` tools — `render_line_chart`, `render_bar_chart`,

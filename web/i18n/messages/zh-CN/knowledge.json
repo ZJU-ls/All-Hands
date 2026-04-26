@@ -120,7 +120,21 @@
       "noResults": "没有命中 · 试试更具体的关键词,或把 BM25 / vector 权重调一下",
       "bm25Rank": "BM25 #{rank}",
       "vecRank": "vec #{rank}",
-      "scoreLabel": "score"
+      "scoreLabel": "score",
+      "explainLabel": "为什么排在这",
+      "matchedTokens": "命中 {matched}/{total} 个词",
+      "matchedHeader": "查询里的词 · 是否命中",
+      "contributionHeader": "BM25 与向量召回的贡献",
+      "bm25Pct": "BM25 占 {pct}%",
+      "vectorPct": "向量占 {pct}%",
+      "vectorPctLabel": "向量",
+      "explainBoth": "关键词检索把它排到第 {bm25} · 向量检索排到第 {vec} · 融合后取较好侧",
+      "explainBm25Only": "只有关键词命中(第 {bm25}) · 向量没召回到这条",
+      "explainVecOnly": "只有向量命中(第 {vec}) · 关键词没匹上"
+    },
+    "starters": {
+      "label": "试试这些问题",
+      "hint": "AI 根据当前知识库的标题 / 章节自动生成 · 点一条即可问"
     },
     "ask": {
       "askingLabel": "提问",
@@ -128,7 +142,13 @@
       "thinkingTitle": "正在思考…",
       "thinkingDesc": "检索片段 → 拼上下文 → LLM 答复",
       "sourcesLabel": "来源",
-      "sourcesCount": "{count} 条"
+      "sourcesCount": "{count} 条",
+      "turnsLabel": "{count} 轮",
+      "youAskedLabel": "你的提问 #{n}",
+      "newConversation": "新对话",
+      "followUpPlaceholder": "继续追问 · 上一轮的引用编号会沿用…",
+      "followUpSubmit": "追问",
+      "followUpHint": "Enter 发送 · 答案沿用上一轮检索的同一份片段编号"
     },
     "delete": {
       "confirm": "确认删除 \"{title}\"?(软删,30 天可恢复)",
