@@ -120,7 +120,17 @@
       "noResults": "No hits — try a more specific query, or tweak the BM25 / vector weights",
       "bm25Rank": "BM25 #{rank}",
       "vecRank": "vec #{rank}",
-      "scoreLabel": "score"
+      "scoreLabel": "score",
+      "explainLabel": "Why this rank?",
+      "matchedTokens": "matched {matched}/{total}",
+      "matchedHeader": "Query terms · matched in chunk",
+      "contributionHeader": "BM25 vs vector contribution",
+      "bm25Pct": "BM25 {pct}%",
+      "vectorPct": "Vector {pct}%",
+      "vectorPctLabel": "Vector",
+      "explainBoth": "BM25 ranked it #{bm25} · vector ranked it #{vec} · hybrid fuses the better side",
+      "explainBm25Only": "Lexical hit only (#{bm25}) · vector retriever did not surface this chunk",
+      "explainVecOnly": "Semantic hit only (#{vec}) · keywords did not match"
     },
     "starters": {
       "label": "Try one of these",
