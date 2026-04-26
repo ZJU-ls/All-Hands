@@ -61,6 +61,7 @@ from allhands.execution.knowledge.ingest import IngestOrchestrator
 from allhands.execution.knowledge.parsers import detect_mime
 from allhands.execution.knowledge.retriever import HybridRetriever
 from allhands.execution.knowledge.vector import BlobVecStore, VectorStore
+from allhands.i18n import t
 from allhands.persistence.knowledge_repos import (
     SqlChunkRepo,
     SqlCollectionRepo,
@@ -301,7 +302,7 @@ class KnowledgeService:
                     label=f"OpenAI · {model}",
                     dim=dim,
                     available=openai_key,
-                    reason=None if openai_key else "去 /gateway 添加 OpenAI provider",
+                    reason=None if openai_key else t("knowledge.embedding.reason.add_openai"),
                     is_default=ref == default_ref,
                 )
             )
@@ -317,10 +318,10 @@ class KnowledgeService:
             options.append(
                 EmbeddingModelOption(
                     ref=ref,
-                    label=f"阿里云百炼 · {model}",
+                    label=t("knowledge.embedding.label.aliyun", model=model),
                     dim=dim,
                     available=aliyun_key,
-                    reason=None if aliyun_key else "去 /gateway 添加 阿里云 百炼 provider",
+                    reason=None if aliyun_key else t("knowledge.embedding.reason.add_aliyun"),
                     is_default=ref == default_ref,
                 )
             )
@@ -620,6 +621,48 @@ class KnowledgeService:
             await self._ingest.ingest_document(document_id, file_path_abs=abs_path)
         return await self.get_document(document_id)
 
+    async def update_document_tags(
+        self,
+        document_id: str,
+        *,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+        replace: list[str] | None = None,
+    ) -> Document:
+        """Mutate a document's tag set.
+
+        Three exclusive shapes:
+        - ``add``: union with current tags (deduped, order preserved).
+        - ``remove``: drop any matching tags.
+        - ``replace``: set tags wholesale (overrides current list).
+
+        Returns the post-update document. Bumps ``updated_at`` so KB
+        derived caches (starter-questions, sidebar tag chips) refresh
+        on next read.
+        """
+        doc = await self.get_document(document_id)
+        if replace is not None:
+            new_tags = list(dict.fromkeys(t.strip() for t in replace if t.strip()))
+        else:
+            existing = list(doc.tags)
+            if remove:
+                drop = {t.strip() for t in remove}
+                existing = [t for t in existing if t not in drop]
+            if add:
+                seen = set(existing)
+                for t in add:
+                    cleaned = t.strip()
+                    if cleaned and cleaned not in seen:
+                        existing.append(cleaned)
+                        seen.add(cleaned)
+            new_tags = existing
+
+        updated = doc.model_copy(update={"tags": new_tags, "updated_at": datetime.now(UTC)})
+        async with self._session_maker() as s:
+            await SqlDocumentRepo(s).upsert(updated)
+            await s.commit()
+        return updated
+
     async def soft_delete_document(self, document_id: str) -> None:
         async with self._session_maker() as s:
             await SqlDocumentRepo(s).soft_delete(document_id)
@@ -671,7 +714,7 @@ class KnowledgeService:
         hits = await self._retriever.search(kb_id, question, cfg)
         if not hits:
             return {
-                "answer": "知识库里没有跟这个问题相关的内容。换个说法,或者补一份资料试试。",
+                "answer": t("knowledge.ask.no_hits"),
                 "sources": [],
                 "used_model": None,
                 "latency_ms": round((time.monotonic() - t0) * 1000, 1),
@@ -684,9 +727,7 @@ class KnowledgeService:
                 system, user, model_ref=model_ref, history=history
             )
         except _NoChatProvider:
-            raise KBError(
-                "还没有可用的对话模型 · 去 /gateway 添加一个 OpenAI / 阿里云 / Anthropic provider"
-            ) from None
+            raise KBError(t("knowledge.ask.no_chat_provider")) from None
 
         return {
             "answer": answer_text,
@@ -736,7 +777,7 @@ class KnowledgeService:
         if not hits:
             yield {
                 "event": "delta",
-                "text": "知识库里没有跟这个问题相关的内容。换个说法,或者补一份资料试试。",
+                "text": t("knowledge.ask.no_hits"),
             }
             yield {
                 "event": "done",
@@ -759,15 +800,12 @@ class KnowledgeService:
         except _NoChatProvider:
             yield {
                 "event": "error",
-                "message": (
-                    "还没有可用的对话模型 · 去 /gateway 添加一个 "
-                    "OpenAI / 阿里云 / Anthropic provider"
-                ),
+                "message": t("knowledge.ask.no_chat_provider"),
             }
             return
         except Exception as exc:
             _logger.exception("kb.ask_stream LLM error")
-            yield {"event": "error", "message": f"模型调用失败:{exc}"}
+            yield {"event": "error", "message": t("knowledge.ask.llm_failed", detail=str(exc))}
             return
 
         yield {

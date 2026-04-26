@@ -375,6 +375,21 @@ export async function uploadDocument(
   );
 }
 
+export async function patchDocumentTags(
+  kbId: string,
+  docId: string,
+  patch: { add?: string[]; remove?: string[]; replace?: string[] },
+): Promise<DocumentDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/documents/${docId}/tags`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
+    "patchDocumentTags",
+  );
+}
+
 export async function reindexDocument(
   kbId: string,
   docId: string,

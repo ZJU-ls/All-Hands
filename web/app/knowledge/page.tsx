@@ -52,6 +52,7 @@ import {
   getKBStats,
   ingestUrl,
   listDocumentChunks,
+  patchDocumentTags,
   reindexDocument,
   createKB,
   deleteDocument,
@@ -504,6 +505,32 @@ export default function KnowledgePage() {
     }
   }
 
+  // Bulk tag editor state — popover open over the selection bar.
+  // Patches each selected doc independently; per-doc errors are tolerated
+  // (failures show in the page error banner rather than aborting mid-loop).
+  const [bulkTagOpen, setBulkTagOpen] = useState(false);
+  async function applyBulkTags(addList: string[], removeList: string[]) {
+    if (!activeKb) return;
+    setBulkTagOpen(false);
+    if (addList.length === 0 && removeList.length === 0) return;
+    const failures: string[] = [];
+    for (const id of selectedDocs) {
+      try {
+        await patchDocumentTags(activeKb.id, id, {
+          add: addList.length ? addList : undefined,
+          remove: removeList.length ? removeList : undefined,
+        });
+      } catch (e) {
+        failures.push(`${id.slice(0, 8)}: ${e}`);
+      }
+    }
+    if (failures.length > 0) {
+      setError(`Bulk tag · ${failures.length} failed:\n${failures.join("\n")}`);
+    }
+    clearSelection();
+    await refreshDocs(activeKb.id);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────
@@ -796,6 +823,7 @@ export default function KnowledgePage() {
                 onToggleSelect={toggleSelect}
                 onClearSelection={clearSelection}
                 onBulkDelete={bulkDelete}
+                onBulkTagsClick={() => setBulkTagOpen(true)}
                 tagFilter={tagFilter}
                 onClearTagFilter={() => setTagFilter(null)}
                 starters={mode === "ask" ? startersForActive : null}
@@ -812,6 +840,18 @@ export default function KnowledgePage() {
             kbId={activeKb.id}
             onClose={() => setOpenDoc(null)}
             onDelete={handleDeleteDoc}
+          />
+        )}
+
+        {/* ─ Modal: Bulk-tag selected docs */}
+        {bulkTagOpen && activeKb && (
+          <BulkTagModal
+            knownTags={Array.from(
+              new Set((docs ?? []).flatMap((d) => d.tags)),
+            ).sort()}
+            selectionCount={selectedDocs.size}
+            onClose={() => setBulkTagOpen(false)}
+            onApply={applyBulkTags}
           />
         )}
 
@@ -1235,6 +1275,7 @@ function DocumentsView({
   onToggleSelect,
   onClearSelection,
   onBulkDelete,
+  onBulkTagsClick,
   tagFilter,
   onClearTagFilter,
   starters,
@@ -1250,6 +1291,7 @@ function DocumentsView({
   onToggleSelect: (id: string) => void;
   onClearSelection: () => void;
   onBulkDelete: () => Promise<void>;
+  onBulkTagsClick: () => void;
   tagFilter: string | null;
   onClearTagFilter: () => void;
   starters: string[] | null;
@@ -1312,6 +1354,14 @@ function DocumentsView({
               className="inline-flex h-7 items-center rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted hover:text-text"
             >
               {t("cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={onBulkTagsClick}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted hover:border-border-strong hover:text-text"
+            >
+              <Icon name="tag" size={11} />
+              {t("bulkTags")}
             </button>
             <button
               type="button"
@@ -2135,6 +2185,130 @@ function ModalShell({
         )}
       </div>
     </div>
+  );
+}
+
+// Bulk tag editor — reused for "tag N selected docs" workflow.
+// Two columns: existing tags (toggle to add/remove) and a freeform input
+// (comma-separated new tags to apply). The "+ / −" pair next to each
+// known tag tells us per-tag whether the user wants to add it, remove
+// it, or leave it alone — three-state per chip rather than a single
+// click. Apply diffs both sets to the patchDocumentTags shape.
+function BulkTagModal({
+  knownTags,
+  selectionCount,
+  onClose,
+  onApply,
+}: {
+  knownTags: string[];
+  selectionCount: number;
+  onClose: () => void;
+  onApply: (add: string[], remove: string[]) => void | Promise<void>;
+}) {
+  const t = useTranslations("knowledge.bulkTags");
+  const [intents, setIntents] = useState<Record<string, "add" | "remove" | null>>(
+    {},
+  );
+  const [newTagsRaw, setNewTagsRaw] = useState("");
+
+  const cycleTag = (tag: string) => {
+    setIntents((prev) => {
+      const next = { ...prev };
+      const cur = next[tag] ?? null;
+      next[tag] = cur === null ? "add" : cur === "add" ? "remove" : null;
+      return next;
+    });
+  };
+
+  const addList = [
+    ...Object.entries(intents)
+      .filter(([, v]) => v === "add")
+      .map(([k]) => k),
+    ...newTagsRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  ];
+  const removeList = Object.entries(intents)
+    .filter(([, v]) => v === "remove")
+    .map(([k]) => k);
+
+  return (
+    <ModalShell
+      title={t("title", { count: selectionCount })}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:text-text"
+          >
+            {t("cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void onApply(addList, removeList)}
+            disabled={addList.length === 0 && removeList.length === 0}
+            className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-40"
+          >
+            <Icon name="check" size={11} />
+            {t("apply", {
+              add: addList.length,
+              remove: removeList.length,
+            })}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4 text-[12px]">
+        <p className="text-text-muted leading-relaxed">{t("intro")}</p>
+
+        {knownTags.length > 0 && (
+          <div>
+            <div className={SECTION_LABEL}>{t("knownHeader")}</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {knownTags.map((tag) => {
+                const intent = intents[tag] ?? null;
+                const cls =
+                  intent === "add"
+                    ? "border-success/40 bg-success-soft text-success"
+                    : intent === "remove"
+                      ? "border-danger/40 bg-danger-soft text-danger"
+                      : "border-border bg-surface-2 text-text-muted hover:text-text";
+                const sym = intent === "add" ? "+" : intent === "remove" ? "−" : "·";
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => cycleTag(tag)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[11px] transition duration-fast ${cls}`}
+                    title={t("cycleHint")}
+                  >
+                    <span className="font-bold">{sym}</span>
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-1 font-mono text-[10px] text-text-subtle">
+              {t("legend")}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div className={SECTION_LABEL}>{t("newHeader")}</div>
+          <input
+            type="text"
+            value={newTagsRaw}
+            onChange={(e) => setNewTagsRaw(e.target.value)}
+            placeholder={t("newPlaceholder")}
+            className="mt-1.5 h-9 w-full rounded-lg border border-border bg-surface-2 px-3 text-[12px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 
