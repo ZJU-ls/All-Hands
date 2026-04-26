@@ -186,6 +186,48 @@
           "running": "运行中"
         }
       },
+      "employeeDetail": {
+        "eyebrow": "员工详情",
+        "breadcrumb": "员工",
+        "title": "员工详情",
+        "subtitle": "员工 ID {id} 的运行画像 · 所有指标已自动 scope 到该员工",
+        "viewConversations": "看历史会话",
+        "scopedToEmployee": "仅本员工",
+        "modelsUsedTitle": "使用的模型",
+        "modelsUsedEmpty": "本员工本时段没有使用任何已记录模型",
+        "toolsUsedTitle": "调用的工具",
+        "toolsUsedEmpty": "本员工本时段没有调用工具",
+        "model": "模型",
+        "inv": "次",
+        "recentRuns": "最近 run · {n}",
+        "noRuns": "本时段没有 run 记录",
+        "kpi": {
+          "runs": "近 50 run",
+          "failureRate": "失败率",
+          "latencyP50": "延迟 P50",
+          "latencyP95": "延迟 P95",
+          "tokens": "Tokens 总消耗",
+          "cost": "成本估算"
+        }
+      },
+      "modelDetail": {
+        "eyebrow": "模型详情",
+        "breadcrumb": "模型",
+        "subtitle": "model_ref {ref} 的使用画像 · 所有指标已自动 scope 到该模型",
+        "scopedToModel": "仅本模型",
+        "topEmployeesTitle": "使用本模型的员工",
+        "topEmployeesEmpty": "本时段没有员工调用此模型",
+        "kpi": {
+          "runs": "近 50 run",
+          "failureRate": "失败率",
+          "latencyP50": "延迟 P50",
+          "tokens": "Tokens 总消耗",
+          "cost": "成本估算",
+          "calls": "调用次数"
+        },
+        "pricing": "USD per 1M tokens",
+        "pricingMissing": "未在价格表内 · 成本按 0 计"
+      },
       "metricDrawer": {
         "close": "关闭",
         "loading": "加载曲线中…",

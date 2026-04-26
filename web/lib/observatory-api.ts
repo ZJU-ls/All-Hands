@@ -78,10 +78,12 @@ export type TraceSummaryDto = {
 };
 
 export async function fetchObservatorySummary(
-  hours = 24,
+  params: { hours?: number; employee_id?: string; model_ref?: string } = {},
 ): Promise<ObservatorySummaryDto> {
   const q = new URLSearchParams();
-  q.set("hours", String(hours));
+  q.set("hours", String(params.hours ?? 24));
+  if (params.employee_id) q.set("employee_id", params.employee_id);
+  if (params.model_ref) q.set("model_ref", params.model_ref);
   const res = await fetch(
     `${BASE}/api/observatory/summary?${q.toString()}`,
     { cache: "no-store" },
@@ -124,12 +126,16 @@ export async function fetchMetricSeries(params: {
   since?: string;
   until?: string;
   bucket?: "5m" | "1h";
+  employee_id?: string;
+  model_ref?: string;
 }): Promise<TimeSeriesDto> {
   const q = new URLSearchParams();
   q.set("metric", params.metric);
   if (params.since) q.set("since", params.since);
   if (params.until) q.set("until", params.until);
   if (params.bucket) q.set("bucket", params.bucket);
+  if (params.employee_id) q.set("employee_id", params.employee_id);
+  if (params.model_ref) q.set("model_ref", params.model_ref);
   const res = await fetch(`${BASE}/api/observatory/series?${q.toString()}`, {
     cache: "no-store",
   });
@@ -267,16 +273,20 @@ export class RunNotFoundError extends Error {
 
 export async function fetchTraces(params?: {
   employee_id?: string;
+  model_ref?: string;
   status?: "ok" | "failed" | "running";
   since?: string;
   until?: string;
+  q?: string;
   limit?: number;
 }): Promise<{ traces: TraceSummaryDto[]; count: number }> {
   const q = new URLSearchParams();
   if (params?.employee_id) q.set("employee_id", params.employee_id);
+  if (params?.model_ref) q.set("model_ref", params.model_ref);
   if (params?.status) q.set("status", params.status);
   if (params?.since) q.set("since", params.since);
   if (params?.until) q.set("until", params.until);
+  if (params?.q) q.set("q", params.q);
   if (params?.limit) q.set("limit", String(params.limit));
   const qs = q.toString();
   const res = await fetch(

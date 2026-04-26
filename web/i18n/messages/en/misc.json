@@ -186,6 +186,48 @@
           "running": "running"
         }
       },
+      "employeeDetail": {
+        "eyebrow": "Employee detail",
+        "breadcrumb": "Employees",
+        "title": "Employee detail",
+        "subtitle": "Runtime profile of employee {id} · all metrics auto-scoped",
+        "viewConversations": "View conversations",
+        "scopedToEmployee": "scoped to this employee",
+        "modelsUsedTitle": "Models used",
+        "modelsUsedEmpty": "No model usage recorded in this window",
+        "toolsUsedTitle": "Tools invoked",
+        "toolsUsedEmpty": "No tool invocations in this window",
+        "model": "Model",
+        "inv": "calls",
+        "recentRuns": "Recent runs · {n}",
+        "noRuns": "No runs in this window",
+        "kpi": {
+          "runs": "Last 50 runs",
+          "failureRate": "Failure rate",
+          "latencyP50": "Latency p50",
+          "latencyP95": "Latency p95",
+          "tokens": "Total tokens",
+          "cost": "Est. cost"
+        }
+      },
+      "modelDetail": {
+        "eyebrow": "Model detail",
+        "breadcrumb": "Models",
+        "subtitle": "Usage profile of model_ref {ref} · all metrics auto-scoped",
+        "scopedToModel": "scoped to this model",
+        "topEmployeesTitle": "Employees using this model",
+        "topEmployeesEmpty": "No employee called this model in window",
+        "kpi": {
+          "runs": "Last 50 runs",
+          "failureRate": "Failure rate",
+          "latencyP50": "Latency p50",
+          "tokens": "Total tokens",
+          "cost": "Est. cost",
+          "calls": "Model calls"
+        },
+        "pricing": "USD per 1M tokens",
+        "pricingMissing": "Not in price table · cost shows as 0"
+      },
       "metricDrawer": {
         "close": "Close",
         "loading": "Loading series…",

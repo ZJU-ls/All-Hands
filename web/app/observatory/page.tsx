@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState } from "@/components/state";
@@ -254,6 +255,7 @@ function HealthPanel({
     value: string;
     tone?: "success" | "warning" | "danger" | "muted";
     onClick?: () => void;
+    href?: string;
   }>;
 }) {
   const t = useTranslations("pages.observatory.panels");
@@ -297,7 +299,19 @@ function HealthPanel({
             );
             return (
               <li key={`${row.label}-${idx}`}>
-                {row.onClick ? (
+                {row.href ? (
+                  <Link
+                    href={row.href}
+                    className="flex w-full items-center justify-between px-5 h-10 hover:bg-surface-2 transition-colors duration-fast"
+                  >
+                    {Inner}
+                    <Icon
+                      name="chevron-right"
+                      size={12}
+                      className="ml-2 text-text-subtle"
+                    />
+                  </Link>
+                ) : row.onClick ? (
                   <button
                     type="button"
                     onClick={row.onClick}
@@ -540,7 +554,7 @@ export default function ObservatoryPage() {
     try {
       const hours = range === "1h" ? 1 : range === "7d" ? 168 : 24;
       const [s, t, runs, fr, lat, tok] = await Promise.all([
-        fetchObservatorySummary(hours),
+        fetchObservatorySummary({ hours }),
         fetchTraces({ limit: 50 }),
         fetchMetricSeries({ metric: "runs", bucket: "1h" }),
         fetchMetricSeries({ metric: "failure_rate", bucket: "1h" }),
@@ -913,6 +927,7 @@ export default function ObservatoryPage() {
                               : t("panels.values.runs", {
                                   count: row.runs_count.toLocaleString(),
                                 }),
+                          href: `/observatory/employees/${encodeURIComponent(row.employee_id)}`,
                         }))
                       : []
                   }
@@ -958,9 +973,12 @@ export default function ObservatoryPage() {
                         {summary.by_model.map((row) => (
                           <tr
                             key={row.model_ref}
-                            className="border-b border-border last:border-b-0 hover:bg-surface-2/40"
+                            className="border-b border-border last:border-b-0 hover:bg-surface-2/40 cursor-pointer"
+                            onClick={() => {
+                              window.location.href = `/observatory/models/${encodeURIComponent(row.model_ref)}`;
+                            }}
                           >
-                            <td className="py-2 px-4 font-mono text-[11px] text-text">
+                            <td className="py-2 px-4 font-mono text-[11px] text-primary">
                               {row.model_ref}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
