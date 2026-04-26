@@ -26,7 +26,8 @@
  * components. Right slide-over for doc detail.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { computePopoverSide } from "@/lib/popover-placement";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
@@ -667,48 +668,12 @@ export default function KnowledgePage() {
               </div>
             </div>
 
-            <Select
-              value={stateFilter}
-              onChange={setStateFilter}
-              options={makeStateFilters(t)}
-              className="min-w-[120px]"
-              triggerClassName="h-9 rounded-xl"
-              ariaLabel={t("toolbar.stateFilterAria")}
-            />
-
-            <button
-              type="button"
-              onClick={() => activeKb && setShowUrlIngest(true)}
+            <AddDocumentMenu
               disabled={!activeKb || uploading}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text disabled:opacity-40 disabled:cursor-not-allowed transition duration-fast"
-              title={t("toolbar.ingestUrlTitle")}
-            >
-              <Icon name="link" size={13} />
-              {t("toolbar.ingestUrl")}
-            </button>
-
-            <label
-              className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm transition duration-fast cursor-pointer ${
-                activeKb
-                  ? "bg-primary hover:bg-primary-hover"
-                  : "bg-primary opacity-40 cursor-not-allowed"
-              }`}
-            >
-              <Icon name="upload" size={13} />
-              {uploading ? t("toolbar.uploading") : t("toolbar.upload")}
-              <input
-                type="file"
-                multiple
-                disabled={!activeKb || uploading}
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files?.length) {
-                    void handleUploadFiles(e.target.files);
-                  }
-                  e.currentTarget.value = "";
-                }}
-              />
-            </label>
+              uploading={uploading}
+              onPickFiles={(files) => void handleUploadFiles(files)}
+              onPickUrl={() => activeKb && setShowUrlIngest(true)}
+            />
           </div>
         )}
 
@@ -828,6 +793,8 @@ export default function KnowledgePage() {
                 onClearTagFilter={() => setTagFilter(null)}
                 starters={mode === "ask" ? startersForActive : null}
                 onPickStarter={pickStarter}
+                stateFilter={stateFilter}
+                onChangeStateFilter={setStateFilter}
               />
             )}
           </main>
@@ -1216,6 +1183,135 @@ function OnboardingWizard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Add-document split button — replaces the legacy "Upload" + "抓 URL"
+// double-button. Primary click on the left "Upload" half opens a file
+// picker; chevron half opens a small menu with "Upload files" / "Ingest
+// URL" entries. One control instead of two halves the toolbar density
+// without removing functionality.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AddDocumentMenu({
+  disabled,
+  uploading,
+  onPickFiles,
+  onPickUrl,
+}: {
+  disabled: boolean;
+  uploading: boolean;
+  onPickFiles: (files: FileList) => void;
+  onPickUrl: () => void;
+}) {
+  const t = useTranslations("knowledge.toolbar");
+  const [open, setOpen] = useState(false);
+  const [side, setSide] = useState<"top" | "bottom">("bottom");
+  const ref = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Click-away closer — keeps the popover ephemeral. Mousedown vs click
+  // chosen so dragging from a primary click doesn't snap the menu shut.
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  // Flip menu side when too close to the bottom — the toolbar usually
+  // sits near the top so "bottom" is the common case, but we still need
+  // top-full as a fallback per § 3.9 popover contract.
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setSide(computePopoverSide(rect, 80, window.innerHeight, "bottom"));
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-flex">
+      <label
+        className={`inline-flex h-9 items-center gap-1.5 rounded-l-xl px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm transition duration-fast ${
+          disabled
+            ? "bg-primary opacity-40 cursor-not-allowed"
+            : "bg-primary hover:bg-primary-hover cursor-pointer"
+        }`}
+      >
+        <Icon name="upload" size={13} />
+        {uploading ? t("uploading") : t("upload")}
+        <input
+          type="file"
+          multiple
+          disabled={disabled}
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files?.length) onPickFiles(e.target.files);
+            e.currentTarget.value = "";
+          }}
+        />
+      </label>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex h-9 items-center justify-center rounded-r-xl border-l border-primary-fg/20 px-2 text-primary-fg shadow-soft-sm transition duration-fast ${
+          disabled
+            ? "bg-primary opacity-40 cursor-not-allowed"
+            : "bg-primary hover:bg-primary-hover"
+        }`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <Icon name="chevron-down" size={12} />
+      </button>
+      {open && (
+        <div
+          className={`absolute right-0 z-40 w-48 overflow-hidden rounded-xl border border-border bg-surface shadow-soft-lg ${
+            side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
+          }`}
+        >
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              setOpen(false);
+              onPickUrl();
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-text hover:bg-surface-2"
+          >
+            <Icon name="link" size={13} className="text-text-subtle" />
+            {t("ingestUrl")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Inline state filter for the Documents header — was a top-toolbar
+// Select before the layout pass; moved here because it's only meaningful
+// in the doc-grid context (search / Ask views already filter by relevance).
+function DocStateSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const t = useTranslations("knowledge");
+  return (
+    <Select
+      value={value}
+      onChange={onChange}
+      options={makeStateFilters(t)}
+      className="min-w-[112px]"
+      triggerClassName="h-7 rounded-lg text-[11px]"
+      ariaLabel={t("toolbar.stateFilterAria")}
+    />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Starter chips — LLM-suggested first questions, shown when Ask mode is
 // idle. Mirrors NotebookLM's "Suggested questions" strip and ChatGPT's
 // custom-GPT example prompts. Empty list (no docs / no provider) renders
@@ -1280,6 +1376,8 @@ function DocumentsView({
   onClearTagFilter,
   starters,
   onPickStarter,
+  stateFilter,
+  onChangeStateFilter,
 }: {
   docs: DocumentDto[];
   allDocsCount: number;
@@ -1296,6 +1394,8 @@ function DocumentsView({
   onClearTagFilter: () => void;
   starters: string[] | null;
   onPickStarter: (q: string) => void;
+  stateFilter: string;
+  onChangeStateFilter: (v: string) => void;
 }) {
   const t = useTranslations("knowledge.docs");
   if (allDocsCount === 0) {
@@ -1332,6 +1432,7 @@ function DocumentsView({
           <span className="font-mono text-[10px] text-text-subtle">
             {t("countOf", { visible: docs.length, total: allDocsCount })}
           </span>
+          <DocStateSelect value={stateFilter} onChange={onChangeStateFilter} />
           {tagFilter && (
             <button
               type="button"
