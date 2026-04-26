@@ -161,7 +161,11 @@
       "newConversation": "新对话",
       "followUpPlaceholder": "继续追问 · 上一轮的引用编号会沿用…",
       "followUpSubmit": "追问",
-      "followUpHint": "Enter 发送 · 答案沿用上一轮检索的同一份片段编号"
+      "followUpHint": "Enter 发送 · 答案沿用上一轮检索的同一份片段编号",
+      "copyAsCitation": "复制",
+      "copyAsCitationTitle": "复制 markdown · 含问题 / 答案 / 引用列表",
+      "copied": "已复制",
+      "copyFailed": "复制失败 · 浏览器可能屏蔽了 clipboard API"
     },
     "bulkTags": {
       "title": "给 {count} 个文档批量打标签",
