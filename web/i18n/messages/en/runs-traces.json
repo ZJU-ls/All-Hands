@@ -1,5 +1,8 @@
 {
   "runs": {
+    "detail": {
+      "shellTitle": "Trace · {id}"
+    },
     "header": {
       "employee": "Employee",
       "model": "Model",

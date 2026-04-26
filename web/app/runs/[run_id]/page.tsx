@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { RunTracePanel } from "@/components/runs/RunTracePanel";
 
@@ -9,11 +10,12 @@ export default function RunDetailPage({
 }: {
   params: Promise<{ run_id: string }>;
 }) {
+  const t = useTranslations("runs.detail");
   const { run_id: runId } = use(params);
   const shortId = runId.length > 10 ? `${runId.slice(0, 10)}…` : runId;
 
   return (
-    <AppShell title={`trace · ${shortId}`}>
+    <AppShell title={t("shellTitle", { id: shortId })}>
       <div
         data-testid="run-detail-page"
         className="mx-auto h-full w-full max-w-4xl overflow-y-auto px-6 py-6"

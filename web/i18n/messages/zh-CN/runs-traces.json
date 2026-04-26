@@ -1,5 +1,8 @@
 {
   "runs": {
+    "detail": {
+      "shellTitle": "追踪 · {id}"
+    },
     "header": {
       "employee": "员工",
       "model": "模型",

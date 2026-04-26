@@ -1082,3 +1082,20 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 **结果**:零代码改动 · 双侧测试全绿 · 平台 i18n 在长期可维护状态
 
 **commits**:仅本条 log
+
+## Round 51 · 2026-04-27 07:13 (cron · 30m)
+
+**主题**:R50 注的 trace detail 页 i18n 收口
+
+**做的事**:
+- `app/runs/[run_id]/page.tsx` 把 AppShell title 从硬编码 `` `trace · ${id}` ``
+  改成 `t("shellTitle", { id })`
+- 加 `runs.detail.shellTitle` catalog key:
+  - zh-CN:"追踪 · {id}"
+  - en:"Trace · {id}"
+- 浏览器 tab 现在会显示「追踪 · abc12345…」/「Trace · abc12345…」· 跟其它
+  页面行为一致
+
+**结果**:1999 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
