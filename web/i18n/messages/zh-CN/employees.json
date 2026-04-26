@@ -128,7 +128,14 @@
       "sectionDryRunSubtitle": "展开后的三列 —— 与落库 payload 一致",
       "cancel": "取消",
       "hiring": "招聘中…",
-      "hire": "招聘"
+      "hire": "招聘",
+      "saveEdit": "保存改动",
+      "savingEdit": "保存中…",
+      "savedFlash": "已保存",
+      "dirty": "有未保存改动",
+      "savedJustNow": "刚刚已保存",
+      "savedMinutesAgo": "已保存 · {n} 分钟前",
+      "savedHoursAgo": "已保存 · {n} 小时前"
     },
     "dryRun": {
       "title": "Dry run 预览",
