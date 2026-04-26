@@ -86,3 +86,24 @@ def test_skill_loads_via_discover_path() -> None:
     assert skill.prompt_fragment is not None
     assert len(skill.prompt_fragment) > 1000, "guidance.md unexpectedly short"
     assert "Brand Blue" in skill.prompt_fragment
+
+
+def test_design_skill_mounted_on_lead_default() -> None:
+    """Lead Agent's default skills must include allhands.design.
+
+    Without this, the user saying 「画个高大上的落地页」 wouldn't even see
+    the skill descriptor at turn 0 → can't resolve_skill, falls back to
+    default ChatGPT-grey HTML.
+    """
+    from allhands.services.employee_service import LEAD_SKILL_IDS
+
+    assert "allhands.design" in LEAD_SKILL_IDS
+
+
+def test_design_skill_supersedes_drawio_creator_in_lead() -> None:
+    """Stale guard · the deleted allhands.drawio-creator skill MUST NOT
+    appear in Lead's mount list (it would log a startup warning every
+    boot since the skill files are physically gone)."""
+    from allhands.services.employee_service import LEAD_SKILL_IDS
+
+    assert "allhands.drawio-creator" not in LEAD_SKILL_IDS
