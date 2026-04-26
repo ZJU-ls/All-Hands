@@ -604,3 +604,24 @@ catalog 里存在」。
 或漏 key,本地跑测就 fail · 不会落到运行时报 MISSING_MESSAGE。
 
 **commits**:见 git log
+
+## Round 28 · 2026-04-26 13:43 (cron · 30m)
+
+**main 新动作**:
+- 4 个新 observatory 子页(employees/[id] · errors/[kind] · models/[ref] · tools/[id])
+- 3 个新 skills 文件管理组件(SkillFileEditor / SkillFileTree / SkillFilesTab)
+  + lib/skill-files-api · @uiw/react-codemirror 新依赖
+- 大量新 catalog key(observatory.{employeeDetail,errorDetail,modelDetail,
+  toolDetail} 块,both locale 同步)
+
+**做的事**:
+- pnpm install 拉新依赖 · 解决 vite 测试 transform 失败
+- 4 个新 observatory 子页扫到 11 处 `new Date(...).toLocaleString()` /
+  `n.toLocaleString()` 没传 locale · 批量 sed + 给每页加 useLocale()
+- observatory/page.tsx:1146 (main 新代码) 也漏掉 row.runs_count.toLocaleString()
+- 全部 toLocaleString 调用 → toLocaleString(locale)
+
+**结果**:1982 web tests · typecheck · lint · regression net 全绿 ·
+全栈再次 0 处 toLocaleString 不带 locale
+
+**commits**:见 git log
