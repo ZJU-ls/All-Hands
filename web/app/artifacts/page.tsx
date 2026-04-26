@@ -340,7 +340,7 @@ export default function ArtifactsGlobalPage() {
 
   return (
     <AppShell>
-      <div className="flex h-full flex-col gap-4 overflow-y-auto p-6">
+      <div className="flex h-full flex-col gap-3 overflow-y-auto p-3 sm:gap-4 sm:p-6">
         <Hero
           stats={stats}
           title={t("title")}
@@ -355,7 +355,7 @@ export default function ArtifactsGlobalPage() {
             after the hero scrolls away. The `-mx-6 px-6` extends the band
             edge-to-edge under the page padding; backdrop-blur softens the
             content scrolling underneath. z-10 keeps it above chart fills. */}
-        <div className="sticky top-0 z-10 -mx-6 border-y border-border bg-bg/80 px-6 py-2 backdrop-blur-md">
+        <div className="sticky top-0 z-10 -mx-3 border-y border-border bg-bg/80 px-3 py-2 backdrop-blur-md sm:-mx-6 sm:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[240px]">
             <Icon
@@ -494,7 +494,7 @@ export default function ArtifactsGlobalPage() {
               · list  · sidebar 4/12  · detail 8/12   (dense)
               · grid  · gallery 8/12  · detail 4/12   (gallery-first)
                   if nothing selected, gallery takes all 12 cols */}
-        <div className="grid min-h-[60vh] flex-1 grid-cols-12 gap-4">
+        <div className="grid min-h-[60vh] flex-1 grid-cols-12 gap-3 sm:gap-4">
           <aside
             className={
               viewMode === "list"
