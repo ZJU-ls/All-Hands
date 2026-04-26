@@ -65,7 +65,14 @@ def _default_max_depth() -> int:
 
 
 class DispatchResult(BaseModel):
-    """Outcome of a `dispatch_employee` call (agent-design § 6.1)."""
+    """Outcome of a `dispatch_employee` call (agent-design § 6.1).
+
+    Optional render-envelope fields (component / props / interactions /
+    extra_renders) carry sub-agent render payloads up to the parent's
+    chat — so when a dispatched employee produces an artifact, the
+    parent UI shows the card instead of just the spawn result text.
+    Mirrors the spawn_subagent forwarding contract.
+    """
 
     run_id: str
     status: str  # "succeeded" | "err_max_depth" | "err_sub_run_failed" | "err_timeout"
@@ -73,6 +80,11 @@ class DispatchResult(BaseModel):
     output_refs: list[str] = Field(default_factory=list)
     thread_id: str | None = None
     parent_run_id: str | None = None
+    # Render forwarding · None when sub-agent didn't produce a render
+    component: str | None = None
+    props: dict[str, object] | None = None
+    interactions: list[object] | None = None
+    extra_renders: list[dict[str, object]] | None = None
 
 
 class SubRunner(Protocol):
@@ -154,6 +166,7 @@ class DispatchService:
         try:
             runner = self._runner_factory(child, new_depth)
             summary_parts: list[str] = []
+            renders: list[dict[str, object]] = []
             async for event in runner.stream(
                 messages=[{"role": "user", "content": task}],
                 thread_id=thread_id,
@@ -163,6 +176,15 @@ class DispatchService:
                 kind = getattr(event, "kind", None)
                 if kind == "token":
                     summary_parts.append(getattr(event, "delta", ""))
+                elif kind == "render":
+                    payload = getattr(event, "payload", None)
+                    if payload is not None:
+                        try:
+                            envelope = payload.model_dump()
+                        except AttributeError:
+                            envelope = dict(payload) if isinstance(payload, dict) else None
+                        if isinstance(envelope, dict):
+                            renders.append(envelope)
                 elif kind == "error":
                     return DispatchResult(
                         run_id=run_id,
@@ -175,10 +197,27 @@ class DispatchService:
             _parent_run_id.reset(parent_token)
             _dispatch_depth.reset(depth_token)
 
-        return DispatchResult(
+        out = DispatchResult(
             run_id=run_id,
             status="succeeded",
             summary="".join(summary_parts).strip() or "(no output)",
             thread_id=thread_id,
             parent_run_id=invoker_run_id,
         )
+        # Forward render envelopes so parent chat shows the artifact card
+        # produced by the dispatched employee. Mirrors spawn_subagent.
+        if renders:
+            first = renders[0]
+            comp = first.get("component")
+            if isinstance(comp, str) and comp:
+                out = out.model_copy(
+                    update={
+                        "component": comp,
+                        "props": first.get("props") if isinstance(first.get("props"), dict) else {},
+                        "interactions": first.get("interactions")
+                        if isinstance(first.get("interactions"), list)
+                        else [],
+                        "extra_renders": renders[1:] if len(renders) > 1 else None,
+                    }
+                )
+        return out

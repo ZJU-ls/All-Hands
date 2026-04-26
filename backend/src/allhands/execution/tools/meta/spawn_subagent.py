@@ -245,9 +245,20 @@ class SpawnSubagentService:
         # GRANDPARENT's run_id, breaking trace tree links in observatory.
         parent_run_token = _parent_run_id.set(trace_id)
 
-        async def _drive() -> tuple[list[str], str]:
+        async def _drive() -> tuple[list[str], str, list[dict[str, Any]]]:
+            """Drive the inner runner · collect token text AND render envelopes.
+
+            Render envelopes (Artifact.Preview / Artifact.Card) emitted by the
+            sub-agent's tool calls would otherwise be trapped in the sub-stream
+            — the parent's chat would only see the spawn result string. We
+            forward the FIRST render envelope as the spawn_subagent tool
+            return so `_as_render_envelope` detects it on the parent side and
+            the chat shows the artifact card. Additional render envelopes are
+            kept on the side for future fan-out (multi-card forwarding TBD).
+            """
             runner = self._runner_factory(child, new_depth)
             parts: list[str] = []
+            renders: list[dict[str, Any]] = []
             status_local = "completed"
             async for event in runner.stream(
                 messages=[{"role": "user", "content": task}],
@@ -256,6 +267,17 @@ class SpawnSubagentService:
                 kind = getattr(event, "kind", None)
                 if kind == "token":
                     parts.append(getattr(event, "delta", ""))
+                elif kind == "render":
+                    payload = getattr(event, "payload", None)
+                    if payload is not None:
+                        # RenderPayload is a pydantic model; dump to dict so
+                        # the executor return is JSON-serializable.
+                        try:
+                            envelope = payload.model_dump()
+                        except AttributeError:
+                            envelope = dict(payload) if isinstance(payload, dict) else None
+                        if isinstance(envelope, dict):
+                            renders.append(envelope)
                 elif kind == "error":
                     msg = getattr(event, "message", "")
                     parts.append(str(msg))
@@ -266,11 +288,11 @@ class SpawnSubagentService:
                         msg,
                     )
                     break
-            return parts, status_local
+            return parts, status_local, renders
 
         try:
             try:
-                parts, status = await asyncio.wait_for(
+                parts, status, renders = await asyncio.wait_for(
                     _drive(),
                     timeout=DEFAULT_SPAWN_TIMEOUT_S,
                 )
@@ -309,13 +331,34 @@ class SpawnSubagentService:
             _dispatch_depth.reset(depth_token)
             _parent_run_id.reset(parent_run_token)
 
-        return {
-            "result": "".join(parts).strip(),
+        result_text = "".join(parts).strip()
+        out: dict[str, Any] = {
+            "result": result_text,
             "trace_id": trace_id,
             "iterations_used": 0,
             "status": status,
             "parent_run_id": current_parent_run_id(),
         }
+        # Forward the first render envelope from the sub-stream so the parent
+        # chat shows the artifact card. Without this the sub-agent's
+        # render_drawio / artifact_create produces an artifact in the panel
+        # but the chat only sees the spawn_subagent tool return string —
+        # users said 「chat 里没有渲染」when this happened. _as_render_envelope
+        # picks {component, props, interactions} off the top-level dict.
+        if renders:
+            first = renders[0]
+            component = first.get("component")
+            if isinstance(component, str) and component:
+                out["component"] = component
+                props_val = first.get("props")
+                out["props"] = props_val if isinstance(props_val, dict) else {}
+                inter_val = first.get("interactions")
+                out["interactions"] = inter_val if isinstance(inter_val, list) else []
+                # Surface extra envelopes so future fan-out (multiple artifact
+                # cards from one spawn) has a place to land.
+                if len(renders) > 1:
+                    out["extra_renders"] = renders[1:]
+        return out
 
     async def _resolve_child(
         self,
