@@ -122,6 +122,7 @@
       "tabs": {
         "overview": "概览",
         "prompt": "参数 / 模板",
+        "files": "文件",
         "versions": "版本历史",
         "dependencies": "依赖图"
       },
@@ -172,6 +173,29 @@
         "thIndex": "#",
         "thToolId": "tool_id",
         "thKind": "kind"
+      },
+      "files": {
+        "loading": "加载文件树",
+        "loadingHint": "拉取该技能目录下的全部文件…",
+        "loadFailed": "加载失败 · {error}",
+        "loadingFile": "正在读取",
+        "readFailed": "读取失败 · {error}",
+        "treeEmpty": "目录为空",
+        "treeEmptyHint": "这个技能没有任何随包文件。",
+        "noSelection": "选一个文件查看 / 编辑",
+        "noSelectionHint": "左侧点选一项,右侧打开编辑器。",
+        "editable": "可编辑",
+        "readOnly": "只读",
+        "binary": "二进制",
+        "binaryNotPreviewable": "二进制文件不支持预览。",
+        "saved": "已保存",
+        "unsaved": "未保存",
+        "saving": "保存中",
+        "saveBtn": "保存",
+        "deleteBtn": "删除",
+        "deleteTooltip": "从磁盘移除该文件",
+        "deleteConfirm": "确认删除「{path}」? 这会写盘 · 不可撤销。",
+        "builtinWarning": "这是内置技能 (跟随后端代码发布)。在这里改动只在内存里立即生效,但下一次 git checkout / docker rebuild 会被覆盖。要永久保留请把改动 commit 进仓库。"
       }
     },
     "explainer": {

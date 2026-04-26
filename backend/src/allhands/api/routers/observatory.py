@@ -28,13 +28,20 @@ router = APIRouter(prefix="/observatory", tags=["observatory"])
 async def get_summary(
     svc: ObservatoryService = Depends(get_observatory_service),
     hours: int = Query(default=24, ge=1, le=720),
+    employee_id: str | None = Query(default=None),
+    model_ref: str | None = Query(default=None),
 ) -> dict[str, object]:
     """Aggregated observatory summary for the last ``hours`` hours.
 
-    The page sends 1 / 24 / 168 (7d) when the user clicks a time-range
-    pill. Defaults to 24 for legacy callers that don't pass a window.
+    Optional dimension filters scope the whole summary to one employee or
+    model — used by the per-dimension detail pages
+    (``/observatory/employees/[id]`` and ``/observatory/models/[ref]``).
     """
-    summary = await svc.get_summary(window_hours=hours)
+    summary = await svc.get_summary(
+        window_hours=hours,
+        employee_id=employee_id,
+        model_ref=model_ref,
+    )
     return summary.model_dump(mode="json")
 
 
@@ -85,14 +92,24 @@ async def get_series(
     since: datetime | None = Query(default=None),
     until: datetime | None = Query(default=None),
     bucket: str = Query(default="1h", pattern="^(5m|1h)$"),
+    employee_id: str | None = Query(default=None),
+    model_ref: str | None = Query(default=None),
 ) -> dict[str, object]:
     """Bucketed time-series for one observatory metric.
 
     Drives the KPI-card / stat-row drilldown chart on the observatory page —
     the user clicks a metric and we show the consumption curve over the
-    selected time window.
+    selected time window. Optional ``employee_id`` / ``model_ref`` scope
+    the series so the detail pages can show per-dimension trends.
     """
-    series = await svc.get_series(metric=metric, since=since, until=until, bucket=bucket)
+    series = await svc.get_series(
+        metric=metric,
+        since=since,
+        until=until,
+        bucket=bucket,
+        employee_id=employee_id,
+        model_ref=model_ref,
+    )
     return series.model_dump(mode="json")
 
 
@@ -100,16 +117,20 @@ async def get_series(
 async def list_traces(
     svc: ObservatoryService = Depends(get_observatory_service),
     employee_id: str | None = Query(default=None),
+    model_ref: str | None = Query(default=None),
     status: str | None = Query(default=None, pattern="^(ok|failed|running)$"),
     since: datetime | None = Query(default=None),
     until: datetime | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=200),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> dict[str, object]:
     traces = await svc.list_traces(
         employee_id=employee_id,
+        model_ref=model_ref,
         status=status,
         since=since,
         until=until,
+        q=q,
         limit=limit,
     )
     return {

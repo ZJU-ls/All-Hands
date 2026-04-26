@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { SkillExplainer } from "@/components/skills/SkillExplainer";
+import { SkillFilesTab } from "@/components/skills/SkillFilesTab";
 
 /**
  * Skill detail page · ADR 0016 V2 Azure Live polish.
@@ -47,13 +48,14 @@ type Employee = {
   model_ref: string;
 };
 
-type Tab = "overview" | "prompt" | "versions" | "dependencies";
+type Tab = "overview" | "prompt" | "files" | "versions" | "dependencies";
 
 type LoadStatus = "loading" | "ready" | "notfound" | "error";
 
 const TABS: ReadonlyArray<readonly [Tab, IconName]> = [
   ["overview", "layout-grid"],
   ["prompt", "file-code-2"],
+  ["files", "folder"],
   ["versions", "clock"],
   ["dependencies", "share-2"],
 ];
@@ -194,6 +196,18 @@ export default function SkillDetailPage() {
                 <Overview skill={skill} dependents={dependents} />
               )}
               {tab === "prompt" && <PromptTab skill={skill} />}
+              {tab === "files" && (
+                <SkillFilesTab
+                  skillId={skill.id}
+                  source={
+                    (skill.source as
+                      | "builtin"
+                      | "github"
+                      | "market"
+                      | "local") ?? "local"
+                  }
+                />
+              )}
               {tab === "versions" && <VersionsTab skill={skill} />}
               {tab === "dependencies" && <DependenciesTab skill={skill} />}
             </>
