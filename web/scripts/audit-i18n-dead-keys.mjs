@@ -96,6 +96,12 @@ for (const dir of ["app", "components", "lib"]) {
       while ((mm = litRe.exec(src))) used.add(`${d.ns}.${mm[1]}`);
       while ((mm = tplRe.exec(src))) usedPrefixes.add(`${d.ns}.${mm[1]}`);
       while ((mm = varRe.exec(src))) usedRuntimeNs.add(d.ns);
+      // Helper-parameter aliasing: if the binding name shows up as a bare
+      // ident inside a function-call arg list (e.g. `targetSummary(ch, tTarget)`),
+      // we can't trace which sub-key the helper picks — treat the namespace
+      // as runtime. Pattern: `[(,]\s*name\s*[,)]`.
+      const passRe = new RegExp(`[(,]\\s*${d.name}\\s*[,)]`, "g");
+      while ((mm = passRe.exec(src))) usedRuntimeNs.add(d.ns);
     }
   }
 }

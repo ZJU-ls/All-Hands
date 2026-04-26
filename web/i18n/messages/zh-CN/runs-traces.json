@@ -52,8 +52,7 @@
       "title": "产出制品 · {count}",
       "subtitle": "本次 run 写入或更新的文件 · 点击进入详情",
       "version": "v{version}",
-      "new": "新建",
-      "open": "打开"
+      "new": "新建"
     }
   },
   "traces": {

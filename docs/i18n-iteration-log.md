@@ -910,3 +910,24 @@ heuristic 静态分析做不了)。继续保留作清理基线。
 - 其它需要更细致 case-by-case 评估,后续轮次慢慢清
 
 **commits**:见 git log
+
+## Round 43 · 2026-04-27 03:13 (cron · 30m)
+
+**主题**:helper-参数别名识别 + 第二波 dead-key 物理清理
+
+**audit 升级**:加 passRe 抓 helper 函数把 `useTranslations` 绑定当参数传出去
+的模式(e.g. `targetSummary(ch, tTarget)`)· 命中后整 namespace 进 runtime-ns set
+· 死 key 73 → 31 → 23(再砍 50)
+
+**实物清理 8 个真死 key**:
+- artifacts.csv.loadFailed · artifacts.pdf.{loading,loadFailed}(对应 view 组件
+  根本没用 loading/loadFailed 文案 · pdf 组件甚至没绑 useTranslations)
+- runs.artifacts.open(RunArtifacts.tsx 只用 title/subtitle/version/new)
+- market.detail.appShellFallback(market 详情页直接用 decoded symbol 当 title)
+- gateway.{page.heroTitleAria,page.sectionCapability,providerSection.setAsDefault}
+  (grep 全栈零引用)
+
+**结果**:catalog 2476 → 2468(-8)· 死 key 23(0.9%)· 1999 tests 全绿
+- 21/23 是 `common.*` 共享词预留 + 2 个其它待 case-by-case
+
+**commits**:见 git log

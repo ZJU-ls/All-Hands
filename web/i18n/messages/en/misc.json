@@ -434,13 +434,8 @@
       "saved": "Saved",
       "saveFailed": "Save failed"
     },
-    "pdf": {
-      "loading": "Loading PDF…",
-      "loadFailed": "PDF load failed: {error}"
-    },
     "csv": {
-      "empty": "(no data)",
-      "loadFailed": "CSV parse failed: {error}"
+      "empty": "(no data)"
     },
     "xlsx": {
       "loading": "Loading Excel…",
