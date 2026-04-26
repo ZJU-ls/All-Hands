@@ -499,3 +499,21 @@ date 格式化 0 处 navigator 默认
 全栈 toast.* 调用 0 处硬编码英文/中文文本
 
 **commits**:见 git log
+
+## Round 23 · 2026-04-26 11:13 (cron · 30m)
+
+**主题**:深度健康检查 · 没有新发现
+
+**做的事**:
+- 扫 ConfirmDialog / Coachmark / SearchInput / HoverPeek / PageHeader 默认值 → 全 t() 化
+- 扫 backend services/cockpit/observatory/artifact/skill/mcp/task → 0 处用户可见硬编码
+- 扫 SVG `<title>` / `<iframe title>` / 模板字符串 → 全是 SVG path / 数字 / cron 表达式,不需翻译
+- 扫 backend execution/ → 唯有 `_ARTIFACT_HALLUC_PATTERNS` 检测词表(读模型输出 · 非展示)+
+  agent_loop 的 nudge SystemMessage(给 LLM 的 instruction · 非用户可见) · by-design
+- 扫 backend services 里 logger / summary / description 的 f-string → 0 处中文
+- 扫 raw enum 显示(trigger.kind / fire.status / server.transport)→ 都是 mono 技术 badge ·
+  类似 Linear "open"/"closed" 那种,by-design 不翻译
+
+**结果**:1928 web tests + backend i18n tests + regression net 全绿 · 本轮零代码改动
+
+**commits**:仅本条 log
