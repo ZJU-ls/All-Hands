@@ -888,6 +888,57 @@ class KnowledgeService:
             ref = preset_for(provider.kind).default_model
         return provider, ref
 
+    async def get_chunks_missing_embeddings(self, kb_id: str) -> int:
+        """Count of chunks in this KB whose ``embedding`` column is NULL.
+
+        A non-zero count means at least some retrieval will fall back to
+        BM25 only — the chunk physically exists but is invisible to the
+        vector lens. Causes:
+        - upload happened while no embedder was usable (missing API key)
+        - embedder swapped after some docs were already ingested
+        - reindex aborted mid-flight
+        Sidebar/banner uses this to surface a "Re-embed all" CTA.
+        """
+        from sqlalchemy import func, select
+
+        from allhands.persistence.orm.knowledge_orm import ChunkRow
+
+        async with self._session_maker() as s:
+            n = (
+                await s.execute(
+                    select(func.count(ChunkRow.id)).where(
+                        ChunkRow.kb_id == kb_id,
+                        ChunkRow.embedding.is_(None),
+                    )
+                )
+            ).scalar()
+        return int(n or 0)
+
+    async def reembed_all(self, kb_id: str) -> dict[str, int]:
+        """Re-run the ingest pipeline for every ready/failed document in
+        a KB. Useful after the user (a) gets the embedding provider
+        working and wants to backfill missing vectors or (b) changes the
+        KB embedding ref (later).
+
+        Returns ``{processed, succeeded, failed}``. Per-doc errors are
+        swallowed so one bad doc can't abort the whole batch — the
+        Document.state on each surfaces the failure to the user.
+        """
+        await self.get_kb(kb_id)
+        docs = await self.list_documents(kb_id, limit=1000)
+        succeeded = 0
+        failed = 0
+        for d in docs:
+            try:
+                refreshed = await self.reindex_document(d.id)
+                if refreshed.state == DocumentState.READY:
+                    succeeded += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+        return {"processed": len(docs), "succeeded": succeeded, "failed": failed}
+
     async def get_kb_health(self, kb_id: str, *, days: int = 30) -> dict[str, Any]:
         """Snapshot of a KB for the sidebar "health" card.
 
@@ -958,6 +1009,8 @@ class KnowledgeService:
             for mime, count in sorted(mime_counter.items(), key=lambda kv: -kv[1])
         ]
 
+        chunks_missing_emb = await self.get_chunks_missing_embeddings(kb_id)
+
         return {
             "doc_count": kb.document_count,
             "chunk_count": kb.chunk_count,
@@ -966,6 +1019,7 @@ class KnowledgeService:
             "daily_doc_counts": daily,
             "top_tags": top_tags,
             "mime_breakdown": mime_breakdown,
+            "chunks_missing_embeddings": chunks_missing_emb,
         }
 
     async def suggest_starter_questions(

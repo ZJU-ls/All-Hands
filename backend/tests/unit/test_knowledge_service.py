@@ -217,6 +217,29 @@ async def test_ask_stream_no_hits_yields_friendly_delta_then_done(
     assert frames[2]["used_model"] is None
 
 
+async def test_reembed_all_processes_each_doc(svc: KnowledgeService) -> None:
+    """reembed_all hits every doc · returns processed/succeeded/failed
+    counters · per-doc errors don't abort the loop."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(kb.id, title="A", content_bytes=_SAMPLE_MD, filename="a.md")
+    await svc.upload_document(kb.id, title="B", content_bytes=b"# B\n\nbody", filename="b.md")
+    res = await svc.reembed_all(kb.id)
+    assert res["processed"] == 2
+    assert res["succeeded"] == 2  # mock embedder always succeeds
+    assert res["failed"] == 0
+
+
+async def test_chunks_missing_embeddings_is_zero_with_mock(
+    svc: KnowledgeService,
+) -> None:
+    """Mock embedder always populates `chunk.embedding`, so a freshly
+    ingested KB should have 0 chunks-missing-embeddings — the banner
+    won't fire in the happy path."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(kb.id, title="t", content_bytes=_SAMPLE_MD, filename="t.md")
+    assert await svc.get_chunks_missing_embeddings(kb.id) == 0
+
+
 async def test_get_kb_health_aggregates_and_buckets(
     svc: KnowledgeService,
 ) -> None:

@@ -591,6 +591,7 @@ class HealthOut(BaseModel):
     daily_doc_counts: list[dict[str, object]]
     top_tags: list[dict[str, object]]
     mime_breakdown: list[dict[str, object]]
+    chunks_missing_embeddings: int
 
 
 @router.get("/{kb_id}/health")
@@ -601,6 +602,25 @@ async def kb_health(kb_id: str, days: int = 30) -> HealthOut:
     except KBNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return HealthOut(**h)
+
+
+class ReembedOut(BaseModel):
+    processed: int
+    succeeded: int
+    failed: int
+
+
+@router.post("/{kb_id}/reembed-all")
+async def reembed_all(kb_id: str) -> ReembedOut:
+    """Re-run ingest for every doc in the KB. Backfills missing vectors
+    (e.g. after fixing the embedding provider config). Synchronous in v0
+    — fine for small KBs (<100 docs); needs a BackgroundTasks queue when
+    we go bigger."""
+    try:
+        result = await _service().reembed_all(kb_id)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ReembedOut(**result)
 
 
 @router.get("/{kb_id}/starter-questions")
