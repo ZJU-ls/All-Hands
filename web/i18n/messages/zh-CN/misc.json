@@ -427,7 +427,18 @@
       "missingId": "Artifact.Preview 缺少 artifact_id",
       "loadFailed": "制品加载失败:{error}",
       "loading": "读取制品…",
-      "unsupportedKind": "kind {kind} 暂不支持预览"
+      "unsupportedKind": "kind {kind} 暂不支持预览",
+      "openInPanel": "在制品区打开",
+      "open": "打开"
+    },
+    "artifactCard": {
+      "missingId": "Artifact.Card 缺少 artifact_id",
+      "loadFailed": "制品加载失败,点击在制品区查看",
+      "loading": "读取中…",
+      "loadingHint": "正在加载制品信息…",
+      "openInPanel": "在制品区打开",
+      "clickToOpen": "点击在制品区打开",
+      "open": "打开"
     },
     "employeeCard": {
       "untitled": "(未命名员工)",

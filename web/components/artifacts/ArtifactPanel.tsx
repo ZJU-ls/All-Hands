@@ -17,6 +17,7 @@ import {
   type ArtifactDto,
 } from "@/lib/artifacts-api";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
+import { useArtifactFocus } from "@/lib/artifact-focus-store";
 import { ArtifactList } from "./ArtifactList";
 import { ArtifactDetail } from "./ArtifactDetail";
 
@@ -42,6 +43,17 @@ export function ArtifactPanel({
 
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+
+  // External focus: a chat-side `Artifact.Card` click drops the target id
+  // into the focus store. We sync both ways: when the store fires, jump to
+  // detail view; when the user backs out manually, clear the store so the
+  // next dispatch (even with the same id) still re-triggers (bumpTick).
+  const focusedId = useArtifactFocus((s) => s.artifactId);
+  const focusBump = useArtifactFocus((s) => s.bumpTick);
+  const clearFocus = useArtifactFocus((s) => s.clear);
+  useEffect(() => {
+    if (focusedId) setSelectedId(focusedId);
+  }, [focusedId, focusBump]);
 
   const refresh = useCallback(async () => {
     try {
@@ -171,7 +183,10 @@ export function ArtifactPanel({
         <div className="flex flex-1 flex-col overflow-hidden">
           <button
             type="button"
-            onClick={() => setSelectedId(null)}
+            onClick={() => {
+              setSelectedId(null);
+              clearFocus();
+            }}
             className="inline-flex h-8 shrink-0 items-center gap-1.5 border-b border-border px-3 text-left font-mono text-[11px] text-text-muted transition-colors duration-fast ease-out hover:bg-surface-2 hover:text-text"
           >
             <Icon name="arrow-left" size={12} />

@@ -427,7 +427,18 @@
       "missingId": "Artifact.Preview is missing artifact_id",
       "loadFailed": "Failed to load artifact: {error}",
       "loading": "Loading artifact…",
-      "unsupportedKind": "Kind {kind} can't be previewed"
+      "unsupportedKind": "Kind {kind} can't be previewed",
+      "openInPanel": "Open in artifact panel",
+      "open": "Open"
+    },
+    "artifactCard": {
+      "missingId": "Artifact.Card is missing artifact_id",
+      "loadFailed": "Failed to load · click to open in panel",
+      "loading": "Loading…",
+      "loadingHint": "Loading artifact metadata…",
+      "openInPanel": "Open in artifact panel",
+      "clickToOpen": "Click to open in panel",
+      "open": "Open"
     },
     "employeeCard": {
       "untitled": "(Unnamed employee)",
