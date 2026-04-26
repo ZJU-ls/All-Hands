@@ -25,7 +25,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from allhands.core import Employee
 from allhands.core.model import LLMModel
@@ -293,6 +293,53 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
         published_at=now,
     )
     return await repo.upsert(lead)
+
+
+async def scan_for_dropped_skill_references(session: object, *, dropped_id: str) -> int:
+    """Count rows still referencing a removed skill id.
+
+    P3 of artifacts unification (2026-04-26): the alembic 0029 migration
+    rewrites stale 'allhands.drawio-creator' → 'allhands.artifacts'. This is
+    a startup-time second line of defence: if the migration didn't run (mis-
+    deploy) we want a loud warning, not a silent "skill not found" later.
+
+    Returns the count of stale rows across employees + skill_runtimes. 0 means
+    everything is clean.
+    """
+    from sqlalchemy import text
+
+    s: Any = session  # AsyncSession-shaped; runtime check instead of typed
+    n = 0
+    rows = (
+        await s.execute(text("SELECT skill_ids FROM employees"))
+    ).fetchall()
+    for (raw,) in rows:
+        if raw is None:
+            continue
+        # SQLAlchemy returns either parsed JSON (dict/list) or raw text. Cover
+        # both shapes by string-searching the JSON form.
+        haystack = raw if isinstance(raw, str) else _json_dumps(raw)
+        if dropped_id in haystack:
+            n += 1
+    rows = (
+        await s.execute(text("SELECT body FROM skill_runtimes"))
+    ).fetchall()
+    for (raw,) in rows:
+        if raw is None:
+            continue
+        haystack = raw if isinstance(raw, str) else _json_dumps(raw)
+        if dropped_id in haystack:
+            n += 1
+    return n
+
+
+def _json_dumps(value: object) -> str:
+    import json
+
+    try:
+        return json.dumps(value, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(value)
 
 
 @dataclass(frozen=True)
