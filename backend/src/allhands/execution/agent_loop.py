@@ -157,6 +157,36 @@ def _serialize_for_lc_tool_message(content: Any) -> str:
         return str(content)
 
 
+_ARTIFACT_HALLUC_PATTERNS = (
+    "这是一个为你",
+    "这是一个我",
+    "这是一个交互式",
+    "这是为你定制",
+    "我已经为你",
+    "我已为你",
+    "我已经创建",
+    "我为你创建",
+    "i've created",
+    "i have created",
+    "here's the html",
+    "here is the html",
+    "以下是",
+)
+
+
+def _looks_like_artifact_hallucination(text: str) -> bool:
+    """Heuristic: does this assistant text describe a 制品 as if just made?
+
+    Used for the hallucination self-correction nudge in agent_loop.stream.
+    Conservative on purpose · false positives cost one extra LLM iteration ·
+    false negatives let the user see an empty artifact panel(我们见过一次)。
+    """
+    if not text:
+        return False
+    lower = text.lower()
+    return any(p.lower() in lower for p in _ARTIFACT_HALLUC_PATTERNS)
+
+
 def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
     """A tool_call entry from accumulated.tool_calls is valid iff:
 
@@ -397,6 +427,30 @@ class AgentLoop:
                             ),
                         )
                     else:
+                        # 2026-04-26 · 检测「制品幻觉」 — 模型在回复里描述
+                        # 「这是一个 X / 我已经为你 X」 但本轮没调 artifact_create
+                        # · 用户看不到任何东西。这一轮已经委身在 lc_messages
+                        # 里 · 注入一句 system 反馈让模型下一轮纠正,而不是
+                        # 直接 return completed。
+                        if _looks_like_artifact_hallucination(text_full):
+                            _log.warning(
+                                "agent_loop.artifact_hallucination_detected",
+                                extra={"sample": text_full[:200]},
+                            )
+                            lc_messages.append(self._to_lc_assistant_message(assistant_msg))
+                            lc_messages.append(
+                                SystemMessage(
+                                    content=(
+                                        "用户看不到任何制品 · 你的上一条回复描述了一个 "
+                                        "HTML / 图表 / 文档,但你这一轮没有调用 "
+                                        "artifact_create 工具。请立即调 "
+                                        "artifact_create({kind, name, content}) 真正产出 · "
+                                        "再调 artifact_render(id) 嵌入预览 · 然后用一两句话告诉用户。"
+                                        "不要再次只说「这是一个...」 而不调工具。"
+                                    )
+                                )
+                            )
+                            continue  # next LLM iteration with the nudge
                         yield LoopExited(reason="completed")
                     return
 
