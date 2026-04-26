@@ -104,6 +104,7 @@
       "selectedCount": "{count} selected",
       "cancel": "Cancel",
       "bulkDelete": "Delete selected",
+      "bulkTags": "Tags…",
       "retryIngest": "Retry ingest"
     },
     "uploads": {
@@ -149,6 +150,17 @@
       "followUpPlaceholder": "Ask a follow-up · same citation numbers carry over…",
       "followUpSubmit": "Follow up",
       "followUpHint": "Press Enter to send · the same retrieved snippets are kept across turns"
+    },
+    "bulkTags": {
+      "title": "Tag {count} selected documents",
+      "intro": "Click an existing tag to cycle add → remove → unchanged. Add brand-new tags below (comma-separated).",
+      "knownHeader": "Tags already in this KB",
+      "newHeader": "New tags (comma-separated)",
+      "newPlaceholder": "blog, must-read, 2026q2",
+      "legend": "+ = add · − = remove · · = leave alone",
+      "cycleHint": "Click to cycle + → − → ·",
+      "cancel": "Cancel",
+      "apply": "Apply · +{add} · −{remove}"
     },
     "delete": {
       "confirm": "Delete \"{title}\"? (Soft delete — recoverable for 30 days.)",

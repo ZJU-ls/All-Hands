@@ -621,6 +621,48 @@ class KnowledgeService:
             await self._ingest.ingest_document(document_id, file_path_abs=abs_path)
         return await self.get_document(document_id)
 
+    async def update_document_tags(
+        self,
+        document_id: str,
+        *,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+        replace: list[str] | None = None,
+    ) -> Document:
+        """Mutate a document's tag set.
+
+        Three exclusive shapes:
+        - ``add``: union with current tags (deduped, order preserved).
+        - ``remove``: drop any matching tags.
+        - ``replace``: set tags wholesale (overrides current list).
+
+        Returns the post-update document. Bumps ``updated_at`` so KB
+        derived caches (starter-questions, sidebar tag chips) refresh
+        on next read.
+        """
+        doc = await self.get_document(document_id)
+        if replace is not None:
+            new_tags = list(dict.fromkeys(t.strip() for t in replace if t.strip()))
+        else:
+            existing = list(doc.tags)
+            if remove:
+                drop = {t.strip() for t in remove}
+                existing = [t for t in existing if t not in drop]
+            if add:
+                seen = set(existing)
+                for t in add:
+                    cleaned = t.strip()
+                    if cleaned and cleaned not in seen:
+                        existing.append(cleaned)
+                        seen.add(cleaned)
+            new_tags = existing
+
+        updated = doc.model_copy(update={"tags": new_tags, "updated_at": datetime.now(UTC)})
+        async with self._session_maker() as s:
+            await SqlDocumentRepo(s).upsert(updated)
+            await s.commit()
+        return updated
+
     async def soft_delete_document(self, document_id: str) -> None:
         async with self._session_maker() as s:
             await SqlDocumentRepo(s).soft_delete(document_id)

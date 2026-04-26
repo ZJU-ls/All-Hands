@@ -104,6 +104,7 @@
       "selectedCount": "选中 {count}",
       "cancel": "取消",
       "bulkDelete": "批量删除",
+      "bulkTags": "标签…",
       "retryIngest": "重试入库"
     },
     "uploads": {
@@ -149,6 +150,17 @@
       "followUpPlaceholder": "继续追问 · 上一轮的引用编号会沿用…",
       "followUpSubmit": "追问",
       "followUpHint": "Enter 发送 · 答案沿用上一轮检索的同一份片段编号"
+    },
+    "bulkTags": {
+      "title": "给 {count} 个文档批量打标签",
+      "intro": "点已有标签可循环切到 +(加)/ −(去)/ ·(不变)三态;下面输入框可逗号分隔加新标签。",
+      "knownHeader": "当前 KB 已有的标签",
+      "newHeader": "新增标签(逗号分隔)",
+      "newPlaceholder": "blog, must-read, 2026q2",
+      "legend": "+ = 加 · − = 去 · · = 保持不变",
+      "cycleHint": "点击循环 + → − → ·",
+      "cancel": "取消",
+      "apply": "应用 · 加 {add} · 去 {remove}"
     },
     "delete": {
       "confirm": "确认删除 \"{title}\"?(软删,30 天可恢复)",
