@@ -362,6 +362,8 @@
         "delete": "删除",
         "loadingTools": "加载工具…",
         "emptyTools": "该服务器未声明任何工具。",
+        "toolsSearchPlaceholder": "在工具内搜索…",
+        "toolsNoMatch": "没有匹配「{query}」的工具",
         "featured": "featured"
       },
       "empty": {

@@ -63,7 +63,10 @@ export default function McpServersPage() {
   const [toolsByServer, setToolsByServer] = useState<
     Record<string, ToolInfo[] | { error: string }>
   >({});
-  const [expanded, setExpanded] = useState<string>("");
+  // 2026-04-26 · R10 · multi-expand. 原实现 expanded: string 同时只能
+  // 看一个 server 的工具列表 — 想对比两个 server 暴露什么得反复切换。
+  // 改成 Set,允许同时展多个;也方便下面给每个工具列表加内部搜索框。
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   const load = async () => {
     setLoadStatus("loading");
@@ -99,11 +102,15 @@ export default function McpServersPage() {
   }
 
   async function handleListTools(server: Server) {
-    if (expanded === server.id) {
-      setExpanded("");
+    if (expanded.has(server.id)) {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        next.delete(server.id);
+        return next;
+      });
       return;
     }
-    setExpanded(server.id);
+    setExpanded((prev) => new Set(prev).add(server.id));
     setBusyId(server.id);
     try {
       const res = await fetch(`/api/mcp-servers/${server.id}/tools`);
@@ -513,7 +520,7 @@ function RegisteredList({
 }: {
   servers: Server[];
   busyId: string;
-  expanded: string;
+  expanded: Set<string>;
   toolsByServer: Record<string, ToolInfo[] | { error: string }>;
   onTest: (s: Server) => void;
   onListTools: (s: Server) => void;
@@ -648,7 +655,7 @@ function RegisteredList({
               server={s}
               featured={s.id === featuredId}
               busy={busyId === s.id}
-              expanded={expanded === s.id}
+              expanded={expanded.has(s.id)}
               tools={toolsByServer[s.id]}
               onTest={onTest}
               onListTools={onListTools}
@@ -888,31 +895,87 @@ function ServerCard({
               <p className="text-[11px] text-text-muted">{tr("card.emptyTools")}</p>
             )}
             {tools && Array.isArray(tools) && tools.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
-                {tools.map((tool) => (
-                  <li
-                    key={tool.name}
-                    data-testid={`tool-${server.name}-${tool.name}`}
-                    className="flex items-start gap-2 text-[11px]"
-                  >
-                    <Icon
-                      name="zap"
-                      size={11}
-                      className="mt-0.5 text-primary shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <span className="font-mono text-text">{tool.name}</span>
-                      {tool.description && (
-                        <span className="text-text-muted"> — {tool.description}</span>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <ToolsList tools={tools} serverName={server.name} />
             )}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Tools list (with inline search) — used when a server is expanded
+// ────────────────────────────────────────────────────────────────────────────
+
+function ToolsList({
+  tools,
+  serverName,
+}: {
+  tools: ToolInfo[];
+  serverName: string;
+}) {
+  const tr = useTranslations("mcp.list");
+  const [query, setQuery] = useState("");
+  // 2026-04-26 · 单个 server 暴露 50+ tool 的情况(github-official 等)
+  // 完全可能。展开 panel 后没有内部搜索,要找特定 tool 只能滚屏。补一个
+  // compact 搜索框 — 同时控制 panel 高度,超 12 个时变成滚动容器,避免
+  // 一次撑满整屏。
+  const lcQuery = query.trim().toLowerCase();
+  const visible = useMemo(() => {
+    if (!lcQuery) return tools;
+    return tools.filter(
+      (t) =>
+        t.name.toLowerCase().includes(lcQuery) ||
+        (t.description ?? "").toLowerCase().includes(lcQuery),
+    );
+  }, [tools, lcQuery]);
+  return (
+    <div className="flex flex-col gap-2">
+      {tools.length > 6 && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={tr("card.toolsSearchPlaceholder")}
+          count={visible.length}
+          total={tools.length}
+          compact
+          shortcut=""
+          testId={`tools-search-${serverName}`}
+        />
+      )}
+      {visible.length === 0 ? (
+        <p className="text-[11px] text-text-subtle italic">
+          {tr("card.toolsNoMatch", { query })}
+        </p>
+      ) : (
+        <ul
+          className={
+            "flex flex-col gap-1.5 " +
+            (tools.length > 12 ? "max-h-72 overflow-y-auto pr-1" : "")
+          }
+        >
+          {visible.map((tool) => (
+            <li
+              key={tool.name}
+              data-testid={`tool-${serverName}-${tool.name}`}
+              className="flex items-start gap-2 text-[11px]"
+            >
+              <Icon
+                name="zap"
+                size={11}
+                className="mt-0.5 text-primary shrink-0"
+              />
+              <div className="min-w-0">
+                <span className="font-mono text-text">{tool.name}</span>
+                {tool.description && (
+                  <span className="text-text-muted"> — {tool.description}</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
