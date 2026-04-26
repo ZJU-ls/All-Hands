@@ -275,3 +275,23 @@ LLM system prompt(_ASK_SYSTEM_PROMPT / ai_explainer / chat 标题生成器)— �
 **结果**:1928 web tests · regression net · typecheck · lint 全绿
 
 **commits**:见 git log
+
+## Round 13 · 2026-04-26 06:13 (cron · 30m)
+
+**主题**:locale-aware 时间格式化 · 干掉硬编码 toLocaleString("zh-CN")
+
+**发现**:3 处用 `toLocaleString("zh-CN", ...)` 写死了中文 locale —
+en 用户看 trace 表 / run header 时,日期会按中文 locale 渲染(e.g.
+"04/26 14:23:05" vs "04/26, 02:23:05 PM")。
+
+**做的事**:
+- components/traces/TraceTable.tsx:formatStartedAt 接 `locale` 参数 ·
+  组件内 useLocale() 注入
+- components/runs/RunHeader.tsx:formatTime 接 `locale` 参数 · 同样 useLocale()
+- lib/format.ts:删除 formatRelativeTime(死函数 · 没人 import · 体内
+  全是硬编码"刚刚 / N 分钟前 / 今天 HH:mm")· 顺手更新文件头注释
+  说明 relative-time 走 catalog + Intl.RelativeTimeFormat
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
