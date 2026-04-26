@@ -31,6 +31,12 @@
       "uninstallConfirm": "Uninstall",
       "noDescription": "No description",
       "builtinLabel": "Builtin",
+      "searchPlaceholder": "Search skills · name / description / id",
+      "noMatch": "No skill matches \"{query}\".",
+      "sortAriaLabel": "Sort by",
+      "sortRecent": "Recent",
+      "sortName": "Name",
+      "sortTools": "Tools",
       "uninstallAria": "Uninstall {name}",
       "loadingLabel": "Loading skills",
       "empty": {
