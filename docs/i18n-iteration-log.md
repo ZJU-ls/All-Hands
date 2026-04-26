@@ -801,3 +801,22 @@ node web/scripts/audit-i18n-dead-keys.mjs --list
 **结果**:1984 web tests · typecheck · lint · regression net 全绿
 
 **commits**:见 git log
+
+## Round 38 · 2026-04-27 00:43 (cron · 30m)
+
+**main 新动作**:新 `/observatory/pricing` 路由 + components/ui/ErrorBoundary +
+新 backend 测试(pricing meta tools / tool-arg validation / web search tool)+
+ADR 0021 自解释 tool。
+
+**做的事**:
+- pricing page 漏一个 `new Date(iso).toLocaleString()` 没传 locale ·
+  fix:formatDate(iso, locale) + useLocale() · 调用点更新
+- ErrorBoundary 是通用 class component,无文案,fallback 由调用者注入
+- 验证三个新 backend 测试不引入 i18n 漏洞
+- pnpm install 拉新依赖 + pnpm build 刷新 routes manifest(routes-smoke
+  之前两个失败是 .next 缓存陈旧,build 后绿)
+- grep 复查 0 处 `.toLocaleString\(\)` 无 locale 残留
+
+**结果**:1999 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
