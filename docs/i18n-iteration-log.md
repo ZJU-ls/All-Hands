@@ -865,3 +865,28 @@ ADR 0021 自解释 tool。
 留作后续清理基线
 
 **commits**:见 git log
+
+## Round 41 · 2026-04-27 02:13 (cron · 30m)
+
+**主题**:dead-key audit varRe 三期 · 处理 indexed lookup + 全动态 template
+
+**继续 R40 的假阳性收口**:
+
+audit 还漏两类 t() 调用形式:
+1. `t(STATUS_KEYS[r.status])` indexed expression(varRe 只接受 bare ident)
+2. `tH(\`${key}.eyebrow\`)` 全动态 template(无静态前缀,backticks 之前直接被排除)
+
+**做的事**:
+- varRe 改成 negative-character class:第一字符不是 `"` / `'` / `)` / `whitespace`,
+  且允许 `` ` `` 紧跟 `$`(覆盖 `\`${var}…\`` 全动态模板)
+- 简化 while 循环
+
+**结果**:dead key 数 128 → 78(再砍掉 50 个假阳性)
+- catalog 2481 / live literal 8665 / template prefix 38 / runtime ns 29 / 死 78 (3.1%)
+- 1999 web tests · typecheck · lint 全绿
+
+**剩 78 多是真死** · 大头 `common.*`(共享词预留)+ 几个废弃 settings.cards.* +
+welcome.highlights.* 那些动态 key 仍漏(因为 helper 函数参数别名,audit
+heuristic 静态分析做不了)。继续保留作清理基线。
+
+**commits**:见 git log

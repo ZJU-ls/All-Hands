@@ -85,17 +85,17 @@ for (const dir of ["app", "components", "lib"]) {
     for (const d of decls) {
       const litRe = new RegExp(`\\b${d.name}(?:\\.(?:rich|raw|has))?\\(\\s*"([a-zA-Z0-9_.]+)"`, "g");
       const tplRe = new RegExp(`\\b${d.name}(?:\\.(?:rich|raw|has))?\\(\\s*\`([a-zA-Z0-9_.]+)\\.\\$\\{`, "g");
-      // Variable-argument call: `name(varName)` where varName is a bare ident.
-      const varRe = new RegExp(`\\b${d.name}(?:\\.(?:rich|raw|has))?\\(\\s*([a-zA-Z_][a-zA-Z0-9_.]*)\\s*[),]`, "g");
+      // Variable-argument call: anything that isn't a quoted string literal.
+      // - `name(varName)` / `name(table[expr])` / `name(\`${var}.suffix\`)`
+      //   all count as "runtime — namespace fully alive".
+      // First char after `(` must be NEITHER " NOR ' (those have the static
+      // regexes above). Backticks count IF their first inner char is `$`
+      // (i.e. starts with `${`, no static prefix to verify against catalog).
+      const varRe = new RegExp(`\\b${d.name}(?:\\.(?:rich|raw|has))?\\(\\s*(?:[^"'\`)\\s]|\`\\$)`, "g");
       let mm;
       while ((mm = litRe.exec(src))) used.add(`${d.ns}.${mm[1]}`);
       while ((mm = tplRe.exec(src))) usedPrefixes.add(`${d.ns}.${mm[1]}`);
-      while ((mm = varRe.exec(src))) {
-        // Only count it as runtime if the arg isn't a quoted string (already
-        // handled above) — varRe matches bare idents, so anything that looks
-        // like a JS identifier passes through.
-        usedRuntimeNs.add(d.ns);
-      }
+      while ((mm = varRe.exec(src))) usedRuntimeNs.add(d.ns);
     }
   }
 }
