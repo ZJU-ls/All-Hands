@@ -25,6 +25,7 @@
    - `read_skill_file('allhands.design', 'references/landing.html')` —— 落地页 hero + features
    - `read_skill_file('allhands.design', 'references/dashboard.html')` —— 数据看板
    - `read_skill_file('allhands.design', 'references/poster.html')` —— 海报 / 封面
+   - `read_skill_file('allhands.design', 'references/pptx-deck.md')` —— pptx 标准 6-slide 大纲 + slides[] 调用示例
    - `read_skill_file('allhands.design', 'references/components.md')` —— 组件代码片段(card / button / pill / kbd / hairline-divider / glass-panel)
    - `read_skill_file('allhands.design', 'references/tokens.md')` —— 全部 design tokens 详表
 3. 简单需求直接抄 base · 复杂需求用 landing / dashboard / poster · 都改占位文字 + 数据
@@ -88,6 +89,19 @@ render_drawio({name:"系统架构", xml:"..."})
 - ❌ box-shadow 用 grey(`rgba(0,0,0,.5)`)→ 暗主题看不见 · 用 `rgba(0,0,0,.4)` 或 primary-glow
 - ❌ 渐变滥用 → 渐变只用在 hero h1 / mesh 背景 / 一个强调按钮 · 不要全页渐变
 - ❌ 一页超过 3 个色族 → 蓝灰主调 + 1 个强调状态色就够 · 4 个起就乱
+
+## 自检清单(产出前内心 checklist)
+
+调 `artifact_create*` 前问自己:
+
+1. **三色渐变标题**: 我的 hero h1 是不是 `linear-gradient(135deg, var(--primary) 0%, #6366F1 50%, var(--accent) 100%)` + `-webkit-background-clip: text`?
+2. **暗主题自适配**: 是否有 `@media (prefers-color-scheme: dark) { :root { ... } }` 段?token 全部用 `var(--xxx)` 不写死 hex?
+3. **Tabular nums**: 任何数字 KPI 是否 `font-variant-numeric: tabular-nums`?
+4. **Hairline 不是粗框**: border 都是 `1px solid var(--border)` · 不是 2px / 3px?
+5. **Mesh hero(暗主题)**: `radial-gradient(circle at ...)` + `filter: blur(40px)` 在 .hero::before?
+6. **Shadow-glow(暗主题强调)**: 强调 CTA 用 `box-shadow: 0 0 0 1px ..., 0 12px 32px var(--primary-glow);`?
+
+三条都对 → 出。少一个 → 加上再出。
 
 ## 失败兜底
 

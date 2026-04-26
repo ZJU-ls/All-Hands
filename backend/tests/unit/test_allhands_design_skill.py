@@ -39,6 +39,7 @@ def test_skill_yaml_loads_with_expected_tools() -> None:
         "references/landing.html",
         "references/dashboard.html",
         "references/poster.html",
+        "references/pptx-deck.md",
         "references/components.md",
         "references/tokens.md",
         "templates/drawio/brand-flow.xml",
