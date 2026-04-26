@@ -503,11 +503,11 @@ def make_artifact_create_executor(
             return {"error": str(exc)}
         except Exception as exc:
             return {"error": f"artifact_create failed: {exc}"}
-        return {
-            "artifact_id": artifact.id,
-            "version": artifact.version,
-            "kind": artifact.kind.value,
-        }
+        return _artifact_create_result(
+            artifact_id=artifact.id,
+            version=artifact.version,
+            kind_value=artifact.kind.value,
+        )
 
     return _exec
 
@@ -900,6 +900,39 @@ def make_artifact_search_executor(
 # any of them.
 
 
+def _artifact_create_result(
+    *,
+    artifact_id: str,
+    version: int,
+    kind_value: str,
+    warnings: list[str] | None = None,
+) -> dict[str, Any]:
+    """Unified return shape for every artifact_create* tool.
+
+    Carries BOTH a render envelope (so the chat shows an Artifact.Preview
+    card automatically · the agent no longer needs a follow-up
+    artifact_render call · _as_render_envelope picks up component+props)
+    AND the flat artifact_id / version / kind keys (so downstream tools
+    like artifact_update / artifact_pin / agent prose can chain). Solves
+    user feedback 2026-04-26 「html 的卡片提醒呢? 现在啥都没有」 — agent
+    forgot the artifact_render second step. With auto-render, every
+    successful create posts a card, regardless of model discipline.
+    """
+    out: dict[str, Any] = {
+        "component": "Artifact.Preview",
+        "props": {"artifact_id": artifact_id, "version": version},
+        "interactions": [],
+        # Flat fields for agent ergonomics + backwards compat. Agents call
+        # `result["artifact_id"]` to chain into update/delete/pin.
+        "artifact_id": artifact_id,
+        "version": version,
+        "kind": kind_value,
+    }
+    if warnings:
+        out["warnings"] = warnings
+    return out
+
+
 async def _persist_office_artifact(
     *,
     maker: async_sessionmaker[AsyncSession],
@@ -965,11 +998,11 @@ async def _persist_office_artifact(
                 size_bytes=size,
             )
         )
-    return {
-        "artifact_id": artifact.id,
-        "version": 1,
-        "kind": kind.value,
-    }
+    return _artifact_create_result(
+        artifact_id=artifact.id,
+        version=1,
+        kind_value=kind.value,
+    )
 
 
 def make_artifact_create_pdf_executor(
@@ -1274,14 +1307,11 @@ def make_render_drawio_executor(
             return {"error": str(exc)}
         except Exception as exc:
             return {"error": f"render_drawio failed: {exc}"}
-        return {
-            "component": "Artifact.Preview",
-            "props": {
-                "artifact_id": persisted["artifact_id"],
-                "version": persisted["version"],
-            },
-            "interactions": [],
-        }
+        # _persist_office_artifact already returns the unified shape
+        # (component + props + flat artifact_id/version/kind), so a bare
+        # passthrough is correct. Keeps drawio in lock-step with all the
+        # other artifact_create* tools — same auto-render contract.
+        return persisted
 
     return _exec
 
