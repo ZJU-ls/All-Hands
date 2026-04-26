@@ -36,7 +36,7 @@
 
 ---
 
-## 核心设计原则(8 条,排序即优先级 · 原则 1-7 见 [ADR 0011](adr/0011-principles-refresh.md) · 原则 8 见 [ADR 0017](adr/0017-event-sourced-claude-code-pattern.md))
+## 核心设计原则(9 条,排序即优先级 · 原则 1-7 见 [ADR 0011](adr/0011-principles-refresh.md) · 原则 8 见 [ADR 0017](adr/0017-event-sourced-claude-code-pattern.md) · 原则 9 见 [ADR 0021](adr/0021-tool-skill-self-explanation.md))
 
 > **每条原则都给出「不变量 / 来源 / 推论 / 回归防御」四段结构。**
 >
@@ -211,6 +211,27 @@
 - `uv run lint-imports` · `langgraph.checkpoint.*` 不泄出 `execution/`(ADR 0014 R1 继续生效)· 新增 `langgraph.graph.*` 同等守护(Phase 1 落地时加)
 - P1-P4 回归测试套件(见 ADR 0017 · Regression defense)验证:事件日志作唯一 SoT · `messages` 表作 projection cache · `build_llm_context` 纯函数性 · turn abort 合成 assistant 注入
 - 未来引入新大型框架 · 必须在 PR 说明里回答"是否与 Claude Code 模式冲突"· reviewer 按 L19 打回
+
+### 原则 9 · Tool / Skill 自解释 · 不打 prompt 补丁(新 · 见 [ADR 0021](adr/0021-tool-skill-self-explanation.md))
+
+**不变量:** Tool 说契约(input_schema / scope / requires_confirmation / returns) · Skill 说偏好(决策树 / 触发关键词 / 行为指导) · Lead prompt 说身份 + 通用工作流 + capability discovery。**三层职责清晰,不漂移。** 出错时 LLM 收到结构化 envelope `{error, field, expected, received, hint}` 自纠,不再吐 stack trace。任何用 prompt instruction 解决可以用 enum / required / 类型约束解决的问题,都是补丁。
+
+**来源:**
+- round-22 全局 review · 用户反馈"出错了应该让 LLM 知道哪里错从而可以改正确"
+- ADR 0021 · 提升为第 9 条核心原则 · 配合 round-22 实施完成
+
+**推论:**
+- **Tool description = 契约**:陈述句"Returns X. Use after Y." · **不**写 "**You must**" "**MUST**" "do NOT chain"
+- **schema-driven 校验**:`coerce_and_validate(tool, kwargs)` · LLM 出错收 `ToolArgError({field, expected, received, hint})` · 一次错改对
+- **JSON 容错**:stringified array/object 可 coerce 时静默 coerce(高频小错宽容)· 不可 coerce 时报 parse error 摘要 + 一句话 hint
+- **Skill body 不复述工具契约**:scope / requires_confirmation / 类型约束已在 schema · 复述只会漂移
+- **Lead prompt 不当 cheatsheet**:不教具体工具用法 · 由 tool description 自己说
+
+**回归防御:**
+- ADR 0021 + `docs/principle-audit.md` 立契约 · review 时凡 description 出现 `**You must**` / `STOP` / `MUST` / `do NOT` / `❌` 列表 · 打回
+- `lead_agent.md` 行数 ≤ 80 · 加新内容前先问"这是 tool description / skill body 该说的吗"
+- 错误测试钉住 envelope shape:`tests/unit/test_tool_arg_validation.py` 17 cases · `tests/unit/test_tool_pipeline.py::test_*_arg_validation_*` 4 e2e · 守住 `{error, field, expected, received, hint}` 不漂移
+- 加新 tool 时 PR review 检查:description 是陈述句不是祈使句
 
 ---
 
