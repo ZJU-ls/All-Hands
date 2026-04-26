@@ -109,7 +109,7 @@ export function ProgressPanel({ conversationId }: Props) {
   return (
     <div
       data-testid="progress-panel"
-      className="border-t border-border bg-surface-2"
+      className="bg-surface-2"
     >
       <div className="mx-auto w-full max-w-6xl px-4 py-2">
         {/* Tab bar — always visible · click to expand / collapse below */}
