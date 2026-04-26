@@ -820,3 +820,23 @@ ADR 0021 自解释 tool。
 **结果**:1999 web tests · typecheck · lint · regression net 全绿
 
 **commits**:见 git log
+
+## Round 39 · 2026-04-27 01:13 (cron · 30m)
+
+**主题**:resolver 多 alias 多重 decl 验证 + dead-key 数据更新
+
+**做的事**:
+- 验证 `tr` / `ta` 等非 `t` 命名 alias 仍能被 resolver 正确扫描:
+  - app/mcp-servers/[id] 三个 `const tr = useTranslations(...)` 不同 ns ·
+    每个 `tr.rich/...` 调用按 line-proximity 解析到正确 decl
+  - app/knowledge `const ta = useTranslations("knowledge.advanced")` 同理
+  - 现有 resolver 测试包含所有这些调用,通过
+- dead-key 审计更新:catalog 2452 → 2481(+29 全在 pricing namespace,
+  全部 alive)· 死 key 仍 259(10.4%)
+- 大头仍然是 `common.*` 的 21 个通用词(`back / cancel / close / loading /
+  ok / yes / no / save / search / settings / refresh / copy / copied …`)·
+  这些是「共享词汇」预留 · 各页面用的是页内同义 key · 未删除(留作公约)
+
+**结果**:本轮零代码改动 · regression net 全绿
+
+**commits**:仅本条 log
