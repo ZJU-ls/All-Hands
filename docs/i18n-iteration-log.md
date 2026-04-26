@@ -407,3 +407,26 @@ i18n 漏洞,留给独立 PR。
 残留 `new Date(...).toLocale*()` 不带 locale 的写法
 
 **commits**:见 git log
+
+## Round 19 · 2026-04-26 09:13 (cron · 30m)
+
+**主题**:三个剩下的 d.toLocaleString() 末班车
+
+**发现**:R18 漏掉了三个文件级 helper —
+app/triggers/page.tsx · app/skills/[id]/page.tsx · app/mcp-servers/[id]/page.tsx
+都有 `function formatTime(iso) { return new Date(iso).toLocaleString() }` ·
+没受 d.toLocaleString() 模式扫描的影响,但本质问题相同。
+
+**做的事**:
+- 三个 formatTime 都接 locale 参数 · 调用方 useLocale() 注入
+- triggers/page TriggerCard · skills/[id] Overview + VersionsTab · mcp-servers/[id]
+  Overview + HealthTab · 五个组件加 useLocale
+
+**剩余无 locale**:
+- 仅 1 处:tasks_used.toLocaleString()(数值千分位)· 不属 date · 全栈数值
+  千分位 locale 化是更大重构 · 当前 navigator 默认行为可以接受
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿 · 全栈
+date 格式化 0 处 navigator 默认
+
+**commits**:见 git log
