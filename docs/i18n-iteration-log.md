@@ -1055,3 +1055,30 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 本轮零代码改动
 
 **commits**:仅本条 log
+
+## Round 50 · 2026-04-27 06:43 (cron · 30m) 🎉
+
+**主题**:小整数 milestone 审计 · 50 轮回看
+
+**做的事**:
+- grep 没有 useTranslations/useLocale/getTranslations 的 .tsx 文件 → 12 个,
+  全部确认无用户可见文案(纯 UI 原子 / dev-only / 转发组件):
+  - app/page.tsx(渲染 Cockpit · Cockpit 自己有 i18n)
+  - app/runs/[run_id]/page.tsx(title `trace · {id}` · trace 是技术术语 · 双语通用)
+  - app/gateway/{providers,models}/page.tsx(legacy 重定向)
+  - app/design-lab/* 和 __tests__(dev-only)
+  - components/ui/{icon,PageHeader,HoverPeek,HairlineAccent,StatusPill,Sparkline,
+    DotGridAvatar,DotGridBackdrop,icons}.tsx(纯视觉原子)
+
+**50 轮里程碑回顾**:
+- catalog: web 2445 + backend 50 keys · 死率 0% · 双侧 resolver test 守护
+- 硬编码扫描:web `i18n-no-hardcoded-zh.test` + backend `test_no_hardcoded_chinese_in_routers`
+  + 两侧 `test_i18n_keys_resolve` 共 4 套回归网
+- 双语完整覆盖:48 个 page · 100+ component · backend 17 个 router 文件 ·
+  7 个 channel adapter · LLM prompts / DB seed 等 by-design 单语已文档化
+- 全栈 `.toLocaleString()` 都跟随 useLocale · 浏览器 tab title 跟随 locale ·
+  iframe / aria-label 跟随 locale
+
+**结果**:零代码改动 · 双侧测试全绿 · 平台 i18n 在长期可维护状态
+
+**commits**:仅本条 log
