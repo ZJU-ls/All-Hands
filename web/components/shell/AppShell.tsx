@@ -367,6 +367,14 @@ export function AppShell({
   const searchParams = useSearchParams();
   const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
 
+  // Sync browser tab title with the page-supplied title (locale-aware via
+  // the `title` prop the caller computed from useTranslations). Falls back
+  // to "allhands" when a page omits it.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.title = title ? `${title} · allhands` : "allhands";
+  }, [title]);
+
   // Hydrate sidebar collapsed pref from localStorage post-mount (avoids SSR mismatch).
   useEffect(() => {
     try {

@@ -342,3 +342,22 @@ i18n 漏洞,留给独立 PR。
 本轮零代码改动
 
 **commits**:仅本条 log
+
+## Round 16 · 2026-04-26 07:43 (cron · 30m)
+
+**主题**:per-page 浏览器 tab title · 跟随 locale + 当前页
+
+**做的事**:
+- AppShell 新加 useEffect 同步 `title` prop 到 `document.title` ·
+  format: `"{pageTitle} · allhands"` · 没传 title 时 fall back 到
+  纯 "allhands"
+- 所有页面已经在用 `<AppShell title={t("...")}>`,所以零 page-side 改动
+  自动覆盖:Cockpit / Chat / Tasks / Employees / Skills / MCP / Gateway /
+  Knowledge / Channels / Triggers / Confirmations / Traces / Observatory /
+  Settings / About …
+- en 用户切到 /tasks 浏览器 tab 显示 "Tasks · allhands"
+  zh 用户同一页显示 "任务 · allhands"
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
