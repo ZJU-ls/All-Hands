@@ -122,6 +122,10 @@
       "vecRank": "vec #{rank}",
       "scoreLabel": "score"
     },
+    "starters": {
+      "label": "试试这些问题",
+      "hint": "AI 根据当前知识库的标题 / 章节自动生成 · 点一条即可问"
+    },
     "ask": {
       "askingLabel": "提问",
       "answerLabel": "回答",

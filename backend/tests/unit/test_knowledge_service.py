@@ -217,6 +217,61 @@ async def test_ask_stream_no_hits_yields_friendly_delta_then_done(
     assert frames[2]["used_model"] is None
 
 
+async def test_suggest_starter_questions_falls_back_when_no_chat_provider(
+    svc: KnowledgeService,
+) -> None:
+    """No chat provider → graceful '<title> 里讲了什么?' fallback rather
+    than raising; UI counts on this so the chip row never disappears
+    just because /gateway is empty."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(
+        kb.id, title="Hybrid Retrieval", content_bytes=_SAMPLE_MD, filename="a.md"
+    )
+    qs = await svc.suggest_starter_questions(kb.id, limit=2)
+    assert isinstance(qs, list)
+    assert len(qs) == 1  # only one doc → one fallback question
+    assert "Hybrid Retrieval" in qs[0]
+
+
+async def test_suggest_starter_questions_empty_kb_returns_empty(
+    svc: KnowledgeService,
+) -> None:
+    kb = await svc.create_kb(name="empty")
+    assert await svc.suggest_starter_questions(kb.id) == []
+
+
+async def test_suggest_starter_questions_uses_llm_and_caches(
+    svc: KnowledgeService,
+) -> None:
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(
+        kb.id, title="Hybrid Retrieval", content_bytes=_SAMPLE_MD, filename="a.md"
+    )
+
+    calls: list[int] = []
+
+    async def fake(self, system, user, *, model_ref=None, history=None):
+        calls.append(1)
+        return (
+            "RRF 怎么工作?\nbge-reranker 提升多少?\n关键词命中和向量召回有什么差?",
+            "fake",
+        )
+
+    KnowledgeService._call_chat_llm = fake  # type: ignore[method-assign,assignment]
+    qs1 = await svc.suggest_starter_questions(kb.id, limit=3)
+    qs2 = await svc.suggest_starter_questions(kb.id, limit=3)
+    assert (
+        qs1
+        == qs2
+        == [
+            "RRF 怎么工作?",
+            "bge-reranker 提升多少?",
+            "关键词命中和向量召回有什么差?",
+        ]
+    )
+    assert len(calls) == 1, "second call must hit the cache"
+
+
 async def test_ask_history_appended_into_messages(svc: KnowledgeService) -> None:
     """When ``history`` is passed, prior turns must reach the chat model
     as alternating Human/AI messages between the system and the new user

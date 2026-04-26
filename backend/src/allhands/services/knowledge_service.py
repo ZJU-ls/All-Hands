@@ -154,6 +154,14 @@ def _build_messages(system: str, user: str, history: list[dict[str, str]] | None
     return msgs
 
 
+# In-process cache for `suggest_starter_questions`. Key = (kb_id,
+# kb.updated_at iso, limit) → questions list. KB writes bump
+# ``updated_at`` so adding a doc invalidates the cache the next call.
+# Dict-based, single-process; that's fine for v0 — when we go multi-worker
+# we can move this to redis with the same key shape.
+_STARTER_CACHE: dict[tuple[str, str, int], list[str]] = {}
+
+
 class KBError(DomainError):
     """KB-layer validation / not-found error."""
 
@@ -837,6 +845,79 @@ class KnowledgeService:
 
             ref = preset_for(provider.kind).default_model
         return provider, ref
+
+    async def suggest_starter_questions(
+        self, kb_id: str, *, limit: int = 4, model_ref: str | None = None
+    ) -> list[str]:
+        """Return a small set of LLM-generated "starter questions" for a KB.
+
+        The Ask mode opens onto a blank canvas — users with a fresh KB
+        often don't know what to ask. NotebookLM / Glean both surface a
+        handful of suggested prompts derived from the corpus; we do the
+        same: collect doc titles + top section headings, ask the chat LLM
+        to propose ``limit`` short questions, return them as plain strings.
+
+        Cache key = ``(kb_id, kb.updated_at, limit)`` — the ``updated_at``
+        bumps whenever a doc is added / removed, so adding a new PDF
+        invalidates stale suggestions automatically. No LLM call when the
+        KB has no documents (returns an empty list — UI shows the empty
+        starter copy instead).
+        """
+        kb = await self.get_kb(kb_id)
+        cache_key = (kb_id, kb.updated_at.isoformat(), limit)
+        cached = _STARTER_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+        docs = await self.list_documents(kb_id, limit=12)
+        if not docs:
+            return []
+
+        # Lightweight corpus snapshot — titles + the first section path of
+        # each doc keep the prompt under ~1k tokens regardless of corpus
+        # size. Falling back to the title alone when no chunks exist yet.
+        corpus_lines: list[str] = []
+        for d in docs:
+            chunks = await self.list_chunks_for_document(d.id)
+            sections = [c.section_path for c in chunks if c.section_path]
+            top_sections = list(dict.fromkeys(sections))[:3]
+            if top_sections:
+                corpus_lines.append(f"- {d.title} :: {' / '.join(top_sections)}")
+            else:
+                corpus_lines.append(f"- {d.title}")
+
+        system = (
+            "You generate starter questions a curious user might ask of a "
+            "private knowledge base. Be specific to the listed documents — "
+            "no generic 'what is this' fluff. Output ONE question per line, "
+            "no numbering, no quotes, no leading dash. Match the language "
+            "of the document titles (Chinese in → Chinese out)."
+        )
+        user = (
+            f"Knowledge base: {kb.name}\n"
+            f"Documents (title :: top sections):\n"
+            + "\n".join(corpus_lines)
+            + f"\n\nGenerate exactly {limit} short, useful starter questions."
+        )
+
+        try:
+            text, _ = await self._call_chat_llm(system, user, model_ref=model_ref)
+        except _NoChatProvider:
+            # Graceful degrade: fall back to "在 <title> 里说了什么?" for
+            # the first ``limit`` docs. Better than a blank panel.
+            return [f"{d.title} 里讲了什么?" for d in docs[:limit]]
+        except Exception:
+            _logger.exception("kb.suggest_starter_questions LLM error")
+            return [f"{d.title} 里讲了什么?" for d in docs[:limit]]
+
+        questions = [
+            line.strip().lstrip("-•*0123456789.) ").strip()
+            for line in text.splitlines()
+            if line.strip()
+        ]
+        questions = [q for q in questions if q][:limit]
+        _STARTER_CACHE[cache_key] = questions
+        return questions
 
     async def diagnose_search(
         self, kb_id: str, query: str, *, top_k: int = 8
