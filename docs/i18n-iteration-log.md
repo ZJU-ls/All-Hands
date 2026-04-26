@@ -318,3 +318,27 @@ en 用户看 trace 表 / run header 时,日期会按中文 locale 渲染(e.g.
 **结果**:1928 web tests · typecheck · lint · regression net 全绿
 
 **commits**:见 git log
+
+## Round 15 · 2026-04-26 07:13 (cron · 30m)
+
+**主题**:广度审计 · 找不到新硬编码
+
+**做的事**:
+- 扫 lib/ + app/ + components/ 的中文字面量 → 全在 JSDoc 注释里(非运行时输出)
+- 扫 backend services/ + execution/ + api/middleware/ → 唯有 LLM system prompts
+  和 bootstrap DB seed 字段(均 by-design)
+- 扫 backend execution/tools/meta/ tool result error / detail → 0 处硬编码
+- shell components(AppShell · sidebar · TopBar · Drawer)→ 0 处硬编码
+- e2e tests 里的 Chinese aria-label 是断言测试,不是用户文案
+- placeholder 里的中文都是技术 ID 示例(cron 表达式 / function ID / URL)
+
+**发现一项 polish 机会(未做 · 留作后续)**:
+所有页面共享 root layout 的 `title: "allhands"` · 浏览器 tab 永远显示同一文字,
+缺页面级 generateMetadata。但 client component 不能直接导 generateMetadata,
+需要要么拆 server layout 要么走 useEffect → document.title。是改进而非
+i18n 漏洞,留给独立 PR。
+
+**结果**:1928 web tests + 12 backend i18n tests + regression net 全绿 ·
+本轮零代码改动
+
+**commits**:仅本条 log
