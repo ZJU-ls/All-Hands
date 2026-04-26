@@ -684,3 +684,20 @@ artifacts page sort / review gates / skills+mcp tabs / KeyboardShortcutsModal �
 回归网现在覆盖三类 t() 调用形式 × 三种值类型(string / array / nested object)。
 
 **commits**:见 git log
+
+## Round 32 · 2026-04-26 15:43 (cron · 30m)
+
+**主题**:backend resolver 升级 · 把 t(f"...{var}") f-string prefix 也纳入
+
+**做的事**:
+- backend/tests/unit/test_i18n_keys_resolve.py:
+  - 新加 `TPL_RE` 抓 `t(f"a.b.{var}…")` 模式 · 类型 web R30/R31 一致
+  - 加 `_all_prefixes()` 把 catalog 所有 sub-prefix 进 set
+  - f-string call 要求 prefix 在 set 里
+- 反向验证:把 `t(f"providers.label.{p.kind}")` sed 成 `t(f"xproviders.label.{p.kind}")` ·
+  test 立刻报 `xproviders.label.* (f-string prefix)` · 恢复后通过
+
+**结果**:backend i18n test 通过 · 现在 web + backend 双侧都覆盖
+literal + template-prefix 两种 t() 形式
+
+**commits**:见 git log
