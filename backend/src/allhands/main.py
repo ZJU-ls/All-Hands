@@ -67,6 +67,37 @@ async def startup() -> None:
     except Exception as exc:
         log.warning("lead_agent.seed.failed", error=str(exc))
 
+    # 2026-04-26 P3 · drawio-creator skill was merged into allhands.artifacts.
+    # Sanity scan: any stale 'allhands.drawio-creator' reference in the DB
+    # would resolve to "skill not found" and break activation. The 0029
+    # alembic migration rewrites these to allhands.artifacts; this scan is
+    # the second line of defence — log loudly if anything slipped through so
+    # ops can re-run the migration. Scan is best-effort (non-fatal).
+    try:
+        from allhands.services.bootstrap_service import (
+            scan_for_dropped_skill_references,
+        )
+
+        maker = get_sessionmaker()
+        async with maker() as session:
+            stale = await scan_for_dropped_skill_references(
+                session, dropped_id="allhands.drawio-creator"
+            )
+        if stale:
+            log.warning(
+                "drawio_creator.stale_refs",
+                count=stale,
+                hint=(
+                    "run `uv run alembic upgrade head` then restart · old skill "
+                    "id 'allhands.drawio-creator' should have been replaced with "
+                    "'allhands.artifacts'"
+                ),
+            )
+        else:
+            log.info("drawio_creator.migrated", status="ok")
+    except Exception as exc:
+        log.warning("drawio_creator.scan.failed", error=str(exc))
+
     # Dev / test seed: ensure every page has real "full house" data on cold start
     # (I-0020). No-op in prod unless ALLHANDS_SEED=1. Track N's seed_service
     # supersedes Track K's bootstrap_service.ensure_gateway_demo_seeds — the

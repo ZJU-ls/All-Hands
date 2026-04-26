@@ -31,7 +31,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { Composer, ThinkingToggle } from "@/components/chat/Composer";
 import { BrandMark } from "@/components/brand/BrandMark";
@@ -73,10 +73,10 @@ function fmtDuration(ms: number | undefined): string {
  *  Keeps small counts readable as exact integers (token-level audits) while
  *  large counts collapse to readable order-of-magnitude.
  */
-function fmtCount(n: number | undefined): string {
+function fmtCount(n: number | undefined, locale: string): string {
   if (n === undefined || n === null || !Number.isFinite(n)) return "—";
   const v = Math.round(n);
-  if (v < 10_000) return v.toLocaleString();
+  if (v < 10_000) return v.toLocaleString(locale);
   if (v < 1_000_000) return `${(v / 1_000).toFixed(1)}k`;
   return `${(v / 1_000_000).toFixed(2)}M`;
 }
@@ -976,15 +976,16 @@ function ReasoningBlock({
 
 function MetricsRow({ metrics }: { metrics: TestMetrics }) {
   const t = useTranslations("modelTestMetrics");
+  const locale = useLocale();
   const showReasoningMetric =
     metrics.reasoningFirstMs !== undefined && metrics.reasoningFirstMs > 0;
   // 把 tok i/o/t 拆成三个独立 chip ——
   // 旧设计把 "28 / 568 / 596" 塞进单个 chip,4 列 grid 下宽度不够就被
   // truncate 截成 "28 / 568 / 5..."。每个数据点单独一个 chip 后,任何一
   // 列宽都装得下单个数字,truncate 不会触发。
-  const tokIn = metrics.inputTokens !== undefined ? fmtCount(metrics.inputTokens) : "—";
-  const tokOut = metrics.inputTokens !== undefined ? fmtCount(metrics.outputTokens ?? 0) : "—";
-  const tokTot = metrics.inputTokens !== undefined ? fmtCount(metrics.totalTokens ?? 0) : "—";
+  const tokIn = metrics.inputTokens !== undefined ? fmtCount(metrics.inputTokens, locale) : "—";
+  const tokOut = metrics.inputTokens !== undefined ? fmtCount(metrics.outputTokens ?? 0, locale) : "—";
+  const tokTot = metrics.inputTokens !== undefined ? fmtCount(metrics.totalTokens ?? 0, locale) : "—";
   return (
     <div
       data-testid="model-test-metrics"

@@ -32,6 +32,14 @@ from allhands.execution.agent_loop import _looks_like_artifact_hallucination
         "Here's the HTML page",
         "Here is the HTML you asked for",
         "以下是为你定制的方案",
+        # 2026-04-26 · qwen3 在「用 html 展示...」请求下不调 tool 而是描述,
+        # 用户截图原话「已为您生成"平台整体架构图"」
+        '已为您生成"平台整体架构图"',
+        "已为您创建一个交互式 HTML 页面",
+        "已为您准备好",
+        "已为你生成 HTML 页面",
+        "为您生成了一份报告",
+        "为你生成了示意图",
     ],
 )
 def test_known_hallucination_phrases_detected(text: str) -> None:

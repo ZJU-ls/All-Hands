@@ -15,6 +15,7 @@ import {
 import { ConversationSwitcher } from "@/components/chat/ConversationSwitcher";
 import { AppShell } from "@/components/shell/AppShell";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
+import { useArtifactFocus } from "@/lib/artifact-focus-store";
 import { ErrorState } from "@/components/state";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -110,6 +111,15 @@ export default function ConversationPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const resetChatStore = useChatStore((s) => s.reset);
+
+  // 2026-04-26 · click-to-focus: a chat-side Artifact.Card click writes to
+  // the focus store · this auto-opens the panel · ArtifactPanel itself
+  // listens to the same store and jumps into the detail view.
+  const focusedArtifactId = useArtifactFocus((s) => s.artifactId);
+  const focusBumpTick = useArtifactFocus((s) => s.bumpTick);
+  useEffect(() => {
+    if (focusedArtifactId) setPanelOpen(true);
+  }, [focusedArtifactId, focusBumpTick]);
   const retryAttemptRef = useRef(0);
   const manualRetryRef = useRef<() => void>(() => {});
 

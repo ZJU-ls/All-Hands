@@ -5,10 +5,12 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
+import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { SkillExplainer } from "@/components/skills/SkillExplainer";
+import { SkillFilesTab } from "@/components/skills/SkillFilesTab";
 
 /**
  * Skill detail page · ADR 0016 V2 Azure Live polish.
@@ -46,13 +48,14 @@ type Employee = {
   model_ref: string;
 };
 
-type Tab = "overview" | "prompt" | "versions" | "dependencies";
+type Tab = "overview" | "prompt" | "files" | "versions" | "dependencies";
 
 type LoadStatus = "loading" | "ready" | "notfound" | "error";
 
 const TABS: ReadonlyArray<readonly [Tab, IconName]> = [
   ["overview", "layout-grid"],
   ["prompt", "file-code-2"],
+  ["files", "folder"],
   ["versions", "clock"],
   ["dependencies", "share-2"],
 ];
@@ -193,6 +196,18 @@ export default function SkillDetailPage() {
                 <Overview skill={skill} dependents={dependents} />
               )}
               {tab === "prompt" && <PromptTab skill={skill} />}
+              {tab === "files" && (
+                <SkillFilesTab
+                  skillId={skill.id}
+                  source={
+                    (skill.source as
+                      | "builtin"
+                      | "github"
+                      | "market"
+                      | "local") ?? "local"
+                  }
+                />
+              )}
               {tab === "versions" && <VersionsTab skill={skill} />}
               {tab === "dependencies" && <DependenciesTab skill={skill} />}
             </>
@@ -594,12 +609,15 @@ function PromptTab({ skill }: { skill: Skill }) {
     <div data-testid="tab-panel-prompt" className="space-y-5">
       <Section title={t("section")} icon="file-code-2">
         {skill.prompt_fragment ? (
-          <pre
+          <div
             data-testid="prompt-fragment"
-            className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-4 whitespace-pre-wrap break-words leading-relaxed"
+            className="rounded-lg border border-border bg-surface-2 p-4"
           >
-            {skill.prompt_fragment}
-          </pre>
+            <AgentMarkdown
+              content={skill.prompt_fragment}
+              className="text-[13px] leading-relaxed"
+            />
+          </div>
         ) : (
           <p
             data-testid="prompt-empty"

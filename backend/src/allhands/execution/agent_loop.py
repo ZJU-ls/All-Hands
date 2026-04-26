@@ -166,6 +166,15 @@ _ARTIFACT_HALLUC_PATTERNS = (
     "我已为你",
     "我已经创建",
     "我为你创建",
+    # 2026-04-26 + qwen3-plus 的更多变体(用户截图反馈「现在啥都没有」)
+    "已为您生成",
+    "已为您创建",
+    "已为您准备",
+    "已为你生成",
+    "已为你创建",
+    "已为你准备",
+    "为您生成了",
+    "为你生成了",
     "i've created",
     "i have created",
     "here's the html",
@@ -712,6 +721,7 @@ class AgentLoop:
             "allhands.artifacts.create_csv",
             "allhands.artifacts.create_docx",
             "allhands.artifacts.create_pptx",
+            "allhands.artifacts.render_drawio",
             "allhands.artifacts.update",
             "allhands.artifacts.rollback",
         ):
@@ -724,6 +734,7 @@ class AgentLoop:
                 make_artifact_create_xlsx_executor,
                 make_artifact_rollback_executor,
                 make_artifact_update_executor,
+                make_render_drawio_executor,
             )
             from allhands.persistence.db import get_sessionmaker
 
@@ -740,6 +751,7 @@ class AgentLoop:
                 "allhands.artifacts.create_csv": make_artifact_create_csv_executor,
                 "allhands.artifacts.create_docx": make_artifact_create_docx_executor,
                 "allhands.artifacts.create_pptx": make_artifact_create_pptx_executor,
+                "allhands.artifacts.render_drawio": make_render_drawio_executor,
                 "allhands.artifacts.update": make_artifact_update_executor,
                 "allhands.artifacts.rollback": make_artifact_rollback_executor,
             }
@@ -893,18 +905,31 @@ class AgentLoop:
     ) -> PermissionDecision:
         """Permission decision for one tool_use.
 
-        Currently:
-          * WRITE / IRREVERSIBLE / BOOTSTRAP scope ∧ requires_confirmation
-            ∧ confirmation_signal wired → Defer (suspend, ask user)
-          * everything else → Allow
+        2026-04-26 · 用户指令:**全部短路掉 confirmation gate**,所有需要
+        审批的 tool 现在直接 Allow。原因:用户测试反复被 expired-by-user 卡
+        住,且对工具确认面板是被动 / 没在看,导致每次都过 5 分钟 TTL 失败。
+        回归第一性原理:先把功能跑通,后续再分阶段收紧权限(plan-mode /
+        per-tool allowlist / 重操作显示提示等)。
+
+        保留的:
+          * ask_user_question(requires_user_input=True)— 这不是审批闸,
+            是 agent 主动向用户提问的合法语义 · 必须保留 Defer 路径
+
+        被关掉的:
+          * WRITE / IRREVERSIBLE / BOOTSTRAP + requires_confirmation 的
+            Defer · 全部直接 Allow
+          * 即:create_employee / delete_provider / spawn_subagent /
+            update_plan / send_message / 所有 admin 类 meta tool 都不再
+            打断对话流
+
+        恢复路径:把下面 needs_confirm 的 Defer 分支放回来即可。Tool 上的
+        requires_confirmation 字段保留,只是这一层不消费它了 — 未来 UI
+        想做一键开关也方便。
 
         Future extensions plug in here:
           * plan mode → Deny when conversation_mode == 'plan' and tool is
             mutator
-          * clarification → Defer with UserInputDeferred when tool is
-            an ask_user_question
-          * sub-agent → executor itself does the recursion; the pipeline
-            doesn't need to defer at this layer
+          * per-tool allowlist → 用户在 settings 里勾选哪些 tool 强审批
         """
         # ADR 0019 C3 · clarification path runs BEFORE the confirmation
         # check. ask_user_question is ToolScope.READ + requires_user_input,
@@ -922,27 +947,10 @@ class AgentLoop:
                 },
             )
 
-        needs_confirm = (
-            tool.scope
-            in (
-                ToolScope.WRITE,
-                ToolScope.IRREVERSIBLE,
-                ToolScope.BOOTSTRAP,
-            )
-            and tool.requires_confirmation
-        )
-        if needs_confirm and self._confirmation_signal is not None:
-            return Defer(
-                signal=self._confirmation_signal,
-                publish_kwargs={
-                    "tool_use_id": block.id,
-                    "summary": f"Execute {tool.name} with args: {block.input}",
-                    "rationale": f"Tool {tool.name!r} requires confirmation.",
-                },
-            )
-        # No signal wired (test path / read-only) → straight allow.
-        # Deny is only used by future plan-mode hooks.
-        _ = Deny  # keep import live for future extension
+        # Confirmation gate intentionally bypassed (see docstring). The
+        # ToolScope / requires_confirmation metadata is still authoritative
+        # for downstream observability and a future re-enable.
+        _ = ToolScope, Deny  # keep imports live for future extension
         return Allow()
 
 

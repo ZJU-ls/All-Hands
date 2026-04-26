@@ -243,10 +243,61 @@ ARTIFACT_CREATE_PPTX_TOOL = Tool(
 )
 
 
+RENDER_DRAWIO_TOOL = Tool(
+    id="allhands.artifacts.render_drawio",
+    kind=ToolKind.META,
+    name="render_drawio",
+    description=(
+        "Single-call drawio diagram. Pass mxfile XML; the tool persists it as a "
+        "drawio artifact AND returns a render envelope so the chat shows the "
+        "diagram inline. **Do not** call artifact_create / artifact_render "
+        "separately — this tool does both. **Do not** paste the XML back into "
+        "your reply — the rendered card already shows the diagram. Use this for "
+        "any 「画 drawio」「画流程图 / 时序图 / 架构图 / ER 图 / 思维导图」request. "
+        'Example: {"name":"login-flow.drawio","xml":"<mxfile><diagram>...</diagram></mxfile>"}. '
+        "If `xml` doesn't begin with `<mxfile`, it is auto-wrapped with the "
+        "minimum mxfile/diagram/mxGraphModel/root scaffolding so renderer-ready "
+        "fragments still work."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": (
+                    "User-facing title. `.drawio` suffix added automatically if missing."
+                ),
+            },
+            "xml": {
+                "type": "string",
+                "description": (
+                    "mxfile XML body. Should include the full `<mxfile>` envelope; "
+                    "bare `<mxGraphModel>` fragments are auto-wrapped."
+                ),
+            },
+            "description": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "change_message": {"type": "string"},
+        },
+        "required": ["name", "xml"],
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "component": {"type": "string"},
+            "props": {"type": "object"},
+        },
+    },
+    scope=ToolScope.WRITE,
+    requires_confirmation=False,
+)
+
+
 ALL_ARTIFACT_OFFICE_TOOLS = [
     ARTIFACT_CREATE_PDF_TOOL,
     ARTIFACT_CREATE_XLSX_TOOL,
     ARTIFACT_CREATE_CSV_TOOL,
     ARTIFACT_CREATE_DOCX_TOOL,
     ARTIFACT_CREATE_PPTX_TOOL,
+    RENDER_DRAWIO_TOOL,
 ]
