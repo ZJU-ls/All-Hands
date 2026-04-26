@@ -217,6 +217,24 @@ async def test_ask_stream_no_hits_yields_friendly_delta_then_done(
     assert frames[2]["used_model"] is None
 
 
+async def test_update_document_tags_add_remove_replace(
+    svc: KnowledgeService,
+) -> None:
+    """Three-shape API: add / remove / replace mutate tag list as
+    advertised. Add is a dedup union; remove drops only listed; replace
+    overrides wholesale."""
+    kb = await svc.create_kb(name="brain")
+    doc = await svc.upload_document(
+        kb.id, title="t", content_bytes=b"# t\n\nx", filename="t.md", tags=["a", "b"]
+    )
+    after_add = await svc.update_document_tags(doc.id, add=["c", "a"])
+    assert after_add.tags == ["a", "b", "c"]
+    after_rm = await svc.update_document_tags(doc.id, remove=["b"])
+    assert after_rm.tags == ["a", "c"]
+    after_replace = await svc.update_document_tags(doc.id, replace=["only", "two"])
+    assert after_replace.tags == ["only", "two"]
+
+
 async def test_suggest_starter_questions_falls_back_when_no_chat_provider(
     svc: KnowledgeService,
 ) -> None:
