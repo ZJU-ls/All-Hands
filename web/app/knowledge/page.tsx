@@ -26,7 +26,7 @@
  * components. Right slide-over for doc detail.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
@@ -35,7 +35,9 @@ import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import {
-  type AskResponse,
+  type AskHistoryTurn,
+  type AskSource,
+  type AskStreamFrame,
   type DiagnoseDto,
   type DocumentChunkDto,
   type DocumentDto,
@@ -43,7 +45,7 @@ import {
   type KBDto,
   type KBStatsDto,
   type ScoredChunkDto,
-  askKB,
+  askKBStream,
   diagnoseSearch,
   getDocumentText,
   getKBStats,
@@ -142,8 +144,23 @@ export default function KnowledgePage() {
   // Ask mode (RAG QA) lives in the same query bar as search; toggle picks
   // which path to fire on Enter.
   const [mode, setMode] = useState<"search" | "ask">("search");
-  const [asking, setAsking] = useState(false);
-  const [askResult, setAskResult] = useState<AskResponse | null>(null);
+  // Multi-turn Ask state — each turn captures the user question, the
+  // chunks retrieved for it, the streaming/final answer text, and per-turn
+  // telemetry. ``streaming`` flips off when the SSE stream emits a `done`
+  // (or `error`) frame; the UI uses that to swap the typing cursor for
+  // citation chips.
+  type AskTurn = {
+    id: string;
+    question: string;
+    sources: AskSource[];
+    answer: string;
+    streaming: boolean;
+    error: string | null;
+    usedModel: string | null;
+    latencyMs: number | null;
+  };
+  const [askTurns, setAskTurns] = useState<AskTurn[]>([]);
+  const askAbortRef = useRef<AbortController | null>(null);
   const [stateFilter, setStateFilter] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
@@ -284,7 +301,7 @@ export default function KnowledgePage() {
     setSearching(true);
     setCommittedQuery(searchQuery.trim());
     setResults(null);
-    setAskResult(null);
+    setAskTurns([]);
     try {
       setResults(await searchKB(activeKb.id, searchQuery.trim()));
     } catch (e) {
@@ -294,26 +311,99 @@ export default function KnowledgePage() {
     }
   }
 
-  async function handleAsk() {
-    if (!activeKb || !searchQuery.trim()) return;
-    setAsking(true);
-    setCommittedQuery(searchQuery.trim());
-    setAskResult(null);
+  // Run one Ask turn. ``followUp`` keeps existing turns + their context
+  // window and appends a new turn; first-call mode resets the conversation.
+  async function runAskTurn(question: string, followUp: boolean) {
+    if (!activeKb || !question.trim()) return;
+    const q = question.trim();
     setResults(null);
+    setCommittedQuery(q);
+
+    const history: AskHistoryTurn[] = followUp
+      ? askTurns
+          .filter((t) => !t.error && t.answer)
+          .flatMap<AskHistoryTurn>((t) => [
+            { role: "user", content: t.question },
+            { role: "assistant", content: t.answer },
+          ])
+      : [];
+
+    const turnId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const blank: AskTurn = {
+      id: turnId,
+      question: q,
+      sources: [],
+      answer: "",
+      streaming: true,
+      error: null,
+      usedModel: null,
+      latencyMs: null,
+    };
+    setAskTurns((prev) => (followUp ? [...prev, blank] : [blank]));
+
+    // Cancel any prior in-flight stream — only one Ask at a time.
+    askAbortRef.current?.abort();
+    const ctl = new AbortController();
+    askAbortRef.current = ctl;
+
     try {
-      setAskResult(await askKB(activeKb.id, searchQuery.trim(), { topK: 5 }));
+      for await (const frame of askKBStream(activeKb.id, q, {
+        topK: 5,
+        history,
+        signal: ctl.signal,
+      })) {
+        applyAskFrame(turnId, frame);
+      }
     } catch (e) {
-      setError(String(e));
-    } finally {
-      setAsking(false);
+      if ((e as Error).name === "AbortError") return;
+      applyAskFrame(turnId, { event: "error", message: String(e) });
     }
   }
 
+  function applyAskFrame(turnId: string, frame: AskStreamFrame) {
+    setAskTurns((prev) =>
+      prev.map((t) => {
+        if (t.id !== turnId) return t;
+        switch (frame.event) {
+          case "sources":
+            return { ...t, sources: frame.sources };
+          case "delta":
+            return { ...t, answer: t.answer + frame.text };
+          case "done":
+            return {
+              ...t,
+              streaming: false,
+              usedModel: frame.used_model,
+              latencyMs: frame.latency_ms,
+            };
+          case "error":
+            return { ...t, streaming: false, error: frame.message };
+          default:
+            return t;
+        }
+      }),
+    );
+  }
+
+  async function handleAsk() {
+    await runAskTurn(searchQuery, false);
+  }
+
+  async function handleAskFollowUp(q: string) {
+    await runAskTurn(q, true);
+  }
+
+  function handleClearAsk() {
+    askAbortRef.current?.abort();
+    setAskTurns([]);
+  }
+
   async function handleClearSearch() {
+    askAbortRef.current?.abort();
     setSearchQuery("");
     setCommittedQuery("");
     setResults(null);
-    setAskResult(null);
+    setAskTurns([]);
   }
 
   async function handleDeleteDoc(d: DocumentDto) {
@@ -507,13 +597,15 @@ export default function KnowledgePage() {
                     mode === "ask" ? void handleAsk() : void handleSearch()
                   }
                   disabled={
-                    (mode === "ask" ? asking : searching) ||
+                    (mode === "ask" ? askTurns.some((t) => t.streaming) : searching) ||
                     !searchQuery.trim() ||
                     !activeKb
                   }
                   className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
                 >
-                  {(mode === "ask" ? asking : searching)
+                  {(mode === "ask"
+                    ? askTurns.some((t) => t.streaming)
+                    : searching)
                     ? t("toolbar.submitRunning")
                     : mode === "ask"
                       ? t("toolbar.submitAsk")
@@ -643,11 +735,11 @@ export default function KnowledgePage() {
               <div className="flex h-full items-center justify-center px-6 py-12 text-[12px] text-text-muted">
                 {t("sidebar.pickKbHint")}
               </div>
-            ) : pageState !== "ok" ? null : askResult || asking ? (
+            ) : pageState !== "ok" ? null : askTurns.length > 0 ? (
               <AskAnswerView
-                question={committedQuery}
-                result={askResult}
-                asking={asking}
+                turns={askTurns}
+                onFollowUp={handleAskFollowUp}
+                onClear={handleClearAsk}
                 onChunkClick={(docId) => {
                   const d = docs?.find((x) => x.id === docId);
                   if (d) setOpenDoc(d);
@@ -1334,122 +1426,259 @@ function UploadProgressStrip({
  * the referenced source card. The full sources list sits below the answer
  * (Perplexity's "sources strip" + Cohere Coral's footnote pattern).
  */
+type AskTurnView = {
+  id: string;
+  question: string;
+  sources: AskSource[];
+  answer: string;
+  streaming: boolean;
+  error: string | null;
+  usedModel: string | null;
+  latencyMs: number | null;
+};
+
 function AskAnswerView({
-  question,
-  result,
-  asking,
+  turns,
+  onFollowUp,
+  onClear,
   onChunkClick,
 }: {
-  question: string;
-  result: AskResponse | null;
-  asking: boolean;
+  turns: AskTurnView[];
+  onFollowUp: (q: string) => void | Promise<void>;
+  onClear: () => void;
   onChunkClick: (docId: string) => void;
 }) {
   const t = useTranslations("knowledge.ask");
-  if (asking || !result) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
-          <Icon name="sparkles" size={13} className="text-primary" />
-          <div className={SECTION_LABEL}>{t("askingLabel")}</div>
-          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
-            &ldquo;{question}&rdquo;
-          </span>
-        </div>
-        <div className="flex flex-1 items-center justify-center p-8">
-          <LoadingState
-            title={t("thinkingTitle")}
-            description={t("thinkingDesc")}
-          />
-        </div>
-      </div>
-    );
-  }
+  const [followUpDraft, setFollowUpDraft] = useState("");
+  const tail = turns[turns.length - 1];
+  const anyStreaming = turns.some((tt) => tt.streaming);
 
-  // Inline cite renderer: split on [N] markers; numbers that match a
-  // source row become buttons, others stay as text.
-  const parts = renderAnswerWithCites(result.answer, result.sources, onChunkClick);
+  // Auto-scroll the conversation pane so the latest delta stays in view
+  // while streaming. Skipped when the user manually scrolls up (sentinel
+  // is the last turn — IntersectionObserver would over-engineer this).
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [turns]);
+
+  function submitFollowUp() {
+    const q = followUpDraft.trim();
+    if (!q || anyStreaming) return;
+    setFollowUpDraft("");
+    void onFollowUp(q);
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* Header — single bar carries conversation length + clear control */}
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <Icon name="sparkles" size={13} className="text-primary" />
           <div className={SECTION_LABEL}>{t("answerLabel")}</div>
-          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
-            &ldquo;{question}&rdquo;
+          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text">
+            {t("turnsLabel", { count: turns.length })}
           </span>
         </div>
-        <div className="flex items-center gap-2 font-mono text-[10px] text-text-subtle">
-          {result.used_model && <span>{result.used_model}</span>}
-          <span>·</span>
-          <span>{result.latency_ms.toFixed(0)} ms</span>
+        <div className="flex items-center gap-3 font-mono text-[10px] text-text-subtle">
+          {tail?.usedModel && <span>{tail.usedModel}</span>}
+          {tail?.latencyMs !== null && tail?.latencyMs !== undefined && (
+            <>
+              <span>·</span>
+              <span>{tail.latencyMs.toFixed(0)} ms</span>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={onClear}
+            className="ml-2 inline-flex h-6 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[10px] uppercase tracking-wider text-text-muted hover:border-border-strong hover:text-text"
+            disabled={anyStreaming}
+          >
+            <Icon name="refresh" size={10} />
+            {t("newConversation")}
+          </button>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        {/* Answer */}
-        <div className="rounded-xl border border-border bg-surface-2 p-5">
-          <p className="whitespace-pre-wrap text-[14px] leading-[1.7] text-text">
-            {parts}
-          </p>
-        </div>
-
-        {/* Sources list */}
-        {result.sources.length > 0 && (
-          <div className="mt-5">
-            <div className="mb-2 flex items-center justify-between">
-              <span className={SECTION_LABEL}>{t("sourcesLabel")}</span>
-              <span className="font-mono text-[10px] text-text-subtle">
-                {t("sourcesCount", { count: result.sources.length })}
-              </span>
-            </div>
-            <ul className="space-y-2">
-              {result.sources.map((s) => (
-                <li
-                  key={s.chunk_id}
-                  id={`src-${s.n}`}
-                  className="rounded-xl border border-border bg-surface-2 p-3"
-                >
-                  <button
-                    type="button"
-                    onClick={() => onChunkClick(s.doc_id)}
-                    className="flex w-full items-start justify-between gap-3 text-left"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
-                        [{s.n}]
-                      </span>
-                      <span className="font-mono text-[11px] text-text-muted">
-                        {s.citation}
-                      </span>
-                    </div>
-                    <span className="font-mono text-[10px] text-text-subtle">
-                      {s.score.toFixed(4)}
-                    </span>
-                  </button>
-                  {s.section_path && (
-                    <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
-                      {s.section_path}
-                    </div>
-                  )}
-                  <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[12px] leading-relaxed text-text">
-                    {s.text}
+      {/* Scrolling conversation log */}
+      <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <ul className="space-y-6">
+          {turns.map((turn, idx) => (
+            <li key={turn.id} className="space-y-3">
+              {/* User question bubble — kept compact, right-aligned-feeling
+                  but still left-anchored for legibility */}
+              <div className="flex items-start gap-2.5">
+                <div className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary-muted text-primary">
+                  <Icon name="user" size={11} />
+                </div>
+                <div className="flex-1">
+                  <div className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+                    {t("youAskedLabel", { n: idx + 1 })}
+                  </div>
+                  <p className="mt-1 text-[14px] leading-snug text-text">
+                    {turn.question}
                   </p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+                </div>
+              </div>
+
+              {/* Answer bubble */}
+              <div className="flex items-start gap-2.5">
+                <div className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-primary">
+                  <Icon name="sparkles" size={11} />
+                </div>
+                <div className="flex-1 space-y-3">
+                  <AskTurnAnswer turn={turn} onChunkClick={onChunkClick} />
+                  {turn.sources.length > 0 && (
+                    <AskTurnSources turn={turn} onChunkClick={onChunkClick} />
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
+
+      {/* Follow-up composer — pinned bottom; mirrors a chat input but
+          only fires the Ask path. Disabled while a turn is mid-stream
+          to keep server-side ordering simple. */}
+      <div className="border-t border-border bg-surface px-5 py-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={followUpDraft}
+            onChange={(e) => setFollowUpDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitFollowUp();
+              }
+            }}
+            placeholder={t("followUpPlaceholder")}
+            disabled={anyStreaming}
+            className="h-9 flex-1 rounded-xl border border-border bg-surface-2 px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={submitFollowUp}
+            disabled={anyStreaming || !followUpDraft.trim()}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-40"
+          >
+            <Icon name="sparkles" size={12} />
+            {t("followUpSubmit")}
+          </button>
+        </div>
+        <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+          {t("followUpHint")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// One turn's answer body. Splits on `[N]` markers; while ``streaming``,
+// shows a blinking caret so the user sees progress before sources lock in.
+function AskTurnAnswer({
+  turn,
+  onChunkClick,
+}: {
+  turn: AskTurnView;
+  onChunkClick: (docId: string) => void;
+}) {
+  const t = useTranslations("knowledge.ask");
+  if (turn.error) {
+    return (
+      <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-[13px] text-danger">
+        {turn.error}
+      </div>
+    );
+  }
+  if (turn.streaming && !turn.answer) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-4 py-3 text-[13px] text-text-muted">
+        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+        <span>{t("thinkingTitle")}</span>
+      </div>
+    );
+  }
+  const parts = renderAnswerWithCites(
+    turn.answer,
+    turn.sources,
+    onChunkClick,
+    turn.id,
+  );
+  return (
+    <div className="rounded-xl border border-border bg-surface-2 p-4">
+      <p className="whitespace-pre-wrap text-[14px] leading-[1.7] text-text">
+        {parts}
+        {turn.streaming && (
+          <span className="ml-0.5 inline-block h-[14px] w-[2px] animate-pulse bg-primary align-middle" />
+        )}
+      </p>
+    </div>
+  );
+}
+
+function AskTurnSources({
+  turn,
+  onChunkClick,
+}: {
+  turn: AskTurnView;
+  onChunkClick: (docId: string) => void;
+}) {
+  const t = useTranslations("knowledge.ask");
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <span className={SECTION_LABEL}>{t("sourcesLabel")}</span>
+        <span className="font-mono text-[10px] text-text-subtle">
+          {t("sourcesCount", { count: turn.sources.length })}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {turn.sources.map((s) => (
+          <li
+            key={s.chunk_id}
+            id={`src-${turn.id}-${s.n}`}
+            className="rounded-xl border border-border bg-surface p-3"
+          >
+            <button
+              type="button"
+              onClick={() => onChunkClick(s.doc_id)}
+              className="flex w-full items-start justify-between gap-3 text-left"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
+                  [{s.n}]
+                </span>
+                <span className="font-mono text-[11px] text-text-muted">
+                  {s.citation}
+                </span>
+              </div>
+              <span className="font-mono text-[10px] text-text-subtle">
+                {s.score.toFixed(4)}
+              </span>
+            </button>
+            {s.section_path && (
+              <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+                {s.section_path}
+              </div>
+            )}
+            <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[12px] leading-relaxed text-text">
+              {s.text}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
 function renderAnswerWithCites(
   answer: string,
-  sources: AskResponse["sources"],
+  sources: AskSource[],
   onClickSource: (docId: string) => void,
+  turnId?: string,
 ): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   const re = /\[(\d+)\]/g;
@@ -1469,7 +1698,8 @@ function renderAnswerWithCites(
           key={`c${key++}`}
           type="button"
           onClick={() => {
-            const el = document.getElementById(`src-${n}`);
+            const id = turnId ? `src-${turnId}-${n}` : `src-${n}`;
+            const el = document.getElementById(id);
             el?.scrollIntoView({ behavior: "smooth", block: "center" });
             onClickSource(src.doc_id);
           }}

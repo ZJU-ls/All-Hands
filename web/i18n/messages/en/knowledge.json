@@ -128,7 +128,13 @@
       "thinkingTitle": "Thinking…",
       "thinkingDesc": "Retrieving snippets → assembling context → LLM reply",
       "sourcesLabel": "Sources",
-      "sourcesCount": "{count}"
+      "sourcesCount": "{count}",
+      "turnsLabel": "{count} turns",
+      "youAskedLabel": "You asked #{n}",
+      "newConversation": "New thread",
+      "followUpPlaceholder": "Ask a follow-up · same citation numbers carry over…",
+      "followUpSubmit": "Follow up",
+      "followUpHint": "Press Enter to send · the same retrieved snippets are kept across turns"
     },
     "delete": {
       "confirm": "Delete \"{title}\"? (Soft delete — recoverable for 30 days.)",

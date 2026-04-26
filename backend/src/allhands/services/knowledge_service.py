@@ -28,10 +28,11 @@ import contextlib
 import hashlib
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from allhands.config.settings import get_settings
 from allhands.core import (
@@ -97,6 +98,60 @@ class EmbeddingModelOption:
     available: bool
     reason: str | None = None
     is_default: bool = False
+
+
+_ASK_SYSTEM_PROMPT = (
+    "你是一个严谨的知识库助手。只用下面给出的上下文片段回答用户的问题。"
+    "在每个引用了上下文事实的句尾,标注片段编号,如 [1]、[2]。"
+    "如果上下文里没有答案,直接说不知道,不要编造。"
+    "回答用中文。多轮对话里,沿用同一份上下文片段编号,不要重新编号。"
+)
+
+
+def _build_ask_prompt(question: str, hits: list[ScoredChunk]) -> tuple[str, str]:
+    """Assemble the (system, user) prompt pair for an Ask turn."""
+    context_block = "\n\n".join(f"[{i + 1}] {r.chunk.text}" for i, r in enumerate(hits))
+    user = f"上下文:\n\n{context_block}\n\n问题:{question}"
+    return _ASK_SYSTEM_PROMPT, user
+
+
+def _serialise_sources(hits: list[ScoredChunk]) -> list[dict[str, object]]:
+    return [
+        {
+            "n": i + 1,
+            "chunk_id": r.chunk.id,
+            "doc_id": r.chunk.document_id,
+            "section_path": r.chunk.section_path,
+            "page": r.chunk.page,
+            "citation": r.citation,
+            "text": r.chunk.text,
+            "score": round(r.score, 4),
+        }
+        for i, r in enumerate(hits)
+    ]
+
+
+def _build_messages(system: str, user: str, history: list[dict[str, str]] | None) -> list[Any]:
+    """Map (system, optional history, user) to LangChain message objects.
+
+    History format: ``[{role: "user"|"assistant", content: str}, ...]``.
+    Unknown roles are skipped — we don't want a malformed entry to crash
+    the whole turn. The current question always lives in the trailing
+    ``HumanMessage`` so retrieval context binds to *this* turn.
+    """
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+    msgs: list[Any] = [SystemMessage(content=system)]
+    if history:
+        for h in history:
+            role = h.get("role")
+            content = h.get("content", "")
+            if role == "user":
+                msgs.append(HumanMessage(content=content))
+            elif role == "assistant":
+                msgs.append(AIMessage(content=content))
+    msgs.append(HumanMessage(content=user))
+    return msgs
 
 
 class KBError(DomainError):
@@ -588,8 +643,17 @@ class KnowledgeService:
         *,
         top_k: int = 5,
         model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> dict[str, object]:
-        """RAG QA: search → assemble context → LLM with citation prompt."""
+        """RAG QA: search → assemble context → LLM with citation prompt.
+
+        ``history`` is an optional list of ``{role, content}`` dicts from
+        prior turns of the same KB Ask session. When present, the LLM
+        sees the prior Q&A as conversational context so follow-up
+        pronouns ("它", "比 X 呢") resolve correctly. Retrieval still
+        runs on the latest question only — chunks from the previous turn
+        are not re-injected (avoids stale context bloat).
+        """
         kb = await self.get_kb(kb_id)
         cfg = RetrievalConfig.model_validate({**kb.retrieval_config.model_dump(), "top_k": top_k})
 
@@ -605,16 +669,12 @@ class KnowledgeService:
                 "latency_ms": round((time.monotonic() - t0) * 1000, 1),
             }
 
-        context_block = "\n\n".join(f"[{i + 1}] {r.chunk.text}" for i, r in enumerate(hits))
-        system = (
-            "你是一个严谨的知识库助手。只用下面给出的上下文片段回答用户的问题。"
-            "在每个引用了上下文事实的句尾,标注片段编号,如 [1]、[2]。"
-            "如果上下文里没有答案,直接说不知道,不要编造。回答用中文。"
-        )
-        user = f"上下文:\n\n{context_block}\n\n问题:{question}"
+        system, user = _build_ask_prompt(question, hits)
 
         try:
-            answer_text, used_model = await self._call_chat_llm(system, user, model_ref=model_ref)
+            answer_text, used_model = await self._call_chat_llm(
+                system, user, model_ref=model_ref, history=history
+            )
         except _NoChatProvider:
             raise KBError(
                 "还没有可用的对话模型 · 去 /gateway 添加一个 OpenAI / 阿里云 / Anthropic provider"
@@ -622,27 +682,146 @@ class KnowledgeService:
 
         return {
             "answer": answer_text,
-            "sources": [
-                {
-                    "n": i + 1,
-                    "chunk_id": r.chunk.id,
-                    "doc_id": r.chunk.document_id,
-                    "section_path": r.chunk.section_path,
-                    "page": r.chunk.page,
-                    "citation": r.citation,
-                    "text": r.chunk.text,
-                    "score": round(r.score, 4),
-                }
-                for i, r in enumerate(hits)
-            ],
+            "sources": _serialise_sources(hits),
+            "used_model": used_model,
+            "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+        }
+
+    async def ask_stream(
+        self,
+        kb_id: str,
+        question: str,
+        *,
+        top_k: int = 5,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Streaming variant of :meth:`ask`.
+
+        Yields a sequence of envelope dicts that the SSE encoder serialises:
+
+        - ``{"event": "sources", "sources": [...], "kb": {"id"...}}`` first,
+          so the UI can paint the citations area before any text arrives.
+        - ``{"event": "delta", "text": "..."}`` per LLM token chunk.
+          Multiple deltas may be coalesced upstream — order is preserved.
+        - ``{"event": "done", "used_model": str | None, "latency_ms": float}``
+          terminal frame after the last delta.
+
+        On hard failure yields ``{"event": "error", "message": str}`` and
+        terminates without a ``done`` frame, so the client can distinguish
+        "model finished cleanly" from "stream aborted mid-flight".
+        """
+        try:
+            kb = await self.get_kb(kb_id)
+        except KBError as exc:
+            yield {"event": "error", "message": str(exc)}
+            return
+        cfg = RetrievalConfig.model_validate({**kb.retrieval_config.model_dump(), "top_k": top_k})
+
+        import time
+
+        t0 = time.monotonic()
+        hits = await self._retriever.search(kb_id, question, cfg)
+        sources = _serialise_sources(hits)
+        yield {"event": "sources", "sources": sources}
+
+        if not hits:
+            yield {
+                "event": "delta",
+                "text": "知识库里没有跟这个问题相关的内容。换个说法,或者补一份资料试试。",
+            }
+            yield {
+                "event": "done",
+                "used_model": None,
+                "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+            }
+            return
+
+        system, user = _build_ask_prompt(question, hits)
+
+        try:
+            used_model: str | None = None
+            async for piece, model_used in self._call_chat_llm_stream(
+                system, user, model_ref=model_ref, history=history
+            ):
+                if piece:
+                    yield {"event": "delta", "text": piece}
+                if model_used:
+                    used_model = model_used
+        except _NoChatProvider:
+            yield {
+                "event": "error",
+                "message": (
+                    "还没有可用的对话模型 · 去 /gateway 添加一个 "
+                    "OpenAI / 阿里云 / Anthropic provider"
+                ),
+            }
+            return
+        except Exception as exc:
+            _logger.exception("kb.ask_stream LLM error")
+            yield {"event": "error", "message": f"模型调用失败:{exc}"}
+            return
+
+        yield {
+            "event": "done",
             "used_model": used_model,
             "latency_ms": round((time.monotonic() - t0) * 1000, 1),
         }
 
     async def _call_chat_llm(
-        self, system: str, user: str, *, model_ref: str | None = None
+        self,
+        system: str,
+        user: str,
+        *,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> tuple[str, str]:
         """Pick first usable LLMProvider, build LangChain chat model, invoke."""
+        provider, ref = await self._pick_chat_provider(model_ref)
+
+        from allhands.execution.llm_factory import build_llm
+
+        llm = build_llm(provider, ref)
+        messages = _build_messages(system, user, history)
+        result = await llm.ainvoke(messages)
+        text = getattr(result, "content", "") or ""
+        if isinstance(text, list):
+            text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
+        return str(text), ref
+
+    async def _call_chat_llm_stream(
+        self,
+        system: str,
+        user: str,
+        *,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[tuple[str, str]]:
+        """Stream text chunks from LangChain ``astream``.
+
+        Yields ``(piece, model_ref)`` tuples — ``model_ref`` is only set on
+        the first non-empty piece so the caller can record it without
+        repeating per-chunk. ``piece`` may be empty for control frames
+        (reasoning tokens etc.) which we drop.
+        """
+        provider, ref = await self._pick_chat_provider(model_ref)
+
+        from allhands.execution.llm_factory import build_llm
+
+        llm = build_llm(provider, ref)
+        messages = _build_messages(system, user, history)
+        emitted = False
+        async for chunk in llm.astream(messages):
+            text = getattr(chunk, "content", "") or ""
+            if isinstance(text, list):
+                # Anthropic streams content blocks; flatten to plain text.
+                text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
+            if not text:
+                continue
+            yield text, (ref if not emitted else "")
+            emitted = True
+
+    async def _pick_chat_provider(self, model_ref: str | None) -> tuple[Any, str]:
         from allhands.persistence.sql_repos import SqlLLMProviderRepo
 
         async with self._session_maker() as s:
@@ -657,17 +836,7 @@ class KnowledgeService:
             from allhands.core.provider_presets import preset_for
 
             ref = preset_for(provider.kind).default_model
-
-        from langchain_core.messages import HumanMessage, SystemMessage
-
-        from allhands.execution.llm_factory import build_llm
-
-        llm = build_llm(provider, ref)
-        result = await llm.ainvoke([SystemMessage(content=system), HumanMessage(content=user)])
-        text = getattr(result, "content", "") or ""
-        if isinstance(text, list):
-            text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
-        return str(text), ref
+        return provider, ref
 
     async def diagnose_search(
         self, kb_id: str, query: str, *, top_k: int = 8

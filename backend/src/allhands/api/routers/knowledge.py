@@ -23,7 +23,11 @@ Endpoints:
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
+
 from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from allhands.core import (
@@ -453,10 +457,16 @@ async def search_kb(kb_id: str, payload: SearchPayload = Body(...)) -> list[Scor
     return [_scored_out(r) for r in results]
 
 
+class AskHistoryTurn(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
 class AskPayload(BaseModel):
     question: str
     top_k: int | None = 5
     model_ref: str | None = None
+    history: list[AskHistoryTurn] | None = None
 
 
 class AskSourceOut(BaseModel):
@@ -487,6 +497,7 @@ async def ask_kb(kb_id: str, payload: AskPayload) -> AskOut:
             payload.question,
             top_k=payload.top_k or 5,
             model_ref=payload.model_ref,
+            history=[h.model_dump() for h in payload.history] if payload.history else None,
         )
     except KBNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -503,6 +514,49 @@ async def ask_kb(kb_id: str, payload: AskPayload) -> AskOut:
         sources=sources_list,
         used_model=out["used_model"] if isinstance(out["used_model"], str) else None,
         latency_ms=float(out["latency_ms"]) if isinstance(out["latency_ms"], (int, float)) else 0.0,
+    )
+
+
+@router.post("/{kb_id}/ask/stream")
+async def ask_kb_stream(kb_id: str, payload: AskPayload) -> StreamingResponse:
+    """Streaming RAG QA — Server-Sent Events.
+
+    Frame protocol (one JSON object per ``data:`` line, terminated by a
+    blank line per the SSE spec):
+
+    - ``{"event": "sources", "sources": [...]}`` (always first)
+    - ``{"event": "delta", "text": "..."}`` (zero or more)
+    - ``{"event": "done", "used_model": "...", "latency_ms": 123.4}`` (terminal)
+    - ``{"event": "error", "message": "..."}`` (terminal — replaces ``done``)
+
+    Front-end iterates with ``ReadableStream`` + a small SSE splitter; the
+    ``[N]`` chip rewrite happens after ``done`` so partial deltas don't
+    flicker. KB existence and "no chat provider" errors are reported as
+    in-stream ``error`` frames (HTTP status is still 200) — keeps the
+    fetch promise resolved and lets the UI render the error inline.
+    """
+
+    async def event_source() -> AsyncIterator[bytes]:
+        try:
+            async for frame in _service().ask_stream(
+                kb_id,
+                payload.question,
+                top_k=payload.top_k or 5,
+                model_ref=payload.model_ref,
+                history=([h.model_dump() for h in payload.history] if payload.history else None),
+            ):
+                yield f"data: {json.dumps(frame, ensure_ascii=False)}\n\n".encode()
+        except Exception as exc:
+            err = {"event": "error", "message": f"streaming aborted: {exc}"}
+            yield f"data: {json.dumps(err, ensure_ascii=False)}\n\n".encode()
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",  # disable nginx buffering when proxied
+        },
     )
 
 
