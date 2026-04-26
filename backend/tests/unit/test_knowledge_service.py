@@ -217,6 +217,35 @@ async def test_ask_stream_no_hits_yields_friendly_delta_then_done(
     assert frames[2]["used_model"] is None
 
 
+async def test_suggest_tags_returns_empty_when_no_provider(
+    svc: KnowledgeService,
+) -> None:
+    kb = await svc.create_kb(name="brain")
+    doc = await svc.upload_document(
+        kb.id, title="Hybrid Retrieval", content_bytes=_SAMPLE_MD, filename="t.md"
+    )
+    assert await svc.suggest_tags_for_document(doc.id) == []
+
+
+async def test_suggest_tags_parses_and_dedupes_llm_output(
+    svc: KnowledgeService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LLM output may have wrapping #, quotes, numbering and dups; the
+    service should normalise to a clean lowercase list ≤ max_tags."""
+    kb = await svc.create_kb(name="brain")
+    doc = await svc.upload_document(kb.id, title="t", content_bytes=_SAMPLE_MD, filename="t.md")
+
+    async def fake(self, system, user, *, model_ref=None, history=None):
+        return "1. #Retrieval\n- 'BM25'\nretrieval\n* re-ranking", "fake"
+
+    # monkeypatch auto-restores after the test → doesn't leak the fake
+    # method to the starter-questions / history tests below.
+    monkeypatch.setattr(KnowledgeService, "_call_chat_llm", fake)
+    tags = await svc.suggest_tags_for_document(doc.id, max_tags=3)
+    assert tags == ["retrieval", "bm25", "re-ranking"]
+
+
 async def test_reembed_all_processes_each_doc(svc: KnowledgeService) -> None:
     """reembed_all hits every doc · returns processed/succeeded/failed
     counters · per-doc errors don't abort the loop."""

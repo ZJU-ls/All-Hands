@@ -133,6 +133,15 @@
       "explainBm25Only": "Lexical hit only (#{bm25}) · vector retriever did not surface this chunk",
       "explainVecOnly": "Semantic hit only (#{vec}) · keywords did not match"
     },
+    "docTags": {
+      "addPlaceholder": "+ add tag…",
+      "removeAria": "Remove #{tag}",
+      "suggestCta": "AI suggest",
+      "suggesting": "Thinking…",
+      "acceptOneHint": "Click to accept this tag",
+      "acceptAll": "Accept all ({count})",
+      "noSuggestions": "AI returned nothing useful — chat provider may be unconfigured"
+    },
     "stale": {
       "body": "{missing}/{total} chunks have no vector (BM25 still works; vector recall will miss them)",
       "cta": "Re-embed all",

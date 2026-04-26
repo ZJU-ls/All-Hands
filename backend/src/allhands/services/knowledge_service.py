@@ -884,6 +884,75 @@ class KnowledgeService:
             ref = preset_for(provider.kind).default_model
         return provider, ref
 
+    async def suggest_tags_for_document(
+        self,
+        document_id: str,
+        *,
+        max_tags: int = 3,
+        existing_tags: list[str] | None = None,
+        model_ref: str | None = None,
+    ) -> list[str]:
+        """Ask the chat LLM to propose ``max_tags`` short tags for a doc.
+
+        Inputs the LLM sees: doc title + first ~1500 chars of body (skips
+        full read on long PDFs · the head usually carries title / abstract
+        / TOC which is plenty for tagging). Tags returned as lowercase
+        kebab-case strings · we strip wrapping quotes and `#`. We also
+        pass any ``existing_tags`` so the LLM can prefer reusing the
+        user's vocabulary instead of inventing parallel synonyms.
+
+        Failure modes:
+        - no chat provider → return [] (UI hides "采纳" button)
+        - LLM error → log + return []
+        - empty doc text → fall back to title-derived tag
+        """
+        doc = await self.get_document(document_id)
+        try:
+            text = await self.read_document_text(document_id)
+        except DocumentNotFound:
+            text = ""
+        body = text[:1500].strip()
+        if not body:
+            body = doc.title
+
+        existing = ", ".join(sorted(set(existing_tags or doc.tags)))
+        existing_hint = f"\nUser's existing tag vocabulary: {existing}" if existing else ""
+
+        system = (
+            "You suggest short, useful tags for documents in a personal "
+            "knowledge base. Output ONE tag per line, no numbering, no "
+            "leading dash, no '#'. Lowercase. Prefer kebab-case for "
+            "multi-word tags. Reuse the user's existing vocabulary when "
+            "appropriate (don't invent synonyms). Match the document's "
+            "language (Chinese in → Chinese out)."
+        )
+        user = (
+            f"Document title: {doc.title}\n"
+            f"Body excerpt:\n{body}\n"
+            f"{existing_hint}\n\n"
+            f"Generate up to {max_tags} concise tags."
+        )
+
+        try:
+            text_out, _ = await self._call_chat_llm(system, user, model_ref=model_ref)
+        except _NoChatProvider:
+            return []
+        except Exception:
+            _logger.exception("kb.suggest_tags_for_document LLM error")
+            return []
+
+        tags: list[str] = []
+        for line in text_out.splitlines():
+            t = line.strip().lstrip("-•*0123456789.) #").strip().strip("\"'")
+            if not t:
+                continue
+            t = t.lower()
+            if t not in tags:
+                tags.append(t)
+            if len(tags) >= max_tags:
+                break
+        return tags
+
     async def get_chunks_missing_embeddings(self, kb_id: str) -> int:
         """Count of chunks in this KB whose ``embedding`` column is NULL.
 
