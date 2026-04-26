@@ -931,3 +931,25 @@ heuristic 静态分析做不了)。继续保留作清理基线。
 - 21/23 是 `common.*` 共享词预留 + 2 个其它待 case-by-case
 
 **commits**:见 git log
+
+## Round 44 · 2026-04-27 03:43 (cron · 30m)
+
+**主题**:第三波 dead-key 清理 · catalog 死率归零
+
+**做的事**:
+- `employees.skillPicker.selected`(英文 "selected" 字面量,无人调用)删
+- `errors.network`(catalog 有,no consumer · 异步错误都走 page-namespace 自己的)删
+- `common.*` 21 个共享词 - 只剩 `retry`(唯一被 3 处调用):
+  - 删 loading / save / cancel / confirm / delete / edit / create / search /
+    back / next / previous / close / ok / yes / no / more / settings / refresh /
+    copy / copied / comingSoon(20 个)
+  - 公约论无视 — Linear / Notion 等 i18n 实践都是 page-scope 维护,
+    避免 common 黑洞抢词
+
+**结果**:catalog 2466 → 2445(-21)· 死 key **0** (0.0%)· 1999 tests
+全绿 · typecheck · lint 全绿
+
+**回滚指引**:如果未来某代码想要某 common 通用词,加回时同步加在
+zh-CN.json + en.json `common` 块下即可,catalog-audit 会防止引用错位。
+
+**commits**:见 git log

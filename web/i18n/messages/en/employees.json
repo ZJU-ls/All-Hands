@@ -175,7 +175,6 @@
     },
     "skillPicker": {
       "empty": "No skills installed yet. Install one on the \"Skills\" page, then come back to mount it.",
-      "selected": "selected",
       "searchPlaceholder": "Search skills · name or description",
       "groupSelected": "Selected",
       "selectedEmpty": "Nothing mounted yet — pick from the groups below",

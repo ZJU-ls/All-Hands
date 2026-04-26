@@ -175,7 +175,6 @@
     },
     "skillPicker": {
       "empty": "还没有安装的 Skill。先在「技能」页安装,再回来挂载。",
-      "selected": "selected",
       "searchPlaceholder": "搜索技能 · 名称或描述",
       "groupSelected": "已选",
       "selectedEmpty": "暂未挂载,从下方分组中点选",
