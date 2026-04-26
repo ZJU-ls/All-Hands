@@ -39,7 +39,11 @@ from allhands.core import (
     TurnToolCall,
     TurnUserInput,
 )
-from allhands.services.model_pricing import estimate_cost_usd
+from allhands.services.model_pricing import (
+    ModelPrice,
+    estimate_cost_usd,
+    overlay_from_entries,
+)
 
 if TYPE_CHECKING:
     from allhands.core import EventEnvelope
@@ -48,6 +52,7 @@ if TYPE_CHECKING:
         ConversationRepo,
         EmployeeRepo,
         EventRepo,
+        ModelPriceRepo,
         ObservabilityConfigRepo,
         TaskRepo,
     )
@@ -74,11 +79,14 @@ class ObservatoryService:
         conversation_repo: ConversationRepo | None = None,
         task_repo: TaskRepo | None = None,
         artifact_repo: ArtifactRepo | None = None,
+        price_repo: ModelPriceRepo | None = None,
         workspace_id: str = "default",
     ) -> None:
         self._events = event_repo
         self._employees = employee_repo
         self._config = config_repo
+        # Optional · DB price overlay. None → cost lookup uses code seed only.
+        self._prices = price_repo
         # Optional for back-compat with callers that only need summary/list
         # (the 4 Meta Tools). The `/runs/{id}` route passes both; get_run_detail
         # will raise a clear error if either is missing.
@@ -88,6 +96,18 @@ class ObservatoryService:
         # When None the field stays empty; the drawer just hides the section.
         self._artifacts = artifact_repo
         self._ws = workspace_id
+
+    async def _load_price_overlay(self) -> dict[str, ModelPrice]:
+        """Load DB price overlay snapshot. ``{}`` when no repo wired (tests)."""
+        if self._prices is None:
+            return {}
+        try:
+            entries = await self._prices.list_all()
+        except Exception:
+            # Never let an overlay-load error break observability — fall back
+            # to code seed silently. Caller logs the underlying issue if any.
+            return {}
+        return overlay_from_entries(entries)
 
     async def get_status(self) -> ObservabilityConfig:
         return await self._config.load()
@@ -113,6 +133,7 @@ class ObservatoryService:
         day_start = ts_now - timedelta(hours=window_hours)
 
         cfg = await self._config.load()
+        price_overlay = await self._load_price_overlay()
 
         runs_total = await self._events.count_since(
             since=datetime.fromtimestamp(0, tz=UTC),
@@ -211,7 +232,7 @@ class ObservatoryService:
                 tt = int(tok)
             model_ref = e.payload.get("model_ref")
             mr = model_ref if isinstance(model_ref, str) and model_ref else None
-            run_cost = estimate_cost_usd(mr, ti, to)
+            run_cost = estimate_cost_usd(mr, ti, to, overlay=price_overlay)
             cost_total += run_cost
 
             emp_id = e.payload.get("employee_id") or e.actor
@@ -414,7 +435,9 @@ class ObservatoryService:
                 ti = int(tok.get("input", 0) or 0)
                 to = int(tok.get("output", 0) or 0)
             mr = e.payload.get("model_ref")
-            prev_cost += estimate_cost_usd(mr if isinstance(mr, str) else None, ti, to)
+            prev_cost += estimate_cost_usd(
+                mr if isinstance(mr, str) else None, ti, to, overlay=price_overlay
+            )
 
         def _pct(curr: float, prev: float) -> float | None:
             if prev <= 0:
@@ -448,7 +471,9 @@ class ObservatoryService:
             elif isinstance(tok, int):
                 tt = int(tok)
             mr = e.payload.get("model_ref") if isinstance(e.payload, dict) else None
-            run_cost = estimate_cost_usd(mr if isinstance(mr, str) else None, ti, to_t)
+            run_cost = estimate_cost_usd(
+                mr if isinstance(mr, str) else None, ti, to_t, overlay=price_overlay
+            )
             conv_runs[cid] = conv_runs.get(cid, 0) + 1
             conv_tokens[cid] = conv_tokens.get(cid, 0) + tt
             conv_cost[cid] = conv_cost.get(cid, 0.0) + run_cost
@@ -792,7 +817,10 @@ class ObservatoryService:
                     )
                 )
 
-        cost_estimate = estimate_cost_usd(model_ref, tokens.prompt, tokens.completion)
+        price_overlay = await self._load_price_overlay()
+        cost_estimate = estimate_cost_usd(
+            model_ref, tokens.prompt, tokens.completion, overlay=price_overlay
+        )
 
         return RunDetail(
             run_id=run_id,
@@ -883,6 +911,7 @@ class ObservatoryService:
         # ever asks for these; we reject anything else as 1h).
         bucket_seconds = 300 if bucket == "5m" else 3600
         bucket_size = timedelta(seconds=bucket_seconds)
+        price_overlay = await self._load_price_overlay()
 
         events = await self._events.list_recent(
             limit=5000,
@@ -953,7 +982,9 @@ class ObservatoryService:
             if isinstance(lc, int):
                 llm_calls[idx] += lc
             mr = payload.get("model_ref")
-            cost[idx] += estimate_cost_usd(mr if isinstance(mr, str) else None, ti, to)
+            cost[idx] += estimate_cost_usd(
+                mr if isinstance(mr, str) else None, ti, to, overlay=price_overlay
+            )
 
         unit_by_metric = {
             "runs": "",

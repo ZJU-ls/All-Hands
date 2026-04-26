@@ -146,6 +146,32 @@
         "share": "Share view",
         "copied": "Copied"
       },
+      "pricing": {
+        "title": "Model price table",
+        "subtitle": "USD-per-1M prices that drive every cost number on the observatory · code-shipped defaults + DB runtime overrides",
+        "breadcrumb": {
+          "observatory": "Observatory",
+          "pricing": "Pricing"
+        },
+        "curatorHint": "Need to update a price? Go to <chat>chat</chat> and invoke the <skill>price-curator</skill> employee — it'll fetch the upstream page, write a DB overlay, and keep the source_url.",
+        "filter": {
+          "all": "All",
+          "db": "DB override",
+          "code": "Code seed"
+        },
+        "searchPlaceholder": "Search model_ref…",
+        "loading": "Loading…",
+        "loadFailed": "Load failed",
+        "empty": "No rows match this filter",
+        "col": {
+          "model": "Model",
+          "source": "Source",
+          "input": "Input",
+          "output": "Output",
+          "note": "Note",
+          "updated": "Updated"
+        }
+      },
       "costPanel": {
         "title": "Cost panel · 24h",
         "today": "Today",

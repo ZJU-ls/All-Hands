@@ -91,6 +91,19 @@ class Settings(BaseSettings):
         description="Optional GitHub PAT. Lifts anon 60 req/h rate cap on market listing.",
     )
 
+    # ---- Web search (builtin tool: web_search) ----
+    # Provider order: tavily > serper > duckduckgo (HTML, keyless fallback).
+    # All keys optional — duckduckgo works without one but is HTML-scraped and
+    # rate-limited; for production, configure tavily or serper.
+    web_search_provider: str = Field(
+        default="auto",
+        description="auto | duckduckgo | tavily | serper. 'auto' picks first configured.",
+    )
+    tavily_api_key: str | None = Field(default=None)
+    serper_api_key: str | None = Field(default=None)
+    web_search_max_results: int = Field(default=5, ge=1, le=20)
+    web_search_timeout_seconds: int = Field(default=10, ge=2, le=60)
+
     def sync_database_url(self) -> str:
         """Synchronous URL for alembic/tools that can't use async driver."""
         return self.database_url.replace("+aiosqlite", "")
