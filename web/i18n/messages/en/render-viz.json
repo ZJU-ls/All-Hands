@@ -89,7 +89,9 @@
   "renderShared": {
     "copyButton": {
       "label": "Copy",
-      "copied": "Copied"
+      "copied": "Copied",
+      "failed": "Copy failed",
+      "failedDetail": "Clipboard access blocked · check browser permissions or copy manually."
     },
     "searchInput": {
       "placeholder": "Search…",

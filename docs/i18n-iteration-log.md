@@ -213,3 +213,19 @@ horizontal ellipsis "…",和其他 placeholder 不一致。
 **结果**:1569 backend tests 全绿 · web typecheck 全绿 · regression net 也全绿(知识库回答现在跟着 Accept-Language 走)
 
 **commits**:见 git log
+
+## Round 10 · 2026-04-26 04:55 (cron · 30m)
+
+**主题**:剩余 backend 用户可见硬编码中文 → t()(model_service · system paths)
+
+**做的事**:
+- model_service.py 2 处:thinking 不支持 warning · empty response stream error
+- api/routers/system.py 5 行 SystemPathEntry:label / description 全包 t()
+  · 之前是双语连写(label="数据根目录 · Data root"),现在按 locale 单出
+- backend i18n catalog 加 12 个 key(2 + 10)
+
+**结果**:1570 backend tests 全绿 · ruff / lint-imports 全绿。剩下的中文都是
+LLM system prompt(_ASK_SYSTEM_PROMPT / ai_explainer / chat 标题生成器)— 那
+是模型 instruction · 不是 UI 文本。
+
+**commits**:见 git log

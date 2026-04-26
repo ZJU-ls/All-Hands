@@ -18,6 +18,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from allhands.config.settings import get_settings
+from allhands.i18n import t
 
 router = APIRouter(prefix="/system", tags=["system"])
 
@@ -59,45 +60,39 @@ def _build_paths() -> list[SystemPathEntry]:
     return [
         SystemPathEntry(
             key="data_dir",
-            label="数据根目录 · Data root",
-            description="所有文件型状态的根 · sqlite 数据库 / 已安装技能 / 制品 blob 都默认放在它下面。",
+            label=t("system.paths.data_dir.label"),
+            description=t("system.paths.data_dir.description"),
             path=str(Path(settings.data_dir).absolute()),
             env_var="ALLHANDS_DATA_DIR",
             configurable=True,
         ),
         SystemPathEntry(
             key="database",
-            label="SQLite 数据库 · Database",
-            description="主数据库文件 · 对话 / 消息 / 制品元数据 / 技能注册表都在这里。",
+            label=t("system.paths.database.label"),
+            description=t("system.paths.database.description"),
             path=str(db_path.absolute()) if db_path else "",
             env_var="ALLHANDS_DATABASE_URL",
             configurable=True,
         ),
         SystemPathEntry(
             key="skills_dir",
-            label="已安装技能 · Installed skills",
-            description=(
-                "用户通过 zip / GitHub 安装的技能存放目录。每个技能一个子文件夹。"
-                "默认 <data_dir>/skills,可通过 ALLHANDS_SKILLS_DIR 覆盖。"
-            ),
+            label=t("system.paths.skills_dir.label"),
+            description=t("system.paths.skills_dir.description"),
             path=str(settings.resolved_skills_dir()),
             env_var="ALLHANDS_SKILLS_DIR",
             configurable=True,
         ),
         SystemPathEntry(
             key="builtin_skills_dir",
-            label="内置技能 · Built-in skills",
-            description="跟随后端代码发布的只读技能集 · 不会被「已安装技能」目录污染。",
+            label=t("system.paths.builtin_skills_dir.label"),
+            description=t("system.paths.builtin_skills_dir.description"),
             path=str(builtin_skills.absolute()),
             builtin=True,
         ),
         SystemPathEntry(
             key="artifacts_dir",
-            label="制品 blob · Artifacts",
-            description=(
-                "Agent 产出的 markdown / 代码 / 图片 / drawio / mermaid 文件存盘位置。"
-                "默认 <data_dir>/artifacts,可通过 ALLHANDS_ARTIFACTS_DIR 覆盖。"
-            ),
+            label=t("system.paths.artifacts_dir.label"),
+            description=t("system.paths.artifacts_dir.description"),
             path=str(settings.resolved_artifacts_dir()),
             env_var="ALLHANDS_ARTIFACTS_DIR",
             configurable=True,
