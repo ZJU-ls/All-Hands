@@ -155,7 +155,14 @@
       "emptyChips": "(空)"
     },
     "mcpPicker": {
-      "empty": "还没有注册 MCP 服务器。先去「MCP 服务器」页注册,再回来挂载。"
+      "empty": "还没有注册 MCP 服务器。先去「MCP 服务器」页注册,再回来挂载。",
+      "searchPlaceholder": "搜索 MCP · 名称 / 协议 / 健康",
+      "groupSelected": "已选",
+      "selectedEmpty": "暂未挂载,从下方分组中点选",
+      "groupHealthy": "在线",
+      "groupUnhealthy": "不健康",
+      "noMatch": "没有匹配「{query}」的 MCP",
+      "chipFailedTitle": "当前健康状态:{health}(失败的服务器仍可挂载,但工具调用会失败)"
     },
     "presetRadio": {
       "ariaLabel": "运转方式",
