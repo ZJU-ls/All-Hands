@@ -421,7 +421,8 @@
     },
     "docx": {
       "loading": "渲染 Word 文档…",
-      "loadFailed": "docx 渲染失败:{error}"
+      "loadFailed": "在线渲染不支持这份文档的某些特性({error})。",
+      "downloadFallback": "下载用 Word / WPS 打开"
     },
     "pptx": {
       "loading": "解析 PowerPoint…",

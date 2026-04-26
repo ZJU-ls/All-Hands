@@ -421,7 +421,8 @@
     },
     "docx": {
       "loading": "Rendering Word document…",
-      "loadFailed": "docx render failed: {error}"
+      "loadFailed": "In-browser preview doesn't support some feature in this doc ({error}).",
+      "downloadFallback": "Download · open in Word / WPS"
     },
     "pptx": {
       "loading": "Parsing PowerPoint…",
