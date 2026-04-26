@@ -58,9 +58,7 @@ class _FakeRunner:
     def __init__(self, events: list[Any]) -> None:
         self._events = events
 
-    async def stream(
-        self, *, messages: list[dict[str, Any]], thread_id: str
-    ) -> AsyncIterator[Any]:
+    async def stream(self, *, messages: list[dict[str, Any]], thread_id: str) -> AsyncIterator[Any]:
         for ev in self._events:
             yield ev
 
