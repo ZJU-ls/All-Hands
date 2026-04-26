@@ -33,6 +33,7 @@ same panel rather than seeing a flicker between two plans.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -46,6 +47,25 @@ if TYPE_CHECKING:
 
 UPDATE_PLAN_TOOL_ID = "allhands.meta.update_plan"
 VIEW_PLAN_TOOL_ID = "allhands.meta.view_plan"
+
+
+# R1 review · C4: per-conversation lock so concurrent update_plan calls
+# don't race read-then-write on the same plan row. Two browser tabs / two
+# overlapping SSE turns hitting the same conversation would each
+# get_latest_for_conversation() simultaneously, both compute "no existing
+# plan" and upsert with different plan_ids — the second silently overwrites
+# the first. The lock serializes the read-modify-write atomically without
+# requiring a DB migration. Keyed by conversation_id; the dict grows
+# unbounded but in practice ≤ active conversations (low cardinality).
+_PLAN_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _conversation_lock(conversation_id: str) -> asyncio.Lock:
+    lock = _PLAN_LOCKS.get(conversation_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _PLAN_LOCKS[conversation_id] = lock
+    return lock
 
 
 _STATUS_MAP: dict[str, StepStatus] = {
@@ -137,44 +157,49 @@ def make_update_plan_executor(
                 ),
             }
 
-        # ── Atomic replace semantics ─────────────────────────────────────
-        existing = await repo.get_latest_for_conversation(conversation_id)
-        now = _now()
+        # ── Atomic replace semantics (R1 · C4 — serialized per conversation) ─
+        # Lock so the read-then-write below can't race against another
+        # concurrent update_plan call on the same conversation. Without it,
+        # two writers see existing=None at the same moment, both upsert
+        # with different plan_ids, second silently wins.
+        async with _conversation_lock(conversation_id):
+            existing = await repo.get_latest_for_conversation(conversation_id)
+            now = _now()
 
-        if existing is not None:
-            plan_id = existing.id
-            new_title = title.strip() if title and title.strip() else existing.title
-            created_at = existing.created_at
-        else:
-            plan_id = str(uuid.uuid4())
-            new_title = title.strip() if title and title.strip() else _derive_title(normalized)
-            created_at = now
+            if existing is not None:
+                plan_id = existing.id
+                new_title = title.strip() if title and title.strip() else existing.title
+                created_at = existing.created_at
+            else:
+                plan_id = str(uuid.uuid4())
+                new_title = title.strip() if title and title.strip() else _derive_title(normalized)
+                created_at = now
 
-        steps = [
-            PlanStep(
-                index=i,
-                title=content,
-                status=status,
-                # Stash activeForm into note for now — the backend's
-                # PlanStep doesn't have a dedicated activeForm column. UI
-                # already renders note as the secondary line, so this
-                # surfaces nicely without a migration.
-                note=active_form if active_form != content else None,
+            steps = [
+                PlanStep(
+                    index=i,
+                    title=content,
+                    status=status,
+                    # Stash activeForm into note for now — the backend's
+                    # PlanStep doesn't have a dedicated activeForm column. UI
+                    # already renders note as the secondary line, so this
+                    # surfaces nicely without a migration.
+                    note=active_form if active_form != content else None,
+                )
+                for i, (content, active_form, status) in enumerate(normalized)
+            ]
+
+            plan = AgentPlan(
+                id=plan_id,
+                conversation_id=conversation_id,
+                run_id=None,
+                owner_employee_id=employee_id,
+                title=new_title,
+                steps=steps,
+                created_at=created_at,
+                updated_at=now,
             )
-            for i, (content, active_form, status) in enumerate(normalized)
-        ]
-
-        plan = AgentPlan(
-            id=plan_id,
-            conversation_id=conversation_id,
-            run_id=None,
-            owner_employee_id=employee_id,
-            title=new_title,
-            steps=steps,
-            created_at=created_at,
-            updated_at=now,
-        )
-        await repo.upsert(plan)
+            await repo.upsert(plan)
 
         # Echo back the summary + plan_id so the agent's next text turn can
         # reference progress without a separate view_plan call.

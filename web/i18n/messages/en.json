@@ -47,6 +47,22 @@
       "expand": "Expand sidebar",
       "toggleHint": "⌘B"
     },
+    "shortcuts": {
+      "title": "Keyboard shortcuts",
+      "close": "Close",
+      "footer": "Press ? anywhere to reopen this list.",
+      "section": {
+        "global": "Global",
+        "navigation": "Navigation"
+      },
+      "openPalette": "Open command palette",
+      "toggleSidebar": "Toggle sidebar",
+      "openHelp": "Show this list",
+      "dismiss": "Close any overlay",
+      "home": "Go to cockpit",
+      "artifacts": "Go to artifacts",
+      "employees": "Go to employees"
+    },
     "sections": {
       "workspace": "Workspace",
       "team": "Team & Skills",
