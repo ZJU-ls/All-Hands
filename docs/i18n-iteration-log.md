@@ -975,3 +975,20 @@ zh-CN.json + en.json `common` 块下即可,catalog-audit 会防止引用错位�
 阳性 / web 0%)
 
 **commits**:见 git log
+
+## Round 46 · 2026-04-27 04:43 (cron · 30m)
+
+**主题**:验证 web 侧 alias / 单引号 / 直接 messages 访问的全空状态
+
+**做的事**:
+- grep `useTranslations as` / `t as` / `getTranslations as` → web 侧 0 处 alias
+  (跟 backend 不一样,backend tasks.py 用 `_t` alias)
+- grep `messages[`/`getMessages()` 直接访问 → 仅 layout.tsx:36 标准模式
+- grep web 单引号 `useTranslations(` / `t(` → 0 处 · 全部双引号一致
+- pnpm build → 47+ 路由全 ok / 0 warning · pnpm lint 0 错 · pnpm test 全绿
+- backend `_t` alias 已被 R45 的 ALIAS_RE 覆盖
+
+**结果**:catalog 双侧死率极低(web 0% / backend 4% 全是 alias 假阳性 ·
+一次性脚本还没升 alias-aware,但 in-source resolver test 已经覆盖)
+
+**commits**:仅本条 log
