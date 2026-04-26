@@ -16,6 +16,8 @@ without having to pre-create a registered employee.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -24,6 +26,16 @@ from typing import TYPE_CHECKING, Any, Protocol
 from allhands.core import Employee, Tool, ToolKind, ToolScope
 from allhands.execution.dispatch import _dispatch_depth, current_parent_run_id
 from allhands.execution.modes import MODES, expand_preset
+
+_log = logging.getLogger(__name__)
+
+# Sub-agent watchdog. The parent's tool_pipeline awaits this executor and
+# the SSE stream is paused on it the whole time — so a sub-agent that hangs
+# (network blip / model timeout / inner loop deadlock) blocks the parent's
+# turn entirely. Cap it at a generous default; user override via env if
+# needed. Surfaces as a structured error envelope so the UI sees a normal
+# tool_call_end with status=failed instead of `tool_call_dropped`.
+DEFAULT_SPAWN_TIMEOUT_S = 180.0
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -217,10 +229,11 @@ class SpawnSubagentService:
         thread_id = str(uuid.uuid4())
         new_depth = current_depth + 1
         depth_token = _dispatch_depth.set(new_depth)
-        try:
+
+        async def _drive() -> tuple[list[str], str]:
             runner = self._runner_factory(child, new_depth)
             parts: list[str] = []
-            status = "completed"
+            status_local = "completed"
             async for event in runner.stream(
                 messages=[{"role": "user", "content": task}],
                 thread_id=thread_id,
@@ -229,17 +242,60 @@ class SpawnSubagentService:
                 if kind == "token":
                     parts.append(getattr(event, "delta", ""))
                 elif kind == "error":
-                    parts.append(getattr(event, "message", ""))
-                    status = "error"
+                    msg = getattr(event, "message", "")
+                    parts.append(str(msg))
+                    status_local = "error"
+                    _log.warning(
+                        "spawn_subagent inner runner error: profile=%s msg=%s",
+                        profile,
+                        msg,
+                    )
                     break
+            return parts, status_local
+
+        try:
+            try:
+                parts, status = await asyncio.wait_for(
+                    _drive(),
+                    timeout=DEFAULT_SPAWN_TIMEOUT_S,
+                )
+            except TimeoutError:
+                _log.warning(
+                    "spawn_subagent timed out after %.0fs · profile=%s task[:80]=%r",
+                    DEFAULT_SPAWN_TIMEOUT_S,
+                    profile,
+                    task[:80],
+                )
+                return {
+                    "result": (
+                        f"Subagent timed out after {DEFAULT_SPAWN_TIMEOUT_S:.0f}s "
+                        "without producing output. The model may be hanging or the "
+                        "inner task is too large. Consider breaking the task into "
+                        "smaller pieces or raising max_iterations_override."
+                    ),
+                    "trace_id": trace_id,
+                    "iterations_used": 0,
+                    "status": "error",
+                    "parent_run_id": current_parent_run_id(),
+                }
+            except Exception as exc:
+                _log.exception(
+                    "spawn_subagent inner runner raised: profile=%s",
+                    profile,
+                )
+                return {
+                    "result": (f"Subagent crashed: {type(exc).__name__}: {exc}"),
+                    "trace_id": trace_id,
+                    "iterations_used": 0,
+                    "status": "error",
+                    "parent_run_id": current_parent_run_id(),
+                }
         finally:
             _dispatch_depth.reset(depth_token)
 
         return {
             "result": "".join(parts).strip(),
             "trace_id": trace_id,
-            # v0: we don't yet track per-turn iterations inside the runner;
-            # leave 0 · the events table records llm.call counts per run.
             "iterations_used": 0,
             "status": status,
             "parent_run_id": current_parent_run_id(),

@@ -192,6 +192,30 @@ def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
 _log = logging.getLogger(__name__)
 
 
+def _make_tool_message_synthetic(*, tool_use_id: str, error: str) -> Message:
+    """Build a synthetic tool_message used when the AgentLoop must surface
+    a tool_use as failed without going through tool_pipeline (e.g. outer
+    loop crashed mid-execution). The error envelope shape matches what
+    tool_pipeline produces for caught executor exceptions, so downstream
+    projection / persistence treat it identically.
+    """
+    from allhands.core.conversation import Message as _Msg
+
+    base = _Msg(
+        id=str(uuid.uuid4()),
+        conversation_id="",
+        role="tool",
+        content="",
+        tool_call_id=tool_use_id,
+        created_at=_now(),
+    )
+    # tool_pipeline routes structured payloads via model_copy(update=...) too
+    # — Message.content is declared str in the schema but downstream
+    # projection / persistence accept dict envelopes by inspection. Mirror
+    # that pattern instead of re-typing the field.
+    return base.model_copy(update={"content": {"error": error}})
+
+
 class AgentLoop:
     """Drives one or more LLM turns through a single conversation."""
 
@@ -409,30 +433,66 @@ class AgentLoop:
                 # or serial (write/deferred). Within concurrent batches
                 # we asyncio.gather; serial batches yield events during
                 # execution (deferred path emits ConfirmationRequested).
+                #
+                # Track which tool_use ids have completed (received TMC)
+                # so the outer except / finally can synthesize a TMC for
+                # any tool that started but didn't finish — otherwise the
+                # frontend stamps it `tool_call_dropped` at finalize time
+                # and the user sees a confusing red "failed" envelope on
+                # what was really an outer-loop crash.
+                committed_tool_use_ids: set[str] = set()
                 batches = partition_tool_uses(tool_use_blocks, bindings)
-                for batch in batches:
-                    if batch.is_concurrent_safe and len(batch.blocks) > 1:
-                        # asyncio.gather — concurrent reads. Order the
-                        # results by input position so transcript stays
-                        # deterministic regardless of completion order.
-                        results = await asyncio.gather(
-                            *[execute_tool_use_concurrent(b, bindings) for b in batch.blocks]
+                try:
+                    for batch in batches:
+                        if batch.is_concurrent_safe and len(batch.blocks) > 1:
+                            results = await asyncio.gather(
+                                *[execute_tool_use_concurrent(b, bindings) for b in batch.blocks]
+                            )
+                            for tool_msg in results:
+                                yield ToolMessageCommitted(message=tool_msg)
+                                committed_tool_use_ids.add(tool_msg.tool_call_id or "")
+                                lc_messages.append(self._to_lc_tool_message(tool_msg))
+                        else:
+                            for block in batch.blocks:
+                                async for ev in execute_tool_use_iter(
+                                    block, bindings, self._permission_check
+                                ):
+                                    yield ev
+                                    if isinstance(ev, ToolMessageCommitted):
+                                        committed_tool_use_ids.add(ev.message.tool_call_id or "")
+                                        lc_messages.append(self._to_lc_tool_message(ev.message))
+                except BaseException as inner_exc:
+                    # Catches Exception AND CancelledError (BaseException).
+                    # Synthesize a failure TMC for every tool_use the model
+                    # asked for that didn't reach a TMC — without this the
+                    # parent loop's outer `except` would swallow the failure
+                    # AND the UI would never see tool_call_end for them.
+                    for blk in tool_use_blocks:
+                        if blk.id in committed_tool_use_ids:
+                            continue
+                        synthetic = _make_tool_message_synthetic(
+                            tool_use_id=blk.id,
+                            error=(
+                                f"{type(inner_exc).__name__}: {inner_exc}"
+                                if not isinstance(inner_exc, asyncio.CancelledError)
+                                else "tool execution cancelled by upstream "
+                                "(SSE drop / parent abort / inner sub-agent failure)"
+                            ),
                         )
-                        for tool_msg in results:
-                            yield ToolMessageCommitted(message=tool_msg)
-                            lc_messages.append(self._to_lc_tool_message(tool_msg))
-                    else:
-                        # Serial — may yield ConfirmationRequested mid-flight
-                        for block in batch.blocks:
-                            async for ev in execute_tool_use_iter(
-                                block, bindings, self._permission_check
-                            ):
-                                yield ev
-                                if isinstance(ev, ToolMessageCommitted):
-                                    lc_messages.append(self._to_lc_tool_message(ev.message))
+                        yield ToolMessageCommitted(message=synthetic)
+                    # Re-raise so the outer try/except still records the
+                    # LoopExited(aborted) sentinel (or unwinds asyncio
+                    # cancellation if that's what we hit).
+                    raise
 
                 # Loop back to next LLM turn
         except GeneratorExit:
+            raise
+        except asyncio.CancelledError:
+            # Surface cancellation as an aborted exit so the chat tap can
+            # finalize repos, then re-raise so asyncio's cancel chain stays
+            # intact.
+            yield LoopExited(reason="aborted", detail="cancelled")
             raise
         except Exception as exc:
             yield LoopExited(
