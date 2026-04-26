@@ -35,9 +35,7 @@ from allhands.execution.agent_loop import _looks_like_artifact_hallucination
     ],
 )
 def test_known_hallucination_phrases_detected(text: str) -> None:
-    assert _looks_like_artifact_hallucination(text), (
-        f"Should flag as hallucination: {text!r}"
-    )
+    assert _looks_like_artifact_hallucination(text), f"Should flag as hallucination: {text!r}"
 
 
 @pytest.mark.parametrize(
