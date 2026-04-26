@@ -51,7 +51,8 @@
     "pieChart": {
       "empty": "No slices",
       "isolated": "Focused · click to release",
-      "tooltip": "{value} · {pct}% · click to focus"
+      "tooltip": "{value} · {pct}% · click to focus",
+      "ariaLabel": "Pie chart"
     },
     "stat": {
       "copyLabel": "Copy metric",

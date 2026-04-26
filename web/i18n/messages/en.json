@@ -43,7 +43,9 @@
       "themeAriaLight": "Switch to light theme",
       "themeAriaDark": "Switch to dark theme",
       "languageTitle": "Change language",
-      "languageAria": "Change language"
+      "languageAria": "Change language",
+      "shortcutsAria": "Keyboard shortcuts",
+      "shortcutsTitle": "? · Keyboard shortcuts"
     },
     "sidebar": {
       "collapse": "Collapse sidebar",

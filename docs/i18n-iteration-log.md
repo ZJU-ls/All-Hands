@@ -461,3 +461,22 @@ date 格式化 0 处 navigator 默认
 **结果**:1928 web tests · typecheck · lint · regression net 全绿
 
 **commits**:见 git log
+
+## Round 21 · 2026-04-26 10:13 (cron · 30m)
+
+**主题**:剩下 3 处 aria-label 英文字面量收口
+
+**发现**:
+- AppShell topbar 键盘快捷键按钮 aria-label="Keyboard shortcuts" + title="? · keyboard shortcuts" 硬编码
+- PieChart svg aria-label="pie chart" 硬编码
+- design-lab 页面 3 处 title="..." 是开发者预览页 · 跳过
+
+**做的事**:
+- 加 catalog key:shell.topbar.shortcutsAria + shortcutsTitle · viz.pieChart.ariaLabel
+- 改 AppShell + PieChart 走 t()
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿。
+本次扫描后 components / app(除 dev-only design-lab)的 aria-label / title
+属性 100% 走 t() · 屏幕阅读器对两种 locale 都说人话。
+
+**commits**:见 git log
