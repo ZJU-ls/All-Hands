@@ -31,6 +31,11 @@ import {
   type ArtifactStatsDto,
 } from "@/lib/artifacts-api";
 
+// 2026-04-27 · KINDS array必须含全部 12 种(对齐 backend ArtifactKind enum)。
+// 之前只有 7 项 · 用户从顶部 stats 卡点 "csv · 2" 时,过滤面包屑显示 csv,
+// 但 ArtifactList 的 KIND_ORDER 也漏 csv → 整列分组 fallback 不渲染 →
+// 屏空。补全 + 把 csv/xlsx/docx/pdf/pptx 在 office 类别下单独排,不再
+// 与"其他"混。
 const KINDS: ArtifactKind[] = [
   "markdown",
   "code",
@@ -39,6 +44,11 @@ const KINDS: ArtifactKind[] = [
   "data",
   "mermaid",
   "drawio",
+  "csv",
+  "xlsx",
+  "docx",
+  "pdf",
+  "pptx",
 ];
 
 const SORTS: ArtifactSort[] = [
@@ -285,6 +295,25 @@ export default function ArtifactsGlobalPage() {
           setItems(next);
           setState("ok");
           setError(null);
+          // 2026-04-27 · selectedId 自洽回收。filter 切换后 next 里如果不
+          // 包含原 selectedId,详情面板会继续显示旧制品(filter csv 但
+          // 看到 drawio),违反"右侧永远是当前可见列表中的项"约束。
+          // 用 setSelectedId 函数式取值避免把 selectedId 加进 deps · 再
+          // 触发本 effect 的死循环。
+          setSelectedId((cur) => {
+            if (cur === null) return cur;
+            return next.some((a) => a.id === cur) ? cur : null;
+          });
+          // 同步:bulkSelected 里凡是不在新 list 里的也清掉。bulk 是隐式
+          // 状态(用户看不见),漂移到不可见项更危险(批量删时把"看不
+          // 见但勾选了"的也删掉)。
+          setBulkSelected((cur) => {
+            if (cur.size === 0) return cur;
+            const visibleIds = new Set(next.map((a) => a.id));
+            const filtered = new Set<string>();
+            for (const id of cur) if (visibleIds.has(id)) filtered.add(id);
+            return filtered.size === cur.size ? cur : filtered;
+          });
         }
       } catch (e) {
         if (!cancelled) {
