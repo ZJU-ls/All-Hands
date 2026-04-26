@@ -77,6 +77,7 @@ type DateRange = "all" | "7d" | "30d";
 
 export default function ArtifactsGlobalPage() {
   const t = useTranslations("artifacts.page");
+  const tToast = useTranslations("artifacts.page.bulk.toast");
   const [items, setItems] = useState<ArtifactDto[]>([]);
   const [stats, setStats] = useState<ArtifactStatsDto | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
@@ -168,10 +169,13 @@ export default function ArtifactsGlobalPage() {
       }
       if (failed === 0) {
         toast.success(
-          `${targetPinned ? "Pinned" : "Unpinned"} ${targetIds.length} artifact${targetIds.length === 1 ? "" : "s"}`,
+          tToast(targetPinned ? "pinned" : "unpinned", { n: targetIds.length }),
         );
       } else {
-        toast.error(`${failed} of ${targetIds.length} failed`, "Reverted those rows");
+        toast.error(
+          tToast("pinPartial", { ok: failed, total: targetIds.length }),
+          tToast("pinPartialDesc"),
+        );
       }
     } finally {
       setBulkBusy(false);
@@ -200,11 +204,14 @@ export default function ArtifactsGlobalPage() {
       }
       clearBulk();
       if (failed === 0) {
-        toast.success(`Deleted ${targetCount} artifact(s)`, "Soft delete · still recoverable");
+        toast.success(
+          tToast("deletedAll", { n: targetCount }),
+          tToast("deletedAllDesc"),
+        );
       } else if (failed < targetCount) {
-        toast.warning(`Deleted ${targetCount - failed} · ${failed} failed`);
+        toast.warning(tToast("deletedPartial", { ok: targetCount - failed, failed }));
       } else {
-        toast.error(`Failed to delete ${failed} artifact(s)`);
+        toast.error(tToast("deletedNone", { n: failed }));
       }
     } finally {
       setBulkBusy(false);

@@ -480,3 +480,22 @@ date 格式化 0 处 navigator 默认
 属性 100% 走 t() · 屏幕阅读器对两种 locale 都说人话。
 
 **commits**:见 git log
+
+## Round 22 · 2026-04-26 10:43 (cron · 30m)
+
+**主题**:5 处 toast.success/.error/.warning 模板字符串硬编码英文
+
+**发现**:R20 在 BulkActionBar 收口时漏了 onPinToggle / bulkDeleteConfirmed
+两段业务 handler 里的 toast 文案 —— 5 个 `${...} artifact(s)` 模板,zh
+用户成功删几个制品看的全是英文 toast。
+
+**做的事**:
+- artifacts.page.bulk.toast 块新增 8 个 ICU key(en 用 plural,zh 用 {n}):
+  pinned · unpinned · pinPartial(+desc) · deletedAll(+desc) · deletedPartial · deletedNone
+- ArtifactsGlobalPage 加 `tToast = useTranslations("artifacts.page.bulk.toast")`
+- 5 处 toast.* 改用 ICU 模板
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿 ·
+全栈 toast.* 调用 0 处硬编码英文/中文文本
+
+**commits**:见 git log

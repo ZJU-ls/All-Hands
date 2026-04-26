@@ -379,7 +379,17 @@
         "selected": "{n} selected",
         "pin": "Pin",
         "unpin": "Unpin",
-        "delete": "Delete"
+        "delete": "Delete",
+        "toast": {
+          "pinned": "Pinned {n, plural, one {# artifact} other {# artifacts}}",
+          "unpinned": "Unpinned {n, plural, one {# artifact} other {# artifacts}}",
+          "pinPartial": "{ok} of {total} failed",
+          "pinPartialDesc": "Reverted those rows",
+          "deletedAll": "Deleted {n, plural, one {# artifact} other {# artifacts}}",
+          "deletedAllDesc": "Soft delete · still recoverable",
+          "deletedPartial": "Deleted {ok} · {failed} failed",
+          "deletedNone": "Failed to delete {n, plural, one {# artifact} other {# artifacts}}"
+        }
       },
       "view": {
         "list": "List",

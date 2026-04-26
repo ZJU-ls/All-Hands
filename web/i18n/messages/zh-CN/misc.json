@@ -379,7 +379,17 @@
         "selected": "已选 {n}",
         "pin": "置顶",
         "unpin": "取消置顶",
-        "delete": "删除"
+        "delete": "删除",
+        "toast": {
+          "pinned": "已置顶 {n} 个制品",
+          "unpinned": "已取消置顶 {n} 个制品",
+          "pinPartial": "{ok} / {total} 失败",
+          "pinPartialDesc": "已回滚失败的行",
+          "deletedAll": "已删除 {n} 个制品",
+          "deletedAllDesc": "软删除 · 可以恢复",
+          "deletedPartial": "已删除 {ok} 个 · {failed} 个失败",
+          "deletedNone": "删除失败 {n} 个制品"
+        }
       },
       "view": {
         "list": "列表",
