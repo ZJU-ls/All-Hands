@@ -109,7 +109,7 @@ export function ArtifactGrid({
   return (
     <ul
       role="listbox"
-      aria-label="artifacts"
+      aria-label={t("groupAria")}
       className="grid grid-cols-1 gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3"
     >
       {ordered.map((a) => {
@@ -154,7 +154,7 @@ export function ArtifactGrid({
                 <span
                   aria-hidden
                   className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded text-warning"
-                  title="pinned"
+                  title={t("pinnedAria")}
                 >
                   <Icon name="check" size={11} />
                 </span>

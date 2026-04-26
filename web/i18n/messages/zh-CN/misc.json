@@ -278,6 +278,8 @@
     },
     "list": {
       "pinned": "置顶",
+      "pinnedAria": "已置顶",
+      "groupAria": "制品",
       "empty": "还没有制品。让员工产出一份文档、代码或图。"
     },
     "panel": {
@@ -369,6 +371,15 @@
         "clearAll": "清空筛选",
         "activeChip": "已选: {label}",
         "removeChipAria": "移除筛选 {label}"
+      },
+      "clearSearchAria": "清除搜索",
+      "bulkActionsAria": "批量操作",
+      "clearSelectionAria": "清除选择",
+      "bulk": {
+        "selected": "已选 {n}",
+        "pin": "置顶",
+        "unpin": "取消置顶",
+        "delete": "删除"
       },
       "view": {
         "list": "列表",

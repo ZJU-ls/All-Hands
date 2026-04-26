@@ -430,3 +430,34 @@ app/triggers/page.tsx · app/skills/[id]/page.tsx · app/mcp-servers/[id]/page.t
 date 格式化 0 处 navigator 默认
 
 **commits**:见 git log
+
+## Round 20 · 2026-04-26 09:43 (cron · 30m)
+
+**主题**:aria-label / 屏幕阅读器友好性 + 漏掉的硬编码英文
+
+**发现**:
+- aria-label 硬编码英文 9+ 处:Toast notifications · ProgressPanel
+  agent progress · PlanProgress 5 个状态 dot · SubagentProgress 3 个状态 dot ·
+  ArtifactList pinned · ArtifactGrid artifacts/pinned · artifacts/page
+  clear search/bulk actions/clear selection
+- artifacts/page BulkActionBar 硬编码 4 处英文文本:"{n} selected" · "Pin" /
+  "Unpin" · "Delete"
+- SubagentProgressSection labelFor() 返回硬编码英文 status 文本(显示给用户看,
+  不仅是 aria-label)
+
+**做的事**:
+- 加 catalog key:
+  - root toast.ariaLabel("通知" / "Notifications")
+  - chat.progressPanel.ariaLabel("代理进度" / "Agent progress")
+  - chat.planProgress.step.{done,running,failed,skipped,pending}
+  - chat.subagent.status.{running,succeeded,failed}
+  - artifacts.list.pinnedAria + groupAria
+  - artifacts.page.{clearSearchAria,bulkActionsAria,clearSelectionAria,bulk.*}
+- 改 8 个组件 / 1 个 page 走 t():Toast · ProgressPanel · PlanProgressSection ·
+  SubagentProgressSection(顺手干掉 labelFor)· ArtifactListItem · ArtifactGrid
+  · artifacts/page BulkActionBar
+- 删除 SubagentProgressSection.labelFor 死函数
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log

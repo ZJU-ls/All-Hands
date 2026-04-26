@@ -1,4 +1,7 @@
 {
+  "toast": {
+    "ariaLabel": "Notifications"
+  },
   "common": {
     "loading": "Loading…",
     "save": "Save",

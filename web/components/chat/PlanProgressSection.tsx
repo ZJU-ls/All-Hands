@@ -188,12 +188,13 @@ export function PlanProgressSection({ plan, embedded = false }: Props) {
 }
 
 function StepDot({ status }: { status: PlanStepStatus }) {
+  const tStep = useTranslations("chat.planProgress.step");
   const base =
     "relative inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border";
   if (status === "done") {
     return (
       <span
-        aria-label="done"
+        aria-label={tStep("done")}
         className={cn(base, "border-success bg-success text-white")}
       >
         <Icon name="check" size={8} strokeWidth={3} />
@@ -203,7 +204,7 @@ function StepDot({ status }: { status: PlanStepStatus }) {
   if (status === "running") {
     return (
       <span
-        aria-label="running"
+        aria-label={tStep("running")}
         className={cn(
           base,
           "border-warning bg-warning shadow-[0_0_0_3px_rgba(251,191,36,0.18)] animate-pulse",
@@ -214,7 +215,7 @@ function StepDot({ status }: { status: PlanStepStatus }) {
   if (status === "failed") {
     return (
       <span
-        aria-label="failed"
+        aria-label={tStep("failed")}
         className={cn(base, "border-danger bg-danger text-white")}
       >
         <Icon name="x" size={8} strokeWidth={3} />
@@ -224,7 +225,7 @@ function StepDot({ status }: { status: PlanStepStatus }) {
   if (status === "skipped") {
     return (
       <span
-        aria-label="skipped"
+        aria-label={tStep("skipped")}
         className={cn(base, "border-text-subtle bg-surface-3 text-text-subtle")}
       >
         <span className="block h-1 w-1 rounded-full bg-text-subtle" />
@@ -233,7 +234,7 @@ function StepDot({ status }: { status: PlanStepStatus }) {
   }
   return (
     <span
-      aria-label="pending"
+      aria-label={tStep("pending")}
       className={cn(base, "border-border bg-surface-3")}
     />
   );

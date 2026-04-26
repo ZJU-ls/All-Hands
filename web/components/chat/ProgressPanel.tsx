@@ -137,7 +137,7 @@ export function ProgressPanel({ conversationId }: Props) {
            floating "white card" feel. */}
         <div
           role="tablist"
-          aria-label="agent progress"
+          aria-label={t("ariaLabel")}
           className="flex items-stretch gap-1.5"
         >
           {hasPlan && (

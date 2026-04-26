@@ -1,4 +1,7 @@
 {
+  "toast": {
+    "ariaLabel": "通知"
+  },
   "common": {
     "loading": "加载中…",
     "save": "保存",
