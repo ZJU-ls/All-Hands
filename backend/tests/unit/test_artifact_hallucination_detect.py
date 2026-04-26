@@ -34,7 +34,7 @@ from allhands.execution.agent_loop import _looks_like_artifact_hallucination
         "以下是为你定制的方案",
         # 2026-04-26 · qwen3 在「用 html 展示...」请求下不调 tool 而是描述,
         # 用户截图原话「已为您生成"平台整体架构图"」
-        "已为您生成\"平台整体架构图\"",
+        '已为您生成"平台整体架构图"',
         "已为您创建一个交互式 HTML 页面",
         "已为您准备好",
         "已为你生成 HTML 页面",
