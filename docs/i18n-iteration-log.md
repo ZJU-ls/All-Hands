@@ -756,3 +756,28 @@ literal + template-prefix 两种 t() 形式
 **结果**:web 1984 tests + backend i18n tests + regression 全绿 · 零代码改动
 
 **commits**:仅本条 log
+
+## Round 36 · 2026-04-26 17:43 (cron · 30m)
+
+**主题**:dead-key 反向审计工具(诊断,不强制修)
+
+**做的事**:
+- 新增 web/scripts/audit-i18n-dead-keys.mjs · 反过来扫:把所有
+  `useTranslations("ns")` + `t("subkey")` 配对,组合 `ns.subkey` 集合 ·
+  catalog 里有但 source 引用不到的 → 候选死 key
+- 当前结果:catalog 2452 keys · live literal 8632(同一 key 被多处引用)·
+  live template prefix 38 · 可能死 key 259 个(10.6%)
+- 大头是 `common.*` 系列(loading / save / ok / yes / no…)和
+  `welcome.highlights.*` 一些子项 —— 各页面用了页内同义 key 而不
+  共享 common · 算冗余但不是 bug
+- **不删除**:工具是诊断性的 · 启发式可能漏掉 props-passed namespace 或
+  computed key,真删需要 case-by-case 评估 · 留作以后清理基线
+
+**用法**:
+```
+node web/scripts/audit-i18n-dead-keys.mjs --list
+```
+
+**结果**:1984 web tests + backend i18n + lint 全绿 · 仅加诊断脚本
+
+**commits**:见 git log
