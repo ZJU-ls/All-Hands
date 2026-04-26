@@ -115,8 +115,18 @@ def _build_preset_child(
     *,
     return_format: str | None,
     max_iterations_override: int | None,
+    model_ref: str,
 ) -> Employee:
-    """Construct a throwaway in-memory Employee from a preset (contract § 4.2)."""
+    """Construct a throwaway in-memory Employee from a preset (contract § 4.2).
+
+    ``model_ref`` is now mandatory and inherits from the parent agent so the
+    subagent talks to the same gateway. The previous hardcoded
+    ``"openai/gpt-4o-mini"`` made spawn_subagent fail on any deployment that
+    doesn't have an OpenAI provider registered (e.g. user's CodingPlan
+    gateway with qwen / glm / kimi / minimax models). Reproducer:
+    spawn_subagent → "Unknown model_ref" → executor exception → SSE drops
+    tool_call mid-flight → frontend shows tool_call_dropped.
+    """
     tool_ids, skill_ids, max_it = expand_preset(
         preset_id,
         custom_max_iterations=max_iterations_override,
@@ -133,7 +143,7 @@ def _build_preset_child(
         name=f"sub-{preset_id.replace('_', '-')[:30]}",
         description=f"Temporary {preset_id} subagent",
         system_prompt="\n\n".join(prompt_parts),
-        model_ref="openai/gpt-4o-mini",
+        model_ref=model_ref,
         tool_ids=list(tool_ids),
         skill_ids=list(skill_ids),
         max_iterations=int(max_it),
@@ -154,10 +164,15 @@ class SpawnSubagentService:
         employee_repo: EmployeeRepo | Any,
         runner_factory: SubRunnerFactory,
         max_depth: int = 1,
+        default_model_ref: str | None = None,
     ) -> None:
         self._employees = employee_repo
         self._runner_factory = runner_factory
         self._max_depth = max_depth
+        # Inherited from the parent so the subagent talks to the same gateway.
+        # When None, falls back to a sensible default (kept for backward compat
+        # with tests that don't bind a parent model).
+        self._default_model_ref = default_model_ref or "openai/gpt-4o-mini"
 
     async def spawn(
         self,
@@ -242,6 +257,7 @@ class SpawnSubagentService:
                 profile,
                 return_format=return_format,
                 max_iterations_override=max_iterations_override,
+                model_ref=self._default_model_ref,
             )
         emp = await self._employees.get_by_name(profile)
         if emp is None:
