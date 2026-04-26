@@ -9,7 +9,7 @@
  */
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { TurnDto, TurnToolCallDto } from "@/lib/observatory-api";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -109,6 +109,7 @@ function TurnRow({ turn }: { turn: TurnDto }) {
 
 function LLMCallTurn({ turn }: { turn: Extract<TurnDto, { kind: "llm_call" }> }) {
   const t = useTranslations("runs.turnList");
+  const locale = useLocale();
   const total = turn.total_tokens || turn.input_tokens + turn.output_tokens;
   return (
     <div
@@ -129,9 +130,9 @@ function LLMCallTurn({ turn }: { turn: Extract<TurnDto, { kind: "llm_call" }> })
             <>
               {" · "}
               {t("llmTokens", {
-                input: turn.input_tokens.toLocaleString(),
-                output: turn.output_tokens.toLocaleString(),
-                total: total.toLocaleString(),
+                input: turn.input_tokens.toLocaleString(locale),
+                output: turn.output_tokens.toLocaleString(locale),
+                total: total.toLocaleString(locale),
               })}
             </>
           ) : null}

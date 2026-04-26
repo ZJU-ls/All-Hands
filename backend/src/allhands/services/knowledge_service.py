@@ -979,6 +979,78 @@ class KnowledgeService:
             ).scalar()
         return int(n or 0)
 
+    async def switch_embedding_model(self, kb_id: str, new_ref: str) -> dict[str, object]:
+        """Re-bind a KB to a different embedding model and rebuild all
+        chunk vectors with it.
+
+        Steps:
+        1. Validate ``new_ref`` resolves to a usable provider (raises KBError otherwise).
+        2. Update KB row ``embedding_model_ref`` + ``embedding_dim`` + bump ``updated_at``.
+        3. Replace ``self._embedder`` (and the wired-up orchestrator + retriever)
+           so subsequent ingests use the new model. v0 single-process simplification:
+           every KB shares one in-process embedder. If the user keeps multiple
+           KBs on different models the last-switched one wins for new uploads —
+           document the trade-off, accept it, revisit when we go multi-tenant.
+        4. Run :meth:`reembed_all` so existing chunks line up with the new model.
+
+        Returns ``{"kb": KB-as-dict, "reembed": {processed, succeeded, failed}}``.
+        """
+        new_ref = (new_ref or "").strip()
+        if not new_ref:
+            raise KBError("new_ref is required")
+        kb = await self.get_kb(kb_id)
+        if new_ref == kb.embedding_model_ref:
+            return {
+                "kb": kb.model_dump(mode="json"),
+                "reembed": {"processed": 0, "succeeded": 0, "failed": 0},
+            }
+
+        # 1. Validate + build the new embedder
+        try:
+            provider = await resolve_provider_with_db(new_ref, self._session_maker)
+        except ValueError as exc:
+            raise KBError(f"模型 {new_ref!r} 不可用: {exc}") from None
+        new_embedder = Embedder(model_ref=new_ref, provider=provider)
+
+        # 2. Persist on KB row
+        async with self._session_maker() as s:
+            row = await SqlKnowledgeBaseRepo(s).get(kb_id)
+            if row is None:
+                raise KBNotFound(f"kb {kb_id!r} not found")
+            updated = row.model_copy(
+                update={
+                    "embedding_model_ref": new_ref,
+                    "embedding_dim": provider.dim,
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            await SqlKnowledgeBaseRepo(s).upsert(updated)
+            # Vector store namespace dim has to be re-stamped too — the
+            # blob layout changes when the model dim does.
+            await self._vec_store.create_namespace(kb_id, provider.dim)
+            await s.commit()
+
+        # 3. Swap service-level embedder + dependents in place
+        self._embedder = new_embedder
+        self._ingest = IngestOrchestrator(
+            self._session_maker,
+            chunker=self._chunker,
+            embedder=self._embedder,
+            vec_store=self._vec_store,
+            data_root=self._data_dir,
+        )
+        self._retriever = HybridRetriever(
+            embedder=self._embedder,
+            vec_store=self._vec_store,
+            fts_search=self._fts_search_for_kb,
+            chunk_lookup=self._chunk_lookup,
+        )
+
+        # 4. Re-embed every existing doc
+        result = await self.reembed_all(kb_id)
+        kb_after = await self.get_kb(kb_id)
+        return {"kb": kb_after.model_dump(mode="json"), "reembed": result}
+
     async def reembed_all(self, kb_id: str) -> dict[str, int]:
         """Re-run the ingest pipeline for every ready/failed document in
         a KB. Useful after the user (a) gets the embedding provider

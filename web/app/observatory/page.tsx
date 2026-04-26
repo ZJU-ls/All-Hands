@@ -792,10 +792,10 @@ export default function ObservatoryPage() {
                           ? t("kpi.totalTokensDelta", {
                               input: formatTokens(summary.input_tokens_total),
                               output: formatTokens(summary.output_tokens_total),
-                              avg: summary.avg_tokens_per_run.toLocaleString(),
+                              avg: summary.avg_tokens_per_run.toLocaleString(locale),
                             })
                           : t("kpi.tokensDelta", {
-                              count: summary.traces_total.toLocaleString(),
+                              count: summary.traces_total.toLocaleString(locale),
                             }),
                       tone: "muted",
                     }}
@@ -810,7 +810,7 @@ export default function ObservatoryPage() {
                     label={t("kpi.llmCalls")}
                     value={
                       summary.llm_calls_total > 0
-                        ? summary.llm_calls_total.toLocaleString()
+                        ? summary.llm_calls_total.toLocaleString(locale)
                         : "—"
                     }
                     delta={{
@@ -818,7 +818,7 @@ export default function ObservatoryPage() {
                       text:
                         summary.traces_total > 0
                           ? t("kpi.llmCallsDelta", {
-                              runs: summary.traces_total.toLocaleString(),
+                              runs: summary.traces_total.toLocaleString(locale),
                               avg:
                                 summary.traces_total > 0
                                   ? (
@@ -895,7 +895,7 @@ export default function ObservatoryPage() {
                     },
                     {
                       label: t("panels.rows.totalTraces"),
-                      value: summary.traces_total.toLocaleString(),
+                      value: summary.traces_total.toLocaleString(locale),
                       onClick: () =>
                         openDrawer("runs", t("panels.rows.totalTraces")),
                     },
@@ -912,7 +912,7 @@ export default function ObservatoryPage() {
                             row.total_tokens > 0
                               ? `${row.runs_count} · ${formatTokens(row.total_tokens)} tok`
                               : t("panels.values.runs", {
-                                  count: row.runs_count.toLocaleString(),
+                                  count: row.runs_count.toLocaleString(locale),
                                 }),
                         }))
                       : []
@@ -965,7 +965,7 @@ export default function ObservatoryPage() {
                               {row.model_ref}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                              {row.runs_count.toLocaleString()}
+                              {row.runs_count.toLocaleString(locale)}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
                               {formatTokens(row.input_tokens)}
@@ -1055,7 +1055,7 @@ export default function ObservatoryPage() {
                               <Icon name="clock" size={11} />
                               {formatDuration(row.duration_s)}
                             </span>
-                            <span>{row.tokens.total.toLocaleString()} {t("incidents.tokensSuffix")}</span>
+                            <span>{row.tokens.total.toLocaleString(locale)} {t("incidents.tokensSuffix")}</span>
                             <span className="hidden md:inline">{formatDate(row.started_at, locale)}</span>
                           </div>
                         </div>
@@ -1171,11 +1171,11 @@ export default function ObservatoryPage() {
                               className="py-2.5 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums"
                               title={
                                 row.tokens.total > 0
-                                  ? `in ${row.tokens.prompt.toLocaleString()} · out ${row.tokens.completion.toLocaleString()} · total ${row.tokens.total.toLocaleString()}`
+                                  ? `in ${row.tokens.prompt.toLocaleString(locale)} · out ${row.tokens.completion.toLocaleString(locale)} · total ${row.tokens.total.toLocaleString(locale)}`
                                   : undefined
                               }
                             >
-                              {row.tokens.total > 0 ? row.tokens.total.toLocaleString() : "—"}
+                              {row.tokens.total > 0 ? row.tokens.total.toLocaleString(locale) : "—"}
                             </td>
                             <td className="py-2.5 px-4 text-text-muted">
                               {formatDate(row.started_at, locale)}

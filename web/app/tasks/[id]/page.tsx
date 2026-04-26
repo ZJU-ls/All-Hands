@@ -443,6 +443,7 @@ function TaskHero({ task }: { task: TaskDto }) {
 
 function TaskKpiStrip({ task }: { task: TaskDto }) {
   const t = useTranslations("tasks.detail");
+  const locale = useLocale();
   const duration = useMemo(() => {
     const start = new Date(task.created_at).getTime();
     const end = task.completed_at
@@ -458,7 +459,7 @@ function TaskKpiStrip({ task }: { task: TaskDto }) {
   const tokensHint =
     task.token_budget == null
       ? t("kpiTokenNoBudget")
-      : t("kpiTokenBudget", { budget: task.token_budget.toLocaleString() });
+      : t("kpiTokenBudget", { budget: task.token_budget.toLocaleString(locale) });
 
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -471,7 +472,7 @@ function TaskKpiStrip({ task }: { task: TaskDto }) {
       />
       <KpiCard
         label={t("kpiToken")}
-        value={task.tokens_used.toLocaleString()}
+        value={task.tokens_used.toLocaleString(locale)}
         hint={tokensHint}
         icon="zap"
         tone="warning"

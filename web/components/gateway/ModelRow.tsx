@@ -13,7 +13,7 @@
  * users into thinking the row was clickable, and was removed 2026-04-25.
  */
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { PingIndicator, type PingState } from "./PingIndicator";
@@ -55,6 +55,7 @@ export function ModelRow({
   onEdit: () => void;
 }) {
   const t = useTranslations("gateway.modelRow");
+  const locale = useLocale();
   const running = pingState.status === "running";
   const title = model.display_name || model.name;
   const showAlias = model.display_name && model.display_name !== model.name;
@@ -88,7 +89,7 @@ export function ModelRow({
         {model.context_window > 0 && (
           <span
             className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border font-mono text-[10px] text-text-muted tabular-nums"
-            title={t("contextWindowTitle", { tokens: model.context_window.toLocaleString() })}
+            title={t("contextWindowTitle", { tokens: model.context_window.toLocaleString(locale) })}
           >
             {formatCtx(model.context_window)}
           </span>

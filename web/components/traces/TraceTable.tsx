@@ -234,11 +234,11 @@ export function TraceTable({
                 className="py-2.5 px-3 text-right font-mono text-[11px] text-text-muted tabular-nums"
                 title={
                   row.tokens.total > 0
-                    ? `in ${row.tokens.prompt.toLocaleString()} · out ${row.tokens.completion.toLocaleString()} · total ${row.tokens.total.toLocaleString()}`
+                    ? `in ${row.tokens.prompt.toLocaleString(locale)} · out ${row.tokens.completion.toLocaleString(locale)} · total ${row.tokens.total.toLocaleString(locale)}`
                     : undefined
                 }
               >
-                {row.tokens.total > 0 ? row.tokens.total.toLocaleString() : "—"}
+                {row.tokens.total > 0 ? row.tokens.total.toLocaleString(locale) : "—"}
               </td>
               <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted">
                 {formatStartedAt(row.started_at, locale)}
