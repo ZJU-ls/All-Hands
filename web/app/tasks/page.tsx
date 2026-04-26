@@ -10,12 +10,7 @@ import { NewTaskDrawer } from "@/components/tasks/NewTaskDrawer";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
 import { TraceChip } from "@/components/runs/TraceChip";
 import { listEmployees, type EmployeeDto } from "@/lib/api";
-import {
-  listTasks,
-  sourceLabel,
-  type TaskDto,
-  type TaskStatus,
-} from "@/lib/tasks-api";
+import { listTasks, type TaskDto, type TaskStatus } from "@/lib/tasks-api";
 
 type FilterKey = "inbox" | "active" | "needs_user" | "done" | "failed" | "all";
 
@@ -389,6 +384,7 @@ function EmptyHint({
 
 function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }) {
   const t = useTranslations("tasks.list");
+  const sourceT = useTranslations("tasks.source");
   const urgent = task.status === "needs_input" || task.status === "needs_approval";
   const updated = new Date(task.updated_at);
   const running = task.status === "running";
@@ -442,7 +438,7 @@ function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }
             <div className="flex flex-wrap items-center gap-2">
               <TaskStatusPill status={task.status} />
               <span className="inline-flex h-5 items-center rounded bg-surface-2 px-1.5 font-mono text-[10px] text-text-muted">
-                {sourceLabel(task.source)}
+                {sourceT(task.source)}
               </span>
               <span className="font-mono text-[10px] text-text-subtle">{task.id}</span>
             </div>

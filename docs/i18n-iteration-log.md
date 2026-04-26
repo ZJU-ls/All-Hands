@@ -295,3 +295,26 @@ en 用户看 trace 表 / run header 时,日期会按中文 locale 渲染(e.g.
 **结果**:1928 web tests · typecheck · lint · regression net 全绿
 
 **commits**:见 git log
+
+## Round 14 · 2026-04-26 06:43 (cron · 30m)
+
+**主题**:lib/ 层面的硬编码 enum-label 函数 → catalog driven
+
+**发现**:
+- lib/employee-profile.ts BADGE_LABEL = { react: "可执行", planner: "会做计划",
+  coordinator: "能带团队" } —— 直接 lookup 表硬塞中文
+- lib/tasks-api.ts statusLabel(s) / sourceLabel(s) —— switch / dict 硬塞中文,
+  TaskStatusPill 也走这个路径
+
+**做的事**:
+- web/i18n/messages/{zh-CN,en}/employees.json 加 `tasks.status.*` (7 状态)
+  + `tasks.source.*` (4 来源) + `employeeBadges.*` (3 徽章) · 共 14 个 key x 2 locale
+- 改 4 个 consumer 走 useTranslations:
+  - app/employees/page.tsx · app/employees/[employeeId]/page.tsx → useTranslations("employeeBadges")
+  - app/tasks/page.tsx · app/tasks/[id]/page.tsx → useTranslations("tasks.source")
+  - components/tasks/TaskStatusPill.tsx → useTranslations("tasks.status") (新加 "use client")
+- 删掉 lib/tasks-api.ts 的 statusLabel + sourceLabel + lib/employee-profile.ts 的 BADGE_LABEL
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log

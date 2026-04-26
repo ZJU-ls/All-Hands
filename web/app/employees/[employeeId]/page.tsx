@@ -14,7 +14,7 @@ import {
   type ConversationDto,
   type EmployeeDto,
 } from "@/lib/api";
-import { deriveProfile, BADGE_LABEL } from "@/lib/employee-profile";
+import { deriveProfile } from "@/lib/employee-profile";
 
 /**
  * Employee detail · single-employee dashboard (ADR 0016 · V2 Azure Live).
@@ -46,6 +46,7 @@ function modelDisplay(modelRef: string, fallback: string): string {
 
 export default function EmployeePage() {
   const t = useTranslations("employees.detail");
+  const badgeT = useTranslations("employeeBadges");
   const { employeeId } = useParams<{ employeeId: string }>();
   const router = useRouter();
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
@@ -165,7 +166,7 @@ export default function EmployeePage() {
                         key={b}
                         className="inline-flex items-center h-5 px-2 rounded-full bg-surface-2 border border-border text-text-muted text-caption font-medium"
                       >
-                        {BADGE_LABEL[b]}
+                        {badgeT(b)}
                       </span>
                     ))}
                   </div>

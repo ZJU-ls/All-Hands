@@ -17,8 +17,6 @@ import {
   cancelTask,
   getTask,
   PENDING_USER_STATUSES,
-  sourceLabel,
-  statusLabel,
   TERMINAL_STATUSES,
   type TaskDto,
   type TaskStatus,
@@ -373,6 +371,8 @@ const TONE_ACCENT: Record<HeroTone, string> = {
 
 function TaskHero({ task }: { task: TaskDto }) {
   const t = useTranslations("tasks.detail");
+  const statusT = useTranslations("tasks.status");
+  const sourceT = useTranslations("tasks.source");
   const created = new Date(task.created_at).toLocaleString();
   const updated = new Date(task.updated_at).toLocaleString();
   const completed = task.completed_at ? new Date(task.completed_at).toLocaleString() : null;
@@ -393,7 +393,7 @@ function TaskHero({ task }: { task: TaskDto }) {
           <div className="flex flex-wrap items-center gap-2">
             <TaskStatusPill status={task.status} />
             <span className="inline-flex h-5 items-center rounded bg-surface-2 px-1.5 font-mono text-[10px] text-text-muted">
-              {sourceLabel(task.source)}
+              {sourceT(task.source)}
             </span>
             <span className="font-mono text-[10px] text-text-subtle">{task.id}</span>
           </div>
@@ -412,7 +412,7 @@ function TaskHero({ task }: { task: TaskDto }) {
             {completed && (
               <span className="inline-flex items-center gap-1">
                 <Icon name="check" size={11} />
-                {t("completedAt", { status: statusLabel(task.status), at: completed })}
+                {t("completedAt", { status: statusT(task.status), at: completed })}
               </span>
             )}
           </div>
