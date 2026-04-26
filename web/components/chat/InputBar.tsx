@@ -58,6 +58,7 @@ export function InputBar({
     finalizeStreaming,
     cancelStreaming,
     setStreamError,
+    bumpHeartbeat,
   } = useChatStore();
 
   // ADR 0014 Phase 4e · build the AG-UI stream callbacks once per render so
@@ -151,6 +152,10 @@ export function InputBar({
           };
           if (!ev.message_id || !ev.payload) return;
           addRenderPayload(ev.message_id, ev.payload);
+        } else if (name === "allhands.heartbeat") {
+          // 2026-04-26 · 服务端 10s 一次心跳 · 让 chip 的「无响应」 计时
+          // reset · 否则 LLM 长 thinking 期间 chip 会错误地进入「停止」 状态。
+          bumpHeartbeat();
         }
       },
       onRunError: (err) => {
@@ -185,6 +190,7 @@ export function InputBar({
     finalizeStreaming,
     cancelStreaming,
     setStreamError,
+    bumpHeartbeat,
     t,
   ]);
 

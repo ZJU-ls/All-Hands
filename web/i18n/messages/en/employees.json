@@ -131,7 +131,14 @@
       "sectionDryRunSubtitle": "The expanded triple — matches the persisted payload exactly",
       "cancel": "Cancel",
       "hiring": "Hiring…",
-      "hire": "Hire"
+      "hire": "Hire",
+      "saveEdit": "Save changes",
+      "savingEdit": "Saving…",
+      "savedFlash": "Saved",
+      "dirty": "Unsaved changes",
+      "savedJustNow": "Saved just now",
+      "savedMinutesAgo": "Saved · {n}m ago",
+      "savedHoursAgo": "Saved · {n}h ago"
     },
     "dryRun": {
       "title": "Dry run preview",
