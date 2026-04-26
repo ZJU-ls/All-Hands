@@ -135,6 +135,17 @@
       "anomalies": {
         "title": "{n} anomaly callouts · rule-based, no ML"
       },
+      "sessions": {
+        "title": "Sessions · top 8",
+        "hint": "Conversations sorted by cost · Langfuse Sessions inspired",
+        "empty": "No conversation-level data in window",
+        "openConversation": "Open conversation"
+      },
+      "share": {
+        "title": "Copy current view link · includes range + search",
+        "share": "Share view",
+        "copied": "Copied"
+      },
       "costPanel": {
         "title": "Cost panel · 24h",
         "today": "Today",
@@ -161,6 +172,7 @@
       },
       "traces": {
         "title": "Latest 50 traces",
+        "openFullTrace": "Open full trace",
         "selfInstrumentedNote": "self-instrumented · local events.run.*",
         "searchPlaceholder": "Search trace_id / employee / model / status",
         "searchAria": "Search traces",
@@ -185,6 +197,80 @@
           "failed": "failed",
           "running": "running"
         }
+      },
+      "employeeDetail": {
+        "eyebrow": "Employee detail",
+        "breadcrumb": "Employees",
+        "title": "Employee detail",
+        "subtitle": "Runtime profile of employee {id} · all metrics auto-scoped",
+        "viewConversations": "View conversations",
+        "scopedToEmployee": "scoped to this employee",
+        "modelsUsedTitle": "Models used",
+        "modelsUsedEmpty": "No model usage recorded in this window",
+        "toolsUsedTitle": "Tools invoked",
+        "toolsUsedEmpty": "No tool invocations in this window",
+        "model": "Model",
+        "inv": "calls",
+        "recentRuns": "Recent runs · {n}",
+        "noRuns": "No runs in this window",
+        "kpi": {
+          "runs": "Last 50 runs",
+          "failureRate": "Failure rate",
+          "latencyP50": "Latency p50",
+          "latencyP95": "Latency p95",
+          "tokens": "Total tokens",
+          "cost": "Est. cost"
+        }
+      },
+      "toolDetail": {
+        "eyebrow": "Tool detail",
+        "breadcrumb": "Tools",
+        "subtitle": "Workspace-wide invocation profile of this tool_id",
+        "kpi": {
+          "invocations": "Invocations",
+          "failures": "Failures",
+          "failureRate": "Failure rate",
+          "avgDuration": "Avg duration"
+        },
+        "notSeen": "No invocations of this tool recorded in window.",
+        "possibleCallers": "Likely callers",
+        "possibleCallersHint": "Tool events do not yet carry employee_id; we approximate by listing active workspace employees. Per-employee tool slicing is planned.",
+        "runs": "runs"
+      },
+      "errorDetail": {
+        "eyebrow": "Error category",
+        "breadcrumb": "Errors",
+        "subtitle": "Failed runs grouped by error_kind · Sentry-style issue view",
+        "kpi": {
+          "count": "Occurrences",
+          "lastSeen": "Last seen",
+          "severity": "Severity"
+        },
+        "severityHigh": "High",
+        "severityMid": "Mid",
+        "severityLow": "Low",
+        "lastMessage": "Last error message",
+        "notSeen": "No errors of this kind recorded in window.",
+        "recentFailures": "Recent failed traces",
+        "noFailures": "No failed traces in last 24h."
+      },
+      "modelDetail": {
+        "eyebrow": "Model detail",
+        "breadcrumb": "Models",
+        "subtitle": "Usage profile of model_ref {ref} · all metrics auto-scoped",
+        "scopedToModel": "scoped to this model",
+        "topEmployeesTitle": "Employees using this model",
+        "topEmployeesEmpty": "No employee called this model in window",
+        "kpi": {
+          "runs": "Last 50 runs",
+          "failureRate": "Failure rate",
+          "latencyP50": "Latency p50",
+          "tokens": "Total tokens",
+          "cost": "Est. cost",
+          "calls": "Model calls"
+        },
+        "pricing": "USD per 1M tokens",
+        "pricingMissing": "Not in price table · cost shows as 0"
       },
       "metricDrawer": {
         "close": "Close",
