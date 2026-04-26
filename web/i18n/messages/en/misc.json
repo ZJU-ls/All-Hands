@@ -437,6 +437,12 @@
     "csv": {
       "empty": "(no data)"
     },
+    "html": {
+      "iframeTitle": "HTML artifact preview"
+    },
+    "pdf": {
+      "iframeTitle": "PDF preview"
+    },
     "xlsx": {
       "loading": "Loading Excel…",
       "empty": "(empty sheet)",

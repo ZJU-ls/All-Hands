@@ -437,6 +437,12 @@
     "csv": {
       "empty": "(无数据)"
     },
+    "html": {
+      "iframeTitle": "HTML 制品预览"
+    },
+    "pdf": {
+      "iframeTitle": "PDF 预览"
+    },
     "xlsx": {
       "loading": "加载 Excel…",
       "empty": "(空表)",
