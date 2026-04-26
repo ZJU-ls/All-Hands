@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Icon } from "@/components/ui/icon";
@@ -20,6 +20,7 @@ type Group = {
 
 export default function ConversationsPage() {
   const t = useTranslations("pages.conversations");
+  const locale = useLocale();
   const [conversations, setConversations] = useState<ConversationDto[] | null>(null);
   const [employees, setEmployees] = useState<EmployeeDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +162,7 @@ export default function ConversationsPage() {
                               <div className="mt-0.5 flex items-center gap-2 font-mono text-caption text-text-subtle">
                                 <span>{c.id.slice(0, 8)}</span>
                                 <span>·</span>
-                                <time>{new Date(c.created_at).toLocaleString()}</time>
+                                <time>{new Date(c.created_at).toLocaleString(locale)}</time>
                               </div>
                             </div>
                             <Icon

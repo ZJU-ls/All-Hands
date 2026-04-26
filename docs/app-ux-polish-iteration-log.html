@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>allhands · App-wide UX Polish · 14 rounds</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #0b0d12;
+    --surface: #11151c;
+    --surface-2: #161c26;
+    --border: #1f2733;
+    --border-strong: #2c3645;
+    --text: #e8edf5;
+    --text-muted: #94a3b8;
+    --text-subtle: #64748b;
+    --primary: #4593ff;
+    --primary-soft: rgba(69, 147, 255, 0.12);
+    --success: #4ade80;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-2: #f1f5f9;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-subtle: #94a3b8;
+      --primary: #1f6feb;
+      --primary-soft: rgba(31, 111, 235, 0.08);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 920px; margin: 0 auto; padding: 64px 24px 96px; }
+  header { margin-bottom: 56px; border-bottom: 1px solid var(--border); padding-bottom: 32px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--text-subtle);
+  }
+  h1 {
+    font-size: 34px;
+    line-height: 1.2;
+    margin: 12px 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .subtitle { color: var(--text-muted); font-size: 16px; max-width: 64ch; }
+  .meta { margin-top: 20px; display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--text-subtle); }
+  .meta .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 10px;
+    background: var(--surface);
+    font-family: var(--mono);
+  }
+  h2 {
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    margin: 64px 0 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 32px;
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  .iter-id {
+    font-family: var(--mono);
+    color: var(--primary);
+    background: var(--primary-soft);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-right: 10px;
+    vertical-align: 2px;
+  }
+  h3 { font-size: 14px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.12em; margin: 22px 0 6px; font-family: var(--mono); font-weight: 600; }
+  p { color: var(--text); margin: 8px 0 14px; }
+  ul { padding-left: 22px; margin: 6px 0 14px; }
+  li { margin: 4px 0; color: var(--text-muted); }
+  li strong { color: var(--text); font-weight: 600; }
+  code, kbd {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--text);
+  }
+  kbd { font-size: 11px; }
+  .ref {
+    font-family: var(--mono);
+    color: var(--text-subtle);
+    font-size: 12px;
+  }
+  .commit {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-subtle);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px 24px;
+    margin: 6px 0 14px;
+  }
+  @media (min-width: 720px) {
+    .grid { grid-template-columns: 132px 1fr; gap: 6px 24px; }
+  }
+  .grid dt { color: var(--text-subtle); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; font-family: var(--mono); padding-top: 2px; }
+  .grid dd { margin: 0; color: var(--text); font-size: 14px; }
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin: 32px 0 0;
+  }
+  .toc ul { padding-left: 0; list-style: none; columns: 2; column-gap: 32px; }
+  .toc li { padding: 4px 0; }
+  .toc a { color: var(--text-muted); text-decoration: none; font-size: 13.5px; }
+  .toc a:hover { color: var(--primary); }
+  .toc a code { background: transparent; border: none; color: var(--primary); padding: 0; }
+  footer {
+    margin-top: 80px;
+    border-top: 1px solid var(--border);
+    padding-top: 28px;
+    color: var(--text-subtle);
+    font-size: 13px;
+  }
+  .signoff { font-family: var(--mono); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <div class="eyebrow">迭代日志 · 2026-04-26 ｜ branch <code>feat/ux-polish</code> → main</div>
+  <h1>allhands · 全应用 UX 打磨 · 14 轮迭代</h1>
+  <p class="subtitle">
+    在 <code>/artifacts</code> 8 轮专项打磨之上，本次围绕 <strong>用户友好</strong> 与
+    <strong>操作便捷</strong> 推了 14 次端到端改进。覆盖通知、确认、键盘、骨架屏、剪贴板、
+    工具栏粘性、未保存警示、状态语言、命令面板、移动端、路由反馈等。每一轮都通过
+    <code>pnpm typecheck + test</code> 闭环 → commit → push 到 main。
+  </p>
+  <div class="meta">
+    <span class="pill">14 commits</span>
+    <span class="pill">10 文件 NEW</span>
+    <span class="pill">1869 → 1875 tests</span>
+    <span class="pill">tsc clean</span>
+    <span class="pill">原则 3.8 token-only</span>
+  </div>
+
+  <div class="toc">
+    <strong style="font-family: var(--mono); font-size: 11px; color: var(--text-subtle); letter-spacing: 0.18em; text-transform: uppercase;">目录</strong>
+    <ul>
+      <li><a href="#a"><code>A</code> Toast 全局通知</a></li>
+      <li><a href="#b"><code>B</code> ConfirmDialog 替换 confirm</a></li>
+      <li><a href="#c"><code>C</code> 制品乐观更新</a></li>
+      <li><a href="#e"><code>E</code> Sidebar 折叠 ⌘B</a></li>
+      <li><a href="#f"><code>F</code> 键盘快捷键帮助 ?</a></li>
+      <li><a href="#g"><code>G</code> Traces 骨架屏</a></li>
+      <li><a href="#h"><code>H</code> Copy 失败 toast</a></li>
+      <li><a href="#i"><code>I</code> 工具栏滚动阴影</a></li>
+      <li><a href="#j"><code>J</code> 未保存离开警示</a></li>
+      <li><a href="#k"><code>K</code> StatusPill 统一</a></li>
+      <li><a href="#l"><code>L</code> Cmd-K 最近访问</a></li>
+      <li><a href="#m"><code>M</code> 制品页移动响应</a></li>
+      <li><a href="#n"><code>N</code> Toast 路由清理</a></li>
+      <li><a href="#p"><code>P</code> 路由切换进度条</a></li>
+    </ul>
+  </div>
+</header>
+
+<!-- A -->
+<h2 id="a"><span class="iter-id">A</span> 全局 Toast 通知系统 <span class="commit">3a2246c</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>所有"操作成功 / 失败"反馈都靠 alert 或静默——不可见、不可堆叠。</dd>
+  <dt>方案</dt><dd>基于 Linear / Vercel / Sonner 调研，落地一个最小可用 toast 系统。</dd>
+  <dt>关键文件</dt><dd><code>web/components/ui/Toast.tsx</code> · 在 <code>AppShell</code> 顶层挂载 <code>ToastProvider</code>。</dd>
+</dl>
+<ul>
+  <li>四种语义：<strong>success / error / info / warning</strong>，各自默认时长（success 2.4s · info 3s · warning 4s · error 6s）。</li>
+  <li>位置：<strong>底部居中</strong>，与 Stream 状态 chip / 批量动作 bar 一致。</li>
+  <li>单击任意位置关闭，最多堆叠 4 条，旧的从底部丢弃。</li>
+  <li>provider 缺失时自动降级为 noop（避免 storybook / 孤岛渲染崩）。</li>
+  <li>API：<code>const { success, error, info, warning, push, dismiss } = useToast()</code>。</li>
+</ul>
+
+<!-- B -->
+<h2 id="b"><span class="iter-id">B</span> ConfirmDialog 替换 window.confirm <span class="commit">3a2246c</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd><code>/artifacts</code> 批量删除走原生 <code>window.confirm</code>，文案僵、与品牌不一致、Esc 行为不可控。</dd>
+  <dt>方案</dt><dd>统一用项目内置 <code>ConfirmDialog</code>，附带 toast 反馈结果。</dd>
+</dl>
+<ul>
+  <li>新增 <code>bulkDeleteConfirm</code> 状态 → 打开 ConfirmDialog → <code>bulkDeleteConfirmed()</code> 实际执行。</li>
+  <li>per-item try/catch，<strong>聚合失败计数</strong>，根据 0 / partial / total 三段在 toast 显示对应语义（success / warning / error）。</li>
+  <li>软删除提示文案：<em>"Soft delete · still recoverable from the database. The metadata row stays for 30 days."</em></li>
+</ul>
+
+<!-- C -->
+<h2 id="c"><span class="iter-id">C</span> 制品 Pin/Unpin 乐观更新 <span class="commit">3a2246c</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>旧实现等 API 全部完成才刷新 UI，单击批量 Pin 后界面"卡住"几百毫秒。</dd>
+  <dt>方案</dt><dd>立即翻转本地 <code>items.pinned</code>，按行做 try/catch，单个失败只回滚那一行。</dd>
+</dl>
+<ul>
+  <li>UI 立刻反映新状态，SSE 后续帧只是确认（不再造成二次跳变）。</li>
+  <li>失败时 toast 用 <code>{ failed }/{ total }</code> 句式，副标题写 "Reverted those rows"。</li>
+  <li>这是 Linear / GitHub / Notion 列表批量操作的标准做法。</li>
+</ul>
+
+<!-- E -->
+<h2 id="e"><span class="iter-id">E</span> Sidebar 折叠 · ⌘B <span class="commit">c7fd4ec</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>侧边栏永远占 240px，宽屏调试 / 演示 / 移动端窄屏都浪费横向空间。</dd>
+  <dt>方案</dt><dd>56px 收起态（仅 icon）↔ 240px 展开态。<code>localStorage.ah.sidebar.collapsed</code> 持久化。</dd>
+</dl>
+<ul>
+  <li>键盘：<kbd>⌘B</kbd> / <kbd>Ctrl+B</kbd> 切换。在 input/textarea/contenteditable 内自动让位。</li>
+  <li>收起态：分组标题变 1px 分隔线、UsageCard 隐藏、激活态用方形 9×9 icon、未读 badge 缩成右上角红点。</li>
+  <li>底部新增折叠/展开按钮，在两态中各自承担相反语义，附带 ⌘B 提示 chip。</li>
+  <li>仅 CSS <code>transition-[width]</code>，不引入 JS 动画。</li>
+</ul>
+
+<!-- F -->
+<h2 id="f"><span class="iter-id">F</span> 全局键盘快捷键帮助 · ? <span class="commit">1136be2</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>引入 ⌘K / ⌘B / ? 后，键盘快捷键越来越多，但用户没法在产品里发现它们。</dd>
+  <dt>方案</dt><dd>新建 <code>KeyboardShortcutsModal</code>，按 <kbd>?</kbd>（Shift+/）打开，带 cheat-sheet。</dd>
+</dl>
+<ul>
+  <li>分组：<strong>Global</strong>（⌘K palette · ⌘B sidebar · ? help · Esc）+ <strong>Navigation</strong>（g h / g a / g e）。</li>
+  <li>样式 <code>&lt;kbd&gt;</code>-like pills，所有按键独立渲染。</li>
+  <li>topbar 新增 <code>circle-help</code> 按钮，点击也打开 modal。</li>
+  <li>i18n：<code>shell.shortcuts.*</code>（en + zh-CN）。</li>
+</ul>
+
+<!-- G -->
+<h2 id="g"><span class="iter-id">G</span> Traces 骨架屏 <span class="commit">49811cd</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>traces 页第一次加载是一行 "Loading…" 文字，数据落到 DOM 时整个表格"砰"地跳出来。</dd>
+  <dt>方案</dt><dd>新建通用 <code>&lt;Skeleton&gt;</code> 原语 + <code>TraceTableSkeleton</code> 6 行占位。</dd>
+</dl>
+<ul>
+  <li>列宽和真实表格一致，数据落到 DOM 时无 layout shift。</li>
+  <li><code>animate-pulse</code> 纯 Tailwind 内置 keyframe，无 JS。</li>
+  <li>视觉骨架对外 <code>aria-hidden</code>，配合 <code>sr-only LoadingState</code> 给屏幕阅读器交差。</li>
+  <li><code>data-testid="trace-table-skeleton"</code> 留给后续视觉回归测试。</li>
+</ul>
+
+<!-- H -->
+<h2 id="h"><span class="iter-id">H</span> Copy 失败 toast <span class="commit">da8184e</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd><code>navigator.clipboard.writeText</code> 因权限被拒或不存在时，CopyButton 静默 noop——用户点了没反应、不知道为什么。</dd>
+  <dt>方案</dt><dd>失败路径走 toast.error，附带"检查浏览器权限或手动复制"的副本。</dd>
+</dl>
+<ul>
+  <li>成功路径仍用就地 ✓ 翻转（轻量、不打扰）。</li>
+  <li>i18n：<code>renderShared.copyButton.failed / failedDetail</code>。</li>
+</ul>
+
+<!-- I -->
+<h2 id="i"><span class="iter-id">I</span> ArtifactDetail 工具栏滚动阴影 <span class="commit">d73765c</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>工具栏本身就是 flex shrink-0、技术上已粘在顶部，但视觉上和正文边界融合，缺少层级。</dd>
+  <dt>方案</dt><dd>正文滚动 &gt; 4px 时，工具栏吸入半透明 <code>bg-surface/90</code> + <code>shadow-soft-sm</code> + <code>backdrop-blur-sm</code>，回到顶部时还原。</dd>
+</dl>
+<ul>
+  <li>纯 className 切换 + <code>transition duration-base</code>，无 JS 动画。</li>
+  <li>onScroll 监听内容容器，state <code>contentScrolled</code> 控制两套 className。</li>
+</ul>
+
+<!-- J -->
+<h2 id="j"><span class="iter-id">J</span> DesignForm 未保存离开警示 <span class="commit">48635fe</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>在编辑员工时关掉 tab 或刷新页面，未保存的修改完全丢失。</dd>
+  <dt>方案</dt><dd>新建 <code>useUnsavedWarning(active)</code> 钩子，在 active=true 时挂 <code>beforeunload</code>。</dd>
+</dl>
+<ul>
+  <li>条件：<code>isEdit &amp;&amp; isDirty &amp;&amp; !busy</code>——保存进行时不再二次警告。</li>
+  <li>仅 active=true 时挂 listener，cleanup 自动 detach。</li>
+  <li>其他表单（Skill 编辑等）后续可直接复用同一 hook。</li>
+</ul>
+
+<!-- K -->
+<h2 id="k"><span class="iter-id">K</span> StatusPill 统一原语 <span class="commit">f3ccae1</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>项目里有十几处状态徽标，每处自己定义 border/text/bg 组合，色调容易漂移。</dd>
+  <dt>方案</dt><dd><code>web/components/ui/StatusPill.tsx</code> · 6 种 kind → 唯一 (tone, icon) 映射。</dd>
+</dl>
+<ul>
+  <li>kinds：success · failed · warning · info · running · muted。</li>
+  <li>支持 dot 变体（替代 icon）和 xs/sm 两种尺寸。</li>
+  <li>token-only，零 Tailwind 原色类，符合 ADR 0016 §3.8。</li>
+  <li>新代码走它；老代码渐进迁移。</li>
+</ul>
+
+<!-- L -->
+<h2 id="l"><span class="iter-id">L</span> CommandPalette 最近访问 <span class="commit">e95121d</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>每次 ⌘K 打开都从 Suggestions 头开始，常用页面要重新键入或翻一遍。</dd>
+  <dt>方案</dt><dd>5 槽 ring，<code>localStorage.ah.cmdk.recents</code> 持久化，empty query 时显示 "Recent" 区块。</dd>
+</dl>
+<ul>
+  <li>每次 <code>pick(href)</code> 把 href push 到队首，重复折叠。</li>
+  <li>"Recent" 在 "Suggestions" 之上、用 clock icon 区分，零结果时不渲染。</li>
+  <li>i18n：<code>commandPalette.recent</code>。</li>
+</ul>
+
+<!-- M -->
+<h2 id="m"><span class="iter-id">M</span> /artifacts 移动端响应 <span class="commit">a160f69</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>外层 padding 6 / gap 4 在 sm 以下太大，工具栏、过滤 chip 会溢出。</dd>
+  <dt>方案</dt><dd><code>p-3 sm:p-6</code> · <code>gap-3 sm:gap-4</code>，sticky 过滤栏 <code>-mx-3</code> 同步。</dd>
+</dl>
+<ul>
+  <li>列布局已经是 <code>col-span-12 lg:col-span-X</code>，本身堆叠 fallback OK，只是间距过大。</li>
+  <li>本轮范围限制在间距，不动栅格逻辑。</li>
+</ul>
+
+<!-- N -->
+<h2 id="n"><span class="iter-id">N</span> Toast 路由切换清理 <span class="commit">3262a90</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>在 <code>/artifacts</code> 触发的 success toast 跟着用户跳到 <code>/chat</code>——上下文已经失效。</dd>
+  <dt>方案</dt><dd>ToastProvider 监听 <code>usePathname()</code>，每次变化丢掉所有非 error toast 并取消其 timer。</dd>
+</dl>
+<ul>
+  <li>error toast 保留：失败可能要重试，新页面可能正是用户去重试的地方。</li>
+  <li>timer 在 dispose 时同步清，避免 setState-after-unmount。</li>
+</ul>
+
+<!-- P -->
+<h2 id="p"><span class="iter-id">P</span> 路由切换顶部进度条 <span class="commit">5490783</span></h2>
+<dl class="grid">
+  <dt>问题</dt><dd>Next 路由切换有 100~600ms 的"无反馈空窗"，用户不知道点击是否生效。</dd>
+  <dt>方案</dt><dd>NProgress 风格的 2px primary-color 顶部进度条，纯 CSS keyframe，零依赖。</dd>
+</dl>
+<ul>
+  <li><code>RouteProgress</code> 组件挂在 AppShell 内、<code>z-[70]</code> 高于 sticky page header。</li>
+  <li>每次 pathname 变化触发 <code>scaleX 0 → 75% → 100% → fade</code> 共 600ms。</li>
+  <li>新 keyframe <code>ah-route-progress</code> 加在 <code>globals.css</code>。</li>
+</ul>
+
+<footer>
+  <p class="signoff">2026-04-26 · feat/ux-polish · 14 commits · all green typecheck + tests · 推到 main 完毕。</p>
+  <p class="signoff" style="color: var(--text-subtle);">每条改进独立成 commit，回滚粒度细；可在 GitHub 按 <code>feat(ux)</code> / <code>feat(shell)</code> 等 scope 过滤查看。</p>
+</footer>
+
+</main>
+</body>
+</html>

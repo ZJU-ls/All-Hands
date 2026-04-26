@@ -1,14 +1,48 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { HoverPeek } from "@/components/ui/HoverPeek";
+import { cn } from "@/lib/cn";
 import type { McpServerDto } from "@/lib/api";
 
 /**
- * V2 (ADR 0016): chip cloud. Selected chip = bg-primary-muted text-primary with
- * a check glyph; unselected = bg-surface-2 text-text-muted + hover:bg-surface-3.
- * Each chip also surfaces transport + health as mono microtext.
+ * McpMultiPicker · upgraded 2026-04-26
+ *
+ * Why the rewrite: same disease as SkillMultiPicker — a flat chip cloud with
+ * no search and no health-based ordering. Once you register 8+ MCP servers
+ * with mixed health, the picker becomes a "find the green one" treasure
+ * hunt. Failed servers visually fight the user when they're trying to
+ * mount a healthy one.
+ *
+ * New shape:
+ *
+ *   ┌─ search box ────────────────────────────────────┐
+ *   │ 🔍 搜索…             3 / 8       [/]             │
+ *   ├─────────────────────────────────────────────────┤
+ *   │ ▼ 已选 · 2                                       │
+ *   │   [✓ github stdio · OK] [✓ filesystem ...]      │
+ *   │ ▼ 在线 · 4                                       │
+ *   │   [slack sse · OK] [...]                         │
+ *   │ ▼ 不健康 · 2  (默认折叠 · 失败的别影响选健康的)  │
+ *   │   [postgres http · UNREACHABLE] [...]           │
+ *   └─────────────────────────────────────────────────┘
+ *
+ * Health classification (matches backend MCPHealth enum):
+ *   - "ok"           → 在线 (auto-open)
+ *   - "unknown"      → 在线 (no probe yet — neutral)
+ *   - "unreachable"  → 不健康 (collapsed by default)
+ *   - "auth_failed"  → 不健康
+ *   - "*"            → 不健康 (defensive: any new failure mode)
+ *
+ * Selected items always render in their own group at the top regardless
+ * of health/filter — preserving "what's mounted right now" visibility.
  */
+
+const HEALTHY_STATES = new Set(["ok", "unknown"]);
+
 export function McpMultiPicker({
   servers,
   selected,
@@ -19,44 +53,271 @@ export function McpMultiPicker({
   onToggle: (id: string) => void;
 }) {
   const t = useTranslations("employees.mcpPicker");
-  if (servers.length === 0) {
-    return (
-      <p className="text-[12px] text-text-muted">
-        {t("empty")}
-      </p>
+  const [query, setQuery] = useState("");
+
+  const lcQuery = query.trim().toLowerCase();
+  const matched = useMemo(() => {
+    if (!lcQuery) return servers;
+    return servers.filter(
+      (s) =>
+        s.name.toLowerCase().includes(lcQuery) ||
+        s.transport.toLowerCase().includes(lcQuery) ||
+        s.health.toLowerCase().includes(lcQuery),
     );
+  }, [servers, lcQuery]);
+
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const groups = useMemo(() => {
+    const selectedServers = servers.filter((s) => selectedSet.has(s.id));
+    const healthy: McpServerDto[] = [];
+    const unhealthy: McpServerDto[] = [];
+    for (const s of matched) {
+      if (HEALTHY_STATES.has(s.health.toLowerCase())) healthy.push(s);
+      else unhealthy.push(s);
+    }
+    return { selected: selectedServers, healthy, unhealthy };
+  }, [servers, matched, selectedSet]);
+
+  if (servers.length === 0) {
+    return <p className="text-[12px] text-text-muted">{t("empty")}</p>;
   }
+
   return (
-    <ul className="flex flex-wrap gap-2">
-      {servers.map((s) => {
-        const on = selected.includes(s.id);
-        return (
-          <li key={s.id}>
-            <button
-              type="button"
-              data-testid={`mcp-${s.id}`}
-              aria-pressed={on}
-              onClick={() => onToggle(s.id)}
-              className={
-                "group inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors duration-fast " +
-                (on
-                  ? "bg-primary-muted text-primary"
-                  : "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text")
-              }
-            >
-              <Icon
-                name={on ? "check" : "plug"}
-                size={13}
-                className="shrink-0"
-              />
-              <span className="text-[12px] font-medium">{s.name}</span>
-              <span className="font-mono text-[10px] text-text-subtle">
-                {s.transport} · {s.health}
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="flex flex-col gap-3">
+      <SearchInput
+        value={query}
+        onChange={setQuery}
+        placeholder={t("searchPlaceholder")}
+        count={matched.length}
+        total={servers.length}
+        compact
+        autoFocusOnSlash
+        testId="mcp-picker-search"
+      />
+      <Group
+        title={t("groupSelected")}
+        count={groups.selected.length}
+        items={groups.selected}
+        selected={selectedSet}
+        onToggle={onToggle}
+        defaultOpen
+        tone="primary"
+        emptyHint={t("selectedEmpty")}
+      />
+      <Group
+        title={t("groupHealthy")}
+        count={groups.healthy.length}
+        items={groups.healthy}
+        selected={selectedSet}
+        onToggle={onToggle}
+        defaultOpen
+      />
+      <Group
+        title={t("groupUnhealthy")}
+        count={groups.unhealthy.length}
+        items={groups.unhealthy}
+        selected={selectedSet}
+        onToggle={onToggle}
+        tone="danger"
+      />
+      {lcQuery &&
+        matched.length === 0 &&
+        groups.selected.length === 0 && (
+          <p
+            data-testid="mcp-picker-no-match"
+            className="text-[12px] text-text-subtle italic px-1"
+          >
+            {t("noMatch", { query })}
+          </p>
+        )}
+    </div>
+  );
+}
+
+function Group({
+  title,
+  count,
+  items,
+  selected,
+  onToggle,
+  emptyHint,
+  defaultOpen = false,
+  tone = "neutral",
+}: {
+  title: string;
+  count: number;
+  items: McpServerDto[];
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  emptyHint?: string;
+  defaultOpen?: boolean;
+  tone?: "neutral" | "primary" | "danger";
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const effectiveOpen = open || (count > 0 && count <= 6);
+  if (count === 0 && !emptyHint) return null;
+  return (
+    <section className="space-y-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={effectiveOpen}
+        className="w-full flex items-center gap-2 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
+      >
+        <Icon
+          name="chevron-down"
+          size={11}
+          className={cn(
+            "text-text-subtle transition-transform duration-fast",
+            effectiveOpen ? "" : "-rotate-90",
+          )}
+        />
+        <span
+          className={cn(
+            "text-[10.5px] uppercase tracking-[0.08em] font-mono",
+            tone === "primary"
+              ? "text-primary"
+              : tone === "danger"
+                ? "text-danger"
+                : "text-text-subtle",
+          )}
+        >
+          {title}
+        </span>
+        <span
+          className={cn(
+            "font-mono text-[10.5px] tabular-nums",
+            tone === "primary" && count > 0
+              ? "text-primary"
+              : tone === "danger" && count > 0
+                ? "text-danger"
+                : "text-text-subtle",
+          )}
+        >
+          · {count}
+        </span>
+        <span aria-hidden className="flex-1 h-px bg-border" />
+      </button>
+      {effectiveOpen && (
+        <ul className="flex flex-wrap gap-1.5 pl-4">
+          {count === 0 && emptyHint && (
+            <li className="text-[11px] text-text-subtle italic px-1.5 py-1">
+              {emptyHint}
+            </li>
+          )}
+          {items.map((s) => {
+            const on = selected.has(s.id);
+            return (
+              <li key={s.id}>
+                <McpChip server={s} on={on} onToggle={() => onToggle(s.id)} />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function McpChip({
+  server,
+  on,
+  onToggle,
+}: {
+  server: McpServerDto;
+  on: boolean;
+  onToggle: () => void;
+}) {
+  const isFailed = !HEALTHY_STATES.has(server.health.toLowerCase());
+  const healthDot = isFailed ? "bg-danger" : "bg-success";
+  return (
+    <HoverPeek content={<McpPeekContent server={server} on={on} />}>
+      <button
+        type="button"
+        data-testid={`mcp-${server.id}`}
+        aria-pressed={on}
+        onClick={onToggle}
+        className={cn(
+          "inline-flex max-w-[280px] items-center gap-1.5 rounded-md px-2.5 py-1 text-left transition-colors duration-fast",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          on
+            ? "bg-primary-muted text-primary border border-primary/30"
+            : isFailed
+              ? "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text border border-danger/20"
+              : "bg-surface-2 text-text-muted hover:bg-surface-3 hover:text-text border border-transparent",
+        )}
+      >
+        <Icon name={on ? "check" : "plug"} size={12} className="shrink-0" />
+        <span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full shrink-0", healthDot)} />
+        <span className="truncate text-[12px] font-medium">{server.name}</span>
+        <span className="shrink-0 font-mono text-[10px] text-text-subtle uppercase">
+          {server.transport}
+        </span>
+      </button>
+    </HoverPeek>
+  );
+}
+
+function McpPeekContent({ server, on }: { server: McpServerDto; on: boolean }) {
+  const t = useTranslations("employees.mcpPicker");
+  const isFailed = !HEALTHY_STATES.has(server.health.toLowerCase());
+  return (
+    <div className="space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[12.5px] font-semibold text-text truncate">
+            {server.name}
+          </p>
+          <p className="font-mono text-[10px] text-text-subtle truncate">
+            {server.id}
+          </p>
+        </div>
+        {on && (
+          <span className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-primary-muted text-primary font-mono text-[10px] shrink-0">
+            <Icon name="check" size={10} />
+            mounted
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 text-[10.5px] font-mono">
+        <span className="inline-flex items-center gap-1 px-1.5 h-5 rounded bg-surface-2 text-text-muted">
+          <Icon name="plug" size={10} />
+          {server.transport}
+        </span>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 px-1.5 h-5 rounded font-medium",
+            isFailed
+              ? "bg-danger-soft text-danger"
+              : "bg-success-soft text-success",
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              isFailed ? "bg-danger" : "bg-success",
+            )}
+          />
+          {server.health}
+        </span>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 px-1.5 h-5 rounded",
+            server.enabled
+              ? "bg-surface-2 text-text-muted"
+              : "bg-warning-soft text-warning",
+          )}
+        >
+          {server.enabled ? "enabled" : "disabled"}
+        </span>
+      </div>
+      {isFailed && (
+        <p className="text-[11.5px] leading-relaxed text-danger">
+          {t("chipFailedTitle", { health: server.health })}
+        </p>
+      )}
+    </div>
   );
 }

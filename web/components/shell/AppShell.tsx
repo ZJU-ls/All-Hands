@@ -9,6 +9,10 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { AllhandsLogo } from "@/components/brand/AllhandsLogo";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
+import { ToastProvider } from "@/components/ui/Toast";
+import { KeyboardShortcutsModal } from "@/components/shell/KeyboardShortcutsModal";
+import { RouteProgress } from "@/components/shell/RouteProgress";
+import { useDocumentTitle } from "@/lib/use-document-title";
 
 // Lazy-load the two global overlays so their module graph (DotGridBackdrop,
 // RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
@@ -125,7 +129,45 @@ function SidebarItem({
   active,
   icon,
   badge,
-}: { label: string; href: string; icon: IconName; badge?: string; active: boolean }) {
+  collapsed,
+}: {
+  label: string;
+  href: string;
+  icon: IconName;
+  badge?: string;
+  active: boolean;
+  collapsed: boolean;
+}) {
+  if (collapsed) {
+    return (
+      <li>
+        <Link
+          href={href}
+          aria-label={label}
+          title={label}
+          className={
+            active
+              ? "relative mx-auto grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-fg shadow-soft-sm transition duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-fg/40"
+              : "group relative mx-auto grid h-9 w-9 place-items-center rounded-lg text-text-muted hover:bg-surface-2 hover:text-text transition duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:bg-surface-2"
+          }
+        >
+          <Icon
+            name={icon}
+            size={15}
+            className={active ? "" : "text-text-subtle group-hover:text-text-muted"}
+          />
+          {badge ? (
+            <span
+              aria-hidden
+              className="absolute -right-0.5 -top-0.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-1 font-mono text-[9px] text-primary-fg"
+            >
+              {badge}
+            </span>
+          ) : null}
+        </Link>
+      </li>
+    );
+  }
   return (
     <li>
       <Link
@@ -170,23 +212,33 @@ function matchActive(pathname: string, href: string, allHrefs: string[]): boolea
   return true;
 }
 
-function WorkspaceSwitcher() {
+function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations("shell");
   return (
     <button
       type="button"
-      className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-transparent px-2 hover:border-border-strong hover:bg-surface-2 transition duration-fast"
+      className={
+        collapsed
+          ? "flex h-11 w-full items-center justify-center rounded-xl border border-transparent hover:border-border-strong hover:bg-surface-2 transition duration-fast"
+          : "flex h-11 w-full items-center gap-2.5 rounded-xl border border-transparent px-2 hover:border-border-strong hover:bg-surface-2 transition duration-fast"
+      }
+      aria-label="allhands"
+      title="allhands"
     >
       <AllhandsLogo size={32} className="shadow-soft-sm" />
-      <div className="min-w-0 flex-1 text-left">
-        <div className="truncate text-sm font-semibold leading-tight tracking-tight">
-          allhands
-        </div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
-          {t("workspaceVersion")}
-        </div>
-      </div>
-      <Icon name="chevrons-up-down" size={14} className="text-text-subtle" />
+      {collapsed ? null : (
+        <>
+          <div className="min-w-0 flex-1 text-left">
+            <div className="truncate text-sm font-semibold leading-tight tracking-tight">
+              allhands
+            </div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
+              {t("workspaceVersion")}
+            </div>
+          </div>
+          <Icon name="chevrons-up-down" size={14} className="text-text-subtle" />
+        </>
+      )}
     </button>
   );
 }
@@ -215,22 +267,39 @@ function UsageCard() {
   );
 }
 
-function Sidebar() {
+function Sidebar({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const pathname = usePathname();
   const tSection = useTranslations("shell.sections");
   const tMenu = useTranslations("shell.menu");
+  const tSide = useTranslations("shell.sidebar");
   const allHrefs = useMemo(() => MENU.flatMap((s) => s.items.map((i) => i.href)), []);
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface">
+    <aside
+      className={
+        collapsed
+          ? "flex w-14 shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-base"
+          : "flex w-60 shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-base"
+      }
+    >
       <div className="flex h-14 items-center border-b border-border px-3">
-        <WorkspaceSwitcher />
+        <WorkspaceSwitcher collapsed={collapsed} />
       </div>
       <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-4">
         {MENU.map((section) => (
           <div key={section.titleKey}>
-            <div className="mb-1.5 px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
-              {tSection(section.titleKey)}
-            </div>
+            {collapsed ? (
+              <div className="mb-1.5 mx-2 h-px bg-border/60" aria-hidden />
+            ) : (
+              <div className="mb-1.5 px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
+                {tSection(section.titleKey)}
+              </div>
+            )}
             <ul className="space-y-0.5">
               {section.items.map((item) => {
                 const active = matchActive(pathname, item.href, allHrefs);
@@ -242,6 +311,7 @@ function Sidebar() {
                     icon={item.icon}
                     badge={item.badge}
                     active={active}
+                    collapsed={collapsed}
                   />
                 );
               })}
@@ -249,7 +319,30 @@ function Sidebar() {
           </div>
         ))}
       </nav>
-      <UsageCard />
+      {collapsed ? null : <UsageCard />}
+      <div className="border-t border-border px-2 py-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={collapsed ? tSide("expand") : tSide("collapse")}
+          title={`${collapsed ? tSide("expand") : tSide("collapse")} · ${tSide("toggleHint")}`}
+          className={
+            collapsed
+              ? "mx-auto grid h-8 w-8 place-items-center rounded-lg text-text-subtle hover:bg-surface-2 hover:text-text transition duration-fast"
+              : "flex h-8 w-full items-center gap-2 rounded-lg px-2 text-caption text-text-subtle hover:bg-surface-2 hover:text-text transition duration-fast"
+          }
+        >
+          <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={14} />
+          {collapsed ? null : (
+            <>
+              <span className="flex-1 text-left">{tSide("collapse")}</span>
+              <span className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">
+                {tSide("toggleHint")}
+              </span>
+            </>
+          )}
+        </button>
+      </div>
     </aside>
   );
 }
@@ -270,8 +363,36 @@ export function AppShell({
   const t = useTranslations("shell.topbar");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteMounted, setPaletteMounted] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const searchParams = useSearchParams();
   const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
+
+  // Sync browser tab title with the page-supplied title (locale-aware via
+  // the `title` prop the caller computed from useTranslations).
+  useDocumentTitle(title);
+
+  // Hydrate sidebar collapsed pref from localStorage post-mount (avoids SSR mismatch).
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem("ah.sidebar.collapsed");
+      if (v === "1") setSidebarCollapsed(true);
+    } catch {
+      // ignore — private mode / disabled storage
+    }
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem("ah.sidebar.collapsed", next ? "1" : "0");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -279,11 +400,37 @@ export function AppShell({
         ev.preventDefault();
         setPaletteMounted(true);
         setPaletteOpen((v) => !v);
+      } else if (ev.key === "?" && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+        // `?` (Shift+/) → open shortcuts cheat-sheet · skip while typing.
+        const target = ev.target as HTMLElement | null;
+        const tag = target?.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          target?.isContentEditable
+        ) {
+          return;
+        }
+        ev.preventDefault();
+        setShortcutsOpen(true);
+      } else if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "b") {
+        // Cmd/Ctrl+B → toggle sidebar (skip when typing in input/textarea/contenteditable).
+        const target = ev.target as HTMLElement | null;
+        const tag = target?.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          target?.isContentEditable
+        ) {
+          return;
+        }
+        ev.preventDefault();
+        toggleSidebar();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [toggleSidebar]);
 
   const openPalette = useCallback(() => {
     setPaletteMounted(true);
@@ -291,8 +438,10 @@ export function AppShell({
   }, []);
 
   return (
+    <ToastProvider>
+    <RouteProgress />
     <div className="flex h-screen w-full bg-bg text-text">
-      <Sidebar />
+      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-bg/80 px-6 backdrop-blur-md">
           <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight">
@@ -304,6 +453,15 @@ export function AppShell({
             <span className="mx-1 h-6 w-px bg-border" aria-hidden />
             <LocaleSwitcher />
             <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => setShortcutsOpen(true)}
+              className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text transition duration-base"
+              aria-label={t("shortcutsAria")}
+              title={t("shortcutsTitle")}
+            >
+              <Icon name="circle-help" size={15} />
+            </button>
             <button
               type="button"
               className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text transition duration-base"
@@ -338,6 +496,11 @@ export function AppShell({
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       )}
       {hasTrace && <RunTraceDrawer />}
+      <KeyboardShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
     </div>
+    </ToastProvider>
   );
 }

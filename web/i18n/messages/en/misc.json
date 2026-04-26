@@ -278,6 +278,8 @@
     },
     "list": {
       "pinned": "Pinned",
+      "pinnedAria": "Pinned",
+      "groupAria": "Artifacts",
       "empty": "No artifacts yet. Have an employee produce a doc, code, or diagram."
     },
     "panel": {
@@ -370,6 +372,25 @@
         "activeChip": "Filter: {label}",
         "removeChipAria": "Remove filter {label}"
       },
+      "clearSearchAria": "Clear search",
+      "bulkActionsAria": "Bulk actions",
+      "clearSelectionAria": "Clear selection",
+      "bulk": {
+        "selected": "{n} selected",
+        "pin": "Pin",
+        "unpin": "Unpin",
+        "delete": "Delete",
+        "toast": {
+          "pinned": "Pinned {n, plural, one {# artifact} other {# artifacts}}",
+          "unpinned": "Unpinned {n, plural, one {# artifact} other {# artifacts}}",
+          "pinPartial": "{ok} of {total} failed",
+          "pinPartialDesc": "Reverted those rows",
+          "deletedAll": "Deleted {n, plural, one {# artifact} other {# artifacts}}",
+          "deletedAllDesc": "Soft delete · still recoverable",
+          "deletedPartial": "Deleted {ok} · {failed} failed",
+          "deletedNone": "Failed to delete {n, plural, one {# artifact} other {# artifacts}}"
+        }
+      },
       "view": {
         "list": "List",
         "grid": "Grid",
@@ -457,6 +478,7 @@
       "placeholder": "Jump to a page · search employees · skills · models",
       "noMatch": "No matches · try a different keyword",
       "suggestions": "Suggestions · {count}",
+      "recent": "Recent · {count}",
       "footer": {
         "navigate": "navigate",
         "open": "open",

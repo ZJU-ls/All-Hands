@@ -26,8 +26,9 @@
  * components. Right slide-over for doc detail.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { computePopoverSide } from "@/lib/popover-placement";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -43,16 +44,20 @@ import {
   type DocumentDto,
   type EmbeddingModelOption,
   type KBDto,
+  type KBHealthDto,
   type KBStatsDto,
   type ScoredChunkDto,
   askKBStream,
   diagnoseSearch,
+  getKBHealth,
   getStarterQuestions,
   getDocumentText,
   getKBStats,
   ingestUrl,
   listDocumentChunks,
   patchDocumentTags,
+  suggestTagsForDocument,
+  reembedAll,
   reindexDocument,
   createKB,
   deleteDocument,
@@ -168,6 +173,34 @@ export default function KnowledgePage() {
   // "not loaded yet" (skeleton) from "loaded but empty" (hide row).
   const [starters, setStarters] = useState<Record<string, string[] | null>>({});
   const startersForActive = activeKb ? (starters[activeKb.id] ?? null) : null;
+  // KB health snapshot — refetched whenever activeKb changes or any
+  // ingest/delete/tag patch could have shifted the totals. Sidebar card
+  // tolerates `null` (renders skeleton) so we don't need a separate
+  // loading flag.
+  const [health, setHealth] = useState<Record<string, KBHealthDto | null>>({});
+  const healthForActive = activeKb ? (health[activeKb.id] ?? null) : null;
+  const [reembedBusy, setReembedBusy] = useState(false);
+  async function runReembedAll() {
+    if (!activeKb || reembedBusy) return;
+    setReembedBusy(true);
+    try {
+      const res = await reembedAll(activeKb.id);
+      setError(
+        t("reembed.summary", {
+          processed: res.processed,
+          succeeded: res.succeeded,
+          failed: res.failed,
+        }),
+      );
+      setTimeout(() => setError(null), 4000);
+      await refreshDocs(activeKb.id);
+      await refreshKbs(activeKb);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setReembedBusy(false);
+    }
+  }
   const [stateFilter, setStateFilter] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
@@ -201,6 +234,11 @@ export default function KnowledgePage() {
     } catch (e) {
       setError(String(e));
     }
+    // Health depends on doc list — refetch in parallel; ignore errors so
+    // a 500 on the analytics route can't crash the doc grid.
+    void getKBHealth(kbId, 30)
+      .then((h) => setHealth((prev) => ({ ...prev, [kbId]: h })))
+      .catch(() => undefined);
   }
 
   useEffect(() => {
@@ -567,6 +605,18 @@ export default function KnowledgePage() {
           </div>
         )}
 
+        {/* ─ Stale embedding banner — shown when at least one chunk in
+            the active KB has no vector. Lets the user one-click backfill
+            without touching individual docs. */}
+        {activeKb && (healthForActive?.chunks_missing_embeddings ?? 0) > 0 && (
+          <StaleEmbeddingBanner
+            missing={healthForActive?.chunks_missing_embeddings ?? 0}
+            chunkTotal={healthForActive?.chunk_count ?? 0}
+            busy={reembedBusy}
+            onReembed={runReembedAll}
+          />
+        )}
+
         {/* ─ Toolbar */}
         {pageState === "ok" && (
           <div className="flex flex-wrap items-center gap-2">
@@ -667,48 +717,12 @@ export default function KnowledgePage() {
               </div>
             </div>
 
-            <Select
-              value={stateFilter}
-              onChange={setStateFilter}
-              options={makeStateFilters(t)}
-              className="min-w-[120px]"
-              triggerClassName="h-9 rounded-xl"
-              ariaLabel={t("toolbar.stateFilterAria")}
-            />
-
-            <button
-              type="button"
-              onClick={() => activeKb && setShowUrlIngest(true)}
+            <AddDocumentMenu
               disabled={!activeKb || uploading}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text disabled:opacity-40 disabled:cursor-not-allowed transition duration-fast"
-              title={t("toolbar.ingestUrlTitle")}
-            >
-              <Icon name="link" size={13} />
-              {t("toolbar.ingestUrl")}
-            </button>
-
-            <label
-              className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm transition duration-fast cursor-pointer ${
-                activeKb
-                  ? "bg-primary hover:bg-primary-hover"
-                  : "bg-primary opacity-40 cursor-not-allowed"
-              }`}
-            >
-              <Icon name="upload" size={13} />
-              {uploading ? t("toolbar.uploading") : t("toolbar.upload")}
-              <input
-                type="file"
-                multiple
-                disabled={!activeKb || uploading}
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files?.length) {
-                    void handleUploadFiles(e.target.files);
-                  }
-                  e.currentTarget.value = "";
-                }}
-              />
-            </label>
+              uploading={uploading}
+              onPickFiles={(files) => void handleUploadFiles(files)}
+              onPickUrl={() => activeKb && setShowUrlIngest(true)}
+            />
           </div>
         )}
 
@@ -759,6 +773,7 @@ export default function KnowledgePage() {
                   kb={activeKb}
                   onOpenSettings={() => setShowSettings(true)}
                 />
+                <KBHealthCard health={healthForActive} />
                 <TagsCard
                   docs={docs ?? []}
                   active={tagFilter}
@@ -828,6 +843,8 @@ export default function KnowledgePage() {
                 onClearTagFilter={() => setTagFilter(null)}
                 starters={mode === "ask" ? startersForActive : null}
                 onPickStarter={pickStarter}
+                stateFilter={stateFilter}
+                onChangeStateFilter={setStateFilter}
               />
             )}
           </main>
@@ -840,6 +857,15 @@ export default function KnowledgePage() {
             kbId={activeKb.id}
             onClose={() => setOpenDoc(null)}
             onDelete={handleDeleteDoc}
+            onTagsChanged={async () => {
+              if (!activeKb) return;
+              await refreshDocs(activeKb.id);
+              // Pull the freshly-tagged version back into the drawer state
+              const refreshed = (await listDocuments(activeKb.id, { limit: 200 })).find(
+                (d) => d.id === openDoc.id,
+              );
+              if (refreshed) setOpenDoc(refreshed);
+            }}
           />
         )}
 
@@ -994,6 +1020,201 @@ function KBInfoCard({
       )}
     </div>
   );
+}
+
+// Stale embedding banner — fires when KB.health.chunks_missing_embeddings
+// > 0. Common cause: user ingested docs while the embedding provider
+// was misconfigured (missing API key) so chunk.embedding stayed NULL.
+// One-click backfill that re-runs the ingest pipeline for every doc.
+function StaleEmbeddingBanner({
+  missing,
+  chunkTotal,
+  busy,
+  onReembed,
+}: {
+  missing: number;
+  chunkTotal: number;
+  busy: boolean;
+  onReembed: () => void | Promise<void>;
+}) {
+  const t = useTranslations("knowledge.stale");
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning-soft px-4 py-2.5 text-[12px] text-warning">
+      <div className="flex items-center gap-2">
+        <Icon name="alert-triangle" size={13} />
+        <span className="text-text">
+          {t("body", { missing, total: chunkTotal })}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={() => void onReembed()}
+        disabled={busy}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-warning/40 bg-surface px-2.5 text-[11px] font-medium text-text hover:border-warning hover:text-warning disabled:opacity-40"
+      >
+        <Icon name="refresh" size={11} />
+        {busy ? t("running") : t("cta")}
+      </button>
+    </div>
+  );
+}
+
+// KB health card — sidebar 第二张卡。Snapshot of "what's in here / when
+// did I last touch it". Three rows: KPI numbers · 30-day sparkline of doc
+// ingest activity · top tags & dominant mime. No real-time polling — the
+// page-level refreshDocs() pull also bumps health.
+function KBHealthCard({ health }: { health: KBHealthDto | null }) {
+  const t = useTranslations("knowledge.health");
+  if (!health) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
+        <div className="mt-3 h-16 animate-pulse rounded-lg bg-surface-2" />
+      </div>
+    );
+  }
+
+  const lastActivity = health.last_activity
+    ? formatRelativeTime(new Date(health.last_activity))
+    : t("never");
+  const tokenLabel = formatCompact(health.token_sum);
+  const sparkMax = Math.max(1, ...health.daily_doc_counts.map((d) => d.count));
+  const dominantMime = health.mime_breakdown[0];
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <div className="flex items-center justify-between">
+        <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
+        <span
+          className="font-mono text-[10px] text-text-subtle"
+          title={health.last_activity ?? undefined}
+        >
+          {t("lastActivity", { when: lastActivity })}
+        </span>
+      </div>
+
+      {/* KPI row */}
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <KpiCell
+          label={t("docs")}
+          value={health.doc_count.toString()}
+        />
+        <KpiCell
+          label={t("chunks")}
+          value={formatCompact(health.chunk_count)}
+        />
+        <KpiCell label={t("tokens")} value={tokenLabel} />
+      </div>
+
+      {/* Sparkline */}
+      <div className="mt-3">
+        <div className="mb-1 flex items-center justify-between font-mono text-[10px] text-text-subtle">
+          <span>{t("activityHeader", { days: health.daily_doc_counts.length })}</span>
+          <span>{t("activityHint")}</span>
+        </div>
+        <Sparkline
+          data={health.daily_doc_counts.map((d) => d.count)}
+          max={sparkMax}
+        />
+      </div>
+
+      {/* Top tags row */}
+      {health.top_tags.length > 0 && (
+        <div className="mt-3">
+          <div className={SECTION_LABEL}>{t("topTagsHeader")}</div>
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {health.top_tags.map((tg) => (
+              <span
+                key={tg.tag}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text-muted"
+              >
+                #{tg.tag}
+                <span className="text-text-subtle">·{tg.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dominantMime && (
+        <div className="mt-3 font-mono text-[10px] text-text-subtle">
+          {t("dominantMime", {
+            mime: dominantMime.mime.split("/").pop() ?? dominantMime.mime,
+            count: dominantMime.count,
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KpiCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface-2 px-2 py-1.5">
+      <div className="font-mono text-[9px] uppercase tracking-wider text-text-subtle">
+        {label}
+      </div>
+      <div className="mt-0.5 font-mono text-[14px] font-semibold text-text">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// Tiny SVG sparkline — bars (not line) because "doc count per day" is
+// discrete + often zero. Bar width auto-scales to fit container; bar
+// height clamped to ≥ 2px so single-doc days are still visible. Days
+// with zero docs render as faint baseline for visual rhythm.
+function Sparkline({ data, max }: { data: number[]; max: number }) {
+  const W = 100;
+  const H = 24;
+  const barW = W / Math.max(1, data.length);
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className="h-7 w-full"
+      aria-hidden="true"
+    >
+      {data.map((v, i) => {
+        const h = v === 0 ? 1 : Math.max(2, (v / max) * H);
+        const x = i * barW;
+        const y = H - h;
+        const fill = v === 0 ? "var(--color-border)" : "var(--color-primary)";
+        return (
+          <rect
+            key={i}
+            x={x + 0.3}
+            y={y}
+            width={Math.max(0.5, barW - 0.6)}
+            height={h}
+            fill={fill}
+            rx="0.5"
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function formatCompact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
+  if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}
+
+function formatRelativeTime(d: Date): string {
+  // Locale-neutral: returns short tokens the calling i18n context wraps
+  // for display. Keeping this as plain strings (no Chinese in source)
+  // avoids the i18n-no-hardcoded-zh contract while still being readable
+  // for ops debugging.
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return "now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d`;
+  return d.toISOString().slice(0, 10);
 }
 
 function TagsCard({
@@ -1216,6 +1437,135 @@ function OnboardingWizard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Add-document split button — replaces the legacy "Upload" + "抓 URL"
+// double-button. Primary click on the left "Upload" half opens a file
+// picker; chevron half opens a small menu with "Upload files" / "Ingest
+// URL" entries. One control instead of two halves the toolbar density
+// without removing functionality.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AddDocumentMenu({
+  disabled,
+  uploading,
+  onPickFiles,
+  onPickUrl,
+}: {
+  disabled: boolean;
+  uploading: boolean;
+  onPickFiles: (files: FileList) => void;
+  onPickUrl: () => void;
+}) {
+  const t = useTranslations("knowledge.toolbar");
+  const [open, setOpen] = useState(false);
+  const [side, setSide] = useState<"top" | "bottom">("bottom");
+  const ref = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Click-away closer — keeps the popover ephemeral. Mousedown vs click
+  // chosen so dragging from a primary click doesn't snap the menu shut.
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  // Flip menu side when too close to the bottom — the toolbar usually
+  // sits near the top so "bottom" is the common case, but we still need
+  // top-full as a fallback per § 3.9 popover contract.
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setSide(computePopoverSide(rect, 80, window.innerHeight, "bottom"));
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-flex">
+      <label
+        className={`inline-flex h-9 items-center gap-1.5 rounded-l-xl px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm transition duration-fast ${
+          disabled
+            ? "bg-primary opacity-40 cursor-not-allowed"
+            : "bg-primary hover:bg-primary-hover cursor-pointer"
+        }`}
+      >
+        <Icon name="upload" size={13} />
+        {uploading ? t("uploading") : t("upload")}
+        <input
+          type="file"
+          multiple
+          disabled={disabled}
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files?.length) onPickFiles(e.target.files);
+            e.currentTarget.value = "";
+          }}
+        />
+      </label>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex h-9 items-center justify-center rounded-r-xl border-l border-primary-fg/20 px-2 text-primary-fg shadow-soft-sm transition duration-fast ${
+          disabled
+            ? "bg-primary opacity-40 cursor-not-allowed"
+            : "bg-primary hover:bg-primary-hover"
+        }`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <Icon name="chevron-down" size={12} />
+      </button>
+      {open && (
+        <div
+          className={`absolute right-0 z-40 w-48 overflow-hidden rounded-xl border border-border bg-surface shadow-soft-lg ${
+            side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
+          }`}
+        >
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              setOpen(false);
+              onPickUrl();
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-text hover:bg-surface-2"
+          >
+            <Icon name="link" size={13} className="text-text-subtle" />
+            {t("ingestUrl")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Inline state filter for the Documents header — was a top-toolbar
+// Select before the layout pass; moved here because it's only meaningful
+// in the doc-grid context (search / Ask views already filter by relevance).
+function DocStateSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const t = useTranslations("knowledge");
+  return (
+    <Select
+      value={value}
+      onChange={onChange}
+      options={makeStateFilters(t)}
+      className="min-w-[112px]"
+      triggerClassName="h-7 rounded-lg text-[11px]"
+      ariaLabel={t("toolbar.stateFilterAria")}
+    />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Starter chips — LLM-suggested first questions, shown when Ask mode is
 // idle. Mirrors NotebookLM's "Suggested questions" strip and ChatGPT's
 // custom-GPT example prompts. Empty list (no docs / no provider) renders
@@ -1280,6 +1630,8 @@ function DocumentsView({
   onClearTagFilter,
   starters,
   onPickStarter,
+  stateFilter,
+  onChangeStateFilter,
 }: {
   docs: DocumentDto[];
   allDocsCount: number;
@@ -1296,6 +1648,8 @@ function DocumentsView({
   onClearTagFilter: () => void;
   starters: string[] | null;
   onPickStarter: (q: string) => void;
+  stateFilter: string;
+  onChangeStateFilter: (v: string) => void;
 }) {
   const t = useTranslations("knowledge.docs");
   if (allDocsCount === 0) {
@@ -1332,6 +1686,7 @@ function DocumentsView({
           <span className="font-mono text-[10px] text-text-subtle">
             {t("countOf", { visible: docs.length, total: allDocsCount })}
           </span>
+          <DocStateSelect value={stateFilter} onChange={onChangeStateFilter} />
           {tagFilter && (
             <button
               type="button"
@@ -1658,7 +2013,10 @@ function AskAnswerView({
                   <Icon name="sparkles" size={11} />
                 </div>
                 <div className="flex-1 space-y-3">
-                  <AskTurnAnswer turn={turn} onChunkClick={onChunkClick} />
+                  <AskTurnAnswer
+                    turn={turn}
+                    onChunkClick={onChunkClick}
+                  />
                   {turn.sources.length > 0 && (
                     <AskTurnSources turn={turn} onChunkClick={onChunkClick} />
                   )}
@@ -1707,6 +2065,61 @@ function AskAnswerView({
 }
 
 // One turn's answer body. Splits on `[N]` markers; while ``streaming``,
+// Copy-as-citation — turns a finished Q&A turn into a self-contained
+// markdown blob (question / answer with [N] inline / numbered footnotes)
+// suitable for pasting into a doc or chat. Mirrors NotebookLM's "Copy"
+// + Perplexity's share-as-text. We bias toward markdown because the
+// allhands chat surface renders it natively and so do most editors.
+function CopyAsCitationButton({ turn }: { turn: AskTurnView }) {
+  const t = useTranslations("knowledge.ask");
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    const md = renderTurnAsMarkdown(turn);
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Some browsers block clipboard write outside user gestures or
+      // require https. Fall back to a brief alert; the user can re-try.
+      alert(t("copyFailed"));
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 font-mono text-[10px] text-text-subtle opacity-0 transition group-hover:opacity-100 hover:text-text"
+      title={t("copyAsCitationTitle")}
+    >
+      <Icon name={copied ? "check" : "copy"} size={10} />
+      {copied ? t("copied") : t("copyAsCitation")}
+    </button>
+  );
+}
+
+function renderTurnAsMarkdown(turn: AskTurnView): string {
+  const lines: string[] = [];
+  lines.push(`> **Q:** ${turn.question}`);
+  lines.push("");
+  lines.push(turn.answer.trim());
+  if (turn.sources.length > 0) {
+    lines.push("");
+    lines.push("**Sources**");
+    for (const s of turn.sources) {
+      const sec = s.section_path ? ` · § ${s.section_path}` : "";
+      lines.push(`- [${s.n}] ${s.citation}${sec}`);
+    }
+  }
+  if (turn.usedModel) {
+    lines.push("");
+    lines.push(`*Generated with ${turn.usedModel}*`);
+  }
+  return lines.join("\n");
+}
+
 // shows a blinking caret so the user sees progress before sources lock in.
 function AskTurnAnswer({
   turn,
@@ -1738,13 +2151,16 @@ function AskTurnAnswer({
     turn.id,
   );
   return (
-    <div className="rounded-xl border border-border bg-surface-2 p-4">
+    <div className="group relative rounded-xl border border-border bg-surface-2 p-4">
       <p className="whitespace-pre-wrap text-[14px] leading-[1.7] text-text">
         {parts}
         {turn.streaming && (
           <span className="ml-0.5 inline-block h-[14px] w-[2px] animate-pulse bg-primary align-middle" />
         )}
       </p>
+      {!turn.streaming && turn.answer && (
+        <CopyAsCitationButton turn={turn} />
+      )}
     </div>
   );
 }
@@ -3036,13 +3452,16 @@ function DocDrawer({
   kbId,
   onClose,
   onDelete,
+  onTagsChanged,
 }: {
   doc: DocumentDto;
   kbId: string;
   onClose: () => void;
   onDelete: (d: DocumentDto) => void;
+  onTagsChanged: () => void | Promise<void>;
 }) {
   const t = useTranslations("knowledge.detail");
+  const locale = useLocale();
   type Tab = "info" | "text" | "chunks";
   const [tab, setTab] = useState<Tab>("info");
   const [text, setText] = useState<string | null>(null);
@@ -3149,27 +3568,16 @@ function DocDrawer({
                 )}
                 <MetaRow
                   label={t("metaCreated")}
-                  value={new Date(doc.created_at).toLocaleString()}
+                  value={new Date(doc.created_at).toLocaleString(locale)}
                 />
                 <MetaRow
                   label={t("metaUpdated")}
-                  value={new Date(doc.updated_at).toLocaleString()}
+                  value={new Date(doc.updated_at).toLocaleString(locale)}
                 />
               </DocMetaSection>
-              {doc.tags.length > 0 && (
-                <DocMetaSection title={t("infoSectionTags")}>
-                  <div className="flex flex-wrap gap-1.5">
-                    {doc.tags.map((t) => (
-                      <span
-                        key={t}
-                        className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text-muted"
-                      >
-                        #{t}
-                      </span>
-                    ))}
-                  </div>
-                </DocMetaSection>
-              )}
+              <DocMetaSection title={t("infoSectionTags")}>
+                <DocTagsEditor doc={doc} kbId={kbId} onChanged={onTagsChanged} />
+              </DocMetaSection>
             </div>
           )}
 
@@ -3323,6 +3731,143 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+// Tag editor for a single doc, lives inside DocDrawer's Info tab.
+// Shows current tags · provides an AI suggest button (sparkles icon)
+// suggestTagsForDocument · pending suggestions appear as ghost chips
+// the user clicks to accept(adds via PATCH). Existing tags can be
+// removed by clicking ✕. The "+ tag" inline input adds custom tags.
+function DocTagsEditor({
+  doc,
+  kbId,
+  onChanged,
+}: {
+  doc: DocumentDto;
+  kbId: string;
+  onChanged: () => void | Promise<void>;
+}) {
+  const t = useTranslations("knowledge.docTags");
+  const [pending, setPending] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState("");
+
+  const suggestionsToShow = (pending ?? []).filter((p) => !doc.tags.includes(p));
+
+  async function runSuggest() {
+    setBusy(true);
+    try {
+      const tags = await suggestTagsForDocument(kbId, doc.id);
+      setPending(tags);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function applyTag(tag: string) {
+    await patchDocumentTags(kbId, doc.id, { add: [tag] });
+    setPending((prev) => prev?.filter((p) => p !== tag) ?? null);
+    await onChanged();
+  }
+
+  async function applyAll() {
+    if (suggestionsToShow.length === 0) return;
+    await patchDocumentTags(kbId, doc.id, { add: suggestionsToShow });
+    setPending(null);
+    await onChanged();
+  }
+
+  async function removeTag(tag: string) {
+    await patchDocumentTags(kbId, doc.id, { remove: [tag] });
+    await onChanged();
+  }
+
+  async function submitAdding() {
+    const tag = adding.trim();
+    if (!tag) return;
+    setAdding("");
+    if (doc.tags.includes(tag)) return;
+    await patchDocumentTags(kbId, doc.id, { add: [tag] });
+    await onChanged();
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {/* Existing tags */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {doc.tags.map((tag) => (
+          <span
+            key={tag}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 pl-2 pr-1 py-0.5 font-mono text-[10px] text-text-muted"
+          >
+            #{tag}
+            <button
+              type="button"
+              onClick={() => void removeTag(tag)}
+              className="text-text-subtle hover:text-danger"
+              aria-label={t("removeAria", { tag })}
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void submitAdding();
+            }
+          }}
+          placeholder={t("addPlaceholder")}
+          className="h-6 w-32 rounded-full border border-border bg-surface px-2 font-mono text-[10px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+        />
+      </div>
+
+      {/* AI suggestion row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void runSuggest()}
+          disabled={busy}
+          className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-surface px-2 font-mono text-[10px] text-text-muted hover:border-primary/40 hover:text-primary disabled:opacity-40"
+        >
+          <Icon name="sparkles" size={10} />
+          {busy ? t("suggesting") : t("suggestCta")}
+        </button>
+        {suggestionsToShow.length > 0 && (
+          <>
+            {suggestionsToShow.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => void applyTag(tag)}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-primary/40 bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary hover:border-primary"
+                title={t("acceptOneHint")}
+              >
+                + #{tag}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => void applyAll()}
+              className="inline-flex h-6 items-center gap-1 rounded-md bg-primary px-2 font-mono text-[10px] text-primary-fg hover:bg-primary-hover"
+            >
+              <Icon name="check" size={10} />
+              {t("acceptAll", { count: suggestionsToShow.length })}
+            </button>
+          </>
+        )}
+      </div>
+      {pending !== null && pending.length === 0 && suggestionsToShow.length === 0 && (
+        <p className="font-mono text-[10px] text-text-subtle">
+          {t("noSuggestions")}
+        </p>
+      )}
+    </div>
   );
 }
 

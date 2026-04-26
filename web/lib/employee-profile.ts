@@ -32,8 +32,3 @@ export function deriveProfile(employee: EmployeeForBadges): EmployeeBadge[] {
   return badges;
 }
 
-export const BADGE_LABEL: Record<EmployeeBadge, string> = {
-  react: "可执行",
-  planner: "会做计划",
-  coordinator: "能带团队",
-};

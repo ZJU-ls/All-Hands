@@ -206,6 +206,36 @@ export async function getKBStats(kbId: string): Promise<KBStatsDto> {
   return check(await fetch(`${BASE}/api/kb/${kbId}/stats`), "getKBStats");
 }
 
+export interface KBHealthDto {
+  doc_count: number;
+  chunk_count: number;
+  token_sum: number;
+  last_activity: string | null;
+  daily_doc_counts: Array<{ date: string; count: number }>;
+  top_tags: Array<{ tag: string; count: number }>;
+  mime_breakdown: Array<{ mime: string; count: number }>;
+  chunks_missing_embeddings: number;
+}
+
+export async function reembedAll(
+  kbId: string,
+): Promise<{ processed: number; succeeded: number; failed: number }> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/reembed-all`, { method: "POST" }),
+    "reembedAll",
+  );
+}
+
+export async function getKBHealth(
+  kbId: string,
+  days = 30,
+): Promise<KBHealthDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/health?days=${days}`),
+    "getKBHealth",
+  );
+}
+
 // Starter questions — small list of LLM-suggested prompts for the Ask
 // blank state. Returns at most ``limit`` strings; an empty array means
 // "no docs yet" or "no chat provider configured" — caller hides the row.
@@ -373,6 +403,19 @@ export async function uploadDocument(
     await fetch(`${BASE}/api/kb/${kbId}/documents`, { method: "POST", body: fd }),
     "uploadDocument",
   );
+}
+
+export async function suggestTagsForDocument(
+  kbId: string,
+  docId: string,
+): Promise<string[]> {
+  const r = await fetch(
+    `${BASE}/api/kb/${kbId}/documents/${docId}/suggest-tags`,
+    { method: "POST" },
+  );
+  if (!r.ok) return [];
+  const j = (await r.json()) as { tags: string[] };
+  return j.tags ?? [];
 }
 
 export async function patchDocumentTags(

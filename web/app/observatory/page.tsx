@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState } from "@/components/state";
 import { TraceChip } from "@/components/runs/TraceChip";
@@ -55,9 +55,9 @@ function formatDuration(s: number | null | undefined): string {
   return `${s.toFixed(2)}s`;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const d = new Date(iso);
-  return d.toLocaleString();
+  return d.toLocaleString(locale);
 }
 
 /** Deterministic pseudo-sparkline from a seed (no real time-series in DTO yet). */
@@ -501,6 +501,7 @@ function TimeRangePills({
 
 export default function ObservatoryPage() {
   const t = useTranslations("pages.observatory");
+  const locale = useLocale();
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [traces, setTraces] = useState<TraceSummaryDto[]>([]);
   const [state, setState] = useState<LoadState>("idle");
@@ -1055,7 +1056,7 @@ export default function ObservatoryPage() {
                               {formatDuration(row.duration_s)}
                             </span>
                             <span>{row.tokens.total.toLocaleString()} {t("incidents.tokensSuffix")}</span>
-                            <span className="hidden md:inline">{formatDate(row.started_at)}</span>
+                            <span className="hidden md:inline">{formatDate(row.started_at, locale)}</span>
                           </div>
                         </div>
                       </div>
@@ -1177,7 +1178,7 @@ export default function ObservatoryPage() {
                               {row.tokens.total > 0 ? row.tokens.total.toLocaleString() : "—"}
                             </td>
                             <td className="py-2.5 px-4 text-text-muted">
-                              {formatDate(row.started_at)}
+                              {formatDate(row.started_at, locale)}
                             </td>
                           </tr>
                         ))}

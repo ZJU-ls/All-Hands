@@ -278,6 +278,8 @@
     },
     "list": {
       "pinned": "置顶",
+      "pinnedAria": "已置顶",
+      "groupAria": "制品",
       "empty": "还没有制品。让员工产出一份文档、代码或图。"
     },
     "panel": {
@@ -370,6 +372,25 @@
         "activeChip": "已选: {label}",
         "removeChipAria": "移除筛选 {label}"
       },
+      "clearSearchAria": "清除搜索",
+      "bulkActionsAria": "批量操作",
+      "clearSelectionAria": "清除选择",
+      "bulk": {
+        "selected": "已选 {n}",
+        "pin": "置顶",
+        "unpin": "取消置顶",
+        "delete": "删除",
+        "toast": {
+          "pinned": "已置顶 {n} 个制品",
+          "unpinned": "已取消置顶 {n} 个制品",
+          "pinPartial": "{ok} / {total} 失败",
+          "pinPartialDesc": "已回滚失败的行",
+          "deletedAll": "已删除 {n} 个制品",
+          "deletedAllDesc": "软删除 · 可以恢复",
+          "deletedPartial": "已删除 {ok} 个 · {failed} 个失败",
+          "deletedNone": "删除失败 {n} 个制品"
+        }
+      },
       "view": {
         "list": "列表",
         "grid": "网格",
@@ -457,6 +478,7 @@
       "placeholder": "跳转到页面 · 搜索员工 · 技能 · 模型",
       "noMatch": "没有匹配的入口 · 试试别的关键词",
       "suggestions": "建议 · {count}",
+      "recent": "最近访问 · {count}",
       "footer": {
         "navigate": "上下移动",
         "open": "打开",

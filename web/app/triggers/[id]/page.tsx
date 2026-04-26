@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -370,6 +370,7 @@ function Hero({
   onDelete: () => void;
 }) {
   const t = useTranslations("triggers.detail");
+  const locale = useLocale();
   const kindIcon: IconName = trigger.kind === "timer" ? "clock" : "zap";
   const dotClass = trigger.auto_disabled_reason
     ? "bg-warning"
@@ -447,7 +448,7 @@ function Hero({
             </div>
             <p className="text-[12px] text-text-muted leading-relaxed mb-1">
               {trigger.last_fired_at
-                ? t("lastFired", { time: formatTime(trigger.last_fired_at) })
+                ? t("lastFired", { time: formatTime(trigger.last_fired_at, locale) })
                 : t("neverFired")}
             </p>
             <p className="font-mono text-caption text-text-subtle truncate">
@@ -653,6 +654,7 @@ function ActionPreview({ t: trigger }: { t: Trigger }) {
 
 function FireRow({ f }: { f: Fire }) {
   const statusMeta = fireStatusMeta(f.status);
+  const locale = useLocale();
   return (
     <div
       data-testid={`fire-${f.id}`}
@@ -666,7 +668,7 @@ function FireRow({ f }: { f: Fire }) {
       </span>
       <span className="inline-flex items-center gap-1 font-mono text-caption text-text-muted shrink-0">
         <Icon name="clock" size={11} className="text-text-subtle" />
-        {formatTime(f.fired_at)}
+        {formatTime(f.fired_at, locale)}
       </span>
       <span className="inline-flex items-center h-5 px-1.5 rounded-md bg-surface border border-border font-mono text-caption text-text-subtle shrink-0">
         {f.source}
@@ -714,10 +716,10 @@ function fireStatusMeta(status: string): { icon: IconName; chip: string } {
   };
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, locale: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString();
+    return d.toLocaleString(locale);
   } catch {
     return iso;
   }
