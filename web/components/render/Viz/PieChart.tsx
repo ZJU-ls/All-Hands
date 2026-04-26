@@ -126,7 +126,7 @@ export function PieChart({ props }: RenderProps) {
             height={SIZE}
             className="shrink-0"
             role="img"
-            aria-label="pie chart"
+            aria-label={t("ariaLabel")}
           >
             {arcs.map(({ path, midAngle }, i) => {
               const isFocused = i === focusedIdx;

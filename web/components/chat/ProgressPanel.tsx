@@ -113,7 +113,7 @@ export function ProgressPanel({ conversationId }: Props) {
   return (
     <div
       data-testid="progress-panel"
-      className="border-t border-border/60 bg-bg"
+      className="bg-bg"
     >
       <div className="mx-auto w-full max-w-6xl px-4 pb-2 pt-2">
         {/* Body · rendered ABOVE tabs so toggling doesn't shove the input. */}
@@ -137,7 +137,7 @@ export function ProgressPanel({ conversationId }: Props) {
            floating "white card" feel. */}
         <div
           role="tablist"
-          aria-label="agent progress"
+          aria-label={t("ariaLabel")}
           className="flex items-stretch gap-1.5"
         >
           {hasPlan && (

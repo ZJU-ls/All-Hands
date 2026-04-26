@@ -8,7 +8,7 @@
  * - Kind badge: small gradient/muted tile with an icon glyph.
  */
 
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { ArtifactDto } from "@/lib/artifacts-api";
 
@@ -48,6 +48,7 @@ export function ArtifactListItem({
   const icon = KIND_ICON[artifact.kind] ?? "file";
   const label = KIND_LABEL[artifact.kind] ?? artifact.kind;
   const locale = useLocale();
+  const t = useTranslations("artifacts.list");
 
   return (
     <li className="relative">
@@ -81,7 +82,7 @@ export function ArtifactListItem({
             {artifact.pinned && (
               <span
                 className="inline-block h-1.5 w-1.5 rounded-full bg-primary"
-                aria-label="pinned"
+                aria-label={t("pinnedAria")}
               />
             )}
             <span className="truncate text-[13px] font-medium text-text">

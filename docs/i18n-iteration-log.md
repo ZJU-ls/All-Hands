@@ -430,3 +430,90 @@ app/triggers/page.tsx · app/skills/[id]/page.tsx · app/mcp-servers/[id]/page.t
 date 格式化 0 处 navigator 默认
 
 **commits**:见 git log
+
+## Round 20 · 2026-04-26 09:43 (cron · 30m)
+
+**主题**:aria-label / 屏幕阅读器友好性 + 漏掉的硬编码英文
+
+**发现**:
+- aria-label 硬编码英文 9+ 处:Toast notifications · ProgressPanel
+  agent progress · PlanProgress 5 个状态 dot · SubagentProgress 3 个状态 dot ·
+  ArtifactList pinned · ArtifactGrid artifacts/pinned · artifacts/page
+  clear search/bulk actions/clear selection
+- artifacts/page BulkActionBar 硬编码 4 处英文文本:"{n} selected" · "Pin" /
+  "Unpin" · "Delete"
+- SubagentProgressSection labelFor() 返回硬编码英文 status 文本(显示给用户看,
+  不仅是 aria-label)
+
+**做的事**:
+- 加 catalog key:
+  - root toast.ariaLabel("通知" / "Notifications")
+  - chat.progressPanel.ariaLabel("代理进度" / "Agent progress")
+  - chat.planProgress.step.{done,running,failed,skipped,pending}
+  - chat.subagent.status.{running,succeeded,failed}
+  - artifacts.list.pinnedAria + groupAria
+  - artifacts.page.{clearSearchAria,bulkActionsAria,clearSelectionAria,bulk.*}
+- 改 8 个组件 / 1 个 page 走 t():Toast · ProgressPanel · PlanProgressSection ·
+  SubagentProgressSection(顺手干掉 labelFor)· ArtifactListItem · ArtifactGrid
+  · artifacts/page BulkActionBar
+- 删除 SubagentProgressSection.labelFor 死函数
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
+
+## Round 21 · 2026-04-26 10:13 (cron · 30m)
+
+**主题**:剩下 3 处 aria-label 英文字面量收口
+
+**发现**:
+- AppShell topbar 键盘快捷键按钮 aria-label="Keyboard shortcuts" + title="? · keyboard shortcuts" 硬编码
+- PieChart svg aria-label="pie chart" 硬编码
+- design-lab 页面 3 处 title="..." 是开发者预览页 · 跳过
+
+**做的事**:
+- 加 catalog key:shell.topbar.shortcutsAria + shortcutsTitle · viz.pieChart.ariaLabel
+- 改 AppShell + PieChart 走 t()
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿。
+本次扫描后 components / app(除 dev-only design-lab)的 aria-label / title
+属性 100% 走 t() · 屏幕阅读器对两种 locale 都说人话。
+
+**commits**:见 git log
+
+## Round 22 · 2026-04-26 10:43 (cron · 30m)
+
+**主题**:5 处 toast.success/.error/.warning 模板字符串硬编码英文
+
+**发现**:R20 在 BulkActionBar 收口时漏了 onPinToggle / bulkDeleteConfirmed
+两段业务 handler 里的 toast 文案 —— 5 个 `${...} artifact(s)` 模板,zh
+用户成功删几个制品看的全是英文 toast。
+
+**做的事**:
+- artifacts.page.bulk.toast 块新增 8 个 ICU key(en 用 plural,zh 用 {n}):
+  pinned · unpinned · pinPartial(+desc) · deletedAll(+desc) · deletedPartial · deletedNone
+- ArtifactsGlobalPage 加 `tToast = useTranslations("artifacts.page.bulk.toast")`
+- 5 处 toast.* 改用 ICU 模板
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿 ·
+全栈 toast.* 调用 0 处硬编码英文/中文文本
+
+**commits**:见 git log
+
+## Round 23 · 2026-04-26 11:13 (cron · 30m)
+
+**主题**:深度健康检查 · 没有新发现
+
+**做的事**:
+- 扫 ConfirmDialog / Coachmark / SearchInput / HoverPeek / PageHeader 默认值 → 全 t() 化
+- 扫 backend services/cockpit/observatory/artifact/skill/mcp/task → 0 处用户可见硬编码
+- 扫 SVG `<title>` / `<iframe title>` / 模板字符串 → 全是 SVG path / 数字 / cron 表达式,不需翻译
+- 扫 backend execution/ → 唯有 `_ARTIFACT_HALLUC_PATTERNS` 检测词表(读模型输出 · 非展示)+
+  agent_loop 的 nudge SystemMessage(给 LLM 的 instruction · 非用户可见) · by-design
+- 扫 backend services 里 logger / summary / description 的 f-string → 0 处中文
+- 扫 raw enum 显示(trigger.kind / fire.status / server.transport)→ 都是 mono 技术 badge ·
+  类似 Linear "open"/"closed" 那种,by-design 不翻译
+
+**结果**:1928 web tests + backend i18n tests + regression net 全绿 · 本轮零代码改动
+
+**commits**:仅本条 log

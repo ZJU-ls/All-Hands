@@ -457,8 +457,8 @@ export function AppShell({
               type="button"
               onClick={() => setShortcutsOpen(true)}
               className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text transition duration-base"
-              aria-label="Keyboard shortcuts"
-              title="? · keyboard shortcuts"
+              aria-label={t("shortcutsAria")}
+              title={t("shortcutsTitle")}
             >
               <Icon name="circle-help" size={15} />
             </button>
