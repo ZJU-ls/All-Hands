@@ -840,3 +840,28 @@ ADR 0021 自解释 tool。
 **结果**:本轮零代码改动 · regression net 全绿
 
 **commits**:仅本条 log
+
+## Round 40 · 2026-04-27 01:43 (cron · 30m)
+
+**主题**:dead-key 审计两类假阳性收口
+
+**发现**:R36 上线的 dead-key audit 有两类假阳性:
+1. `t(varName)` 模式(运行时变量当 key)被全归为死 · employeeBadges.* 这种
+   `badgeT(b)` 调用看不出来 b 是什么 · key 实际全活
+2. `const t = await getTranslations("ns")`(server component metadata)·
+   declRe 不允许 `=` 和 `getTranslations` 之间有 `await` · metadata.description
+   误判死
+
+**做的事**:
+- audit-i18n-dead-keys.mjs:
+  - 加 varRe 抓 `name(varName,?)` 模式 · 命中后 namespace 整体进 `usedRuntimeNs`
+    set · key 扫描时若任一 prefix 在该 set 里就算 alive
+  - declRe 加 `(?:await\s+)?` 容许 await 关键字
+- tests/i18n-keys-resolve.test.ts 同款 declRe 升级(以后 SSR getTranslations
+  也不会被 resolver 漏掉)
+
+**结果**:dead key 数 259 → 128(假阳性下降一半)· 1999 web tests 全绿 ·
+剩下的 128 大多是真死 key(common.* 共享词 + 历史代码删过的 i18n 残留),
+留作后续清理基线
+
+**commits**:见 git log

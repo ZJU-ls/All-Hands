@@ -69,7 +69,11 @@ function loadCatalog() {
 const cat = loadCatalog();
 const used = new Set();
 const usedPrefixes = new Set();
-const declRe = /\b(?:const|let|var)\s+(\w+)\s*=\s*(?:useTranslations|getTranslations)\(\s*"([^"]+)"\s*\)/g;
+// Namespaces where the binding is called with a *variable* (e.g. `badgeT(b)`)
+// — we can't know which sub-key is referenced, so treat the whole namespace
+// as live-by-association.
+const usedRuntimeNs = new Set();
+const declRe = /\b(?:const|let|var)\s+(\w+)\s*=\s*(?:await\s+)?(?:useTranslations|getTranslations)\(\s*"([^"]+)"\s*\)/g;
 
 for (const dir of ["app", "components", "lib"]) {
   for (const f of walk(join(WEB, dir))) {
@@ -81,9 +85,17 @@ for (const dir of ["app", "components", "lib"]) {
     for (const d of decls) {
       const litRe = new RegExp(`\\b${d.name}(?:\\.(?:rich|raw|has))?\\(\\s*"([a-zA-Z0-9_.]+)"`, "g");
       const tplRe = new RegExp(`\\b${d.name}(?:\\.(?:rich|raw|has))?\\(\\s*\`([a-zA-Z0-9_.]+)\\.\\$\\{`, "g");
+      // Variable-argument call: `name(varName)` where varName is a bare ident.
+      const varRe = new RegExp(`\\b${d.name}(?:\\.(?:rich|raw|has))?\\(\\s*([a-zA-Z_][a-zA-Z0-9_.]*)\\s*[),]`, "g");
       let mm;
       while ((mm = litRe.exec(src))) used.add(`${d.ns}.${mm[1]}`);
       while ((mm = tplRe.exec(src))) usedPrefixes.add(`${d.ns}.${mm[1]}`);
+      while ((mm = varRe.exec(src))) {
+        // Only count it as runtime if the arg isn't a quoted string (already
+        // handled above) — varRe matches bare idents, so anything that looks
+        // like a JS identifier passes through.
+        usedRuntimeNs.add(d.ns);
+      }
     }
   }
 }
@@ -91,21 +103,23 @@ for (const dir of ["app", "components", "lib"]) {
 const dead = [];
 for (const k of cat) {
   if (used.has(k)) continue;
-  let prefixOk = false;
+  let live = false;
   const parts = k.split(".");
   for (let i = 1; i < parts.length; i++) {
-    if (usedPrefixes.has(parts.slice(0, i).join("."))) {
-      prefixOk = true;
+    const prefix = parts.slice(0, i).join(".");
+    if (usedPrefixes.has(prefix) || usedRuntimeNs.has(prefix)) {
+      live = true;
       break;
     }
   }
-  if (!prefixOk) dead.push(k);
+  if (!live) dead.push(k);
 }
 dead.sort();
 
 console.log(`catalog keys: ${cat.size}`);
 console.log(`live (literal): ${used.size}`);
 console.log(`live (template prefix): ${usedPrefixes.size}`);
+console.log(`live (runtime-arg ns): ${usedRuntimeNs.size}`);
 console.log(`possibly dead: ${dead.length} (${(dead.length / cat.size * 100).toFixed(1)}%)`);
 if (process.argv.includes("--list")) {
   for (const k of dead.slice(0, 100)) console.log("  ", k);
