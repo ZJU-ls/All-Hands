@@ -13,6 +13,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -441,3 +442,28 @@ class ConversationEventRow(Base):
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_compacted: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class ModelPriceRow(Base):
+    """Runtime overlay for per-model token pricing.
+
+    Codebase ships seed prices in ``services/model_pricing.py``; this table
+    overrides them at runtime so an Agent (or admin) can correct prices
+    when a provider's page changes — without a code redeploy. Look-up
+    semantics: DB row wins, code dict is fallback. ``model_ref`` is the
+    same key the LLMModel layer uses (e.g. ``openai/gpt-4o-mini``).
+
+    ``source_url`` carries the citation the curator-Agent used; ``note``
+    is free-form (e.g. "promo until 2026-Q3"). ``updated_by_run_id``
+    links back to the Observatory run that wrote the row — provenance.
+    """
+
+    __tablename__ = "model_prices"
+
+    model_ref: Mapped[str] = mapped_column(String(128), primary_key=True)
+    input_per_million_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    output_per_million_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    updated_by_run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

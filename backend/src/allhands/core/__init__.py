@@ -94,6 +94,7 @@ from allhands.core.observability import (
     TurnUserInput,
 )
 from allhands.core.plan import AgentPlan, PlanStep, StepStatus
+from allhands.core.pricing import ModelPriceEntry, PriceSource
 from allhands.core.provider import LLMProvider
 from allhands.core.run_overrides import RunOverrides
 from allhands.core.skill import Skill, SkillSource
@@ -192,6 +193,7 @@ __all__ = [
     "MaxIterationsReached",
     "Message",
     "MessageRole",
+    "ModelPriceEntry",
     "ObservabilityConfig",
     "ObservatoryConversationBreakdown",
     "ObservatoryEmployeeBreakdown",
@@ -200,6 +202,7 @@ __all__ = [
     "ObservatorySummary",
     "ObservatoryToolBreakdown",
     "PlanStep",
+    "PriceSource",
     "RenderPayload",
     "RetrievalConfig",
     "RunDetail",

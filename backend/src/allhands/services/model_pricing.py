@@ -1,18 +1,27 @@
 """Per-model token pricing — used by ObservatoryService to estimate run cost.
 
-Self-instrumented · prices live in code rather than the DB so they're
-versioned with the codebase. Update via PR when a provider's pricing
-changes; missing entries fall back to ``0.0`` (cost shows as "—" in UI
-rather than guessing wrong).
+Two-layer lookup (2026-04-27):
+1. **DB overlay** (``model_prices`` table) — populated by an Agent (the
+   ``price-curator`` skill) or admin via Meta Tool. Wins when set.
+2. **Code seed** (``_PRICES`` below) — versioned with the repo. Acts as
+   fallback so the platform has sane defaults out of the box.
+3. Neither matches → ``0.0`` (the UI renders "—" rather than guessing).
 
-Prices are USD per 1M tokens (input / output). Sources tracked in PR
-descriptions; this is a small whitelist on purpose — the registry is
-exhaustive enough for the platform's default models and easy to extend.
+Prices are USD per 1M tokens (input / output). When you update the seed,
+include the source URL in the PR description; runtime overrides carry their
+own ``source_url`` field on each row.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from allhands.core import ModelPriceEntry
+from allhands.core.pricing import PRICE_SEED
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 
 @dataclass(frozen=True)
@@ -21,46 +30,37 @@ class ModelPrice:
     output_per_million_usd: float
 
 
-# Keys are case-insensitive; we match on the *suffix* after the slash so
-# "openai/gpt-4o-mini" and "azure/gpt-4o-mini" both resolve. When in doubt
-# the FULL ref is checked first, then the model-name-only fallback.
+# View on PRICE_SEED · same shape as before, lets the resolver code stay
+# unchanged. PRICE_SEED lives in ``core/`` so both the service and the
+# execution-layer meta-tool executors can read it without crossing the
+# forbidden ``execution -> services`` import direction.
 _PRICES: dict[str, ModelPrice] = {
-    # OpenAI · https://openai.com/pricing
-    "gpt-4o": ModelPrice(2.50, 10.00),
-    "gpt-4o-mini": ModelPrice(0.15, 0.60),
-    "gpt-4.1": ModelPrice(2.00, 8.00),
-    "gpt-4.1-mini": ModelPrice(0.40, 1.60),
-    "o1": ModelPrice(15.00, 60.00),
-    "o1-mini": ModelPrice(3.00, 12.00),
-    "o3": ModelPrice(2.00, 8.00),
-    "o3-mini": ModelPrice(1.10, 4.40),
-    # Anthropic · https://www.anthropic.com/pricing
-    "claude-opus-4-7": ModelPrice(15.00, 75.00),
-    "claude-opus-4-6": ModelPrice(15.00, 75.00),
-    "claude-sonnet-4-6": ModelPrice(3.00, 15.00),
-    "claude-haiku-4-5": ModelPrice(1.00, 5.00),
-    "claude-3-5-sonnet": ModelPrice(3.00, 15.00),
-    "claude-3-5-haiku": ModelPrice(0.80, 4.00),
-    # DashScope · 阿里百炼
-    "qwen-max": ModelPrice(2.80, 8.40),
-    "qwen-plus": ModelPrice(0.40, 1.20),
-    "qwen-turbo": ModelPrice(0.30, 0.60),
-    # DeepSeek
-    "deepseek-chat": ModelPrice(0.27, 1.10),
-    "deepseek-reasoner": ModelPrice(0.55, 2.19),
+    ref: ModelPrice(in_usd, out_usd) for ref, (in_usd, out_usd) in PRICE_SEED.items()
 }
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Public API
+# ────────────────────────────────────────────────────────────────────────
 
 
 def estimate_cost_usd(
     model_ref: str | None,
     input_tokens: int,
     output_tokens: int,
+    *,
+    overlay: Mapping[str, ModelPrice] | None = None,
 ) -> float:
-    """Best-effort cost estimate. Returns ``0.0`` when the model isn't in
-    the registry — the UI treats zero as "unknown" and shows "—"."""
+    """Best-effort cost estimate.
+
+    ``overlay`` is the *runtime DB overlay snapshot* (already keyed by
+    lowercased model_ref). Pass ``None`` to skip overlay (useful when the
+    caller has no DB session — tests / pure aggregations). Missing model
+    returns ``0.0``; the UI treats zero as "unknown" and shows "—".
+    """
     if not model_ref:
         return 0.0
-    price = _resolve(model_ref)
+    price = _resolve(model_ref, overlay)
     if price is None:
         return 0.0
     return (
@@ -69,19 +69,88 @@ def estimate_cost_usd(
     )
 
 
-def _resolve(model_ref: str) -> ModelPrice | None:
+def overlay_from_entries(entries: Iterable[ModelPriceEntry]) -> dict[str, ModelPrice]:
+    """Project DB rows to the lookup-friendly snapshot the resolver expects."""
+    return {
+        e.model_ref.lower().strip(): ModelPrice(e.input_per_million_usd, e.output_per_million_usd)
+        for e in entries
+    }
+
+
+def list_all_with_source(
+    overlay: Mapping[str, ModelPrice] | None = None,
+    *,
+    overlay_entries: Iterable[ModelPriceEntry] | None = None,
+) -> list[ModelPriceEntry]:
+    """All known prices · DB rows + code-seed rows that are *not* overridden.
+
+    Useful for the read-only price page and the ``list_model_prices`` Meta
+    Tool. Caller passes both ``overlay`` (for the projection) and the raw
+    ``overlay_entries`` (carries metadata like ``source_url`` / ``note`` /
+    ``updated_at``). When entries are passed, overlay can be derived from
+    them — both args are accepted for caller convenience.
+    """
+    if overlay_entries is None:
+        ov_entries: list[ModelPriceEntry] = []
+    else:
+        ov_entries = list(overlay_entries)
+
+    if overlay is None:
+        overlay = overlay_from_entries(ov_entries)
+
+    out: list[ModelPriceEntry] = []
+    seen: set[str] = set()
+    for e in ov_entries:
+        out.append(e)
+        seen.add(e.model_ref.lower().strip())
+
+    for k, v in _PRICES.items():
+        if k in seen:
+            continue
+        out.append(
+            ModelPriceEntry(
+                model_ref=k,
+                input_per_million_usd=v.input_per_million_usd,
+                output_per_million_usd=v.output_per_million_usd,
+                source="code",
+            )
+        )
+
+    out.sort(key=lambda e: (e.source == "code", e.model_ref))
+    return out
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Internal resolver
+# ────────────────────────────────────────────────────────────────────────
+
+
+def _resolve(model_ref: str, overlay: Mapping[str, ModelPrice] | None) -> ModelPrice | None:
     norm = model_ref.lower().strip()
+    suffix = norm.split("/", 1)[-1] if "/" in norm else norm
+
+    # 1. DB overlay wins · check full ref then suffix.
+    if overlay:
+        if norm in overlay:
+            return overlay[norm]
+        if suffix in overlay:
+            return overlay[suffix]
+        best_ov = _longest_prefix_match(suffix, overlay)
+        if best_ov is not None:
+            return best_ov
+
+    # 2. Code seed.
     if norm in _PRICES:
         return _PRICES[norm]
-    # Strip provider prefix (``openai/``, ``anthropic/``, ``bailian/`` …)
-    suffix = norm.split("/", 1)[-1] if "/" in norm else norm
     if suffix in _PRICES:
         return _PRICES[suffix]
-    # Some bindings carry a date / variant suffix (claude-haiku-4-5-20251001).
-    # Match on the longest prefix in the registry to handle those.
+    return _longest_prefix_match(suffix, _PRICES)
+
+
+def _longest_prefix_match(suffix: str, table: Mapping[str, ModelPrice]) -> ModelPrice | None:
     best: ModelPrice | None = None
     best_len = 0
-    for k, v in _PRICES.items():
+    for k, v in table.items():
         if suffix.startswith(k) and len(k) > best_len:
             best = v
             best_len = len(k)

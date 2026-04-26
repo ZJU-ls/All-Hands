@@ -287,13 +287,32 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header: name + meta */}
+      {/* Header: name + meta + 复制 id (R9 · 调试和反馈用,工程师常需要)。
+          R9 · 标题区可点击 → 把 ID 复制到剪贴板,光标变 pointer 暗示
+          可交互。视觉信号弱(text-text-subtle 仅在 hover 显示 ✓),不
+          抢主操作的注意力。 */}
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-semibold text-text">{meta.name}</div>
-          <div className="truncate font-mono text-[10px] text-text-subtle">
-            {meta.kind} · v{meta.version} · {meta.mime_type} · {meta.size_bytes} B
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                void navigator.clipboard.writeText(meta.id);
+              }
+            }}
+            title={t("toolbarCopyIdTitle")}
+            className="group flex w-full min-w-0 items-center gap-1 truncate font-mono text-[10px] text-text-subtle hover:text-text-muted transition-colors"
+          >
+            <span className="truncate">
+              {meta.kind} · v{meta.version} · {meta.mime_type} · {meta.size_bytes} B
+            </span>
+            <Icon
+              name="copy"
+              size={9}
+              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            />
+          </button>
         </div>
       </div>
 
@@ -409,8 +428,10 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
             disabled={busy != null}
           />
         ) : content ? (
+          // 2026-04-27 · scroll-fade-bottom 给长内容底部 28px 渐隐 mask,
+          // 视觉提示"还有内容滚不到位"。content 较短时无视觉影响。
           <div
-            className="h-full overflow-y-auto"
+            className="h-full overflow-y-auto scroll-fade-bottom"
             onScroll={(e) => {
               const top = (e.currentTarget as HTMLDivElement).scrollTop;
               setContentScrolled(top > 4);
