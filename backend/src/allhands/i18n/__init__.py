@@ -70,7 +70,6 @@ def get_current_locale() -> str:
 
 _MESSAGES: dict[str, dict[str, str]] = {
     "zh-CN": {
-        "errors.unknown": "未知错误",
         "errors.invalid_request": "请求无效",
         "errors.malformed_response": "服务返回结构异常",
         "errors.invalid_status_filter": "无效的状态过滤器: {detail}",
@@ -83,13 +82,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "errors.not_found.skill": "技能不存在",
         "errors.not_found.mcp_server": "MCP 服务器不存在",
         "errors.not_found.lead_agent": "未找到 Lead Agent",
-        "errors.not_found.task": "任务不存在",
-        "errors.not_found.employee": "员工不存在",
-        "errors.not_found.conversation": "会话不存在",
-        "errors.not_found.version_blob": "该版本没有可下载的内容",
-        "errors.conflict.task_state": "任务状态冲突",
         "errors.stream.error_prefix": "[错误]",
-        "errors.no_default_provider": "尚未配置默认 LLM 供应商 — 请先到「模型网关」选一家供应商并标记为默认。",
         "errors.no_default_model": "尚未指定默认模型 — 请先到「模型网关」点一行模型,设为默认。",
         "errors.default_model_provider_missing": "默认模型所在的供应商已被删除 — 请重新指定默认模型。",
         "errors.not_found.employee_id": "员工 {id} 不存在",
@@ -129,7 +122,6 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "system.paths.artifacts_dir.description": "Agent 产出的 markdown / 代码 / 图片 / drawio / mermaid 文件存盘位置。默认 <data_dir>/artifacts,可通过 ALLHANDS_ARTIFACTS_DIR 覆盖。",
     },
     "en": {
-        "errors.unknown": "Unknown error",
         "errors.invalid_request": "Invalid request",
         "errors.malformed_response": "Malformed service response",
         "errors.invalid_status_filter": "Invalid status filter: {detail}",
@@ -142,13 +134,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "errors.not_found.skill": "Skill not found.",
         "errors.not_found.mcp_server": "MCP server not found.",
         "errors.not_found.lead_agent": "Lead agent not found.",
-        "errors.not_found.task": "Task not found.",
-        "errors.not_found.employee": "Employee not found.",
-        "errors.not_found.conversation": "Conversation not found.",
-        "errors.not_found.version_blob": "version has no stored blob",
-        "errors.conflict.task_state": "Task state conflict",
         "errors.stream.error_prefix": "[error]",
-        "errors.no_default_provider": 'No default LLM provider is configured — pick a provider in "Model Gateway" and mark it as default first.',
         "errors.no_default_model": 'No default model is set — open "Model Gateway" and click "Set as default" on any registered model.',
         "errors.default_model_provider_missing": "The provider hosting the default model has been deleted — pick a new default model.",
         "errors.not_found.employee_id": "Employee {id} not found.",

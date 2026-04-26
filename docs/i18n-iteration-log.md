@@ -953,3 +953,25 @@ heuristic 静态分析做不了)。继续保留作清理基线。
 zh-CN.json + en.json `common` 块下即可,catalog-audit 会防止引用错位。
 
 **commits**:见 git log
+
+## Round 45 · 2026-04-27 04:13 (cron · 30m)
+
+**主题**:backend 也做 dead-key 清理 + resolver 加 `t as alias` 识别
+
+**做的事**:
+- backend 写一次性 dead-key audit 脚本 → 抓出 10 个 catalog 候选死 key
+  · 1 处假阳性是单引号 `t('errors.stream.error_prefix')`(f-string 内)
+  · 2 处假阳性是 `_t(...)` 别名(`from allhands.i18n import t as _t`)
+- backend resolver test 升级:
+  - CALL_RE / TPL_RE 接 single + double quote
+  - ALIAS_RE 解析 `from allhands.i18n import t as <name>` · 用 alias 名构造 regex
+- 删 7 个二次确认无引用的 backend key:
+  - errors.unknown · errors.no_default_provider · errors.conflict.task_state ·
+    errors.stream(误算) · errors.not_found.{task,employee,conversation,version_blob}
+  - 所有都是历史 router 重构后留的孤儿(employee → employee_id 这种 rename)
+
+**结果**:backend catalog 57 → 50(-7)· 13 backend i18n tests 全绿 ·
+1999 web tests 全绿 · 双侧 catalog 死率都极低(backend 4% 全是 alias 假
+阳性 / web 0%)
+
+**commits**:见 git log

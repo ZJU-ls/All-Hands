@@ -22,11 +22,18 @@ from allhands.i18n import _MESSAGES, LOCALES
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "allhands"
 
-CALL_RE = re.compile(r'\bt\(\s*"([a-zA-Z_][a-zA-Z0-9_.]*)"')
-# f-string template prefix:  t(f"a.b.{var}…")  — capture the leading static
-# prefix up to the first `{` and require the catalog to have at least one
-# key matching `prefix.*`.
-TPL_RE = re.compile(r'\bt\(\s*f"([a-zA-Z_][a-zA-Z0-9_.]*)\.\{')
+# Detect alias `from allhands.i18n import t as <alias>`.
+ALIAS_RE = re.compile(
+    r"^\s*from\s+allhands\.i18n\s+import\s+(?:[^,\n]+,\s*)*t(?:\s+as\s+(\w+))?", re.MULTILINE
+)
+
+
+def _call_re(name: str) -> re.Pattern[str]:
+    return re.compile(rf"""\b{name}\(\s*['"]([a-zA-Z_][a-zA-Z0-9_.]*)['"]""")
+
+
+def _tpl_re(name: str) -> re.Pattern[str]:
+    return re.compile(rf"""\b{name}\(\s*f['"]([a-zA-Z_][a-zA-Z0-9_.]*)\.\{{""")
 
 
 def _all_keys() -> set[str]:
@@ -55,12 +62,17 @@ def test_every_t_call_resolves() -> None:
         text = path.read_text(encoding="utf-8")
         if "from allhands.i18n import" not in text:
             continue
+        # Detect alias: `from allhands.i18n import t as _t`. Default to `t`.
+        alias_match = ALIAS_RE.search(text)
+        name = alias_match.group(1) if alias_match and alias_match.group(1) else "t"
+        call_re = _call_re(name)
+        tpl_re = _tpl_re(name)
         for lineno, line in enumerate(text.splitlines(), 1):
-            for match in CALL_RE.finditer(line):
+            for match in call_re.finditer(line):
                 key = match.group(1)
                 if key not in catalog:
                     offences.append((path, lineno, key))
-            for match in TPL_RE.finditer(line):
+            for match in tpl_re.finditer(line):
                 prefix = match.group(1)
                 if prefix not in prefixes:
                     offences.append((path, lineno, f"{prefix}.* (f-string prefix)"))
