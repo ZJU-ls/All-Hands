@@ -1099,3 +1099,18 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 **结果**:1999 web tests · typecheck · lint · regression net 全绿
 
 **commits**:见 git log
+
+## Round 52 · 2026-04-27 07:43 (cron · 30m)
+
+**主题**:server-side / dialog-default / 非-HTTPException 后端错误的最终复核
+
+**做的事**:
+- next-intl/server 用法 → 只在 layout.tsx · standard pattern · 正确
+- ConfirmDialog 默认值 fallback `t("confirm") / t("cancel")` →
+  `ui.confirmDialog.confirm/cancel` 已在 catalog · 不依赖被 R44 删的 `common.*`
+- 后端 raise XxxError(literal) 模式 + 直接 return JSONResponse(中文) →
+  全栈 0 处发现
+
+**结果**:本轮零代码改动 · regression net 全绿
+
+**commits**:仅本条 log
