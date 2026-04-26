@@ -401,3 +401,131 @@ class _RejectingSignal(_ApprovingSignal):
 
 def _make_fake_signal() -> DeferredSignal:
     return _ApprovingSignal()
+
+
+# --- iter 2/3 · ToolArgError → structured ToolMessage e2e ----------------
+
+
+def _typed_tool(
+    name: str,
+    *,
+    properties: dict[str, Any],
+    required: list[str] | None = None,
+) -> Tool:
+    return Tool(
+        id=f"t.{name}",
+        kind=ToolKind.BACKEND,
+        name=name,
+        description=f"{name} tool",
+        input_schema={
+            "type": "object",
+            "properties": properties,
+            "required": required or [],
+        },
+        output_schema={"type": "object"},
+        scope=ToolScope.READ,
+        requires_confirmation=False,
+    )
+
+
+@pytest.mark.asyncio
+async def test_concurrent_path_arg_validation_error_returns_structured_envelope() -> None:
+    """LLM sends array-typed arg as a malformed string → ToolMessage carries
+    {error, field, expected, received, hint}, not raw stack trace."""
+    sheets_tool = _typed_tool(
+        "build_xlsx",
+        properties={"sheets": {"type": "array"}},
+        required=["sheets"],
+    )
+
+    async def _ex(**_: Any) -> dict[str, Any]:  # never reached
+        return {"ok": True}
+
+    bindings = _bindings((sheets_tool, _ex))
+    block = ToolUseBlock(
+        id="tu1",
+        name="build_xlsx",
+        input={"sheets": '[{"name":"Q1","rows":[1,2,3'},  # truncated JSON
+    )
+    msg = await execute_tool_use_concurrent(block, bindings)
+    assert isinstance(msg.content, dict)
+    assert msg.content["error"] == "tool input validation failed"
+    assert msg.content["field"] == "sheets"
+    assert msg.content["expected"] == "array"
+    assert "JSON parse failed" in msg.content["received"]
+    assert "JSON array literal" in msg.content["hint"]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_path_missing_required_arg_yields_envelope() -> None:
+    tool = _typed_tool(
+        "create_employee",
+        properties={"name": {"type": "string", "description": "user-facing name"}},
+        required=["name"],
+    )
+
+    async def _ex(**_: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    bindings = _bindings((tool, _ex))
+    block = ToolUseBlock(id="tu2", name="create_employee", input={})
+    msg = await execute_tool_use_concurrent(block, bindings)
+    assert isinstance(msg.content, dict)
+    assert msg.content["field"] == "name"
+    assert msg.content["expected"] == "string"
+    assert "missing" in msg.content["received"]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_path_silently_coerces_valid_stringified_array() -> None:
+    """Happy path · LLM was sloppy but the JSON parses → coerce silently
+    (no envelope, no warning to LLM context)."""
+    tool = _typed_tool(
+        "build_xlsx",
+        properties={"sheets": {"type": "array"}},
+    )
+    captured: dict[str, Any] = {}
+
+    async def _ex(**kw: Any) -> dict[str, Any]:
+        captured.update(kw)
+        return {"ok": True}
+
+    bindings = _bindings((tool, _ex))
+    block = ToolUseBlock(
+        id="tu3", name="build_xlsx", input={"sheets": '[{"name":"Q1"}]'}
+    )
+    msg = await execute_tool_use_concurrent(block, bindings)
+    assert msg.content == {"ok": True}
+    assert captured["sheets"] == [{"name": "Q1"}]
+
+
+@pytest.mark.asyncio
+async def test_iter_path_arg_validation_yields_envelope_terminal() -> None:
+    """Same contract on the serial path · the deferred-aware loop must
+    produce ToolMessageCommitted with the envelope shape."""
+    tool = _typed_tool(
+        "set_limit",
+        properties={"limit": {"type": "integer"}},
+        required=["limit"],
+    )
+
+    async def _ex(**_: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    bindings = _bindings((tool, _ex))
+    block = ToolUseBlock(id="tu4", name="set_limit", input={"limit": "many"})
+
+    def _allow(_b: ToolUseBlock, _t: Tool) -> Allow:
+        return Allow()
+
+    events: list[Any] = []
+    async for ev in execute_tool_use_iter(
+        block, bindings, _allow, conversation_id="conv-1"
+    ):
+        events.append(ev)
+    assert len(events) == 1
+    terminal = events[0]
+    assert isinstance(terminal, ToolMessageCommitted)
+    assert terminal.message.content["error"] == "tool input validation failed"
+    assert terminal.message.content["field"] == "limit"
+    assert terminal.message.content["expected"] == "integer"
