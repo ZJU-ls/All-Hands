@@ -77,7 +77,11 @@
       "ping": "ping",
       "chatTest": "对话测试",
       "edit": "编辑模型",
-      "delete": "删除"
+      "delete": "删除",
+      "defaultBadge": "默认",
+      "defaultBadgeTitle": "工作区默认模型 · Lead Agent 与 AI 解读默认走这一对 (provider, model)",
+      "setDefault": "设为默认",
+      "setDefaultTitle": "设为工作区默认 (provider + model 一起切)"
     },
     "modelTest": {
       "errorTimeout": "超时",

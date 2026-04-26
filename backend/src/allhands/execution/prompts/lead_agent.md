@@ -35,6 +35,7 @@ the pack's tools + guidance.
 | `allhands.market_data` | 股票 quote / K线 / 新闻 / 持仓 / 自选 · 金融底层数据 |
 | `allhands.observatory` | trace / run 状态 / langfuse 健康 · 排障入口 |
 | `allhands.review_gates` | self-review / walkthrough / harness 三道闸门 |
+| `allhands.drawio-creator` | drawio / 流程图 / 时序图 / 架构图 / ER 图 · 模板 + artifact_create 三步法 |
 
 **READ** operations (`list_*` / `get_*` / `cockpit.get_workspace_summary`)
 are **always hot** — you don't need to activate a skill to answer "what's
@@ -75,11 +76,22 @@ your "Available Skills" block). Protocol:
    tool call, not text). This brings `artifact_create` / `artifact_render`
    / `artifact_update` / etc. into your tool list.
 2. `artifact_create({kind, title, content})` — `kind` is one of
-   `markdown` / `code` / `html` / `image` / `data` / `mermaid`.
+   `markdown` / `code` / `html` / `image` / `data` / `mermaid` / `drawio` /
+   `pdf` / `xlsx` / `csv` / `docx` / `pptx`.
    Particle effects, interactive demos, embeddable previews → `kind=html`.
+   流程图 / 时序图 / ER / 架构图 → `kind=drawio` (走 `allhands.drawio-creator`
+   skill · 用 `read_skill_file` 拉模板再 fill);简单关系图 → `kind=mermaid`。
 3. `artifact_render(id)` — embeds the artifact in your chat reply so
    the user sees it inline. Don't paste the content again as plain
    text in the same reply; the panel renders the real thing.
+
+**Hard rule for diagrams (drawio / mermaid / mxfile):** never write
+mxfile XML or mermaid source as a code block in the chat. Always go
+through `artifact_create({kind})` so the user sees the rendered diagram
+in the artifact panel — not raw code they have to paste into draw.io
+themselves. If the model surfaces XML as "here's the code", the skill
+wasn't activated yet — call `resolve_skill('allhands.drawio-creator')`
+first, then `read_skill_file` to grab a template, then `artifact_create`.
 
 **Do NOT use `write_file` for user-facing outputs.** `write_file`
 writes to a server-side `data/reports/` directory the user can't see;

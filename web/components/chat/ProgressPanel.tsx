@@ -26,6 +26,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 import { PlanProgressSection } from "./PlanProgressSection";
@@ -41,6 +42,8 @@ type Props = {
 };
 
 export function ProgressPanel({ conversationId }: Props) {
+  const t = useTranslations("chat.progressPanel");
+  const tPlan = useTranslations("chat.planProgress");
   const plan = useLatestPlan(conversationId);
   const subagents = useActiveSubagents();
 
@@ -119,7 +122,7 @@ export function ProgressPanel({ conversationId }: Props) {
             <Tab
               id="plan"
               icon="list"
-              label={plan?.title ?? "计划"}
+              label={plan?.title ?? tPlan("fallbackTitle")}
               active={active === "plan"}
               onClick={() => onTabClick("plan")}
               badge={
@@ -127,7 +130,9 @@ export function ProgressPanel({ conversationId }: Props) {
                   <span className="text-warning">
                     <span className="tabular-nums">{planDone}</span>
                     <span className="text-text-subtle">/{planTotal}</span>
-                    <span className="ml-1.5">· {planRunning} 进行中</span>
+                    <span className="ml-1.5">
+                      {t("runningSuffix", { n: planRunning })}
+                    </span>
                   </span>
                 ) : (
                   <>
@@ -142,7 +147,7 @@ export function ProgressPanel({ conversationId }: Props) {
             <Tab
               id="subagent"
               icon="users"
-              label="子代理"
+              label={t("subagentTab")}
               active={active === "subagent"}
               onClick={() => onTabClick("subagent")}
               badge={
@@ -158,11 +163,13 @@ export function ProgressPanel({ conversationId }: Props) {
                 >
                   {subagents.length}
                   {subRunning > 0 && (
-                    <span className="ml-1.5">· {subRunning} 进行中</span>
+                    <span className="ml-1.5">
+                      {t("runningSuffix", { n: subRunning })}
+                    </span>
                   )}
                   {subFailed > 0 && (
                     <span className="ml-1.5 text-danger">
-                      · {subFailed} 失败
+                      {t("failedSuffix", { n: subFailed })}
                     </span>
                   )}
                 </span>

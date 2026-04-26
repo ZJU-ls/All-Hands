@@ -23,6 +23,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { PlanLatestDto, PlanStepStatus } from "@/lib/api";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
@@ -32,6 +33,7 @@ const STORAGE_KEY = "allhands.progress.plan.expanded";
 type Props = { plan: PlanLatestDto; embedded?: boolean };
 
 export function PlanProgressSection({ plan, embedded = false }: Props) {
+  const t = useTranslations("chat.planProgress");
   const [expanded, setExpanded] = useState<boolean>(true);
 
   // Persisted toggle state — only relevant in standalone (non-embedded)
@@ -173,10 +175,10 @@ export function PlanProgressSection({ plan, embedded = false }: Props) {
           <span className="tabular-nums">{done}</span>
           <span className="text-text-subtle">/{total}</span>
           {running > 0 && (
-            <span className="ml-1.5 text-warning">· {running} 进行中</span>
+            <span className="ml-1.5 text-warning">{t("runningCount", { n: running })}</span>
           )}
           {failed > 0 && (
-            <span className="ml-1.5 text-danger">· {failed} 失败</span>
+            <span className="ml-1.5 text-danger">{t("failedCount", { n: failed })}</span>
           )}
         </span>
       </button>

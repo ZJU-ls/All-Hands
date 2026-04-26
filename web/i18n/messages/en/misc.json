@@ -88,6 +88,11 @@
         "failureStable": "Stable",
         "tokens": "Avg tokens / run",
         "tokensDelta": "{count} total traces",
+        "totalTokens": "Tokens consumed · 24h",
+        "totalTokensDelta": "in {input} · out {output} · avg {avg}/run",
+        "llmCalls": "Model requests · 24h",
+        "llmCallsDelta": "{runs} runs · avg {avg} calls/run",
+        "llmCallsEmpty": "No model calls in last 24h",
         "vsYesterday": "vs yesterday",
         "clickHint": "Click for consumption curve →"
       },
@@ -261,6 +266,15 @@
     },
     "editor": {
       "loading": "Loading editor…"
+    },
+    "peek": {
+      "size": "size",
+      "updated": "updated",
+      "created": "created",
+      "justNow": "just now",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago"
     },
     "list": {
       "pinned": "Pinned",

@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:update": "playwright test --update-snapshots"
+    "test:e2e:update": "playwright test --update-snapshots",
+    "audit-i18n": "node scripts/audit-i18n-catalog.mjs",
+    "audit-i18n:strict": "node scripts/audit-i18n-catalog.mjs --strict"
   },
   "dependencies": {
     "@lobehub/icons-static-svg": "^1.86.0",

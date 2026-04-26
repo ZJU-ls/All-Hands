@@ -23,6 +23,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { ArtifactDto, ArtifactKind } from "@/lib/artifacts-api";
 
@@ -49,13 +50,15 @@ function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
-function relativeTime(iso: string): string {
-  const t = new Date(iso).getTime();
-  const diff = Date.now() - t;
-  if (diff < 60_000) return "刚刚";
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 24 * 3600_000) return `${Math.floor(diff / 3600_000)} 小时前`;
-  if (diff < 7 * 24 * 3600_000) return `${Math.floor(diff / (24 * 3600_000))} 天前`;
+type RelTimeT = (key: string, values?: Record<string, string | number>) => string;
+
+function relativeTime(iso: string, t: RelTimeT): string {
+  const ts = new Date(iso).getTime();
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return t("justNow");
+  if (diff < 3600_000) return t("minutesAgo", { n: Math.floor(diff / 60_000) });
+  if (diff < 24 * 3600_000) return t("hoursAgo", { n: Math.floor(diff / 3600_000) });
+  if (diff < 7 * 24 * 3600_000) return t("daysAgo", { n: Math.floor(diff / (24 * 3600_000)) });
   return new Date(iso).toISOString().slice(0, 10);
 }
 
@@ -73,6 +76,7 @@ export function ArtifactPeek({
     onBlur: () => void;
   }) => ReactNode;
 }) {
+  const tPeek = useTranslations("artifacts.peek");
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -160,12 +164,12 @@ export function ArtifactPeek({
                 </div>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-y-1 font-mono text-[10px] text-text-muted">
-                <span className="text-text-subtle">size</span>
+                <span className="text-text-subtle">{tPeek("size")}</span>
                 <span className="text-right tabular-nums">{formatBytes(artifact.size_bytes)}</span>
-                <span className="text-text-subtle">updated</span>
-                <span className="text-right">{relativeTime(artifact.updated_at)}</span>
-                <span className="text-text-subtle">created</span>
-                <span className="text-right">{relativeTime(artifact.created_at)}</span>
+                <span className="text-text-subtle">{tPeek("updated")}</span>
+                <span className="text-right">{relativeTime(artifact.updated_at, tPeek)}</span>
+                <span className="text-text-subtle">{tPeek("created")}</span>
+                <span className="text-right">{relativeTime(artifact.created_at, tPeek)}</span>
               </div>
               {artifact.conversation_id ? (
                 <div className="mt-2 truncate border-t border-border pt-2 font-mono text-[10px] text-text-subtle">

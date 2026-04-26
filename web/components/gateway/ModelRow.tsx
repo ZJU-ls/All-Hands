@@ -110,10 +110,10 @@ export function ModelRow({
           <span
             data-testid={`gateway-default-badge-${model.id}`}
             className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm bg-primary/10 border border-primary/25 text-primary text-[10px] font-semibold"
-            title="工作区默认模型 · Lead Agent 与 AI 解读默认走这一对 (provider, model)"
+            title={t("defaultBadgeTitle")}
           >
             <Icon name="star" size={10} strokeWidth={2} />
-            默认
+            {t("defaultBadge")}
           </span>
         ) : (
           model.enabled && (
@@ -121,11 +121,11 @@ export function ModelRow({
               type="button"
               onClick={onSetDefault}
               data-testid={`gateway-set-default-${model.id}`}
-              title="设为工作区默认 (provider + model 一起切)"
+              title={t("setDefaultTitle")}
               className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm border border-dashed border-border bg-transparent text-text-subtle text-[10px] font-medium hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors duration-fast opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               <Icon name="star" size={10} strokeWidth={2} />
-              设为默认
+              {t("setDefault")}
             </button>
           )
         )}

@@ -58,10 +58,12 @@ function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function relativeTime(iso: string): string {
-  const t = new Date(iso).getTime();
-  const diff = Date.now() - t;
-  if (diff < 60_000) return "刚刚";
+type RelTimeT = (key: string, values?: Record<string, string | number>) => string;
+
+function relativeTime(iso: string, t: RelTimeT): string {
+  const ts = new Date(iso).getTime();
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return t("justNow");
   if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m`;
   if (diff < 24 * 3600_000) return `${Math.floor(diff / 3600_000)}h`;
   if (diff < 7 * 24 * 3600_000) return `${Math.floor(diff / (24 * 3600_000))}d`;
@@ -83,6 +85,7 @@ export function ArtifactGrid({
   onToggleBulk?: (id: string) => void;
 }) {
   const t = useTranslations("artifacts.list");
+  const tPeek = useTranslations("artifacts.peek");
   // Stable order: pinned first, then upstream sort (which the page already
   // controls). Group section headers would clutter a grid — we use a tiny
   // pinned star instead so pinned items remain spottable mixed in.
@@ -175,7 +178,7 @@ export function ArtifactGrid({
               <div className="flex items-center justify-between font-mono text-[10px] text-text-muted">
                 <span>v{a.version}</span>
                 <span>{formatBytes(a.size_bytes)}</span>
-                <span>{relativeTime(a.updated_at)}</span>
+                <span>{relativeTime(a.updated_at, tPeek)}</span>
               </div>
             </button>
               )}

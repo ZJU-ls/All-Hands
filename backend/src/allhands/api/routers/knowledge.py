@@ -35,6 +35,7 @@ from allhands.core import (
     RetrievalConfig,
     ScoredChunk,
 )
+from allhands.i18n import t
 from allhands.services.knowledge_service import (
     DocumentNotFound,
     KBError,
@@ -335,7 +336,9 @@ async def ingest_url(kb_id: str, payload: IngestUrlPayload) -> DocOut:
     except KBNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"无法抓取: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=t("errors.kb_fetch_failed", detail=str(exc))
+        ) from exc
     return _doc_out(doc)
 
 
@@ -371,7 +374,7 @@ async def get_document(kb_id: str, doc_id: str) -> DocOut:
     except DocumentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if doc.kb_id != kb_id:
-        raise HTTPException(status_code=404, detail="document not in this kb")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.document_in_kb"))
     return _doc_out(doc)
 
 
@@ -404,7 +407,7 @@ async def list_document_chunks(kb_id: str, doc_id: str) -> list[ChunkOut]:
     except DocumentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if doc.kb_id != kb_id:
-        raise HTTPException(status_code=404, detail="document not in this kb")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.document_in_kb"))
     chunks = await _service().list_chunks_for_document(doc_id)
     return [
         ChunkOut(

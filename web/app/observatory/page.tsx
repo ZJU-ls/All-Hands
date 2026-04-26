@@ -675,7 +675,7 @@ export default function ObservatoryPage() {
 
           {/* KPI STRIP */}
           <section>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {summary ? (
                 <>
                   {(() => {
@@ -778,17 +778,21 @@ export default function ObservatoryPage() {
                   })()}
                   <KpiCard
                     icon="database"
-                    label={t("kpi.tokens")}
+                    label={t("kpi.totalTokens")}
                     value={
                       summary.total_tokens_total > 0
                         ? formatTokens(summary.total_tokens_total)
-                        : summary.avg_tokens_per_run.toLocaleString()
+                        : "—"
                     }
                     delta={{
                       icon: "trending-up",
                       text:
                         summary.total_tokens_total > 0
-                          ? `in ${formatTokens(summary.input_tokens_total)} · out ${formatTokens(summary.output_tokens_total)} · ${summary.llm_calls_total} calls`
+                          ? t("kpi.totalTokensDelta", {
+                              input: formatTokens(summary.input_tokens_total),
+                              output: formatTokens(summary.output_tokens_total),
+                              avg: summary.avg_tokens_per_run.toLocaleString(),
+                            })
                           : t("kpi.tokensDelta", {
                               count: summary.traces_total.toLocaleString(),
                             }),
@@ -797,12 +801,44 @@ export default function ObservatoryPage() {
                     sparkSeed={53}
                     sparkTone="primary"
                     sparkValues={sparks?.tokens_total}
-                    onClick={() => openDrawer("tokens_total", t("kpi.tokens"))}
+                    onClick={() => openDrawer("tokens_total", t("kpi.totalTokens"))}
+                    clickHint={t("kpi.clickHint")}
+                  />
+                  <KpiCard
+                    icon="zap"
+                    label={t("kpi.llmCalls")}
+                    value={
+                      summary.llm_calls_total > 0
+                        ? summary.llm_calls_total.toLocaleString()
+                        : "—"
+                    }
+                    delta={{
+                      icon: "trending-up",
+                      text:
+                        summary.traces_total > 0
+                          ? t("kpi.llmCallsDelta", {
+                              runs: summary.traces_total.toLocaleString(),
+                              avg:
+                                summary.traces_total > 0
+                                  ? (
+                                      summary.llm_calls_total /
+                                      summary.traces_total
+                                    ).toFixed(1)
+                                  : "0",
+                            })
+                          : t("kpi.llmCallsEmpty"),
+                      tone: "muted",
+                    }}
+                    sparkSeed={67}
+                    sparkTone="primary"
+                    sparkValues={sparks?.runs}
+                    onClick={() => openDrawer("llm_calls", t("kpi.llmCalls"))}
                     clickHint={t("kpi.clickHint")}
                   />
                 </>
               ) : state === "loading" ? (
                 <>
+                  <KpiSkeleton />
                   <KpiSkeleton />
                   <KpiSkeleton />
                   <KpiSkeleton />
