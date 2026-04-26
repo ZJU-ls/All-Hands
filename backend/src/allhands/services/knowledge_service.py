@@ -888,6 +888,86 @@ class KnowledgeService:
             ref = preset_for(provider.kind).default_model
         return provider, ref
 
+    async def get_kb_health(self, kb_id: str, *, days: int = 30) -> dict[str, Any]:
+        """Snapshot of a KB for the sidebar "health" card.
+
+        Returns:
+        - ``doc_count`` / ``chunk_count``: aggregates straight from KB row
+        - ``token_sum``: sum of ``chunk.token_count`` across all chunks (not
+          stored on KB so we sum on the fly — cheap because v0 KBs are small)
+        - ``last_activity``: ISO of latest ``updated_at`` across docs;
+          ``None`` for empty KB.
+        - ``daily_doc_counts``: ``[{date, count}, …]`` of length ``days``,
+          oldest day first. Today's bucket is the rightmost. Drives the
+          sparkline.
+        - ``top_tags``: ``[{tag, count}, …]`` top 5 by occurrence.
+        - ``mime_breakdown``: ``[{mime, count}, …]`` sorted desc.
+
+        Cheap enough to call on every sidebar render (≤ 1 select + a few
+        aggregations); we don't bother caching at this scale.
+        """
+        from collections import Counter
+        from datetime import timedelta
+
+        kb = await self.get_kb(kb_id)
+        docs = await self.list_documents(kb_id, limit=1000)
+
+        # Token sum needs chunk rows. One query per doc would be N round
+        # trips; instead do a single aggregate via the chunk repo for the
+        # whole KB.
+        async with self._session_maker() as s:
+            from sqlalchemy import func, select
+
+            from allhands.persistence.orm.knowledge_orm import ChunkRow
+
+            total_tokens = (
+                await s.execute(
+                    select(func.coalesce(func.sum(ChunkRow.token_count), 0)).where(
+                        ChunkRow.kb_id == kb_id
+                    )
+                )
+            ).scalar() or 0
+
+        last_activity = max((d.updated_at for d in docs), default=None)
+
+        today = datetime.now(UTC).date()
+        bucket_counts: Counter[str] = Counter()
+        for d in docs:
+            day = d.created_at.date()
+            delta = (today - day).days
+            if 0 <= delta < days:
+                bucket_counts[day.isoformat()] += 1
+        daily = [
+            {
+                "date": (today - timedelta(days=days - 1 - i)).isoformat(),
+                "count": bucket_counts.get((today - timedelta(days=days - 1 - i)).isoformat(), 0),
+            }
+            for i in range(days)
+        ]
+
+        tag_counter: Counter[str] = Counter()
+        for d in docs:
+            tag_counter.update(d.tags)
+        top_tags = [{"tag": tag, "count": count} for tag, count in tag_counter.most_common(5)]
+
+        mime_counter: Counter[str] = Counter()
+        for d in docs:
+            mime_counter[d.mime_type] += 1
+        mime_breakdown = [
+            {"mime": mime, "count": count}
+            for mime, count in sorted(mime_counter.items(), key=lambda kv: -kv[1])
+        ]
+
+        return {
+            "doc_count": kb.document_count,
+            "chunk_count": kb.chunk_count,
+            "token_sum": int(total_tokens),
+            "last_activity": last_activity.isoformat() if last_activity else None,
+            "daily_doc_counts": daily,
+            "top_tags": top_tags,
+            "mime_breakdown": mime_breakdown,
+        }
+
     async def suggest_starter_questions(
         self, kb_id: str, *, limit: int = 4, model_ref: str | None = None
     ) -> list[str]:
