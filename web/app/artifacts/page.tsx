@@ -285,20 +285,39 @@ export default function ArtifactsGlobalPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [items, selectedId, q]);
 
+  // 2026-04-27 · 把 fetchList 抽出来,SSE artifact_changed 也能复用
+  // 同一份"用当前 filter 重拉列表"的逻辑。否则 backend 创建/删除/
+  // pin 后,顶部 stats 跳了但列表还是旧的 — count chip 与 list 失同步。
+  // useRef(filters) 的可读副本让 fetchList 不需要 deps:effect 触发会
+  // 重设 ref;SSE handler 调用时永远拿最新 filter。
+  const filtersRef = useRef({
+    kind: kind as ArtifactKind | "",
+    sort,
+    q,
+    pinnedOnly,
+    createdAfter,
+  });
+  filtersRef.current = { kind, sort, q, pinnedOnly, createdAfter };
+
+  const fetchList = useCallback(async () => {
+    const f = filtersRef.current;
+    return listArtifacts({
+      kind: f.kind || undefined,
+      q: f.q || undefined,
+      sort: f.sort,
+      pinned: f.pinnedOnly || undefined,
+      createdAfter: f.createdAfter,
+      limit: 200,
+    });
+  }, []);
+
   // Refetch list when filters move; throttled-by-React-batch is fine here.
   useEffect(() => {
     let cancelled = false;
     setState("loading");
     void (async () => {
       try {
-        const next = await listArtifacts({
-          kind: kind || undefined,
-          q: q || undefined,
-          sort,
-          pinned: pinnedOnly || undefined,
-          createdAfter,
-          limit: 200,
-        });
+        const next = await fetchList();
         if (!cancelled) {
           setItems(next);
           setState("ok");
@@ -353,15 +372,51 @@ export default function ArtifactsGlobalPage() {
 
   useEffect(() => {
     const es = new EventSource(artifactStreamUrl());
-    const onChanged = () => {
-      void refreshStats();
+    // 2026-04-27 · 之前只刷 stats,导致列表与统计失同步:agent 在后台
+    // 创建一个新 csv,顶部 stats 立刻 +1,但 sidebar 列表里看不到。
+    // 现在同步 refresh list,配合 fetchList 用 filtersRef 不依赖 deps,
+    // 任何时刻调用都拿最新 filter 拉数据。
+    let busy = false;
+    const onChanged = async () => {
+      if (busy) return; // 简单的 inflight 防抖,避免 burst create 时连发
+      busy = true;
+      try {
+        // 并发刷新 stats 与 list — 它们独立查 backend,串行一遍意义不大
+        await Promise.all([
+          refreshStats(),
+          fetchList()
+            .then((next) => {
+              setItems(next);
+              // selectedId 自洽:SSE 后被删的项要从详情面板回收
+              setSelectedId((cur) =>
+                cur === null
+                  ? cur
+                  : next.some((a) => a.id === cur)
+                    ? cur
+                    : null,
+              );
+              setBulkSelected((cur) => {
+                if (cur.size === 0) return cur;
+                const visibleIds = new Set(next.map((a) => a.id));
+                const filtered = new Set<string>();
+                for (const id of cur) if (visibleIds.has(id)) filtered.add(id);
+                return filtered.size === cur.size ? cur : filtered;
+              });
+            })
+            .catch(() => {
+              /* SSE-driven refresh 失败时静默 · 不要遮罩当前列表 */
+            }),
+        ]);
+      } finally {
+        busy = false;
+      }
     };
-    es.addEventListener("artifact_changed", onChanged);
+    es.addEventListener("artifact_changed", () => void onChanged());
     return () => {
-      es.removeEventListener("artifact_changed", onChanged);
+      es.removeEventListener("artifact_changed", () => void onChanged());
       es.close();
     };
-  }, [refreshStats]);
+  }, [refreshStats, fetchList]);
 
   const kindOptions = useMemo(
     () => [
@@ -1072,26 +1127,45 @@ function EmptyList({
   onClearAll: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  // Differentiate "no artifacts at all" vs "filtered to nothing" so the
-  // user knows whether to clear filters or seed work. The "filtered →
-  // nothing" branch gets a CTA reset button; the "fresh workspace"
-  // branch gets a quiet hint pointing at the chat.
-  const isFiltered = q.trim().length > 0 || kind !== "" || hasActiveFilters;
+  // 2026-04-27 · 空态文案与 filter context 联动。原来不论筛 csv 还是
+  // 筛 mermaid 都显示 "暂无制品",用户得自己回想"我筛了什么"。现在
+  // 按主导维度精确反馈:有 kind → "没有 csv 类型"· 有 q → "没找到
+  // \"foo\""· 仅 pinned → "没有置顶的"· 全空 → "工作区还没产出"。
+  const trimmedQ = q.trim();
+  const isFiltered = trimmedQ.length > 0 || kind !== "" || hasActiveFilters;
+  let headline: string;
+  let detail: string | null = null;
+  if (!isFiltered) {
+    headline = t("emptyAll");
+    detail = t("emptyAllHint");
+  } else if (kind && trimmedQ) {
+    headline = t("emptyKindAndQ", { kind, query: trimmedQ });
+    detail = t("emptyClearHint");
+  } else if (kind) {
+    headline = t("emptyKind", { kind });
+    detail = t("emptyClearHint");
+  } else if (trimmedQ) {
+    headline = t("emptyQuery", { query: trimmedQ });
+    detail = t("emptyClearHint");
+  } else {
+    // pinnedOnly / dateRange 触发的空态
+    headline = t("empty");
+    detail = t("emptyClearHint");
+  }
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-10 text-center">
       <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-muted text-primary">
         <Icon name="folder" size={20} />
       </span>
-      <p className="text-sm font-medium text-text">
-        {isFiltered ? t("empty") : t("emptyAll")}
-      </p>
-      {!isFiltered ? (
-        <p className="max-w-xs text-caption text-text-muted">{t("emptyAllHint")}</p>
-      ) : (
+      <p className="text-sm font-medium text-text">{headline}</p>
+      {detail && (
+        <p className="max-w-xs text-caption text-text-muted">{detail}</p>
+      )}
+      {isFiltered && (
         <button
           type="button"
           onClick={onClearAll}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-caption text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text"
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-caption text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           <Icon name="x" size={11} />
           {t("filters.clearAll")}
