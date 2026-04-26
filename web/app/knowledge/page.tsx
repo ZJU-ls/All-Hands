@@ -44,10 +44,12 @@ import {
   type DocumentDto,
   type EmbeddingModelOption,
   type KBDto,
+  type KBHealthDto,
   type KBStatsDto,
   type ScoredChunkDto,
   askKBStream,
   diagnoseSearch,
+  getKBHealth,
   getStarterQuestions,
   getDocumentText,
   getKBStats,
@@ -169,6 +171,12 @@ export default function KnowledgePage() {
   // "not loaded yet" (skeleton) from "loaded but empty" (hide row).
   const [starters, setStarters] = useState<Record<string, string[] | null>>({});
   const startersForActive = activeKb ? (starters[activeKb.id] ?? null) : null;
+  // KB health snapshot — refetched whenever activeKb changes or any
+  // ingest/delete/tag patch could have shifted the totals. Sidebar card
+  // tolerates `null` (renders skeleton) so we don't need a separate
+  // loading flag.
+  const [health, setHealth] = useState<Record<string, KBHealthDto | null>>({});
+  const healthForActive = activeKb ? (health[activeKb.id] ?? null) : null;
   const [stateFilter, setStateFilter] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
@@ -202,6 +210,11 @@ export default function KnowledgePage() {
     } catch (e) {
       setError(String(e));
     }
+    // Health depends on doc list — refetch in parallel; ignore errors so
+    // a 500 on the analytics route can't crash the doc grid.
+    void getKBHealth(kbId, 30)
+      .then((h) => setHealth((prev) => ({ ...prev, [kbId]: h })))
+      .catch(() => undefined);
   }
 
   useEffect(() => {
@@ -724,6 +737,7 @@ export default function KnowledgePage() {
                   kb={activeKb}
                   onOpenSettings={() => setShowSettings(true)}
                 />
+                <KBHealthCard health={healthForActive} />
                 <TagsCard
                   docs={docs ?? []}
                   active={tagFilter}
@@ -961,6 +975,164 @@ function KBInfoCard({
       )}
     </div>
   );
+}
+
+// KB health card — sidebar 第二张卡。Snapshot of "what's in here / when
+// did I last touch it". Three rows: KPI numbers · 30-day sparkline of doc
+// ingest activity · top tags & dominant mime. No real-time polling — the
+// page-level refreshDocs() pull also bumps health.
+function KBHealthCard({ health }: { health: KBHealthDto | null }) {
+  const t = useTranslations("knowledge.health");
+  if (!health) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
+        <div className="mt-3 h-16 animate-pulse rounded-lg bg-surface-2" />
+      </div>
+    );
+  }
+
+  const lastActivity = health.last_activity
+    ? formatRelativeTime(new Date(health.last_activity))
+    : t("never");
+  const tokenLabel = formatCompact(health.token_sum);
+  const sparkMax = Math.max(1, ...health.daily_doc_counts.map((d) => d.count));
+  const dominantMime = health.mime_breakdown[0];
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <div className="flex items-center justify-between">
+        <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
+        <span
+          className="font-mono text-[10px] text-text-subtle"
+          title={health.last_activity ?? undefined}
+        >
+          {t("lastActivity", { when: lastActivity })}
+        </span>
+      </div>
+
+      {/* KPI row */}
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <KpiCell
+          label={t("docs")}
+          value={health.doc_count.toString()}
+        />
+        <KpiCell
+          label={t("chunks")}
+          value={formatCompact(health.chunk_count)}
+        />
+        <KpiCell label={t("tokens")} value={tokenLabel} />
+      </div>
+
+      {/* Sparkline */}
+      <div className="mt-3">
+        <div className="mb-1 flex items-center justify-between font-mono text-[10px] text-text-subtle">
+          <span>{t("activityHeader", { days: health.daily_doc_counts.length })}</span>
+          <span>{t("activityHint")}</span>
+        </div>
+        <Sparkline
+          data={health.daily_doc_counts.map((d) => d.count)}
+          max={sparkMax}
+        />
+      </div>
+
+      {/* Top tags row */}
+      {health.top_tags.length > 0 && (
+        <div className="mt-3">
+          <div className={SECTION_LABEL}>{t("topTagsHeader")}</div>
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {health.top_tags.map((tg) => (
+              <span
+                key={tg.tag}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text-muted"
+              >
+                #{tg.tag}
+                <span className="text-text-subtle">·{tg.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dominantMime && (
+        <div className="mt-3 font-mono text-[10px] text-text-subtle">
+          {t("dominantMime", {
+            mime: dominantMime.mime.split("/").pop() ?? dominantMime.mime,
+            count: dominantMime.count,
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KpiCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface-2 px-2 py-1.5">
+      <div className="font-mono text-[9px] uppercase tracking-wider text-text-subtle">
+        {label}
+      </div>
+      <div className="mt-0.5 font-mono text-[14px] font-semibold text-text">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// Tiny SVG sparkline — bars (not line) because "doc count per day" is
+// discrete + often zero. Bar width auto-scales to fit container; bar
+// height clamped to ≥ 2px so single-doc days are still visible. Days
+// with zero docs render as faint baseline for visual rhythm.
+function Sparkline({ data, max }: { data: number[]; max: number }) {
+  const W = 100;
+  const H = 24;
+  const barW = W / Math.max(1, data.length);
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className="h-7 w-full"
+      aria-hidden="true"
+    >
+      {data.map((v, i) => {
+        const h = v === 0 ? 1 : Math.max(2, (v / max) * H);
+        const x = i * barW;
+        const y = H - h;
+        const fill = v === 0 ? "var(--color-border)" : "var(--color-primary)";
+        return (
+          <rect
+            key={i}
+            x={x + 0.3}
+            y={y}
+            width={Math.max(0.5, barW - 0.6)}
+            height={h}
+            fill={fill}
+            rx="0.5"
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function formatCompact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
+  if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}
+
+function formatRelativeTime(d: Date): string {
+  // Locale-neutral: returns short tokens the calling i18n context wraps
+  // for display. Keeping this as plain strings (no Chinese in source)
+  // avoids the i18n-no-hardcoded-zh contract while still being readable
+  // for ops debugging.
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return "now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d`;
+  return d.toISOString().slice(0, 10);
 }
 
 function TagsCard({

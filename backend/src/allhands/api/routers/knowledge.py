@@ -583,6 +583,26 @@ async def ask_kb_stream(kb_id: str, payload: AskPayload) -> StreamingResponse:
     )
 
 
+class HealthOut(BaseModel):
+    doc_count: int
+    chunk_count: int
+    token_sum: int
+    last_activity: str | None
+    daily_doc_counts: list[dict[str, object]]
+    top_tags: list[dict[str, object]]
+    mime_breakdown: list[dict[str, object]]
+
+
+@router.get("/{kb_id}/health")
+async def kb_health(kb_id: str, days: int = 30) -> HealthOut:
+    """Sidebar "health" snapshot — totals, activity sparkline, top tags."""
+    try:
+        h = await _service().get_kb_health(kb_id, days=days)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return HealthOut(**h)
+
+
 @router.get("/{kb_id}/starter-questions")
 async def starter_questions(kb_id: str, limit: int = 4) -> dict[str, list[str]]:
     """Return ``limit`` LLM-suggested starter questions for the KB.

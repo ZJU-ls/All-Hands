@@ -133,6 +133,18 @@
       "explainBm25Only": "只有关键词命中(第 {bm25}) · 向量没召回到这条",
       "explainVecOnly": "只有向量命中(第 {vec}) · 关键词没匹上"
     },
+    "health": {
+      "sectionLabel": "Health",
+      "lastActivity": "{when}",
+      "never": "—",
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activityHeader": "近 {days} 天入库",
+      "activityHint": "每条 = 当天新增 doc 数",
+      "topTagsHeader": "热门标签",
+      "dominantMime": "主要类型 · {mime} ({count})"
+    },
     "starters": {
       "label": "试试这些问题",
       "hint": "AI 根据当前知识库的标题 / 章节自动生成 · 点一条即可问"

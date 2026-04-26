@@ -133,6 +133,18 @@
       "explainBm25Only": "Lexical hit only (#{bm25}) · vector retriever did not surface this chunk",
       "explainVecOnly": "Semantic hit only (#{vec}) · keywords did not match"
     },
+    "health": {
+      "sectionLabel": "Health",
+      "lastActivity": "{when}",
+      "never": "—",
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activityHeader": "Last {days}-day ingest",
+      "activityHint": "1 bar = docs added that day",
+      "topTagsHeader": "Top tags",
+      "dominantMime": "Dominant · {mime} ({count})"
+    },
     "starters": {
       "label": "Try one of these",
       "hint": "Generated from this KB's titles and headings · click to ask"

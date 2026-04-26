@@ -217,6 +217,56 @@ async def test_ask_stream_no_hits_yields_friendly_delta_then_done(
     assert frames[2]["used_model"] is None
 
 
+async def test_get_kb_health_aggregates_and_buckets(
+    svc: KnowledgeService,
+) -> None:
+    """Health snapshot: totals match KB row · daily_doc_counts has the
+    requested length, oldest first, today rightmost · top_tags counts
+    occurrences across all docs · mime_breakdown sorted desc."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(
+        kb.id, title="A", content_bytes=_SAMPLE_MD, filename="a.md", tags=["x", "y"]
+    )
+    await svc.upload_document(
+        kb.id, title="B", content_bytes=b"# B\n\nbody", filename="b.md", tags=["x"]
+    )
+    h = await svc.get_kb_health(kb.id, days=7)
+
+    assert h["doc_count"] == 2
+    assert h["chunk_count"] >= 2  # at least one chunk per doc
+    assert h["token_sum"] > 0
+    assert h["last_activity"] is not None
+
+    daily = h["daily_doc_counts"]
+    assert len(daily) == 7
+    # Today bucket (rightmost) should hold both freshly-uploaded docs
+    assert daily[-1]["count"] == 2
+    # Oldest bucket should be empty
+    assert daily[0]["count"] == 0
+    # Bucket dates monotonically increasing
+    dates = [d["date"] for d in daily]
+    assert dates == sorted(dates)
+
+    # x appears in both docs → most frequent tag
+    assert h["top_tags"][0] == {"tag": "x", "count": 2}
+
+    # Both mime types present
+    mimes = {b["mime"] for b in h["mime_breakdown"]}
+    assert any("markdown" in m or "plain" in m for m in mimes)
+
+
+async def test_get_kb_health_empty_kb(svc: KnowledgeService) -> None:
+    kb = await svc.create_kb(name="empty")
+    h = await svc.get_kb_health(kb.id, days=14)
+    assert h["doc_count"] == 0
+    assert h["chunk_count"] == 0
+    assert h["token_sum"] == 0
+    assert h["last_activity"] is None
+    assert all(d["count"] == 0 for d in h["daily_doc_counts"])
+    assert h["top_tags"] == []
+    assert h["mime_breakdown"] == []
+
+
 async def test_update_document_tags_add_remove_replace(
     svc: KnowledgeService,
 ) -> None:
