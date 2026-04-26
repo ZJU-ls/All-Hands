@@ -28,10 +28,11 @@ import contextlib
 import hashlib
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from allhands.config.settings import get_settings
 from allhands.core import (
@@ -60,6 +61,7 @@ from allhands.execution.knowledge.ingest import IngestOrchestrator
 from allhands.execution.knowledge.parsers import detect_mime
 from allhands.execution.knowledge.retriever import HybridRetriever
 from allhands.execution.knowledge.vector import BlobVecStore, VectorStore
+from allhands.i18n import t
 from allhands.persistence.knowledge_repos import (
     SqlChunkRepo,
     SqlCollectionRepo,
@@ -99,6 +101,68 @@ class EmbeddingModelOption:
     is_default: bool = False
 
 
+_ASK_SYSTEM_PROMPT = (
+    "你是一个严谨的知识库助手。只用下面给出的上下文片段回答用户的问题。"
+    "在每个引用了上下文事实的句尾,标注片段编号,如 [1]、[2]。"
+    "如果上下文里没有答案,直接说不知道,不要编造。"
+    "回答用中文。多轮对话里,沿用同一份上下文片段编号,不要重新编号。"
+)
+
+
+def _build_ask_prompt(question: str, hits: list[ScoredChunk]) -> tuple[str, str]:
+    """Assemble the (system, user) prompt pair for an Ask turn."""
+    context_block = "\n\n".join(f"[{i + 1}] {r.chunk.text}" for i, r in enumerate(hits))
+    user = f"上下文:\n\n{context_block}\n\n问题:{question}"
+    return _ASK_SYSTEM_PROMPT, user
+
+
+def _serialise_sources(hits: list[ScoredChunk]) -> list[dict[str, object]]:
+    return [
+        {
+            "n": i + 1,
+            "chunk_id": r.chunk.id,
+            "doc_id": r.chunk.document_id,
+            "section_path": r.chunk.section_path,
+            "page": r.chunk.page,
+            "citation": r.citation,
+            "text": r.chunk.text,
+            "score": round(r.score, 4),
+        }
+        for i, r in enumerate(hits)
+    ]
+
+
+def _build_messages(system: str, user: str, history: list[dict[str, str]] | None) -> list[Any]:
+    """Map (system, optional history, user) to LangChain message objects.
+
+    History format: ``[{role: "user"|"assistant", content: str}, ...]``.
+    Unknown roles are skipped — we don't want a malformed entry to crash
+    the whole turn. The current question always lives in the trailing
+    ``HumanMessage`` so retrieval context binds to *this* turn.
+    """
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+    msgs: list[Any] = [SystemMessage(content=system)]
+    if history:
+        for h in history:
+            role = h.get("role")
+            content = h.get("content", "")
+            if role == "user":
+                msgs.append(HumanMessage(content=content))
+            elif role == "assistant":
+                msgs.append(AIMessage(content=content))
+    msgs.append(HumanMessage(content=user))
+    return msgs
+
+
+# In-process cache for `suggest_starter_questions`. Key = (kb_id,
+# kb.updated_at iso, limit) → questions list. KB writes bump
+# ``updated_at`` so adding a doc invalidates the cache the next call.
+# Dict-based, single-process; that's fine for v0 — when we go multi-worker
+# we can move this to redis with the same key shape.
+_STARTER_CACHE: dict[tuple[str, str, int], list[str]] = {}
+
+
 class KBError(DomainError):
     """KB-layer validation / not-found error."""
 
@@ -109,6 +173,10 @@ class KBNotFound(KBError):
 
 class DocumentNotFound(KBError):
     pass
+
+
+class _NoChatProvider(Exception):
+    """Internal marker — no usable LLMProvider for the Ask path."""
 
 
 class GrantDenied(KBError):
@@ -234,7 +302,7 @@ class KnowledgeService:
                     label=f"OpenAI · {model}",
                     dim=dim,
                     available=openai_key,
-                    reason=None if openai_key else "去 /gateway 添加 OpenAI provider",
+                    reason=None if openai_key else t("knowledge.embedding.reason.add_openai"),
                     is_default=ref == default_ref,
                 )
             )
@@ -250,10 +318,10 @@ class KnowledgeService:
             options.append(
                 EmbeddingModelOption(
                     ref=ref,
-                    label=f"阿里云百炼 · {model}",
+                    label=t("knowledge.embedding.label.aliyun", model=model),
                     dim=dim,
                     available=aliyun_key,
-                    reason=None if aliyun_key else "去 /gateway 添加 阿里云 百炼 provider",
+                    reason=None if aliyun_key else t("knowledge.embedding.reason.add_aliyun"),
                     is_default=ref == default_ref,
                 )
             )
@@ -344,6 +412,45 @@ class KnowledgeService:
     # ------------------------------------------------------------------
     # Documents
     # ------------------------------------------------------------------
+
+    async def ingest_url(
+        self,
+        kb_id: str,
+        url: str,
+        *,
+        title: str | None = None,
+        tags: list[str] | None = None,
+        timeout_seconds: float = 20.0,
+    ) -> Document:
+        """Fetch a URL, treat the body as HTML, ingest as a document.
+
+        Reuses ``upload_document`` so chunking / embedding pipeline is
+        identical. Title falls back to the URL itself; mime defaults to
+        ``text/html`` so the html parser handles it. The fetch is via
+        httpx with redirect-follow + a generous timeout — websites that
+        require JS rendering won't extract well, but raw HTML pages
+        (docs / wikis / blog posts) work fine.
+        """
+        import httpx
+
+        await self.get_kb(kb_id)
+        async with httpx.AsyncClient(follow_redirects=True, timeout=timeout_seconds) as client:
+            r = await client.get(url, headers={"user-agent": "allhands-kb/0.1"})
+            r.raise_for_status()
+            body = r.content
+            mime = r.headers.get("content-type", "text/html").split(";")[0].strip()
+
+        derived_title = title or _derive_title_from_url(url)
+        return await self.upload_document(
+            kb_id,
+            title=derived_title,
+            content_bytes=body,
+            filename=f"{derived_title}.html",
+            mime_type=mime or "text/html",
+            source_type=SourceType.URL,
+            source_uri=url,
+            tags=tags,
+        )
 
     async def upload_document(
         self,
@@ -475,6 +582,45 @@ class KnowledgeService:
                 offset=offset,
             )
 
+    async def reindex_document(self, document_id: str) -> Document:
+        """Re-run ingest pipeline for a doc. Wipes its chunks + embedding
+        jobs first, resets state to PENDING, then runs the orchestrator
+        from scratch. Useful for FAILED docs after the user fixed env
+        (e.g. installed pypdf) or for re-chunking after settings changed."""
+        doc = await self.get_document(document_id)
+        async with self._session_maker() as s:
+            from allhands.persistence.knowledge_repos import (
+                SqlChunkRepo,
+                SqlDocumentRepo,
+                SqlEmbeddingJobRepo,
+                SqlKnowledgeBaseRepo,
+            )
+
+            chunk_repo = SqlChunkRepo(s)
+            removed = await chunk_repo.delete_for_document(document_id)
+            jobs = SqlEmbeddingJobRepo(s)
+            # Reset any jobs that exist for this doc (lease/done/failed all
+            # become queued again — but we'll wipe then re-enqueue, so just
+            # delete by setting them all to a dead state via reset).
+            await jobs.reset_failed_for_doc(document_id)
+            doc_repo = SqlDocumentRepo(s)
+            await doc_repo.update_state(
+                document_id,
+                DocumentState.PENDING,
+                error=None,
+                chunk_count=0,
+                failed_chunk_count=0,
+            )
+            # Counters: subtract the removed chunks from the KB total.
+            if removed:
+                await SqlKnowledgeBaseRepo(s).bump_counters(doc.kb_id, docs=0, chunks=-removed)
+            await s.commit()
+
+        abs_path = self._data_dir / "kb" / doc.file_path
+        with contextlib.suppress(Exception):
+            await self._ingest.ingest_document(document_id, file_path_abs=abs_path)
+        return await self.get_document(document_id)
+
     async def soft_delete_document(self, document_id: str) -> None:
         async with self._session_maker() as s:
             await SqlDocumentRepo(s).soft_delete(document_id)
@@ -498,6 +644,276 @@ class KnowledgeService:
         latency_ms = (time.monotonic() - t0) * 1000.0
         _record_search_stat(kb_id, query, latency_ms, len(results))
         return results
+
+    async def ask(
+        self,
+        kb_id: str,
+        question: str,
+        *,
+        top_k: int = 5,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> dict[str, object]:
+        """RAG QA: search → assemble context → LLM with citation prompt.
+
+        ``history`` is an optional list of ``{role, content}`` dicts from
+        prior turns of the same KB Ask session. When present, the LLM
+        sees the prior Q&A as conversational context so follow-up
+        pronouns ("它", "比 X 呢") resolve correctly. Retrieval still
+        runs on the latest question only — chunks from the previous turn
+        are not re-injected (avoids stale context bloat).
+        """
+        kb = await self.get_kb(kb_id)
+        cfg = RetrievalConfig.model_validate({**kb.retrieval_config.model_dump(), "top_k": top_k})
+
+        import time
+
+        t0 = time.monotonic()
+        hits = await self._retriever.search(kb_id, question, cfg)
+        if not hits:
+            return {
+                "answer": t("knowledge.ask.no_hits"),
+                "sources": [],
+                "used_model": None,
+                "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+            }
+
+        system, user = _build_ask_prompt(question, hits)
+
+        try:
+            answer_text, used_model = await self._call_chat_llm(
+                system, user, model_ref=model_ref, history=history
+            )
+        except _NoChatProvider:
+            raise KBError(t("knowledge.ask.no_chat_provider")) from None
+
+        return {
+            "answer": answer_text,
+            "sources": _serialise_sources(hits),
+            "used_model": used_model,
+            "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+        }
+
+    async def ask_stream(
+        self,
+        kb_id: str,
+        question: str,
+        *,
+        top_k: int = 5,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Streaming variant of :meth:`ask`.
+
+        Yields a sequence of envelope dicts that the SSE encoder serialises:
+
+        - ``{"event": "sources", "sources": [...], "kb": {"id"...}}`` first,
+          so the UI can paint the citations area before any text arrives.
+        - ``{"event": "delta", "text": "..."}`` per LLM token chunk.
+          Multiple deltas may be coalesced upstream — order is preserved.
+        - ``{"event": "done", "used_model": str | None, "latency_ms": float}``
+          terminal frame after the last delta.
+
+        On hard failure yields ``{"event": "error", "message": str}`` and
+        terminates without a ``done`` frame, so the client can distinguish
+        "model finished cleanly" from "stream aborted mid-flight".
+        """
+        try:
+            kb = await self.get_kb(kb_id)
+        except KBError as exc:
+            yield {"event": "error", "message": str(exc)}
+            return
+        cfg = RetrievalConfig.model_validate({**kb.retrieval_config.model_dump(), "top_k": top_k})
+
+        import time
+
+        t0 = time.monotonic()
+        hits = await self._retriever.search(kb_id, question, cfg)
+        sources = _serialise_sources(hits)
+        yield {"event": "sources", "sources": sources}
+
+        if not hits:
+            yield {
+                "event": "delta",
+                "text": t("knowledge.ask.no_hits"),
+            }
+            yield {
+                "event": "done",
+                "used_model": None,
+                "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+            }
+            return
+
+        system, user = _build_ask_prompt(question, hits)
+
+        try:
+            used_model: str | None = None
+            async for piece, model_used in self._call_chat_llm_stream(
+                system, user, model_ref=model_ref, history=history
+            ):
+                if piece:
+                    yield {"event": "delta", "text": piece}
+                if model_used:
+                    used_model = model_used
+        except _NoChatProvider:
+            yield {
+                "event": "error",
+                "message": t("knowledge.ask.no_chat_provider"),
+            }
+            return
+        except Exception as exc:
+            _logger.exception("kb.ask_stream LLM error")
+            yield {"event": "error", "message": t("knowledge.ask.llm_failed", detail=str(exc))}
+            return
+
+        yield {
+            "event": "done",
+            "used_model": used_model,
+            "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+        }
+
+    async def _call_chat_llm(
+        self,
+        system: str,
+        user: str,
+        *,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> tuple[str, str]:
+        """Pick first usable LLMProvider, build LangChain chat model, invoke."""
+        provider, ref = await self._pick_chat_provider(model_ref)
+
+        from allhands.execution.llm_factory import build_llm
+
+        llm = build_llm(provider, ref)
+        messages = _build_messages(system, user, history)
+        result = await llm.ainvoke(messages)
+        text = getattr(result, "content", "") or ""
+        if isinstance(text, list):
+            text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
+        return str(text), ref
+
+    async def _call_chat_llm_stream(
+        self,
+        system: str,
+        user: str,
+        *,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[tuple[str, str]]:
+        """Stream text chunks from LangChain ``astream``.
+
+        Yields ``(piece, model_ref)`` tuples — ``model_ref`` is only set on
+        the first non-empty piece so the caller can record it without
+        repeating per-chunk. ``piece`` may be empty for control frames
+        (reasoning tokens etc.) which we drop.
+        """
+        provider, ref = await self._pick_chat_provider(model_ref)
+
+        from allhands.execution.llm_factory import build_llm
+
+        llm = build_llm(provider, ref)
+        messages = _build_messages(system, user, history)
+        emitted = False
+        async for chunk in llm.astream(messages):
+            text = getattr(chunk, "content", "") or ""
+            if isinstance(text, list):
+                # Anthropic streams content blocks; flatten to plain text.
+                text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
+            if not text:
+                continue
+            yield text, (ref if not emitted else "")
+            emitted = True
+
+    async def _pick_chat_provider(self, model_ref: str | None) -> tuple[Any, str]:
+        from allhands.persistence.sql_repos import SqlLLMProviderRepo
+
+        async with self._session_maker() as s:
+            providers = await SqlLLMProviderRepo(s).list_all()
+        usable = [p for p in providers if p.enabled and p.api_key]
+        if not usable:
+            raise _NoChatProvider()
+        provider = usable[0]
+
+        ref = model_ref or get_settings().default_model_ref
+        if not ref:
+            from allhands.core.provider_presets import preset_for
+
+            ref = preset_for(provider.kind).default_model
+        return provider, ref
+
+    async def suggest_starter_questions(
+        self, kb_id: str, *, limit: int = 4, model_ref: str | None = None
+    ) -> list[str]:
+        """Return a small set of LLM-generated "starter questions" for a KB.
+
+        The Ask mode opens onto a blank canvas — users with a fresh KB
+        often don't know what to ask. NotebookLM / Glean both surface a
+        handful of suggested prompts derived from the corpus; we do the
+        same: collect doc titles + top section headings, ask the chat LLM
+        to propose ``limit`` short questions, return them as plain strings.
+
+        Cache key = ``(kb_id, kb.updated_at, limit)`` — the ``updated_at``
+        bumps whenever a doc is added / removed, so adding a new PDF
+        invalidates stale suggestions automatically. No LLM call when the
+        KB has no documents (returns an empty list — UI shows the empty
+        starter copy instead).
+        """
+        kb = await self.get_kb(kb_id)
+        cache_key = (kb_id, kb.updated_at.isoformat(), limit)
+        cached = _STARTER_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+        docs = await self.list_documents(kb_id, limit=12)
+        if not docs:
+            return []
+
+        # Lightweight corpus snapshot — titles + the first section path of
+        # each doc keep the prompt under ~1k tokens regardless of corpus
+        # size. Falling back to the title alone when no chunks exist yet.
+        corpus_lines: list[str] = []
+        for d in docs:
+            chunks = await self.list_chunks_for_document(d.id)
+            sections = [c.section_path for c in chunks if c.section_path]
+            top_sections = list(dict.fromkeys(sections))[:3]
+            if top_sections:
+                corpus_lines.append(f"- {d.title} :: {' / '.join(top_sections)}")
+            else:
+                corpus_lines.append(f"- {d.title}")
+
+        system = (
+            "You generate starter questions a curious user might ask of a "
+            "private knowledge base. Be specific to the listed documents — "
+            "no generic 'what is this' fluff. Output ONE question per line, "
+            "no numbering, no quotes, no leading dash. Match the language "
+            "of the document titles (Chinese in → Chinese out)."
+        )
+        user = (
+            f"Knowledge base: {kb.name}\n"
+            f"Documents (title :: top sections):\n"
+            + "\n".join(corpus_lines)
+            + f"\n\nGenerate exactly {limit} short, useful starter questions."
+        )
+
+        try:
+            text, _ = await self._call_chat_llm(system, user, model_ref=model_ref)
+        except _NoChatProvider:
+            # Graceful degrade: fall back to "在 <title> 里说了什么?" for
+            # the first ``limit`` docs. Better than a blank panel.
+            return [f"{d.title} 里讲了什么?" for d in docs[:limit]]
+        except Exception:
+            _logger.exception("kb.suggest_starter_questions LLM error")
+            return [f"{d.title} 里讲了什么?" for d in docs[:limit]]
+
+        questions = [
+            line.strip().lstrip("-•*0123456789.) ").strip()
+            for line in text.splitlines()
+            if line.strip()
+        ]
+        questions = [q for q in questions if q][:limit]
+        _STARTER_CACHE[cache_key] = questions
+        return questions
 
     async def diagnose_search(
         self, kb_id: str, query: str, *, top_k: int = 8
@@ -633,6 +1049,19 @@ class SearchStatsSummary:
     count: int
     avg_latency_ms: float | None
     recent: list[SearchStatRecent]
+
+
+def _derive_title_from_url(url: str) -> str:
+    """Best-effort human title from a URL: last path segment with hyphens
+    swapped to spaces, falling back to the host. Keeps the create-doc UX
+    pleasant when the user just pastes a link."""
+    from urllib.parse import unquote, urlparse
+
+    p = urlparse(url)
+    last = (p.path or "").rstrip("/").split("/")[-1]
+    if last:
+        return unquote(last).replace("-", " ").replace("_", " ")[:200]
+    return p.netloc or url
 
 
 def _summarize_stats(kb_id: str) -> SearchStatsSummary:

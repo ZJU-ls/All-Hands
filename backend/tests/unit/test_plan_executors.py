@@ -1,251 +1,385 @@
-"""ADR 0019 C1 · Plan executor unit tests."""
+"""ADR 0019 C1 (Round 1) · update_plan / view_plan executors.
+
+Tests the Claude-Code-style atomic-replace plan tool. Validation rules
+mirror the executor's docstring contract:
+
+  - 1-20 todos
+  - non-empty content
+  - status ∈ {pending, in_progress, completed}
+  - at most 1 in_progress
+  - atomic replace: subsequent calls keep the same plan_id and replace
+    steps wholesale (within a conversation)
+"""
 
 from __future__ import annotations
 
-import uuid
+import asyncio
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
 
 import pytest
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from allhands.core.plan import AgentPlan, PlanStep, StepStatus
+from allhands.core.plan import StepStatus
 from allhands.execution.tools.meta.plan_executors import (
-    make_plan_complete_step_executor,
-    make_plan_create_executor,
-    make_plan_update_step_executor,
-    make_plan_view_executor,
+    UPDATE_PLAN_TOOL_ID,
+    VIEW_PLAN_TOOL_ID,
+    make_update_plan_executor,
+    make_view_plan_executor,
 )
+from allhands.persistence.orm.base import Base
+from allhands.persistence.sql_repos import SqlAgentPlanRepo
 
 
-class _FakeAgentPlanRepo:
-    """In-memory AgentPlanRepo for unit tests · matches Protocol shape."""
-
-    def __init__(self) -> None:
-        self._plans: dict[str, AgentPlan] = {}
-
-    async def get(self, plan_id: str) -> AgentPlan | None:
-        return self._plans.get(plan_id)
-
-    async def get_latest_for_conversation(self, conversation_id: str) -> AgentPlan | None:
-        candidates = [p for p in self._plans.values() if p.conversation_id == conversation_id]
-        if not candidates:
-            return None
-        return sorted(candidates, key=lambda p: p.created_at)[-1]
-
-    async def list_for_conversation(self, conversation_id: str) -> list[AgentPlan]:
-        return [p for p in self._plans.values() if p.conversation_id == conversation_id]
-
-    async def upsert(self, plan: AgentPlan) -> AgentPlan:
-        self._plans[plan.id] = plan
-        return plan
-
-    async def delete(self, plan_id: str) -> None:
-        self._plans.pop(plan_id, None)
+@pytest_asyncio.fixture
+async def session() -> AsyncIterator[AsyncSession]:
+    """In-memory SQLite session for plan repo tests."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as s:
+        yield s
 
 
-CONV = "conv_abc"
-EMP = "emp_test"
+# ── Tool ID constants ───────────────────────────────────────────────────
 
 
-# --- create ---------------------------------------------------------------
+def test_tool_ids_are_namespaced() -> None:
+    """Public tool ids stay stable under allhands.meta.* per L01."""
+    assert UPDATE_PLAN_TOOL_ID == "allhands.meta.update_plan"
+    assert VIEW_PLAN_TOOL_ID == "allhands.meta.view_plan"
+
+
+# ── update_plan: happy path ─────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_plan_create_persists_and_returns_id() -> None:
-    repo = _FakeAgentPlanRepo()
-    create = make_plan_create_executor(repo=repo, conversation_id=CONV, employee_id=EMP)
-    out = await create(title="重构 X", steps=["读代码", "拆模块", "写测试"])
-    assert "plan_id" in out
-    assert out["step_count"] == 3
-    saved = await repo.get(out["plan_id"])
-    assert saved is not None
-    assert saved.title == "重构 X"
-    assert saved.conversation_id == CONV
-    assert saved.owner_employee_id == EMP
-    assert [s.title for s in saved.steps] == ["读代码", "拆模块", "写测试"]
-    assert all(s.status == StepStatus.PENDING for s in saved.steps)
+async def test_first_update_creates_plan_with_correct_steps(
+    session: AsyncSession,
+) -> None:
+    repo = SqlAgentPlanRepo(session)
+    exec_fn = make_update_plan_executor(repo=repo, conversation_id="conv-1", employee_id="emp-1")
 
-
-@pytest.mark.asyncio
-async def test_plan_create_strips_whitespace_and_drops_empties() -> None:
-    repo = _FakeAgentPlanRepo()
-    create = make_plan_create_executor(repo=repo, conversation_id=CONV, employee_id=EMP)
-    out = await create(title="  X  ", steps=["a", "  ", "b", "", "c"])
-    plan = await repo.get(out["plan_id"])
-    assert plan is not None
-    assert plan.title == "X"
-    assert [s.title for s in plan.steps] == ["a", "b", "c"]
-
-
-@pytest.mark.asyncio
-async def test_plan_create_rejects_empty_title() -> None:
-    repo = _FakeAgentPlanRepo()
-    create = make_plan_create_executor(repo=repo, conversation_id=CONV, employee_id=EMP)
-    out = await create(title="   ", steps=["a"])
-    assert "error" in out
-
-
-@pytest.mark.asyncio
-async def test_plan_create_rejects_no_steps() -> None:
-    repo = _FakeAgentPlanRepo()
-    create = make_plan_create_executor(repo=repo, conversation_id=CONV, employee_id=EMP)
-    out = await create(title="t", steps=[])
-    assert "error" in out
-
-
-@pytest.mark.asyncio
-async def test_plan_create_rejects_too_many_steps() -> None:
-    repo = _FakeAgentPlanRepo()
-    create = make_plan_create_executor(repo=repo, conversation_id=CONV, employee_id=EMP)
-    out = await create(title="t", steps=[f"step {i}" for i in range(21)])
-    assert "error" in out
-    assert "20" in out["error"]
-
-
-# --- update_step ----------------------------------------------------------
-
-
-def _seed_plan(repo: _FakeAgentPlanRepo, conversation_id: str = CONV) -> str:
-    plan_id = str(uuid.uuid4())
-    plan = AgentPlan(
-        id=plan_id,
-        conversation_id=conversation_id,
-        run_id=None,
-        owner_employee_id=EMP,
-        title="t",
-        steps=[
-            PlanStep(index=0, title="a"),
-            PlanStep(index=1, title="b"),
-            PlanStep(index=2, title="c"),
+    out = await exec_fn(
+        todos=[
+            {"content": "Read code", "activeForm": "Reading code", "status": "in_progress"},
+            {"content": "Write tests", "activeForm": "Writing tests", "status": "pending"},
+            {"content": "Refactor", "activeForm": "Refactoring", "status": "pending"},
         ],
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
+        title="Fix the bug",
     )
-    repo._plans[plan_id] = plan
-    return plan_id
+
+    assert "plan_id" in out
+    assert out["summary"] == "0/3 done · 1 in progress · 2 pending"
+
+    plan = await repo.get_latest_for_conversation("conv-1")
+    assert plan is not None
+    assert plan.title == "Fix the bug"
+    assert len(plan.steps) == 3
+    assert plan.steps[0].status == StepStatus.RUNNING
+    assert plan.steps[0].title == "Read code"
+    assert plan.steps[0].note == "Reading code"  # activeForm stashed in note
+    assert plan.steps[1].status == StepStatus.PENDING
 
 
 @pytest.mark.asyncio
-async def test_plan_update_step_changes_status() -> None:
-    repo = _FakeAgentPlanRepo()
-    plan_id = _seed_plan(repo)
-    upd = make_plan_update_step_executor(repo=repo, conversation_id=CONV)
-    out = await upd(plan_id=plan_id, step_index=1, status="running")
-    assert out["status"] == "running"
-    plan = await repo.get(plan_id)
+async def test_subsequent_update_replaces_steps_keeps_plan_id(
+    session: AsyncSession,
+) -> None:
+    """Atomic replace: same plan_id, steps wholesale-replaced."""
+    repo = SqlAgentPlanRepo(session)
+    exec_fn = make_update_plan_executor(repo=repo, conversation_id="conv-1", employee_id="emp-1")
+
+    out1 = await exec_fn(
+        todos=[
+            {"content": "A", "activeForm": "Doing A", "status": "in_progress"},
+            {"content": "B", "activeForm": "Doing B", "status": "pending"},
+        ],
+        title="First",
+    )
+    out2 = await exec_fn(
+        todos=[
+            {"content": "A", "activeForm": "Doing A", "status": "completed"},
+            {"content": "B", "activeForm": "Doing B", "status": "in_progress"},
+            {"content": "C", "activeForm": "Doing C", "status": "pending"},
+        ],
+        # Title intentionally omitted — should inherit "First".
+    )
+
+    assert out1["plan_id"] == out2["plan_id"], "plan_id must be stable across calls"
+
+    plan = await repo.get_latest_for_conversation("conv-1")
     assert plan is not None
-    assert plan.steps[0].status == StepStatus.PENDING
+    assert plan.title == "First", "title preserved when not provided in 2nd call"
+    assert len(plan.steps) == 3
+    assert plan.steps[0].status == StepStatus.DONE
     assert plan.steps[1].status == StepStatus.RUNNING
     assert plan.steps[2].status == StepStatus.PENDING
 
 
 @pytest.mark.asyncio
-async def test_plan_update_step_attaches_note() -> None:
-    repo = _FakeAgentPlanRepo()
-    plan_id = _seed_plan(repo)
-    upd = make_plan_update_step_executor(repo=repo, conversation_id=CONV)
-    await upd(plan_id=plan_id, step_index=0, status="failed", note="API 502")
-    plan = await repo.get(plan_id)
+async def test_explicit_title_in_second_call_replaces(
+    session: AsyncSession,
+) -> None:
+    repo = SqlAgentPlanRepo(session)
+    exec_fn = make_update_plan_executor(repo=repo, conversation_id="conv-1", employee_id="emp-1")
+
+    await exec_fn(
+        todos=[{"content": "x", "activeForm": "x-ing", "status": "pending"}],
+        title="Old",
+    )
+    await exec_fn(
+        todos=[{"content": "x", "activeForm": "x-ing", "status": "in_progress"}],
+        title="New",
+    )
+
+    plan = await repo.get_latest_for_conversation("conv-1")
     assert plan is not None
-    assert plan.steps[0].status == StepStatus.FAILED
-    assert plan.steps[0].note == "API 502"
+    assert plan.title == "New"
+
+
+# ── update_plan: validation ─────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_plan_update_step_unknown_status_returns_error() -> None:
-    repo = _FakeAgentPlanRepo()
-    plan_id = _seed_plan(repo)
-    upd = make_plan_update_step_executor(repo=repo, conversation_id=CONV)
-    out = await upd(plan_id=plan_id, step_index=0, status="unknown")
+async def test_rejects_empty_todos(session: AsyncSession) -> None:
+    exec_fn = make_update_plan_executor(
+        repo=SqlAgentPlanRepo(session), conversation_id="c", employee_id="e"
+    )
+    out = await exec_fn(todos=[])
+    assert "error" in out
+    assert "non-empty" in out["error"]
+
+
+@pytest.mark.asyncio
+async def test_rejects_more_than_20_todos(session: AsyncSession) -> None:
+    exec_fn = make_update_plan_executor(
+        repo=SqlAgentPlanRepo(session), conversation_id="c", employee_id="e"
+    )
+    todos = [
+        {"content": f"todo {i}", "activeForm": f"doing {i}", "status": "pending"} for i in range(21)
+    ]
+    out = await exec_fn(todos=todos)
+    assert "error" in out
+    assert "20" in out["error"]
+
+
+@pytest.mark.asyncio
+async def test_rejects_two_in_progress(session: AsyncSession) -> None:
+    """Claude Code's hard rule: at most one in_progress at a time."""
+    exec_fn = make_update_plan_executor(
+        repo=SqlAgentPlanRepo(session), conversation_id="c", employee_id="e"
+    )
+    out = await exec_fn(
+        todos=[
+            {"content": "A", "activeForm": "doing A", "status": "in_progress"},
+            {"content": "B", "activeForm": "doing B", "status": "in_progress"},
+            {"content": "C", "activeForm": "doing C", "status": "pending"},
+        ],
+    )
+    assert "error" in out
+    assert "in_progress" in out["error"]
+
+
+@pytest.mark.asyncio
+async def test_rejects_invalid_status_string(session: AsyncSession) -> None:
+    exec_fn = make_update_plan_executor(
+        repo=SqlAgentPlanRepo(session), conversation_id="c", employee_id="e"
+    )
+    out = await exec_fn(
+        todos=[
+            {"content": "x", "activeForm": "x-ing", "status": "running"},
+            # ↑ legacy enum from old tool group; the new tool only accepts
+            # pending / in_progress / completed.
+        ],
+    )
     assert "error" in out
 
 
 @pytest.mark.asyncio
-async def test_plan_update_step_unknown_plan_returns_error() -> None:
-    repo = _FakeAgentPlanRepo()
-    upd = make_plan_update_step_executor(repo=repo, conversation_id=CONV)
-    out = await upd(plan_id="ghost", step_index=0, status="done")
+async def test_rejects_empty_content(session: AsyncSession) -> None:
+    exec_fn = make_update_plan_executor(
+        repo=SqlAgentPlanRepo(session), conversation_id="c", employee_id="e"
+    )
+    out = await exec_fn(
+        todos=[{"content": "  ", "activeForm": "x", "status": "pending"}],
+    )
     assert "error" in out
+    assert "content" in out["error"]
 
 
 @pytest.mark.asyncio
-async def test_plan_update_step_cross_conversation_blocked() -> None:
-    """Defense-in-depth: even if the LLM in conversation A guessed a
-    plan_id from conversation B, the executor refuses."""
-    repo = _FakeAgentPlanRepo()
-    plan_id = _seed_plan(repo, conversation_id="OTHER")
-    upd = make_plan_update_step_executor(repo=repo, conversation_id=CONV)
-    out = await upd(plan_id=plan_id, step_index=0, status="done")
-    assert "error" in out
-    assert "conversation" in out["error"]
+async def test_falls_back_to_content_when_active_form_missing(
+    session: AsyncSession,
+) -> None:
+    """Weak models forget activeForm — fall back to content rather than
+    failing the call. Documented in the executor's comments."""
+    exec_fn = make_update_plan_executor(
+        repo=SqlAgentPlanRepo(session), conversation_id="c", employee_id="e"
+    )
+    out = await exec_fn(
+        todos=[{"content": "Read code", "activeForm": "", "status": "pending"}],
+    )
+    assert "error" not in out
+
+
+# ── update_plan: status mapping ─────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_plan_update_step_index_out_of_range() -> None:
-    repo = _FakeAgentPlanRepo()
-    plan_id = _seed_plan(repo)
-    upd = make_plan_update_step_executor(repo=repo, conversation_id=CONV)
-    out = await upd(plan_id=plan_id, step_index=99, status="done")
-    assert "error" in out
-
-
-# --- complete_step --------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_plan_complete_step_shortcut() -> None:
-    repo = _FakeAgentPlanRepo()
-    plan_id = _seed_plan(repo)
-    cmp = make_plan_complete_step_executor(repo=repo, conversation_id=CONV)
-    out = await cmp(plan_id=plan_id, step_index=2)
-    assert out["status"] == "done"
-    plan = await repo.get(plan_id)
+async def test_status_mapping_pending_to_pending(session: AsyncSession) -> None:
+    repo = SqlAgentPlanRepo(session)
+    exec_fn = make_update_plan_executor(repo=repo, conversation_id="c", employee_id="e")
+    await exec_fn(
+        todos=[{"content": "x", "activeForm": "x-ing", "status": "pending"}],
+    )
+    plan = await repo.get_latest_for_conversation("c")
     assert plan is not None
-    assert plan.steps[2].status == StepStatus.DONE
-
-
-# --- view -----------------------------------------------------------------
+    assert plan.steps[0].status == StepStatus.PENDING
 
 
 @pytest.mark.asyncio
-async def test_plan_view_with_id_returns_render_envelope() -> None:
-    repo = _FakeAgentPlanRepo()
-    plan_id = _seed_plan(repo)
-    view = make_plan_view_executor(repo=repo, conversation_id=CONV)
-    out = await view(plan_id=plan_id)
-    assert out["component"] == "PlanTimeline"
-    assert out["props"]["title"] == "t"
-    assert len(out["props"]["steps"]) == 3
-    assert all("status" in s for s in out["props"]["steps"])
-    assert out["interactions"] == []
+async def test_status_mapping_in_progress_to_running(session: AsyncSession) -> None:
+    repo = SqlAgentPlanRepo(session)
+    exec_fn = make_update_plan_executor(repo=repo, conversation_id="c", employee_id="e")
+    await exec_fn(
+        todos=[{"content": "x", "activeForm": "x-ing", "status": "in_progress"}],
+    )
+    plan = await repo.get_latest_for_conversation("c")
+    assert plan is not None
+    assert plan.steps[0].status == StepStatus.RUNNING
 
 
 @pytest.mark.asyncio
-async def test_plan_view_without_id_returns_latest_for_conversation() -> None:
-    repo = _FakeAgentPlanRepo()
-    create = make_plan_create_executor(repo=repo, conversation_id=CONV, employee_id=EMP)
-    await create(title="老 plan", steps=["x"])
-    out_new = await create(title="新 plan", steps=["y", "z"])
-    view = make_plan_view_executor(repo=repo, conversation_id=CONV)
-    out: dict[str, Any] = await view()
-    assert out["component"] == "PlanTimeline"
-    assert out["props"]["title"] == "新 plan"
-    assert out["props"]["steps"][0]["title"] == "y"
-    assert out_new["plan_id"]  # silence unused-var
+async def test_status_mapping_completed_to_done(session: AsyncSession) -> None:
+    repo = SqlAgentPlanRepo(session)
+    exec_fn = make_update_plan_executor(repo=repo, conversation_id="c", employee_id="e")
+    await exec_fn(
+        todos=[{"content": "x", "activeForm": "x-ing", "status": "completed"}],
+    )
+    plan = await repo.get_latest_for_conversation("c")
+    assert plan is not None
+    assert plan.steps[0].status == StepStatus.DONE
+
+
+# ── view_plan ───────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_plan_view_no_plans_returns_error() -> None:
-    repo = _FakeAgentPlanRepo()
-    view = make_plan_view_executor(repo=repo, conversation_id=CONV)
+async def test_view_plan_returns_error_when_no_plan(session: AsyncSession) -> None:
+    repo = SqlAgentPlanRepo(session)
+    exec_fn = make_view_plan_executor(repo=repo, conversation_id="empty-conv")
+    out = await exec_fn()
+    assert "error" in out
+
+
+@pytest.mark.asyncio
+async def test_view_plan_round_trips_after_update(session: AsyncSession) -> None:
+    """Round-trip: update_plan then view_plan returns the same shape the
+    agent sent (plus a plan_id)."""
+    repo = SqlAgentPlanRepo(session)
+    update = make_update_plan_executor(repo=repo, conversation_id="c", employee_id="e")
+    view = make_view_plan_executor(repo=repo, conversation_id="c")
+
+    await update(
+        todos=[
+            {"content": "Read", "activeForm": "Reading", "status": "completed"},
+            {"content": "Write", "activeForm": "Writing", "status": "in_progress"},
+            {"content": "Test", "activeForm": "Testing", "status": "pending"},
+        ],
+        title="Demo",
+    )
+
     out = await view()
-    assert "error" in out
+    assert out["title"] == "Demo"
+    assert "plan_id" in out
+    todos = out["todos"]
+    assert len(todos) == 3
+    assert todos[0] == {
+        "content": "Read",
+        "activeForm": "Reading",
+        "status": "completed",
+    }
+    assert todos[1]["status"] == "in_progress"
+    assert todos[2]["status"] == "pending"
+
+
+# ── conversation isolation ──────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_plan_view_cross_conversation_blocked() -> None:
-    repo = _FakeAgentPlanRepo()
-    plan_id = _seed_plan(repo, conversation_id="OTHER")
-    view = make_plan_view_executor(repo=repo, conversation_id=CONV)
-    out = await view(plan_id=plan_id)
-    assert "error" in out
+async def test_two_conversations_have_independent_plans(
+    session: AsyncSession,
+) -> None:
+    """Each conversation_id gets its own plan thread."""
+    repo = SqlAgentPlanRepo(session)
+    a = make_update_plan_executor(repo=repo, conversation_id="A", employee_id="e")
+    b = make_update_plan_executor(repo=repo, conversation_id="B", employee_id="e")
+
+    a_out = await a(
+        todos=[{"content": "alpha", "activeForm": "alpha-ing", "status": "pending"}],
+        title="Plan A",
+    )
+    b_out = await b(
+        todos=[{"content": "beta", "activeForm": "beta-ing", "status": "pending"}],
+        title="Plan B",
+    )
+
+    assert a_out["plan_id"] != b_out["plan_id"]
+
+    plan_a = await repo.get_latest_for_conversation("A")
+    plan_b = await repo.get_latest_for_conversation("B")
+    assert plan_a is not None and plan_b is not None
+    assert plan_a.title == "Plan A"
+    assert plan_b.title == "Plan B"
+
+
+# ── derived title fallback ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_first_call_without_title_derives_from_first_todo(
+    session: AsyncSession,
+) -> None:
+    """No title → derive a short fallback from first todo so the UI header
+    isn't empty."""
+    repo = SqlAgentPlanRepo(session)
+    exec_fn = make_update_plan_executor(repo=repo, conversation_id="c", employee_id="e")
+    await exec_fn(
+        todos=[
+            {
+                "content": "Investigate the bug",
+                "activeForm": "Investigating the bug",
+                "status": "in_progress",
+            }
+        ],
+    )
+    plan = await repo.get_latest_for_conversation("c")
+    assert plan is not None
+    assert "Investigate the bug" in plan.title
+
+
+# Misc: confirm the plan keeps an updated_at advance.
+@pytest.mark.asyncio
+async def test_updated_at_advances_on_replace(session: AsyncSession) -> None:
+    repo = SqlAgentPlanRepo(session)
+    exec_fn = make_update_plan_executor(repo=repo, conversation_id="c", employee_id="e")
+    await exec_fn(
+        todos=[{"content": "x", "activeForm": "x-ing", "status": "pending"}],
+    )
+    p1 = await repo.get_latest_for_conversation("c")
+    assert p1 is not None
+    t1 = p1.updated_at
+
+    await asyncio.sleep(0.01)
+    await exec_fn(
+        todos=[{"content": "x", "activeForm": "x-ing", "status": "in_progress"}],
+    )
+    p2 = await repo.get_latest_for_conversation("c")
+    assert p2 is not None
+    assert p2.updated_at > t1
+    assert p2.created_at == p1.created_at  # created_at preserved
+    assert isinstance(p2.updated_at, datetime)
+    assert p2.updated_at.tzinfo == UTC

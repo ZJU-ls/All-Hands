@@ -63,13 +63,13 @@
     },
     "observatory": {
       "title": "观测中心",
-      "eyebrow": "Observatory",
-      "heading": "Platform health at a glance",
-      "subtitle": "聚合 traces · runs · latency · cost · 一屏看清员工运行状态。",
+      "eyebrow": "观测中心",
+      "heading": "平台运行状态一屏看清",
+      "subtitle": "聚合 traces · runs · 延迟 · 成本 · 自建埋点 · 一屏看清员工运行状态。",
       "range": {
-        "lastHour": "Last hour",
-        "h24": "24h",
-        "d7": "7d"
+        "lastHour": "近 1 小时",
+        "h24": "近 24 小时",
+        "d7": "近 7 天"
       },
       "refreshing": "刷新中…",
       "refresh": "刷新",
@@ -79,61 +79,142 @@
         "action": "重试"
       },
       "kpi": {
-        "uptime": "Uptime · 24h",
-        "uptimeDelta": "+0.2% vs yesterday",
-        "latency": "Latency p50",
+        "uptime": "可用率 · 24h",
+        "uptimeDelta": "较昨日 +0.2%",
+        "latency": "延迟 P50",
         "latencyDelta": "快于上周",
-        "failure": "Failure rate",
+        "failure": "失败率",
         "failureWarn": "警戒",
         "failureStable": "稳定",
-        "tokens": "Avg tokens · run",
-        "tokensDelta": "{count} total traces"
+        "tokens": "平均 Tokens / 次",
+        "tokensDelta": "总计 {count} 条 trace",
+        "totalTokens": "Tokens 总消耗 · 24h",
+        "totalTokensDelta": "in {input} · out {output} · 平均 {avg}/次",
+        "llmCalls": "模型请求次数 · 24h",
+        "llmCallsDelta": "{runs} 次 run · 平均 {avg} 次调用 / run",
+        "llmCallsEmpty": "近 24h 没有模型调用",
+        "vsYesterday": "vs 昨日",
+        "clickHint": "点击查看消耗曲线 →"
       },
       "panels": {
         "telemetry": "自建埋点 · 24h",
-        "topEmployees": "Top employees · 24h",
+        "topEmployees": "员工 TOP · 24h",
         "byModel": "按模型 · 24h",
+        "byTool": "工具调用 TOP · 24h",
+        "byToolHint": "{n} 个工具 · 共 {invocations} 次调用",
+        "byToolEmpty": "本时段内没有工具调用",
+        "topErrors": "失败原因 TOP · 24h",
+        "topErrorsHint": "{n} 类失败 · 共 {count} 次",
+        "topErrorsEmpty": "近 24h 没有失败,运行平稳。",
         "noData": "还没有数据",
-        "moreLabel": "{title} more",
+        "moreLabel": "更多 {title}",
         "rows": {
           "observability": "埋点状态",
-          "latencyP50": "Latency p50",
-          "latencyP95": "Latency p95",
-          "latencyP99": "Latency p99",
+          "latencyP50": "延迟 P50",
+          "latencyP95": "延迟 P95",
+          "latencyP99": "延迟 P99",
           "estimatedCost": "成本估算 · 24h",
-          "totalTraces": "Total traces"
+          "totalTraces": "总 trace 数"
         },
         "values": {
-          "enabled": "enabled",
-          "disabled": "disabled",
-          "selfInstrumented": "self-instrumented",
-          "runs": "{count} runs"
+          "enabled": "已启用",
+          "disabled": "未启用",
+          "selfInstrumented": "已启用 · 自建埋点",
+          "runs": "{count} 次"
+        },
+        "modelTable": {
+          "model": "模型",
+          "runs": "调用",
+          "in": "输入",
+          "out": "输出",
+          "total": "合计",
+          "cost": "成本",
+          "modelsCount": "{n} 个模型 · 共 {calls} 次 LLM 调用"
         }
       },
+      "anomalies": {
+        "title": "{n} 项异常需关注 · 自动判定 · 不是 ML"
+      },
+      "costPanel": {
+        "title": "成本面板 · 24h",
+        "today": "今日累计",
+        "dailyProjection": "日预估",
+        "monthlyProjection": "月预估",
+        "hint24h": "按近 24h 平均外推",
+        "hintMonthly": "按当前节奏跑满 30 天",
+        "topEmployees": "最贵员工 TOP",
+        "topModels": "最贵模型 TOP",
+        "noData": "本时段无成本数据",
+        "seeChart": "查看曲线"
+      },
+      "heatmap": {
+        "title": "延迟热力图 · 24h",
+        "hint": "{runs} 次 run · 颜色越深表示该桶 run 越多",
+        "empty": "本时段没有完成的 run · 暂无热力图。",
+        "oldest": "24h 前",
+        "now": "现在"
+      },
       "incidents": {
-        "title": "Recent incidents",
-        "count": "{count} failed",
-        "tokensSuffix": "tok"
+        "title": "近期失败",
+        "count": "{count} 次失败",
+        "tokensSuffix": "tokens"
       },
       "traces": {
         "title": "近 50 条 trace",
-        "selfInstrumentedNote": "self-instrumented · 本地 events.run.*",
+        "selfInstrumentedNote": "自建埋点 · 本地 events.run.*",
+        "searchPlaceholder": "搜索 trace_id / 员工 / 模型 / 状态",
+        "searchAria": "搜索 trace",
+        "searchEmpty": {
+          "title": "无匹配结果",
+          "description": "调整搜索词,或留空显示全部 50 条 trace。"
+        },
         "empty": {
           "title": "还没有 run 事件",
           "description": "和 Lead 对话发起第一条任务,这里会出现 trace 摘要。"
         },
         "headers": {
           "trace": "trace",
-          "employee": "employee",
-          "status": "status",
-          "duration": "duration",
+          "employee": "员工",
+          "status": "状态",
+          "duration": "耗时",
           "tokens": "tokens",
-          "started": "started"
+          "started": "开始"
         },
         "status": {
-          "ok": "ok",
-          "failed": "failed",
+          "ok": "成功",
+          "failed": "失败",
           "running": "运行中"
+        }
+      },
+      "metricDrawer": {
+        "close": "关闭",
+        "loading": "加载曲线中…",
+        "loadFailed": "加载失败,点重试。",
+        "retry": "重试",
+        "empty": "所选窗口内没有数据。",
+        "bucket1h": "1 小时分桶",
+        "bucket5m": "5 分钟分桶",
+        "rangeLastHour": "近 1 小时",
+        "range24h": "近 24 小时",
+        "range7d": "近 7 天",
+        "rangeAria": "时间窗口",
+        "tooltipCount": "{n} 次 run",
+        "summaryLabel": {
+          "max": "峰值",
+          "avg": "均值",
+          "current": "最新"
+        },
+        "metric": {
+          "runs": "调用次数",
+          "failure_rate": "失败率",
+          "latency_p50": "延迟 P50",
+          "latency_p95": "延迟 P95",
+          "latency_p99": "延迟 P99",
+          "tokens_total": "Tokens 合计",
+          "tokens_input": "Tokens 输入",
+          "tokens_output": "Tokens 输出",
+          "llm_calls": "LLM 调用次数",
+          "cost": "成本估算"
         }
       }
     },
@@ -185,6 +266,15 @@
     },
     "editor": {
       "loading": "加载编辑器…"
+    },
+    "peek": {
+      "size": "大小",
+      "updated": "更新于",
+      "created": "创建于",
+      "justNow": "刚刚",
+      "minutesAgo": "{n} 分钟前",
+      "hoursAgo": "{n} 小时前",
+      "daysAgo": "{n} 天前"
     },
     "list": {
       "pinned": "置顶",
@@ -420,6 +510,10 @@
       "cancel": "取消",
       "processing": "处理中…",
       "closeAria": "关闭"
+    },
+    "searchInput": {
+      "placeholder": "搜索…",
+      "clear": "清除"
     },
     "dotGridAvatar": {},
     "dotGridBackdrop": {},

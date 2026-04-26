@@ -75,6 +75,9 @@
     "en": "English",
     "label": "语言"
   },
+  "metadata": {
+    "description": "One for All — 开源自部署的数字员工组织平台"
+  },
   "healthBadge": {
     "ok": "后端正常 · {version}",
     "error": "后端不可达",

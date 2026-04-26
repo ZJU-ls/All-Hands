@@ -66,6 +66,12 @@ LEAD_EXTRA_SKILL_IDS: tuple[str, ...] = (
     "allhands.market_data",
     "allhands.observatory",
     "allhands.review_gates",
+    # 2026-04-26 · drawio 漏挂的 bug 修复 — 用户让 Lead 画 drawio 图时
+    # 之前 agent 直接把 mxfile XML 写到聊天里(因为没 skill 教它走
+    # read_skill_file + artifact_create 三步法)。挂上这个 skill 后
+    # Lead turn 0 就看到 「allhands.drawio-creator: 用 mxfile 模板产
+    # 图」 描述符,触发关键词命中即激活,XML 不再泄漏到对话。
+    "allhands.drawio-creator",
 )
 LEAD_SKILL_IDS: tuple[str, ...] = DEFAULT_SKILL_IDS + LEAD_EXTRA_SKILL_IDS
 

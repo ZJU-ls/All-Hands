@@ -4,25 +4,44 @@
     "subtitle": "把资料存进来 · 自己搜得到 · 员工也能引用回答",
     "loadFailed": "加载失败",
     "dismiss": "关闭",
+    "dismissAria": "关闭",
     "uploadHint": "点右上角「上传」按钮添加文档",
     "toolbar": {
       "kbSelectPlaceholder": "选择 KB",
       "kbSelectAria": "选择知识库",
       "kbCount": "{count} 篇文档",
+      "kbHint": "{count} docs",
       "newKb": "新建 KB",
       "newKbAria": "新建 KB",
       "search": "Search",
       "searchEllipsis": "…",
       "searchPlaceholder": "搜索 {kb} 里的内容…",
       "searchPlaceholderEmpty": "选个 KB 再搜",
+      "searchPlaceholderPick": "选个 KB 再操作",
+      "askPlaceholder": "问 {kb}…  (LLM 用召回的片段回答)",
+      "searchInside": "搜 {kb} 里的内容…",
       "clearSearch": "清除",
+      "clearSearchAria": "清除",
       "stateAll": "全部状态",
       "stateReady": "Ready",
       "stateIndexing": "Indexing",
       "stateFailed": "Failed",
       "stateFilterAria": "状态过滤",
       "upload": "上传",
-      "uploading": "Uploading…"
+      "uploading": "Uploading…",
+      "modeSearch": "搜",
+      "modeAsk": "问",
+      "modeSearchTitle": "搜索 · 列出片段",
+      "modeAskTitle": "提问 · LLM 用片段回答",
+      "submitSearch": "搜",
+      "submitAsk": "问",
+      "submitRunning": "…",
+      "ingestUrl": "抓 URL",
+      "ingestUrlTitle": "抓 URL 入库"
+    },
+    "dragOverlay": {
+      "drop": "松手即添加到 {kb}",
+      "supportedFormats": "支持 markdown / pdf / docx / html / txt / csv …"
     },
     "sidebar": {
       "loadingTitle": "加载中",
@@ -30,7 +49,9 @@
       "emptyTitle": "工作区还没有知识库",
       "emptyDesc": "新建一个 KB,开始把笔记 / PDF / 网页 clip 沉淀进来。",
       "emptyAction": "新建知识库",
-      "pickKbHint": "先在工具栏左侧选择一个知识库"
+      "pickKbHint": "先在工具栏左侧选择一个知识库",
+      "startLabel": "开始",
+      "startDesc": "右边是首次设置向导 · 跟着两步就能用。"
     },
     "kb": {
       "settingsAria": "知识库设置",
@@ -43,12 +64,31 @@
       "semanticEnabled": "已启用语义检索"
     },
     "tags": {
-      "sectionLabel": "Tags"
+      "sectionLabel": "Tags",
+      "clear": "清除"
     },
     "tools": {
       "title": "让员工帮你查",
       "skillName": "知识库研究员",
-      "body": "在「员工」页给某个员工加上「{skill}」技能,TA 在对话里就能搜这个 KB 并引用原文回答你。"
+      "body": "在「员工」页给某个员工加上「<emp>知识库研究员</emp>」技能,TA 在对话里就能搜这个 KB 并引用原文回答你。"
+    },
+    "onboarding": {
+      "heading": "第一次来 · 4 步搭好",
+      "subtitle": "把零散的笔记 / 文档存进来 · 自己搜得到 · 员工也能引用回答你",
+      "primaryCta": "现在新建第一个知识库",
+      "step1Title": "(可选)配置语义检索模型",
+      "step1Found": "已找到 {count} 个可用模型",
+      "step1NotFound": "没配也能用 mock(只匹配关键词)",
+      "step1Action": "去模型网关",
+      "step1Desc": "在「模型网关」加一个 OpenAI 或阿里云百炼 provider · KB 才能理解语义。不配的话演示模式也能跑通流程。",
+      "step2Title": "新建第一个知识库",
+      "step2Action": "新建知识库",
+      "step2Desc": "起个名字 · 选 embedder · 创建。建好后拖几个 md / pdf / docx 进来就能搜。",
+      "step3Title": "上传 / 抓 URL · 然后搜或问",
+      "step3Desc": "顶部工具栏:文件按钮 / 抓 URL · 多文件直接拖到页面。「搜/问」分段里切「问」就是 RAG 问答。",
+      "step4Title": "(可选)让员工帮你查",
+      "step4Action": "去员工页",
+      "step4Desc": "给某个员工挂上「知识库研究员」技能,他在 /chat 里就能搜这个 KB 并引用回答。"
     },
     "docs": {
       "sectionLabel": "Documents",
@@ -57,22 +97,62 @@
       "emptyDesc": "上传第一份文档(支持 md / pdf / docx / html / txt)。Agent 会自动解析、切片、嵌入,数秒内可检索。",
       "emptyAction": "上传文档",
       "noFilterMatch": "当前过滤器没有命中任何文档",
-      "chunkSummary": "🧩 {chunks} chunks · v{version}",
-      "sizeKb": "{kb} KB"
+      "chunkSummary": "{chunks} chunks · v{version}",
+      "sizeKb": "{kb} KB",
+      "removeTagFilter": "移除标签筛选",
+      "selectAria": "选择",
+      "selectedCount": "选中 {count}",
+      "cancel": "取消",
+      "bulkDelete": "批量删除",
+      "retryIngest": "重试入库"
+    },
+    "uploads": {
+      "summary": "上传 · 完成 {done}/{total}",
+      "failed": "{count} 失败",
+      "inflight": "{count} 进行中",
+      "clear": "清除"
     },
     "search": {
       "sectionLabel": "Search Results",
-      "hits": "{count} hit",
-      "hitsPlural": "{count} hits",
+      "hits": "{count, plural, one {# hit} other {# hits}}",
       "loadingTitle": "检索中…",
       "loadingDesc": "正在并发匹配关键词和语义",
       "noResults": "没有命中 · 试试更具体的关键词,或把 BM25 / vector 权重调一下",
       "bm25Rank": "BM25 #{rank}",
       "vecRank": "vec #{rank}",
-      "scoreLabel": "score"
+      "scoreLabel": "score",
+      "explainLabel": "为什么排在这",
+      "matchedTokens": "命中 {matched}/{total} 个词",
+      "matchedHeader": "查询里的词 · 是否命中",
+      "contributionHeader": "BM25 与向量召回的贡献",
+      "bm25Pct": "BM25 占 {pct}%",
+      "vectorPct": "向量占 {pct}%",
+      "vectorPctLabel": "向量",
+      "explainBoth": "关键词检索把它排到第 {bm25} · 向量检索排到第 {vec} · 融合后取较好侧",
+      "explainBm25Only": "只有关键词命中(第 {bm25}) · 向量没召回到这条",
+      "explainVecOnly": "只有向量命中(第 {vec}) · 关键词没匹上"
+    },
+    "starters": {
+      "label": "试试这些问题",
+      "hint": "AI 根据当前知识库的标题 / 章节自动生成 · 点一条即可问"
+    },
+    "ask": {
+      "askingLabel": "提问",
+      "answerLabel": "回答",
+      "thinkingTitle": "正在思考…",
+      "thinkingDesc": "检索片段 → 拼上下文 → LLM 答复",
+      "sourcesLabel": "来源",
+      "sourcesCount": "{count} 条",
+      "turnsLabel": "{count} 轮",
+      "youAskedLabel": "你的提问 #{n}",
+      "newConversation": "新对话",
+      "followUpPlaceholder": "继续追问 · 上一轮的引用编号会沿用…",
+      "followUpSubmit": "追问",
+      "followUpHint": "Enter 发送 · 答案沿用上一轮检索的同一份片段编号"
     },
     "delete": {
-      "confirm": "确认删除 \"{title}\"?(软删,30 天可恢复)"
+      "confirm": "确认删除 \"{title}\"?(软删,30 天可恢复)",
+      "bulkConfirm": "软删除 {count} 个文档?"
     },
     "modal": {
       "closeAria": "关闭"
@@ -92,6 +172,19 @@
       "embeddingHintDim": "{dim}d",
       "embeddingHelp": "灰色项缺少 API key · 在 .env 配置后启用 · 切换需 reindex"
     },
+    "urlIngest": {
+      "title": "抓 URL 到「{kb}」",
+      "cancel": "取消",
+      "submit": "抓取",
+      "submitting": "抓取中…",
+      "fieldUrl": "URL",
+      "urlPlaceholder": "https://example.com/some-article",
+      "urlHint": "v0 只支持服务端渲染好的 HTML 页面 · JS-only SPA 抓不到内容",
+      "fieldTitle": "标题(可选)",
+      "titlePlaceholder": "留空 = 用 URL 末段自动生成",
+      "fieldTags": "标签(可选 · 逗号分隔)",
+      "tagsPlaceholder": "article, blog, must-read"
+    },
     "settings": {
       "titleSuffix": "{name} · 设置",
       "cancel": "取消",
@@ -106,8 +199,7 @@
       }
     },
     "advanced": {
-      "intro": "一般不用动。两个权重控制\"关键词命中\"和\"语义匹配\"哪个更重要;",
-      "introTopK": "{topK} 是每次检索返回的最大段数。",
+      "intro": "一般不用动。两个权重控制\"关键词命中\"和\"语义匹配\"哪个更重要;<br></br><mono>top k</mono> 是每次检索返回的最大段数。",
       "fieldBm25": "关键词命中(BM25)",
       "fieldVec": "语义匹配(向量)",
       "fieldTopK": "返回多少段",
@@ -143,18 +235,14 @@
       "availableHeading": "可用的真实模型",
       "manageProvider": "管理 provider",
       "noModelsTitle": "还没有可用的 embedding 模型",
-      "noModelsBodyPrefix": "去「",
-      "noModelsLink": "模型网关",
-      "noModelsBodySuffix": "」添加一个 OpenAI 或阿里云百炼 provider · 填上 API key,这里就会出现可用模型列表。",
+      "noModelsBody": "去「<gateway>模型网关</gateway>」添加一个 OpenAI 或阿里云百炼 provider · 填上 API key,这里就会出现可用模型列表。",
       "goConfigure": "去配置",
       "switchModelHint": "切换 KB 的 embedding 模型需要重算所有\"语义指纹\"(reindex)· v0 暂不支持热切换。要换模型,先删了这个 KB,再用新模型新建。",
       "modelDimHint": "{dim}d"
     },
     "danger": {
       "heading": "删除知识库",
-      "warningPrefix": "软删除 · 30 天内可联系管理员恢复;之后所有文档 / 向量数据物理移除。原始上传文件留在磁盘上(",
-      "warningPath": "data/kb/{prefix}…",
-      "warningSuffix": "),需要手动清理。",
+      "warning": "软删除 · 30 天内可联系管理员恢复;之后所有文档 / 向量数据物理移除。原始上传文件留在磁盘上(<code>data/kb/{prefix}…</code>),需要手动清理。",
       "confirmFieldLabel": "输入 KB 名称「{name}」以确认",
       "deleteAction": "永久删除"
     },
@@ -178,6 +266,8 @@
       "loadingChunksDesc": "读取每段的位置 / section / 页码",
       "emptyChunks": "这个文档没有分片(可能解析为空)",
       "chunkRange": "{start}–{end} · ~{tokens} tokens",
+      "jumpToSource": "跳原文",
+      "jumpToSourceTitle": "跳到原文位置",
       "softDelete": "软删除",
       "close": "关闭"
     }

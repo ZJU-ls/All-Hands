@@ -26,14 +26,18 @@
  * components. Right slide-over for doc detail.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
+import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import {
+  type AskHistoryTurn,
+  type AskSource,
+  type AskStreamFrame,
   type DiagnoseDto,
   type DocumentChunkDto,
   type DocumentDto,
@@ -41,10 +45,14 @@ import {
   type KBDto,
   type KBStatsDto,
   type ScoredChunkDto,
+  askKBStream,
   diagnoseSearch,
+  getStarterQuestions,
   getDocumentText,
   getKBStats,
+  ingestUrl,
   listDocumentChunks,
+  reindexDocument,
   createKB,
   deleteDocument,
   listDocuments,
@@ -54,6 +62,15 @@ import {
   updateRetrievalConfig,
   uploadDocument,
 } from "@/lib/kb-api";
+
+function makeStateFilters(t: ReturnType<typeof useTranslations>) {
+  return [
+    { value: "", label: t("toolbar.stateAll") },
+    { value: "ready", label: t("toolbar.stateReady") },
+    { value: "indexing", label: t("toolbar.stateIndexing") },
+    { value: "failed", label: t("toolbar.stateFailed") },
+  ];
+}
 
 const SECTION_LABEL =
   "font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle";
@@ -92,6 +109,13 @@ const MIME_ICON: Record<string, { tone: string; label: string }> = {
   },
 };
 
+function isMarkdownLikely(mime: string): boolean {
+  const sub = mime.split("/").pop() ?? "";
+  // markdown / x-markdown / md / mdx — and we treat plain as markdown
+  // because most things people upload as .txt are still markdown-ish.
+  return /(markdown|^md$|^mdx$|plain|html)/.test(sub);
+}
+
 function MimeBadge({ mime }: { mime: string }) {
   const subtype = mime.split("/").pop() || mime;
   const meta = MIME_ICON[subtype] ?? { tone: "text-text-muted", label: subtype.slice(0, 4).toUpperCase() };
@@ -110,10 +134,6 @@ function MimeBadge({ mime }: { mime: string }) {
 
 export default function KnowledgePage() {
   const t = useTranslations("knowledge");
-  const tToolbar = useTranslations("knowledge.toolbar");
-  const tSidebar = useTranslations("knowledge.sidebar");
-  const tDelete = useTranslations("knowledge.delete");
-
   const [kbs, setKbs] = useState<KBDto[] | null>(null);
   const [activeKb, setActiveKb] = useState<KBDto | null>(null);
   const [docs, setDocs] = useState<DocumentDto[] | null>(null);
@@ -122,7 +142,34 @@ export default function KnowledgePage() {
   const [committedQuery, setCommittedQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<ScoredChunkDto[] | null>(null);
+  // Ask mode (RAG QA) lives in the same query bar as search; toggle picks
+  // which path to fire on Enter.
+  const [mode, setMode] = useState<"search" | "ask">("search");
+  // Multi-turn Ask state — each turn captures the user question, the
+  // chunks retrieved for it, the streaming/final answer text, and per-turn
+  // telemetry. ``streaming`` flips off when the SSE stream emits a `done`
+  // (or `error`) frame; the UI uses that to swap the typing cursor for
+  // citation chips.
+  type AskTurn = {
+    id: string;
+    question: string;
+    sources: AskSource[];
+    answer: string;
+    streaming: boolean;
+    error: string | null;
+    usedModel: string | null;
+    latencyMs: number | null;
+  };
+  const [askTurns, setAskTurns] = useState<AskTurn[]>([]);
+  const askAbortRef = useRef<AbortController | null>(null);
+  // Starter questions cache, scoped to active KB id. Loaded lazily the
+  // first time Ask mode is opened on a KB; nullable distinguishes
+  // "not loaded yet" (skeleton) from "loaded but empty" (hide row).
+  const [starters, setStarters] = useState<Record<string, string[] | null>>({});
+  const startersForActive = activeKb ? (starters[activeKb.id] ?? null) : null;
   const [stateFilter, setStateFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pageState, setPageState] = useState<"loading" | "ok" | "error">(
@@ -130,17 +177,8 @@ export default function KnowledgePage() {
   );
   const [showCreate, setShowCreate] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showUrlIngest, setShowUrlIngest] = useState(false);
   const [openDoc, setOpenDoc] = useState<DocumentDto | null>(null);
-
-  const stateFilters = useMemo(
-    () => [
-      { value: "", label: tToolbar("stateAll") },
-      { value: "ready", label: tToolbar("stateReady") },
-      { value: "indexing", label: tToolbar("stateIndexing") },
-      { value: "failed", label: tToolbar("stateFailed") },
-    ],
-    [tToolbar],
-  );
 
   async function refreshKbs(preserve?: KBDto | null) {
     try {
@@ -183,18 +221,105 @@ export default function KnowledgePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKb?.id]);
 
-  async function handleUpload(file: File) {
+  // Lazy-load starter questions the first time Ask mode is opened on a
+  // KB. Backend caches by (kb, updated_at); refetching after an upload
+  // is cheap. We *don't* prefetch on KB switch — saves an LLM call when
+  // the user just wants to browse docs / search.
+  useEffect(() => {
+    if (!activeKb || mode !== "ask") return;
+    if (starters[activeKb.id] !== undefined) return;
+    const id = activeKb.id;
+    setStarters((prev) => ({ ...prev, [id]: null }));
+    void getStarterQuestions(id, 4)
+      .then((qs) => setStarters((prev) => ({ ...prev, [id]: qs })))
+      .catch(() => setStarters((prev) => ({ ...prev, [id]: [] })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKb?.id, mode]);
+
+  function pickStarter(q: string) {
+    setSearchQuery(q);
+    void runAskTurn(q, false);
+  }
+
+  // Bulk upload — single file calls go through this too. Tracks per-file
+  // status so the user can see N/M progress instead of one opaque spinner.
+  type UploadEntry = {
+    id: string;
+    name: string;
+    state: "queued" | "uploading" | "done" | "failed";
+    error?: string;
+  };
+  const [uploads, setUploads] = useState<UploadEntry[]>([]);
+
+  async function handleUploadFiles(files: FileList | File[]) {
     if (!activeKb) return;
+    const list = Array.from(files);
+    if (list.length === 0) return;
+    const entries: UploadEntry[] = list.map((f, i) => ({
+      id: `${Date.now()}-${i}-${f.name}`,
+      name: f.name,
+      state: "queued",
+    }));
+    setUploads((prev) => [...entries, ...prev].slice(0, 20));
     setUploading(true);
     try {
-      await uploadDocument(activeKb.id, file, { title: file.name });
+      // Sequential upload — concurrent would race the SQLite writer lock
+      // and embedder rate limits; one-at-a-time keeps the UI honest about
+      // what's happening too.
+      for (const e of entries) {
+        const file = list[entries.indexOf(e)];
+        if (!file) continue;
+        setUploads((prev) =>
+          prev.map((p) => (p.id === e.id ? { ...p, state: "uploading" } : p)),
+        );
+        try {
+          await uploadDocument(activeKb.id, file, { title: file.name });
+          setUploads((prev) =>
+            prev.map((p) => (p.id === e.id ? { ...p, state: "done" } : p)),
+          );
+        } catch (err) {
+          setUploads((prev) =>
+            prev.map((p) =>
+              p.id === e.id ? { ...p, state: "failed", error: String(err) } : p,
+            ),
+          );
+        }
+      }
       await refreshDocs(activeKb.id);
       await refreshKbs(activeKb);
-    } catch (e) {
-      setError(String(e));
     } finally {
       setUploading(false);
+      // Clear done entries after 4s so panel doesn't accrete
+      setTimeout(() => {
+        setUploads((prev) => prev.filter((p) => p.state !== "done"));
+      }, 4000);
     }
+  }
+
+  // Page-level drag-drop receiver
+  const [dragOver, setDragOver] = useState(false);
+  function onDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (!activeKb) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragOver) setDragOver(true);
+  }
+  function onDragLeave(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      e.currentTarget === e.target ||
+      !e.currentTarget.contains(e.relatedTarget as Node)
+    ) {
+      setDragOver(false);
+    }
+  }
+  async function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (!activeKb || !e.dataTransfer.files.length) return;
+    await handleUploadFiles(e.dataTransfer.files);
   }
 
   async function handleSearch() {
@@ -202,6 +327,7 @@ export default function KnowledgePage() {
     setSearching(true);
     setCommittedQuery(searchQuery.trim());
     setResults(null);
+    setAskTurns([]);
     try {
       setResults(await searchKB(activeKb.id, searchQuery.trim()));
     } catch (e) {
@@ -211,18 +337,118 @@ export default function KnowledgePage() {
     }
   }
 
+  // Run one Ask turn. ``followUp`` keeps existing turns + their context
+  // window and appends a new turn; first-call mode resets the conversation.
+  async function runAskTurn(question: string, followUp: boolean) {
+    if (!activeKb || !question.trim()) return;
+    const q = question.trim();
+    setResults(null);
+    setCommittedQuery(q);
+
+    const history: AskHistoryTurn[] = followUp
+      ? askTurns
+          .filter((t) => !t.error && t.answer)
+          .flatMap<AskHistoryTurn>((t) => [
+            { role: "user", content: t.question },
+            { role: "assistant", content: t.answer },
+          ])
+      : [];
+
+    const turnId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const blank: AskTurn = {
+      id: turnId,
+      question: q,
+      sources: [],
+      answer: "",
+      streaming: true,
+      error: null,
+      usedModel: null,
+      latencyMs: null,
+    };
+    setAskTurns((prev) => (followUp ? [...prev, blank] : [blank]));
+
+    // Cancel any prior in-flight stream — only one Ask at a time.
+    askAbortRef.current?.abort();
+    const ctl = new AbortController();
+    askAbortRef.current = ctl;
+
+    try {
+      for await (const frame of askKBStream(activeKb.id, q, {
+        topK: 5,
+        history,
+        signal: ctl.signal,
+      })) {
+        applyAskFrame(turnId, frame);
+      }
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
+      applyAskFrame(turnId, { event: "error", message: String(e) });
+    }
+  }
+
+  function applyAskFrame(turnId: string, frame: AskStreamFrame) {
+    setAskTurns((prev) =>
+      prev.map((t) => {
+        if (t.id !== turnId) return t;
+        switch (frame.event) {
+          case "sources":
+            return { ...t, sources: frame.sources };
+          case "delta":
+            return { ...t, answer: t.answer + frame.text };
+          case "done":
+            return {
+              ...t,
+              streaming: false,
+              usedModel: frame.used_model,
+              latencyMs: frame.latency_ms,
+            };
+          case "error":
+            return { ...t, streaming: false, error: frame.message };
+          default:
+            return t;
+        }
+      }),
+    );
+  }
+
+  async function handleAsk() {
+    await runAskTurn(searchQuery, false);
+  }
+
+  async function handleAskFollowUp(q: string) {
+    await runAskTurn(q, true);
+  }
+
+  function handleClearAsk() {
+    askAbortRef.current?.abort();
+    setAskTurns([]);
+  }
+
   async function handleClearSearch() {
+    askAbortRef.current?.abort();
     setSearchQuery("");
     setCommittedQuery("");
     setResults(null);
+    setAskTurns([]);
   }
 
   async function handleDeleteDoc(d: DocumentDto) {
     if (!activeKb) return;
-    if (!confirm(tDelete("confirm", { title: d.title }))) return;
+    if (!confirm(t("delete.confirm", { title: d.title }))) return;
     try {
       await deleteDocument(activeKb.id, d.id);
       setOpenDoc(null);
+      await refreshDocs(activeKb.id);
+      await refreshKbs(activeKb);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleReindexDoc(d: DocumentDto) {
+    if (!activeKb) return;
+    try {
+      await reindexDocument(activeKb.id, d.id);
       await refreshDocs(activeKb.id);
       await refreshKbs(activeKb);
     } catch (e) {
@@ -236,17 +462,47 @@ export default function KnowledgePage() {
       (kbs ?? []).map((k) => ({
         value: k.id,
         label: k.name,
-        hint: tToolbar("kbCount", { count: k.document_count }),
+        hint: t("toolbar.kbHint", { count: k.document_count }),
       })),
-    [kbs, tToolbar],
+    [kbs, t],
   );
 
-  // Document filter (state)
+  // Document filter (state + tag)
   const filteredDocs = useMemo(() => {
     if (!docs) return [];
-    if (!stateFilter) return docs;
-    return docs.filter((d) => d.state === stateFilter);
-  }, [docs, stateFilter]);
+    return docs.filter((d) => {
+      if (stateFilter && d.state !== stateFilter) return false;
+      if (tagFilter && !d.tags.includes(tagFilter)) return false;
+      return true;
+    });
+  }, [docs, stateFilter, tagFilter]);
+
+  // Selection helpers
+  function toggleSelect(id: string) {
+    setSelectedDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelectedDocs(new Set());
+  }
+  async function bulkDelete() {
+    if (!activeKb || selectedDocs.size === 0) return;
+    if (!confirm(t("delete.bulkConfirm", { count: selectedDocs.size }))) return;
+    try {
+      for (const id of selectedDocs) {
+        await deleteDocument(activeKb.id, id);
+      }
+      clearSelection();
+      await refreshDocs(activeKb.id);
+      await refreshKbs(activeKb);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -254,7 +510,16 @@ export default function KnowledgePage() {
 
   return (
     <AppShell>
-      <div className="flex h-full flex-col gap-4 p-6">
+      <div
+        className={`relative flex h-full flex-col gap-4 p-6 ${
+          dragOver
+            ? "outline-dashed outline-2 outline-primary outline-offset-[-12px]"
+            : ""
+        }`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
         <PageHeader
           title={t("title")}
           subtitle={t("subtitle")}
@@ -268,7 +533,7 @@ export default function KnowledgePage() {
               type="button"
               onClick={() => setError(null)}
               className="ml-3 text-text-subtle hover:text-text"
-              aria-label={t("dismiss")}
+              aria-label={t("dismissAria")}
             >
               ✕
             </button>
@@ -285,72 +550,115 @@ export default function KnowledgePage() {
                 if (k) setActiveKb(k);
               }}
               options={kbSelectOptions}
-              placeholder={tToolbar("kbSelectPlaceholder")}
+              placeholder={t("toolbar.kbSelectPlaceholder")}
               className="min-w-[200px]"
               triggerClassName="h-9 rounded-xl"
-              ariaLabel={tToolbar("kbSelectAria")}
+              ariaLabel={t("toolbar.kbSelectAria")}
             />
             <button
               type="button"
               onClick={() => setShowCreate(true)}
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
-              aria-label={tToolbar("newKbAria")}
+              aria-label={t("toolbar.newKbAria")}
             >
               <Icon name="plus" size={13} />
-              <span>{tToolbar("newKb")}</span>
+              <span>{t("toolbar.newKb")}</span>
             </button>
 
-            {/* Search bar */}
-            <div className="relative ml-auto flex min-w-[300px] flex-1 max-w-[640px]">
-              <Icon
-                name="search"
-                size={14}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
-              />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleSearch();
-                  if (e.key === "Escape") void handleClearSearch();
-                }}
-                placeholder={
-                  activeKb
-                    ? tToolbar("searchPlaceholder", { kb: activeKb.name })
-                    : tToolbar("searchPlaceholderEmpty")
-                }
-                disabled={!activeKb}
-                className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-20 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
-              />
-              {committedQuery && (
+            {/* Search / Ask bar */}
+            <div className="relative ml-auto flex min-w-[340px] flex-1 max-w-[720px] items-center gap-2">
+              {/* Mode toggle (segmented) */}
+              <div className="inline-flex h-9 items-center rounded-xl border border-border bg-surface p-0.5">
+                {(["search", "ask"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMode(m)}
+                    className={`inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[11px] font-medium transition duration-fast ${
+                      mode === m
+                        ? "bg-primary text-primary-fg shadow-soft-sm"
+                        : "text-text-muted hover:text-text"
+                    }`}
+                    title={m === "search" ? t("toolbar.modeSearchTitle") : t("toolbar.modeAskTitle")}
+                  >
+                    <Icon name={m === "search" ? "search" : "sparkles"} size={11} />
+                    {m === "search" ? t("toolbar.modeSearch") : t("toolbar.modeAsk")}
+                  </button>
+                ))}
+              </div>
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      void (mode === "ask" ? handleAsk() : handleSearch());
+                    }
+                    if (e.key === "Escape") void handleClearSearch();
+                  }}
+                  placeholder={
+                    !activeKb
+                      ? t("toolbar.searchPlaceholderPick")
+                      : mode === "ask"
+                        ? t("toolbar.askPlaceholder", { kb: activeKb.name })
+                        : t("toolbar.searchInside", { kb: activeKb.name })
+                  }
+                  disabled={!activeKb}
+                  className="h-9 w-full rounded-xl border border-border bg-surface pl-3 pr-20 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
+                />
+                {committedQuery && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="absolute right-14 top-1/2 -translate-y-1/2 text-[11px] text-text-subtle hover:text-text"
+                    aria-label={t("toolbar.clearSearchAria")}
+                  >
+                    ✕
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleClearSearch}
-                  className="absolute right-12 top-1/2 -translate-y-1/2 text-[11px] text-text-subtle hover:text-text"
-                  aria-label={tToolbar("clearSearch")}
+                  onClick={() =>
+                    mode === "ask" ? void handleAsk() : void handleSearch()
+                  }
+                  disabled={
+                    (mode === "ask" ? askTurns.some((t) => t.streaming) : searching) ||
+                    !searchQuery.trim() ||
+                    !activeKb
+                  }
+                  className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
                 >
-                  ✕
+                  {(mode === "ask"
+                    ? askTurns.some((t) => t.streaming)
+                    : searching)
+                    ? t("toolbar.submitRunning")
+                    : mode === "ask"
+                      ? t("toolbar.submitAsk")
+                      : t("toolbar.submitSearch")}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={handleSearch}
-                disabled={searching || !searchQuery.trim() || !activeKb}
-                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 items-center rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
-              >
-                {searching ? tToolbar("searchEllipsis") : tToolbar("search")}
-              </button>
+              </div>
             </div>
 
             <Select
               value={stateFilter}
               onChange={setStateFilter}
-              options={stateFilters}
+              options={makeStateFilters(t)}
               className="min-w-[120px]"
               triggerClassName="h-9 rounded-xl"
-              ariaLabel={tToolbar("stateFilterAria")}
+              ariaLabel={t("toolbar.stateFilterAria")}
             />
+
+            <button
+              type="button"
+              onClick={() => activeKb && setShowUrlIngest(true)}
+              disabled={!activeKb || uploading}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text disabled:opacity-40 disabled:cursor-not-allowed transition duration-fast"
+              title={t("toolbar.ingestUrlTitle")}
+            >
+              <Icon name="link" size={13} />
+              {t("toolbar.ingestUrl")}
+            </button>
 
             <label
               className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm transition duration-fast cursor-pointer ${
@@ -360,18 +668,51 @@ export default function KnowledgePage() {
               }`}
             >
               <Icon name="upload" size={13} />
-              {uploading ? tToolbar("uploading") : tToolbar("upload")}
+              {uploading ? t("toolbar.uploading") : t("toolbar.upload")}
               <input
                 type="file"
+                multiple
                 disabled={!activeKb || uploading}
                 className="hidden"
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void handleUpload(f);
+                  if (e.target.files?.length) {
+                    void handleUploadFiles(e.target.files);
+                  }
                   e.currentTarget.value = "";
                 }}
               />
             </label>
+          </div>
+        )}
+
+        {/* Upload progress strip — pin under toolbar so user sees what's
+            happening with bulk drops */}
+        {uploads.length > 0 && (
+          <UploadProgressStrip
+            uploads={uploads}
+            onClear={() => setUploads([])}
+          />
+        )}
+
+        {/* Drag-drop hint overlay — only when dragging files in */}
+        {dragOver && activeKb && (
+          <div
+            className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center"
+            aria-hidden="true"
+          >
+            <div className="rounded-2xl border border-primary bg-surface px-8 py-6 text-center shadow-soft-lg">
+              <Icon
+                name="upload"
+                size={28}
+                className="mx-auto mb-2 text-primary"
+              />
+              <div className="text-[14px] font-semibold text-text">
+                {t("dragOverlay.drop", { kb: activeKb.name })}
+              </div>
+              <div className="font-mono text-[11px] text-text-subtle">
+                {t("dragOverlay.supportedFormats")}
+              </div>
+            </div>
           </div>
         )}
 
@@ -380,10 +721,7 @@ export default function KnowledgePage() {
           {/* ─ Left aside */}
           <aside className="col-span-12 flex min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3">
             {pageState === "loading" && (
-              <LoadingState
-                title={tSidebar("loadingTitle")}
-                description={tSidebar("loadingDesc")}
-              />
+              <LoadingState title={t("sidebar.loadingTitle")} description={t("sidebar.loadingDesc")} />
             )}
             {pageState === "error" && (
               <ErrorState title={error || t("loadFailed")} />
@@ -394,31 +732,46 @@ export default function KnowledgePage() {
                   kb={activeKb}
                   onOpenSettings={() => setShowSettings(true)}
                 />
-                <TagsCard docs={docs ?? []} />
+                <TagsCard
+                  docs={docs ?? []}
+                  active={tagFilter}
+                  onPick={setTagFilter}
+                />
                 <ToolsCard />
               </>
             )}
             {pageState === "ok" && !activeKb && kbs && kbs.length === 0 && (
-              <EmptyState
-                title={tSidebar("emptyTitle")}
-                description={tSidebar("emptyDesc")}
-                action={{
-                  label: tSidebar("emptyAction"),
-                  onClick: () => setShowCreate(true),
-                  icon: "plus",
-                }}
-                icon="book-open"
-              />
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <div className={SECTION_LABEL}>{t("sidebar.startLabel")}</div>
+                <p className="mt-2 text-[12px] leading-relaxed text-text-muted">
+                  {t("sidebar.startDesc")}
+                </p>
+              </div>
             )}
           </aside>
 
           {/* ─ Main canvas */}
           <main className="col-span-12 flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:col-span-9">
-            {pageState === "ok" && !activeKb ? (
+            {pageState === "ok" && !activeKb && kbs && kbs.length === 0 ? (
+              <OnboardingWizard
+                models={models}
+                onCreate={() => setShowCreate(true)}
+              />
+            ) : pageState === "ok" && !activeKb ? (
               <div className="flex h-full items-center justify-center px-6 py-12 text-[12px] text-text-muted">
-                {tSidebar("pickKbHint")}
+                {t("sidebar.pickKbHint")}
               </div>
-            ) : pageState !== "ok" ? null : committedQuery ? (
+            ) : pageState !== "ok" ? null : askTurns.length > 0 ? (
+              <AskAnswerView
+                turns={askTurns}
+                onFollowUp={handleAskFollowUp}
+                onClear={handleClearAsk}
+                onChunkClick={(docId) => {
+                  const d = docs?.find((x) => x.id === docId);
+                  if (d) setOpenDoc(d);
+                }}
+              />
+            ) : committedQuery ? (
               <SearchResultsView
                 query={committedQuery}
                 results={results}
@@ -432,14 +785,21 @@ export default function KnowledgePage() {
               <DocumentsView
                 docs={filteredDocs}
                 allDocsCount={docs?.length ?? 0}
-                hasFilter={!!stateFilter}
+                hasFilter={!!stateFilter || !!tagFilter}
                 onClickDoc={setOpenDoc}
                 onUpload={() => {
-                  // Trigger the toolbar upload — fastest path is to focus the
-                  // hidden input, but simpler: surface a hint.
                   setError(t("uploadHint"));
                   setTimeout(() => setError(null), 2500);
                 }}
+                onReindex={handleReindexDoc}
+                selected={selectedDocs}
+                onToggleSelect={toggleSelect}
+                onClearSelection={clearSelection}
+                onBulkDelete={bulkDelete}
+                tagFilter={tagFilter}
+                onClearTagFilter={() => setTagFilter(null)}
+                starters={mode === "ask" ? startersForActive : null}
+                onPickStarter={pickStarter}
               />
             )}
           </main>
@@ -456,6 +816,18 @@ export default function KnowledgePage() {
         )}
 
         {/* ─ Modal: Create KB */}
+        {showUrlIngest && activeKb && (
+          <UrlIngestModal
+            kb={activeKb}
+            onClose={() => setShowUrlIngest(false)}
+            onIngested={async () => {
+              setShowUrlIngest(false);
+              await refreshDocs(activeKb.id);
+              await refreshKbs(activeKb);
+            }}
+            onError={setError}
+          />
+        )}
         {showCreate && (
           <CreateKBModal
             models={models}
@@ -502,14 +874,15 @@ export default function KnowledgePage() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * KB info card · 用户视角 · 不暴露 BM25/RRF/dim/cosine 等术语。
+ * KB info card · user perspective · no BM25/RRF/dim/cosine jargon.
  *
- * 三个层次:
- *   1. 名字 + 简介 + 设置入口
- *   2. 一句话能力简述 (e.g. "✓ 启用了语义检索" / "演示模式 · 检索只能匹配关键词")
- *   3. 数字: "5 段内容 · 来自 2 份资料"
+ * Three layers:
+ *   1. Name + description + settings entry
+ *   2. One-line capability summary (e.g. semantic search on / demo mode warning)
+ *   3. Numbers: "5 snippets · from 2 sources"
  *
- * 检索权重 / embedder 维度等技术细节都收进 设置弹窗的"高级"分组。
+ * Retrieval weights / embedder dim and other technical details are tucked
+ * into the "Advanced" tab of the settings dialog.
  */
 function KBInfoCard({
   kb,
@@ -544,7 +917,7 @@ function KBInfoCard({
         </button>
       </div>
 
-      {/* 内容统计 — 友好语言,不用 documents/chunks 的英文术语 */}
+      {/* Content stats — friendly wording, no documents/chunks jargon */}
       <div className="mt-3 flex items-baseline gap-3 text-[13px] text-text">
         <span>
           <span className="font-semibold">{kb.document_count}</span>
@@ -557,7 +930,7 @@ function KBInfoCard({
         </span>
       </div>
 
-      {/* 能力提示 — mock 高亮警示;真实 provider 静默 ✓ */}
+      {/* Capability hint — mock surfaces a warning; real providers stay quiet */}
       {isMock ? (
         <button
           type="button"
@@ -583,26 +956,66 @@ function KBInfoCard({
   );
 }
 
-function TagsCard({ docs }: { docs: DocumentDto[] }) {
-  const t = useTranslations("knowledge.tags");
+function TagsCard({
+  docs,
+  active,
+  onPick,
+}: {
+  docs: DocumentDto[];
+  active: string | null;
+  onPick: (t: string | null) => void;
+}) {
+  const tt = useTranslations("knowledge.tags");
   const tags = useMemo(() => {
     const counts = new Map<string, number>();
     for (const d of docs) {
-      for (const tag of d.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      for (const t of d.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
     }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [docs]);
   if (tags.length === 0) return null;
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {tags.map(([tag, n]) => (
+      <div className="mb-2 flex items-center justify-between">
+        <span className={SECTION_LABEL}>{tt("sectionLabel")}</span>
+        {active && (
+          <button
+            type="button"
+            onClick={() => onPick(null)}
+            className="text-[11px] text-text-subtle hover:text-text"
+          >
+            {tt("clear")}
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {tags.map(([t, n]) => {
+          const isActive = active === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onPick(isActive ? null : t)}
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition duration-fast ${
+                isActive
+                  ? "border-primary bg-primary-muted text-primary"
+                  : "border-border bg-surface-2 text-text-muted hover:border-border-strong hover:text-text"
+              }`}
+            >
+              <span>#{t}</span>
+              <span className="font-mono text-[10px] text-text-subtle">{n}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Suppress the original span loop — replaced with the buttons above */}
+      <div className="hidden">
+        {tags.map(([t, n]) => (
           <span
-            key={tag}
+            key={t}
             className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted"
           >
-            <span>#{tag}</span>
+            <span>#{t}</span>
             <span className="font-mono text-[10px] text-text-subtle">{n}</span>
           </span>
         ))}
@@ -621,11 +1034,188 @@ function ToolsCard() {
       </div>
       <p className="mt-1.5 text-[12px] leading-relaxed text-text-muted">
         {t.rich("body", {
-          skill: () => (
-            <span className="text-text">{t("skillName")}</span>
-          ),
+          emp: (chunks) => <span className="text-text">{chunks}</span>,
         })}
       </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Onboarding wizard (zero-KB state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Full-page first-run experience. Notion / ChatGPT custom-GPT do this:
+ * give the user a numbered "here's how to start" guide plus the primary
+ * action prominent. Avoids the "blank canvas where do I click" anxiety.
+ */
+function OnboardingWizard({
+  models,
+  onCreate,
+}: {
+  models: EmbeddingModelOption[];
+  onCreate: () => void;
+}) {
+  const t = useTranslations("knowledge.onboarding");
+  const realAvailable = models.filter(
+    (m) => !m.ref.startsWith("mock:") && m.available,
+  ).length;
+  const steps = [
+    {
+      n: 1,
+      title: t("step1Title"),
+      done: realAvailable > 0,
+      cta: realAvailable > 0
+        ? t("step1Found", { count: realAvailable })
+        : t("step1NotFound"),
+      action: realAvailable === 0
+        ? { href: "/gateway", label: t("step1Action") }
+        : undefined,
+      desc: t("step1Desc"),
+    },
+    {
+      n: 2,
+      title: t("step2Title"),
+      done: false,
+      cta: undefined,
+      action: { onClick: onCreate, label: t("step2Action") },
+      desc: t("step2Desc"),
+    },
+    {
+      n: 3,
+      title: t("step3Title"),
+      done: false,
+      cta: undefined,
+      action: undefined,
+      desc: t("step3Desc"),
+    },
+    {
+      n: 4,
+      title: t("step4Title"),
+      done: false,
+      cta: undefined,
+      action: { href: "/employees", label: t("step4Action") },
+      desc: t("step4Desc"),
+    },
+  ];
+  return (
+    <div className="flex h-full flex-col overflow-y-auto px-8 py-10">
+      <div className="mx-auto w-full max-w-2xl">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary-muted">
+            <Icon name="book-open" size={26} className="text-primary" />
+          </div>
+          <h2 className="text-[20px] font-semibold text-text">{t("heading")}</h2>
+          <p className="mt-1 text-[13px] text-text-muted">
+            {t("subtitle")}
+          </p>
+        </div>
+        <ol className="space-y-3">
+          {steps.map((s) => (
+            <li
+              key={s.n}
+              className="flex gap-3 rounded-xl border border-border bg-surface-2 p-4"
+            >
+              <div
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg font-mono text-[12px] ${
+                  s.done
+                    ? "bg-success-soft text-success"
+                    : "bg-primary-muted text-primary"
+                }`}
+              >
+                {s.done ? <Icon name="check" size={14} /> : s.n}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-[13px] font-semibold text-text">
+                  {s.title}
+                  {s.cta && (
+                    <span className="font-mono text-[10px] text-text-subtle">
+                      · {s.cta}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[12px] leading-relaxed text-text-muted">
+                  {s.desc}
+                </p>
+                {s.action && "href" in s.action ? (
+                  <a
+                    href={s.action.href}
+                    className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted hover:border-border-strong hover:text-text"
+                  >
+                    {s.action.label}
+                    <Icon name="external-link" size={11} />
+                  </a>
+                ) : s.action ? (
+                  <button
+                    type="button"
+                    onClick={s.action.onClick}
+                    className="mt-2 inline-flex h-7 items-center gap-1.5 rounded-md bg-primary px-2.5 text-[11px] font-medium text-primary-fg hover:bg-primary-hover"
+                  >
+                    <Icon name="plus" size={11} />
+                    {s.action.label}
+                  </button>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-6 flex justify-center">
+          <button
+            type="button"
+            onClick={onCreate}
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-5 text-[13px] font-semibold text-primary-fg shadow-soft-sm hover:bg-primary-hover transition duration-fast"
+          >
+            <Icon name="plus" size={14} />
+            {t("primaryCta")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Starter chips — LLM-suggested first questions, shown when Ask mode is
+// idle. Mirrors NotebookLM's "Suggested questions" strip and ChatGPT's
+// custom-GPT example prompts. Empty list (no docs / no provider) renders
+// nothing so the layout collapses cleanly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function StarterChips({
+  starters,
+  onPick,
+}: {
+  starters: string[];
+  onPick: (q: string) => void;
+}) {
+  const t = useTranslations("knowledge.starters");
+  return (
+    <div className="border-b border-border bg-gradient-to-b from-primary-muted/30 to-transparent px-5 py-4">
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-primary">
+        <Icon name="sparkles" size={11} />
+        <span>{t("label")}</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {starters.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => onPick(q)}
+            className="group inline-flex items-start gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left text-[12px] text-text-muted hover:border-primary/40 hover:bg-primary-muted/40 hover:text-text transition duration-fast"
+          >
+            <Icon
+              name="message-square"
+              size={12}
+              className="mt-0.5 text-text-subtle group-hover:text-primary"
+            />
+            <span className="max-w-[280px] leading-snug">{q}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+        {t("hint")}
+      </div>
     </div>
   );
 }
@@ -640,12 +1230,30 @@ function DocumentsView({
   hasFilter,
   onClickDoc,
   onUpload,
+  onReindex,
+  selected,
+  onToggleSelect,
+  onClearSelection,
+  onBulkDelete,
+  tagFilter,
+  onClearTagFilter,
+  starters,
+  onPickStarter,
 }: {
   docs: DocumentDto[];
   allDocsCount: number;
   hasFilter: boolean;
   onClickDoc: (d: DocumentDto) => void;
   onUpload: () => void;
+  onReindex: (d: DocumentDto) => Promise<void>;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onClearSelection: () => void;
+  onBulkDelete: () => Promise<void>;
+  tagFilter: string | null;
+  onClearTagFilter: () => void;
+  starters: string[] | null;
+  onPickStarter: (q: string) => void;
 }) {
   const t = useTranslations("knowledge.docs");
   if (allDocsCount === 0) {
@@ -673,20 +1281,77 @@ function DocumentsView({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
-        <span className="font-mono text-[10px] text-text-subtle">
-          {t("countOf", { visible: docs.length, total: allDocsCount })}
-        </span>
+      {starters && starters.length > 0 && (
+        <StarterChips starters={starters} onPick={onPickStarter} />
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
+          <span className="font-mono text-[10px] text-text-subtle">
+            {t("countOf", { visible: docs.length, total: allDocsCount })}
+          </span>
+          {tagFilter && (
+            <button
+              type="button"
+              onClick={onClearTagFilter}
+              className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary-muted px-2 py-0.5 text-[11px] text-primary"
+              title={t("removeTagFilter")}
+            >
+              #{tagFilter} ✕
+            </button>
+          )}
+        </div>
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-text-muted">
+              {t("selectedCount", { count: selected.size })}
+            </span>
+            <button
+              type="button"
+              onClick={onClearSelection}
+              className="inline-flex h-7 items-center rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted hover:text-text"
+            >
+              {t("cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void onBulkDelete()}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-danger/40 bg-danger-soft px-2 text-[11px] text-danger hover:bg-danger/10"
+            >
+              <Icon name="trash-2" size={11} />
+              {t("bulkDelete")}
+            </button>
+          </div>
+        )}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-5 sm:grid-cols-2 xl:grid-cols-3">
-        {docs.map((d) => (
-          <button
+        {docs.map((d) => {
+          const isSelected = selected.has(d.id);
+          return (
+          <div
             key={d.id}
-            type="button"
+            className={`group relative flex cursor-pointer flex-col gap-2 rounded-xl border bg-surface-2 p-3 text-left transition duration-fast hover:-translate-y-px hover:shadow-soft-sm ${
+              isSelected
+                ? "border-primary ring-1 ring-primary/30"
+                : "border-border hover:border-border-strong"
+            }`}
             onClick={() => onClickDoc(d)}
-            className="group flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-3 text-left transition duration-fast hover:-translate-y-px hover:border-border-strong hover:shadow-soft-sm"
           >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect(d.id);
+              }}
+              className={`absolute left-2 top-2 grid h-5 w-5 place-items-center rounded border transition duration-fast ${
+                isSelected
+                  ? "border-primary bg-primary text-primary-fg opacity-100"
+                  : "border-border bg-surface text-transparent opacity-0 group-hover:opacity-100 hover:border-border-strong"
+              }`}
+              aria-label={t("selectAria")}
+            >
+              <Icon name="check" size={12} />
+            </button>
             <div className="flex items-start justify-between gap-2">
               <MimeBadge mime={d.mime_type} />
               <StatePill state={d.state} />
@@ -697,12 +1362,12 @@ function DocumentsView({
               </div>
               {d.tags.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {d.tags.slice(0, 3).map((tag) => (
+                  {d.tags.slice(0, 3).map((t) => (
                     <span
-                      key={tag}
+                      key={t}
                       className="rounded-full bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle"
                     >
-                      #{tag}
+                      #{t}
                     </span>
                   ))}
                 </div>
@@ -710,25 +1375,429 @@ function DocumentsView({
             </div>
             <div className="flex items-center justify-between font-mono text-[10px] text-text-subtle">
               <span>
-                {t("chunkSummary", {
-                  chunks: d.chunk_count,
-                  version: d.version,
-                })}
+                {"\u{1F9E9} "}
+                {t("chunkSummary", { chunks: d.chunk_count, version: d.version })}
               </span>
-              <span>
-                {t("sizeKb", { kb: (d.size_bytes / 1024).toFixed(1) })}
-              </span>
+              <span>{t("sizeKb", { kb: (d.size_bytes / 1024).toFixed(1) })}</span>
             </div>
             {d.state_error && (
               <div className="rounded-md border border-danger/30 bg-danger-soft px-2 py-1 text-[10px] text-danger">
                 {d.state_error}
               </div>
             )}
-          </button>
-        ))}
+            {d.state === "failed" && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onReindex(d);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void onReindex(d);
+                  }
+                }}
+                className="inline-flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-warning/40 bg-warning-soft px-2 text-[11px] text-warning hover:bg-warning/10 transition duration-fast"
+              >
+                <Icon name="refresh" size={11} />
+                {t("retryIngest")}
+              </span>
+            )}
+          </div>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Upload progress strip
+// ─────────────────────────────────────────────────────────────────────────────
+
+function UploadProgressStrip({
+  uploads,
+  onClear,
+}: {
+  uploads: Array<{
+    id: string;
+    name: string;
+    state: "queued" | "uploading" | "done" | "failed";
+    error?: string;
+  }>;
+  onClear: () => void;
+}) {
+  const t = useTranslations("knowledge.uploads");
+  const done = uploads.filter((u) => u.state === "done").length;
+  const failed = uploads.filter((u) => u.state === "failed").length;
+  const inflight = uploads.filter(
+    (u) => u.state === "queued" || u.state === "uploading",
+  ).length;
+
+  return (
+    <div className="rounded-xl border border-border bg-surface px-4 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[12px]">
+          <Icon name="upload" size={12} className="text-primary" />
+          <span className="text-text">
+            {t("summary", { done, total: uploads.length })}
+            {failed > 0 && (
+              <span className="ml-2 text-danger">{t("failed", { count: failed })}</span>
+            )}
+            {inflight > 0 && (
+              <span className="ml-2 text-warning">{t("inflight", { count: inflight })}</span>
+            )}
+          </span>
+        </div>
+        {inflight === 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[11px] text-text-subtle hover:text-text"
+          >
+            {t("clear")}
+          </button>
+        )}
+      </div>
+      <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
+        {uploads.slice(0, 6).map((u) => {
+          const tone =
+            u.state === "done"
+              ? "text-success"
+              : u.state === "failed"
+                ? "text-danger"
+                : "text-warning";
+          const icon =
+            u.state === "done"
+              ? "check"
+              : u.state === "failed"
+                ? "alert-triangle"
+                : "loader";
+          return (
+            <li
+              key={u.id}
+              className="flex items-center gap-1.5 truncate font-mono text-[10px] text-text-muted"
+              title={u.error || u.name}
+            >
+              <Icon
+                name={icon}
+                size={10}
+                className={`${tone} ${u.state === "uploading" ? "animate-spin" : ""}`}
+              />
+              <span className="truncate">{u.name}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ask (RAG) answer view — Glean / Perplexity style
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Renders the LLM answer with inline cite chips. The model output uses
+ * "[1]", "[2]" markers; we replace them with clickable buttons that open
+ * the referenced source card. The full sources list sits below the answer
+ * (Perplexity's "sources strip" + Cohere Coral's footnote pattern).
+ */
+type AskTurnView = {
+  id: string;
+  question: string;
+  sources: AskSource[];
+  answer: string;
+  streaming: boolean;
+  error: string | null;
+  usedModel: string | null;
+  latencyMs: number | null;
+};
+
+function AskAnswerView({
+  turns,
+  onFollowUp,
+  onClear,
+  onChunkClick,
+}: {
+  turns: AskTurnView[];
+  onFollowUp: (q: string) => void | Promise<void>;
+  onClear: () => void;
+  onChunkClick: (docId: string) => void;
+}) {
+  const t = useTranslations("knowledge.ask");
+  const [followUpDraft, setFollowUpDraft] = useState("");
+  const tail = turns[turns.length - 1];
+  const anyStreaming = turns.some((tt) => tt.streaming);
+
+  // Auto-scroll the conversation pane so the latest delta stays in view
+  // while streaming. Skipped when the user manually scrolls up (sentinel
+  // is the last turn — IntersectionObserver would over-engineer this).
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [turns]);
+
+  function submitFollowUp() {
+    const q = followUpDraft.trim();
+    if (!q || anyStreaming) return;
+    setFollowUpDraft("");
+    void onFollowUp(q);
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Header — single bar carries conversation length + clear control */}
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          <Icon name="sparkles" size={13} className="text-primary" />
+          <div className={SECTION_LABEL}>{t("answerLabel")}</div>
+          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text">
+            {t("turnsLabel", { count: turns.length })}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 font-mono text-[10px] text-text-subtle">
+          {tail?.usedModel && <span>{tail.usedModel}</span>}
+          {tail?.latencyMs !== null && tail?.latencyMs !== undefined && (
+            <>
+              <span>·</span>
+              <span>{tail.latencyMs.toFixed(0)} ms</span>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={onClear}
+            className="ml-2 inline-flex h-6 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[10px] uppercase tracking-wider text-text-muted hover:border-border-strong hover:text-text"
+            disabled={anyStreaming}
+          >
+            <Icon name="refresh" size={10} />
+            {t("newConversation")}
+          </button>
+        </div>
+      </div>
+
+      {/* Scrolling conversation log */}
+      <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <ul className="space-y-6">
+          {turns.map((turn, idx) => (
+            <li key={turn.id} className="space-y-3">
+              {/* User question bubble — kept compact, right-aligned-feeling
+                  but still left-anchored for legibility */}
+              <div className="flex items-start gap-2.5">
+                <div className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary-muted text-primary">
+                  <Icon name="user" size={11} />
+                </div>
+                <div className="flex-1">
+                  <div className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+                    {t("youAskedLabel", { n: idx + 1 })}
+                  </div>
+                  <p className="mt-1 text-[14px] leading-snug text-text">
+                    {turn.question}
+                  </p>
+                </div>
+              </div>
+
+              {/* Answer bubble */}
+              <div className="flex items-start gap-2.5">
+                <div className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-primary">
+                  <Icon name="sparkles" size={11} />
+                </div>
+                <div className="flex-1 space-y-3">
+                  <AskTurnAnswer turn={turn} onChunkClick={onChunkClick} />
+                  {turn.sources.length > 0 && (
+                    <AskTurnSources turn={turn} onChunkClick={onChunkClick} />
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Follow-up composer — pinned bottom; mirrors a chat input but
+          only fires the Ask path. Disabled while a turn is mid-stream
+          to keep server-side ordering simple. */}
+      <div className="border-t border-border bg-surface px-5 py-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={followUpDraft}
+            onChange={(e) => setFollowUpDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitFollowUp();
+              }
+            }}
+            placeholder={t("followUpPlaceholder")}
+            disabled={anyStreaming}
+            className="h-9 flex-1 rounded-xl border border-border bg-surface-2 px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={submitFollowUp}
+            disabled={anyStreaming || !followUpDraft.trim()}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-[12px] font-medium text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-40"
+          >
+            <Icon name="sparkles" size={12} />
+            {t("followUpSubmit")}
+          </button>
+        </div>
+        <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+          {t("followUpHint")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// One turn's answer body. Splits on `[N]` markers; while ``streaming``,
+// shows a blinking caret so the user sees progress before sources lock in.
+function AskTurnAnswer({
+  turn,
+  onChunkClick,
+}: {
+  turn: AskTurnView;
+  onChunkClick: (docId: string) => void;
+}) {
+  const t = useTranslations("knowledge.ask");
+  if (turn.error) {
+    return (
+      <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-[13px] text-danger">
+        {turn.error}
+      </div>
+    );
+  }
+  if (turn.streaming && !turn.answer) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-4 py-3 text-[13px] text-text-muted">
+        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+        <span>{t("thinkingTitle")}</span>
+      </div>
+    );
+  }
+  const parts = renderAnswerWithCites(
+    turn.answer,
+    turn.sources,
+    onChunkClick,
+    turn.id,
+  );
+  return (
+    <div className="rounded-xl border border-border bg-surface-2 p-4">
+      <p className="whitespace-pre-wrap text-[14px] leading-[1.7] text-text">
+        {parts}
+        {turn.streaming && (
+          <span className="ml-0.5 inline-block h-[14px] w-[2px] animate-pulse bg-primary align-middle" />
+        )}
+      </p>
+    </div>
+  );
+}
+
+function AskTurnSources({
+  turn,
+  onChunkClick,
+}: {
+  turn: AskTurnView;
+  onChunkClick: (docId: string) => void;
+}) {
+  const t = useTranslations("knowledge.ask");
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <span className={SECTION_LABEL}>{t("sourcesLabel")}</span>
+        <span className="font-mono text-[10px] text-text-subtle">
+          {t("sourcesCount", { count: turn.sources.length })}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {turn.sources.map((s) => (
+          <li
+            key={s.chunk_id}
+            id={`src-${turn.id}-${s.n}`}
+            className="rounded-xl border border-border bg-surface p-3"
+          >
+            <button
+              type="button"
+              onClick={() => onChunkClick(s.doc_id)}
+              className="flex w-full items-start justify-between gap-3 text-left"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
+                  [{s.n}]
+                </span>
+                <span className="font-mono text-[11px] text-text-muted">
+                  {s.citation}
+                </span>
+              </div>
+              <span className="font-mono text-[10px] text-text-subtle">
+                {s.score.toFixed(4)}
+              </span>
+            </button>
+            {s.section_path && (
+              <div className="mt-1.5 font-mono text-[10px] text-text-subtle">
+                {s.section_path}
+              </div>
+            )}
+            <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[12px] leading-relaxed text-text">
+              {s.text}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function renderAnswerWithCites(
+  answer: string,
+  sources: AskSource[],
+  onClickSource: (docId: string) => void,
+  turnId?: string,
+): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const re = /\[(\d+)\]/g;
+  const known = new Map(sources.map((s) => [s.n, s] as const));
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  while ((m = re.exec(answer)) !== null) {
+    if (m.index > last) {
+      out.push(<span key={`t${key++}`}>{answer.slice(last, m.index)}</span>);
+    }
+    const n = Number(m[1]);
+    const src = known.get(n);
+    if (src) {
+      out.push(
+        <button
+          key={`c${key++}`}
+          type="button"
+          onClick={() => {
+            const id = turnId ? `src-${turnId}-${n}` : `src-${n}`;
+            const el = document.getElementById(id);
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            onClickSource(src.doc_id);
+          }}
+          className="mx-0.5 inline-flex items-center rounded-md bg-primary-muted px-1.5 align-baseline font-mono text-[11px] text-primary hover:bg-primary/20 transition duration-fast"
+          title={src.citation}
+        >
+          [{n}]
+        </button>,
+      );
+    } else {
+      out.push(<span key={`t${key++}`}>{m[0]}</span>);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < answer.length) {
+    out.push(<span key={`t${key++}`}>{answer.slice(last)}</span>);
+  }
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -754,24 +1823,19 @@ function SearchResultsView({
           <Icon name="search" size={13} className="text-text-subtle" />
           <div className={SECTION_LABEL}>{t("sectionLabel")}</div>
           <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-text">
-            “{query}”
+            &ldquo;{query}&rdquo;
           </span>
         </div>
         {results && (
           <span className="font-mono text-[10px] text-text-subtle">
-            {results.length === 1
-              ? t("hits", { count: results.length })
-              : t("hitsPlural", { count: results.length })}
+            {t("hits", { count: results.length })}
           </span>
         )}
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
         {searching && (
           <div className="flex h-full items-center justify-center">
-            <LoadingState
-              title={t("loadingTitle")}
-              description={t("loadingDesc")}
-            />
+            <LoadingState title={t("loadingTitle")} description={t("loadingDesc")} />
           </div>
         )}
         {!searching && results && results.length === 0 && (
@@ -781,50 +1845,255 @@ function SearchResultsView({
         )}
         {!searching &&
           results?.map((r, i) => (
-            <button
+            <SearchResultCard
               key={r.chunk_id}
-              type="button"
+              rank={i + 1}
+              query={query}
+              result={r}
               onClick={() => onChunkClick(r.document_id)}
-              className="block w-full rounded-xl border border-border bg-surface-2 p-4 text-left transition duration-fast hover:border-border-strong hover:shadow-soft-sm"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
-                    #{i + 1}
-                  </span>
-                  <span className="font-mono text-[11px] text-text-muted">
-                    {r.citation}
-                  </span>
-                  {r.bm25_rank != null && (
-                    <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      {t("bm25Rank", { rank: r.bm25_rank })}
-                    </span>
-                  )}
-                  {r.vector_rank != null && (
-                    <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                      {t("vecRank", { rank: r.vector_rank })}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-col items-end font-mono text-[10px] text-text-subtle">
-                  <span>{t("scoreLabel")}</span>
-                  <span className="text-[12px] text-text">
-                    {r.score.toFixed(4)}
-                  </span>
-                </div>
-              </div>
-              {r.section_path && (
-                <div className="mt-2 font-mono text-[10px] text-text-subtle">
-                  {r.section_path}
-                </div>
-              )}
-              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-relaxed text-text">
-                {r.text}
-              </p>
-            </button>
+            />
           ))}
       </div>
     </div>
+  );
+}
+
+// One search-result card with an inline "Why?" expander explaining how
+// this chunk got its rank: BM25 vs vector contribution + which query
+// tokens matched the chunk text. Mirrors Perplexity's "show steps" and
+// Glean's relevance breakdown — surfacing the retrieval math turns hybrid
+// search from a black box into a debuggable pipeline.
+function SearchResultCard({
+  rank,
+  query,
+  result,
+  onClick,
+}: {
+  rank: number;
+  query: string;
+  result: ScoredChunkDto;
+  onClick: () => void;
+}) {
+  const t = useTranslations("knowledge.search");
+  const [open, setOpen] = useState(false);
+
+  const { tokens, matched } = useMemo(
+    () => analyseQueryMatch(query, result.text),
+    [query, result.text],
+  );
+  const hasBoth = result.bm25_rank != null && result.vector_rank != null;
+
+  return (
+    <div className="rounded-xl border border-border bg-surface-2 p-4 transition duration-fast hover:border-border-strong hover:shadow-soft-sm">
+      <button
+        type="button"
+        onClick={onClick}
+        className="block w-full text-left"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-md bg-primary-muted px-2 py-0.5 font-mono text-[10px] text-primary">
+              #{rank}
+            </span>
+            <span className="font-mono text-[11px] text-text-muted">
+              {result.citation}
+            </span>
+            {result.bm25_rank != null && (
+              <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
+                BM25 #{result.bm25_rank}
+              </span>
+            )}
+            {result.vector_rank != null && (
+              <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
+                vec #{result.vector_rank}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col items-end font-mono text-[10px] text-text-subtle">
+            <span>{t("scoreLabel")}</span>
+            <span className="text-[12px] text-text">
+              {result.score.toFixed(4)}
+            </span>
+          </div>
+        </div>
+        {result.section_path && (
+          <div className="mt-2 font-mono text-[10px] text-text-subtle">
+            {result.section_path}
+          </div>
+        )}
+        <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[13px] leading-relaxed text-text">
+          {highlightTokens(result.text, matched)}
+        </p>
+      </button>
+
+      <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
+          className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle hover:text-text"
+          aria-expanded={open}
+        >
+          <Icon
+            name={open ? "chevron-up" : "chevron-down"}
+            size={11}
+          />
+          {t("explainLabel")}
+        </button>
+        {tokens.length > 0 && (
+          <span className="font-mono text-[10px] text-text-subtle">
+            {t("matchedTokens", { matched: matched.length, total: tokens.length })}
+          </span>
+        )}
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-3 rounded-lg border border-border bg-surface px-3 py-3 text-[12px]">
+          {/* BM25 vs Vector contribution bar — visualises which lens
+              this chunk leaned on. Equal-weight retrieval averages the
+              two ranks, so the bar is a heuristic readout, not the exact
+              fused score formula. Still useful to spot "lexical-heavy"
+              vs "semantic-heavy" hits at a glance. */}
+          <ContributionBar
+            bm25Rank={result.bm25_rank}
+            vectorRank={result.vector_rank}
+          />
+          {tokens.length > 0 && (
+            <div>
+              <div className={SECTION_LABEL}>{t("matchedHeader")}</div>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {tokens.map((tok) => {
+                  const hit = matched.includes(tok);
+                  return (
+                    <span
+                      key={tok}
+                      className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] ${
+                        hit
+                          ? "bg-success-soft text-success border border-success/30"
+                          : "border border-border bg-surface-2 text-text-subtle"
+                      }`}
+                    >
+                      {tok}
+                      {hit ? " ✓" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div className="font-mono text-[10px] leading-relaxed text-text-subtle">
+            {hasBoth
+              ? t("explainBoth", {
+                  bm25: result.bm25_rank ?? 0,
+                  vec: result.vector_rank ?? 0,
+                })
+              : result.bm25_rank != null
+                ? t("explainBm25Only", { bm25: result.bm25_rank })
+                : t("explainVecOnly", { vec: result.vector_rank ?? 0 })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContributionBar({
+  bm25Rank,
+  vectorRank,
+}: {
+  bm25Rank: number | null;
+  vectorRank: number | null;
+}) {
+  const t = useTranslations("knowledge.search");
+  // Lower rank = better. We invert into pseudo-strength in [0, 1] using
+  // 1/rank, then normalise the pair to sum to 1 so the bar reads as a
+  // share of contribution.
+  const bm = bm25Rank != null ? 1 / bm25Rank : 0;
+  const vc = vectorRank != null ? 1 / vectorRank : 0;
+  const total = bm + vc || 1;
+  const bmPct = Math.round((bm / total) * 100);
+  const vcPct = 100 - bmPct;
+  return (
+    <div>
+      <div className={SECTION_LABEL}>{t("contributionHeader")}</div>
+      <div className="mt-1.5 flex h-2 w-full overflow-hidden rounded-full bg-surface-2">
+        {bm > 0 && (
+          <div
+            className="h-full bg-primary"
+            style={{ width: `${bmPct}%` }}
+            title={t("bm25Pct", { pct: bmPct })}
+          />
+        )}
+        {vc > 0 && (
+          <div
+            className="h-full bg-accent"
+            style={{ width: `${vcPct}%` }}
+            title={t("vectorPct", { pct: vcPct })}
+          />
+        )}
+      </div>
+      <div className="mt-1 flex justify-between font-mono text-[10px] text-text-subtle">
+        <span>
+          BM25 {bmPct}%
+        </span>
+        <span>
+          {t("vectorPctLabel")} {vcPct}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Cheap query → token analysis. Splits on non-CJK / non-word boundaries,
+// drops stop-shorts (1-char ASCII), case-folds, then checks each token
+// against the chunk text. The "matched" set drives both the chip row
+// and the in-text highlights. This is a heuristic — the real BM25
+// scorer uses tokeniser + IDF — but it lets users *see* what their query
+// matched without a round-trip.
+function analyseQueryMatch(
+  query: string,
+  text: string,
+): { tokens: string[]; matched: string[] } {
+  const raw = query
+    .toLowerCase()
+    .split(/[\s,.;:!?'"()\[\]{}<>=*&|/\\]+/)
+    .filter((w) => w.length > 1 || /[\u4e00-\u9fff]/.test(w));
+  const seen = new Set<string>();
+  const tokens: string[] = [];
+  for (const w of raw) {
+    if (!seen.has(w)) {
+      seen.add(w);
+      tokens.push(w);
+    }
+  }
+  const lower = text.toLowerCase();
+  const matched = tokens.filter((tok) => lower.includes(tok));
+  return { tokens, matched };
+}
+
+function highlightTokens(text: string, matched: string[]): React.ReactNode {
+  if (matched.length === 0) return text;
+  // Build a single regex of all matched tokens, escaped for safety.
+  const re = new RegExp(
+    `(${matched
+      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|")})`,
+    "gi",
+  );
+  const parts = text.split(re);
+  return parts.map((part, i) =>
+    matched.some((m) => m.toLowerCase() === part.toLowerCase()) ? (
+      <mark
+        key={i}
+        className="rounded-sm bg-warning-soft px-0.5 text-text"
+      >
+        {part}
+      </mark>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
   );
 }
 
@@ -866,6 +2135,102 @@ function ModalShell({
         )}
       </div>
     </div>
+  );
+}
+
+function UrlIngestModal({
+  kb,
+  onClose,
+  onIngested,
+  onError,
+}: {
+  kb: KBDto;
+  onClose: () => void;
+  onIngested: () => void;
+  onError: (msg: string) => void;
+}) {
+  const t = useTranslations("knowledge.urlIngest");
+  const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [tagsRaw, setTagsRaw] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (!url.trim()) return;
+    setSubmitting(true);
+    try {
+      await ingestUrl(kb.id, url.trim(), {
+        title: title.trim() || undefined,
+        tags: tagsRaw
+          ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
+          : undefined,
+      });
+      onIngested();
+    } catch (e) {
+      onError(String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ModalShell
+      title={t("title", { kb: kb.name })}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[12px] text-text-muted hover:border-border-strong hover:text-text transition duration-fast"
+          >
+            {t("cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!url.trim() || submitting}
+            className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-[12px] font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-40 transition duration-fast"
+          >
+            {submitting ? t("submitting") : t("submit")}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label={t("fieldUrl")}>
+          <input
+            type="url"
+            autoFocus
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder={t("urlPlaceholder")}
+            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+          <p className="mt-1 font-mono text-[10px] text-text-subtle">
+            {t("urlHint")}
+          </p>
+        </Field>
+        <Field label={t("fieldTitle")}>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={t("titlePlaceholder")}
+            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+        </Field>
+        <Field label={t("fieldTags")}>
+          <input
+            type="text"
+            value={tagsRaw}
+            onChange={(e) => setTagsRaw(e.target.value)}
+            placeholder={t("tagsPlaceholder")}
+            className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
+          />
+        </Field>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -978,11 +2343,12 @@ function CreateKBModal({
 }
 
 /**
- * KBSettingsModal — 知识库设置(基础 / 高级 / 危险三 tab)。
+ * KBSettingsModal — KB settings (Basic / Advanced / Danger tabs).
  *
- * 设计目标:把所有跟 KB 相关的"调整"都收拢到这里 · 不要散落在 sidebar /
- * KB 卡上。基础 tab 用大白话讲清"我现在的智能水平靠什么";高级 tab 才暴
- * 露 BM25 / 向量 / top_k 等真正的调参旋钮;危险 tab 单独放删除。
+ * Goal: gather every KB-related adjustment in one place rather than
+ * scattering them across the sidebar or KB card. Basic tab explains the
+ * current "intelligence level" in plain language; Advanced tab exposes
+ * BM25 / vector / top_k tuning knobs; Danger tab isolates deletion.
  */
 function KBSettingsModal({
   kb,
@@ -999,10 +2365,9 @@ function KBSettingsModal({
   onDelete: () => void;
   onError: (msg: string) => void;
 }) {
-  type Tab = "basic" | "advanced" | "diagnose" | "danger";
   const t = useTranslations("knowledge.settings");
-  const tTabs = useTranslations("knowledge.settings.tabs");
-  const tAdv = useTranslations("knowledge.advanced");
+  const ta = useTranslations("knowledge.advanced");
+  type Tab = "basic" | "advanced" | "diagnose" | "danger";
   const [tab, setTab] = useState<Tab>("basic");
 
   // Advanced state
@@ -1013,19 +2378,9 @@ function KBSettingsModal({
   const [saving, setSaving] = useState(false);
 
   const rerankerOptions = [
-    { value: "none", label: tAdv("rerankerNone") },
-    {
-      value: "bge-base",
-      label: tAdv("rerankerBge"),
-      disabled: true,
-      hint: tAdv("rerankerHintM3"),
-    },
-    {
-      value: "cohere",
-      label: tAdv("rerankerCohere"),
-      disabled: true,
-      hint: tAdv("rerankerHintM3"),
-    },
+    { value: "none", label: ta("rerankerNone") },
+    { value: "bge-base", label: ta("rerankerBge"), disabled: true, hint: ta("rerankerHintM3") },
+    { value: "cohere", label: ta("rerankerCohere"), disabled: true, hint: ta("rerankerHintM3") },
   ];
 
   async function saveAdvanced() {
@@ -1050,10 +2405,10 @@ function KBSettingsModal({
     label: string;
     icon: "info" | "settings" | "search" | "trash-2";
   }[] = [
-    { id: "basic", label: tTabs("basic"), icon: "info" },
-    { id: "diagnose", label: tTabs("diagnose"), icon: "search" },
-    { id: "advanced", label: tTabs("advanced"), icon: "settings" },
-    { id: "danger", label: tTabs("danger"), icon: "trash-2" },
+    { id: "basic", label: t("tabs.basic"), icon: "info" },
+    { id: "diagnose", label: t("tabs.diagnose"), icon: "search" },
+    { id: "advanced", label: t("tabs.advanced"), icon: "settings" },
+    { id: "danger", label: t("tabs.danger"), icon: "trash-2" },
   ];
 
   return (
@@ -1092,43 +2447,42 @@ function KBSettingsModal({
     >
       {/* Tabs */}
       <div className="-mt-2 mb-4 flex gap-1 border-b border-border">
-        {tabs.map((tabItem) => {
-          const active = tabItem.id === tab;
+        {tabs.map((t) => {
+          const active = t.id === tab;
           return (
             <button
-              key={tabItem.id}
+              key={t.id}
               type="button"
-              onClick={() => setTab(tabItem.id)}
+              onClick={() => setTab(t.id)}
               className={`-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-[13px] transition duration-fast ${
                 active
                   ? "border-primary text-text"
                   : "border-transparent text-text-muted hover:text-text"
               }`}
             >
-              <Icon name={tabItem.icon} size={13} />
-              {tabItem.label}
+              <Icon name={t.icon} size={13} />
+              {t.label}
             </button>
           );
         })}
       </div>
 
       {/* Basic tab — embedder picker + plain-language explanation */}
-      {tab === "basic" && <BasicTab kb={kb} models={models} />}
+      {tab === "basic" && (
+        <BasicTab kb={kb} models={models} />
+      )}
 
       {/* Advanced tab — retrieval tune */}
       {tab === "advanced" && (
         <div className="space-y-4">
           <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px] text-text-muted">
-            {tAdv("intro")}
-            <br />
-            {tAdv.rich("introTopK", {
-              topK: () => (
-                <span className="font-mono text-[11px]">top k</span>
-              ),
+            {ta.rich("intro", {
+              br: () => <br />,
+              mono: (chunks) => <span className="font-mono text-[11px]">{chunks}</span>,
             })}
           </p>
           <div className="grid grid-cols-2 gap-4">
-            <Field label={tAdv("fieldBm25")}>
+            <Field label={ta("fieldBm25")}>
               <input
                 type="number"
                 min={0}
@@ -1138,7 +2492,7 @@ function KBSettingsModal({
                 className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
               />
             </Field>
-            <Field label={tAdv("fieldVec")}>
+            <Field label={ta("fieldVec")}>
               <input
                 type="number"
                 min={0}
@@ -1148,7 +2502,7 @@ function KBSettingsModal({
                 className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
               />
             </Field>
-            <Field label={tAdv("fieldTopK")}>
+            <Field label={ta("fieldTopK")}>
               <input
                 type="number"
                 min={1}
@@ -1158,14 +2512,14 @@ function KBSettingsModal({
                 className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text focus:border-border-strong focus:outline-none"
               />
             </Field>
-            <Field label={tAdv("fieldReranker")}>
+            <Field label={ta("fieldReranker")}>
               <Select
                 value={reranker}
                 onChange={(v) => setReranker(v as "none" | "bge-base" | "cohere")}
                 options={rerankerOptions}
                 className="w-full"
                 triggerClassName="h-9 rounded-xl"
-                ariaLabel={tAdv("rerankerAria")}
+                ariaLabel={ta("rerankerAria")}
               />
             </Field>
           </div>
@@ -1182,10 +2536,10 @@ function KBSettingsModal({
 }
 
 /**
- * 调试检索 tab — same query, three lenses, side-by-side. Helps users
+ * Diagnose tab — same query, three lenses, side-by-side. Helps users
  * see what BM25 alone returns vs. vector alone vs. hybrid, so the
- * "为什么没召回" / "为什么这条排第一" question becomes visible instead
- * of magic.
+ * "why didn't this hit" / "why is this ranked first" question becomes
+ * visible instead of magic.
  */
 function DiagnoseTab({ kb }: { kb: KBDto }) {
   const t = useTranslations("knowledge.diagnose");
@@ -1248,21 +2602,18 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
             subtitle={t("colKeywordSubtitle")}
             tone="warning"
             results={out.bm25_only}
-            noHits={t("noHits")}
           />
           <DiagnoseColumn
             title={t("colVectorTitle")}
             subtitle={t("colVectorSubtitle")}
             tone="primary"
             results={out.vector_only}
-            noHits={t("noHits")}
           />
           <DiagnoseColumn
             title={t("colHybridTitle")}
             subtitle={t("colHybridSubtitle")}
             tone="success"
             results={out.hybrid}
-            noHits={t("noHits")}
           />
         </div>
       ) : (
@@ -1276,10 +2627,7 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
           <div className="mb-2 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
             <span>{t("statsTitle")}</span>
             <span>
-              {t("statsSummary", {
-                count: stats.count,
-                avg: stats.avg_latency_ms?.toFixed(0) ?? "0",
-              })}
+              {t("statsSummary", { count: stats.count, avg: stats.avg_latency_ms?.toFixed(0) ?? "0" })}
             </span>
           </div>
           <ul className="space-y-1 text-[11px]">
@@ -1290,10 +2638,7 @@ function DiagnoseTab({ kb }: { kb: KBDto }) {
               >
                 <span className="truncate text-text">{r.query}</span>
                 <span className="font-mono text-text-subtle">
-                  {t("statsRow", {
-                    hits: r.hits,
-                    ms: r.latency_ms.toFixed(0),
-                  })}
+                  {t("statsRow", { hits: r.hits, ms: r.latency_ms.toFixed(0) })}
                 </span>
               </li>
             ))}
@@ -1309,14 +2654,13 @@ function DiagnoseColumn({
   subtitle,
   tone,
   results,
-  noHits,
 }: {
   title: string;
   subtitle: string;
   tone: "warning" | "primary" | "success";
   results: ScoredChunkDto[];
-  noHits: string;
 }) {
+  const t = useTranslations("knowledge.diagnose");
   const toneCls =
     tone === "warning"
       ? "border-warning/40 bg-warning-soft"
@@ -1332,7 +2676,7 @@ function DiagnoseColumn({
       <ul className="space-y-1.5 p-2">
         {results.length === 0 && (
           <li className="px-2 py-3 text-center text-[11px] text-text-subtle">
-            {noHits}
+            {t("noHits")}
           </li>
         )}
         {results.map((r, i) => (
@@ -1423,11 +2767,11 @@ function BasicTab({
               {t("noModelsTitle")}
             </div>
             <p className="leading-relaxed">
-              {t("noModelsBodyPrefix")}
-              <a href="/gateway" className="text-primary underline">
-                {t("noModelsLink")}
-              </a>
-              {t("noModelsBodySuffix")}
+              {t.rich("noModelsBody", {
+                gateway: (chunks) => (
+                  <a href="/gateway" className="text-primary underline">{chunks}</a>
+                ),
+              })}
             </p>
             <a
               href="/gateway"
@@ -1471,8 +2815,8 @@ function DangerTab({
   onDelete: () => void;
 }) {
   const t = useTranslations("knowledge.danger");
-  const [confirmText, setConfirmText] = useState("");
-  const enabled = confirmText === kb.name;
+  const [confirm, setConfirm] = useState("");
+  const enabled = confirm === kb.name;
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-danger/30 bg-danger-soft p-4">
@@ -1481,19 +2825,20 @@ function DangerTab({
           {t("heading")}
         </div>
         <p className="mt-1.5 text-[12px] leading-relaxed text-danger/90">
-          {t("warningPrefix")}
-          <code className="font-mono text-[11px]">
-            {t("warningPath", { prefix: kb.id.slice(0, 8) })}
-          </code>
-          {t("warningSuffix")}
+          {t.rich("warning", {
+            prefix: kb.id.slice(0, 8),
+            code: (chunks) => (
+              <code className="font-mono text-[11px]">{chunks}</code>
+            ),
+          })}
         </p>
       </div>
 
       <Field label={t("confirmFieldLabel", { name: kb.name })}>
         <input
           type="text"
-          value={confirmText}
-          onChange={(e) => setConfirmText(e.target.value)}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
           placeholder={kb.name}
           className="h-9 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-danger focus:outline-none"
         />
@@ -1523,8 +2868,8 @@ function DocDrawer({
   onClose: () => void;
   onDelete: (d: DocumentDto) => void;
 }) {
-  type Tab = "info" | "text" | "chunks";
   const t = useTranslations("knowledge.detail");
+  type Tab = "info" | "text" | "chunks";
   const [tab, setTab] = useState<Tab>("info");
   const [text, setText] = useState<string | null>(null);
   const [chunks, setChunks] = useState<DocumentChunkDto[] | null>(null);
@@ -1593,21 +2938,21 @@ function DocDrawer({
 
         {/* Tabs */}
         <div className="flex gap-1 border-b border-border px-5">
-          {tabs.map((tabItem) => {
-            const active = tabItem.id === tab;
+          {tabs.map((t) => {
+            const active = t.id === tab;
             return (
               <button
-                key={tabItem.id}
+                key={t.id}
                 type="button"
-                onClick={() => setTab(tabItem.id)}
+                onClick={() => setTab(t.id)}
                 className={`-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-[12px] transition duration-fast ${
                   active
                     ? "border-primary text-text"
                     : "border-transparent text-text-muted hover:text-text"
                 }`}
               >
-                <Icon name={tabItem.icon} size={12} />
-                {tabItem.label}
+                <Icon name={t.icon} size={12} />
+                {t.label}
               </button>
             );
           })}
@@ -1640,12 +2985,12 @@ function DocDrawer({
               {doc.tags.length > 0 && (
                 <DocMetaSection title={t("infoSectionTags")}>
                   <div className="flex flex-wrap gap-1.5">
-                    {doc.tags.map((tag) => (
+                    {doc.tags.map((t) => (
                       <span
-                        key={tag}
+                        key={t}
                         className="rounded-full border border-border bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-text-muted"
                       >
-                        #{tag}
+                        #{t}
                       </span>
                     ))}
                   </div>
@@ -1655,7 +3000,7 @@ function DocDrawer({
           )}
 
           {tab === "text" && (
-            <div className="p-5">
+            <div className="p-5" id="doc-text-pane">
               {loading && text === null ? (
                 <LoadingState title={t("loadingText")} />
               ) : textErr ? (
@@ -1664,6 +3009,11 @@ function DocDrawer({
                 <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[12px] text-text-muted">
                   {t("emptyText")}
                 </div>
+              ) : isMarkdownLikely(doc.mime_type) ? (
+                <AgentMarkdown
+                  content={text}
+                  className="rounded-xl border border-border bg-surface-2 px-5 py-4 text-[13px] leading-relaxed"
+                />
               ) : (
                 <pre className="whitespace-pre-wrap break-words rounded-xl border border-border bg-surface-2 p-4 text-[12px] leading-relaxed text-text">
                   {text}
@@ -1701,12 +3051,52 @@ function DocDrawer({
                           </span>
                         )}
                         <span className="ml-auto">
-                          {t("chunkRange", {
-                            start: c.span_start,
-                            end: c.span_end,
-                            tokens: c.token_count,
-                          })}
+                          {t("chunkRange", { start: c.span_start, end: c.span_end, tokens: c.token_count })}
                         </span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            // Switch to text tab + scroll to span. AgentMarkdown
+                            // renders async, so wait one frame then locate by
+                            // searching the rendered text for a unique-enough
+                            // prefix of the chunk.
+                            setTab("text");
+                            await new Promise((r) => setTimeout(r, 80));
+                            const root = document.getElementById("doc-text-pane");
+                            if (!root) return;
+                            const needle = c.text.slice(0, 40);
+                            const walker = document.createTreeWalker(
+                              root,
+                              NodeFilter.SHOW_TEXT,
+                            );
+                            let n: Node | null = walker.nextNode();
+                            while (n) {
+                              if ((n.textContent ?? "").includes(needle)) {
+                                (n.parentElement as HTMLElement)?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "center",
+                                });
+                                (n.parentElement as HTMLElement)?.classList.add(
+                                  "kb-highlight",
+                                );
+                                setTimeout(
+                                  () =>
+                                    (n!.parentElement as HTMLElement)?.classList.remove(
+                                      "kb-highlight",
+                                    ),
+                                  1800,
+                                );
+                                return;
+                              }
+                              n = walker.nextNode();
+                            }
+                          }}
+                          className="inline-flex h-5 items-center gap-1 rounded border border-border bg-surface px-1.5 text-[10px] text-text-muted hover:text-text hover:border-border-strong transition duration-fast"
+                          title={t("jumpToSourceTitle")}
+                        >
+                          <Icon name="external-link" size={10} />
+                          {t("jumpToSource")}
+                        </button>
                       </div>
                       <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-text">
                         {c.text}

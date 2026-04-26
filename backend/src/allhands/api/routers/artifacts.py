@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_artifact_service
 from allhands.core import BINARY_KINDS, Artifact, ArtifactKind, ArtifactVersion
+from allhands.i18n import t
 from allhands.services.artifact_service import (
     ArtifactContentMissing,
     ArtifactNotFound,
@@ -174,7 +175,9 @@ async def list_artifacts(
         try:
             parsed_kind = ArtifactKind(kind)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=f"unknown kind {kind!r}") from exc
+            raise HTTPException(
+                status_code=400, detail=t("errors.unknown_kind", kind=repr(kind))
+            ) from exc
     items = await svc.list_all(
         kind=parsed_kind,
         name_prefix=name_prefix,

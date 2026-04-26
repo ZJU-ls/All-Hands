@@ -4,25 +4,44 @@
     "subtitle": "Drop your sources in. Search them yourself. Let your team cite them too.",
     "loadFailed": "Failed to load",
     "dismiss": "Dismiss",
+    "dismissAria": "Dismiss",
     "uploadHint": "Click the \"Upload\" button in the top-right to add a document",
     "toolbar": {
       "kbSelectPlaceholder": "Pick a KB",
       "kbSelectAria": "Select knowledge base",
       "kbCount": "{count} docs",
+      "kbHint": "{count} docs",
       "newKb": "New KB",
       "newKbAria": "New KB",
       "search": "Search",
       "searchEllipsis": "…",
       "searchPlaceholder": "Search inside {kb}…",
       "searchPlaceholderEmpty": "Pick a KB to start searching",
+      "searchPlaceholderPick": "Pick a KB first",
+      "askPlaceholder": "Ask {kb}…  (LLM answers using retrieved snippets)",
+      "searchInside": "Search inside {kb}…",
       "clearSearch": "Clear",
+      "clearSearchAria": "Clear",
       "stateAll": "All states",
       "stateReady": "Ready",
       "stateIndexing": "Indexing",
       "stateFailed": "Failed",
       "stateFilterAria": "State filter",
       "upload": "Upload",
-      "uploading": "Uploading…"
+      "uploading": "Uploading…",
+      "modeSearch": "Search",
+      "modeAsk": "Ask",
+      "modeSearchTitle": "Search · list snippets",
+      "modeAskTitle": "Ask · LLM answers using snippets",
+      "submitSearch": "Search",
+      "submitAsk": "Ask",
+      "submitRunning": "…",
+      "ingestUrl": "Fetch URL",
+      "ingestUrlTitle": "Fetch a URL into the KB"
+    },
+    "dragOverlay": {
+      "drop": "Drop to add to {kb}",
+      "supportedFormats": "Supports markdown / pdf / docx / html / txt / csv …"
     },
     "sidebar": {
       "loadingTitle": "Loading",
@@ -30,7 +49,9 @@
       "emptyTitle": "No knowledge bases yet",
       "emptyDesc": "Create a KB and start collecting your notes, PDFs, and clipped pages.",
       "emptyAction": "New knowledge base",
-      "pickKbHint": "Pick a knowledge base from the toolbar on the left"
+      "pickKbHint": "Pick a knowledge base from the toolbar on the left",
+      "startLabel": "Get started",
+      "startDesc": "The setup wizard on the right takes two steps."
     },
     "kb": {
       "settingsAria": "Knowledge base settings",
@@ -43,12 +64,31 @@
       "semanticEnabled": "Semantic search is on"
     },
     "tags": {
-      "sectionLabel": "Tags"
+      "sectionLabel": "Tags",
+      "clear": "Clear"
     },
     "tools": {
       "title": "Let your team look things up",
       "skillName": "KB Researcher",
-      "body": "On the Employees page, give a teammate the \"{skill}\" skill — they'll be able to search this KB in chat and answer with citations."
+      "body": "On the Employees page, give a teammate the \"<emp>KB Researcher</emp>\" skill — they'll be able to search this KB in chat and answer with citations."
+    },
+    "onboarding": {
+      "heading": "First time here · set up in 4 steps",
+      "subtitle": "Pull your scattered notes and docs together. Search them yourself. Let teammates cite them too.",
+      "primaryCta": "Create your first knowledge base",
+      "step1Title": "(Optional) Configure a semantic embedding model",
+      "step1Found": "{count} usable models found",
+      "step1NotFound": "Mock works too — keyword-only matching",
+      "step1Action": "Open Model Gateway",
+      "step1Desc": "Add an OpenAI or Aliyun Bailian provider in Model Gateway so the KB can understand meaning. Without one, demo mode still gets you through the flow.",
+      "step2Title": "Create your first knowledge base",
+      "step2Action": "New knowledge base",
+      "step2Desc": "Pick a name, choose an embedder, hit create. Then drop a few md / pdf / docx files in and start searching.",
+      "step3Title": "Upload or fetch a URL, then search or ask",
+      "step3Desc": "Top toolbar: file picker and URL fetch. You can also drag multiple files onto the page. Toggle the segmented control to \"Ask\" for RAG-style Q&A.",
+      "step4Title": "(Optional) Let your team look things up",
+      "step4Action": "Open Employees",
+      "step4Desc": "Add the \"KB Researcher\" skill to a teammate. They'll be able to search this KB from /chat and answer with citations."
     },
     "docs": {
       "sectionLabel": "Documents",
@@ -57,22 +97,62 @@
       "emptyDesc": "Upload your first document (md, pdf, docx, html, txt). The agent parses, chunks, and embeds it within seconds.",
       "emptyAction": "Upload a document",
       "noFilterMatch": "No documents match the current filter",
-      "chunkSummary": "🧩 {chunks} chunks · v{version}",
-      "sizeKb": "{kb} KB"
+      "chunkSummary": "{chunks} chunks · v{version}",
+      "sizeKb": "{kb} KB",
+      "removeTagFilter": "Remove tag filter",
+      "selectAria": "Select",
+      "selectedCount": "{count} selected",
+      "cancel": "Cancel",
+      "bulkDelete": "Delete selected",
+      "retryIngest": "Retry ingest"
+    },
+    "uploads": {
+      "summary": "Uploads · {done}/{total} done",
+      "failed": "{count} failed",
+      "inflight": "{count} in progress",
+      "clear": "Clear"
     },
     "search": {
       "sectionLabel": "Search Results",
-      "hits": "{count} hit",
-      "hitsPlural": "{count} hits",
+      "hits": "{count, plural, one {# hit} other {# hits}}",
       "loadingTitle": "Searching…",
       "loadingDesc": "Matching keywords and semantics in parallel",
       "noResults": "No hits — try a more specific query, or tweak the BM25 / vector weights",
       "bm25Rank": "BM25 #{rank}",
       "vecRank": "vec #{rank}",
-      "scoreLabel": "score"
+      "scoreLabel": "score",
+      "explainLabel": "Why this rank?",
+      "matchedTokens": "matched {matched}/{total}",
+      "matchedHeader": "Query terms · matched in chunk",
+      "contributionHeader": "BM25 vs vector contribution",
+      "bm25Pct": "BM25 {pct}%",
+      "vectorPct": "Vector {pct}%",
+      "vectorPctLabel": "Vector",
+      "explainBoth": "BM25 ranked it #{bm25} · vector ranked it #{vec} · hybrid fuses the better side",
+      "explainBm25Only": "Lexical hit only (#{bm25}) · vector retriever did not surface this chunk",
+      "explainVecOnly": "Semantic hit only (#{vec}) · keywords did not match"
+    },
+    "starters": {
+      "label": "Try one of these",
+      "hint": "Generated from this KB's titles and headings · click to ask"
+    },
+    "ask": {
+      "askingLabel": "Question",
+      "answerLabel": "Answer",
+      "thinkingTitle": "Thinking…",
+      "thinkingDesc": "Retrieving snippets → assembling context → LLM reply",
+      "sourcesLabel": "Sources",
+      "sourcesCount": "{count}",
+      "turnsLabel": "{count} turns",
+      "youAskedLabel": "You asked #{n}",
+      "newConversation": "New thread",
+      "followUpPlaceholder": "Ask a follow-up · same citation numbers carry over…",
+      "followUpSubmit": "Follow up",
+      "followUpHint": "Press Enter to send · the same retrieved snippets are kept across turns"
     },
     "delete": {
-      "confirm": "Delete \"{title}\"? (Soft delete — recoverable for 30 days.)"
+      "confirm": "Delete \"{title}\"? (Soft delete — recoverable for 30 days.)",
+      "bulkConfirm": "Soft-delete {count} documents?"
     },
     "modal": {
       "closeAria": "Close"
@@ -92,6 +172,19 @@
       "embeddingHintDim": "{dim}d",
       "embeddingHelp": "Grayed-out options need an API key — set one in .env to enable. Switching requires a reindex."
     },
+    "urlIngest": {
+      "title": "Fetch URL into \"{kb}\"",
+      "cancel": "Cancel",
+      "submit": "Fetch",
+      "submitting": "Fetching…",
+      "fieldUrl": "URL",
+      "urlPlaceholder": "https://example.com/some-article",
+      "urlHint": "v0 only handles server-rendered HTML pages — JS-only SPAs won't yield content",
+      "fieldTitle": "Title (optional)",
+      "titlePlaceholder": "Leave blank to auto-generate from the URL tail",
+      "fieldTags": "Tags (optional, comma-separated)",
+      "tagsPlaceholder": "article, blog, must-read"
+    },
     "settings": {
       "titleSuffix": "{name} · Settings",
       "cancel": "Cancel",
@@ -106,8 +199,7 @@
       }
     },
     "advanced": {
-      "intro": "You usually don't need to touch this. The two weights control whether keyword hits or semantic matches matter more; ",
-      "introTopK": "{topK} caps how many snippets each query returns.",
+      "intro": "You usually don't need to touch this. The two weights control whether keyword hits or semantic matches matter more;<br></br><mono>top k</mono> caps how many snippets each query returns.",
       "fieldBm25": "Keyword match (BM25)",
       "fieldVec": "Semantic match (vector)",
       "fieldTopK": "How many snippets",
@@ -143,18 +235,14 @@
       "availableHeading": "Available real models",
       "manageProvider": "Manage providers",
       "noModelsTitle": "No embedding models available yet",
-      "noModelsBodyPrefix": "Head to the ",
-      "noModelsLink": "Model Gateway",
-      "noModelsBodySuffix": " and add an OpenAI or Aliyun Bailian provider with an API key — usable models will show up here.",
+      "noModelsBody": "Head to the <gateway>Model Gateway</gateway> and add an OpenAI or Aliyun Bailian provider with an API key — usable models will show up here.",
       "goConfigure": "Configure now",
       "switchModelHint": "Switching a KB's embedding model requires recomputing every \"semantic fingerprint\" (reindex). v0 doesn't hot-swap yet — to switch, delete this KB and recreate it with the new model.",
       "modelDimHint": "{dim}d"
     },
     "danger": {
       "heading": "Delete knowledge base",
-      "warningPrefix": "Soft delete · recoverable by an admin within 30 days. After that, all documents and vectors are removed permanently. The raw uploaded files stay on disk under (",
-      "warningPath": "data/kb/{prefix}…",
-      "warningSuffix": ") and have to be cleaned up manually.",
+      "warning": "Soft delete · recoverable by an admin within 30 days. After that, all documents and vectors are removed permanently. The raw uploaded files stay on disk under (<code>data/kb/{prefix}…</code>) and have to be cleaned up manually.",
       "confirmFieldLabel": "Type the KB name \"{name}\" to confirm",
       "deleteAction": "Delete permanently"
     },
@@ -178,6 +266,8 @@
       "loadingChunksDesc": "Reading each chunk's offsets, section, and page",
       "emptyChunks": "This document has no chunks (parsed empty)",
       "chunkRange": "{start}–{end} · ~{tokens} tokens",
+      "jumpToSource": "Jump to source",
+      "jumpToSourceTitle": "Jump to source location",
       "softDelete": "Soft delete",
       "close": "Close"
     }

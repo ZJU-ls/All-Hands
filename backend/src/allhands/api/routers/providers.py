@@ -176,7 +176,7 @@ async def ping_provider(
     svc = await get_provider_service(session)
     provider = await svc.get(provider_id)
     if provider is None:
-        raise HTTPException(status_code=404, detail="Provider not found.")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
     async with _httpx.AsyncClient(timeout=ENDPOINT_TIMEOUT_S) as client:
         result = await probe_endpoint_health(provider, http_client=client)
     return result.to_dict()

@@ -95,6 +95,9 @@
       "delete": "删除"
     },
     "designForm": {
+      "field": {
+        "required": "必填字段不能为空"
+      },
       "sectionBasics": "基础信息",
       "fieldName": "名称",
       "namePlaceholder": "例如 researcher-a",
@@ -128,7 +131,14 @@
       "sectionDryRunSubtitle": "展开后的三列 —— 与落库 payload 一致",
       "cancel": "取消",
       "hiring": "招聘中…",
-      "hire": "招聘"
+      "hire": "招聘",
+      "saveEdit": "保存改动",
+      "savingEdit": "保存中…",
+      "savedFlash": "已保存",
+      "dirty": "有未保存改动",
+      "savedJustNow": "刚刚已保存",
+      "savedMinutesAgo": "已保存 · {n} 分钟前",
+      "savedHoursAgo": "已保存 · {n} 小时前"
     },
     "dryRun": {
       "title": "Dry run 预览",
@@ -158,7 +168,16 @@
     },
     "skillPicker": {
       "empty": "还没有安装的 Skill。先在「技能」页安装,再回来挂载。",
-      "selected": "selected"
+      "selected": "selected",
+      "searchPlaceholder": "搜索技能 · 名称或描述",
+      "groupSelected": "已选",
+      "selectedEmpty": "暂未挂载,从下方分组中点选",
+      "groupBuiltin": "内建",
+      "groupMarket": "市场",
+      "groupGithub": "GitHub",
+      "groupUploaded": "上传",
+      "groupOther": "其他",
+      "noMatch": "没有匹配「{query}」的技能"
     }
   },
   "tasks": {

@@ -157,6 +157,36 @@ def _serialize_for_lc_tool_message(content: Any) -> str:
         return str(content)
 
 
+_ARTIFACT_HALLUC_PATTERNS = (
+    "这是一个为你",
+    "这是一个我",
+    "这是一个交互式",
+    "这是为你定制",
+    "我已经为你",
+    "我已为你",
+    "我已经创建",
+    "我为你创建",
+    "i've created",
+    "i have created",
+    "here's the html",
+    "here is the html",
+    "以下是",
+)
+
+
+def _looks_like_artifact_hallucination(text: str) -> bool:
+    """Heuristic: does this assistant text describe a 制品 as if just made?
+
+    Used for the hallucination self-correction nudge in agent_loop.stream.
+    Conservative on purpose · false positives cost one extra LLM iteration ·
+    false negatives let the user see an empty artifact panel(我们见过一次)。
+    """
+    if not text:
+        return False
+    lower = text.lower()
+    return any(p.lower() in lower for p in _ARTIFACT_HALLUC_PATTERNS)
+
+
 def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
     """A tool_call entry from accumulated.tool_calls is valid iff:
 
@@ -190,6 +220,30 @@ def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
 
 
 _log = logging.getLogger(__name__)
+
+
+def _make_tool_message_synthetic(*, tool_use_id: str, error: str) -> Message:
+    """Build a synthetic tool_message used when the AgentLoop must surface
+    a tool_use as failed without going through tool_pipeline (e.g. outer
+    loop crashed mid-execution). The error envelope shape matches what
+    tool_pipeline produces for caught executor exceptions, so downstream
+    projection / persistence treat it identically.
+    """
+    from allhands.core.conversation import Message as _Msg
+
+    base = _Msg(
+        id=str(uuid.uuid4()),
+        conversation_id="",
+        role="tool",
+        content="",
+        tool_call_id=tool_use_id,
+        created_at=_now(),
+    )
+    # tool_pipeline routes structured payloads via model_copy(update=...) too
+    # — Message.content is declared str in the schema but downstream
+    # projection / persistence accept dict envelopes by inspection. Mirror
+    # that pattern instead of re-typing the field.
+    return base.model_copy(update={"content": {"error": error}})
 
 
 class AgentLoop:
@@ -397,6 +451,30 @@ class AgentLoop:
                             ),
                         )
                     else:
+                        # 2026-04-26 · 检测「制品幻觉」 — 模型在回复里描述
+                        # 「这是一个 X / 我已经为你 X」 但本轮没调 artifact_create
+                        # · 用户看不到任何东西。这一轮已经委身在 lc_messages
+                        # 里 · 注入一句 system 反馈让模型下一轮纠正,而不是
+                        # 直接 return completed。
+                        if _looks_like_artifact_hallucination(text_full):
+                            _log.warning(
+                                "agent_loop.artifact_hallucination_detected",
+                                extra={"sample": text_full[:200]},
+                            )
+                            lc_messages.append(self._to_lc_assistant_message(assistant_msg))
+                            lc_messages.append(
+                                SystemMessage(
+                                    content=(
+                                        "用户看不到任何制品 · 你的上一条回复描述了一个 "
+                                        "HTML / 图表 / 文档,但你这一轮没有调用 "
+                                        "artifact_create 工具。请立即调 "
+                                        "artifact_create({kind, name, content}) 真正产出 · "
+                                        "再调 artifact_render(id) 嵌入预览 · 然后用一两句话告诉用户。"
+                                        "不要再次只说「这是一个...」 而不调工具。"
+                                    )
+                                )
+                            )
+                            continue  # next LLM iteration with the nudge
                         yield LoopExited(reason="completed")
                     return
 
@@ -409,30 +487,66 @@ class AgentLoop:
                 # or serial (write/deferred). Within concurrent batches
                 # we asyncio.gather; serial batches yield events during
                 # execution (deferred path emits ConfirmationRequested).
+                #
+                # Track which tool_use ids have completed (received TMC)
+                # so the outer except / finally can synthesize a TMC for
+                # any tool that started but didn't finish — otherwise the
+                # frontend stamps it `tool_call_dropped` at finalize time
+                # and the user sees a confusing red "failed" envelope on
+                # what was really an outer-loop crash.
+                committed_tool_use_ids: set[str] = set()
                 batches = partition_tool_uses(tool_use_blocks, bindings)
-                for batch in batches:
-                    if batch.is_concurrent_safe and len(batch.blocks) > 1:
-                        # asyncio.gather — concurrent reads. Order the
-                        # results by input position so transcript stays
-                        # deterministic regardless of completion order.
-                        results = await asyncio.gather(
-                            *[execute_tool_use_concurrent(b, bindings) for b in batch.blocks]
+                try:
+                    for batch in batches:
+                        if batch.is_concurrent_safe and len(batch.blocks) > 1:
+                            results = await asyncio.gather(
+                                *[execute_tool_use_concurrent(b, bindings) for b in batch.blocks]
+                            )
+                            for tool_msg in results:
+                                yield ToolMessageCommitted(message=tool_msg)
+                                committed_tool_use_ids.add(tool_msg.tool_call_id or "")
+                                lc_messages.append(self._to_lc_tool_message(tool_msg))
+                        else:
+                            for block in batch.blocks:
+                                async for ev in execute_tool_use_iter(
+                                    block, bindings, self._permission_check
+                                ):
+                                    yield ev
+                                    if isinstance(ev, ToolMessageCommitted):
+                                        committed_tool_use_ids.add(ev.message.tool_call_id or "")
+                                        lc_messages.append(self._to_lc_tool_message(ev.message))
+                except BaseException as inner_exc:
+                    # Catches Exception AND CancelledError (BaseException).
+                    # Synthesize a failure TMC for every tool_use the model
+                    # asked for that didn't reach a TMC — without this the
+                    # parent loop's outer `except` would swallow the failure
+                    # AND the UI would never see tool_call_end for them.
+                    for blk in tool_use_blocks:
+                        if blk.id in committed_tool_use_ids:
+                            continue
+                        synthetic = _make_tool_message_synthetic(
+                            tool_use_id=blk.id,
+                            error=(
+                                f"{type(inner_exc).__name__}: {inner_exc}"
+                                if not isinstance(inner_exc, asyncio.CancelledError)
+                                else "tool execution cancelled by upstream "
+                                "(SSE drop / parent abort / inner sub-agent failure)"
+                            ),
                         )
-                        for tool_msg in results:
-                            yield ToolMessageCommitted(message=tool_msg)
-                            lc_messages.append(self._to_lc_tool_message(tool_msg))
-                    else:
-                        # Serial — may yield ConfirmationRequested mid-flight
-                        for block in batch.blocks:
-                            async for ev in execute_tool_use_iter(
-                                block, bindings, self._permission_check
-                            ):
-                                yield ev
-                                if isinstance(ev, ToolMessageCommitted):
-                                    lc_messages.append(self._to_lc_tool_message(ev.message))
+                        yield ToolMessageCommitted(message=synthetic)
+                    # Re-raise so the outer try/except still records the
+                    # LoopExited(aborted) sentinel (or unwinds asyncio
+                    # cancellation if that's what we hit).
+                    raise
 
                 # Loop back to next LLM turn
         except GeneratorExit:
+            raise
+        except asyncio.CancelledError:
+            # Surface cancellation as an aborted exit so the chat tap can
+            # finalize repos, then re-raise so asyncio's cancel chain stays
+            # intact.
+            yield LoopExited(reason="aborted", detail="cancelled")
             raise
         except Exception as exc:
             yield LoopExited(
@@ -526,38 +640,24 @@ class AgentLoop:
 
             return make_spawn_subagent_executor(self._spawn_subagent_service)
 
-        # ADR 0019 C1 · plan tools · substitute the registry's no-op stubs
-        # with executors bound to the per-conversation AgentPlanRepo.
+        # ADR 0019 C1 (Round 1 redesign) · plan tools · single-tool atomic
+        # replace, bound to per-conversation AgentPlanRepo.
         if self._plan_repo is not None and self._conversation_id:
             from allhands.execution.tools.meta.plan_executors import (
-                PLAN_COMPLETE_STEP_TOOL_ID,
-                PLAN_CREATE_TOOL_ID,
-                PLAN_UPDATE_STEP_TOOL_ID,
-                PLAN_VIEW_TOOL_ID,
-                make_plan_complete_step_executor,
-                make_plan_create_executor,
-                make_plan_update_step_executor,
-                make_plan_view_executor,
+                UPDATE_PLAN_TOOL_ID,
+                VIEW_PLAN_TOOL_ID,
+                make_update_plan_executor,
+                make_view_plan_executor,
             )
 
-            if tool_id == PLAN_CREATE_TOOL_ID:
-                return make_plan_create_executor(
+            if tool_id == UPDATE_PLAN_TOOL_ID:
+                return make_update_plan_executor(
                     repo=self._plan_repo,
                     conversation_id=self._conversation_id,
                     employee_id=self._employee.id,
                 )
-            if tool_id == PLAN_UPDATE_STEP_TOOL_ID:
-                return make_plan_update_step_executor(
-                    repo=self._plan_repo,
-                    conversation_id=self._conversation_id,
-                )
-            if tool_id == PLAN_COMPLETE_STEP_TOOL_ID:
-                return make_plan_complete_step_executor(
-                    repo=self._plan_repo,
-                    conversation_id=self._conversation_id,
-                )
-            if tool_id == PLAN_VIEW_TOOL_ID:
-                return make_plan_view_executor(
+            if tool_id == VIEW_PLAN_TOOL_ID:
+                return make_view_plan_executor(
                     repo=self._plan_repo,
                     conversation_id=self._conversation_id,
                 )

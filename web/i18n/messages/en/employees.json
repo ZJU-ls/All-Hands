@@ -95,6 +95,9 @@
       "delete": "Delete"
     },
     "designForm": {
+      "field": {
+        "required": "Required field"
+      },
       "sectionBasics": "Basics",
       "fieldName": "Name",
       "namePlaceholder": "e.g. researcher-a",
@@ -128,7 +131,14 @@
       "sectionDryRunSubtitle": "The expanded triple — matches the persisted payload exactly",
       "cancel": "Cancel",
       "hiring": "Hiring…",
-      "hire": "Hire"
+      "hire": "Hire",
+      "saveEdit": "Save changes",
+      "savingEdit": "Saving…",
+      "savedFlash": "Saved",
+      "dirty": "Unsaved changes",
+      "savedJustNow": "Saved just now",
+      "savedMinutesAgo": "Saved · {n}m ago",
+      "savedHoursAgo": "Saved · {n}h ago"
     },
     "dryRun": {
       "title": "Dry run preview",
@@ -158,7 +168,16 @@
     },
     "skillPicker": {
       "empty": "No skills installed yet. Install one on the \"Skills\" page, then come back to mount it.",
-      "selected": "selected"
+      "selected": "selected",
+      "searchPlaceholder": "Search skills · name or description",
+      "groupSelected": "Selected",
+      "selectedEmpty": "Nothing mounted yet — pick from the groups below",
+      "groupBuiltin": "Built-in",
+      "groupMarket": "Market",
+      "groupGithub": "GitHub",
+      "groupUploaded": "Uploaded",
+      "groupOther": "Other",
+      "noMatch": "No skill matches \"{query}\""
     }
   },
   "tasks": {

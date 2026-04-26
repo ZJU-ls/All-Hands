@@ -64,7 +64,10 @@
     },
     "messageBubble": {
       "thinkingProcess": "Thinking",
-      "thinkingProcessLive": "Thinking…"
+      "thinkingProcessLive": "Thinking…",
+      "interrupted": "Interrupted · response incomplete",
+      "interruptedTitle": "This reply didn't finish — interrupted by the user, network drop, or a backend error. Whatever was streamed before the cut is kept.",
+      "toolPulse": "Running tools…"
     },
     "messageList": {
       "jumpToLatest": "Jump to latest",
@@ -108,6 +111,25 @@
       "compacting": "Compacting…",
       "compact": "Compact",
       "tooltip": "Estimated input {used} tokens / model context window {total} tokens · we'll suggest compacting as you approach the cap"
+    },
+    "toolCall": {
+      "subagentRun": "Subagent run",
+      "viewTrace": "View trace →"
+    },
+    "subagent": {
+      "title": "Active subagents",
+      "runningCount": "· {n} running",
+      "viewTrace": "View trace ↗"
+    },
+    "planProgress": {
+      "runningCount": "· {n} running",
+      "failedCount": "· {n} failed",
+      "fallbackTitle": "Plan"
+    },
+    "progressPanel": {
+      "subagentTab": "Subagents",
+      "runningSuffix": "· {n} running",
+      "failedSuffix": "· {n} failed"
     }
   }
 }

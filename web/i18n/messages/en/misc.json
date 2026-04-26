@@ -86,15 +86,28 @@
         "failure": "Failure rate",
         "failureWarn": "Watch",
         "failureStable": "Stable",
-        "tokens": "Avg tokens · run",
-        "tokensDelta": "{count} total traces"
+        "tokens": "Avg tokens / run",
+        "tokensDelta": "{count} total traces",
+        "totalTokens": "Tokens consumed · 24h",
+        "totalTokensDelta": "in {input} · out {output} · avg {avg}/run",
+        "llmCalls": "Model requests · 24h",
+        "llmCallsDelta": "{runs} runs · avg {avg} calls/run",
+        "llmCallsEmpty": "No model calls in last 24h",
+        "vsYesterday": "vs yesterday",
+        "clickHint": "Click for consumption curve →"
       },
       "panels": {
         "telemetry": "Self-instrumented · 24h",
         "topEmployees": "Top employees · 24h",
         "byModel": "By model · 24h",
+        "byTool": "Top tools · 24h",
+        "byToolHint": "{n} tools · {invocations} calls",
+        "byToolEmpty": "No tool invocations in the window.",
+        "topErrors": "Top errors · 24h",
+        "topErrorsHint": "{n} kinds · {count} failures",
+        "topErrorsEmpty": "Quiet — no failures in the last 24h.",
         "noData": "No data yet",
-        "moreLabel": "{title} more",
+        "moreLabel": "More {title}",
         "rows": {
           "observability": "Telemetry",
           "latencyP50": "Latency p50",
@@ -108,16 +121,53 @@
           "disabled": "disabled",
           "selfInstrumented": "self-instrumented",
           "runs": "{count} runs"
+        },
+        "modelTable": {
+          "model": "model",
+          "runs": "runs",
+          "in": "in",
+          "out": "out",
+          "total": "total",
+          "cost": "cost",
+          "modelsCount": "{n} models · {calls} calls"
         }
+      },
+      "anomalies": {
+        "title": "{n} anomaly callouts · rule-based, no ML"
+      },
+      "costPanel": {
+        "title": "Cost panel · 24h",
+        "today": "Today",
+        "dailyProjection": "Daily projection",
+        "monthlyProjection": "Monthly projection",
+        "hint24h": "Extrapolated from last 24h",
+        "hintMonthly": "If the current pace held for 30 days",
+        "topEmployees": "Top employees by cost",
+        "topModels": "Top models by cost",
+        "noData": "No cost data in window",
+        "seeChart": "Open chart"
+      },
+      "heatmap": {
+        "title": "Latency heatmap · 24h",
+        "hint": "{runs} runs · darker cell = more runs in that bucket",
+        "empty": "No runs in this window · heatmap unavailable.",
+        "oldest": "24h ago",
+        "now": "now"
       },
       "incidents": {
         "title": "Recent incidents",
         "count": "{count} failed",
-        "tokensSuffix": "tok"
+        "tokensSuffix": "tokens"
       },
       "traces": {
         "title": "Latest 50 traces",
         "selfInstrumentedNote": "self-instrumented · local events.run.*",
+        "searchPlaceholder": "Search trace_id / employee / model / status",
+        "searchAria": "Search traces",
+        "searchEmpty": {
+          "title": "No matches",
+          "description": "Adjust the search, or clear it to show all 50 traces."
+        },
         "empty": {
           "title": "No run events yet",
           "description": "Chat with Lead and kick off the first task — trace summaries will appear here."
@@ -134,6 +184,37 @@
           "ok": "ok",
           "failed": "failed",
           "running": "running"
+        }
+      },
+      "metricDrawer": {
+        "close": "Close",
+        "loading": "Loading series…",
+        "loadFailed": "Failed to load. Tap retry.",
+        "retry": "Retry",
+        "empty": "No data in the selected window.",
+        "bucket1h": "1-hour buckets",
+        "bucket5m": "5-minute buckets",
+        "rangeLastHour": "Last hour",
+        "range24h": "24 hours",
+        "range7d": "7 days",
+        "rangeAria": "Time window",
+        "tooltipCount": "{n} runs",
+        "summaryLabel": {
+          "max": "Peak",
+          "avg": "Avg",
+          "current": "Latest"
+        },
+        "metric": {
+          "runs": "Runs",
+          "failure_rate": "Failure rate",
+          "latency_p50": "Latency p50",
+          "latency_p95": "Latency p95",
+          "latency_p99": "Latency p99",
+          "tokens_total": "Total tokens",
+          "tokens_input": "Input tokens",
+          "tokens_output": "Output tokens",
+          "llm_calls": "LLM calls",
+          "cost": "Estimated cost"
         }
       }
     },
@@ -185,6 +266,15 @@
     },
     "editor": {
       "loading": "Loading editor…"
+    },
+    "peek": {
+      "size": "size",
+      "updated": "updated",
+      "created": "created",
+      "justNow": "just now",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago"
     },
     "list": {
       "pinned": "Pinned",
@@ -420,6 +510,10 @@
       "cancel": "Cancel",
       "processing": "Working…",
       "closeAria": "Close"
+    },
+    "searchInput": {
+      "placeholder": "Search…",
+      "clear": "Clear"
     },
     "dotGridAvatar": {},
     "dotGridBackdrop": {},

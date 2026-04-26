@@ -64,7 +64,10 @@
     },
     "messageBubble": {
       "thinkingProcess": "思考过程",
-      "thinkingProcessLive": "思考过程…"
+      "thinkingProcessLive": "思考过程…",
+      "interrupted": "已中止 · 内容不完整",
+      "interruptedTitle": "该回复未完成 — 用户中止 / 网络断开 / 后端错误。已保留中断前的内容。",
+      "toolPulse": "正在执行工具…"
     },
     "messageList": {
       "jumpToLatest": "回到最新消息",
@@ -108,6 +111,25 @@
       "compacting": "整理中…",
       "compact": "整理",
       "tooltip": "已用输入估算 {used} tokens / 模型上下文窗口 {total} tokens · 即将达到上限时会提示整理"
+    },
+    "toolCall": {
+      "subagentRun": "子代理 run",
+      "viewTrace": "查看链路详情 →"
+    },
+    "subagent": {
+      "title": "活跃子代理",
+      "runningCount": "· {n} 运行中",
+      "viewTrace": "查看链路 ↗"
+    },
+    "planProgress": {
+      "runningCount": "· {n} 进行中",
+      "failedCount": "· {n} 失败",
+      "fallbackTitle": "计划"
+    },
+    "progressPanel": {
+      "subagentTab": "子代理",
+      "runningSuffix": "· {n} 进行中",
+      "failedSuffix": "· {n} 失败"
     }
   }
 }
