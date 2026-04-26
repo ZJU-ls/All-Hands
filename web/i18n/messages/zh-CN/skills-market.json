@@ -31,6 +31,12 @@
       "uninstallConfirm": "卸载",
       "noDescription": "暂无描述",
       "builtinLabel": "内建",
+      "searchPlaceholder": "搜索技能 · 名称 / 描述 / id",
+      "noMatch": "没有匹配「{query}」的技能。",
+      "sortAriaLabel": "排序方式",
+      "sortRecent": "最近安装",
+      "sortName": "名称",
+      "sortTools": "工具数",
       "uninstallAria": "卸载 {name}",
       "loadingLabel": "加载技能",
       "empty": {
