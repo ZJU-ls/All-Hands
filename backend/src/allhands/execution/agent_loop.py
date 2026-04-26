@@ -157,6 +157,45 @@ def _serialize_for_lc_tool_message(content: Any) -> str:
         return str(content)
 
 
+_ARTIFACT_HALLUC_PATTERNS = (
+    "这是一个为你",
+    "这是一个我",
+    "这是一个交互式",
+    "这是为你定制",
+    "我已经为你",
+    "我已为你",
+    "我已经创建",
+    "我为你创建",
+    # 2026-04-26 + qwen3-plus 的更多变体(用户截图反馈「现在啥都没有」)
+    "已为您生成",
+    "已为您创建",
+    "已为您准备",
+    "已为你生成",
+    "已为你创建",
+    "已为你准备",
+    "为您生成了",
+    "为你生成了",
+    "i've created",
+    "i have created",
+    "here's the html",
+    "here is the html",
+    "以下是",
+)
+
+
+def _looks_like_artifact_hallucination(text: str) -> bool:
+    """Heuristic: does this assistant text describe a 制品 as if just made?
+
+    Used for the hallucination self-correction nudge in agent_loop.stream.
+    Conservative on purpose · false positives cost one extra LLM iteration ·
+    false negatives let the user see an empty artifact panel(我们见过一次)。
+    """
+    if not text:
+        return False
+    lower = text.lower()
+    return any(p.lower() in lower for p in _ARTIFACT_HALLUC_PATTERNS)
+
+
 def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
     """A tool_call entry from accumulated.tool_calls is valid iff:
 
@@ -190,6 +229,39 @@ def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
 
 
 _log = logging.getLogger(__name__)
+
+
+def _make_tool_message_synthetic(
+    *,
+    tool_use_id: str,
+    error: str,
+    conversation_id: str = "",
+) -> Message:
+    """Build a synthetic tool_message used when the AgentLoop must surface
+    a tool_use as failed without going through tool_pipeline (e.g. outer
+    loop crashed mid-execution). The error envelope shape matches what
+    tool_pipeline produces for caught executor exceptions, so downstream
+    projection / persistence treat it identically.
+
+    R1 review · C6: ``conversation_id`` is now threaded so persistence
+    keyed on the message's own conversation_id (not just the outer scope)
+    can still join the synthetic row to the right conversation.
+    """
+    from allhands.core.conversation import Message as _Msg
+
+    base = _Msg(
+        id=str(uuid.uuid4()),
+        conversation_id=conversation_id,
+        role="tool",
+        content="",
+        tool_call_id=tool_use_id,
+        created_at=_now(),
+    )
+    # tool_pipeline routes structured payloads via model_copy(update=...) too
+    # — Message.content is declared str in the schema but downstream
+    # projection / persistence accept dict envelopes by inspection. Mirror
+    # that pattern instead of re-typing the field.
+    return base.model_copy(update={"content": {"error": error}})
 
 
 class AgentLoop:
@@ -352,6 +424,19 @@ class AgentLoop:
                 valid_tool_calls = [
                     tc for tc in raw_tool_calls if _is_valid_tool_call(tc, known_names)
                 ]
+                # R1 review · M3 · dedupe by id, keeping the latest entry.
+                # DashScope / Qwen sometimes emit the same tool_call_id twice
+                # within a single AIMessageChunk accumulation; without this
+                # we'd commit two ToolUseBlocks with identical ids and emit
+                # two TMCs with the same tool_call_id — which the next-turn
+                # LangChain replay treats as malformed.
+                if valid_tool_calls:
+                    by_id: dict[str, dict[str, Any]] = {}
+                    for tc in valid_tool_calls:
+                        tc_id = str(tc.get("id") or "")
+                        if tc_id:
+                            by_id[tc_id] = tc
+                    valid_tool_calls = list(by_id.values())
 
                 blocks: list[Any] = []
                 if reasoning_full:
@@ -397,42 +482,117 @@ class AgentLoop:
                             ),
                         )
                     else:
+                        # 2026-04-26 · 检测「制品幻觉」 — 模型在回复里描述
+                        # 「这是一个 X / 我已经为你 X」 但本轮没调 artifact_create
+                        # · 用户看不到任何东西。这一轮已经委身在 lc_messages
+                        # 里 · 注入一句 system 反馈让模型下一轮纠正,而不是
+                        # 直接 return completed。
+                        if _looks_like_artifact_hallucination(text_full):
+                            _log.warning(
+                                "agent_loop.artifact_hallucination_detected",
+                                extra={"sample": text_full[:200]},
+                            )
+                            lc_messages.append(self._to_lc_assistant_message(assistant_msg))
+                            lc_messages.append(
+                                SystemMessage(
+                                    content=(
+                                        "用户看不到任何制品 · 你的上一条回复描述了一个 "
+                                        "HTML / 图表 / 文档,但你这一轮没有调用 "
+                                        "artifact_create 工具。请立即调 "
+                                        "artifact_create({kind, name, content}) 真正产出 · "
+                                        "再调 artifact_render(id) 嵌入预览 · 然后用一两句话告诉用户。"
+                                        "不要再次只说「这是一个...」 而不调工具。"
+                                    )
+                                )
+                            )
+                            continue  # next LLM iteration with the nudge
                         yield LoopExited(reason="completed")
                     return
 
-                # Append assistant message (with tool_uses) to lc history
-                # so the next LLM turn sees its own previous turn.
-                lc_messages.append(self._to_lc_assistant_message(assistant_msg))
+                # R2 review · widen the BaseException safety net to cover
+                # the entire post-AssistantMessageCommitted phase, not just
+                # the batches loop. The earlier scoping missed cancellations
+                # that hit between `yield AssistantMessageCommitted(...)` and
+                # the start of `try: for batch in batches:` (about 4 lines
+                # of code, but on a slow event loop / SSE drop / inner
+                # exception during lc_messages bookkeeping any of these can
+                # synchronously yield CancelledError). When that happens, the
+                # tool_use was already announced to the frontend (TOOL_CALL_
+                # START fired) but the loop unwinds before TOOL_CALL_END,
+                # leaving the UI to stamp `tool_call_dropped`.
+                committed_tool_use_ids: set[str] = set()
+                pending_tool_use_ids: set[str] = {b.id for b in tool_use_blocks}
+                try:
+                    # Append assistant message to lc history so the next LLM
+                    # turn sees it; failure here would leak the assistant
+                    # tool_use to the wire without committing tool results.
+                    lc_messages.append(self._to_lc_assistant_message(assistant_msg))
 
-                # Execute tool_uses through the pipeline. Partition into
-                # batches; each batch is either concurrent (read-only)
-                # or serial (write/deferred). Within concurrent batches
-                # we asyncio.gather; serial batches yield events during
-                # execution (deferred path emits ConfirmationRequested).
-                batches = partition_tool_uses(tool_use_blocks, bindings)
-                for batch in batches:
-                    if batch.is_concurrent_safe and len(batch.blocks) > 1:
-                        # asyncio.gather — concurrent reads. Order the
-                        # results by input position so transcript stays
-                        # deterministic regardless of completion order.
-                        results = await asyncio.gather(
-                            *[execute_tool_use_concurrent(b, bindings) for b in batch.blocks]
+                    batches = partition_tool_uses(tool_use_blocks, bindings)
+                    for batch in batches:
+                        if batch.is_concurrent_safe and len(batch.blocks) > 1:
+                            # R1 · C1: return_exceptions=True so a blow-up in
+                            # one branch doesn't cancel siblings mid-await.
+                            raw_results = await asyncio.gather(
+                                *[
+                                    execute_tool_use_concurrent(
+                                        b, bindings, conversation_id=self._conversation_id
+                                    )
+                                    for b in batch.blocks
+                                ],
+                                return_exceptions=True,
+                            )
+                            for blk, res in zip(batch.blocks, raw_results, strict=True):
+                                if isinstance(res, BaseException):
+                                    tool_msg = _make_tool_message_synthetic(
+                                        tool_use_id=blk.id,
+                                        error=f"{type(res).__name__}: {res}",
+                                        conversation_id=self._conversation_id,
+                                    )
+                                else:
+                                    tool_msg = res
+                                yield ToolMessageCommitted(message=tool_msg)
+                                committed_tool_use_ids.add(tool_msg.tool_call_id or "")
+                                lc_messages.append(self._to_lc_tool_message(tool_msg))
+                        else:
+                            for block in batch.blocks:
+                                async for ev in execute_tool_use_iter(
+                                    block,
+                                    bindings,
+                                    self._permission_check,
+                                    conversation_id=self._conversation_id,
+                                ):
+                                    yield ev
+                                    if isinstance(ev, ToolMessageCommitted):
+                                        committed_tool_use_ids.add(ev.message.tool_call_id or "")
+                                        lc_messages.append(self._to_lc_tool_message(ev.message))
+                except BaseException as inner_exc:
+                    # Catches Exception AND CancelledError (BaseException).
+                    # Synthesize a failure TMC for every tool_use the model
+                    # asked for that didn't reach a TMC — even if cancel hit
+                    # before any batch ran.
+                    for blk_id in pending_tool_use_ids - committed_tool_use_ids:
+                        synthetic = _make_tool_message_synthetic(
+                            tool_use_id=blk_id,
+                            error=(
+                                f"{type(inner_exc).__name__}: {inner_exc}"
+                                if not isinstance(inner_exc, asyncio.CancelledError)
+                                else "tool execution cancelled by upstream "
+                                "(SSE drop / parent abort / inner sub-agent failure)"
+                            ),
+                            conversation_id=self._conversation_id,
                         )
-                        for tool_msg in results:
-                            yield ToolMessageCommitted(message=tool_msg)
-                            lc_messages.append(self._to_lc_tool_message(tool_msg))
-                    else:
-                        # Serial — may yield ConfirmationRequested mid-flight
-                        for block in batch.blocks:
-                            async for ev in execute_tool_use_iter(
-                                block, bindings, self._permission_check
-                            ):
-                                yield ev
-                                if isinstance(ev, ToolMessageCommitted):
-                                    lc_messages.append(self._to_lc_tool_message(ev.message))
+                        yield ToolMessageCommitted(message=synthetic)
+                    raise
 
                 # Loop back to next LLM turn
         except GeneratorExit:
+            raise
+        except asyncio.CancelledError:
+            # Surface cancellation as an aborted exit so the chat tap can
+            # finalize repos, then re-raise so asyncio's cancel chain stays
+            # intact.
+            yield LoopExited(reason="aborted", detail="cancelled")
             raise
         except Exception as exc:
             yield LoopExited(
@@ -561,6 +721,7 @@ class AgentLoop:
             "allhands.artifacts.create_csv",
             "allhands.artifacts.create_docx",
             "allhands.artifacts.create_pptx",
+            "allhands.artifacts.render_drawio",
             "allhands.artifacts.update",
             "allhands.artifacts.rollback",
         ):
@@ -573,6 +734,7 @@ class AgentLoop:
                 make_artifact_create_xlsx_executor,
                 make_artifact_rollback_executor,
                 make_artifact_update_executor,
+                make_render_drawio_executor,
             )
             from allhands.persistence.db import get_sessionmaker
 
@@ -589,6 +751,7 @@ class AgentLoop:
                 "allhands.artifacts.create_csv": make_artifact_create_csv_executor,
                 "allhands.artifacts.create_docx": make_artifact_create_docx_executor,
                 "allhands.artifacts.create_pptx": make_artifact_create_pptx_executor,
+                "allhands.artifacts.render_drawio": make_render_drawio_executor,
                 "allhands.artifacts.update": make_artifact_update_executor,
                 "allhands.artifacts.rollback": make_artifact_rollback_executor,
             }
@@ -742,18 +905,31 @@ class AgentLoop:
     ) -> PermissionDecision:
         """Permission decision for one tool_use.
 
-        Currently:
-          * WRITE / IRREVERSIBLE / BOOTSTRAP scope ∧ requires_confirmation
-            ∧ confirmation_signal wired → Defer (suspend, ask user)
-          * everything else → Allow
+        2026-04-26 · 用户指令:**全部短路掉 confirmation gate**,所有需要
+        审批的 tool 现在直接 Allow。原因:用户测试反复被 expired-by-user 卡
+        住,且对工具确认面板是被动 / 没在看,导致每次都过 5 分钟 TTL 失败。
+        回归第一性原理:先把功能跑通,后续再分阶段收紧权限(plan-mode /
+        per-tool allowlist / 重操作显示提示等)。
+
+        保留的:
+          * ask_user_question(requires_user_input=True)— 这不是审批闸,
+            是 agent 主动向用户提问的合法语义 · 必须保留 Defer 路径
+
+        被关掉的:
+          * WRITE / IRREVERSIBLE / BOOTSTRAP + requires_confirmation 的
+            Defer · 全部直接 Allow
+          * 即:create_employee / delete_provider / spawn_subagent /
+            update_plan / send_message / 所有 admin 类 meta tool 都不再
+            打断对话流
+
+        恢复路径:把下面 needs_confirm 的 Defer 分支放回来即可。Tool 上的
+        requires_confirmation 字段保留,只是这一层不消费它了 — 未来 UI
+        想做一键开关也方便。
 
         Future extensions plug in here:
           * plan mode → Deny when conversation_mode == 'plan' and tool is
             mutator
-          * clarification → Defer with UserInputDeferred when tool is
-            an ask_user_question
-          * sub-agent → executor itself does the recursion; the pipeline
-            doesn't need to defer at this layer
+          * per-tool allowlist → 用户在 settings 里勾选哪些 tool 强审批
         """
         # ADR 0019 C3 · clarification path runs BEFORE the confirmation
         # check. ask_user_question is ToolScope.READ + requires_user_input,
@@ -771,27 +947,10 @@ class AgentLoop:
                 },
             )
 
-        needs_confirm = (
-            tool.scope
-            in (
-                ToolScope.WRITE,
-                ToolScope.IRREVERSIBLE,
-                ToolScope.BOOTSTRAP,
-            )
-            and tool.requires_confirmation
-        )
-        if needs_confirm and self._confirmation_signal is not None:
-            return Defer(
-                signal=self._confirmation_signal,
-                publish_kwargs={
-                    "tool_use_id": block.id,
-                    "summary": f"Execute {tool.name} with args: {block.input}",
-                    "rationale": f"Tool {tool.name!r} requires confirmation.",
-                },
-            )
-        # No signal wired (test path / read-only) → straight allow.
-        # Deny is only used by future plan-mode hooks.
-        _ = Deny  # keep import live for future extension
+        # Confirmation gate intentionally bypassed (see docstring). The
+        # ToolScope / requires_confirmation metadata is still authoritative
+        # for downstream observability and a future re-enable.
+        _ = ToolScope, Deny  # keep imports live for future extension
         return Allow()
 
 

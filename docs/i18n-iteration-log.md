@@ -198,3 +198,409 @@ horizontal ellipsis "…",和其他 placeholder 不一致。
 **结果**:i18n 8 轮迭代收尾 · 报告交付。
 
 **commits**:见 git log
+
+## Round 9 · 2026-04-26 04:45 (cron · 30m)
+
+**主题**:KnowledgeService 6 处用户可见硬编码中文 → t()
+
+**做的事**:
+- backend i18n catalog 加 6 个 key:
+  - knowledge.embedding.label.aliyun · knowledge.embedding.reason.add_openai · knowledge.embedding.reason.add_aliyun
+  - knowledge.ask.no_hits · knowledge.ask.no_chat_provider · knowledge.ask.llm_failed
+- knowledge_service.py 把 embedding option label / reason · ask 无命中文案 · ask LLM 失败 · stream LLM 失败 全部包成 t()
+- 系统 prompt(_ASK_SYSTEM_PROMPT)保留中文 — 那是模型的 instruction,不是用户可见
+
+**结果**:1569 backend tests 全绿 · web typecheck 全绿 · regression net 也全绿(知识库回答现在跟着 Accept-Language 走)
+
+**commits**:见 git log
+
+## Round 10 · 2026-04-26 04:55 (cron · 30m)
+
+**主题**:剩余 backend 用户可见硬编码中文 → t()(model_service · system paths)
+
+**做的事**:
+- model_service.py 2 处:thinking 不支持 warning · empty response stream error
+- api/routers/system.py 5 行 SystemPathEntry:label / description 全包 t()
+  · 之前是双语连写(label="数据根目录 · Data root"),现在按 locale 单出
+- backend i18n catalog 加 12 个 key(2 + 10)
+
+**结果**:1570 backend tests 全绿 · ruff / lint-imports 全绿。剩下的中文都是
+LLM system prompt(_ASK_SYSTEM_PROMPT / ai_explainer / chat 标题生成器)— 那
+是模型 instruction · 不是 UI 文本。
+
+**commits**:见 git log
+
+## Round 11 · 2026-04-26 05:13 (cron · 30m)
+
+**主题**:广度审计 · 验证回归网仍然把得住主线
+
+**做的事**:
+- pull main:这一轮 main 加了 KeyboardShortcutsModal / RouteProgress / Skeleton / StatusPill / HoverPeek / Toast 系统 + skills/mcp 迭代代码
+- 跑两个 regression net(`i18n-no-hardcoded-zh.test.ts` · `i18n-catalog-audit.test.ts`)+ 1928 web tests · 全绿
+- 手动扫描:
+  - components/shell + components/ui 的新组件 → aria-label / placeholder / title 属性全走 useTranslations
+  - 全 app/ 路由的 toast.error / alert / confirm 调用 → 0 处硬编码字面量
+  - throw new Error 字面量 → 都是 `HTTP ${status}` 这类技术堆栈,被上层 i18n 错误 UI 截住
+  - en 目录下任何含 CJK 字符的 value(可能漏译)→ 仅 `"zh-CN": "简体中文"`(有意为之)
+- 没有发现新漏点 · 这一轮代码零改动 · 仅写 log
+
+**剩下的中文都是 by-design**:
+- LLM system prompts(_ASK_SYSTEM_PROMPT / chat 标题生成器 / ai_explainer 三个 prompt)— 模型 instruction
+- bootstrap_service.py 阿里云预设 name — 一次性 DB seed 字段(改了不影响已存在数据)
+- artifact_office.py 工具 description 里的 JSON 例子 — 给 agent 看的 schema 示例
+
+**结果**:这是健康检查 · 没有 bug 也是好结果
+
+**commits**:仅 docs(本条 log)
+
+## Round 12 · 2026-04-26 05:43 (cron · 30m)
+
+**主题**:清理死代码 + 深扫执行层 / 持久化层
+
+**发现**:
+- web/lib/i18n/dict.ts 是孤儿(124 行 v0 早期方案残留 · 没有任何文件 import)
+  · 真正的 catalog 在 web/i18n/messages/{zh-CN,en}/ 下
+- backend core/provider_presets.py:49 label="阿里云 百炼" — 在 core/ 不能调
+  t() · 但 routers/providers.py:102 已经在出口做了 `t(f"providers.label.{kind}")`
+  覆盖,核心层只是 fallback,可以接受
+- backend core/market.py:92 Literal["财报", "分红", ...] — 是 enum 域值不是
+  display 文案,翻译会破坏数据契约,正确做法是前端按 enum value 查 catalog
+- backend bootstrap_service.py:350 name="阿里云 百炼" — DB seed 字段,一次性
+  写入,翻译无意义(用户可以改名)
+
+**做的事**:
+- 删除 web/lib/i18n/dict.ts(死代码)
+- 顺手删空目录 web/lib/i18n/
+
+**结果**:1928 web tests · regression net · typecheck · lint 全绿
+
+**commits**:见 git log
+
+## Round 13 · 2026-04-26 06:13 (cron · 30m)
+
+**主题**:locale-aware 时间格式化 · 干掉硬编码 toLocaleString("zh-CN")
+
+**发现**:3 处用 `toLocaleString("zh-CN", ...)` 写死了中文 locale —
+en 用户看 trace 表 / run header 时,日期会按中文 locale 渲染(e.g.
+"04/26 14:23:05" vs "04/26, 02:23:05 PM")。
+
+**做的事**:
+- components/traces/TraceTable.tsx:formatStartedAt 接 `locale` 参数 ·
+  组件内 useLocale() 注入
+- components/runs/RunHeader.tsx:formatTime 接 `locale` 参数 · 同样 useLocale()
+- lib/format.ts:删除 formatRelativeTime(死函数 · 没人 import · 体内
+  全是硬编码"刚刚 / N 分钟前 / 今天 HH:mm")· 顺手更新文件头注释
+  说明 relative-time 走 catalog + Intl.RelativeTimeFormat
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
+
+## Round 14 · 2026-04-26 06:43 (cron · 30m)
+
+**主题**:lib/ 层面的硬编码 enum-label 函数 → catalog driven
+
+**发现**:
+- lib/employee-profile.ts BADGE_LABEL = { react: "可执行", planner: "会做计划",
+  coordinator: "能带团队" } —— 直接 lookup 表硬塞中文
+- lib/tasks-api.ts statusLabel(s) / sourceLabel(s) —— switch / dict 硬塞中文,
+  TaskStatusPill 也走这个路径
+
+**做的事**:
+- web/i18n/messages/{zh-CN,en}/employees.json 加 `tasks.status.*` (7 状态)
+  + `tasks.source.*` (4 来源) + `employeeBadges.*` (3 徽章) · 共 14 个 key x 2 locale
+- 改 4 个 consumer 走 useTranslations:
+  - app/employees/page.tsx · app/employees/[employeeId]/page.tsx → useTranslations("employeeBadges")
+  - app/tasks/page.tsx · app/tasks/[id]/page.tsx → useTranslations("tasks.source")
+  - components/tasks/TaskStatusPill.tsx → useTranslations("tasks.status") (新加 "use client")
+- 删掉 lib/tasks-api.ts 的 statusLabel + sourceLabel + lib/employee-profile.ts 的 BADGE_LABEL
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
+
+## Round 15 · 2026-04-26 07:13 (cron · 30m)
+
+**主题**:广度审计 · 找不到新硬编码
+
+**做的事**:
+- 扫 lib/ + app/ + components/ 的中文字面量 → 全在 JSDoc 注释里(非运行时输出)
+- 扫 backend services/ + execution/ + api/middleware/ → 唯有 LLM system prompts
+  和 bootstrap DB seed 字段(均 by-design)
+- 扫 backend execution/tools/meta/ tool result error / detail → 0 处硬编码
+- shell components(AppShell · sidebar · TopBar · Drawer)→ 0 处硬编码
+- e2e tests 里的 Chinese aria-label 是断言测试,不是用户文案
+- placeholder 里的中文都是技术 ID 示例(cron 表达式 / function ID / URL)
+
+**发现一项 polish 机会(未做 · 留作后续)**:
+所有页面共享 root layout 的 `title: "allhands"` · 浏览器 tab 永远显示同一文字,
+缺页面级 generateMetadata。但 client component 不能直接导 generateMetadata,
+需要要么拆 server layout 要么走 useEffect → document.title。是改进而非
+i18n 漏洞,留给独立 PR。
+
+**结果**:1928 web tests + 12 backend i18n tests + regression net 全绿 ·
+本轮零代码改动
+
+**commits**:仅本条 log
+
+## Round 16 · 2026-04-26 07:43 (cron · 30m)
+
+**主题**:per-page 浏览器 tab title · 跟随 locale + 当前页
+
+**做的事**:
+- AppShell 新加 useEffect 同步 `title` prop 到 `document.title` ·
+  format: `"{pageTitle} · allhands"` · 没传 title 时 fall back 到
+  纯 "allhands"
+- 所有页面已经在用 `<AppShell title={t("...")}>`,所以零 page-side 改动
+  自动覆盖:Cockpit / Chat / Tasks / Employees / Skills / MCP / Gateway /
+  Knowledge / Channels / Triggers / Confirmations / Traces / Observatory /
+  Settings / About …
+- en 用户切到 /tasks 浏览器 tab 显示 "Tasks · allhands"
+  zh 用户同一页显示 "任务 · allhands"
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
+
+## Round 17 · 2026-04-26 08:13 (cron · 30m)
+
+**主题**:抽 useDocumentTitle hook · 把没走 AppShell 的页面也包进来
+
+**做的事**:
+- 抽 lib/use-document-title.ts 共享 hook,把 R16 在 AppShell 里写的
+  useEffect 提取出来 · 公约一处定义
+- AppShell 改用该 hook,去掉重复 useEffect
+- 唯一不走 AppShell 的用户级页面是 /welcome(其它无 AppShell 的页面是
+  redirect / design-lab,不需要 i18n title)
+- /welcome 调 useDocumentTitle(t("docTitle")) · 加 welcome.docTitle key
+  ("欢迎" / "Welcome")到 zh-CN.json + en.json 根 catalog
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
+
+## Round 18 · 2026-04-26 08:43 (cron · 30m)
+
+**主题**:全栈无 locale `toLocaleString()` 大扫除
+
+**发现**:13 处 `new Date(...).toLocaleString()` 没传 locale,落到 navigator
+默认。zh 应用却跑在 en navigator 上时,日期显示用 navigator locale,跟应用
+字符串不一致。
+
+**做的事**:全部接 `useLocale()` 并把 locale 传进 toLocaleString:
+- app/observatory/page.tsx:formatDate(iso, locale)
+- app/tasks/[id]/page.tsx:TaskHero · MetaGrid 各加 useLocale · 4 处时间
+- app/tasks/page.tsx:TaskRow 加 useLocale · 1 处
+- app/triggers/[id]/page.tsx:formatTime(iso, locale) · TriggerHeader · FireRow · 2 处调用
+- app/conversations/page.tsx:ConversationsPage 加 useLocale · 1 处
+- app/knowledge/page.tsx:DocDrawer 加 useLocale · 2 处(created_at / updated_at)
+- app/market/page.tsx:MarketPage 加 useLocale · 1 处(poller tick)
+- app/market/[symbol]/page.tsx:QuoteHero + NewsCard 各加 useLocale · 2 处
+- app/mcp-servers/page.tsx:formatAbsolute(ts, locale) + 串到 buildKpis 签名
+- app/channels/[id]/page.tsx:ChannelDetailPage + MessageRow 各加 useLocale · 2 处
+- app/employees/[employeeId]/page.tsx:EmployeePage 加 useLocale · 1 处
+- components/artifacts/ArtifactListItem.tsx:加 useLocale · 1 处(updated_at)
+- components/chat/ConversationSwitcher.tsx:formatRelative 多接 locale 参数
+- components/observatory/MetricDrawer.tsx:SeriesChart 加 useLocale · 1 处(tooltip)
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿 · grep 复查零
+残留 `new Date(...).toLocale*()` 不带 locale 的写法
+
+**commits**:见 git log
+
+## Round 19 · 2026-04-26 09:13 (cron · 30m)
+
+**主题**:三个剩下的 d.toLocaleString() 末班车
+
+**发现**:R18 漏掉了三个文件级 helper —
+app/triggers/page.tsx · app/skills/[id]/page.tsx · app/mcp-servers/[id]/page.tsx
+都有 `function formatTime(iso) { return new Date(iso).toLocaleString() }` ·
+没受 d.toLocaleString() 模式扫描的影响,但本质问题相同。
+
+**做的事**:
+- 三个 formatTime 都接 locale 参数 · 调用方 useLocale() 注入
+- triggers/page TriggerCard · skills/[id] Overview + VersionsTab · mcp-servers/[id]
+  Overview + HealthTab · 五个组件加 useLocale
+
+**剩余无 locale**:
+- 仅 1 处:tasks_used.toLocaleString()(数值千分位)· 不属 date · 全栈数值
+  千分位 locale 化是更大重构 · 当前 navigator 默认行为可以接受
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿 · 全栈
+date 格式化 0 处 navigator 默认
+
+**commits**:见 git log
+
+## Round 20 · 2026-04-26 09:43 (cron · 30m)
+
+**主题**:aria-label / 屏幕阅读器友好性 + 漏掉的硬编码英文
+
+**发现**:
+- aria-label 硬编码英文 9+ 处:Toast notifications · ProgressPanel
+  agent progress · PlanProgress 5 个状态 dot · SubagentProgress 3 个状态 dot ·
+  ArtifactList pinned · ArtifactGrid artifacts/pinned · artifacts/page
+  clear search/bulk actions/clear selection
+- artifacts/page BulkActionBar 硬编码 4 处英文文本:"{n} selected" · "Pin" /
+  "Unpin" · "Delete"
+- SubagentProgressSection labelFor() 返回硬编码英文 status 文本(显示给用户看,
+  不仅是 aria-label)
+
+**做的事**:
+- 加 catalog key:
+  - root toast.ariaLabel("通知" / "Notifications")
+  - chat.progressPanel.ariaLabel("代理进度" / "Agent progress")
+  - chat.planProgress.step.{done,running,failed,skipped,pending}
+  - chat.subagent.status.{running,succeeded,failed}
+  - artifacts.list.pinnedAria + groupAria
+  - artifacts.page.{clearSearchAria,bulkActionsAria,clearSelectionAria,bulk.*}
+- 改 8 个组件 / 1 个 page 走 t():Toast · ProgressPanel · PlanProgressSection ·
+  SubagentProgressSection(顺手干掉 labelFor)· ArtifactListItem · ArtifactGrid
+  · artifacts/page BulkActionBar
+- 删除 SubagentProgressSection.labelFor 死函数
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
+
+## Round 21 · 2026-04-26 10:13 (cron · 30m)
+
+**主题**:剩下 3 处 aria-label 英文字面量收口
+
+**发现**:
+- AppShell topbar 键盘快捷键按钮 aria-label="Keyboard shortcuts" + title="? · keyboard shortcuts" 硬编码
+- PieChart svg aria-label="pie chart" 硬编码
+- design-lab 页面 3 处 title="..." 是开发者预览页 · 跳过
+
+**做的事**:
+- 加 catalog key:shell.topbar.shortcutsAria + shortcutsTitle · viz.pieChart.ariaLabel
+- 改 AppShell + PieChart 走 t()
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿。
+本次扫描后 components / app(除 dev-only design-lab)的 aria-label / title
+属性 100% 走 t() · 屏幕阅读器对两种 locale 都说人话。
+
+**commits**:见 git log
+
+## Round 22 · 2026-04-26 10:43 (cron · 30m)
+
+**主题**:5 处 toast.success/.error/.warning 模板字符串硬编码英文
+
+**发现**:R20 在 BulkActionBar 收口时漏了 onPinToggle / bulkDeleteConfirmed
+两段业务 handler 里的 toast 文案 —— 5 个 `${...} artifact(s)` 模板,zh
+用户成功删几个制品看的全是英文 toast。
+
+**做的事**:
+- artifacts.page.bulk.toast 块新增 8 个 ICU key(en 用 plural,zh 用 {n}):
+  pinned · unpinned · pinPartial(+desc) · deletedAll(+desc) · deletedPartial · deletedNone
+- ArtifactsGlobalPage 加 `tToast = useTranslations("artifacts.page.bulk.toast")`
+- 5 处 toast.* 改用 ICU 模板
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿 ·
+全栈 toast.* 调用 0 处硬编码英文/中文文本
+
+**commits**:见 git log
+
+## Round 23 · 2026-04-26 11:13 (cron · 30m)
+
+**主题**:深度健康检查 · 没有新发现
+
+**做的事**:
+- 扫 ConfirmDialog / Coachmark / SearchInput / HoverPeek / PageHeader 默认值 → 全 t() 化
+- 扫 backend services/cockpit/observatory/artifact/skill/mcp/task → 0 处用户可见硬编码
+- 扫 SVG `<title>` / `<iframe title>` / 模板字符串 → 全是 SVG path / 数字 / cron 表达式,不需翻译
+- 扫 backend execution/ → 唯有 `_ARTIFACT_HALLUC_PATTERNS` 检测词表(读模型输出 · 非展示)+
+  agent_loop 的 nudge SystemMessage(给 LLM 的 instruction · 非用户可见) · by-design
+- 扫 backend services 里 logger / summary / description 的 f-string → 0 处中文
+- 扫 raw enum 显示(trigger.kind / fire.status / server.transport)→ 都是 mono 技术 badge ·
+  类似 Linear "open"/"closed" 那种,by-design 不翻译
+
+**结果**:1928 web tests + backend i18n tests + regression net 全绿 · 本轮零代码改动
+
+**commits**:仅本条 log
+
+## Round 24 · 2026-04-26 11:43 (cron · 30m)
+
+**主题**:再次广度审计 · main 新增的 4 个文件零漏点
+
+**main 新增**:agent_loop / test_agent_loop / ProgressPanel(R20 R21 改动 +
+border-t 拆除) / HoverPeek 定位修复 — 都不引入新文案。
+
+**做的事**:
+- 跑 backend + web regression net + typecheck + lint → 全绿
+- 检查 agent_loop 新增中文(160-174 + 490) → 都是 LLM 检测词表 / nudge
+  SystemMessage,by-design 不翻译
+- 扫表单 type="submit" / required → submit 文案全 t()
+- HoverPeek + ProgressPanel 改动只动样式 / 几何,无文案变化
+
+**剩余可做但低 ROI**:18+ 处 number `.toLocaleString()`(observatory / tasks /
+traces / RunTurnList / ModelTestDialog / ModelRow)。zh-CN + en 两个 locale
+千分位分隔符都是 `,`,navigator-default 行为不会撕裂这两种用户。仅
+de-DE / fr-FR navigator + 应用切到 zh / en 时会显示 "1.234"。当前不修。
+
+**结果**:1928 web tests + backend i18n tests + regression net 全绿 · 零代码改动
+
+**commits**:仅本条 log
+
+## Round 25 · 2026-04-26 12:13 (cron · 30m)
+
+**主题**:把 R24 列在 backlog 的 18+ 处 number `.toLocaleString()` 一并收口
+
+**做的事**:
+- sed 批量替换 `.toLocaleString()` → `.toLocaleString(locale)`
+  在 app/observatory · app/tasks/[id] · components/traces/TraceTable
+- 给五个组件补 useLocale:
+  - app/tasks/[id] TaskKpiStrip · components/runs/RunTurnList LLMCallTurn ·
+    components/gateway/ModelRow · components/gateway/ModelTestDialog MetricsRow
+  - 后两个还要给 fmtCount(n, locale) 加 locale 参数 + 三个调用点
+- observatory(12 处)+ TraceTable(4 处)的 toLocaleString 都已经在
+  组件内 useLocale 范围里(R18 R19 已 wire),sed 后零编译错
+
+**验证**:`grep '\.toLocaleString()' app/ components/` 现在 0 行
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿 · 全栈
+任何 `.toLocaleString*()` 调用都跟随当前 locale,
+de-DE / fr-FR navigator 用户也不再撕裂
+
+**commits**:见 git log
+
+## Round 26 · 2026-04-26 12:43 (用户报错触发)
+
+**bug**:`/mcp-servers` 控制台报 `MISSING_MESSAGE: mcp.list.neverSynced
+in messages for locale zh-CN` · buildKpis 调 `t("neverSynced")`,t 是
+`useTranslations("mcp.list")`,但 catalog 把 key 嵌在 `mcp.list.kpi.neverSynced` 下。
+
+**根因**:命名空间 / key 路径不一致 · 现有 catalog-audit 测试只比较两个 locale
+的 shape 是否对齐(都缺也通过)· 没有验证「源码里 t(...) 引用的 key 必须在
+catalog 里存在」。
+
+**做的事**:
+- app/mcp-servers/page.tsx:422 改 `t("neverSynced")` → `t("kpi.neverSynced")`
+- 新增 web/tests/i18n-keys-resolve.test.ts(回归网):
+  - 加载所有 catalog key(root + 8 namespace 文件)成 Set
+  - 扫 app/ + components/ + lib/ 所有 .ts/.tsx,正则匹配
+    `useTranslations("ns")` 把它绑定的局部变量名记下
+  - 对每个 t-name 找 `t-name("a.b.c")` 调用,组合 `ns.a.b.c` 检查是否存在
+  - 反向验证:把修复 sed-undo 后跑一次,确认能 surface 这个 bug · 然后
+    再恢复
+
+**结果**:1929 web tests · typecheck · lint · regression 全绿。
+以后 PR 加错 namespace 或漏 key,这层会立刻挡住。
+
+**commits**:见 git log
+
+## Round 27 · 2026-04-26 13:13 (cron · 30m)
+
+**主题**:把 R26 的 web key-resolver 复制到 backend
+
+**做的事**:
+- 新增 backend/tests/unit/test_i18n_keys_resolve.py:
+  - 扫所有 backend/src/allhands/**/*.py 里 `t("literal")` 调用(只在
+    `from allhands.i18n import t` 的文件)
+  - 检查每个 key 在 _MESSAGES 任一 locale dict 里存在
+  - 当前覆盖 17 个文件 / 61 处 t() 调用 · 全绿
+- web 侧 R26 的 i18n-keys-resolve 也跑了一遍,1929 web tests 全绿
+
+**结果**:web + backend 双侧都有 t() 漏 key 回归网。以后 PR 加错 namespace
+或漏 key,本地跑测就 fail · 不会落到运行时报 MISSING_MESSAGE。
+
+**commits**:见 git log

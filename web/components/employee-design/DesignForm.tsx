@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import {
@@ -18,6 +18,7 @@ import { PresetRadio } from "./PresetRadio";
 import { DryRunPanel } from "./DryRunPanel";
 import { ModelPicker } from "@/components/model-picker/ModelPicker";
 import { Icon } from "@/components/ui/icon";
+import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 
 /**
  * 设计表单 · 受控 state 全部在这里,**无 mode 字段**(§3.2 红线)。
@@ -74,6 +75,14 @@ export function DesignForm({
     "idle",
   );
   const [composeError, setComposeError] = useState<string | null>(null);
+  // 2026-04-26 · 编辑态保存反馈与 dirty 跟踪。lastSaved 持有最近一次保存
+  // 落库后的"基线"快照,configuredEqualsBaseline 用它判断"当前 form 与
+  // 已持久化的状态是否一致",从而:
+  //   - 渲染 dirty 指示("未保存")
+  //   - 渲染最近保存提示("已保存 · N 秒前 ✓")
+  //   - 在没有 dirty 时禁用 save 按钮,避免无意义的空提交
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   // Edit / preview toggle. During streaming we force preview (you can't
   // render markdown in a textarea); when streaming ends we leave the user
   // wherever they were so they can keep iterating in either mode.
@@ -94,7 +103,46 @@ export function DesignForm({
     }
   }, [systemPrompt, composeState, promptView]);
 
-  const canSave = name.trim().length > 0 && !busy;
+  // Baseline snapshot for dirty tracking (edit mode only). Updated on every
+  // successful save, so subsequent edits are diffed against the latest
+  // persisted shape — not the stale "initial-on-mount" prop. Comparing
+  // arrays via JSON-stringify keeps the dependency graph dead simple; these
+  // arrays are tiny (≤ 20 ids) so the cost is irrelevant.
+  const [baseline, setBaseline] = useState(() => ({
+    description: initial?.description ?? "",
+    systemPrompt: initial?.system_prompt ?? "",
+    modelRef: initial?.model_ref ?? "",
+    skillIds: initial?.skill_ids ?? [],
+    mcpIds: initialMcpIds,
+    maxIterations: initial?.max_iterations ?? 10,
+  }));
+
+  const isDirty = useMemo(() => {
+    if (!isEdit) return name.trim().length > 0;
+    if (description !== baseline.description) return true;
+    if (systemPrompt !== baseline.systemPrompt) return true;
+    if (modelRef !== baseline.modelRef) return true;
+    if (maxIterations !== baseline.maxIterations) return true;
+    if (JSON.stringify([...skillIds].sort()) !== JSON.stringify([...baseline.skillIds].sort()))
+      return true;
+    if (JSON.stringify([...mcpIds].sort()) !== JSON.stringify([...baseline.mcpIds].sort()))
+      return true;
+    return false;
+  }, [
+    isEdit,
+    name,
+    description,
+    systemPrompt,
+    modelRef,
+    maxIterations,
+    skillIds,
+    mcpIds,
+    baseline,
+  ]);
+
+  const canSave = name.trim().length > 0 && !busy && (isEdit ? isDirty : true);
+  // Warn on tab-close when there are unsaved edits.
+  useUnsavedWarning(isEdit && isDirty && !busy);
 
   function toggle(list: string[], id: string, setter: (v: string[]) => void) {
     setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
@@ -169,23 +217,52 @@ export function DesignForm({
     setErr("");
     try {
       const customToolIds = mcpIds.map((id) => `mcp:${id}`);
-      const expanded = await previewEmployeeComposition({
-        preset,
-        custom_tool_ids: customToolIds,
-        custom_skill_ids: skillIds,
-        custom_max_iterations: maxIterations,
-      });
       if (isEdit && initial) {
+        // 2026-04-26 · 编辑态绕过 preset 展开。原实现在 PATCH 前再调一次
+        // compose_preview(preset=execute by default) · 这会无条件把
+        // execute preset 的 tool_ids_base 重新塞回去,即使原员工是 plan
+        // 预设也被强制重铸成 execute · 用户看到的"我只是改了模型字段"
+        // 实际上偷偷换了 tools。
+        // 编辑态语义改成"直接编辑 (tool_ids, skill_ids, max_iterations)
+        // 三个持久化列":保留原 tool_ids 中非 mcp:* 的部分(skill/preset
+        // 沉淀的工具),mcp:* 用当前 mcpIds 重建。preset 单选在 UI 上隐藏。
+        const preservedNonMcpTools = (initial.tool_ids ?? []).filter(
+          (tid) => !tid.startsWith("mcp:"),
+        );
+        const tool_ids = [...preservedNonMcpTools, ...customToolIds];
         const emp = await updateEmployee(initial.id, {
           description: description.trim(),
           system_prompt: systemPrompt,
           model_ref: modelRef,
-          tool_ids: expanded.tool_ids,
-          skill_ids: expanded.skill_ids,
-          max_iterations: expanded.max_iterations,
+          tool_ids,
+          skill_ids: skillIds,
+          max_iterations: maxIterations,
         });
+        // Resync baseline to whatever the API persisted — that's now the
+        // canonical snapshot dirty-tracking should diff against.
+        setBaseline({
+          description: emp.description,
+          systemPrompt: emp.system_prompt,
+          modelRef: emp.model_ref,
+          skillIds: emp.skill_ids,
+          mcpIds: emp.tool_ids
+            .filter((tid) => tid.startsWith("mcp:"))
+            .map((tid) => tid.slice(4)),
+          maxIterations: emp.max_iterations,
+        });
+        setSavedAt(Date.now());
+        setSavedFlash(true);
+        window.setTimeout(() => setSavedFlash(false), 2200);
         onSaved?.(emp);
       } else {
+        // Create path keeps preset expansion — fresh employees genuinely
+        // need preset baselines mixed in.
+        const expanded = await previewEmployeeComposition({
+          preset,
+          custom_tool_ids: customToolIds,
+          custom_skill_ids: skillIds,
+          custom_max_iterations: maxIterations,
+        });
         const emp = await createEmployee({
           name: name.trim(),
           description: description.trim(),
@@ -247,12 +324,17 @@ export function DesignForm({
         </div>
       </Section>
 
-      <Section
-        title={t("sectionPreset")}
-        subtitle={t("sectionPresetSubtitle")}
-      >
-        <PresetRadio value={preset} onChange={setPreset} />
-      </Section>
+      {/* 2026-04-26 · preset 单选只在新建态出现。编辑态它是噪声(effect 在
+          isEdit 下 return,点了无反应),又会让用户疑惑"我点了到底改了
+          什么"。直接隐掉。 */}
+      {!isEdit && (
+        <Section
+          title={t("sectionPreset")}
+          subtitle={t("sectionPresetSubtitle")}
+        >
+          <PresetRadio value={preset} onChange={setPreset} />
+        </Section>
+      )}
 
       <Section title={t("sectionSkills")} subtitle={t("sectionSkillsSubtitle")}>
         <SkillMultiPicker
@@ -432,27 +514,128 @@ export function DesignForm({
         </p>
       )}
 
-      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border border-border px-4 py-2 text-[12px] text-text hover:bg-surface-2 transition-colors duration-base"
-          >
-            {t("cancel")}
-          </button>
+      <div className="flex items-center gap-3 pt-2 border-t border-border">
+        {/* 左侧:保存状态指示器(仅编辑态)。dirty/saved/savedFlash 三态:
+            - dirty:橙色"未保存改动"——告诉用户当前看到的不是数据库里的样子
+            - savedFlash:绿色"✓ 已保存"——刚 PATCH 完的瞬态确认
+            - savedAt && !dirty:灰色"已保存 · N 秒前"——稳态参考时间锚
+            提供清晰的"input → action → effect"反馈链路,解决"保存到底
+            生效没"和"我现在看到的是不是已持久化"两个核心困惑。 */}
+        {isEdit && (
+          <SaveStatusIndicator
+            dirty={isDirty}
+            savedFlash={savedFlash}
+            savedAt={savedAt}
+            t={t}
+          />
         )}
-        <button
-          type="submit"
-          data-testid="design-save"
-          disabled={!canSave}
-          className="rounded-md bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-40 px-4 py-2 text-[12px] font-medium transition-colors duration-base"
-        >
-          {busy ? t("hiring") : t("hire")}
-        </button>
+        <div className="flex items-center gap-2 ml-auto">
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-md border border-border px-4 py-2 text-[12px] text-text hover:bg-surface-2 transition-colors duration-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              {t("cancel")}
+            </button>
+          )}
+          <button
+            type="submit"
+            data-testid="design-save"
+            disabled={!canSave}
+            className={`rounded-md px-4 py-2 text-[12px] font-medium transition-colors duration-base focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 disabled:opacity-40 ${
+              savedFlash
+                ? "bg-success text-primary-fg"
+                : "bg-primary text-primary-fg hover:bg-primary-hover"
+            }`}
+          >
+            {busy
+              ? isEdit
+                ? t("savingEdit")
+                : t("hiring")
+              : savedFlash && isEdit
+                ? t("savedFlash")
+                : isEdit
+                  ? t("saveEdit")
+                  : t("hire")}
+          </button>
+        </div>
       </div>
     </form>
   );
+}
+
+/**
+ * Save status indicator for edit mode.
+ *
+ * Three states (mutex):
+ *   1. savedFlash: green "✓ 已保存" pulse for ~2.2s right after PATCH ok
+ *   2. dirty:      amber "● 未保存改动" pill — diverges from baseline
+ *   3. saved + clean: muted "已保存 · N 秒前" timestamp anchor
+ *
+ * Updates every 30s while mounted to keep the relative timestamp fresh.
+ */
+function SaveStatusIndicator({
+  dirty,
+  savedFlash,
+  savedAt,
+  t,
+}: {
+  dirty: boolean;
+  savedFlash: boolean;
+  savedAt: number | null;
+  t: (k: string, v?: Record<string, string | number>) => string;
+}) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!savedAt) return;
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, [savedAt]);
+
+  if (savedFlash) {
+    return (
+      <span
+        data-testid="design-save-flash"
+        className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-success-soft text-success text-[11.5px] font-medium animate-fade-in"
+      >
+        <Icon name="check-circle-2" size={13} />
+        {t("savedFlash")}
+      </span>
+    );
+  }
+
+  if (dirty) {
+    return (
+      <span
+        data-testid="design-dirty"
+        className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-warning-soft text-warning text-[11.5px] font-medium"
+      >
+        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-warning" />
+        {t("dirty")}
+      </span>
+    );
+  }
+
+  if (savedAt) {
+    const diffMs = Date.now() - savedAt;
+    const label =
+      diffMs < 60_000
+        ? t("savedJustNow")
+        : diffMs < 3_600_000
+          ? t("savedMinutesAgo", { n: Math.floor(diffMs / 60_000) })
+          : t("savedHoursAgo", { n: Math.floor(diffMs / 3_600_000) });
+    return (
+      <span
+        data-testid="design-saved-stable"
+        className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11.5px] text-text-subtle"
+      >
+        <Icon name="check" size={12} className="text-text-subtle" />
+        {label}
+      </span>
+    );
+  }
+  return null;
 }
 
 function Section({

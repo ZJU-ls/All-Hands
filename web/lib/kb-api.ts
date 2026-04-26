@@ -60,10 +60,19 @@ export interface AskResponse {
   latency_ms: number;
 }
 
+export interface AskHistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export async function askKB(
   kbId: string,
   question: string,
-  opts: { topK?: number; modelRef?: string } = {},
+  opts: {
+    topK?: number;
+    modelRef?: string;
+    history?: AskHistoryTurn[];
+  } = {},
 ): Promise<AskResponse> {
   return check(
     await fetch(`${BASE}/api/kb/${kbId}/ask`, {
@@ -73,10 +82,92 @@ export async function askKB(
         question,
         top_k: opts.topK ?? 5,
         model_ref: opts.modelRef,
+        history: opts.history,
       }),
     }),
     "askKB",
   );
+}
+
+// Streaming Ask — the SSE frame protocol mirrors the backend route doc:
+//   sources → delta* → done   |   sources → error   |   error
+export type AskStreamFrame =
+  | { event: "sources"; sources: AskSource[] }
+  | { event: "delta"; text: string }
+  | { event: "done"; used_model: string | null; latency_ms: number }
+  | { event: "error"; message: string };
+
+/**
+ * Stream an Ask answer token-by-token.
+ *
+ * Yields parsed `AskStreamFrame` objects in arrival order. The function
+ * does *not* assemble the answer for you — callers append `delta.text`
+ * pieces themselves so they can render mid-stream typewriter effect.
+ *
+ * `signal` lets the caller abort an in-flight stream (e.g. user clicks
+ * "停止 / 重问"); the underlying fetch is cancelled and iteration ends.
+ */
+export async function* askKBStream(
+  kbId: string,
+  question: string,
+  opts: {
+    topK?: number;
+    modelRef?: string;
+    history?: AskHistoryTurn[];
+    signal?: AbortSignal;
+  } = {},
+): AsyncGenerator<AskStreamFrame, void, void> {
+  const res = await fetch(`${BASE}/api/kb/${kbId}/ask/stream`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "text/event-stream",
+    },
+    body: JSON.stringify({
+      question,
+      top_k: opts.topK ?? 5,
+      model_ref: opts.modelRef,
+      history: opts.history,
+    }),
+    signal: opts.signal,
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    yield {
+      event: "error",
+      message: `askKBStream failed (${res.status}): ${text || res.statusText}`,
+    };
+    return;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // SSE frames are separated by blank lines (\n\n). One frame may span
+    // multiple `data:` lines, but the backend emits one `data:` per
+    // frame so we can split on \n\n directly.
+    let idx = buffer.indexOf("\n\n");
+    while (idx !== -1) {
+      const raw = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const dataLine = raw
+        .split("\n")
+        .filter((l) => l.startsWith("data:"))
+        .map((l) => l.slice(5).trimStart())
+        .join("");
+      if (dataLine) {
+        try {
+          yield JSON.parse(dataLine) as AskStreamFrame;
+        } catch {
+          // Ignore malformed frames; stream is best-effort.
+        }
+      }
+      idx = buffer.indexOf("\n\n");
+    }
+  }
 }
 
 export interface DiagnoseDto {
@@ -113,6 +204,68 @@ export interface KBStatsDto {
 
 export async function getKBStats(kbId: string): Promise<KBStatsDto> {
   return check(await fetch(`${BASE}/api/kb/${kbId}/stats`), "getKBStats");
+}
+
+export interface KBHealthDto {
+  doc_count: number;
+  chunk_count: number;
+  token_sum: number;
+  last_activity: string | null;
+  daily_doc_counts: Array<{ date: string; count: number }>;
+  top_tags: Array<{ tag: string; count: number }>;
+  mime_breakdown: Array<{ mime: string; count: number }>;
+  chunks_missing_embeddings: number;
+}
+
+export async function switchEmbeddingModel(
+  kbId: string,
+  newRef: string,
+): Promise<{
+  kb: KBDto;
+  reembed: { processed: number; succeeded: number; failed: number };
+}> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/embedding-model`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ new_ref: newRef }),
+    }),
+    "switchEmbeddingModel",
+  );
+}
+
+export async function reembedAll(
+  kbId: string,
+): Promise<{ processed: number; succeeded: number; failed: number }> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/reembed-all`, { method: "POST" }),
+    "reembedAll",
+  );
+}
+
+export async function getKBHealth(
+  kbId: string,
+  days = 30,
+): Promise<KBHealthDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/health?days=${days}`),
+    "getKBHealth",
+  );
+}
+
+// Starter questions — small list of LLM-suggested prompts for the Ask
+// blank state. Returns at most ``limit`` strings; an empty array means
+// "no docs yet" or "no chat provider configured" — caller hides the row.
+export async function getStarterQuestions(
+  kbId: string,
+  limit = 4,
+): Promise<string[]> {
+  const r = await fetch(
+    `${BASE}/api/kb/${kbId}/starter-questions?limit=${limit}`,
+  );
+  if (!r.ok) return [];
+  const j = (await r.json()) as { questions: string[] };
+  return j.questions ?? [];
 }
 
 export interface DocumentChunkDto {
@@ -266,6 +419,34 @@ export async function uploadDocument(
   return check(
     await fetch(`${BASE}/api/kb/${kbId}/documents`, { method: "POST", body: fd }),
     "uploadDocument",
+  );
+}
+
+export async function suggestTagsForDocument(
+  kbId: string,
+  docId: string,
+): Promise<string[]> {
+  const r = await fetch(
+    `${BASE}/api/kb/${kbId}/documents/${docId}/suggest-tags`,
+    { method: "POST" },
+  );
+  if (!r.ok) return [];
+  const j = (await r.json()) as { tags: string[] };
+  return j.tags ?? [];
+}
+
+export async function patchDocumentTags(
+  kbId: string,
+  docId: string,
+  patch: { add?: string[]; remove?: string[]; replace?: string[] },
+): Promise<DocumentDto> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/documents/${docId}/tags`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
+    "patchDocumentTags",
   );
 }
 

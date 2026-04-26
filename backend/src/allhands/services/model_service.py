@@ -40,6 +40,7 @@ import httpx
 
 from allhands.core.model import LLMModel
 from allhands.core.provider import LLMProvider
+from allhands.i18n import t
 from allhands.persistence.repositories import LLMModelRepo, LLMProviderRepo
 
 ErrorCategory = Literal[
@@ -726,7 +727,7 @@ async def _astream_anthropic_chat(
             ):
                 yield {
                     "type": "warning",
-                    "message": ("上游模型不接受 thinking 参数 — 已自动去掉该字段重试一次。"),
+                    "message": t("models.warning.thinking_unsupported"),
                     "category": "thinking_unsupported",
                 }
                 body_retry = {k: v for k, v in body.items() if k != "thinking"}
@@ -856,11 +857,7 @@ async def _anthropic_stream_attempt(
     if not response and not reasoning_text and output_tokens == 0:
         yield {
             "type": "error",
-            "error": (
-                "上游返回了空响应流 — 该 anthropic-compat 反代可能不支持 "
-                "thinking 字段(无论开关状态)。换一个 provider 或换非思考的"
-                "模型变体试试。"
-            ),
+            "error": t("models.error.empty_response_anthropic_compat"),
             "error_category": "provider_error",
             "latency_ms": latency_ms,
         }

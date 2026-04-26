@@ -74,6 +74,9 @@ if (typeof window !== "undefined") {
   import("../components/render/Artifact/Preview").then(({ ArtifactPreview }) => {
     safeRegister("Artifact.Preview", ArtifactPreview);
   });
+  import("../components/render/Artifact/Card").then(({ ArtifactCard }) => {
+    safeRegister("Artifact.Card", ArtifactCard);
+  });
   import("../components/render/EmployeeCard").then(({ EmployeeCard }) => {
     safeRegister("EmployeeCard", EmployeeCard);
   });

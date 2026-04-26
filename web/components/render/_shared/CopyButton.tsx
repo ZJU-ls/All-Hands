@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
+import { useToast } from "@/components/ui/Toast";
 
 type Props = {
   value: string;
@@ -39,9 +40,14 @@ export function CopyButton({
   const effectiveLabel = label ?? t("label");
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toast = useToast();
 
   const handle = useCallback(() => {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      // Surface unsupported clipboard so the silent-failure UX stops biting.
+      toast.error(t("failed"), t("failedDetail"));
+      return;
+    }
     navigator.clipboard
       .writeText(value)
       .then(() => {
@@ -49,8 +55,10 @@ export function CopyButton({
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => setCopied(false), 1400);
       })
-      .catch(() => {});
-  }, [value]);
+      .catch(() => {
+        toast.error(t("failed"), t("failedDetail"));
+      });
+  }, [value, t, toast]);
 
   useEffect(() => {
     return () => {

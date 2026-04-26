@@ -28,10 +28,11 @@ import contextlib
 import hashlib
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from allhands.config.settings import get_settings
 from allhands.core import (
@@ -60,6 +61,7 @@ from allhands.execution.knowledge.ingest import IngestOrchestrator
 from allhands.execution.knowledge.parsers import detect_mime
 from allhands.execution.knowledge.retriever import HybridRetriever
 from allhands.execution.knowledge.vector import BlobVecStore, VectorStore
+from allhands.i18n import t
 from allhands.persistence.knowledge_repos import (
     SqlChunkRepo,
     SqlCollectionRepo,
@@ -97,6 +99,68 @@ class EmbeddingModelOption:
     available: bool
     reason: str | None = None
     is_default: bool = False
+
+
+_ASK_SYSTEM_PROMPT = (
+    "你是一个严谨的知识库助手。只用下面给出的上下文片段回答用户的问题。"
+    "在每个引用了上下文事实的句尾,标注片段编号,如 [1]、[2]。"
+    "如果上下文里没有答案,直接说不知道,不要编造。"
+    "回答用中文。多轮对话里,沿用同一份上下文片段编号,不要重新编号。"
+)
+
+
+def _build_ask_prompt(question: str, hits: list[ScoredChunk]) -> tuple[str, str]:
+    """Assemble the (system, user) prompt pair for an Ask turn."""
+    context_block = "\n\n".join(f"[{i + 1}] {r.chunk.text}" for i, r in enumerate(hits))
+    user = f"上下文:\n\n{context_block}\n\n问题:{question}"
+    return _ASK_SYSTEM_PROMPT, user
+
+
+def _serialise_sources(hits: list[ScoredChunk]) -> list[dict[str, object]]:
+    return [
+        {
+            "n": i + 1,
+            "chunk_id": r.chunk.id,
+            "doc_id": r.chunk.document_id,
+            "section_path": r.chunk.section_path,
+            "page": r.chunk.page,
+            "citation": r.citation,
+            "text": r.chunk.text,
+            "score": round(r.score, 4),
+        }
+        for i, r in enumerate(hits)
+    ]
+
+
+def _build_messages(system: str, user: str, history: list[dict[str, str]] | None) -> list[Any]:
+    """Map (system, optional history, user) to LangChain message objects.
+
+    History format: ``[{role: "user"|"assistant", content: str}, ...]``.
+    Unknown roles are skipped — we don't want a malformed entry to crash
+    the whole turn. The current question always lives in the trailing
+    ``HumanMessage`` so retrieval context binds to *this* turn.
+    """
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+    msgs: list[Any] = [SystemMessage(content=system)]
+    if history:
+        for h in history:
+            role = h.get("role")
+            content = h.get("content", "")
+            if role == "user":
+                msgs.append(HumanMessage(content=content))
+            elif role == "assistant":
+                msgs.append(AIMessage(content=content))
+    msgs.append(HumanMessage(content=user))
+    return msgs
+
+
+# In-process cache for `suggest_starter_questions`. Key = (kb_id,
+# kb.updated_at iso, limit) → questions list. KB writes bump
+# ``updated_at`` so adding a doc invalidates the cache the next call.
+# Dict-based, single-process; that's fine for v0 — when we go multi-worker
+# we can move this to redis with the same key shape.
+_STARTER_CACHE: dict[tuple[str, str, int], list[str]] = {}
 
 
 class KBError(DomainError):
@@ -238,7 +302,7 @@ class KnowledgeService:
                     label=f"OpenAI · {model}",
                     dim=dim,
                     available=openai_key,
-                    reason=None if openai_key else "去 /gateway 添加 OpenAI provider",
+                    reason=None if openai_key else t("knowledge.embedding.reason.add_openai"),
                     is_default=ref == default_ref,
                 )
             )
@@ -254,10 +318,10 @@ class KnowledgeService:
             options.append(
                 EmbeddingModelOption(
                     ref=ref,
-                    label=f"阿里云百炼 · {model}",
+                    label=t("knowledge.embedding.label.aliyun", model=model),
                     dim=dim,
                     available=aliyun_key,
-                    reason=None if aliyun_key else "去 /gateway 添加 阿里云 百炼 provider",
+                    reason=None if aliyun_key else t("knowledge.embedding.reason.add_aliyun"),
                     is_default=ref == default_ref,
                 )
             )
@@ -557,6 +621,48 @@ class KnowledgeService:
             await self._ingest.ingest_document(document_id, file_path_abs=abs_path)
         return await self.get_document(document_id)
 
+    async def update_document_tags(
+        self,
+        document_id: str,
+        *,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+        replace: list[str] | None = None,
+    ) -> Document:
+        """Mutate a document's tag set.
+
+        Three exclusive shapes:
+        - ``add``: union with current tags (deduped, order preserved).
+        - ``remove``: drop any matching tags.
+        - ``replace``: set tags wholesale (overrides current list).
+
+        Returns the post-update document. Bumps ``updated_at`` so KB
+        derived caches (starter-questions, sidebar tag chips) refresh
+        on next read.
+        """
+        doc = await self.get_document(document_id)
+        if replace is not None:
+            new_tags = list(dict.fromkeys(t.strip() for t in replace if t.strip()))
+        else:
+            existing = list(doc.tags)
+            if remove:
+                drop = {t.strip() for t in remove}
+                existing = [t for t in existing if t not in drop]
+            if add:
+                seen = set(existing)
+                for t in add:
+                    cleaned = t.strip()
+                    if cleaned and cleaned not in seen:
+                        existing.append(cleaned)
+                        seen.add(cleaned)
+            new_tags = existing
+
+        updated = doc.model_copy(update={"tags": new_tags, "updated_at": datetime.now(UTC)})
+        async with self._session_maker() as s:
+            await SqlDocumentRepo(s).upsert(updated)
+            await s.commit()
+        return updated
+
     async def soft_delete_document(self, document_id: str) -> None:
         async with self._session_maker() as s:
             await SqlDocumentRepo(s).soft_delete(document_id)
@@ -588,8 +694,17 @@ class KnowledgeService:
         *,
         top_k: int = 5,
         model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> dict[str, object]:
-        """RAG QA: search → assemble context → LLM with citation prompt."""
+        """RAG QA: search → assemble context → LLM with citation prompt.
+
+        ``history`` is an optional list of ``{role, content}`` dicts from
+        prior turns of the same KB Ask session. When present, the LLM
+        sees the prior Q&A as conversational context so follow-up
+        pronouns ("它", "比 X 呢") resolve correctly. Retrieval still
+        runs on the latest question only — chunks from the previous turn
+        are not re-injected (avoids stale context bloat).
+        """
         kb = await self.get_kb(kb_id)
         cfg = RetrievalConfig.model_validate({**kb.retrieval_config.model_dump(), "top_k": top_k})
 
@@ -599,50 +714,160 @@ class KnowledgeService:
         hits = await self._retriever.search(kb_id, question, cfg)
         if not hits:
             return {
-                "answer": "知识库里没有跟这个问题相关的内容。换个说法,或者补一份资料试试。",
+                "answer": t("knowledge.ask.no_hits"),
                 "sources": [],
                 "used_model": None,
                 "latency_ms": round((time.monotonic() - t0) * 1000, 1),
             }
 
-        context_block = "\n\n".join(f"[{i + 1}] {r.chunk.text}" for i, r in enumerate(hits))
-        system = (
-            "你是一个严谨的知识库助手。只用下面给出的上下文片段回答用户的问题。"
-            "在每个引用了上下文事实的句尾,标注片段编号,如 [1]、[2]。"
-            "如果上下文里没有答案,直接说不知道,不要编造。回答用中文。"
-        )
-        user = f"上下文:\n\n{context_block}\n\n问题:{question}"
+        system, user = _build_ask_prompt(question, hits)
 
         try:
-            answer_text, used_model = await self._call_chat_llm(system, user, model_ref=model_ref)
+            answer_text, used_model = await self._call_chat_llm(
+                system, user, model_ref=model_ref, history=history
+            )
         except _NoChatProvider:
-            raise KBError(
-                "还没有可用的对话模型 · 去 /gateway 添加一个 OpenAI / 阿里云 / Anthropic provider"
-            ) from None
+            raise KBError(t("knowledge.ask.no_chat_provider")) from None
 
         return {
             "answer": answer_text,
-            "sources": [
-                {
-                    "n": i + 1,
-                    "chunk_id": r.chunk.id,
-                    "doc_id": r.chunk.document_id,
-                    "section_path": r.chunk.section_path,
-                    "page": r.chunk.page,
-                    "citation": r.citation,
-                    "text": r.chunk.text,
-                    "score": round(r.score, 4),
-                }
-                for i, r in enumerate(hits)
-            ],
+            "sources": _serialise_sources(hits),
+            "used_model": used_model,
+            "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+        }
+
+    async def ask_stream(
+        self,
+        kb_id: str,
+        question: str,
+        *,
+        top_k: int = 5,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Streaming variant of :meth:`ask`.
+
+        Yields a sequence of envelope dicts that the SSE encoder serialises:
+
+        - ``{"event": "sources", "sources": [...], "kb": {"id"...}}`` first,
+          so the UI can paint the citations area before any text arrives.
+        - ``{"event": "delta", "text": "..."}`` per LLM token chunk.
+          Multiple deltas may be coalesced upstream — order is preserved.
+        - ``{"event": "done", "used_model": str | None, "latency_ms": float}``
+          terminal frame after the last delta.
+
+        On hard failure yields ``{"event": "error", "message": str}`` and
+        terminates without a ``done`` frame, so the client can distinguish
+        "model finished cleanly" from "stream aborted mid-flight".
+        """
+        try:
+            kb = await self.get_kb(kb_id)
+        except KBError as exc:
+            yield {"event": "error", "message": str(exc)}
+            return
+        cfg = RetrievalConfig.model_validate({**kb.retrieval_config.model_dump(), "top_k": top_k})
+
+        import time
+
+        t0 = time.monotonic()
+        hits = await self._retriever.search(kb_id, question, cfg)
+        sources = _serialise_sources(hits)
+        yield {"event": "sources", "sources": sources}
+
+        if not hits:
+            yield {
+                "event": "delta",
+                "text": t("knowledge.ask.no_hits"),
+            }
+            yield {
+                "event": "done",
+                "used_model": None,
+                "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+            }
+            return
+
+        system, user = _build_ask_prompt(question, hits)
+
+        try:
+            used_model: str | None = None
+            async for piece, model_used in self._call_chat_llm_stream(
+                system, user, model_ref=model_ref, history=history
+            ):
+                if piece:
+                    yield {"event": "delta", "text": piece}
+                if model_used:
+                    used_model = model_used
+        except _NoChatProvider:
+            yield {
+                "event": "error",
+                "message": t("knowledge.ask.no_chat_provider"),
+            }
+            return
+        except Exception as exc:
+            _logger.exception("kb.ask_stream LLM error")
+            yield {"event": "error", "message": t("knowledge.ask.llm_failed", detail=str(exc))}
+            return
+
+        yield {
+            "event": "done",
             "used_model": used_model,
             "latency_ms": round((time.monotonic() - t0) * 1000, 1),
         }
 
     async def _call_chat_llm(
-        self, system: str, user: str, *, model_ref: str | None = None
+        self,
+        system: str,
+        user: str,
+        *,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> tuple[str, str]:
         """Pick first usable LLMProvider, build LangChain chat model, invoke."""
+        provider, ref = await self._pick_chat_provider(model_ref)
+
+        from allhands.execution.llm_factory import build_llm
+
+        llm = build_llm(provider, ref)
+        messages = _build_messages(system, user, history)
+        result = await llm.ainvoke(messages)
+        text = getattr(result, "content", "") or ""
+        if isinstance(text, list):
+            text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
+        return str(text), ref
+
+    async def _call_chat_llm_stream(
+        self,
+        system: str,
+        user: str,
+        *,
+        model_ref: str | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> AsyncIterator[tuple[str, str]]:
+        """Stream text chunks from LangChain ``astream``.
+
+        Yields ``(piece, model_ref)`` tuples — ``model_ref`` is only set on
+        the first non-empty piece so the caller can record it without
+        repeating per-chunk. ``piece`` may be empty for control frames
+        (reasoning tokens etc.) which we drop.
+        """
+        provider, ref = await self._pick_chat_provider(model_ref)
+
+        from allhands.execution.llm_factory import build_llm
+
+        llm = build_llm(provider, ref)
+        messages = _build_messages(system, user, history)
+        emitted = False
+        async for chunk in llm.astream(messages):
+            text = getattr(chunk, "content", "") or ""
+            if isinstance(text, list):
+                # Anthropic streams content blocks; flatten to plain text.
+                text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
+            if not text:
+                continue
+            yield text, (ref if not emitted else "")
+            emitted = True
+
+    async def _pick_chat_provider(self, model_ref: str | None) -> tuple[Any, str]:
         from allhands.persistence.sql_repos import SqlLLMProviderRepo
 
         async with self._session_maker() as s:
@@ -657,17 +882,355 @@ class KnowledgeService:
             from allhands.core.provider_presets import preset_for
 
             ref = preset_for(provider.kind).default_model
+        return provider, ref
 
-        from langchain_core.messages import HumanMessage, SystemMessage
+    async def suggest_tags_for_document(
+        self,
+        document_id: str,
+        *,
+        max_tags: int = 3,
+        existing_tags: list[str] | None = None,
+        model_ref: str | None = None,
+    ) -> list[str]:
+        """Ask the chat LLM to propose ``max_tags`` short tags for a doc.
 
-        from allhands.execution.llm_factory import build_llm
+        Inputs the LLM sees: doc title + first ~1500 chars of body (skips
+        full read on long PDFs · the head usually carries title / abstract
+        / TOC which is plenty for tagging). Tags returned as lowercase
+        kebab-case strings · we strip wrapping quotes and `#`. We also
+        pass any ``existing_tags`` so the LLM can prefer reusing the
+        user's vocabulary instead of inventing parallel synonyms.
 
-        llm = build_llm(provider, ref)
-        result = await llm.ainvoke([SystemMessage(content=system), HumanMessage(content=user)])
-        text = getattr(result, "content", "") or ""
-        if isinstance(text, list):
-            text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
-        return str(text), ref
+        Failure modes:
+        - no chat provider → return [] (UI hides "采纳" button)
+        - LLM error → log + return []
+        - empty doc text → fall back to title-derived tag
+        """
+        doc = await self.get_document(document_id)
+        try:
+            text = await self.read_document_text(document_id)
+        except DocumentNotFound:
+            text = ""
+        body = text[:1500].strip()
+        if not body:
+            body = doc.title
+
+        existing = ", ".join(sorted(set(existing_tags or doc.tags)))
+        existing_hint = f"\nUser's existing tag vocabulary: {existing}" if existing else ""
+
+        system = (
+            "You suggest short, useful tags for documents in a personal "
+            "knowledge base. Output ONE tag per line, no numbering, no "
+            "leading dash, no '#'. Lowercase. Prefer kebab-case for "
+            "multi-word tags. Reuse the user's existing vocabulary when "
+            "appropriate (don't invent synonyms). Match the document's "
+            "language (Chinese in → Chinese out)."
+        )
+        user = (
+            f"Document title: {doc.title}\n"
+            f"Body excerpt:\n{body}\n"
+            f"{existing_hint}\n\n"
+            f"Generate up to {max_tags} concise tags."
+        )
+
+        try:
+            text_out, _ = await self._call_chat_llm(system, user, model_ref=model_ref)
+        except _NoChatProvider:
+            return []
+        except Exception:
+            _logger.exception("kb.suggest_tags_for_document LLM error")
+            return []
+
+        tags: list[str] = []
+        for line in text_out.splitlines():
+            t = line.strip().lstrip("-•*0123456789.) #").strip().strip("\"'")
+            if not t:
+                continue
+            t = t.lower()
+            if t not in tags:
+                tags.append(t)
+            if len(tags) >= max_tags:
+                break
+        return tags
+
+    async def get_chunks_missing_embeddings(self, kb_id: str) -> int:
+        """Count of chunks in this KB whose ``embedding`` column is NULL.
+
+        A non-zero count means at least some retrieval will fall back to
+        BM25 only — the chunk physically exists but is invisible to the
+        vector lens. Causes:
+        - upload happened while no embedder was usable (missing API key)
+        - embedder swapped after some docs were already ingested
+        - reindex aborted mid-flight
+        Sidebar/banner uses this to surface a "Re-embed all" CTA.
+        """
+        from sqlalchemy import func, select
+
+        from allhands.persistence.orm.knowledge_orm import ChunkRow
+
+        async with self._session_maker() as s:
+            n = (
+                await s.execute(
+                    select(func.count(ChunkRow.id)).where(
+                        ChunkRow.kb_id == kb_id,
+                        ChunkRow.embedding.is_(None),
+                    )
+                )
+            ).scalar()
+        return int(n or 0)
+
+    async def switch_embedding_model(self, kb_id: str, new_ref: str) -> dict[str, object]:
+        """Re-bind a KB to a different embedding model and rebuild all
+        chunk vectors with it.
+
+        Steps:
+        1. Validate ``new_ref`` resolves to a usable provider (raises KBError otherwise).
+        2. Update KB row ``embedding_model_ref`` + ``embedding_dim`` + bump ``updated_at``.
+        3. Replace ``self._embedder`` (and the wired-up orchestrator + retriever)
+           so subsequent ingests use the new model. v0 single-process simplification:
+           every KB shares one in-process embedder. If the user keeps multiple
+           KBs on different models the last-switched one wins for new uploads —
+           document the trade-off, accept it, revisit when we go multi-tenant.
+        4. Run :meth:`reembed_all` so existing chunks line up with the new model.
+
+        Returns ``{"kb": KB-as-dict, "reembed": {processed, succeeded, failed}}``.
+        """
+        new_ref = (new_ref or "").strip()
+        if not new_ref:
+            raise KBError("new_ref is required")
+        kb = await self.get_kb(kb_id)
+        if new_ref == kb.embedding_model_ref:
+            return {
+                "kb": kb.model_dump(mode="json"),
+                "reembed": {"processed": 0, "succeeded": 0, "failed": 0},
+            }
+
+        # 1. Validate + build the new embedder
+        try:
+            provider = await resolve_provider_with_db(new_ref, self._session_maker)
+        except ValueError as exc:
+            raise KBError(f"模型 {new_ref!r} 不可用: {exc}") from None
+        new_embedder = Embedder(model_ref=new_ref, provider=provider)
+
+        # 2. Persist on KB row
+        async with self._session_maker() as s:
+            row = await SqlKnowledgeBaseRepo(s).get(kb_id)
+            if row is None:
+                raise KBNotFound(f"kb {kb_id!r} not found")
+            updated = row.model_copy(
+                update={
+                    "embedding_model_ref": new_ref,
+                    "embedding_dim": provider.dim,
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            await SqlKnowledgeBaseRepo(s).upsert(updated)
+            # Vector store namespace dim has to be re-stamped too — the
+            # blob layout changes when the model dim does.
+            await self._vec_store.create_namespace(kb_id, provider.dim)
+            await s.commit()
+
+        # 3. Swap service-level embedder + dependents in place
+        self._embedder = new_embedder
+        self._ingest = IngestOrchestrator(
+            self._session_maker,
+            chunker=self._chunker,
+            embedder=self._embedder,
+            vec_store=self._vec_store,
+            data_root=self._data_dir,
+        )
+        self._retriever = HybridRetriever(
+            embedder=self._embedder,
+            vec_store=self._vec_store,
+            fts_search=self._fts_search_for_kb,
+            chunk_lookup=self._chunk_lookup,
+        )
+
+        # 4. Re-embed every existing doc
+        result = await self.reembed_all(kb_id)
+        kb_after = await self.get_kb(kb_id)
+        return {"kb": kb_after.model_dump(mode="json"), "reembed": result}
+
+    async def reembed_all(self, kb_id: str) -> dict[str, int]:
+        """Re-run the ingest pipeline for every ready/failed document in
+        a KB. Useful after the user (a) gets the embedding provider
+        working and wants to backfill missing vectors or (b) changes the
+        KB embedding ref (later).
+
+        Returns ``{processed, succeeded, failed}``. Per-doc errors are
+        swallowed so one bad doc can't abort the whole batch — the
+        Document.state on each surfaces the failure to the user.
+        """
+        await self.get_kb(kb_id)
+        docs = await self.list_documents(kb_id, limit=1000)
+        succeeded = 0
+        failed = 0
+        for d in docs:
+            try:
+                refreshed = await self.reindex_document(d.id)
+                if refreshed.state == DocumentState.READY:
+                    succeeded += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+        return {"processed": len(docs), "succeeded": succeeded, "failed": failed}
+
+    async def get_kb_health(self, kb_id: str, *, days: int = 30) -> dict[str, Any]:
+        """Snapshot of a KB for the sidebar "health" card.
+
+        Returns:
+        - ``doc_count`` / ``chunk_count``: aggregates straight from KB row
+        - ``token_sum``: sum of ``chunk.token_count`` across all chunks (not
+          stored on KB so we sum on the fly — cheap because v0 KBs are small)
+        - ``last_activity``: ISO of latest ``updated_at`` across docs;
+          ``None`` for empty KB.
+        - ``daily_doc_counts``: ``[{date, count}, …]`` of length ``days``,
+          oldest day first. Today's bucket is the rightmost. Drives the
+          sparkline.
+        - ``top_tags``: ``[{tag, count}, …]`` top 5 by occurrence.
+        - ``mime_breakdown``: ``[{mime, count}, …]`` sorted desc.
+
+        Cheap enough to call on every sidebar render (≤ 1 select + a few
+        aggregations); we don't bother caching at this scale.
+        """
+        from collections import Counter
+        from datetime import timedelta
+
+        kb = await self.get_kb(kb_id)
+        docs = await self.list_documents(kb_id, limit=1000)
+
+        # Token sum needs chunk rows. One query per doc would be N round
+        # trips; instead do a single aggregate via the chunk repo for the
+        # whole KB.
+        async with self._session_maker() as s:
+            from sqlalchemy import func, select
+
+            from allhands.persistence.orm.knowledge_orm import ChunkRow
+
+            total_tokens = (
+                await s.execute(
+                    select(func.coalesce(func.sum(ChunkRow.token_count), 0)).where(
+                        ChunkRow.kb_id == kb_id
+                    )
+                )
+            ).scalar() or 0
+
+        last_activity = max((d.updated_at for d in docs), default=None)
+
+        today = datetime.now(UTC).date()
+        bucket_counts: Counter[str] = Counter()
+        for d in docs:
+            day = d.created_at.date()
+            delta = (today - day).days
+            if 0 <= delta < days:
+                bucket_counts[day.isoformat()] += 1
+        daily = [
+            {
+                "date": (today - timedelta(days=days - 1 - i)).isoformat(),
+                "count": bucket_counts.get((today - timedelta(days=days - 1 - i)).isoformat(), 0),
+            }
+            for i in range(days)
+        ]
+
+        tag_counter: Counter[str] = Counter()
+        for d in docs:
+            tag_counter.update(d.tags)
+        top_tags = [{"tag": tag, "count": count} for tag, count in tag_counter.most_common(5)]
+
+        mime_counter: Counter[str] = Counter()
+        for d in docs:
+            mime_counter[d.mime_type] += 1
+        mime_breakdown = [
+            {"mime": mime, "count": count}
+            for mime, count in sorted(mime_counter.items(), key=lambda kv: -kv[1])
+        ]
+
+        chunks_missing_emb = await self.get_chunks_missing_embeddings(kb_id)
+
+        return {
+            "doc_count": kb.document_count,
+            "chunk_count": kb.chunk_count,
+            "token_sum": int(total_tokens),
+            "last_activity": last_activity.isoformat() if last_activity else None,
+            "daily_doc_counts": daily,
+            "top_tags": top_tags,
+            "mime_breakdown": mime_breakdown,
+            "chunks_missing_embeddings": chunks_missing_emb,
+        }
+
+    async def suggest_starter_questions(
+        self, kb_id: str, *, limit: int = 4, model_ref: str | None = None
+    ) -> list[str]:
+        """Return a small set of LLM-generated "starter questions" for a KB.
+
+        The Ask mode opens onto a blank canvas — users with a fresh KB
+        often don't know what to ask. NotebookLM / Glean both surface a
+        handful of suggested prompts derived from the corpus; we do the
+        same: collect doc titles + top section headings, ask the chat LLM
+        to propose ``limit`` short questions, return them as plain strings.
+
+        Cache key = ``(kb_id, kb.updated_at, limit)`` — the ``updated_at``
+        bumps whenever a doc is added / removed, so adding a new PDF
+        invalidates stale suggestions automatically. No LLM call when the
+        KB has no documents (returns an empty list — UI shows the empty
+        starter copy instead).
+        """
+        kb = await self.get_kb(kb_id)
+        cache_key = (kb_id, kb.updated_at.isoformat(), limit)
+        cached = _STARTER_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+        docs = await self.list_documents(kb_id, limit=12)
+        if not docs:
+            return []
+
+        # Lightweight corpus snapshot — titles + the first section path of
+        # each doc keep the prompt under ~1k tokens regardless of corpus
+        # size. Falling back to the title alone when no chunks exist yet.
+        corpus_lines: list[str] = []
+        for d in docs:
+            chunks = await self.list_chunks_for_document(d.id)
+            sections = [c.section_path for c in chunks if c.section_path]
+            top_sections = list(dict.fromkeys(sections))[:3]
+            if top_sections:
+                corpus_lines.append(f"- {d.title} :: {' / '.join(top_sections)}")
+            else:
+                corpus_lines.append(f"- {d.title}")
+
+        system = (
+            "You generate starter questions a curious user might ask of a "
+            "private knowledge base. Be specific to the listed documents — "
+            "no generic 'what is this' fluff. Output ONE question per line, "
+            "no numbering, no quotes, no leading dash. Match the language "
+            "of the document titles (Chinese in → Chinese out)."
+        )
+        user = (
+            f"Knowledge base: {kb.name}\n"
+            f"Documents (title :: top sections):\n"
+            + "\n".join(corpus_lines)
+            + f"\n\nGenerate exactly {limit} short, useful starter questions."
+        )
+
+        try:
+            text, _ = await self._call_chat_llm(system, user, model_ref=model_ref)
+        except _NoChatProvider:
+            # Graceful degrade: fall back to "在 <title> 里说了什么?" for
+            # the first ``limit`` docs. Better than a blank panel.
+            return [f"{d.title} 里讲了什么?" for d in docs[:limit]]
+        except Exception:
+            _logger.exception("kb.suggest_starter_questions LLM error")
+            return [f"{d.title} 里讲了什么?" for d in docs[:limit]]
+
+        questions = [
+            line.strip().lstrip("-•*0123456789.) ").strip()
+            for line in text.splitlines()
+            if line.strip()
+        ]
+        questions = [q for q in questions if q][:limit]
+        _STARTER_CACHE[cache_key] = questions
+        return questions
 
     async def diagnose_search(
         self, kb_id: str, query: str, *, top_k: int = 8

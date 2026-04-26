@@ -19,9 +19,9 @@ import type { ActiveSubagent } from "./progress-hooks";
 
 const STORAGE_KEY = "allhands.progress.subagent.expanded";
 
-type Props = { subagents: ActiveSubagent[] };
+type Props = { subagents: ActiveSubagent[]; embedded?: boolean };
 
-export function SubagentProgressSection({ subagents }: Props) {
+export function SubagentProgressSection({ subagents, embedded = false }: Props) {
   const t = useTranslations("chat.subagent");
   const [expanded, setExpanded] = useState<boolean>(true);
   const router = useRouter();
@@ -29,21 +29,23 @@ export function SubagentProgressSection({ subagents }: Props) {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    if (embedded) return;
     try {
       const v = window.localStorage.getItem(STORAGE_KEY);
       if (v === "false") setExpanded(false);
     } catch {
-      // ignore — defaults to expanded
+      /* defaults expanded */
     }
-  }, []);
+  }, [embedded]);
 
   const toggle = () => {
+    if (embedded) return;
     setExpanded((prev) => {
       const next = !prev;
       try {
         window.localStorage.setItem(STORAGE_KEY, String(next));
       } catch {
-        // ignore
+        /* ignore */
       }
       return next;
     });
@@ -57,13 +59,63 @@ export function SubagentProgressSection({ subagents }: Props) {
 
   const running = subagents.filter((s) => s.status === "running").length;
 
+  const rowList = (
+    <div className={cn("space-y-px px-2", embedded ? "py-2" : "px-3 pb-2 pt-0.5")}>
+      {subagents.map((s) => (
+        <div
+          key={s.toolCallId}
+          data-testid={`subagent-row-${s.toolCallId}`}
+          data-status={s.status}
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 transition-[background-color]",
+            s.status === "running" ? "bg-primary-muted/40" : "hover:bg-surface-2",
+          )}
+        >
+          <SubagentDot status={s.status} />
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate text-[13px]",
+              s.status === "failed" ? "text-danger" : "text-text",
+            )}
+            title={s.name}
+          >
+            {s.name}
+          </span>
+          <span className="shrink-0 font-mono text-[10.5px] text-text-subtle">
+            {t(`status.${s.status}`)}
+          </span>
+          {s.runId ? (
+            <button
+              type="button"
+              onClick={() => openTrace(s.runId!)}
+              data-testid={`subagent-trace-${s.toolCallId}`}
+              className="shrink-0 rounded-md border border-primary/30 bg-primary-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-primary transition-[background-color,border-color] duration-fast hover:border-primary/50 hover:bg-primary-muted"
+            >
+              {t("viewTrace")}
+            </button>
+          ) : (
+            <span className="w-[68px] shrink-0" aria-hidden />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <div data-testid="subagent-progress-section" data-embedded="true">
+        {rowList}
+      </div>
+    );
+  }
+
   return (
     <div data-testid="subagent-progress-section">
       <button
         type="button"
         onClick={toggle}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors duration-fast hover:bg-surface-2"
+        className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-[background-color] duration-fast hover:bg-surface-2"
       >
         <Icon
           name={expanded ? "chevron-down" : "chevron-right"}
@@ -86,50 +138,17 @@ export function SubagentProgressSection({ subagents }: Props) {
           )}
         </span>
       </button>
-      {expanded && (
-        <div className="space-y-0.5 px-3 pb-2 pt-0.5">
-          {subagents.map((s) => (
-            <div
-              key={s.toolCallId}
-              data-testid={`subagent-row-${s.toolCallId}`}
-              data-status={s.status}
-              className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-surface-2"
-            >
-              <SubagentDot status={s.status} />
-              <span
-                className="min-w-0 flex-1 truncate text-[12px] text-text"
-                title={s.name}
-              >
-                {s.name}
-              </span>
-              <span className="shrink-0 font-mono text-[10.5px] text-text-subtle">
-                {labelFor(s.status)}
-              </span>
-              {s.runId ? (
-                <button
-                  type="button"
-                  onClick={() => openTrace(s.runId!)}
-                  data-testid={`subagent-trace-${s.toolCallId}`}
-                  className="shrink-0 rounded-md border border-primary/30 bg-primary-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-primary transition-colors duration-fast hover:bg-primary-muted hover:border-primary/50"
-                >
-                  {t("viewTrace")}
-                </button>
-              ) : (
-                <span className="w-[68px] shrink-0" aria-hidden />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {expanded && rowList}
     </div>
   );
 }
 
 function SubagentDot({ status }: { status: ActiveSubagent["status"] }) {
+  const tStatus = useTranslations("chat.subagent.status");
   if (status === "running") {
     return (
       <span
-        aria-label="running"
+        aria-label={tStatus("running")}
         className={cn(
           "inline-block h-2 w-2 shrink-0 rounded-full bg-primary",
           "shadow-[0_0_0_3px_rgba(79,140,255,0.18)] animate-pulse",
@@ -140,21 +159,15 @@ function SubagentDot({ status }: { status: ActiveSubagent["status"] }) {
   if (status === "succeeded") {
     return (
       <span
-        aria-label="succeeded"
+        aria-label={tStatus("succeeded")}
         className="inline-block h-2 w-2 shrink-0 rounded-full bg-success"
       />
     );
   }
   return (
     <span
-      aria-label="failed"
+      aria-label={tStatus("failed")}
       className="inline-block h-2 w-2 shrink-0 rounded-full bg-danger"
     />
   );
-}
-
-function labelFor(status: ActiveSubagent["status"]): string {
-  if (status === "running") return "running";
-  if (status === "succeeded") return "done";
-  return "failed";
 }

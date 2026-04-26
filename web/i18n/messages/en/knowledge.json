@@ -104,6 +104,7 @@
       "selectedCount": "{count} selected",
       "cancel": "Cancel",
       "bulkDelete": "Delete selected",
+      "bulkTags": "Tags…",
       "retryIngest": "Retry ingest"
     },
     "uploads": {
@@ -120,7 +121,50 @@
       "noResults": "No hits — try a more specific query, or tweak the BM25 / vector weights",
       "bm25Rank": "BM25 #{rank}",
       "vecRank": "vec #{rank}",
-      "scoreLabel": "score"
+      "scoreLabel": "score",
+      "explainLabel": "Why this rank?",
+      "matchedTokens": "matched {matched}/{total}",
+      "matchedHeader": "Query terms · matched in chunk",
+      "contributionHeader": "BM25 vs vector contribution",
+      "bm25Pct": "BM25 {pct}%",
+      "vectorPct": "Vector {pct}%",
+      "vectorPctLabel": "Vector",
+      "explainBoth": "BM25 ranked it #{bm25} · vector ranked it #{vec} · hybrid fuses the better side",
+      "explainBm25Only": "Lexical hit only (#{bm25}) · vector retriever did not surface this chunk",
+      "explainVecOnly": "Semantic hit only (#{vec}) · keywords did not match"
+    },
+    "docTags": {
+      "addPlaceholder": "+ add tag…",
+      "removeAria": "Remove #{tag}",
+      "suggestCta": "AI suggest",
+      "suggesting": "Thinking…",
+      "acceptOneHint": "Click to accept this tag",
+      "acceptAll": "Accept all ({count})",
+      "noSuggestions": "AI returned nothing useful — chat provider may be unconfigured"
+    },
+    "stale": {
+      "body": "{missing}/{total} chunks have no vector (BM25 still works; vector recall will miss them)",
+      "cta": "Re-embed all",
+      "running": "Working…"
+    },
+    "reembed": {
+      "summary": "Re-embed done · {processed} processed · {succeeded} ok · {failed} failed"
+    },
+    "health": {
+      "sectionLabel": "Health",
+      "lastActivity": "{when}",
+      "never": "—",
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activityHeader": "Last {days}-day ingest",
+      "activityHint": "1 bar = docs added that day",
+      "topTagsHeader": "Top tags",
+      "dominantMime": "Dominant · {mime} ({count})"
+    },
+    "starters": {
+      "label": "Try one of these",
+      "hint": "Generated from this KB's titles and headings · click to ask"
     },
     "ask": {
       "askingLabel": "Question",
@@ -128,7 +172,28 @@
       "thinkingTitle": "Thinking…",
       "thinkingDesc": "Retrieving snippets → assembling context → LLM reply",
       "sourcesLabel": "Sources",
-      "sourcesCount": "{count}"
+      "sourcesCount": "{count}",
+      "turnsLabel": "{count} turns",
+      "youAskedLabel": "You asked #{n}",
+      "newConversation": "New thread",
+      "followUpPlaceholder": "Ask a follow-up · same citation numbers carry over…",
+      "followUpSubmit": "Follow up",
+      "followUpHint": "Press Enter to send · the same retrieved snippets are kept across turns",
+      "copyAsCitation": "Copy",
+      "copyAsCitationTitle": "Copy markdown · question / answer / source list",
+      "copied": "Copied",
+      "copyFailed": "Copy failed · the browser may have blocked the clipboard API"
+    },
+    "bulkTags": {
+      "title": "Tag {count} selected documents",
+      "intro": "Click an existing tag to cycle add → remove → unchanged. Add brand-new tags below (comma-separated).",
+      "knownHeader": "Tags already in this KB",
+      "newHeader": "New tags (comma-separated)",
+      "newPlaceholder": "blog, must-read, 2026q2",
+      "legend": "+ = add · − = remove · · = leave alone",
+      "cycleHint": "Click to cycle + → − → ·",
+      "cancel": "Cancel",
+      "apply": "Apply · +{add} · −{remove}"
     },
     "delete": {
       "confirm": "Delete \"{title}\"? (Soft delete — recoverable for 30 days.)",
@@ -218,7 +283,13 @@
       "noModelsBody": "Head to the <gateway>Model Gateway</gateway> and add an OpenAI or Aliyun Bailian provider with an API key — usable models will show up here.",
       "goConfigure": "Configure now",
       "switchModelHint": "Switching a KB's embedding model requires recomputing every \"semantic fingerprint\" (reindex). v0 doesn't hot-swap yet — to switch, delete this KB and recreate it with the new model.",
-      "modelDimHint": "{dim}d"
+      "switchModelHintV2": "Click any model to switch · the backend reindexes every chunk's vector. All KBs in this process share one embedder, so a switch also affects other KBs' future uploads — use with care.",
+      "modelDimHint": "{dim}d",
+      "currentBadge": "current",
+      "switching": "switching…",
+      "switchConfirm": "Switching to {model} will reindex all {docs} documents in this KB. Proceed?",
+      "switchSummary": "Switched and re-embedded · {processed} processed · {succeeded} ok · {failed} failed",
+      "switchFailed": "Switch failed"
     },
     "danger": {
       "heading": "Delete knowledge base",

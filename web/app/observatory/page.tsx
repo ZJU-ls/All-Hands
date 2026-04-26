@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState } from "@/components/state";
 import { TraceChip } from "@/components/runs/TraceChip";
@@ -57,9 +57,9 @@ function formatDuration(s: number | null | undefined): string {
   return `${s.toFixed(2)}s`;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const d = new Date(iso);
-  return d.toLocaleString();
+  return d.toLocaleString(locale);
 }
 
 /** Deterministic pseudo-sparkline from a seed (no real time-series in DTO yet). */
@@ -564,6 +564,7 @@ export default function ObservatoryPage() {
 
 function ObservatoryPageInner() {
   const t = useTranslations("pages.observatory");
+  const locale = useLocale();
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [traces, setTraces] = useState<TraceSummaryDto[]>([]);
   const [state, setState] = useState<LoadState>("idle");
@@ -888,10 +889,10 @@ function ObservatoryPageInner() {
                           ? t("kpi.totalTokensDelta", {
                               input: formatTokens(summary.input_tokens_total),
                               output: formatTokens(summary.output_tokens_total),
-                              avg: summary.avg_tokens_per_run.toLocaleString(),
+                              avg: summary.avg_tokens_per_run.toLocaleString(locale),
                             })
                           : t("kpi.tokensDelta", {
-                              count: summary.traces_total.toLocaleString(),
+                              count: summary.traces_total.toLocaleString(locale),
                             }),
                       tone: "muted",
                     }}
@@ -906,7 +907,7 @@ function ObservatoryPageInner() {
                     label={t("kpi.llmCalls")}
                     value={
                       summary.llm_calls_total > 0
-                        ? summary.llm_calls_total.toLocaleString()
+                        ? summary.llm_calls_total.toLocaleString(locale)
                         : "—"
                     }
                     delta={{
@@ -914,7 +915,7 @@ function ObservatoryPageInner() {
                       text:
                         summary.traces_total > 0
                           ? t("kpi.llmCallsDelta", {
-                              runs: summary.traces_total.toLocaleString(),
+                              runs: summary.traces_total.toLocaleString(locale),
                               avg:
                                 summary.traces_total > 0
                                   ? (
@@ -991,7 +992,7 @@ function ObservatoryPageInner() {
                     },
                     {
                       label: t("panels.rows.totalTraces"),
-                      value: summary.traces_total.toLocaleString(),
+                      value: summary.traces_total.toLocaleString(locale),
                       onClick: () =>
                         openDrawer("runs", t("panels.rows.totalTraces")),
                     },
@@ -1008,7 +1009,7 @@ function ObservatoryPageInner() {
                             row.total_tokens > 0
                               ? `${row.runs_count} · ${formatTokens(row.total_tokens)} tok`
                               : t("panels.values.runs", {
-                                  count: row.runs_count.toLocaleString(),
+                                  count: row.runs_count.toLocaleString(locale),
                                 }),
                           href: `/observatory/employees/${encodeURIComponent(row.employee_id)}`,
                         }))
@@ -1065,7 +1066,7 @@ function ObservatoryPageInner() {
                               {row.model_ref}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                              {row.runs_count.toLocaleString()}
+                              {row.runs_count.toLocaleString(locale)}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
                               {formatTokens(row.input_tokens)}
@@ -1153,7 +1154,7 @@ function ObservatoryPageInner() {
                                 : "—"}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-subtle tabular-nums">
-                              {row.last_seen_at ? formatDate(row.last_seen_at) : "—"}
+                              {row.last_seen_at ? formatDate(row.last_seen_at, locale) : "—"}
                             </td>
                           </tr>
                         ))}
@@ -1229,8 +1230,8 @@ function ObservatoryPageInner() {
                               <Icon name="clock" size={11} />
                               {formatDuration(row.duration_s)}
                             </span>
-                            <span>{row.tokens.total.toLocaleString()} {t("incidents.tokensSuffix")}</span>
-                            <span className="hidden md:inline">{formatDate(row.started_at)}</span>
+                            <span>{row.tokens.total.toLocaleString(locale)} {t("incidents.tokensSuffix")}</span>
+                            <span className="hidden md:inline">{formatDate(row.started_at, locale)}</span>
                           </div>
                         </div>
                       </div>
@@ -1371,14 +1372,14 @@ function ObservatoryPageInner() {
                               className="py-2.5 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums"
                               title={
                                 row.tokens.total > 0
-                                  ? `in ${row.tokens.prompt.toLocaleString()} · out ${row.tokens.completion.toLocaleString()} · total ${row.tokens.total.toLocaleString()}`
+                                  ? `in ${row.tokens.prompt.toLocaleString(locale)} · out ${row.tokens.completion.toLocaleString(locale)} · total ${row.tokens.total.toLocaleString(locale)}`
                                   : undefined
                               }
                             >
-                              {row.tokens.total > 0 ? row.tokens.total.toLocaleString() : "—"}
+                              {row.tokens.total > 0 ? row.tokens.total.toLocaleString(locale) : "—"}
                             </td>
                             <td className="py-2.5 px-4 text-text-muted">
-                              {formatDate(row.started_at)}
+                              {formatDate(row.started_at, locale)}
                             </td>
                           </tr>,
                           expandedTrace === row.trace_id ? (

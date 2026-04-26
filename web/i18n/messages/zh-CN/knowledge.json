@@ -104,6 +104,7 @@
       "selectedCount": "选中 {count}",
       "cancel": "取消",
       "bulkDelete": "批量删除",
+      "bulkTags": "标签…",
       "retryIngest": "重试入库"
     },
     "uploads": {
@@ -120,7 +121,50 @@
       "noResults": "没有命中 · 试试更具体的关键词,或把 BM25 / vector 权重调一下",
       "bm25Rank": "BM25 #{rank}",
       "vecRank": "vec #{rank}",
-      "scoreLabel": "score"
+      "scoreLabel": "score",
+      "explainLabel": "为什么排在这",
+      "matchedTokens": "命中 {matched}/{total} 个词",
+      "matchedHeader": "查询里的词 · 是否命中",
+      "contributionHeader": "BM25 与向量召回的贡献",
+      "bm25Pct": "BM25 占 {pct}%",
+      "vectorPct": "向量占 {pct}%",
+      "vectorPctLabel": "向量",
+      "explainBoth": "关键词检索把它排到第 {bm25} · 向量检索排到第 {vec} · 融合后取较好侧",
+      "explainBm25Only": "只有关键词命中(第 {bm25}) · 向量没召回到这条",
+      "explainVecOnly": "只有向量命中(第 {vec}) · 关键词没匹上"
+    },
+    "docTags": {
+      "addPlaceholder": "+ 加标签…",
+      "removeAria": "移除 #{tag}",
+      "suggestCta": "AI 推荐",
+      "suggesting": "推荐中…",
+      "acceptOneHint": "点击采纳这一条",
+      "acceptAll": "全部采纳 ({count})",
+      "noSuggestions": "AI 没给出新建议(可能 KB 里 chat provider 还没配)"
+    },
+    "stale": {
+      "body": "{missing}/{total} 个分片没有向量(BM25 还能搜 · 但向量召回会漏)",
+      "cta": "重新嵌入全部",
+      "running": "处理中…"
+    },
+    "reembed": {
+      "summary": "Re-embed 完成 · 共 {processed} · 成功 {succeeded} · 失败 {failed}"
+    },
+    "health": {
+      "sectionLabel": "Health",
+      "lastActivity": "{when}",
+      "never": "—",
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activityHeader": "近 {days} 天入库",
+      "activityHint": "每条 = 当天新增 doc 数",
+      "topTagsHeader": "热门标签",
+      "dominantMime": "主要类型 · {mime} ({count})"
+    },
+    "starters": {
+      "label": "试试这些问题",
+      "hint": "AI 根据当前知识库的标题 / 章节自动生成 · 点一条即可问"
     },
     "ask": {
       "askingLabel": "提问",
@@ -128,7 +172,28 @@
       "thinkingTitle": "正在思考…",
       "thinkingDesc": "检索片段 → 拼上下文 → LLM 答复",
       "sourcesLabel": "来源",
-      "sourcesCount": "{count} 条"
+      "sourcesCount": "{count} 条",
+      "turnsLabel": "{count} 轮",
+      "youAskedLabel": "你的提问 #{n}",
+      "newConversation": "新对话",
+      "followUpPlaceholder": "继续追问 · 上一轮的引用编号会沿用…",
+      "followUpSubmit": "追问",
+      "followUpHint": "Enter 发送 · 答案沿用上一轮检索的同一份片段编号",
+      "copyAsCitation": "复制",
+      "copyAsCitationTitle": "复制 markdown · 含问题 / 答案 / 引用列表",
+      "copied": "已复制",
+      "copyFailed": "复制失败 · 浏览器可能屏蔽了 clipboard API"
+    },
+    "bulkTags": {
+      "title": "给 {count} 个文档批量打标签",
+      "intro": "点已有标签可循环切到 +(加)/ −(去)/ ·(不变)三态;下面输入框可逗号分隔加新标签。",
+      "knownHeader": "当前 KB 已有的标签",
+      "newHeader": "新增标签(逗号分隔)",
+      "newPlaceholder": "blog, must-read, 2026q2",
+      "legend": "+ = 加 · − = 去 · · = 保持不变",
+      "cycleHint": "点击循环 + → − → ·",
+      "cancel": "取消",
+      "apply": "应用 · 加 {add} · 去 {remove}"
     },
     "delete": {
       "confirm": "确认删除 \"{title}\"?(软删,30 天可恢复)",
@@ -218,7 +283,13 @@
       "noModelsBody": "去「<gateway>模型网关</gateway>」添加一个 OpenAI 或阿里云百炼 provider · 填上 API key,这里就会出现可用模型列表。",
       "goConfigure": "去配置",
       "switchModelHint": "切换 KB 的 embedding 模型需要重算所有\"语义指纹\"(reindex)· v0 暂不支持热切换。要换模型,先删了这个 KB,再用新模型新建。",
-      "modelDimHint": "{dim}d"
+      "switchModelHintV2": "点击模型即切换 · 后端会同步重算 KB 所有分片的向量(reindex)· 同进程下所有 KB 共用一个 embedder,切换会影响别的 KB 新上传的 embedding,谨慎使用。",
+      "modelDimHint": "{dim}d",
+      "currentBadge": "当前",
+      "switching": "切换中…",
+      "switchConfirm": "切到 {model} 会重算这个 KB 所有 {docs} 个文档的向量(reindex),要继续吗?",
+      "switchSummary": "已切换并重新嵌入 · 共 {processed} · 成功 {succeeded} · 失败 {failed}",
+      "switchFailed": "切换失败"
     },
     "danger": {
       "heading": "删除知识库",

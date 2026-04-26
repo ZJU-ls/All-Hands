@@ -131,7 +131,14 @@
       "sectionDryRunSubtitle": "The expanded triple — matches the persisted payload exactly",
       "cancel": "Cancel",
       "hiring": "Hiring…",
-      "hire": "Hire"
+      "hire": "Hire",
+      "saveEdit": "Save changes",
+      "savingEdit": "Saving…",
+      "savedFlash": "Saved",
+      "dirty": "Unsaved changes",
+      "savedJustNow": "Saved just now",
+      "savedMinutesAgo": "Saved · {n}m ago",
+      "savedHoursAgo": "Saved · {n}h ago"
     },
     "dryRun": {
       "title": "Dry run preview",
@@ -148,7 +155,14 @@
       "emptyChips": "(empty)"
     },
     "mcpPicker": {
-      "empty": "No MCP servers registered yet. Register one on the \"MCP servers\" page, then come back to mount it."
+      "empty": "No MCP servers registered yet. Register one on the \"MCP servers\" page, then come back to mount it.",
+      "searchPlaceholder": "Search MCP · name / transport / health",
+      "groupSelected": "Selected",
+      "selectedEmpty": "Nothing mounted — pick from the groups below",
+      "groupHealthy": "Online",
+      "groupUnhealthy": "Unhealthy",
+      "noMatch": "No MCP matches \"{query}\"",
+      "chipFailedTitle": "Current health: {health} (you can still mount it, but tool calls will fail)"
     },
     "presetRadio": {
       "ariaLabel": "Run mode",
@@ -161,7 +175,16 @@
     },
     "skillPicker": {
       "empty": "No skills installed yet. Install one on the \"Skills\" page, then come back to mount it.",
-      "selected": "selected"
+      "selected": "selected",
+      "searchPlaceholder": "Search skills · name or description",
+      "groupSelected": "Selected",
+      "selectedEmpty": "Nothing mounted yet — pick from the groups below",
+      "groupBuiltin": "Built-in",
+      "groupMarket": "Market",
+      "groupGithub": "GitHub",
+      "groupUploaded": "Uploaded",
+      "groupOther": "Other",
+      "noMatch": "No skill matches \"{query}\""
     }
   },
   "tasks": {
@@ -274,6 +297,26 @@
       "cancel": "Cancel",
       "creating": "Creating…",
       "submit": "Create task"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "needs_input": "Needs answer",
+      "needs_approval": "Needs approval",
+      "completed": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "source": {
+      "user": "User",
+      "lead": "Lead",
+      "trigger": "Trigger",
+      "employee": "Employee"
     }
+  },
+  "employeeBadges": {
+    "react": "Executable",
+    "planner": "Plans ahead",
+    "coordinator": "Leads team"
   }
 }

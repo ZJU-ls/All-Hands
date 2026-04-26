@@ -1,4 +1,7 @@
 {
+  "toast": {
+    "ariaLabel": "通知"
+  },
   "common": {
     "loading": "加载中…",
     "save": "保存",
@@ -40,7 +43,30 @@
       "themeAriaLight": "切换到浅色主题",
       "themeAriaDark": "切换到深色主题",
       "languageTitle": "切换语言",
-      "languageAria": "切换语言"
+      "languageAria": "切换语言",
+      "shortcutsAria": "键盘快捷键",
+      "shortcutsTitle": "? · 键盘快捷键"
+    },
+    "sidebar": {
+      "collapse": "收起侧边栏",
+      "expand": "展开侧边栏",
+      "toggleHint": "⌘B"
+    },
+    "shortcuts": {
+      "title": "键盘快捷键",
+      "close": "关闭",
+      "footer": "在任意位置按 ? 可再次打开。",
+      "section": {
+        "global": "全局",
+        "navigation": "导航"
+      },
+      "openPalette": "打开命令面板",
+      "toggleSidebar": "切换侧边栏",
+      "openHelp": "显示快捷键列表",
+      "dismiss": "关闭浮层",
+      "home": "返回控制台",
+      "artifacts": "进入制品页",
+      "employees": "进入员工页"
     },
     "sections": {
       "workspace": "工作区",
@@ -84,6 +110,7 @@
     "pinging": "正在 ping 后端…"
   },
   "welcome": {
+    "docTitle": "欢迎",
     "skip": "稍后再说 →",
     "eyebrow": "v0 · Open Source · Self-hosted",
     "h1Line1": "欢迎来到 allhands。",

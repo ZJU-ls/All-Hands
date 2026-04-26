@@ -14,6 +14,8 @@ import { AppShell } from "@/components/shell/AppShell";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Select } from "@/components/ui/Select";
 import { ErrorState } from "@/components/state";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toast";
 import { ArtifactList } from "@/components/artifacts/ArtifactList";
 import { ArtifactGrid } from "@/components/artifacts/ArtifactGrid";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
@@ -75,6 +77,7 @@ type DateRange = "all" | "7d" | "30d";
 
 export default function ArtifactsGlobalPage() {
   const t = useTranslations("artifacts.page");
+  const tToast = useTranslations("artifacts.page.bulk.toast");
   const [items, setItems] = useState<ArtifactDto[]>([]);
   const [stats, setStats] = useState<ArtifactStatsDto | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
@@ -119,6 +122,8 @@ export default function ArtifactsGlobalPage() {
   // Once non-empty, the floating BulkActionBar appears with pin/delete.
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const toast = useToast();
 
   function toggleBulk(id: string) {
     setBulkSelected((prev) => {
@@ -141,30 +146,73 @@ export default function ArtifactsGlobalPage() {
   async function bulkPin() {
     if (bulkSelected.size === 0 || bulkBusy) return;
     setBulkBusy(true);
+    const targetPinned = !allPinned;
+    const targetIds = Array.from(bulkSelected);
+    // Optimistic flip · the list reflects the new pinned state instantly,
+    // SSE follow-up just confirms. If a request fails, we revert that one
+    // row + raise an error toast.
+    setItems((prev) =>
+      prev.map((a) => (bulkSelected.has(a.id) ? { ...a, pinned: targetPinned } : a)),
+    );
+    let failed = 0;
     try {
-      const targetPinned = !allPinned;
-      // Sequential to avoid hammering the backend; the SSE stream pushes
-      // the resulting `artifact_changed` frames back so the list rerenders
-      // naturally without a manual refetch.
-      for (const id of bulkSelected) {
-        await pinArtifact(id, targetPinned);
+      for (const id of targetIds) {
+        try {
+          await pinArtifact(id, targetPinned);
+        } catch {
+          failed += 1;
+          // Revert just this row.
+          setItems((prev) =>
+            prev.map((a) => (a.id === id ? { ...a, pinned: !targetPinned } : a)),
+          );
+        }
+      }
+      if (failed === 0) {
+        toast.success(
+          tToast(targetPinned ? "pinned" : "unpinned", { n: targetIds.length }),
+        );
+      } else {
+        toast.error(
+          tToast("pinPartial", { ok: failed, total: targetIds.length }),
+          tToast("pinPartialDesc"),
+        );
       }
     } finally {
       setBulkBusy(false);
     }
   }
-  async function bulkDelete() {
+  // Two-step delete · the BulkActionBar's Delete button now opens the
+  // branded ConfirmDialog (instead of native window.confirm which can't
+  // honor §3.8 visual contract or our keyboard semantics).
+  function bulkDeleteRequest() {
     if (bulkSelected.size === 0 || bulkBusy) return;
-    if (typeof window !== "undefined") {
-      if (!window.confirm(`Delete ${bulkSelected.size} artifact(s)? This is reversible (soft-delete).`)) return;
-    }
+    setBulkDeleteConfirm(true);
+  }
+  async function bulkDeleteConfirmed() {
+    setBulkDeleteConfirm(false);
+    if (bulkSelected.size === 0) return;
     setBulkBusy(true);
+    const targetCount = bulkSelected.size;
+    let failed = 0;
     try {
       for (const id of bulkSelected) {
-        await deleteArtifact(id);
+        try {
+          await deleteArtifact(id);
+        } catch {
+          failed += 1;
+        }
       }
-      // SSE refresh handles the list; clear the local selection set.
       clearBulk();
+      if (failed === 0) {
+        toast.success(
+          tToast("deletedAll", { n: targetCount }),
+          tToast("deletedAllDesc"),
+        );
+      } else if (failed < targetCount) {
+        toast.warning(tToast("deletedPartial", { ok: targetCount - failed, failed }));
+      } else {
+        toast.error(tToast("deletedNone", { n: failed }));
+      }
     } finally {
       setBulkBusy(false);
     }
@@ -299,7 +347,7 @@ export default function ArtifactsGlobalPage() {
 
   return (
     <AppShell>
-      <div className="flex h-full flex-col gap-4 overflow-y-auto p-6">
+      <div className="flex h-full flex-col gap-3 overflow-y-auto p-3 sm:gap-4 sm:p-6">
         <Hero
           stats={stats}
           title={t("title")}
@@ -314,7 +362,7 @@ export default function ArtifactsGlobalPage() {
             after the hero scrolls away. The `-mx-6 px-6` extends the band
             edge-to-edge under the page padding; backdrop-blur softens the
             content scrolling underneath. z-10 keeps it above chart fills. */}
-        <div className="sticky top-0 z-10 -mx-6 border-y border-border bg-bg/80 px-6 py-2 backdrop-blur-md">
+        <div className="sticky top-0 z-10 -mx-3 border-y border-border bg-bg/80 px-3 py-2 backdrop-blur-md sm:-mx-6 sm:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[240px]">
             <Icon
@@ -341,7 +389,7 @@ export default function ArtifactsGlobalPage() {
               <button
                 type="button"
                 onClick={() => setQ("")}
-                aria-label="clear search"
+                aria-label={t("clearSearchAria")}
                 className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded text-text-subtle hover:text-text-muted"
               >
                 <Icon name="x" size={11} />
@@ -453,7 +501,7 @@ export default function ArtifactsGlobalPage() {
               · list  · sidebar 4/12  · detail 8/12   (dense)
               · grid  · gallery 8/12  · detail 4/12   (gallery-first)
                   if nothing selected, gallery takes all 12 cols */}
-        <div className="grid min-h-[60vh] flex-1 grid-cols-12 gap-4">
+        <div className="grid min-h-[60vh] flex-1 grid-cols-12 gap-3 sm:gap-4">
           <aside
             className={
               viewMode === "list"
@@ -517,10 +565,20 @@ export default function ArtifactsGlobalPage() {
           allPinned={allPinned}
           busy={bulkBusy}
           onPinToggle={bulkPin}
-          onDelete={bulkDelete}
+          onDelete={bulkDeleteRequest}
           onClear={clearBulk}
         />
       ) : null}
+      <ConfirmDialog
+        open={bulkDeleteConfirm}
+        title={`Delete ${bulkSelected.size} artifact${bulkSelected.size === 1 ? "" : "s"}?`}
+        message="Soft delete · still recoverable from the database. The metadata row stays for 30 days."
+        confirmLabel="Delete"
+        danger
+        busy={bulkBusy}
+        onConfirm={bulkDeleteConfirmed}
+        onCancel={() => setBulkDeleteConfirm(false)}
+      />
     </AppShell>
   );
 }
@@ -540,14 +598,16 @@ function BulkActionBar({
   onDelete: () => void;
   onClear: () => void;
 }) {
+  const t = useTranslations("artifacts.page");
+  const tBulk = useTranslations("artifacts.page.bulk");
   return (
     <div
       role="toolbar"
-      aria-label="bulk actions"
+      aria-label={t("bulkActionsAria")}
       className="fixed bottom-6 left-1/2 z-30 inline-flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-border bg-surface px-3 py-2 shadow-soft-lg animate-fade-up"
     >
       <span className="font-mono text-[11px] text-text-muted">
-        {count} selected
+        {tBulk("selected", { n: count })}
       </span>
       <span className="h-4 w-px bg-border" aria-hidden />
       <button
@@ -557,7 +617,7 @@ function BulkActionBar({
         className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] text-text-muted transition-colors duration-fast hover:border-border-strong hover:text-text disabled:opacity-50"
       >
         <Icon name="check" size={12} />
-        {allPinned ? "Unpin" : "Pin"}
+        {allPinned ? tBulk("unpin") : tBulk("pin")}
       </button>
       <button
         type="button"
@@ -566,13 +626,13 @@ function BulkActionBar({
         className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-danger-soft px-2.5 text-[12px] text-danger transition-colors duration-fast hover:border-danger/50 disabled:opacity-50"
       >
         <Icon name="trash-2" size={12} />
-        Delete
+        {tBulk("delete")}
       </button>
       <button
         type="button"
         onClick={onClear}
-        aria-label="clear selection"
-        title="clear selection"
+        aria-label={t("clearSelectionAria")}
+        title={t("clearSelectionAria")}
         className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-subtle transition-colors duration-fast hover:bg-surface-2 hover:text-text"
       >
         <Icon name="x" size={12} />

@@ -74,6 +74,11 @@ export type SkillDto = {
   name: string;
   description: string;
   tool_ids: string[];
+  /** "builtin" | "market" | "github" | "uploaded" — populated by /api/skills.
+   *  Optional in the type because older callers / fixture mocks may omit it. */
+  source?: string;
+  version?: string;
+  installed_at?: string | null;
 };
 
 export type McpServerDto = {

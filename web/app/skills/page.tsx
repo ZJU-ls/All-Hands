@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, LoadingState } from "@/components/state";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type IconName } from "@/components/ui/icon";
+import { SearchInput } from "@/components/ui/SearchInput";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 
 /**
@@ -52,9 +53,11 @@ type MarketPreview = {
   files: string[];
 };
 
-type Tab = "installed" | "market" | "github" | "upload";
+type Tab = "builtin" | "installed" | "market" | "github" | "upload";
 
-const TAB_KEYS: ReadonlyArray<Tab> = ["installed", "market", "github", "upload"];
+// 2026-04-26 · 平台内建 / 我安装的 拆成两个 tab(原本混在 「已安装」 一锅)
+// 默认进 「我安装的」 — 用户最关心自己装的那 N 个 · builtin 是只读参考
+const TAB_KEYS: ReadonlyArray<Tab> = ["installed", "builtin", "market", "github", "upload"];
 
 export default function SkillsPage() {
   const t = useTranslations("skills.list");
@@ -284,7 +287,15 @@ export default function SkillsPage() {
 
           {loadStatus === "ready" && tab === "installed" && (
             <InstalledList
-              skills={skills}
+              skills={skills.filter((s) => s.source !== "builtin")}
+              onDelete={(s) => setDeleteTarget(s)}
+              onBrowse={() => setTab("market")}
+            />
+          )}
+
+          {loadStatus === "ready" && tab === "builtin" && (
+            <InstalledList
+              skills={skills.filter((s) => s.source === "builtin")}
               onDelete={(s) => setDeleteTarget(s)}
               onBrowse={() => setTab("market")}
             />
@@ -345,8 +356,9 @@ export default function SkillsPage() {
   );
 }
 
-function tabIcon(t: Tab): "layout-grid" | "store" | "code" | "upload" {
+function tabIcon(t: Tab): "layout-grid" | "shield-check" | "store" | "code" | "upload" {
   if (t === "installed") return "layout-grid";
+  if (t === "builtin") return "shield-check";
   if (t === "market") return "store";
   if (t === "github") return "code";
   return "upload";
@@ -450,6 +462,8 @@ function StatKpi({
   );
 }
 
+type InstalledSort = "recent" | "name" | "tools";
+
 function InstalledList({
   skills,
   onDelete,
@@ -459,17 +473,128 @@ function InstalledList({
   onDelete: (s: Skill) => void;
   onBrowse: () => void;
 }) {
+  const t = useTranslations("skills.list");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<InstalledSort>("recent");
+  // 2026-04-26 · 列表数量超 ~12 时,无搜索 + 无排序 = 用户找不到刚装
+  // 的 skill。补本地搜索 + 三档排序。这里的过滤计算量极低(skill 数
+  // ~ 数百级),不需要 debounce / virtualization。
+  const lcQuery = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    let list = skills;
+    if (lcQuery) {
+      list = list.filter(
+        (s) =>
+          s.name.toLowerCase().includes(lcQuery) ||
+          s.description.toLowerCase().includes(lcQuery) ||
+          s.id.toLowerCase().includes(lcQuery),
+      );
+    }
+    const cloned = [...list];
+    if (sort === "name") {
+      cloned.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sort === "tools") {
+      cloned.sort(
+        (a, b) =>
+          b.tool_ids.length - a.tool_ids.length ||
+          a.name.localeCompare(b.name),
+      );
+    } else {
+      // recent: 安装时间倒序;builtin 没有 installed_at,排到最后但保持
+      // 字母序,避免随机抖动
+      cloned.sort((a, b) => {
+        const aT = a.installed_at ? Date.parse(a.installed_at) : -Infinity;
+        const bT = b.installed_at ? Date.parse(b.installed_at) : -Infinity;
+        if (aT !== bT) return bT - aT;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    return cloned;
+  }, [skills, lcQuery, sort]);
+
   if (skills.length === 0) {
     return <EmptySkills onBrowse={onBrowse} />;
   }
   return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[220px]">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder={t("searchPlaceholder")}
+            count={filtered.length}
+            total={skills.length}
+            autoFocusOnSlash
+            testId="skills-search"
+          />
+        </div>
+        <SortPills value={sort} onChange={setSort} />
+      </div>
+      {filtered.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border bg-surface-2 px-4 py-6 text-center text-[12.5px] text-text-muted">
+          {t("noMatch", { query })}
+        </p>
+      ) : (
+        <div
+          data-testid="skills-list"
+          className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"
+        >
+          {filtered.map((s) => (
+            <SkillCard
+              key={s.id}
+              skill={s}
+              onDelete={onDelete}
+              highlight={lcQuery}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SortPills({
+  value,
+  onChange,
+}: {
+  value: InstalledSort;
+  onChange: (v: InstalledSort) => void;
+}) {
+  const t = useTranslations("skills.list");
+  const items: { id: InstalledSort; label: string; icon: IconName }[] = [
+    { id: "recent", label: t("sortRecent"), icon: "clock" },
+    { id: "name", label: t("sortName"), icon: "list" },
+    { id: "tools", label: t("sortTools"), icon: "wand-2" },
+  ];
+  return (
     <div
-      data-testid="skills-list"
-      className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"
+      role="radiogroup"
+      aria-label={t("sortAriaLabel")}
+      className="inline-flex h-9 rounded-md border border-border bg-surface p-0.5"
     >
-      {skills.map((s) => (
-        <SkillCard key={s.id} skill={s} onDelete={onDelete} />
-      ))}
+      {items.map((item) => {
+        const active = value === item.id;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(item.id)}
+            data-testid={`skills-sort-${item.id}`}
+            className={
+              "inline-flex h-8 items-center gap-1.5 rounded px-2.5 text-[11.5px] font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 " +
+              (active
+                ? "bg-primary text-primary-fg shadow-soft-sm"
+                : "text-text-muted hover:text-text hover:bg-surface-2")
+            }
+          >
+            <Icon name={item.icon} size={11} />
+            {item.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -477,9 +602,14 @@ function InstalledList({
 function SkillCard({
   skill,
   onDelete,
+  highlight,
 }: {
   skill: Skill;
   onDelete: (s: Skill) => void;
+  /** Lower-cased query — when present, name/description matches get
+   *  visually highlighted (R11 search-highlight feature folded in
+   *  early because the SortPills is right next to it). */
+  highlight?: string;
 }) {
   const t = useTranslations("skills.list");
   const isBuiltin = skill.source === "builtin";
@@ -512,7 +642,7 @@ function SkillCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[14px] font-semibold text-text truncate tracking-tight">
-              {skill.name}
+              <Highlight text={skill.name} term={highlight} />
             </span>
             <SourceBadge source={skill.source} />
           </div>
@@ -531,7 +661,7 @@ function SkillCard({
 
       {skill.description ? (
         <p className="text-[12px] text-text-muted leading-snug line-clamp-2 min-h-[32px]">
-          {skill.description}
+          <Highlight text={skill.description} term={highlight} />
         </p>
       ) : (
         <p className="text-[12px] text-text-subtle italic leading-snug min-h-[32px]">
@@ -564,6 +694,46 @@ function SkillCard({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Highlight · 把 term 在 text 中匹配到的子串包成 <mark>。
+ * 安全:仅按 lowercase indexOf 切片,无正则注入风险。空 term/text 不
+ * 渲染 <mark>,直接返回原文。Linear / Algolia 通用做法。
+ */
+function Highlight({ text, term }: { text: string; term?: string }) {
+  if (!term) return <>{text}</>;
+  const lcText = text.toLowerCase();
+  const lcTerm = term.toLowerCase();
+  if (lcTerm.length === 0 || !lcText.includes(lcTerm)) return <>{text}</>;
+  const parts: { value: string; match: boolean }[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const idx = lcText.indexOf(lcTerm, i);
+    if (idx === -1) {
+      parts.push({ value: text.slice(i), match: false });
+      break;
+    }
+    if (idx > i) parts.push({ value: text.slice(i, idx), match: false });
+    parts.push({ value: text.slice(idx, idx + lcTerm.length), match: true });
+    i = idx + lcTerm.length;
+  }
+  return (
+    <>
+      {parts.map((p, k) =>
+        p.match ? (
+          <mark
+            key={k}
+            className="rounded-sm bg-warning-soft text-text px-0.5 -mx-0.5 font-medium"
+          >
+            {p.value}
+          </mark>
+        ) : (
+          <span key={k}>{p.value}</span>
+        ),
+      )}
+    </>
   );
 }
 
@@ -740,6 +910,13 @@ function MarketList({
 }) {
   const t = useTranslations("skills.list.market");
   const [activeTag, setActiveTag] = useState<string>("");
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  // 2026-04-26 · R8 · 大列表 lazy render(>24 时,默认显示前 24,点
+  // load-more 加 24)。原实现一次性渲染 100+ 卡片到 DOM,初次切到市场
+  // tab 卡 ~600ms。state 不放 limit-字面量(因为 query / activeTag 变化
+  // 后该重置 limit),用 batch 数 + 重置 effect。
+  const PAGE = 24;
+  const [batches, setBatches] = useState(1);
 
   // Collect every tag + how many skills use it. Sorted by popularity so the
   // filter row puts the most-useful pills first.
@@ -747,13 +924,37 @@ function MarketList({
   for (const e of entries) {
     for (const t of e.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
   }
-  const topTags = Array.from(tagCounts.entries())
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 12);
+  const allTags = Array.from(tagCounts.entries()).sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  // R9 · 12 个上限太死。默认收起到 12,有更多时点 + 显示完整(folded
+  // 时也保证 activeTag 一定在可见列表里 — 否则用户切了某 tag,刷新后
+  // 看不到选中状态)。
+  const FOLDED_TAG_LIMIT = 12;
+  const visibleTags = (() => {
+    if (tagsExpanded) return allTags;
+    const folded = allTags.slice(0, FOLDED_TAG_LIMIT);
+    if (activeTag && !folded.some(([k]) => k === activeTag)) {
+      const extra = allTags.find(([k]) => k === activeTag);
+      if (extra) return [...folded, extra];
+    }
+    return folded;
+  })();
+  const overflowCount = Math.max(0, allTags.length - visibleTags.length);
 
-  const visible = activeTag
+  const filtered = activeTag
     ? entries.filter((e) => e.tags.includes(activeTag))
     : entries;
+
+  // Reset pagination when filter changes — batches counts pages of `filtered`,
+  // so a prior larger value would point past the new shorter array.
+  useEffect(() => {
+    setBatches(1);
+  }, [query, activeTag]);
+
+  const limit = batches * PAGE;
+  const visible = filtered.slice(0, limit);
+  const remaining = Math.max(0, filtered.length - limit);
   const totalInstalled = entries.filter((e) => installedSlugs.has(e.name)).length;
 
   return (
@@ -786,7 +987,7 @@ function MarketList({
         )}
       </div>
 
-      {topTags.length > 0 && (
+      {allTags.length > 0 && (
         <div
           data-testid="market-tag-filter"
           className="flex items-center gap-1.5 flex-wrap text-[11px]"
@@ -809,7 +1010,7 @@ function MarketList({
               {entries.length}
             </span>
           </button>
-          {topTags.map(([tag, count]) => {
+          {visibleTags.map(([tag, count]) => {
             const active = activeTag === tag;
             return (
               <button
@@ -834,6 +1035,26 @@ function MarketList({
               </button>
             );
           })}
+          {overflowCount > 0 && !tagsExpanded && (
+            <button
+              type="button"
+              onClick={() => setTagsExpanded(true)}
+              data-testid="market-tag-show-more"
+              className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full border border-dashed border-border text-text-muted hover:border-primary hover:text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              {t("tagsShowMore", { n: overflowCount })}
+            </button>
+          )}
+          {tagsExpanded && allTags.length > FOLDED_TAG_LIMIT && (
+            <button
+              type="button"
+              onClick={() => setTagsExpanded(false)}
+              data-testid="market-tag-show-less"
+              className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full border border-dashed border-border text-text-muted hover:border-primary hover:text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              {t("tagsShowLess")}
+            </button>
+          )}
         </div>
       )}
 
@@ -957,6 +1178,19 @@ function MarketList({
               </div>
             );
           })}
+        </div>
+      )}
+      {remaining > 0 && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            data-testid="market-load-more"
+            onClick={() => setBatches((n) => n + 1)}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg border border-border bg-surface text-[12.5px] font-medium text-text-muted hover:text-text hover:bg-surface-2 hover:border-border-strong transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <Icon name="chevron-down" size={12} />
+            {t("loadMore", { remaining, batch: Math.min(PAGE, remaining) })}
+          </button>
         </div>
       )}
     </div>

@@ -106,13 +106,20 @@ def _mk_employee(name: str = "W") -> Employee:
 
 
 def test_spawn_subagent_tool_schema() -> None:
-    """Contract § 5.2 · scope=WRITE · requires_confirmation=True · Meta kind."""
+    """Contract § 5.2 · scope=WRITE · Meta kind.
+
+    requires_confirmation is False — spawning a child runner is benign;
+    the child has its own ConfirmationGate for any real WRITE inside its
+    scope. Mirrors dispatch_employee. Confirming at the spawn boundary
+    is a double-gate that produces "expired by user" because the user
+    never sees a meaningful prompt for it.
+    """
     from allhands.core import ToolKind, ToolScope
 
     assert SPAWN_SUBAGENT_TOOL.id == "allhands.meta.spawn_subagent"
     assert SPAWN_SUBAGENT_TOOL.kind == ToolKind.META
     assert SPAWN_SUBAGENT_TOOL.scope == ToolScope.WRITE
-    assert SPAWN_SUBAGENT_TOOL.requires_confirmation is True
+    assert SPAWN_SUBAGENT_TOOL.requires_confirmation is False
     required = SPAWN_SUBAGENT_TOOL.input_schema.get("required", [])
     assert "profile" in required
     assert "task" in required

@@ -17,6 +17,7 @@ so the impl is the contract for v0.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -679,6 +680,25 @@ class SqlEmbeddingCacheRepo:
 # ----------------------------------------------------------------------
 
 
+_FTS5_RESERVED = re.compile(r"[\"'*()+\-:^!?,;.&|/\\\[\]{}<>=~`@#$%]+")
+
+
+def _sanitise_fts_query(query: str) -> str:
+    """Strip FTS5-reserved punctuation so natural-language questions
+    (and user typos like ``what is rrf?``) don't blow up the parser.
+
+    The MATCH grammar treats ``?``, ``!``, quotes, colons, parens etc.
+    as syntax — bare punctuation in a user-typed question therefore
+    raises ``fts5: syntax error near "?"``. We replace all reserved
+    chars with spaces, collapse whitespace, then drop empty tokens.
+    Empty result means "search everything that matches anything" — we
+    treat it as no-op (caller short-circuits on empty).
+    """
+    cleaned = _FTS5_RESERVED.sub(" ", query)
+    tokens = [t for t in cleaned.split() if t]
+    return " ".join(tokens)
+
+
 async def fts_search(
     session: AsyncSession, kb_id: str, query: str, *, top: int = 50
 ) -> list[tuple[int, float]]:
@@ -687,7 +707,8 @@ async def fts_search(
     SQLite FTS5's `bm25()` returns a NEGATIVE score (lower is better);
     we negate so callers can treat higher = better.
     """
-    if not query.strip():
+    cleaned = _sanitise_fts_query(query)
+    if not cleaned:
         return []
     sql = text(
         """
@@ -698,7 +719,7 @@ async def fts_search(
          LIMIT :limit
         """
     )
-    rows = (await session.execute(sql, {"kb_id": kb_id, "q": query, "limit": top})).all()
+    rows = (await session.execute(sql, {"kb_id": kb_id, "q": cleaned, "limit": top})).all()
     # Negate so higher = better.
     return [(int(r[0]), -float(r[1])) for r in rows]
 

@@ -131,7 +131,14 @@
       "sectionDryRunSubtitle": "展开后的三列 —— 与落库 payload 一致",
       "cancel": "取消",
       "hiring": "招聘中…",
-      "hire": "招聘"
+      "hire": "招聘",
+      "saveEdit": "保存改动",
+      "savingEdit": "保存中…",
+      "savedFlash": "已保存",
+      "dirty": "有未保存改动",
+      "savedJustNow": "刚刚已保存",
+      "savedMinutesAgo": "已保存 · {n} 分钟前",
+      "savedHoursAgo": "已保存 · {n} 小时前"
     },
     "dryRun": {
       "title": "Dry run 预览",
@@ -148,7 +155,14 @@
       "emptyChips": "(空)"
     },
     "mcpPicker": {
-      "empty": "还没有注册 MCP 服务器。先去「MCP 服务器」页注册,再回来挂载。"
+      "empty": "还没有注册 MCP 服务器。先去「MCP 服务器」页注册,再回来挂载。",
+      "searchPlaceholder": "搜索 MCP · 名称 / 协议 / 健康",
+      "groupSelected": "已选",
+      "selectedEmpty": "暂未挂载,从下方分组中点选",
+      "groupHealthy": "在线",
+      "groupUnhealthy": "不健康",
+      "noMatch": "没有匹配「{query}」的 MCP",
+      "chipFailedTitle": "当前健康状态:{health}(失败的服务器仍可挂载,但工具调用会失败)"
     },
     "presetRadio": {
       "ariaLabel": "运转方式",
@@ -161,7 +175,16 @@
     },
     "skillPicker": {
       "empty": "还没有安装的 Skill。先在「技能」页安装,再回来挂载。",
-      "selected": "selected"
+      "selected": "selected",
+      "searchPlaceholder": "搜索技能 · 名称或描述",
+      "groupSelected": "已选",
+      "selectedEmpty": "暂未挂载,从下方分组中点选",
+      "groupBuiltin": "内建",
+      "groupMarket": "市场",
+      "groupGithub": "GitHub",
+      "groupUploaded": "上传",
+      "groupOther": "其他",
+      "noMatch": "没有匹配「{query}」的技能"
     }
   },
   "tasks": {
@@ -274,6 +297,26 @@
       "cancel": "取消",
       "creating": "创建中…",
       "submit": "创建任务"
+    },
+    "status": {
+      "queued": "排队中",
+      "running": "执行中",
+      "needs_input": "等你回答",
+      "needs_approval": "等你审批",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
+    "source": {
+      "user": "用户",
+      "lead": "Lead",
+      "trigger": "触发器",
+      "employee": "员工"
     }
+  },
+  "employeeBadges": {
+    "react": "可执行",
+    "planner": "会做计划",
+    "coordinator": "能带团队"
   }
 }

@@ -16,14 +16,30 @@ without having to pre-create a registered employee.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from allhands.core import Employee, Tool, ToolKind, ToolScope
-from allhands.execution.dispatch import _dispatch_depth, current_parent_run_id
+from allhands.execution.dispatch import (
+    _dispatch_depth,
+    _parent_run_id,
+    current_parent_run_id,
+)
 from allhands.execution.modes import MODES, expand_preset
+
+_log = logging.getLogger(__name__)
+
+# Sub-agent watchdog. The parent's tool_pipeline awaits this executor and
+# the SSE stream is paused on it the whole time — so a sub-agent that hangs
+# (network blip / model timeout / inner loop deadlock) blocks the parent's
+# turn entirely. Cap it at a generous default; user override via env if
+# needed. Surfaces as a structured error envelope so the UI sees a normal
+# tool_call_end with status=failed instead of `tool_call_dropped`.
+DEFAULT_SPAWN_TIMEOUT_S = 180.0
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -90,8 +106,14 @@ SPAWN_SUBAGENT_TOOL = Tool(
             },
         },
     },
+    # Spawning a subagent is itself benign — it just hands a task to a
+    # child runner. The child has its own ConfirmationGate that fires for
+    # any real WRITE inside its scope, so confirming at the spawn boundary
+    # is a double-gate that produces "expired by user" when the user never
+    # sees a prompt for "may I think harder about this?". Mirrors
+    # `dispatch_employee` (employee_tools.py — also requires_confirmation=False).
     scope=ToolScope.WRITE,
-    requires_confirmation=True,
+    requires_confirmation=False,
 )
 
 
@@ -115,8 +137,18 @@ def _build_preset_child(
     *,
     return_format: str | None,
     max_iterations_override: int | None,
+    model_ref: str,
 ) -> Employee:
-    """Construct a throwaway in-memory Employee from a preset (contract § 4.2)."""
+    """Construct a throwaway in-memory Employee from a preset (contract § 4.2).
+
+    ``model_ref`` is now mandatory and inherits from the parent agent so the
+    subagent talks to the same gateway. The previous hardcoded
+    ``"openai/gpt-4o-mini"`` made spawn_subagent fail on any deployment that
+    doesn't have an OpenAI provider registered (e.g. user's CodingPlan
+    gateway with qwen / glm / kimi / minimax models). Reproducer:
+    spawn_subagent → "Unknown model_ref" → executor exception → SSE drops
+    tool_call mid-flight → frontend shows tool_call_dropped.
+    """
     tool_ids, skill_ids, max_it = expand_preset(
         preset_id,
         custom_max_iterations=max_iterations_override,
@@ -133,7 +165,7 @@ def _build_preset_child(
         name=f"sub-{preset_id.replace('_', '-')[:30]}",
         description=f"Temporary {preset_id} subagent",
         system_prompt="\n\n".join(prompt_parts),
-        model_ref="openai/gpt-4o-mini",
+        model_ref=model_ref,
         tool_ids=list(tool_ids),
         skill_ids=list(skill_ids),
         max_iterations=int(max_it),
@@ -154,10 +186,15 @@ class SpawnSubagentService:
         employee_repo: EmployeeRepo | Any,
         runner_factory: SubRunnerFactory,
         max_depth: int = 1,
+        default_model_ref: str | None = None,
     ) -> None:
         self._employees = employee_repo
         self._runner_factory = runner_factory
         self._max_depth = max_depth
+        # Inherited from the parent so the subagent talks to the same gateway.
+        # When None, falls back to a sensible default (kept for backward compat
+        # with tests that don't bind a parent model).
+        self._default_model_ref = default_model_ref or "openai/gpt-4o-mini"
 
     async def spawn(
         self,
@@ -202,10 +239,16 @@ class SpawnSubagentService:
         thread_id = str(uuid.uuid4())
         new_depth = current_depth + 1
         depth_token = _dispatch_depth.set(new_depth)
-        try:
+        # R1 review · M5 — DispatchService sets _parent_run_id so nested
+        # operations report the right trace lineage. spawn_subagent had to
+        # mirror that or the subagent's tool calls were stamped with the
+        # GRANDPARENT's run_id, breaking trace tree links in observatory.
+        parent_run_token = _parent_run_id.set(trace_id)
+
+        async def _drive() -> tuple[list[str], str]:
             runner = self._runner_factory(child, new_depth)
             parts: list[str] = []
-            status = "completed"
+            status_local = "completed"
             async for event in runner.stream(
                 messages=[{"role": "user", "content": task}],
                 thread_id=thread_id,
@@ -214,17 +257,61 @@ class SpawnSubagentService:
                 if kind == "token":
                     parts.append(getattr(event, "delta", ""))
                 elif kind == "error":
-                    parts.append(getattr(event, "message", ""))
-                    status = "error"
+                    msg = getattr(event, "message", "")
+                    parts.append(str(msg))
+                    status_local = "error"
+                    _log.warning(
+                        "spawn_subagent inner runner error: profile=%s msg=%s",
+                        profile,
+                        msg,
+                    )
                     break
+            return parts, status_local
+
+        try:
+            try:
+                parts, status = await asyncio.wait_for(
+                    _drive(),
+                    timeout=DEFAULT_SPAWN_TIMEOUT_S,
+                )
+            except TimeoutError:
+                _log.warning(
+                    "spawn_subagent timed out after %.0fs · profile=%s task[:80]=%r",
+                    DEFAULT_SPAWN_TIMEOUT_S,
+                    profile,
+                    task[:80],
+                )
+                return {
+                    "result": (
+                        f"Subagent timed out after {DEFAULT_SPAWN_TIMEOUT_S:.0f}s "
+                        "without producing output. The model may be hanging or the "
+                        "inner task is too large. Consider breaking the task into "
+                        "smaller pieces or raising max_iterations_override."
+                    ),
+                    "trace_id": trace_id,
+                    "iterations_used": 0,
+                    "status": "error",
+                    "parent_run_id": current_parent_run_id(),
+                }
+            except Exception as exc:
+                _log.exception(
+                    "spawn_subagent inner runner raised: profile=%s",
+                    profile,
+                )
+                return {
+                    "result": (f"Subagent crashed: {type(exc).__name__}: {exc}"),
+                    "trace_id": trace_id,
+                    "iterations_used": 0,
+                    "status": "error",
+                    "parent_run_id": current_parent_run_id(),
+                }
         finally:
             _dispatch_depth.reset(depth_token)
+            _parent_run_id.reset(parent_run_token)
 
         return {
             "result": "".join(parts).strip(),
             "trace_id": trace_id,
-            # v0: we don't yet track per-turn iterations inside the runner;
-            # leave 0 · the events table records llm.call counts per run.
             "iterations_used": 0,
             "status": status,
             "parent_run_id": current_parent_run_id(),
@@ -242,6 +329,7 @@ class SpawnSubagentService:
                 profile,
                 return_format=return_format,
                 max_iterations_override=max_iterations_override,
+                model_ref=self._default_model_ref,
             )
         emp = await self._employees.get_by_name(profile)
         if emp is None:

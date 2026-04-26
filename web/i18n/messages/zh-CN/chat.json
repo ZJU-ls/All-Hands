@@ -119,11 +119,30 @@
     "subagent": {
       "title": "活跃子代理",
       "runningCount": "· {n} 运行中",
-      "viewTrace": "查看链路 ↗"
+      "viewTrace": "查看链路 ↗",
+      "status": {
+        "running": "运行中",
+        "succeeded": "已完成",
+        "failed": "失败"
+      }
     },
     "planProgress": {
       "runningCount": "· {n} 进行中",
-      "failedCount": "· {n} 失败"
+      "failedCount": "· {n} 失败",
+      "fallbackTitle": "计划",
+      "step": {
+        "done": "已完成",
+        "running": "进行中",
+        "failed": "失败",
+        "skipped": "已跳过",
+        "pending": "等待"
+      }
+    },
+    "progressPanel": {
+      "subagentTab": "子代理",
+      "runningSuffix": "· {n} 进行中",
+      "failedSuffix": "· {n} 失败",
+      "ariaLabel": "代理进度"
     }
   }
 }

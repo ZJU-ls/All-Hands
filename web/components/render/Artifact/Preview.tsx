@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { RenderProps } from "@/lib/component-registry";
+import { useArtifactFocus } from "@/lib/artifact-focus-store";
 import {
   getArtifact,
   getArtifactTextContent,
@@ -79,6 +80,7 @@ function StatusShell({
 export function ArtifactPreview({ props }: RenderProps) {
   const t = useTranslations("render.preview");
   const artifactId = (props.artifact_id as string | undefined) ?? "";
+  const focusArtifact = useArtifactFocus((s) => s.focus);
   const [meta, setMeta] = useState<ArtifactDto | null>(null);
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -201,6 +203,16 @@ export function ArtifactPreview({ props }: RenderProps) {
         <span className="inline-flex h-6 shrink-0 items-center rounded-md bg-primary-muted px-2 font-mono text-[10px] uppercase tracking-wider text-primary">
           {meta.kind}
         </span>
+        <button
+          type="button"
+          onClick={() => focusArtifact(meta.id)}
+          aria-label={t("openInPanel")}
+          title={t("openInPanel")}
+          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border bg-surface px-2 font-mono text-[10px] text-text-muted transition hover:border-primary/40 hover:text-primary"
+        >
+          <Icon name="external-link" size={10} />
+          {t("open")}
+        </button>
       </div>
       {body}
     </div>

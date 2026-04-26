@@ -23,10 +23,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { SearchInput } from "@/components/ui/SearchInput";
 
 type Transport = "stdio" | "sse" | "http";
 type Health = "unknown" | "ok" | "unreachable" | "auth_failed";
@@ -52,6 +53,7 @@ type Tab = "registered" | "add";
 
 export default function McpServersPage() {
   const t = useTranslations("mcp.list");
+  const locale = useLocale();
   const [tab, setTab] = useState<Tab>("registered");
   const [servers, setServers] = useState<Server[]>([]);
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -62,7 +64,10 @@ export default function McpServersPage() {
   const [toolsByServer, setToolsByServer] = useState<
     Record<string, ToolInfo[] | { error: string }>
   >({});
-  const [expanded, setExpanded] = useState<string>("");
+  // 2026-04-26 · R10 · multi-expand. 原实现 expanded: string 同时只能
+  // 看一个 server 的工具列表 — 想对比两个 server 暴露什么得反复切换。
+  // 改成 Set,允许同时展多个;也方便下面给每个工具列表加内部搜索框。
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   const load = async () => {
     setLoadStatus("loading");
@@ -98,11 +103,15 @@ export default function McpServersPage() {
   }
 
   async function handleListTools(server: Server) {
-    if (expanded === server.id) {
-      setExpanded("");
+    if (expanded.has(server.id)) {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        next.delete(server.id);
+        return next;
+      });
       return;
     }
-    setExpanded(server.id);
+    setExpanded((prev) => new Set(prev).add(server.id));
     setBusyId(server.id);
     try {
       const res = await fetch(`/api/mcp-servers/${server.id}/tools`);
@@ -136,7 +145,7 @@ export default function McpServersPage() {
     }
   }
 
-  const kpis = useMemo(() => buildKpis(servers, t), [servers, t]);
+  const kpis = useMemo(() => buildKpis(servers, t, locale), [servers, t, locale]);
 
   return (
     <AppShell title={t("appShellTitle")}>
@@ -401,7 +410,7 @@ function KpiCard({
 
 type Translator = ReturnType<typeof useTranslations>;
 
-function buildKpis(servers: Server[], t: Translator) {
+function buildKpis(servers: Server[], t: Translator, locale: string) {
   const total = servers.length;
   const online = servers.filter((s) => s.health === "ok").length;
   const tools = servers.reduce((acc, s) => acc + (s.exposed_tool_ids?.length ?? 0), 0);
@@ -410,7 +419,7 @@ function buildKpis(servers: Server[], t: Translator) {
     .filter((ts) => !Number.isNaN(ts));
   const latest = lastTimestamps.length > 0 ? Math.max(...lastTimestamps) : null;
   const lastSyncLabel = latest !== null ? formatRelative(latest, t) : "—";
-  const lastSyncSub = latest !== null ? formatAbsolute(latest) : t("neverSynced");
+  const lastSyncSub = latest !== null ? formatAbsolute(latest, locale) : t("kpi.neverSynced");
   return { total, online, tools, lastSyncLabel, lastSyncSub };
 }
 
@@ -427,9 +436,9 @@ function formatRelative(ts: number, t: Translator): string {
   return t("relativeDays", { n: d });
 }
 
-function formatAbsolute(ts: number): string {
+function formatAbsolute(ts: number, locale: string): string {
   try {
-    return new Date(ts).toLocaleString();
+    return new Date(ts).toLocaleString(locale);
   } catch {
     return "";
   }
@@ -498,6 +507,8 @@ function configSummary(s: Server): string {
 // Registered server list
 // ────────────────────────────────────────────────────────────────────────────
 
+type McpSort = "health" | "name" | "tools" | "recent";
+
 function RegisteredList({
   servers,
   busyId,
@@ -510,42 +521,196 @@ function RegisteredList({
 }: {
   servers: Server[];
   busyId: string;
-  expanded: string;
+  expanded: Set<string>;
   toolsByServer: Record<string, ToolInfo[] | { error: string }>;
   onTest: (s: Server) => void;
   onListTools: (s: Server) => void;
   onDelete: (s: Server) => void;
   onSwitchToAdd: () => void;
 }) {
+  const t = useTranslations("mcp.list");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<McpSort>("health");
+  const [unhealthyOnly, setUnhealthyOnly] = useState(false);
+  // 2026-04-26 · MCP servers list 之前完全没有搜索 / 排序 / 健康过滤。
+  // 注册了 10+ server 时,要找特定 server 得肉眼扫;失败的混在中间影响
+  // "选健康的"决策。补三件套:搜索 + 排序 + "只看不健康"toggle。
+  const lcQuery = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    let list = servers;
+    if (lcQuery) {
+      list = list.filter(
+        (s) =>
+          s.name.toLowerCase().includes(lcQuery) ||
+          s.transport.toLowerCase().includes(lcQuery) ||
+          s.health.toLowerCase().includes(lcQuery),
+      );
+    }
+    if (unhealthyOnly) {
+      list = list.filter((s) => s.health !== "ok" && s.health !== "unknown");
+    }
+    const cloned = [...list];
+    if (sort === "name") {
+      cloned.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sort === "tools") {
+      cloned.sort(
+        (a, b) =>
+          (b.exposed_tool_ids?.length ?? 0) - (a.exposed_tool_ids?.length ?? 0) ||
+          a.name.localeCompare(b.name),
+      );
+    } else if (sort === "recent") {
+      cloned.sort((a, b) => {
+        const aT = a.last_handshake_at ? Date.parse(a.last_handshake_at) : 0;
+        const bT = b.last_handshake_at ? Date.parse(b.last_handshake_at) : 0;
+        if (aT !== bT) return bT - aT;
+        return a.name.localeCompare(b.name);
+      });
+    } else {
+      // health 默认:在线优先(ok > unknown > auth_failed > unreachable),
+      // 健康内按 tool 数排,这样最有用的 server 总在最上
+      const order: Record<string, number> = {
+        ok: 0,
+        unknown: 1,
+        auth_failed: 2,
+        unreachable: 3,
+      };
+      cloned.sort((a, b) => {
+        const ra = order[a.health] ?? 9;
+        const rb = order[b.health] ?? 9;
+        if (ra !== rb) return ra - rb;
+        const ta = a.exposed_tool_ids?.length ?? 0;
+        const tb = b.exposed_tool_ids?.length ?? 0;
+        if (ta !== tb) return tb - ta;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    return cloned;
+  }, [servers, lcQuery, sort, unhealthyOnly]);
+
   if (servers.length === 0) {
     return <EmptyServers onAdd={onSwitchToAdd} />;
   }
 
-  // Pick a "featured" server to render as the gradient default: online w/ most
-  // tools, falling back to first server. Purely visual hierarchy.
-  const featured = [...servers]
-    .filter((s) => s.health === "ok")
-    .sort((a, b) => (b.exposed_tool_ids?.length ?? 0) - (a.exposed_tool_ids?.length ?? 0))[0];
-  const featuredId = featured?.id ?? servers[0]?.id;
+  // Pick a "featured" server: online w/ most tools, but only when sort is at
+  // its default "health" mode — when the user explicitly sorted otherwise we
+  // don't want a random card to wear the gradient.
+  const featured =
+    sort === "health"
+      ? [...filtered]
+          .filter((s) => s.health === "ok")
+          .sort((a, b) => (b.exposed_tool_ids?.length ?? 0) - (a.exposed_tool_ids?.length ?? 0))[0]
+      : null;
+  const featuredId = featured?.id ?? null;
+
+  const unhealthyCount = servers.filter(
+    (s) => s.health !== "ok" && s.health !== "unknown",
+  ).length;
 
   return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[260px]">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder={t("searchPlaceholder")}
+            count={filtered.length}
+            total={servers.length}
+            autoFocusOnSlash
+            testId="mcp-list-search"
+          />
+        </div>
+        <McpSortPills value={sort} onChange={setSort} />
+        {unhealthyCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setUnhealthyOnly((v) => !v)}
+            aria-pressed={unhealthyOnly}
+            data-testid="mcp-list-unhealthy-toggle"
+            className={
+              "inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-[11.5px] font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 " +
+              (unhealthyOnly
+                ? "bg-danger text-primary-fg shadow-soft-sm"
+                : "border border-danger/40 text-danger hover:bg-danger-soft")
+            }
+          >
+            <Icon name="alert-triangle" size={11} />
+            {t("unhealthyOnly", { n: unhealthyCount })}
+          </button>
+        )}
+      </div>
+      {filtered.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border bg-surface-2 px-4 py-8 text-center text-[12.5px] text-text-muted">
+          {unhealthyOnly && lcQuery === ""
+            ? t("noUnhealthy")
+            : t("noMatch", { query })}
+        </p>
+      ) : (
+        <div
+          data-testid="mcp-list"
+          className="grid grid-cols-1 xl:grid-cols-2 gap-4"
+        >
+          {filtered.map((s) => (
+            <ServerCard
+              key={s.id}
+              server={s}
+              featured={s.id === featuredId}
+              busy={busyId === s.id}
+              expanded={expanded.has(s.id)}
+              tools={toolsByServer[s.id]}
+              onTest={onTest}
+              onListTools={onListTools}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function McpSortPills({
+  value,
+  onChange,
+}: {
+  value: McpSort;
+  onChange: (v: McpSort) => void;
+}) {
+  const t = useTranslations("mcp.list");
+  const items: { id: McpSort; label: string; icon: IconName }[] = [
+    { id: "health", label: t("sortHealth"), icon: "shield-check" },
+    { id: "name", label: t("sortName"), icon: "list" },
+    { id: "tools", label: t("sortTools"), icon: "wand-2" },
+    { id: "recent", label: t("sortRecent"), icon: "clock" },
+  ];
+  return (
     <div
-      data-testid="mcp-list"
-      className="grid grid-cols-1 xl:grid-cols-2 gap-4"
+      role="radiogroup"
+      aria-label={t("sortAriaLabel")}
+      className="inline-flex h-9 rounded-md border border-border bg-surface p-0.5"
     >
-      {servers.map((s) => (
-        <ServerCard
-          key={s.id}
-          server={s}
-          featured={s.id === featuredId}
-          busy={busyId === s.id}
-          expanded={expanded === s.id}
-          tools={toolsByServer[s.id]}
-          onTest={onTest}
-          onListTools={onListTools}
-          onDelete={onDelete}
-        />
-      ))}
+      {items.map((item) => {
+        const active = value === item.id;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(item.id)}
+            data-testid={`mcp-sort-${item.id}`}
+            className={
+              "inline-flex h-8 items-center gap-1.5 rounded px-2.5 text-[11.5px] font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 " +
+              (active
+                ? "bg-primary text-primary-fg shadow-soft-sm"
+                : "text-text-muted hover:text-text hover:bg-surface-2")
+            }
+          >
+            <Icon name={item.icon} size={11} />
+            <span className="hidden sm:inline">{item.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -731,31 +896,87 @@ function ServerCard({
               <p className="text-[11px] text-text-muted">{tr("card.emptyTools")}</p>
             )}
             {tools && Array.isArray(tools) && tools.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
-                {tools.map((tool) => (
-                  <li
-                    key={tool.name}
-                    data-testid={`tool-${server.name}-${tool.name}`}
-                    className="flex items-start gap-2 text-[11px]"
-                  >
-                    <Icon
-                      name="zap"
-                      size={11}
-                      className="mt-0.5 text-primary shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <span className="font-mono text-text">{tool.name}</span>
-                      {tool.description && (
-                        <span className="text-text-muted"> — {tool.description}</span>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <ToolsList tools={tools} serverName={server.name} />
             )}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Tools list (with inline search) — used when a server is expanded
+// ────────────────────────────────────────────────────────────────────────────
+
+function ToolsList({
+  tools,
+  serverName,
+}: {
+  tools: ToolInfo[];
+  serverName: string;
+}) {
+  const tr = useTranslations("mcp.list");
+  const [query, setQuery] = useState("");
+  // 2026-04-26 · 单个 server 暴露 50+ tool 的情况(github-official 等)
+  // 完全可能。展开 panel 后没有内部搜索,要找特定 tool 只能滚屏。补一个
+  // compact 搜索框 — 同时控制 panel 高度,超 12 个时变成滚动容器,避免
+  // 一次撑满整屏。
+  const lcQuery = query.trim().toLowerCase();
+  const visible = useMemo(() => {
+    if (!lcQuery) return tools;
+    return tools.filter(
+      (t) =>
+        t.name.toLowerCase().includes(lcQuery) ||
+        (t.description ?? "").toLowerCase().includes(lcQuery),
+    );
+  }, [tools, lcQuery]);
+  return (
+    <div className="flex flex-col gap-2">
+      {tools.length > 6 && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={tr("card.toolsSearchPlaceholder")}
+          count={visible.length}
+          total={tools.length}
+          compact
+          shortcut=""
+          testId={`tools-search-${serverName}`}
+        />
+      )}
+      {visible.length === 0 ? (
+        <p className="text-[11px] text-text-subtle italic">
+          {tr("card.toolsNoMatch", { query })}
+        </p>
+      ) : (
+        <ul
+          className={
+            "flex flex-col gap-1.5 " +
+            (tools.length > 12 ? "max-h-72 overflow-y-auto pr-1" : "")
+          }
+        >
+          {visible.map((tool) => (
+            <li
+              key={tool.name}
+              data-testid={`tool-${serverName}-${tool.name}`}
+              className="flex items-start gap-2 text-[11px]"
+            >
+              <Icon
+                name="zap"
+                size={11}
+                className="mt-0.5 text-primary shrink-0"
+              />
+              <div className="min-w-0">
+                <span className="font-mono text-text">{tool.name}</span>
+                {tool.description && (
+                  <span className="text-text-muted"> — {tool.description}</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
