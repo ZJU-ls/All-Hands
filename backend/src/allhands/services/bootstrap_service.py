@@ -310,9 +310,7 @@ async def scan_for_dropped_skill_references(session: object, *, dropped_id: str)
 
     s: Any = session  # AsyncSession-shaped; runtime check instead of typed
     n = 0
-    rows = (
-        await s.execute(text("SELECT skill_ids FROM employees"))
-    ).fetchall()
+    rows = (await s.execute(text("SELECT skill_ids FROM employees"))).fetchall()
     for (raw,) in rows:
         if raw is None:
             continue
@@ -321,9 +319,7 @@ async def scan_for_dropped_skill_references(session: object, *, dropped_id: str)
         haystack = raw if isinstance(raw, str) else _json_dumps(raw)
         if dropped_id in haystack:
             n += 1
-    rows = (
-        await s.execute(text("SELECT body FROM skill_runtimes"))
-    ).fetchall()
+    rows = (await s.execute(text("SELECT body FROM skill_runtimes"))).fetchall()
     for (raw,) in rows:
         if raw is None:
             continue

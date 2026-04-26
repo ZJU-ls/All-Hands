@@ -902,9 +902,7 @@ def make_artifact_search_executor(
 
 
 # Inline-renderable kinds (聊天里直接显示完整内容)
-_INLINE_KINDS: frozenset[str] = frozenset(
-    {"html", "drawio", "mermaid", "image", "csv", "data"}
-)
+_INLINE_KINDS: frozenset[str] = frozenset({"html", "drawio", "mermaid", "image", "csv", "data"})
 # Always Card-only — 内联体验差(只能看占位)
 _CARD_ONLY_KINDS: frozenset[str] = frozenset({"pptx", "docx"})
 # Size threshold for text kinds (markdown / code / xlsx) — 超就降级 Card
