@@ -12,6 +12,7 @@ import { LocaleSwitcher } from "@/components/locale/LocaleSwitcher";
 import { ToastProvider } from "@/components/ui/Toast";
 import { KeyboardShortcutsModal } from "@/components/shell/KeyboardShortcutsModal";
 import { RouteProgress } from "@/components/shell/RouteProgress";
+import { useDocumentTitle } from "@/lib/use-document-title";
 
 // Lazy-load the two global overlays so their module graph (DotGridBackdrop,
 // RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
@@ -367,6 +368,10 @@ export function AppShell({
   const searchParams = useSearchParams();
   const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
 
+  // Sync browser tab title with the page-supplied title (locale-aware via
+  // the `title` prop the caller computed from useTranslations).
+  useDocumentTitle(title);
+
   // Hydrate sidebar collapsed pref from localStorage post-mount (avoids SSR mismatch).
   useEffect(() => {
     try {
@@ -452,8 +457,8 @@ export function AppShell({
               type="button"
               onClick={() => setShortcutsOpen(true)}
               className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text transition duration-base"
-              aria-label="Keyboard shortcuts"
-              title="? · keyboard shortcuts"
+              aria-label={t("shortcutsAria")}
+              title={t("shortcutsTitle")}
             >
               <Icon name="circle-help" size={15} />
             </button>

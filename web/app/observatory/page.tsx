@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState } from "@/components/state";
 import { TraceChip } from "@/components/runs/TraceChip";
@@ -55,9 +57,9 @@ function formatDuration(s: number | null | undefined): string {
   return `${s.toFixed(2)}s`;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const d = new Date(iso);
-  return d.toLocaleString();
+  return d.toLocaleString(locale);
 }
 
 /** Deterministic pseudo-sparkline from a seed (no real time-series in DTO yet). */
@@ -254,6 +256,7 @@ function HealthPanel({
     value: string;
     tone?: "success" | "warning" | "danger" | "muted";
     onClick?: () => void;
+    href?: string;
   }>;
 }) {
   const t = useTranslations("pages.observatory.panels");
@@ -297,7 +300,19 @@ function HealthPanel({
             );
             return (
               <li key={`${row.label}-${idx}`}>
-                {row.onClick ? (
+                {row.href ? (
+                  <Link
+                    href={row.href}
+                    className="flex w-full items-center justify-between px-5 h-10 hover:bg-surface-2 transition-colors duration-fast"
+                  >
+                    {Inner}
+                    <Icon
+                      name="chevron-right"
+                      size={12}
+                      className="ml-2 text-text-subtle"
+                    />
+                  </Link>
+                ) : row.onClick ? (
                   <button
                     type="button"
                     onClick={row.onClick}
@@ -363,28 +378,31 @@ function ToolsPanel({
                   ? "text-warning"
                   : "text-text-muted";
             return (
-              <li
-                key={r.tool_id}
-                className="flex items-center gap-3 px-5 h-11 hover:bg-surface-2 transition-colors duration-fast"
-              >
-                <code className="font-mono text-[11.5px] text-text truncate flex-1">
-                  {r.tool_id}
-                </code>
-                <span className="font-mono text-[11px] text-text-muted tabular-nums shrink-0">
-                  {r.invocations}
-                </span>
-                <span
-                  className={`font-mono text-[11px] tabular-nums shrink-0 w-12 text-right ${failTone}`}
+              <li key={r.tool_id}>
+                <Link
+                  href={`/observatory/tools/${encodeURIComponent(r.tool_id)}`}
+                  className="flex items-center gap-3 px-5 h-11 hover:bg-surface-2 transition-colors duration-fast"
                 >
-                  {(r.failure_rate * 100).toFixed(1)}%
-                </span>
-                <span className="font-mono text-[11px] text-text-subtle tabular-nums shrink-0 w-14 text-right">
-                  {r.avg_duration_s > 0
-                    ? r.avg_duration_s < 1
-                      ? `${(r.avg_duration_s * 1000).toFixed(0)}ms`
-                      : `${r.avg_duration_s.toFixed(2)}s`
-                    : "—"}
-                </span>
+                  <code className="font-mono text-[11.5px] text-text truncate flex-1">
+                    {r.tool_id}
+                  </code>
+                  <span className="font-mono text-[11px] text-text-muted tabular-nums shrink-0">
+                    {r.invocations}
+                  </span>
+                  <span
+                    className={`font-mono text-[11px] tabular-nums shrink-0 w-12 text-right ${failTone}`}
+                  >
+                    {(r.failure_rate * 100).toFixed(1)}%
+                  </span>
+                  <span className="font-mono text-[11px] text-text-subtle tabular-nums shrink-0 w-14 text-right">
+                    {r.avg_duration_s > 0
+                      ? r.avg_duration_s < 1
+                        ? `${(r.avg_duration_s * 1000).toFixed(0)}ms`
+                        : `${r.avg_duration_s.toFixed(2)}s`
+                      : "—"}
+                  </span>
+                  <Icon name="chevron-right" size={11} className="text-text-subtle shrink-0" />
+                </Link>
               </li>
             );
           })}
@@ -425,25 +443,60 @@ function ErrorsPanel({
       ) : (
         <ul className="divide-y divide-border">
           {rows.slice(0, 6).map((r) => (
-            <li key={r.error_kind} className="px-5 py-2.5">
-              <div className="flex items-center gap-2">
-                <code className="font-mono text-[11.5px] text-danger">
-                  {r.error_kind}
-                </code>
-                <span className="ml-auto font-mono text-[11px] text-text-muted tabular-nums">
-                  × {r.count}
-                </span>
-              </div>
-              {r.last_message ? (
-                <div className="mt-1 text-[11.5px] text-text-muted line-clamp-2">
-                  {r.last_message}
+            <li key={r.error_kind}>
+              <Link
+                href={`/observatory/errors/${encodeURIComponent(r.error_kind)}`}
+                className="block px-5 py-2.5 hover:bg-surface-2 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <code className="font-mono text-[11.5px] text-danger">
+                    {r.error_kind}
+                  </code>
+                  <span className="ml-auto font-mono text-[11px] text-text-muted tabular-nums">
+                    × {r.count}
+                  </span>
+                  <Icon name="chevron-right" size={11} className="text-text-subtle" />
                 </div>
-              ) : null}
+                {r.last_message ? (
+                  <div className="mt-1 text-[11.5px] text-text-muted line-clamp-2">
+                    {r.last_message}
+                  </div>
+                ) : null}
+              </Link>
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+// ── Share-this-view button · copies window.location to clipboard ─────────
+
+function ShareViewButton() {
+  const t = useTranslations("pages.observatory.share");
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard API can fail in iframes / non-secure contexts.
+      // Silently no-op; user can copy URL from address bar.
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={t("title")}
+      aria-label={t("title")}
+      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-surface border border-border hover:border-border-strong text-[12px] font-medium text-text transition-colors duration-fast"
+    >
+      <Icon name={copied ? "check" : "link"} size={13} />
+      {copied ? t("copied") : t("share")}
+    </button>
   );
 }
 
@@ -500,15 +553,59 @@ function TimeRangePills({
 }
 
 export default function ObservatoryPage() {
+  // useSearchParams requires a Suspense boundary at the page level
+  // (Next 15 hard error otherwise) · the inner component does the work.
+  return (
+    <Suspense>
+      <ObservatoryPageInner />
+    </Suspense>
+  );
+}
+
+function ObservatoryPageInner() {
   const t = useTranslations("pages.observatory");
+  const locale = useLocale();
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [traces, setTraces] = useState<TraceSummaryDto[]>([]);
   const [state, setState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<TimeRange>("24h");
+  // Range + search are URL-state-driven so the dashboard view is shareable.
+  // ?range=1h|24h|7d&q=… — the source-of-truth lives in the query string;
+  // setters write to the URL and a useEffect mirrors them into local state.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlRange = (searchParams.get("range") as TimeRange | null) ?? "24h";
+  const urlQ = searchParams.get("q") ?? "";
+  const [range, setRangeState] = useState<TimeRange>(urlRange);
+  const setRange = (next: TimeRange) => {
+    setRangeState(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "24h") params.delete("range");
+    else params.set("range", next);
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "?", { scroll: false });
+  };
+  // Keep local in sync if the user navigates back/forward.
+  useEffect(() => {
+    if (urlRange !== range) setRangeState(urlRange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlRange]);
   const [drawerMetric, setDrawerMetric] = useState<ObservatoryMetric | null>(null);
   const [drawerLabel, setDrawerLabel] = useState<string | undefined>(undefined);
-  const [traceSearch, setTraceSearch] = useState("");
+  const [expandedTrace, setExpandedTrace] = useState<string | null>(null);
+  const [traceSearch, setTraceSearchState] = useState(urlQ);
+  const setTraceSearch = (next: string) => {
+    setTraceSearchState(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.trim() === "") params.delete("q");
+    else params.set("q", next);
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "?", { scroll: false });
+  };
+  useEffect(() => {
+    if (urlQ !== traceSearch) setTraceSearchState(urlQ);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQ]);
   const openDrawer = (metric: ObservatoryMetric, label?: string) => {
     setDrawerMetric(metric);
     setDrawerLabel(label);
@@ -540,7 +637,7 @@ export default function ObservatoryPage() {
     try {
       const hours = range === "1h" ? 1 : range === "7d" ? 168 : 24;
       const [s, t, runs, fr, lat, tok] = await Promise.all([
-        fetchObservatorySummary(hours),
+        fetchObservatorySummary({ hours }),
         fetchTraces({ limit: 50 }),
         fetchMetricSeries({ metric: "runs", bucket: "1h" }),
         fetchMetricSeries({ metric: "failure_rate", bucket: "1h" }),
@@ -604,6 +701,7 @@ export default function ObservatoryPage() {
             </div>
             <div className="flex items-center gap-2">
               <TimeRangePills value={range} onChange={setRange} />
+              <ShareViewButton />
               <button
                 type="button"
                 onClick={load}
@@ -791,10 +889,10 @@ export default function ObservatoryPage() {
                           ? t("kpi.totalTokensDelta", {
                               input: formatTokens(summary.input_tokens_total),
                               output: formatTokens(summary.output_tokens_total),
-                              avg: summary.avg_tokens_per_run.toLocaleString(),
+                              avg: summary.avg_tokens_per_run.toLocaleString(locale),
                             })
                           : t("kpi.tokensDelta", {
-                              count: summary.traces_total.toLocaleString(),
+                              count: summary.traces_total.toLocaleString(locale),
                             }),
                       tone: "muted",
                     }}
@@ -809,7 +907,7 @@ export default function ObservatoryPage() {
                     label={t("kpi.llmCalls")}
                     value={
                       summary.llm_calls_total > 0
-                        ? summary.llm_calls_total.toLocaleString()
+                        ? summary.llm_calls_total.toLocaleString(locale)
                         : "—"
                     }
                     delta={{
@@ -817,7 +915,7 @@ export default function ObservatoryPage() {
                       text:
                         summary.traces_total > 0
                           ? t("kpi.llmCallsDelta", {
-                              runs: summary.traces_total.toLocaleString(),
+                              runs: summary.traces_total.toLocaleString(locale),
                               avg:
                                 summary.traces_total > 0
                                   ? (
@@ -894,7 +992,7 @@ export default function ObservatoryPage() {
                     },
                     {
                       label: t("panels.rows.totalTraces"),
-                      value: summary.traces_total.toLocaleString(),
+                      value: summary.traces_total.toLocaleString(locale),
                       onClick: () =>
                         openDrawer("runs", t("panels.rows.totalTraces")),
                     },
@@ -911,8 +1009,9 @@ export default function ObservatoryPage() {
                             row.total_tokens > 0
                               ? `${row.runs_count} · ${formatTokens(row.total_tokens)} tok`
                               : t("panels.values.runs", {
-                                  count: row.runs_count.toLocaleString(),
+                                  count: row.runs_count.toLocaleString(locale),
                                 }),
+                          href: `/observatory/employees/${encodeURIComponent(row.employee_id)}`,
                         }))
                       : []
                   }
@@ -958,13 +1057,16 @@ export default function ObservatoryPage() {
                         {summary.by_model.map((row) => (
                           <tr
                             key={row.model_ref}
-                            className="border-b border-border last:border-b-0 hover:bg-surface-2/40"
+                            className="border-b border-border last:border-b-0 hover:bg-surface-2/40 cursor-pointer"
+                            onClick={() => {
+                              window.location.href = `/observatory/models/${encodeURIComponent(row.model_ref)}`;
+                            }}
                           >
-                            <td className="py-2 px-4 font-mono text-[11px] text-text">
+                            <td className="py-2 px-4 font-mono text-[11px] text-primary">
                               {row.model_ref}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                              {row.runs_count.toLocaleString()}
+                              {row.runs_count.toLocaleString(locale)}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
                               {formatTokens(row.input_tokens)}
@@ -979,6 +1081,80 @@ export default function ObservatoryPage() {
                               {row.estimated_cost_usd > 0
                                 ? `$${row.estimated_cost_usd.toFixed(4)}`
                                 : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ) : null}
+
+              {/* SESSIONS · per-conversation rollup (Langfuse Sessions inspiration) */}
+              {summary.by_conversation.length > 0 ? (
+                <section>
+                  <div className="flex items-baseline justify-between mb-3">
+                    <h2 className="text-[18px] font-semibold tracking-tight text-text flex items-center gap-2">
+                      <Icon name="message-square" size={16} className="text-primary" />
+                      {t("sessions.title")}
+                    </h2>
+                    <span className="text-[11px] font-mono text-text-subtle">
+                      {t("sessions.hint")}
+                    </span>
+                  </div>
+                  <div className="rounded-xl bg-surface border border-border shadow-soft-sm overflow-hidden">
+                    <table className="w-full border-collapse text-[12px]">
+                      <thead>
+                        <tr className="bg-surface-2 text-left text-text-subtle border-b border-border">
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium">
+                            conversation
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium">
+                            employee
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            runs
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            tokens
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium tabular-nums text-right">
+                            cost
+                          </th>
+                          <th className="py-2 px-4 font-mono text-[10px] uppercase tracking-[0.12em] font-medium text-right">
+                            last seen
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summary.by_conversation.map((row) => (
+                          <tr
+                            key={row.conversation_id}
+                            className="border-b border-border last:border-b-0 hover:bg-surface-2/40 cursor-pointer"
+                            onClick={() => {
+                              window.location.href = `/chat/${encodeURIComponent(row.conversation_id)}`;
+                            }}
+                            title={t("sessions.openConversation")}
+                          >
+                            <td className="py-2 px-4 font-mono text-[11px] text-primary truncate max-w-[200px]">
+                              {row.conversation_id.slice(0, 12)}…
+                            </td>
+                            <td className="py-2 px-4 text-[11px] text-text-muted truncate max-w-[180px]">
+                              {row.employee_name ?? row.employee_id ?? "—"}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {row.runs_count.toLocaleString(locale)}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {formatTokens(row.total_tokens)}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
+                              {row.estimated_cost_usd > 0
+                                ? `$${row.estimated_cost_usd.toFixed(4)}`
+                                : "—"}
+                            </td>
+                            <td className="py-2 px-4 text-right font-mono text-[11px] text-text-subtle tabular-nums">
+                              {row.last_seen_at ? formatDate(row.last_seen_at, locale) : "—"}
                             </td>
                           </tr>
                         ))}
@@ -1054,8 +1230,8 @@ export default function ObservatoryPage() {
                               <Icon name="clock" size={11} />
                               {formatDuration(row.duration_s)}
                             </span>
-                            <span>{row.tokens.total.toLocaleString()} {t("incidents.tokensSuffix")}</span>
-                            <span className="hidden md:inline">{formatDate(row.started_at)}</span>
+                            <span>{row.tokens.total.toLocaleString(locale)} {t("incidents.tokensSuffix")}</span>
+                            <span className="hidden md:inline">{formatDate(row.started_at, locale)}</span>
                           </div>
                         </div>
                       </div>
@@ -1134,16 +1310,42 @@ export default function ObservatoryPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredTraces.map((row) => (
+                        {filteredTraces.flatMap((row) => [
                           <tr
                             key={row.trace_id}
-                            className="border-b border-border last:border-b-0 hover:bg-surface-2 transition-colors duration-fast"
+                            onClick={() =>
+                              setExpandedTrace(
+                                expandedTrace === row.trace_id ? null : row.trace_id,
+                              )
+                            }
+                            className="border-b border-border last:border-b-0 hover:bg-surface-2 transition-colors duration-fast cursor-pointer"
                           >
                             <td className="py-2.5 px-4 font-mono text-[11px] text-text-muted truncate max-w-[220px]">
-                              <TraceChip runId={row.trace_id} label={row.trace_id} />
+                              <span className="inline-flex items-center gap-1">
+                                <Icon
+                                  name={
+                                    expandedTrace === row.trace_id
+                                      ? "chevron-down"
+                                      : "chevron-right"
+                                  }
+                                  size={11}
+                                  className="text-text-subtle"
+                                />
+                                <TraceChip runId={row.trace_id} label={row.trace_id} />
+                              </span>
                             </td>
                             <td className="py-2.5 px-4 text-text">
-                              {row.employee_name ?? row.employee_id ?? "—"}
+                              {row.employee_id ? (
+                                <Link
+                                  href={`/observatory/employees/${encodeURIComponent(row.employee_id)}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="hover:text-primary"
+                                >
+                                  {row.employee_name ?? row.employee_id}
+                                </Link>
+                              ) : (
+                                "—"
+                              )}
                             </td>
                             <td className="py-2.5 px-4">
                               {row.status === "failed" ? (
@@ -1170,17 +1372,59 @@ export default function ObservatoryPage() {
                               className="py-2.5 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums"
                               title={
                                 row.tokens.total > 0
-                                  ? `in ${row.tokens.prompt.toLocaleString()} · out ${row.tokens.completion.toLocaleString()} · total ${row.tokens.total.toLocaleString()}`
+                                  ? `in ${row.tokens.prompt.toLocaleString(locale)} · out ${row.tokens.completion.toLocaleString(locale)} · total ${row.tokens.total.toLocaleString(locale)}`
                                   : undefined
                               }
                             >
-                              {row.tokens.total > 0 ? row.tokens.total.toLocaleString() : "—"}
+                              {row.tokens.total > 0 ? row.tokens.total.toLocaleString(locale) : "—"}
                             </td>
                             <td className="py-2.5 px-4 text-text-muted">
-                              {formatDate(row.started_at)}
+                              {formatDate(row.started_at, locale)}
                             </td>
-                          </tr>
-                        ))}
+                          </tr>,
+                          expandedTrace === row.trace_id ? (
+                            <tr key={`${row.trace_id}-expand`} className="bg-surface-2/40">
+                              <td colSpan={6} className="px-6 py-4">
+                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11.5px]">
+                                  <span className="text-text-subtle">
+                                    {t("traces.headers.trace")}
+                                  </span>
+                                  <code className="font-mono text-text">{row.trace_id}</code>
+                                  {row.model_ref && (
+                                    <>
+                                      <span className="text-text-subtle">model</span>
+                                      <Link
+                                        href={`/observatory/models/${encodeURIComponent(row.model_ref)}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="font-mono text-primary hover:underline"
+                                      >
+                                        {row.model_ref}
+                                      </Link>
+                                    </>
+                                  )}
+                                  <span className="text-text-subtle">tokens</span>
+                                  <span className="font-mono text-text">
+                                    {row.tokens.total > 0
+                                      ? `${formatTokens(row.tokens.total)} (in ${formatTokens(row.tokens.prompt)} · out ${formatTokens(row.tokens.completion)})`
+                                      : "—"}
+                                  </span>
+                                  <span className="text-text-subtle">llm calls</span>
+                                  <span className="font-mono text-text">
+                                    {row.llm_calls > 0 ? row.llm_calls : "—"}
+                                  </span>
+                                  <Link
+                                    href={`/runs/${encodeURIComponent(row.trace_id)}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="ml-auto inline-flex items-center gap-1 text-primary hover:underline"
+                                  >
+                                    {t("traces.openFullTrace")}
+                                    <Icon name="arrow-right" size={11} />
+                                  </Link>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null,
+                        ])}
                       </tbody>
                     </table>
                   </div>

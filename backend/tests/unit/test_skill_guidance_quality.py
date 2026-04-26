@@ -43,7 +43,7 @@ NEW_PACKS = (
     "kb_researcher",
     "stock_assistant",
     "executor-spawn",
-    "drawio-creator",
+    # drawio-creator removed 2026-04-26 · merged into allhands.artifacts (P3)
 )
 
 SKILLS_ROOT = Path(__file__).resolve().parents[2] / "skills" / "builtin"

@@ -135,6 +135,17 @@
       "anomalies": {
         "title": "{n} 项异常需关注 · 自动判定 · 不是 ML"
       },
+      "sessions": {
+        "title": "会话维度 · TOP 8",
+        "hint": "按成本排序的会话 · 类似 Langfuse Sessions",
+        "empty": "本时段没有会话维度数据",
+        "openConversation": "打开会话"
+      },
+      "share": {
+        "title": "复制当前视图链接 · 含时间窗与搜索词",
+        "share": "分享视图",
+        "copied": "已复制"
+      },
       "costPanel": {
         "title": "成本面板 · 24h",
         "today": "今日累计",
@@ -161,6 +172,7 @@
       },
       "traces": {
         "title": "近 50 条 trace",
+        "openFullTrace": "打开完整 trace",
         "selfInstrumentedNote": "自建埋点 · 本地 events.run.*",
         "searchPlaceholder": "搜索 trace_id / 员工 / 模型 / 状态",
         "searchAria": "搜索 trace",
@@ -185,6 +197,80 @@
           "failed": "失败",
           "running": "运行中"
         }
+      },
+      "employeeDetail": {
+        "eyebrow": "员工详情",
+        "breadcrumb": "员工",
+        "title": "员工详情",
+        "subtitle": "员工 ID {id} 的运行画像 · 所有指标已自动 scope 到该员工",
+        "viewConversations": "看历史会话",
+        "scopedToEmployee": "仅本员工",
+        "modelsUsedTitle": "使用的模型",
+        "modelsUsedEmpty": "本员工本时段没有使用任何已记录模型",
+        "toolsUsedTitle": "调用的工具",
+        "toolsUsedEmpty": "本员工本时段没有调用工具",
+        "model": "模型",
+        "inv": "次",
+        "recentRuns": "最近 run · {n}",
+        "noRuns": "本时段没有 run 记录",
+        "kpi": {
+          "runs": "近 50 run",
+          "failureRate": "失败率",
+          "latencyP50": "延迟 P50",
+          "latencyP95": "延迟 P95",
+          "tokens": "Tokens 总消耗",
+          "cost": "成本估算"
+        }
+      },
+      "toolDetail": {
+        "eyebrow": "工具详情",
+        "breadcrumb": "工具",
+        "subtitle": "tool_id 的全局调用画像",
+        "kpi": {
+          "invocations": "调用次数",
+          "failures": "失败次数",
+          "failureRate": "失败率",
+          "avgDuration": "平均耗时"
+        },
+        "notSeen": "本时段没有此工具的调用记录。",
+        "possibleCallers": "可能的调用方",
+        "possibleCallersHint": "工具事件目前不带 employee 维度,只能按工作区里活跃员工列出 · 后续会接入精确归属。",
+        "runs": "次 run"
+      },
+      "errorDetail": {
+        "eyebrow": "失败原因详情",
+        "breadcrumb": "失败原因",
+        "subtitle": "按 error_kind 分组的失败统计 · Sentry 风格 issue 视图",
+        "kpi": {
+          "count": "失败次数",
+          "lastSeen": "最近一次",
+          "severity": "严重度"
+        },
+        "severityHigh": "高",
+        "severityMid": "中",
+        "severityLow": "低",
+        "lastMessage": "最近一次错误信息",
+        "notSeen": "本时段没有此类错误的记录。",
+        "recentFailures": "近期失败 trace",
+        "noFailures": "近 24h 没有失败 trace。"
+      },
+      "modelDetail": {
+        "eyebrow": "模型详情",
+        "breadcrumb": "模型",
+        "subtitle": "model_ref {ref} 的使用画像 · 所有指标已自动 scope 到该模型",
+        "scopedToModel": "仅本模型",
+        "topEmployeesTitle": "使用本模型的员工",
+        "topEmployeesEmpty": "本时段没有员工调用此模型",
+        "kpi": {
+          "runs": "近 50 run",
+          "failureRate": "失败率",
+          "latencyP50": "延迟 P50",
+          "tokens": "Tokens 总消耗",
+          "cost": "成本估算",
+          "calls": "调用次数"
+        },
+        "pricing": "USD per 1M tokens",
+        "pricingMissing": "未在价格表内 · 成本按 0 计"
       },
       "metricDrawer": {
         "close": "关闭",
@@ -278,6 +364,8 @@
     },
     "list": {
       "pinned": "置顶",
+      "pinnedAria": "已置顶",
+      "groupAria": "制品",
       "empty": "还没有制品。让员工产出一份文档、代码或图。"
     },
     "panel": {
@@ -287,6 +375,8 @@
       "offline": "offline",
       "closeAria": "关闭制品区",
       "closeTitle": "关闭 · Cmd/Ctrl+J",
+      "resizeAria": "拖动调整制品区宽度",
+      "resizeTitle": "拖动调整宽度",
       "back": "返回列表",
       "loading": {
         "title": "加载制品区",
@@ -331,7 +421,8 @@
     },
     "docx": {
       "loading": "渲染 Word 文档…",
-      "loadFailed": "docx 渲染失败:{error}"
+      "loadFailed": "在线渲染不支持这份文档的某些特性({error})。",
+      "downloadFallback": "下载用 Word / WPS 打开"
     },
     "pptx": {
       "loading": "解析 PowerPoint…",
@@ -370,6 +461,25 @@
         "activeChip": "已选: {label}",
         "removeChipAria": "移除筛选 {label}"
       },
+      "clearSearchAria": "清除搜索",
+      "bulkActionsAria": "批量操作",
+      "clearSelectionAria": "清除选择",
+      "bulk": {
+        "selected": "已选 {n}",
+        "pin": "置顶",
+        "unpin": "取消置顶",
+        "delete": "删除",
+        "toast": {
+          "pinned": "已置顶 {n} 个制品",
+          "unpinned": "已取消置顶 {n} 个制品",
+          "pinPartial": "{ok} / {total} 失败",
+          "pinPartialDesc": "已回滚失败的行",
+          "deletedAll": "已删除 {n} 个制品",
+          "deletedAllDesc": "软删除 · 可以恢复",
+          "deletedPartial": "已删除 {ok} 个 · {failed} 个失败",
+          "deletedNone": "删除失败 {n} 个制品"
+        }
+      },
       "view": {
         "list": "列表",
         "grid": "网格",
@@ -406,7 +516,22 @@
       "missingId": "Artifact.Preview 缺少 artifact_id",
       "loadFailed": "制品加载失败:{error}",
       "loading": "读取制品…",
-      "unsupportedKind": "kind {kind} 暂不支持预览"
+      "unsupportedKind": "kind {kind} 暂不支持预览",
+      "openInPanel": "在制品区打开",
+      "open": "打开",
+      "openInNewTab": "在新窗口打开",
+      "download": "下载",
+      "copy": "复制内容",
+      "copied": "已复制"
+    },
+    "artifactCard": {
+      "missingId": "Artifact.Card 缺少 artifact_id",
+      "loadFailed": "制品加载失败,点击在制品区查看",
+      "loading": "读取中…",
+      "loadingHint": "正在加载制品信息…",
+      "openInPanel": "在制品区打开",
+      "clickToOpen": "点击在制品区打开",
+      "open": "打开"
     },
     "employeeCard": {
       "untitled": "(未命名员工)",
@@ -486,7 +611,7 @@
       },
       "entries": {
         "cockpit": "驾驶舱",
-        "chat": "对话",
+        "chat": "Lead 对话",
         "conversations": "历史会话",
         "tasks": "任务",
         "employees": "员工",

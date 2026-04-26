@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { RenderProps } from "@/lib/component-registry";
+import { useArtifactFocus } from "@/lib/artifact-focus-store";
 import {
   getArtifact,
   getArtifactTextContent,
@@ -79,6 +80,7 @@ function StatusShell({
 export function ArtifactPreview({ props }: RenderProps) {
   const t = useTranslations("render.preview");
   const artifactId = (props.artifact_id as string | undefined) ?? "";
+  const focusArtifact = useArtifactFocus((s) => s.focus);
   const [meta, setMeta] = useState<ArtifactDto | null>(null);
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +165,11 @@ export function ArtifactPreview({ props }: RenderProps) {
         body = <MermaidView content={text} />;
         break;
       case "drawio":
-        body = <DrawioView content={text} />;
+        // Chat-side preview: 480px fits a typical message rhythm + the
+        // diagram auto-fits the iframe (fit=1&zoom=auto + postMessage
+        // 'fit' from DrawioView). Container width is whatever the
+        // message column gives — diagrams.net scales content.
+        body = <DrawioView content={text} height={480} />;
         break;
       case "csv":
         body = <CsvView content={text} />;
@@ -201,8 +207,106 @@ export function ArtifactPreview({ props }: RenderProps) {
         <span className="inline-flex h-6 shrink-0 items-center rounded-md bg-primary-muted px-2 font-mono text-[10px] uppercase tracking-wider text-primary">
           {meta.kind}
         </span>
+        <PreviewQuickActions
+          meta={meta}
+          text={text}
+          onFocusPanel={() => focusArtifact(meta.id)}
+        />
       </div>
       {body}
+    </div>
+  );
+}
+
+/**
+ * Compact quick-action strip on the chat-side preview header.
+ *
+ * Mirrors the toolbar buttons in `ArtifactDetail` so the user can act on the
+ * artifact without first opening the panel:
+ *   - 在新窗口打开 (HTML / image / data — kinds whose raw bytes are
+ *     directly viewable in a browser tab)
+ *   - 下载 (every kind — calls /content?download=true)
+ *   - 复制内容 (text kinds — drops content to clipboard)
+ *   - 在制品面板打开 (always — focus + open the right drawer)
+ *
+ * Each button is icon-only with `title=` tooltips to keep the header tight.
+ */
+function PreviewQuickActions({
+  meta,
+  text,
+  onFocusPanel,
+}: {
+  meta: ArtifactDto;
+  text: string | null;
+  onFocusPanel: () => void;
+}) {
+  const t = useTranslations("render.preview");
+  const [copied, setCopied] = useState(false);
+
+  const contentUrl = `${BASE}/api/artifacts/${meta.id}/content`;
+  const downloadUrl = `${contentUrl}?download=true`;
+  const canOpenInTab = ["html", "image", "data", "pdf"].includes(meta.kind);
+  const canCopy = !isBinaryKind(meta.kind) && text != null;
+
+  const handleCopy = async () => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // clipboard rejected (insecure context) — degrade silently
+    }
+  };
+
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      {canOpenInTab && (
+        <a
+          href={contentUrl}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={t("openInNewTab")}
+          title={t("openInNewTab")}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition hover:border-primary/40 hover:text-primary"
+        >
+          <Icon name="external-link" size={11} />
+        </a>
+      )}
+      {canCopy && (
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          aria-label={copied ? t("copied") : t("copy")}
+          title={copied ? t("copied") : t("copy")}
+          className={
+            "inline-flex h-6 w-6 items-center justify-center rounded-md border bg-surface transition " +
+            (copied
+              ? "border-success/40 text-success"
+              : "border-border text-text-muted hover:border-primary/40 hover:text-primary")
+          }
+        >
+          <Icon name={copied ? "check" : "copy"} size={11} />
+        </button>
+      )}
+      <a
+        href={downloadUrl}
+        aria-label={t("download")}
+        title={t("download")}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition hover:border-primary/40 hover:text-primary"
+      >
+        <Icon name="download" size={11} />
+      </a>
+      <button
+        type="button"
+        onClick={onFocusPanel}
+        aria-label={t("openInPanel")}
+        title={t("openInPanel")}
+        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border bg-surface px-2 font-mono text-[10px] text-text-muted transition hover:border-primary/40 hover:text-primary"
+      >
+        <Icon name="folder" size={11} />
+        {t("open")}
+      </button>
     </div>
   );
 }

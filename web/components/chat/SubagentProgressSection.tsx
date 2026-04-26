@@ -82,7 +82,7 @@ export function SubagentProgressSection({ subagents, embedded = false }: Props) 
             {s.name}
           </span>
           <span className="shrink-0 font-mono text-[10.5px] text-text-subtle">
-            {labelFor(s.status)}
+            {t(`status.${s.status}`)}
           </span>
           {s.runId ? (
             <button
@@ -144,10 +144,11 @@ export function SubagentProgressSection({ subagents, embedded = false }: Props) 
 }
 
 function SubagentDot({ status }: { status: ActiveSubagent["status"] }) {
+  const tStatus = useTranslations("chat.subagent.status");
   if (status === "running") {
     return (
       <span
-        aria-label="running"
+        aria-label={tStatus("running")}
         className={cn(
           "inline-block h-2 w-2 shrink-0 rounded-full bg-primary",
           "shadow-[0_0_0_3px_rgba(79,140,255,0.18)] animate-pulse",
@@ -158,21 +159,15 @@ function SubagentDot({ status }: { status: ActiveSubagent["status"] }) {
   if (status === "succeeded") {
     return (
       <span
-        aria-label="succeeded"
+        aria-label={tStatus("succeeded")}
         className="inline-block h-2 w-2 shrink-0 rounded-full bg-success"
       />
     );
   }
   return (
     <span
-      aria-label="failed"
+      aria-label={tStatus("failed")}
       className="inline-block h-2 w-2 shrink-0 rounded-full bg-danger"
     />
   );
-}
-
-function labelFor(status: ActiveSubagent["status"]): string {
-  if (status === "running") return "running";
-  if (status === "succeeded") return "done";
-  return "failed";
 }

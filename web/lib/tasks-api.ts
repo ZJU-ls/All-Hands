@@ -148,25 +148,6 @@ export async function approveTask(
   return res.json() as Promise<TaskDto>;
 }
 
-export function statusLabel(s: TaskStatus): string {
-  switch (s) {
-    case "queued":
-      return "排队中";
-    case "running":
-      return "执行中";
-    case "needs_input":
-      return "等你回答";
-    case "needs_approval":
-      return "等你审批";
-    case "completed":
-      return "已完成";
-    case "failed":
-      return "失败";
-    case "cancelled":
-      return "已取消";
-  }
-}
-
 export function statusTone(s: TaskStatus): "neutral" | "info" | "warn" | "success" | "danger" {
   switch (s) {
     case "queued":
@@ -185,6 +166,3 @@ export function statusTone(s: TaskStatus): "neutral" | "info" | "warn" | "succes
   }
 }
 
-export function sourceLabel(s: TaskSource): string {
-  return { user: "用户", lead: "Lead", trigger: "触发器", employee: "员工" }[s];
-}

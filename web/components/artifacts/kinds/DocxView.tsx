@@ -1,16 +1,22 @@
 "use client";
 
 /**
- * DocxView · fetch the .docx blob, render to HTML in-place via docx-preview.
- * Pure client-side · no server roundtrip beyond the original /content fetch.
+ * DocxView · fetch the .docx, render to HTML in-place via docx-preview.
  *
- * docx-preview can't handle every Word feature (complex SmartArt, embedded
- * Excel, custom XML parts), so we wrap the render call in try/catch and
- * fall back to a 「下载查看」 message — same UX as pptx.
+ * Implementation notes:
+ * - We pull bytes as `ArrayBuffer` not `Blob`. fetch().blob() carries an
+ *   inferred MIME type that some docx-preview versions misuse during zip
+ *   unpacking, surfacing as 「Bug : uncompressed data size mismatch」 even
+ *   when the .docx is a perfectly valid zip (verified via `unzip -l`).
+ *   ArrayBuffer skips that path.
+ * - When docx-preview throws anyway (truly unsupported features — embedded
+ *   Excel, complex SmartArt, custom XML parts), we fall back to a
+ *   download-prompting UI so the user still has a path to the content.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Icon } from "@/components/ui/icon";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -26,12 +32,16 @@ export function DocxView({ artifactId }: { artifactId: string }) {
       try {
         const res = await fetch(`${BASE}/api/artifacts/${artifactId}/content`);
         if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
-        const blob = await res.blob();
+        // ArrayBuffer over Blob — see file-level note. Wrapping in a Blob
+        // with the explicit OOXML mime keeps docx-preview's internal type
+        // dispatch happy.
+        const buf = await res.arrayBuffer();
+        const blob = new Blob([buf], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        });
         const dp = await import("docx-preview");
         if (cancelled || !containerRef.current) return;
         await dp.renderAsync(blob, containerRef.current, undefined, {
-          // light theme for now · token-based dark mode for office docs needs
-          // a docx-preview style override pass we'll do in v1
           inWrapper: true,
           ignoreHeight: false,
           ignoreWidth: false,
@@ -48,9 +58,25 @@ export function DocxView({ artifactId }: { artifactId: string }) {
   }, [artifactId]);
 
   if (error) {
+    // Friendly fallback: the .docx is on disk and downloadable, just not
+    // renderable in-browser. Surface a download CTA instead of raw error
+    // text — same UX pattern as pptx.
+    const downloadUrl = `${BASE}/api/artifacts/${artifactId}/content?download=true`;
     return (
-      <div className="px-4 py-3 text-[12px] text-danger">
-        {t("loadFailed", { error })}
+      <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-warning-soft text-warning">
+          <Icon name="alert-circle" size={18} />
+        </span>
+        <div className="max-w-sm text-[12px] text-text-muted">
+          {t("loadFailed", { error })}
+        </div>
+        <a
+          href={downloadUrl}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-primary/40 bg-primary-soft px-3 text-[12px] font-medium text-primary transition hover:bg-primary/15"
+        >
+          <Icon name="download" size={12} />
+          {t("downloadFallback")}
+        </a>
       </div>
     );
   }

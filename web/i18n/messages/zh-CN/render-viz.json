@@ -51,7 +51,8 @@
     "pieChart": {
       "empty": "暂无数据",
       "isolated": "已聚焦 · 点击恢复",
-      "tooltip": "{value} · {pct}% · 点击聚焦"
+      "tooltip": "{value} · {pct}% · 点击聚焦",
+      "ariaLabel": "饼图"
     },
     "stat": {
       "copyLabel": "复制指标",

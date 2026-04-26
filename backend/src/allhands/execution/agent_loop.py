@@ -166,6 +166,15 @@ _ARTIFACT_HALLUC_PATTERNS = (
     "我已为你",
     "我已经创建",
     "我为你创建",
+    # 2026-04-26 + qwen3-plus 的更多变体(用户截图反馈「现在啥都没有」)
+    "已为您生成",
+    "已为您创建",
+    "已为您准备",
+    "已为你生成",
+    "已为你创建",
+    "已为你准备",
+    "为您生成了",
+    "为你生成了",
     "i've created",
     "i have created",
     "here's the html",
@@ -500,34 +509,30 @@ class AgentLoop:
                         yield LoopExited(reason="completed")
                     return
 
-                # Append assistant message (with tool_uses) to lc history
-                # so the next LLM turn sees its own previous turn.
-                lc_messages.append(self._to_lc_assistant_message(assistant_msg))
-
-                # Execute tool_uses through the pipeline. Partition into
-                # batches; each batch is either concurrent (read-only)
-                # or serial (write/deferred). Within concurrent batches
-                # we asyncio.gather; serial batches yield events during
-                # execution (deferred path emits ConfirmationRequested).
-                #
-                # Track which tool_use ids have completed (received TMC)
-                # so the outer except / finally can synthesize a TMC for
-                # any tool that started but didn't finish — otherwise the
-                # frontend stamps it `tool_call_dropped` at finalize time
-                # and the user sees a confusing red "failed" envelope on
-                # what was really an outer-loop crash.
+                # R2 review · widen the BaseException safety net to cover
+                # the entire post-AssistantMessageCommitted phase, not just
+                # the batches loop. The earlier scoping missed cancellations
+                # that hit between `yield AssistantMessageCommitted(...)` and
+                # the start of `try: for batch in batches:` (about 4 lines
+                # of code, but on a slow event loop / SSE drop / inner
+                # exception during lc_messages bookkeeping any of these can
+                # synchronously yield CancelledError). When that happens, the
+                # tool_use was already announced to the frontend (TOOL_CALL_
+                # START fired) but the loop unwinds before TOOL_CALL_END,
+                # leaving the UI to stamp `tool_call_dropped`.
                 committed_tool_use_ids: set[str] = set()
-                batches = partition_tool_uses(tool_use_blocks, bindings)
+                pending_tool_use_ids: set[str] = {b.id for b in tool_use_blocks}
                 try:
+                    # Append assistant message to lc history so the next LLM
+                    # turn sees it; failure here would leak the assistant
+                    # tool_use to the wire without committing tool results.
+                    lc_messages.append(self._to_lc_assistant_message(assistant_msg))
+
+                    batches = partition_tool_uses(tool_use_blocks, bindings)
                     for batch in batches:
                         if batch.is_concurrent_safe and len(batch.blocks) > 1:
-                            # R1 review · C1: use return_exceptions=True so a
-                            # blow-up in one branch doesn't cancel siblings
-                            # mid-await. Each branch already wraps executor
-                            # exceptions into an error envelope Message — but
-                            # if the wrap itself raises (binding lookup,
-                            # _make_tool_message), we'd lose all sibling
-                            # results otherwise.
+                            # R1 · C1: return_exceptions=True so a blow-up in
+                            # one branch doesn't cancel siblings mid-await.
                             raw_results = await asyncio.gather(
                                 *[
                                     execute_tool_use_concurrent(
@@ -564,14 +569,11 @@ class AgentLoop:
                 except BaseException as inner_exc:
                     # Catches Exception AND CancelledError (BaseException).
                     # Synthesize a failure TMC for every tool_use the model
-                    # asked for that didn't reach a TMC — without this the
-                    # parent loop's outer `except` would swallow the failure
-                    # AND the UI would never see tool_call_end for them.
-                    for blk in tool_use_blocks:
-                        if blk.id in committed_tool_use_ids:
-                            continue
+                    # asked for that didn't reach a TMC — even if cancel hit
+                    # before any batch ran.
+                    for blk_id in pending_tool_use_ids - committed_tool_use_ids:
                         synthetic = _make_tool_message_synthetic(
-                            tool_use_id=blk.id,
+                            tool_use_id=blk_id,
                             error=(
                                 f"{type(inner_exc).__name__}: {inner_exc}"
                                 if not isinstance(inner_exc, asyncio.CancelledError)
@@ -581,9 +583,6 @@ class AgentLoop:
                             conversation_id=self._conversation_id,
                         )
                         yield ToolMessageCommitted(message=synthetic)
-                    # Re-raise so the outer try/except still records the
-                    # LoopExited(aborted) sentinel (or unwinds asyncio
-                    # cancellation if that's what we hit).
                     raise
 
                 # Loop back to next LLM turn
@@ -722,6 +721,7 @@ class AgentLoop:
             "allhands.artifacts.create_csv",
             "allhands.artifacts.create_docx",
             "allhands.artifacts.create_pptx",
+            "allhands.artifacts.render_drawio",
             "allhands.artifacts.update",
             "allhands.artifacts.rollback",
         ):
@@ -734,6 +734,7 @@ class AgentLoop:
                 make_artifact_create_xlsx_executor,
                 make_artifact_rollback_executor,
                 make_artifact_update_executor,
+                make_render_drawio_executor,
             )
             from allhands.persistence.db import get_sessionmaker
 
@@ -750,6 +751,7 @@ class AgentLoop:
                 "allhands.artifacts.create_csv": make_artifact_create_csv_executor,
                 "allhands.artifacts.create_docx": make_artifact_create_docx_executor,
                 "allhands.artifacts.create_pptx": make_artifact_create_pptx_executor,
+                "allhands.artifacts.render_drawio": make_render_drawio_executor,
                 "allhands.artifacts.update": make_artifact_update_executor,
                 "allhands.artifacts.rollback": make_artifact_rollback_executor,
             }
@@ -903,18 +905,31 @@ class AgentLoop:
     ) -> PermissionDecision:
         """Permission decision for one tool_use.
 
-        Currently:
-          * WRITE / IRREVERSIBLE / BOOTSTRAP scope ∧ requires_confirmation
-            ∧ confirmation_signal wired → Defer (suspend, ask user)
-          * everything else → Allow
+        2026-04-26 · 用户指令:**全部短路掉 confirmation gate**,所有需要
+        审批的 tool 现在直接 Allow。原因:用户测试反复被 expired-by-user 卡
+        住,且对工具确认面板是被动 / 没在看,导致每次都过 5 分钟 TTL 失败。
+        回归第一性原理:先把功能跑通,后续再分阶段收紧权限(plan-mode /
+        per-tool allowlist / 重操作显示提示等)。
+
+        保留的:
+          * ask_user_question(requires_user_input=True)— 这不是审批闸,
+            是 agent 主动向用户提问的合法语义 · 必须保留 Defer 路径
+
+        被关掉的:
+          * WRITE / IRREVERSIBLE / BOOTSTRAP + requires_confirmation 的
+            Defer · 全部直接 Allow
+          * 即:create_employee / delete_provider / spawn_subagent /
+            update_plan / send_message / 所有 admin 类 meta tool 都不再
+            打断对话流
+
+        恢复路径:把下面 needs_confirm 的 Defer 分支放回来即可。Tool 上的
+        requires_confirmation 字段保留,只是这一层不消费它了 — 未来 UI
+        想做一键开关也方便。
 
         Future extensions plug in here:
           * plan mode → Deny when conversation_mode == 'plan' and tool is
             mutator
-          * clarification → Defer with UserInputDeferred when tool is
-            an ask_user_question
-          * sub-agent → executor itself does the recursion; the pipeline
-            doesn't need to defer at this layer
+          * per-tool allowlist → 用户在 settings 里勾选哪些 tool 强审批
         """
         # ADR 0019 C3 · clarification path runs BEFORE the confirmation
         # check. ask_user_question is ToolScope.READ + requires_user_input,
@@ -932,27 +947,10 @@ class AgentLoop:
                 },
             )
 
-        needs_confirm = (
-            tool.scope
-            in (
-                ToolScope.WRITE,
-                ToolScope.IRREVERSIBLE,
-                ToolScope.BOOTSTRAP,
-            )
-            and tool.requires_confirmation
-        )
-        if needs_confirm and self._confirmation_signal is not None:
-            return Defer(
-                signal=self._confirmation_signal,
-                publish_kwargs={
-                    "tool_use_id": block.id,
-                    "summary": f"Execute {tool.name} with args: {block.input}",
-                    "rationale": f"Tool {tool.name!r} requires confirmation.",
-                },
-            )
-        # No signal wired (test path / read-only) → straight allow.
-        # Deny is only used by future plan-mode hooks.
-        _ = Deny  # keep import live for future extension
+        # Confirmation gate intentionally bypassed (see docstring). The
+        # ToolScope / requires_confirmation metadata is still authoritative
+        # for downstream observability and a future re-enable.
+        _ = ToolScope, Deny  # keep imports live for future extension
         return Allow()
 
 

@@ -176,9 +176,13 @@ describe("/skills/[id] detail page", () => {
 
     fireEvent.click(screen.getByTestId("tab-prompt"));
     expect(screen.getByTestId("tab-panel-prompt")).toBeDefined();
-    expect(screen.getByTestId("prompt-fragment").textContent).toContain(
-      "search 工具",
-    );
+    // AgentMarkdown dynamic-imports `marked` and writes innerHTML in a
+    // useEffect, so we wait for the parse to land before asserting.
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("prompt-fragment").textContent ?? "",
+      ).toContain("search 工具");
+    });
 
     fireEvent.click(screen.getByTestId("tab-versions"));
     expect(screen.getByTestId("tab-panel-versions")).toBeDefined();

@@ -72,6 +72,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "zh-CN": {
         "errors.unknown": "未知错误",
         "errors.invalid_request": "请求无效",
+        "errors.malformed_response": "服务返回结构异常",
         "errors.invalid_status_filter": "无效的状态过滤器: {detail}",
         "errors.invalid_source": "无效的来源: {detail}",
         "errors.from_event_id_required": "需要 from_event_id",
@@ -97,6 +98,8 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "errors.not_found.run_id": "运行未找到:{id}",
         "errors.not_found.document_in_kb": "文档不在该知识库中",
         "errors.not_found.user_input": "用户输入待办不存在",
+        "errors.not_found.skill_file": "文件不存在: {path}",
+        "errors.skill_no_install_path": "该技能没有磁盘安装路径",
         "errors.unknown_kind": "未知类型 {kind}",
         "errors.unknown_preset": "未知预设 {preset}",
         "errors.transport_invalid": "transport 必须是 stdio | sse | http(收到 {raw})",
@@ -128,6 +131,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "en": {
         "errors.unknown": "Unknown error",
         "errors.invalid_request": "Invalid request",
+        "errors.malformed_response": "Malformed service response",
         "errors.invalid_status_filter": "Invalid status filter: {detail}",
         "errors.invalid_source": "Invalid source: {detail}",
         "errors.from_event_id_required": "from_event_id is required",
@@ -153,6 +157,8 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "errors.not_found.run_id": "Run not found: {id}",
         "errors.not_found.document_in_kb": "Document is not part of this KB",
         "errors.not_found.user_input": "Pending user input not found",
+        "errors.not_found.skill_file": "File not found: {path}",
+        "errors.skill_no_install_path": "Skill has no install path on disk",
         "errors.unknown_kind": "Unknown kind {kind}",
         "errors.unknown_preset": "Unknown preset {preset}",
         "errors.transport_invalid": "transport must be one of stdio | sse | http (got {raw})",

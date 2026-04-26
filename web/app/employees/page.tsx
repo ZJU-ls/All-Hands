@@ -9,7 +9,7 @@ import { LoadingState } from "@/components/state";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Icon } from "@/components/ui/icon";
 import { createConversation, listEmployees, type EmployeeDto } from "@/lib/api";
-import { deriveProfile, BADGE_LABEL } from "@/lib/employee-profile";
+import { deriveProfile } from "@/lib/employee-profile";
 
 /**
  * Employees · card grid view (ADR 0016 · V2 Azure Live polish).
@@ -148,6 +148,7 @@ function EmployeeCard({
   anyBusy: boolean;
 }) {
   const t = useTranslations("employees.list");
+  const badgeT = useTranslations("employeeBadges");
   const badges = deriveProfile(employee).filter((b) => b !== "react");
   const isLead = employee.is_lead_agent;
 
@@ -214,7 +215,7 @@ function EmployeeCard({
               key={b}
               className="inline-flex items-center h-5 px-2 rounded-full bg-surface-2 text-text-muted text-caption font-medium border border-border"
             >
-              {BADGE_LABEL[b]}
+              {badgeT(b)}
             </span>
           ))}
         </div>

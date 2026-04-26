@@ -6,6 +6,7 @@
  * to the pre-rework version — rework is presentational only.
  */
 
+import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
@@ -17,6 +18,7 @@ import {
   type ArtifactDto,
 } from "@/lib/artifacts-api";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
+import { useArtifactFocus } from "@/lib/artifact-focus-store";
 import { ArtifactList } from "./ArtifactList";
 import { ArtifactDetail } from "./ArtifactDetail";
 
@@ -42,6 +44,64 @@ export function ArtifactPanel({
 
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+
+  // External focus: a chat-side `Artifact.Card` click drops the target id
+  // into the focus store. We sync both ways: when the store fires, jump to
+  // detail view; when the user backs out manually, clear the store so the
+  // next dispatch (even with the same id) still re-triggers (bumpTick).
+  const focusedId = useArtifactFocus((s) => s.artifactId);
+  const focusBump = useArtifactFocus((s) => s.bumpTick);
+  const clearFocus = useArtifactFocus((s) => s.clear);
+  useEffect(() => {
+    if (focusedId) setSelectedId(focusedId);
+  }, [focusedId, focusBump]);
+
+  // Resizable panel width. Drag the left edge to widen — drawio / html /
+  // pdf detail views fit the viewport better at 480-800px than the
+  // default 360px. Persist across mounts via localStorage.
+  const MIN_WIDTH = 320;
+  const MAX_WIDTH = 1200;
+  const DEFAULT_WIDTH = 480;
+  const [panelWidth, setPanelWidth] = useState<number>(DEFAULT_WIDTH);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem("allhands.artifact_panel_width");
+    if (stored) {
+      const n = parseInt(stored, 10);
+      if (!Number.isNaN(n) && n >= MIN_WIDTH && n <= MAX_WIDTH) setPanelWidth(n);
+    }
+  }, []);
+  const persistWidth = useCallback((w: number) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("allhands.artifact_panel_width", String(w));
+  }, []);
+  const startResize = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = panelWidth;
+      const onMove = (ev: PointerEvent) => {
+        // dragging left grows the panel (it's docked right)
+        const delta = startX - ev.clientX;
+        const next = Math.max(
+          MIN_WIDTH,
+          Math.min(MAX_WIDTH, startW + delta),
+        );
+        setPanelWidth(next);
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        setPanelWidth((w) => {
+          persistWidth(w);
+          return w;
+        });
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [panelWidth, persistWidth],
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -132,8 +192,18 @@ export function ArtifactPanel({
   return (
     <aside
       aria-label={t("ariaLabel")}
-      className="flex h-full w-[360px] shrink-0 flex-col border-l border-border bg-surface shadow-soft-lg"
+      className="relative flex h-full shrink-0 flex-col border-l border-border bg-surface shadow-soft-lg"
+      style={{ width: `${panelWidth}px` }}
     >
+      {/* Resize handle · drag left edge to widen */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t("resizeAria")}
+        title={t("resizeTitle")}
+        onPointerDown={startResize}
+        className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize bg-transparent transition-colors duration-fast hover:bg-primary/30"
+      />
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface-2/60 px-3">
         <span
           aria-hidden="true"
@@ -171,7 +241,10 @@ export function ArtifactPanel({
         <div className="flex flex-1 flex-col overflow-hidden">
           <button
             type="button"
-            onClick={() => setSelectedId(null)}
+            onClick={() => {
+              setSelectedId(null);
+              clearFocus();
+            }}
             className="inline-flex h-8 shrink-0 items-center gap-1.5 border-b border-border px-3 text-left font-mono text-[11px] text-text-muted transition-colors duration-fast ease-out hover:bg-surface-2 hover:text-text"
           >
             <Icon name="arrow-left" size={12} />

@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import {
   fetchMetricSeries,
@@ -35,6 +35,8 @@ export type MetricDrawerProps = {
   metric: ObservatoryMetric | null;
   /** Optional override label shown next to the metric title. */
   contextLabel?: string;
+  /** Dimension filter applied to /series fetch — drill-down stays scoped. */
+  scope?: { employee_id?: string; model_ref?: string };
   defaultWindow?: WindowKey;
   onClose: () => void;
 };
@@ -43,6 +45,7 @@ export function MetricDrawer({
   open,
   metric,
   contextLabel,
+  scope,
   defaultWindow = "24h",
   onClose,
 }: MetricDrawerProps) {
@@ -83,6 +86,8 @@ export function MetricDrawer({
       since: since.toISOString(),
       until: until.toISOString(),
       bucket: def.bucket,
+      employee_id: scope?.employee_id,
+      model_ref: scope?.model_ref,
     })
       .then((s) => {
         if (cancelled) return;
@@ -97,7 +102,7 @@ export function MetricDrawer({
     return () => {
       cancelled = true;
     };
-  }, [open, metric, windowKey]);
+  }, [open, metric, windowKey, scope?.employee_id, scope?.model_ref]);
 
   if (!open || !metric) return null;
 
@@ -263,6 +268,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function SeriesChart({ series }: { series: TimeSeriesDto }) {
   const t = useTranslations("pages.observatory.metricDrawer");
+  const locale = useLocale();
   const fmt = makeFormatter(series);
   const W = 580;
   const H = 220;
@@ -428,7 +434,7 @@ function SeriesChart({ series }: { series: TimeSeriesDto }) {
       {/* Inline tooltip readout */}
       {hoverIdx !== null && series.points[hoverIdx] ? (
         <div className="mt-2 flex items-center justify-between text-[11px] text-text-muted font-mono">
-          <span>{new Date(series.points[hoverIdx]!.ts).toLocaleString()}</span>
+          <span>{new Date(series.points[hoverIdx]!.ts).toLocaleString(locale)}</span>
           <span className="text-text">
             <span className="font-semibold">
               {fmt(series.points[hoverIdx]!.value)}

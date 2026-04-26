@@ -86,7 +86,7 @@ function renderBody(
       return loaded.kind === "text" ? <MermaidView content={loaded.content} /> : null;
     case "drawio":
       return loaded.kind === "text" ? (
-        <DrawioView content={loaded.content} editable artifactId={artifact.id} height={560} />
+        <DrawioView content={loaded.content} editable artifactId={artifact.id} fillHeight />
       ) : null;
     case "csv":
       return loaded.kind === "text" ? <CsvView content={loaded.content} /> : null;

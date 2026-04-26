@@ -32,6 +32,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 
@@ -157,9 +158,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   // Tear down all pending timers on unmount.
   useEffect(() => {
+    const timers = timersRef.current;
     return () => {
-      for (const handle of timersRef.current.values()) clearTimeout(handle);
-      timersRef.current.clear();
+      for (const handle of timers.values()) clearTimeout(handle);
+      timers.clear();
     };
   }, []);
 
@@ -197,11 +199,12 @@ function ToastViewport({
   toasts: Toast[];
   onDismiss: (id: number) => void;
 }) {
+  const t = useTranslations("toast");
   if (toasts.length === 0) return null;
   return (
     <div
       role="region"
-      aria-label="notifications"
+      aria-label={t("ariaLabel")}
       aria-live="polite"
       className="pointer-events-none fixed bottom-6 left-1/2 z-50 flex w-full max-w-[420px] -translate-x-1/2 flex-col items-center gap-2"
     >
