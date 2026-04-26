@@ -138,7 +138,11 @@ export function HoverPeek({
         onMouseLeave={supportsHover ? scheduleClose : undefined}
         onFocus={supportsHover ? scheduleOpen : undefined}
         onBlur={supportsHover ? scheduleClose : undefined}
-        className="contents"
+        // Was `contents` — which on most browsers makes
+        // getBoundingClientRect() return 0,0,0,0 and pinned the popover to
+        // the viewport top-left. inline-flex gives the wrapper a real box
+        // that exactly fits the child chip, so the rect tracks the trigger.
+        className="inline-flex"
       >
         {children}
       </span>
