@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -385,6 +385,7 @@ function EmptyHint({
 function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }) {
   const t = useTranslations("tasks.list");
   const sourceT = useTranslations("tasks.source");
+  const locale = useLocale();
   const urgent = task.status === "needs_input" || task.status === "needs_approval";
   const updated = new Date(task.updated_at);
   const running = task.status === "running";
@@ -459,7 +460,7 @@ function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }
               {assigneeName}
             </div>
             <div className="mt-0.5 font-mono text-[10px] text-text-subtle">
-              {updated.toLocaleString()}
+              {updated.toLocaleString(locale)}
             </div>
             {task.run_ids.length > 0 && task.run_ids[0] && (
               <TraceChip runId={task.run_ids[0]} label="trace" />

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState } from "@/components/state";
 import { Icon } from "@/components/ui/icon";
@@ -47,6 +47,7 @@ function modelDisplay(modelRef: string, fallback: string): string {
 export default function EmployeePage() {
   const t = useTranslations("employees.detail");
   const badgeT = useTranslations("employeeBadges");
+  const locale = useLocale();
   const { employeeId } = useParams<{ employeeId: string }>();
   const router = useRouter();
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
@@ -242,7 +243,7 @@ export default function EmployeePage() {
                             </p>
                             <p className="mt-0.5 font-mono text-caption text-text-subtle truncate">
                               {c.id.slice(0, 8)} ·{" "}
-                              {new Date(c.created_at).toLocaleString()}
+                              {new Date(c.created_at).toLocaleString(locale)}
                             </p>
                           </div>
                           <Icon

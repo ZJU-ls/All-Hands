@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState, ErrorState } from "@/components/state";
 import { TaskStatusPill } from "@/components/tasks/TaskStatusPill";
@@ -373,9 +373,10 @@ function TaskHero({ task }: { task: TaskDto }) {
   const t = useTranslations("tasks.detail");
   const statusT = useTranslations("tasks.status");
   const sourceT = useTranslations("tasks.source");
-  const created = new Date(task.created_at).toLocaleString();
-  const updated = new Date(task.updated_at).toLocaleString();
-  const completed = task.completed_at ? new Date(task.completed_at).toLocaleString() : null;
+  const locale = useLocale();
+  const created = new Date(task.created_at).toLocaleString(locale);
+  const updated = new Date(task.updated_at).toLocaleString(locale);
+  const completed = task.completed_at ? new Date(task.completed_at).toLocaleString(locale) : null;
   const { tone, icon, spin } = heroToneFor(task.status);
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-soft-sm">
@@ -853,6 +854,7 @@ function KbdChip({ children }: { children: React.ReactNode }) {
 
 function MetaGrid({ task }: { task: TaskDto }) {
   const t = useTranslations("tasks.detail");
+  const locale = useLocale();
   const rows: { k: string; v: string; icon: IconName }[] = [
     { k: "workspace", v: task.workspace_id, icon: "layout-grid" },
     { k: "created_by", v: task.created_by, icon: "user" },
@@ -865,7 +867,7 @@ function MetaGrid({ task }: { task: TaskDto }) {
       icon: "sparkles",
     },
     { k: "tokens_used", v: String(task.tokens_used), icon: "activity" },
-    { k: "updated_at", v: new Date(task.updated_at).toLocaleString(), icon: "clock" },
+    { k: "updated_at", v: new Date(task.updated_at).toLocaleString(locale), icon: "clock" },
   ];
   return (
     <dl className="grid grid-cols-1 gap-1.5 md:grid-cols-2 md:gap-x-6 md:gap-y-1.5">

@@ -23,7 +23,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -53,6 +53,7 @@ type Tab = "registered" | "add";
 
 export default function McpServersPage() {
   const t = useTranslations("mcp.list");
+  const locale = useLocale();
   const [tab, setTab] = useState<Tab>("registered");
   const [servers, setServers] = useState<Server[]>([]);
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -144,7 +145,7 @@ export default function McpServersPage() {
     }
   }
 
-  const kpis = useMemo(() => buildKpis(servers, t), [servers, t]);
+  const kpis = useMemo(() => buildKpis(servers, t, locale), [servers, t, locale]);
 
   return (
     <AppShell title={t("appShellTitle")}>
@@ -409,7 +410,7 @@ function KpiCard({
 
 type Translator = ReturnType<typeof useTranslations>;
 
-function buildKpis(servers: Server[], t: Translator) {
+function buildKpis(servers: Server[], t: Translator, locale: string) {
   const total = servers.length;
   const online = servers.filter((s) => s.health === "ok").length;
   const tools = servers.reduce((acc, s) => acc + (s.exposed_tool_ids?.length ?? 0), 0);
@@ -418,7 +419,7 @@ function buildKpis(servers: Server[], t: Translator) {
     .filter((ts) => !Number.isNaN(ts));
   const latest = lastTimestamps.length > 0 ? Math.max(...lastTimestamps) : null;
   const lastSyncLabel = latest !== null ? formatRelative(latest, t) : "—";
-  const lastSyncSub = latest !== null ? formatAbsolute(latest) : t("neverSynced");
+  const lastSyncSub = latest !== null ? formatAbsolute(latest, locale) : t("neverSynced");
   return { total, online, tools, lastSyncLabel, lastSyncSub };
 }
 
@@ -435,9 +436,9 @@ function formatRelative(ts: number, t: Translator): string {
   return t("relativeDays", { n: d });
 }
 
-function formatAbsolute(ts: number): string {
+function formatAbsolute(ts: number, locale: string): string {
   try {
-    return new Date(ts).toLocaleString();
+    return new Date(ts).toLocaleString(locale);
   } catch {
     return "";
   }

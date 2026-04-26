@@ -28,7 +28,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { computePopoverSide } from "@/lib/popover-placement";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -3144,6 +3144,7 @@ function DocDrawer({
   onDelete: (d: DocumentDto) => void;
 }) {
   const t = useTranslations("knowledge.detail");
+  const locale = useLocale();
   type Tab = "info" | "text" | "chunks";
   const [tab, setTab] = useState<Tab>("info");
   const [text, setText] = useState<string | null>(null);
@@ -3250,11 +3251,11 @@ function DocDrawer({
                 )}
                 <MetaRow
                   label={t("metaCreated")}
-                  value={new Date(doc.created_at).toLocaleString()}
+                  value={new Date(doc.created_at).toLocaleString(locale)}
                 />
                 <MetaRow
                   label={t("metaUpdated")}
-                  value={new Date(doc.updated_at).toLocaleString()}
+                  value={new Date(doc.updated_at).toLocaleString(locale)}
                 />
               </DocMetaSection>
               {doc.tags.length > 0 && (

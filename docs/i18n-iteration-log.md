@@ -378,3 +378,32 @@ i18n 漏洞,留给独立 PR。
 **结果**:1928 web tests · typecheck · lint · regression net 全绿
 
 **commits**:见 git log
+
+## Round 18 · 2026-04-26 08:43 (cron · 30m)
+
+**主题**:全栈无 locale `toLocaleString()` 大扫除
+
+**发现**:13 处 `new Date(...).toLocaleString()` 没传 locale,落到 navigator
+默认。zh 应用却跑在 en navigator 上时,日期显示用 navigator locale,跟应用
+字符串不一致。
+
+**做的事**:全部接 `useLocale()` 并把 locale 传进 toLocaleString:
+- app/observatory/page.tsx:formatDate(iso, locale)
+- app/tasks/[id]/page.tsx:TaskHero · MetaGrid 各加 useLocale · 4 处时间
+- app/tasks/page.tsx:TaskRow 加 useLocale · 1 处
+- app/triggers/[id]/page.tsx:formatTime(iso, locale) · TriggerHeader · FireRow · 2 处调用
+- app/conversations/page.tsx:ConversationsPage 加 useLocale · 1 处
+- app/knowledge/page.tsx:DocDrawer 加 useLocale · 2 处(created_at / updated_at)
+- app/market/page.tsx:MarketPage 加 useLocale · 1 处(poller tick)
+- app/market/[symbol]/page.tsx:QuoteHero + NewsCard 各加 useLocale · 2 处
+- app/mcp-servers/page.tsx:formatAbsolute(ts, locale) + 串到 buildKpis 签名
+- app/channels/[id]/page.tsx:ChannelDetailPage + MessageRow 各加 useLocale · 2 处
+- app/employees/[employeeId]/page.tsx:EmployeePage 加 useLocale · 1 处
+- components/artifacts/ArtifactListItem.tsx:加 useLocale · 1 处(updated_at)
+- components/chat/ConversationSwitcher.tsx:formatRelative 多接 locale 参数
+- components/observatory/MetricDrawer.tsx:SeriesChart 加 useLocale · 1 处(tooltip)
+
+**结果**:1928 web tests · typecheck · lint · regression net 全绿 · grep 复查零
+残留 `new Date(...).toLocale*()` 不带 locale 的写法
+
+**commits**:见 git log
