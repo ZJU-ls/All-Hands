@@ -114,11 +114,22 @@ class Batch:
 
 def _is_concurrent_safe(tool: Tool | None) -> bool:
     """A tool is concurrent-safe iff it's READ scope AND doesn't require
-    confirmation. Any other combination — write, irreversible, bootstrap,
-    or read-with-confirmation — gets its own serial batch."""
+    confirmation AND doesn't require user input. Any other combination —
+    write, irreversible, bootstrap, read-with-confirmation, or
+    read-with-user-input — gets its own serial batch.
+
+    The ``requires_user_input`` clause prevents the concurrent path
+    (which bypasses ``permission_check``) from running an
+    ``ask_user_question``-style READ tool without firing its
+    UserInputDeferred. Without it, the question would silently execute
+    against an empty answer dict (R1 review · C3)."""
     if tool is None:
         return False
-    return tool.scope == ToolScope.READ and not tool.requires_confirmation
+    if tool.scope != ToolScope.READ:
+        return False
+    if tool.requires_confirmation:
+        return False
+    return not getattr(tool, "requires_user_input", False)
 
 
 def partition_tool_uses(

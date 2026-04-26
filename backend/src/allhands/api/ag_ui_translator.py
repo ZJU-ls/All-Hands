@@ -36,6 +36,7 @@ from allhands.execution.internal_events import (
     AssistantMessagePartial,
     ConfirmationRequested,
     InternalEvent,
+    LLMCallFinished,
     LoopExited,
     ToolCallProgress,
     ToolMessageCommitted,
@@ -137,11 +138,30 @@ def translate_to_agui(
             )
         return
 
-    # Unknown event type — fall through silently. The contract is "all
-    # InternalEvent variants are handled"; if a new one is added, this
-    # path is the build-error trigger via mypy exhaustiveness on the
-    # union (``assert_never(event)`` could be added here once mypy is
-    # configured to warn on the missing isinstance arm).
+    if isinstance(event, LLMCallFinished):
+        # Per-call telemetry — token totals, duration, model. Surfaces as a
+        # custom event the frontend / observatory can subscribe to without
+        # the persistence tap being the only consumer (R1 review · C5).
+        yield custom(
+            "allhands.llm_call_finished",
+            {
+                "message_id": event.message_id,
+                "model_ref": event.model_ref,
+                "duration_s": event.duration_s,
+                "input_tokens": event.input_tokens,
+                "output_tokens": event.output_tokens,
+                "total_tokens": event.total_tokens,
+            },
+        )
+        return
+
+    # Exhaustiveness guard. Adding a new InternalEvent variant without an
+    # arm here previously fell through silently — the R1 review caught
+    # `LLMCallFinished` being dropped this way for months. Now any future
+    # variant raises at runtime in dev / tests so the omission is loud.
+    raise NotImplementedError(
+        f"ag_ui_translator missing arm for InternalEvent {type(event).__name__}"
+    )
 
 
 __all__ = ["translate_to_agui"]

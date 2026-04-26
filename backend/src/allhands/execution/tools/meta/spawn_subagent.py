@@ -24,7 +24,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from allhands.core import Employee, Tool, ToolKind, ToolScope
-from allhands.execution.dispatch import _dispatch_depth, current_parent_run_id
+from allhands.execution.dispatch import (
+    _dispatch_depth,
+    _parent_run_id,
+    current_parent_run_id,
+)
 from allhands.execution.modes import MODES, expand_preset
 
 _log = logging.getLogger(__name__)
@@ -229,6 +233,11 @@ class SpawnSubagentService:
         thread_id = str(uuid.uuid4())
         new_depth = current_depth + 1
         depth_token = _dispatch_depth.set(new_depth)
+        # R1 review · M5 — DispatchService sets _parent_run_id so nested
+        # operations report the right trace lineage. spawn_subagent had to
+        # mirror that or the subagent's tool calls were stamped with the
+        # GRANDPARENT's run_id, breaking trace tree links in observatory.
+        parent_run_token = _parent_run_id.set(trace_id)
 
         async def _drive() -> tuple[list[str], str]:
             runner = self._runner_factory(child, new_depth)
@@ -292,6 +301,7 @@ class SpawnSubagentService:
                 }
         finally:
             _dispatch_depth.reset(depth_token)
+            _parent_run_id.reset(parent_run_token)
 
         return {
             "result": "".join(parts).strip(),

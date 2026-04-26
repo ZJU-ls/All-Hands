@@ -222,18 +222,27 @@ def _is_valid_tool_call(tc: dict[str, Any], known_names: set[str]) -> bool:
 _log = logging.getLogger(__name__)
 
 
-def _make_tool_message_synthetic(*, tool_use_id: str, error: str) -> Message:
+def _make_tool_message_synthetic(
+    *,
+    tool_use_id: str,
+    error: str,
+    conversation_id: str = "",
+) -> Message:
     """Build a synthetic tool_message used when the AgentLoop must surface
     a tool_use as failed without going through tool_pipeline (e.g. outer
     loop crashed mid-execution). The error envelope shape matches what
     tool_pipeline produces for caught executor exceptions, so downstream
     projection / persistence treat it identically.
+
+    R1 review · C6: ``conversation_id`` is now threaded so persistence
+    keyed on the message's own conversation_id (not just the outer scope)
+    can still join the synthetic row to the right conversation.
     """
     from allhands.core.conversation import Message as _Msg
 
     base = _Msg(
         id=str(uuid.uuid4()),
-        conversation_id="",
+        conversation_id=conversation_id,
         role="tool",
         content="",
         tool_call_id=tool_use_id,
@@ -406,6 +415,19 @@ class AgentLoop:
                 valid_tool_calls = [
                     tc for tc in raw_tool_calls if _is_valid_tool_call(tc, known_names)
                 ]
+                # R1 review · M3 · dedupe by id, keeping the latest entry.
+                # DashScope / Qwen sometimes emit the same tool_call_id twice
+                # within a single AIMessageChunk accumulation; without this
+                # we'd commit two ToolUseBlocks with identical ids and emit
+                # two TMCs with the same tool_call_id — which the next-turn
+                # LangChain replay treats as malformed.
+                if valid_tool_calls:
+                    by_id: dict[str, dict[str, Any]] = {}
+                    for tc in valid_tool_calls:
+                        tc_id = str(tc.get("id") or "")
+                        if tc_id:
+                            by_id[tc_id] = tc
+                    valid_tool_calls = list(by_id.values())
 
                 blocks: list[Any] = []
                 if reasoning_full:
@@ -499,17 +521,41 @@ class AgentLoop:
                 try:
                     for batch in batches:
                         if batch.is_concurrent_safe and len(batch.blocks) > 1:
-                            results = await asyncio.gather(
-                                *[execute_tool_use_concurrent(b, bindings) for b in batch.blocks]
+                            # R1 review · C1: use return_exceptions=True so a
+                            # blow-up in one branch doesn't cancel siblings
+                            # mid-await. Each branch already wraps executor
+                            # exceptions into an error envelope Message — but
+                            # if the wrap itself raises (binding lookup,
+                            # _make_tool_message), we'd lose all sibling
+                            # results otherwise.
+                            raw_results = await asyncio.gather(
+                                *[
+                                    execute_tool_use_concurrent(
+                                        b, bindings, conversation_id=self._conversation_id
+                                    )
+                                    for b in batch.blocks
+                                ],
+                                return_exceptions=True,
                             )
-                            for tool_msg in results:
+                            for blk, res in zip(batch.blocks, raw_results, strict=True):
+                                if isinstance(res, BaseException):
+                                    tool_msg = _make_tool_message_synthetic(
+                                        tool_use_id=blk.id,
+                                        error=f"{type(res).__name__}: {res}",
+                                        conversation_id=self._conversation_id,
+                                    )
+                                else:
+                                    tool_msg = res
                                 yield ToolMessageCommitted(message=tool_msg)
                                 committed_tool_use_ids.add(tool_msg.tool_call_id or "")
                                 lc_messages.append(self._to_lc_tool_message(tool_msg))
                         else:
                             for block in batch.blocks:
                                 async for ev in execute_tool_use_iter(
-                                    block, bindings, self._permission_check
+                                    block,
+                                    bindings,
+                                    self._permission_check,
+                                    conversation_id=self._conversation_id,
                                 ):
                                     yield ev
                                     if isinstance(ev, ToolMessageCommitted):
@@ -532,6 +578,7 @@ class AgentLoop:
                                 else "tool execution cancelled by upstream "
                                 "(SSE drop / parent abort / inner sub-agent failure)"
                             ),
+                            conversation_id=self._conversation_id,
                         )
                         yield ToolMessageCommitted(message=synthetic)
                     # Re-raise so the outer try/except still records the
