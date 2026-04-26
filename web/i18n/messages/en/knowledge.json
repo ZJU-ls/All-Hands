@@ -104,6 +104,7 @@
       "selectedCount": "{count} selected",
       "cancel": "Cancel",
       "bulkDelete": "Delete selected",
+      "bulkTags": "Tags…",
       "retryIngest": "Retry ingest"
     },
     "uploads": {
@@ -120,7 +121,21 @@
       "noResults": "No hits — try a more specific query, or tweak the BM25 / vector weights",
       "bm25Rank": "BM25 #{rank}",
       "vecRank": "vec #{rank}",
-      "scoreLabel": "score"
+      "scoreLabel": "score",
+      "explainLabel": "Why this rank?",
+      "matchedTokens": "matched {matched}/{total}",
+      "matchedHeader": "Query terms · matched in chunk",
+      "contributionHeader": "BM25 vs vector contribution",
+      "bm25Pct": "BM25 {pct}%",
+      "vectorPct": "Vector {pct}%",
+      "vectorPctLabel": "Vector",
+      "explainBoth": "BM25 ranked it #{bm25} · vector ranked it #{vec} · hybrid fuses the better side",
+      "explainBm25Only": "Lexical hit only (#{bm25}) · vector retriever did not surface this chunk",
+      "explainVecOnly": "Semantic hit only (#{vec}) · keywords did not match"
+    },
+    "starters": {
+      "label": "Try one of these",
+      "hint": "Generated from this KB's titles and headings · click to ask"
     },
     "ask": {
       "askingLabel": "Question",
@@ -128,7 +143,24 @@
       "thinkingTitle": "Thinking…",
       "thinkingDesc": "Retrieving snippets → assembling context → LLM reply",
       "sourcesLabel": "Sources",
-      "sourcesCount": "{count}"
+      "sourcesCount": "{count}",
+      "turnsLabel": "{count} turns",
+      "youAskedLabel": "You asked #{n}",
+      "newConversation": "New thread",
+      "followUpPlaceholder": "Ask a follow-up · same citation numbers carry over…",
+      "followUpSubmit": "Follow up",
+      "followUpHint": "Press Enter to send · the same retrieved snippets are kept across turns"
+    },
+    "bulkTags": {
+      "title": "Tag {count} selected documents",
+      "intro": "Click an existing tag to cycle add → remove → unchanged. Add brand-new tags below (comma-separated).",
+      "knownHeader": "Tags already in this KB",
+      "newHeader": "New tags (comma-separated)",
+      "newPlaceholder": "blog, must-read, 2026q2",
+      "legend": "+ = add · − = remove · · = leave alone",
+      "cycleHint": "Click to cycle + → − → ·",
+      "cancel": "Cancel",
+      "apply": "Apply · +{add} · −{remove}"
     },
     "delete": {
       "confirm": "Delete \"{title}\"? (Soft delete — recoverable for 30 days.)",

@@ -511,6 +511,10 @@
       "processing": "处理中…",
       "closeAria": "关闭"
     },
+    "searchInput": {
+      "placeholder": "搜索…",
+      "clear": "清除"
+    },
     "dotGridAvatar": {},
     "dotGridBackdrop": {},
     "select": {

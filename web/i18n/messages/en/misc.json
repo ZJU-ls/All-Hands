@@ -511,6 +511,10 @@
       "processing": "Working…",
       "closeAria": "Close"
     },
+    "searchInput": {
+      "placeholder": "Search…",
+      "clear": "Clear"
+    },
     "dotGridAvatar": {},
     "dotGridBackdrop": {},
     "select": {

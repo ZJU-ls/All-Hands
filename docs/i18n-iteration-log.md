@@ -198,3 +198,18 @@ horizontal ellipsis "…",和其他 placeholder 不一致。
 **结果**:i18n 8 轮迭代收尾 · 报告交付。
 
 **commits**:见 git log
+
+## Round 9 · 2026-04-26 04:45 (cron · 30m)
+
+**主题**:KnowledgeService 6 处用户可见硬编码中文 → t()
+
+**做的事**:
+- backend i18n catalog 加 6 个 key:
+  - knowledge.embedding.label.aliyun · knowledge.embedding.reason.add_openai · knowledge.embedding.reason.add_aliyun
+  - knowledge.ask.no_hits · knowledge.ask.no_chat_provider · knowledge.ask.llm_failed
+- knowledge_service.py 把 embedding option label / reason · ask 无命中文案 · ask LLM 失败 · stream LLM 失败 全部包成 t()
+- 系统 prompt(_ASK_SYSTEM_PROMPT)保留中文 — 那是模型的 instruction,不是用户可见
+
+**结果**:1569 backend tests 全绿 · web typecheck 全绿 · regression net 也全绿(知识库回答现在跟着 Accept-Language 走)
+
+**commits**:见 git log

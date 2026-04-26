@@ -153,3 +153,171 @@ async def test_list_embedding_models_marks_mock_available_and_default(
 def test_default_embedding_model_ref_pulled_from_settings() -> None:
     # Settings.kb_default_embedding_model_ref drives the default
     assert KnowledgeService.default_embedding_model_ref() == "mock:hash-64"
+
+
+# ---------------------------------------------------------------------------
+# ask_stream — frame protocol & multi-turn history
+# ---------------------------------------------------------------------------
+
+
+async def test_ask_stream_emits_sources_then_deltas_then_done(
+    svc: KnowledgeService,
+) -> None:
+    """Streaming Ask must yield sources first, deltas in order, done last.
+
+    We monkey-patch `_call_chat_llm_stream` so the test doesn't need a real
+    LLMProvider. The contract under test is purely the framing.
+    """
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(kb.id, title="Survey", content_bytes=_SAMPLE_MD, filename="survey.md")
+
+    async def fake_stream(*_args: object, **_kwargs: object):
+        for piece, ref in [("Hello ", "fake:model"), ("world.", "")]:
+            yield piece, ref
+
+    # Bind patched method to instance via setattr (avoid mypy 'method assign')
+    svc._call_chat_llm_stream = fake_stream  # type: ignore[method-assign]
+
+    frames: list[dict] = []  # type: ignore[type-arg]
+    async for f in svc.ask_stream(kb.id, "what is rrf"):
+        frames.append(f)
+
+    events = [f["event"] for f in frames]
+    assert events[0] == "sources"
+    assert events[-1] == "done"
+    assert events.count("delta") == 2
+    # Sources must be a non-empty list of citation dicts in order
+    src = frames[0]["sources"]
+    assert isinstance(src, list) and len(src) > 0
+    assert src[0]["n"] == 1 and "chunk_id" in src[0]
+    # Deltas in arrival order
+    deltas = [f["text"] for f in frames if f["event"] == "delta"]
+    assert deltas == ["Hello ", "world."]
+    # Done frame carries model + latency
+    done = frames[-1]
+    assert done["used_model"] == "fake:model"
+    assert isinstance(done["latency_ms"], (int, float)) and done["latency_ms"] >= 0
+
+
+async def test_ask_stream_no_hits_yields_friendly_delta_then_done(
+    svc: KnowledgeService,
+) -> None:
+    """Empty retrieval still completes with a single delta + done — the
+    UI should never see a hanging stream just because the KB lacks the
+    answer."""
+    kb = await svc.create_kb(name="empty")
+    frames: list[dict] = []  # type: ignore[type-arg]
+    async for f in svc.ask_stream(kb.id, "anything"):
+        frames.append(f)
+    assert frames[0]["event"] == "sources"
+    assert frames[0]["sources"] == []
+    assert frames[1]["event"] == "delta"
+    assert "知识库" in frames[1]["text"]
+    assert frames[2]["event"] == "done"
+    assert frames[2]["used_model"] is None
+
+
+async def test_update_document_tags_add_remove_replace(
+    svc: KnowledgeService,
+) -> None:
+    """Three-shape API: add / remove / replace mutate tag list as
+    advertised. Add is a dedup union; remove drops only listed; replace
+    overrides wholesale."""
+    kb = await svc.create_kb(name="brain")
+    doc = await svc.upload_document(
+        kb.id, title="t", content_bytes=b"# t\n\nx", filename="t.md", tags=["a", "b"]
+    )
+    after_add = await svc.update_document_tags(doc.id, add=["c", "a"])
+    assert after_add.tags == ["a", "b", "c"]
+    after_rm = await svc.update_document_tags(doc.id, remove=["b"])
+    assert after_rm.tags == ["a", "c"]
+    after_replace = await svc.update_document_tags(doc.id, replace=["only", "two"])
+    assert after_replace.tags == ["only", "two"]
+
+
+async def test_suggest_starter_questions_falls_back_when_no_chat_provider(
+    svc: KnowledgeService,
+) -> None:
+    """No chat provider → graceful '<title> 里讲了什么?' fallback rather
+    than raising; UI counts on this so the chip row never disappears
+    just because /gateway is empty."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(
+        kb.id, title="Hybrid Retrieval", content_bytes=_SAMPLE_MD, filename="a.md"
+    )
+    qs = await svc.suggest_starter_questions(kb.id, limit=2)
+    assert isinstance(qs, list)
+    assert len(qs) == 1  # only one doc → one fallback question
+    assert "Hybrid Retrieval" in qs[0]
+
+
+async def test_suggest_starter_questions_empty_kb_returns_empty(
+    svc: KnowledgeService,
+) -> None:
+    kb = await svc.create_kb(name="empty")
+    assert await svc.suggest_starter_questions(kb.id) == []
+
+
+async def test_suggest_starter_questions_uses_llm_and_caches(
+    svc: KnowledgeService,
+) -> None:
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(
+        kb.id, title="Hybrid Retrieval", content_bytes=_SAMPLE_MD, filename="a.md"
+    )
+
+    calls: list[int] = []
+
+    async def fake(self, system, user, *, model_ref=None, history=None):
+        calls.append(1)
+        return (
+            "RRF 怎么工作?\nbge-reranker 提升多少?\n关键词命中和向量召回有什么差?",
+            "fake",
+        )
+
+    KnowledgeService._call_chat_llm = fake  # type: ignore[method-assign,assignment]
+    qs1 = await svc.suggest_starter_questions(kb.id, limit=3)
+    qs2 = await svc.suggest_starter_questions(kb.id, limit=3)
+    assert (
+        qs1
+        == qs2
+        == [
+            "RRF 怎么工作?",
+            "bge-reranker 提升多少?",
+            "关键词命中和向量召回有什么差?",
+        ]
+    )
+    assert len(calls) == 1, "second call must hit the cache"
+
+
+async def test_ask_history_appended_into_messages(svc: KnowledgeService) -> None:
+    """When ``history`` is passed, prior turns must reach the chat model
+    as alternating Human/AI messages between the system and the new user
+    turn — that's what makes follow-ups resolvable ("what about X?")."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(kb.id, title="Survey", content_bytes=_SAMPLE_MD, filename="survey.md")
+
+    captured: dict[str, object] = {}
+
+    async def fake_call(self, system, user, *, model_ref=None, history=None):
+        captured["system"] = system
+        captured["user"] = user
+        captured["history"] = history
+        return "answer", "fake:model"
+
+    KnowledgeService._call_chat_llm = fake_call  # type: ignore[method-assign,assignment]
+    out = await svc.ask(
+        kb.id,
+        "what about reranking?",
+        history=[
+            {"role": "user", "content": "what is rrf?"},
+            {"role": "assistant", "content": "RRF is a fusion method [1]."},
+        ],
+    )
+    assert out["used_model"] == "fake:model"
+    assert captured["history"] == [
+        {"role": "user", "content": "what is rrf?"},
+        {"role": "assistant", "content": "RRF is a fusion method [1]."},
+    ]
+    # System prompt mentions multi-turn citation rule
+    assert "多轮" in str(captured["system"])

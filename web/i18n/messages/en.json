@@ -42,6 +42,11 @@
       "languageTitle": "Change language",
       "languageAria": "Change language"
     },
+    "sidebar": {
+      "collapse": "Collapse sidebar",
+      "expand": "Expand sidebar",
+      "toggleHint": "⌘B"
+    },
     "sections": {
       "workspace": "Workspace",
       "team": "Team & Skills",

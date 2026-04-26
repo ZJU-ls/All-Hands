@@ -14,6 +14,8 @@ import { AppShell } from "@/components/shell/AppShell";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Select } from "@/components/ui/Select";
 import { ErrorState } from "@/components/state";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toast";
 import { ArtifactList } from "@/components/artifacts/ArtifactList";
 import { ArtifactGrid } from "@/components/artifacts/ArtifactGrid";
 import { ArtifactDetail } from "@/components/artifacts/ArtifactDetail";
@@ -119,6 +121,8 @@ export default function ArtifactsGlobalPage() {
   // Once non-empty, the floating BulkActionBar appears with pin/delete.
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const toast = useToast();
 
   function toggleBulk(id: string) {
     setBulkSelected((prev) => {
@@ -141,30 +145,67 @@ export default function ArtifactsGlobalPage() {
   async function bulkPin() {
     if (bulkSelected.size === 0 || bulkBusy) return;
     setBulkBusy(true);
+    const targetPinned = !allPinned;
+    const targetIds = Array.from(bulkSelected);
+    // Optimistic flip · the list reflects the new pinned state instantly,
+    // SSE follow-up just confirms. If a request fails, we revert that one
+    // row + raise an error toast.
+    setItems((prev) =>
+      prev.map((a) => (bulkSelected.has(a.id) ? { ...a, pinned: targetPinned } : a)),
+    );
+    let failed = 0;
     try {
-      const targetPinned = !allPinned;
-      // Sequential to avoid hammering the backend; the SSE stream pushes
-      // the resulting `artifact_changed` frames back so the list rerenders
-      // naturally without a manual refetch.
-      for (const id of bulkSelected) {
-        await pinArtifact(id, targetPinned);
+      for (const id of targetIds) {
+        try {
+          await pinArtifact(id, targetPinned);
+        } catch {
+          failed += 1;
+          // Revert just this row.
+          setItems((prev) =>
+            prev.map((a) => (a.id === id ? { ...a, pinned: !targetPinned } : a)),
+          );
+        }
+      }
+      if (failed === 0) {
+        toast.success(
+          `${targetPinned ? "Pinned" : "Unpinned"} ${targetIds.length} artifact${targetIds.length === 1 ? "" : "s"}`,
+        );
+      } else {
+        toast.error(`${failed} of ${targetIds.length} failed`, "Reverted those rows");
       }
     } finally {
       setBulkBusy(false);
     }
   }
-  async function bulkDelete() {
+  // Two-step delete · the BulkActionBar's Delete button now opens the
+  // branded ConfirmDialog (instead of native window.confirm which can't
+  // honor §3.8 visual contract or our keyboard semantics).
+  function bulkDeleteRequest() {
     if (bulkSelected.size === 0 || bulkBusy) return;
-    if (typeof window !== "undefined") {
-      if (!window.confirm(`Delete ${bulkSelected.size} artifact(s)? This is reversible (soft-delete).`)) return;
-    }
+    setBulkDeleteConfirm(true);
+  }
+  async function bulkDeleteConfirmed() {
+    setBulkDeleteConfirm(false);
+    if (bulkSelected.size === 0) return;
     setBulkBusy(true);
+    const targetCount = bulkSelected.size;
+    let failed = 0;
     try {
       for (const id of bulkSelected) {
-        await deleteArtifact(id);
+        try {
+          await deleteArtifact(id);
+        } catch {
+          failed += 1;
+        }
       }
-      // SSE refresh handles the list; clear the local selection set.
       clearBulk();
+      if (failed === 0) {
+        toast.success(`Deleted ${targetCount} artifact(s)`, "Soft delete · still recoverable");
+      } else if (failed < targetCount) {
+        toast.warning(`Deleted ${targetCount - failed} · ${failed} failed`);
+      } else {
+        toast.error(`Failed to delete ${failed} artifact(s)`);
+      }
     } finally {
       setBulkBusy(false);
     }
@@ -517,10 +558,20 @@ export default function ArtifactsGlobalPage() {
           allPinned={allPinned}
           busy={bulkBusy}
           onPinToggle={bulkPin}
-          onDelete={bulkDelete}
+          onDelete={bulkDeleteRequest}
           onClear={clearBulk}
         />
       ) : null}
+      <ConfirmDialog
+        open={bulkDeleteConfirm}
+        title={`Delete ${bulkSelected.size} artifact${bulkSelected.size === 1 ? "" : "s"}?`}
+        message="Soft delete · still recoverable from the database. The metadata row stays for 30 days."
+        confirmLabel="Delete"
+        danger
+        busy={bulkBusy}
+        onConfirm={bulkDeleteConfirmed}
+        onCancel={() => setBulkDeleteConfirm(false)}
+      />
     </AppShell>
   );
 }
