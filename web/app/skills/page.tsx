@@ -910,6 +910,13 @@ function MarketList({
 }) {
   const t = useTranslations("skills.list.market");
   const [activeTag, setActiveTag] = useState<string>("");
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  // 2026-04-26 · R8 · 大列表 lazy render(>24 时,默认显示前 24,点
+  // load-more 加 24)。原实现一次性渲染 100+ 卡片到 DOM,初次切到市场
+  // tab 卡 ~600ms。state 不放 limit-字面量(因为 query / activeTag 变化
+  // 后该重置 limit),用 batch 数 + 重置 effect。
+  const PAGE = 24;
+  const [batches, setBatches] = useState(1);
 
   // Collect every tag + how many skills use it. Sorted by popularity so the
   // filter row puts the most-useful pills first.
@@ -917,13 +924,37 @@ function MarketList({
   for (const e of entries) {
     for (const t of e.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
   }
-  const topTags = Array.from(tagCounts.entries())
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 12);
+  const allTags = Array.from(tagCounts.entries()).sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  // R9 · 12 个上限太死。默认收起到 12,有更多时点 + 显示完整(folded
+  // 时也保证 activeTag 一定在可见列表里 — 否则用户切了某 tag,刷新后
+  // 看不到选中状态)。
+  const FOLDED_TAG_LIMIT = 12;
+  const visibleTags = (() => {
+    if (tagsExpanded) return allTags;
+    const folded = allTags.slice(0, FOLDED_TAG_LIMIT);
+    if (activeTag && !folded.some(([k]) => k === activeTag)) {
+      const extra = allTags.find(([k]) => k === activeTag);
+      if (extra) return [...folded, extra];
+    }
+    return folded;
+  })();
+  const overflowCount = Math.max(0, allTags.length - visibleTags.length);
 
-  const visible = activeTag
+  const filtered = activeTag
     ? entries.filter((e) => e.tags.includes(activeTag))
     : entries;
+
+  // Reset pagination when filter changes — batches counts pages of `filtered`,
+  // so a prior larger value would point past the new shorter array.
+  useEffect(() => {
+    setBatches(1);
+  }, [query, activeTag]);
+
+  const limit = batches * PAGE;
+  const visible = filtered.slice(0, limit);
+  const remaining = Math.max(0, filtered.length - limit);
   const totalInstalled = entries.filter((e) => installedSlugs.has(e.name)).length;
 
   return (
@@ -956,7 +987,7 @@ function MarketList({
         )}
       </div>
 
-      {topTags.length > 0 && (
+      {allTags.length > 0 && (
         <div
           data-testid="market-tag-filter"
           className="flex items-center gap-1.5 flex-wrap text-[11px]"
@@ -979,7 +1010,7 @@ function MarketList({
               {entries.length}
             </span>
           </button>
-          {topTags.map(([tag, count]) => {
+          {visibleTags.map(([tag, count]) => {
             const active = activeTag === tag;
             return (
               <button
@@ -1004,6 +1035,26 @@ function MarketList({
               </button>
             );
           })}
+          {overflowCount > 0 && !tagsExpanded && (
+            <button
+              type="button"
+              onClick={() => setTagsExpanded(true)}
+              data-testid="market-tag-show-more"
+              className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full border border-dashed border-border text-text-muted hover:border-primary hover:text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              {t("tagsShowMore", { n: overflowCount })}
+            </button>
+          )}
+          {tagsExpanded && allTags.length > FOLDED_TAG_LIMIT && (
+            <button
+              type="button"
+              onClick={() => setTagsExpanded(false)}
+              data-testid="market-tag-show-less"
+              className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full border border-dashed border-border text-text-muted hover:border-primary hover:text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              {t("tagsShowLess")}
+            </button>
+          )}
         </div>
       )}
 
@@ -1127,6 +1178,19 @@ function MarketList({
               </div>
             );
           })}
+        </div>
+      )}
+      {remaining > 0 && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            data-testid="market-load-more"
+            onClick={() => setBatches((n) => n + 1)}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg border border-border bg-surface text-[12.5px] font-medium text-text-muted hover:text-text hover:bg-surface-2 hover:border-border-strong transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <Icon name="chevron-down" size={12} />
+            {t("loadMore", { remaining, batch: Math.min(PAGE, remaining) })}
+          </button>
         </div>
       )}
     </div>
