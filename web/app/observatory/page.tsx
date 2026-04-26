@@ -377,28 +377,31 @@ function ToolsPanel({
                   ? "text-warning"
                   : "text-text-muted";
             return (
-              <li
-                key={r.tool_id}
-                className="flex items-center gap-3 px-5 h-11 hover:bg-surface-2 transition-colors duration-fast"
-              >
-                <code className="font-mono text-[11.5px] text-text truncate flex-1">
-                  {r.tool_id}
-                </code>
-                <span className="font-mono text-[11px] text-text-muted tabular-nums shrink-0">
-                  {r.invocations}
-                </span>
-                <span
-                  className={`font-mono text-[11px] tabular-nums shrink-0 w-12 text-right ${failTone}`}
+              <li key={r.tool_id}>
+                <Link
+                  href={`/observatory/tools/${encodeURIComponent(r.tool_id)}`}
+                  className="flex items-center gap-3 px-5 h-11 hover:bg-surface-2 transition-colors duration-fast"
                 >
-                  {(r.failure_rate * 100).toFixed(1)}%
-                </span>
-                <span className="font-mono text-[11px] text-text-subtle tabular-nums shrink-0 w-14 text-right">
-                  {r.avg_duration_s > 0
-                    ? r.avg_duration_s < 1
-                      ? `${(r.avg_duration_s * 1000).toFixed(0)}ms`
-                      : `${r.avg_duration_s.toFixed(2)}s`
-                    : "—"}
-                </span>
+                  <code className="font-mono text-[11.5px] text-text truncate flex-1">
+                    {r.tool_id}
+                  </code>
+                  <span className="font-mono text-[11px] text-text-muted tabular-nums shrink-0">
+                    {r.invocations}
+                  </span>
+                  <span
+                    className={`font-mono text-[11px] tabular-nums shrink-0 w-12 text-right ${failTone}`}
+                  >
+                    {(r.failure_rate * 100).toFixed(1)}%
+                  </span>
+                  <span className="font-mono text-[11px] text-text-subtle tabular-nums shrink-0 w-14 text-right">
+                    {r.avg_duration_s > 0
+                      ? r.avg_duration_s < 1
+                        ? `${(r.avg_duration_s * 1000).toFixed(0)}ms`
+                        : `${r.avg_duration_s.toFixed(2)}s`
+                      : "—"}
+                  </span>
+                  <Icon name="chevron-right" size={11} className="text-text-subtle shrink-0" />
+                </Link>
               </li>
             );
           })}
@@ -439,20 +442,26 @@ function ErrorsPanel({
       ) : (
         <ul className="divide-y divide-border">
           {rows.slice(0, 6).map((r) => (
-            <li key={r.error_kind} className="px-5 py-2.5">
-              <div className="flex items-center gap-2">
-                <code className="font-mono text-[11.5px] text-danger">
-                  {r.error_kind}
-                </code>
-                <span className="ml-auto font-mono text-[11px] text-text-muted tabular-nums">
-                  × {r.count}
-                </span>
-              </div>
-              {r.last_message ? (
-                <div className="mt-1 text-[11.5px] text-text-muted line-clamp-2">
-                  {r.last_message}
+            <li key={r.error_kind}>
+              <Link
+                href={`/observatory/errors/${encodeURIComponent(r.error_kind)}`}
+                className="block px-5 py-2.5 hover:bg-surface-2 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <code className="font-mono text-[11.5px] text-danger">
+                    {r.error_kind}
+                  </code>
+                  <span className="ml-auto font-mono text-[11px] text-text-muted tabular-nums">
+                    × {r.count}
+                  </span>
+                  <Icon name="chevron-right" size={11} className="text-text-subtle" />
                 </div>
-              ) : null}
+                {r.last_message ? (
+                  <div className="mt-1 text-[11.5px] text-text-muted line-clamp-2">
+                    {r.last_message}
+                  </div>
+                ) : null}
+              </Link>
             </li>
           ))}
         </ul>

@@ -210,6 +210,38 @@
           "cost": "Est. cost"
         }
       },
+      "toolDetail": {
+        "eyebrow": "Tool detail",
+        "breadcrumb": "Tools",
+        "subtitle": "Workspace-wide invocation profile of this tool_id",
+        "kpi": {
+          "invocations": "Invocations",
+          "failures": "Failures",
+          "failureRate": "Failure rate",
+          "avgDuration": "Avg duration"
+        },
+        "notSeen": "No invocations of this tool recorded in window.",
+        "possibleCallers": "Likely callers",
+        "possibleCallersHint": "Tool events do not yet carry employee_id; we approximate by listing active workspace employees. Per-employee tool slicing is planned.",
+        "runs": "runs"
+      },
+      "errorDetail": {
+        "eyebrow": "Error category",
+        "breadcrumb": "Errors",
+        "subtitle": "Failed runs grouped by error_kind · Sentry-style issue view",
+        "kpi": {
+          "count": "Occurrences",
+          "lastSeen": "Last seen",
+          "severity": "Severity"
+        },
+        "severityHigh": "High",
+        "severityMid": "Mid",
+        "severityLow": "Low",
+        "lastMessage": "Last error message",
+        "notSeen": "No errors of this kind recorded in window.",
+        "recentFailures": "Recent failed traces",
+        "noFailures": "No failed traces in last 24h."
+      },
       "modelDetail": {
         "eyebrow": "Model detail",
         "breadcrumb": "Models",
