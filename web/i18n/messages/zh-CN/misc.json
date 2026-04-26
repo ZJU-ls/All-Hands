@@ -457,6 +457,7 @@
       "placeholder": "跳转到页面 · 搜索员工 · 技能 · 模型",
       "noMatch": "没有匹配的入口 · 试试别的关键词",
       "suggestions": "建议 · {count}",
+      "recent": "最近访问 · {count}",
       "footer": {
         "navigate": "上下移动",
         "open": "打开",
