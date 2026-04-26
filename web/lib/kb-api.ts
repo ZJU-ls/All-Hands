@@ -217,6 +217,23 @@ export interface KBHealthDto {
   chunks_missing_embeddings: number;
 }
 
+export async function switchEmbeddingModel(
+  kbId: string,
+  newRef: string,
+): Promise<{
+  kb: KBDto;
+  reembed: { processed: number; succeeded: number; failed: number };
+}> {
+  return check(
+    await fetch(`${BASE}/api/kb/${kbId}/embedding-model`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ new_ref: newRef }),
+    }),
+    "switchEmbeddingModel",
+  );
+}
+
 export async function reembedAll(
   kbId: string,
 ): Promise<{ processed: number; succeeded: number; failed: number }> {

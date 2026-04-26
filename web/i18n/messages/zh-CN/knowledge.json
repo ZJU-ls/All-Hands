@@ -283,7 +283,13 @@
       "noModelsBody": "去「<gateway>模型网关</gateway>」添加一个 OpenAI 或阿里云百炼 provider · 填上 API key,这里就会出现可用模型列表。",
       "goConfigure": "去配置",
       "switchModelHint": "切换 KB 的 embedding 模型需要重算所有\"语义指纹\"(reindex)· v0 暂不支持热切换。要换模型,先删了这个 KB,再用新模型新建。",
-      "modelDimHint": "{dim}d"
+      "switchModelHintV2": "点击模型即切换 · 后端会同步重算 KB 所有分片的向量(reindex)· 同进程下所有 KB 共用一个 embedder,切换会影响别的 KB 新上传的 embedding,谨慎使用。",
+      "modelDimHint": "{dim}d",
+      "currentBadge": "当前",
+      "switching": "切换中…",
+      "switchConfirm": "切到 {model} 会重算这个 KB 所有 {docs} 个文档的向量(reindex),要继续吗?",
+      "switchSummary": "已切换并重新嵌入 · 共 {processed} · 成功 {succeeded} · 失败 {failed}",
+      "switchFailed": "切换失败"
     },
     "danger": {
       "heading": "删除知识库",

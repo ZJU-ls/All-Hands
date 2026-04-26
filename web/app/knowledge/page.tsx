@@ -58,6 +58,7 @@ import {
   patchDocumentTags,
   suggestTagsForDocument,
   reembedAll,
+  switchEmbeddingModel,
   reindexDocument,
   createKB,
   deleteDocument,
@@ -3059,7 +3060,7 @@ function KBSettingsModal({
 
       {/* Basic tab — embedder picker + plain-language explanation */}
       {tab === "basic" && (
-        <BasicTab kb={kb} models={models} />
+        <BasicTab kb={kb} models={models} onSwitched={onSaved} />
       )}
 
       {/* Advanced tab — retrieval tune */}
@@ -3295,15 +3296,48 @@ function DiagnoseColumn({
 function BasicTab({
   kb,
   models,
+  onSwitched,
 }: {
   kb: KBDto;
   models: EmbeddingModelOption[];
+  onSwitched: (next: KBDto) => void;
 }) {
   const t = useTranslations("knowledge.basic");
   const isMock = kb.embedding_model_ref.startsWith("mock:");
   const realAvailable = models.filter(
     (m) => !m.ref.startsWith("mock:") && m.available,
   );
+  const [switchingTo, setSwitchingTo] = useState<string | null>(null);
+
+  async function pickModel(ref: string) {
+    if (ref === kb.embedding_model_ref) return;
+    if (switchingTo) return;
+    if (
+      !confirm(
+        t("switchConfirm", {
+          model: ref,
+          docs: kb.document_count,
+        }),
+      )
+    )
+      return;
+    setSwitchingTo(ref);
+    try {
+      const out = await switchEmbeddingModel(kb.id, ref);
+      onSwitched(out.kb);
+      alert(
+        t("switchSummary", {
+          processed: out.reembed.processed,
+          succeeded: out.reembed.succeeded,
+          failed: out.reembed.failed,
+        }),
+      );
+    } catch (e) {
+      alert(`${t("switchFailed")}\n${e}`);
+    } finally {
+      setSwitchingTo(null);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -3374,21 +3408,51 @@ function BasicTab({
         ) : (
           <>
             <ul className="space-y-1.5">
-              {realAvailable.map((m) => (
-                <li
-                  key={m.ref}
-                  className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 text-[12px]"
-                >
-                  <span className="text-text">{m.label}</span>
-                  <span className="font-mono text-[10px] text-text-subtle">
-                    {t("modelDimHint", { dim: m.dim })}
-                  </span>
-                </li>
-              ))}
+              {realAvailable.map((m) => {
+                const active = m.ref === kb.embedding_model_ref;
+                const switching = switchingTo === m.ref;
+                return (
+                  <li key={m.ref}>
+                    <button
+                      type="button"
+                      onClick={() => void pickModel(m.ref)}
+                      disabled={active || switchingTo !== null}
+                      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-[12px] transition duration-fast ${
+                        active
+                          ? "border-success/40 bg-success-soft text-text cursor-default"
+                          : switching
+                            ? "border-primary bg-primary-muted text-text cursor-wait"
+                            : "border-border bg-surface-2 text-text hover:border-primary/40 hover:bg-primary-muted/30"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {active && (
+                          <Icon
+                            name="check"
+                            size={12}
+                            className="text-success"
+                          />
+                        )}
+                        {switching && (
+                          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+                        )}
+                        <span>{m.label}</span>
+                      </span>
+                      <span className="font-mono text-[10px] text-text-subtle">
+                        {switching
+                          ? t("switching")
+                          : active
+                            ? `${t("modelDimHint", { dim: m.dim })} · ${t("currentBadge")}`
+                            : t("modelDimHint", { dim: m.dim })}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
             <p className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[11px] text-text-muted">
               <Icon name="info" size={11} className="-mt-px mr-1 inline-block" />
-              {t("switchModelHint")}
+              {t("switchModelHintV2")}
             </p>
           </>
         )}
