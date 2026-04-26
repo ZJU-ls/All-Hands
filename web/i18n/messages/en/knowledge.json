@@ -161,7 +161,11 @@
       "newConversation": "New thread",
       "followUpPlaceholder": "Ask a follow-up · same citation numbers carry over…",
       "followUpSubmit": "Follow up",
-      "followUpHint": "Press Enter to send · the same retrieved snippets are kept across turns"
+      "followUpHint": "Press Enter to send · the same retrieved snippets are kept across turns",
+      "copyAsCitation": "Copy",
+      "copyAsCitationTitle": "Copy markdown · question / answer / source list",
+      "copied": "Copied",
+      "copyFailed": "Copy failed · the browser may have blocked the clipboard API"
     },
     "bulkTags": {
       "title": "Tag {count} selected documents",

@@ -1931,7 +1931,10 @@ function AskAnswerView({
                   <Icon name="sparkles" size={11} />
                 </div>
                 <div className="flex-1 space-y-3">
-                  <AskTurnAnswer turn={turn} onChunkClick={onChunkClick} />
+                  <AskTurnAnswer
+                    turn={turn}
+                    onChunkClick={onChunkClick}
+                  />
                   {turn.sources.length > 0 && (
                     <AskTurnSources turn={turn} onChunkClick={onChunkClick} />
                   )}
@@ -1980,6 +1983,61 @@ function AskAnswerView({
 }
 
 // One turn's answer body. Splits on `[N]` markers; while ``streaming``,
+// Copy-as-citation — turns a finished Q&A turn into a self-contained
+// markdown blob (question / answer with [N] inline / numbered footnotes)
+// suitable for pasting into a doc or chat. Mirrors NotebookLM's "Copy"
+// + Perplexity's share-as-text. We bias toward markdown because the
+// allhands chat surface renders it natively and so do most editors.
+function CopyAsCitationButton({ turn }: { turn: AskTurnView }) {
+  const t = useTranslations("knowledge.ask");
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    const md = renderTurnAsMarkdown(turn);
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Some browsers block clipboard write outside user gestures or
+      // require https. Fall back to a brief alert; the user can re-try.
+      alert(t("copyFailed"));
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 font-mono text-[10px] text-text-subtle opacity-0 transition group-hover:opacity-100 hover:text-text"
+      title={t("copyAsCitationTitle")}
+    >
+      <Icon name={copied ? "check" : "copy"} size={10} />
+      {copied ? t("copied") : t("copyAsCitation")}
+    </button>
+  );
+}
+
+function renderTurnAsMarkdown(turn: AskTurnView): string {
+  const lines: string[] = [];
+  lines.push(`> **Q:** ${turn.question}`);
+  lines.push("");
+  lines.push(turn.answer.trim());
+  if (turn.sources.length > 0) {
+    lines.push("");
+    lines.push("**Sources**");
+    for (const s of turn.sources) {
+      const sec = s.section_path ? ` · § ${s.section_path}` : "";
+      lines.push(`- [${s.n}] ${s.citation}${sec}`);
+    }
+  }
+  if (turn.usedModel) {
+    lines.push("");
+    lines.push(`*Generated with ${turn.usedModel}*`);
+  }
+  return lines.join("\n");
+}
+
 // shows a blinking caret so the user sees progress before sources lock in.
 function AskTurnAnswer({
   turn,
@@ -2011,13 +2069,16 @@ function AskTurnAnswer({
     turn.id,
   );
   return (
-    <div className="rounded-xl border border-border bg-surface-2 p-4">
+    <div className="group relative rounded-xl border border-border bg-surface-2 p-4">
       <p className="whitespace-pre-wrap text-[14px] leading-[1.7] text-text">
         {parts}
         {turn.streaming && (
           <span className="ml-0.5 inline-block h-[14px] w-[2px] animate-pulse bg-primary align-middle" />
         )}
       </p>
+      {!turn.streaming && turn.answer && (
+        <CopyAsCitationButton turn={turn} />
+      )}
     </div>
   );
 }
