@@ -2,7 +2,39 @@
 
 import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { Skeleton } from "@/components/ui/Skeleton";
 import type { TraceSummaryDto } from "@/lib/observatory-api";
+
+/**
+ * Skeleton row stack for the trace table loading state. Matches the table's
+ * column proportions so layout doesn't jump on first paint of real data.
+ * `rows` defaults to 6 — enough to fill the viewport without overflowing.
+ */
+export function TraceTableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div
+      aria-hidden
+      data-testid="trace-table-skeleton"
+      className="divide-y divide-border"
+    >
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 px-3 py-3"
+          style={{ animationDelay: `${i * 60}ms` }}
+        >
+          <Skeleton className="h-3 w-[180px]" />
+          <Skeleton className="h-3 w-[120px]" />
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <div className="flex-1" />
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="h-3 w-14" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export type TraceSortKey = "started_at" | "duration_s" | "tokens";
 export type SortDirection = "asc" | "desc";
