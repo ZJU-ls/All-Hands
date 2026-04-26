@@ -443,6 +443,29 @@ async def reindex_document(kb_id: str, doc_id: str) -> DocOut:
     return _doc_out(doc)
 
 
+class TagPatchPayload(BaseModel):
+    add: list[str] | None = None
+    remove: list[str] | None = None
+    replace: list[str] | None = None
+
+
+@router.patch("/{kb_id}/documents/{doc_id}/tags")
+async def patch_document_tags(kb_id: str, doc_id: str, payload: TagPatchPayload) -> DocOut:
+    """Add / remove / replace tags on a single document.
+
+    Bulk paths (e.g. tag N selected docs) issue this in a loop client-side
+    — no dedicated bulk endpoint yet because the per-doc op is cheap and
+    the front-end wants per-row error tolerance anyway.
+    """
+    try:
+        doc = await _service().update_document_tags(
+            doc_id, add=payload.add, remove=payload.remove, replace=payload.replace
+        )
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _doc_out(doc)
+
+
 # ----------------------------------------------------------------------
 # Search
 # ----------------------------------------------------------------------
