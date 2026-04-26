@@ -500,34 +500,30 @@ class AgentLoop:
                         yield LoopExited(reason="completed")
                     return
 
-                # Append assistant message (with tool_uses) to lc history
-                # so the next LLM turn sees its own previous turn.
-                lc_messages.append(self._to_lc_assistant_message(assistant_msg))
-
-                # Execute tool_uses through the pipeline. Partition into
-                # batches; each batch is either concurrent (read-only)
-                # or serial (write/deferred). Within concurrent batches
-                # we asyncio.gather; serial batches yield events during
-                # execution (deferred path emits ConfirmationRequested).
-                #
-                # Track which tool_use ids have completed (received TMC)
-                # so the outer except / finally can synthesize a TMC for
-                # any tool that started but didn't finish — otherwise the
-                # frontend stamps it `tool_call_dropped` at finalize time
-                # and the user sees a confusing red "failed" envelope on
-                # what was really an outer-loop crash.
+                # R2 review · widen the BaseException safety net to cover
+                # the entire post-AssistantMessageCommitted phase, not just
+                # the batches loop. The earlier scoping missed cancellations
+                # that hit between `yield AssistantMessageCommitted(...)` and
+                # the start of `try: for batch in batches:` (about 4 lines
+                # of code, but on a slow event loop / SSE drop / inner
+                # exception during lc_messages bookkeeping any of these can
+                # synchronously yield CancelledError). When that happens, the
+                # tool_use was already announced to the frontend (TOOL_CALL_
+                # START fired) but the loop unwinds before TOOL_CALL_END,
+                # leaving the UI to stamp `tool_call_dropped`.
                 committed_tool_use_ids: set[str] = set()
-                batches = partition_tool_uses(tool_use_blocks, bindings)
+                pending_tool_use_ids: set[str] = {b.id for b in tool_use_blocks}
                 try:
+                    # Append assistant message to lc history so the next LLM
+                    # turn sees it; failure here would leak the assistant
+                    # tool_use to the wire without committing tool results.
+                    lc_messages.append(self._to_lc_assistant_message(assistant_msg))
+
+                    batches = partition_tool_uses(tool_use_blocks, bindings)
                     for batch in batches:
                         if batch.is_concurrent_safe and len(batch.blocks) > 1:
-                            # R1 review · C1: use return_exceptions=True so a
-                            # blow-up in one branch doesn't cancel siblings
-                            # mid-await. Each branch already wraps executor
-                            # exceptions into an error envelope Message — but
-                            # if the wrap itself raises (binding lookup,
-                            # _make_tool_message), we'd lose all sibling
-                            # results otherwise.
+                            # R1 · C1: return_exceptions=True so a blow-up in
+                            # one branch doesn't cancel siblings mid-await.
                             raw_results = await asyncio.gather(
                                 *[
                                     execute_tool_use_concurrent(
@@ -564,14 +560,11 @@ class AgentLoop:
                 except BaseException as inner_exc:
                     # Catches Exception AND CancelledError (BaseException).
                     # Synthesize a failure TMC for every tool_use the model
-                    # asked for that didn't reach a TMC — without this the
-                    # parent loop's outer `except` would swallow the failure
-                    # AND the UI would never see tool_call_end for them.
-                    for blk in tool_use_blocks:
-                        if blk.id in committed_tool_use_ids:
-                            continue
+                    # asked for that didn't reach a TMC — even if cancel hit
+                    # before any batch ran.
+                    for blk_id in pending_tool_use_ids - committed_tool_use_ids:
                         synthetic = _make_tool_message_synthetic(
-                            tool_use_id=blk.id,
+                            tool_use_id=blk_id,
                             error=(
                                 f"{type(inner_exc).__name__}: {inner_exc}"
                                 if not isinstance(inner_exc, asyncio.CancelledError)
@@ -581,9 +574,6 @@ class AgentLoop:
                             conversation_id=self._conversation_id,
                         )
                         yield ToolMessageCommitted(message=synthetic)
-                    # Re-raise so the outer try/except still records the
-                    # LoopExited(aborted) sentinel (or unwinds asyncio
-                    # cancellation if that's what we hit).
                     raise
 
                 # Loop back to next LLM turn
