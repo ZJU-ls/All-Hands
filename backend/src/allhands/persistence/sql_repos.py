@@ -97,7 +97,7 @@ def _row_to_employee(row: EmployeeRow) -> Employee:
         skill_ids=list(row.skill_ids),
         max_iterations=row.max_iterations,
         is_lead_agent=row.is_lead_agent,
-        status=row.status if row.status in ("draft", "published") else "published",  # type: ignore[arg-type]
+        status=row.status if row.status in ("draft", "published", "archived") else "published",  # type: ignore[arg-type]
         created_by=row.created_by,
         created_at=_utc(row.created_at),
         published_at=_utc(row.published_at) if row.published_at else None,
@@ -236,10 +236,22 @@ class SqlEmployeeRepo:
         row = result.scalar_one_or_none()
         return _row_to_employee(row) if row else None
 
-    async def list_all(self, *, status: str | None = None) -> list[Employee]:
+    async def list_all(
+        self, *, status: str | None = None, include_archived: bool = False
+    ) -> list[Employee]:
+        """List employees.
+
+        - ``status`` filters to a single status value when provided.
+        - ``include_archived`` controls whether archived employees show up
+          when ``status`` is ``None``. The default keeps the historical
+          "active surfaces" behaviour: callers that want the 「已离职」
+          tab pass ``status="archived"`` explicitly.
+        """
         stmt = select(EmployeeRow)
         if status is not None:
             stmt = stmt.where(EmployeeRow.status == status)
+        elif not include_archived:
+            stmt = stmt.where(EmployeeRow.status != "archived")
         result = await self._s.execute(stmt)
         return [_row_to_employee(r) for r in result.scalars().all()]
 

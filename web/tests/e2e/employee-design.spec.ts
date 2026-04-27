@@ -126,7 +126,18 @@ function installRoutes(
   page.route(/\/api\/employees(\?[^/]*)?$/, async (route) => {
     const method = route.request().method();
     if (method === "GET") {
-      await route.fulfill({ json: state.employees });
+      // Backend semantics:
+      //   no status filter → exclude archived
+      //   status=archived  → only archived
+      //   status=draft / published → only that status
+      const url = new URL(route.request().url());
+      const status = url.searchParams.get("status");
+      const filtered = state.employees.filter((e) => {
+        const empStatus = (e as { status?: string }).status ?? "published";
+        if (status === null) return empStatus !== "archived";
+        return empStatus === status;
+      });
+      await route.fulfill({ json: filtered });
       return;
     }
     if (method === "POST") {
@@ -152,6 +163,24 @@ function installRoutes(
       return;
     }
     await route.continue();
+  });
+  page.route(/\/api\/employees\/[^/]+\/restore$/, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    const url = route.request().url();
+    const id = url.split("/").slice(-2)[0];
+    const emp = state.employees.find((e) => (e as { id: string }).id === id) as
+      | (Json & { status: string; published_at: string | null })
+      | undefined;
+    if (!emp) {
+      await route.fulfill({ status: 404, json: { detail: "missing" } });
+      return;
+    }
+    emp.status = "published";
+    emp.published_at = "2026-04-20T00:00:00Z";
+    await route.fulfill({ json: emp });
   });
   page.route(/\/api\/employees\/[^/]+\/publish$/, async (route) => {
     if (route.request().method() !== "POST") {
@@ -197,7 +226,14 @@ function installRoutes(
       return;
     }
     if (method === "DELETE") {
-      if (idx >= 0) state.employees.splice(idx, 1);
+      const hard = new URL(route.request().url()).searchParams.get("hard") === "true";
+      if (idx >= 0) {
+        if (hard) {
+          state.employees.splice(idx, 1);
+        } else {
+          (state.employees[idx] as { status: string }).status = "archived";
+        }
+      }
       await route.fulfill({ status: 204 });
       return;
     }
@@ -365,7 +401,9 @@ test.describe("/employees/{id}?tab=config · lifecycle (publish + delete + try)"
     await expect(page.getByTestId("employee-config-publish")).toHaveCount(0);
   });
 
-  test("delete confirms then routes back to /employees roster", async ({ page }) => {
+  test("delete (soft) flips status to archived in-place + shows restore banner", async ({
+    page,
+  }) => {
     installRoutes(page, { employees: [{ ...draftEmp }] });
     await page.goto(`/employees/${draftEmp.id}?tab=config`);
 
@@ -377,6 +415,35 @@ test.describe("/employees/{id}?tab=config · lifecycle (publish + delete + try)"
       .getByRole("button", { name: /^删除$|^Delete$/ })
       .click();
 
+    // v3 soft-delete: detail page stays mounted, hero chip flips, banner shows.
+    await expect(page.getByTestId("employee-hero-status-archived")).toBeVisible();
+    await expect(page.getByTestId("employee-archived-banner")).toBeVisible();
+    await expect(page.getByTestId("employee-archived-restore")).toBeVisible();
+  });
+
+  test("archived banner restore flips back to published", async ({ page }) => {
+    const archivedEmp = { ...draftEmp, status: "archived" } satisfies Json;
+    installRoutes(page, { employees: [archivedEmp] });
+    await page.goto(`/employees/${draftEmp.id}`);
+
+    await expect(page.getByTestId("employee-archived-banner")).toBeVisible();
+    await page.getByTestId("employee-archived-restore").click();
+    await expect(page.getByTestId("employee-hero-status-published")).toBeVisible();
+    await expect(page.getByTestId("employee-archived-banner")).toHaveCount(0);
+  });
+
+  test("archived banner hard-delete → routes back to /employees", async ({
+    page,
+  }) => {
+    const archivedEmp = { ...draftEmp, status: "archived" } satisfies Json;
+    installRoutes(page, { employees: [archivedEmp] });
+    await page.goto(`/employees/${draftEmp.id}`);
+
+    await page.getByTestId("employee-archived-hard-delete").click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^永久删除$|^Delete forever$/ })
+      .click();
     await page.waitForURL(/\/employees(\?.*)?$/);
   });
 

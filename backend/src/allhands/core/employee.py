@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 _RESERVED_ROLE_NAMES = frozenset({"system", "user", "tool", "assistant"})
 _MAX_NAME_LEN = 64
 
-EmployeeStatus = Literal["draft", "published"]
+EmployeeStatus = Literal["draft", "published", "archived"]
 
 
 def is_valid_employee_name(name: str) -> bool:
