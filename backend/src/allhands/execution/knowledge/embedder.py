@@ -60,6 +60,11 @@ class EmbeddingProvider:
     name: str
     dim: int
     embed: Callable[[list[str]], Awaitable[list[Vector]]]
+    # Per-provider batch ceiling. Aliyun DashScope text-embedding-v3/v4 caps
+    # batch at 10 (HTTP 400: "batch size is invalid, it should not be larger
+    # than 10"). OpenAI's `text-embedding-3-*` allows >>64 but our writer
+    # latency / retry backoff is happier at 64. None = use the global default.
+    max_batch_size: int | None = None
 
 
 def _hash_embed(dim: int) -> Callable[[list[str]], Awaitable[list[Vector]]]:
@@ -181,7 +186,13 @@ class Embedder:
 
     async def _embed_with_retry(self, texts: list[str]) -> list[Vector]:
         out: list[Vector] = []
-        for batch in _chunks(texts, self.cfg.batch_size):
+        # Provider-specific cap wins. Aliyun v3/v4 returns 400 above 10.
+        effective_batch = (
+            min(self.cfg.batch_size, self.provider.max_batch_size)
+            if self.provider.max_batch_size is not None
+            else self.cfg.batch_size
+        )
+        for batch in _chunks(texts, effective_batch):
             attempts = 0
             while True:
                 attempts += 1
@@ -305,10 +316,16 @@ def resolve_provider(
 
     base = found.base_url.rstrip("/")
     dim = _OPENAI_DIMS.get(rest, 1536) if scheme == "openai" else _BAILIAN_DIMS.get(rest, 1024)
+    # Aliyun DashScope text-embedding-v3/v4 caps batch at 10 (HTTP 400 above
+    # that). OpenAI's text-embedding-3-* allows much larger batches but our
+    # latency / retry math is fine at the global default. Only constrain when
+    # we know the upstream limit.
+    max_batch = 10 if scheme in {"aliyun", "bailian"} else None
     return EmbeddingProvider(
         name=model_ref,
         dim=dim,
         embed=_openai_compat_embed(f"{base}/embeddings", found.api_key, rest),
+        max_batch_size=max_batch,
     )
 
 

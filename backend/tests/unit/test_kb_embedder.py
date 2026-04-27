@@ -53,3 +53,60 @@ def test_resolve_provider_rejects_unknown_scheme() -> None:
 def test_resolve_provider_mock_dim_parsed_from_ref() -> None:
     p = resolve_provider("mock:hash-128")
     assert p.dim == 128
+
+
+async def test_embedder_respects_provider_max_batch_size() -> None:
+    """When a provider declares max_batch_size (e.g. aliyun caps at 10),
+    the embedder must chunk down to it even when EmbedderConfig.batch_size
+    is larger. Regression for the 2026-04-28 bug:
+        '<400> InternalError.Algo.InvalidParameter: ...
+         batch size is invalid, it should not be larger than 10'
+    """
+    from allhands.execution.knowledge.embedder import (
+        EmbedderConfig,
+        EmbeddingProvider,
+    )
+
+    seen: list[int] = []
+
+    async def capped_embed(texts: list[str]) -> list[list[float]]:
+        seen.append(len(texts))
+        return [normalize([0.1] * 4) for _ in texts]
+
+    provider = EmbeddingProvider(
+        name="aliyun:text-embedding-v4",
+        dim=4,
+        embed=capped_embed,
+        max_batch_size=10,
+    )
+    emb = Embedder(
+        model_ref=provider.name,
+        provider=provider,
+        config=EmbedderConfig(batch_size=64),
+    )
+    await emb.embed_texts([f"text {i}" for i in range(25)])
+    # 25 / 10 → batches of 10, 10, 5
+    assert seen == [10, 10, 5]
+
+
+def test_resolve_provider_aliyun_sets_max_batch_10() -> None:
+    """resolve_provider must wire max_batch_size=10 for aliyun/bailian
+    schemes so the upstream batch-of-10 cap is honoured automatically."""
+
+    class _S:
+        dashscope_api_key = "fake"
+
+    p = resolve_provider("aliyun:text-embedding-v4", settings_lookup=lambda: _S())
+    assert p.max_batch_size == 10
+    p2 = resolve_provider("bailian:text-embedding-v3", settings_lookup=lambda: _S())
+    assert p2.max_batch_size == 10
+
+
+def test_resolve_provider_openai_no_batch_cap() -> None:
+    """OpenAI doesn't have such a cap; provider must leave it None."""
+
+    class _S:
+        openai_api_key = "fake"
+
+    p = resolve_provider("openai:text-embedding-3-small", settings_lookup=lambda: _S())
+    assert p.max_batch_size is None
