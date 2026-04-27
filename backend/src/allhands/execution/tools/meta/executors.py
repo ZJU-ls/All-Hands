@@ -1233,14 +1233,19 @@ def make_artifact_create_pptx_executor(
 
     async def _exec(
         name: str,
+        page: dict[str, Any] | None = None,
         slides: list[dict[str, Any]] | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
         change_message: str | None = None,
         **_: Any,
     ) -> dict[str, Any]:
+        # ToolArgError raised by render_pptx propagates to the pipeline
+        # for the structured {error,field,expected,received,hint}
+        # envelope (ADR 0021). We only catch the generic generator /
+        # persistence failures here.
         try:
-            blob, warnings = render_pptx(slides=slides or [])
+            blob, warnings = render_pptx(page=page, slides=slides or [])
             result = await _persist_office_artifact(
                 maker=maker,
                 name=name,
@@ -1258,8 +1263,6 @@ def make_artifact_create_pptx_executor(
             return result
         except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
             return {"error": str(exc)}
-        except Exception as exc:
-            return {"error": f"artifact_create_pptx failed: {exc}"}
 
     return _exec
 
