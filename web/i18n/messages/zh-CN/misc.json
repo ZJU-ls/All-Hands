@@ -172,6 +172,13 @@
           "updated": "更新时间"
         }
       },
+      "runDetail": {
+        "shellTitle": "Trace · {id}",
+        "breadcrumb": {
+          "aria": "面包屑导航",
+          "trace": "trace"
+        }
+      },
       "costPanel": {
         "title": "成本面板 · 24h",
         "today": "今日累计",
@@ -237,15 +244,29 @@
         "toolsUsedEmpty": "本员工本时段没有调用工具",
         "model": "模型",
         "inv": "次",
-        "recentRuns": "最近 run · {n}",
+        "recentRuns": "最近 50 条 trace · 共 {n} 条",
         "noRuns": "本时段没有 run 记录",
         "kpi": {
-          "runs": "近 50 run",
+          "runs": "近 50 次 RUN",
           "failureRate": "失败率",
           "latencyP50": "延迟 P50",
           "latencyP95": "延迟 P95",
           "tokens": "Tokens 总消耗",
           "cost": "成本估算"
+        },
+        "table": {
+          "trace": "TRACE",
+          "model": "模型",
+          "status": "状态",
+          "duration": "耗时",
+          "tokens": "TOKENS",
+          "started": "开始时间",
+          "employee": "员工"
+        },
+        "status": {
+          "ok": "成功",
+          "failed": "失败",
+          "running": "运行中"
         }
       },
       "toolDetail": {
@@ -288,7 +309,7 @@
         "topEmployeesTitle": "使用本模型的员工",
         "topEmployeesEmpty": "本时段没有员工调用此模型",
         "kpi": {
-          "runs": "近 50 run",
+          "runs": "近 50 次 RUN",
           "failureRate": "失败率",
           "latencyP50": "延迟 P50",
           "tokens": "Tokens 总消耗",
@@ -632,7 +653,7 @@
         "conversations": "历史会话",
         "tasks": "异步任务",
         "employees": "数字员工",
-        "employeeDesign": "设计新员工",
+        "employeeNew": "招聘新员工",
         "skills": "技能包",
         "mcp": "外部 MCP",
         "gateway": "供应商与模型网关",
@@ -653,7 +674,7 @@
         "conversations": "历史会话",
         "tasks": "任务",
         "employees": "员工",
-        "employeeDesign": "员工设计",
+        "employeeNew": "招聘新员工",
         "skills": "技能",
         "mcp": "MCP 服务器",
         "gateway": "供应商与模型",

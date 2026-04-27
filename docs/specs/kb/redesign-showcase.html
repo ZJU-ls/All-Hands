@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KB · 重设计方案 · 单页拆三级</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root[data-theme="dark"]{
+  --bg-base:#0a0d14; --bg-surface:#11151f; --bg-elevated:#161b28; --bg-soft:#1c2233;
+  --border-hairline:rgba(120,140,200,0.10); --border-strong:rgba(140,165,220,0.22);
+  --text-strong:#f4f6fb; --text-default:#c9d1e3; --text-muted:#8590a8; --text-faint:#5d6680;
+  --primary:#4a7dff; --primary-soft:rgba(74,125,255,0.14); --primary-glow:rgba(74,125,255,0.42);
+  --accent-cyan:#38c8d8; --accent-violet:#8b6cff;
+  --success:#44d18a; --warning:#f0b048; --danger:#ff6477;
+  --wire-fill:rgba(140,165,220,0.06); --wire-stroke:rgba(140,165,220,0.30);
+  --wire-focus-fill:rgba(74,125,255,0.14); --wire-focus-stroke:rgba(74,125,255,0.55);
+}
+:root[data-theme="light"]{
+  --bg-base:#f5f7fc; --bg-surface:#fff; --bg-elevated:#fff; --bg-soft:#eef2fa;
+  --border-hairline:rgba(20,30,60,0.08); --border-strong:rgba(20,30,60,0.20);
+  --text-strong:#0c1426; --text-default:#2c364c; --text-muted:#5a6680; --text-faint:#8a93ab;
+  --primary:#2c5cff; --primary-soft:rgba(44,92,255,0.10); --primary-glow:rgba(44,92,255,0.35);
+  --accent-cyan:#1e9aa8; --accent-violet:#6a4cf0;
+  --success:#1fae6a; --warning:#c98a25; --danger:#d8324a;
+  --wire-fill:rgba(20,30,60,0.04); --wire-stroke:rgba(20,30,60,0.22);
+  --wire-focus-fill:rgba(44,92,255,0.08); --wire-focus-stroke:rgba(44,92,255,0.55);
+}
+html,body{background:var(--bg-base);color:var(--text-default);font-family:'Inter','PingFang SC',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+.text-strong{color:var(--text-strong);} .text-muted{color:var(--text-muted);} .text-faint{color:var(--text-faint);}
+.bg-surface{background:var(--bg-surface);} .bg-soft{background:var(--bg-soft);}
+.border-hairline{border-color:var(--border-hairline);}
+.border-strong{border-color:var(--border-strong);}
+.gradient-text{background:linear-gradient(120deg,var(--primary),var(--accent-cyan),var(--accent-violet));-webkit-background-clip:text;background-clip:text;color:transparent;}
+.hero-mesh{background:radial-gradient(60% 50% at 20% 0%,var(--primary-soft) 0,transparent 60%),radial-gradient(50% 40% at 90% 20%,rgba(56,200,216,.10) 0,transparent 60%),radial-gradient(40% 30% at 50% 100%,rgba(139,108,255,.10) 0,transparent 60%);}
+.card{background:var(--bg-surface);border:1px solid var(--border-hairline);border-radius:14px;}
+.card-elev{background:var(--bg-elevated);border:1px solid var(--border-hairline);border-radius:12px;}
+.kbd{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;padding:2px 6px;border-radius:4px;background:var(--bg-soft);border:1px solid var(--border-hairline);color:var(--text-default);}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:11px;line-height:1.4;border-radius:999px;border:1px solid var(--border-strong);color:var(--text-muted);background:var(--bg-soft);font-weight:500;letter-spacing:0.02em;}
+.pill-primary{color:var(--primary);border-color:var(--primary-soft);background:var(--primary-soft);}
+.pill-success{color:var(--success);border-color:rgba(68,209,138,0.2);background:rgba(68,209,138,0.10);}
+.pill-warning{color:var(--warning);border-color:rgba(240,176,72,0.2);background:rgba(240,176,72,0.10);}
+.pill-danger{color:var(--danger);border-color:rgba(255,100,119,0.20);background:rgba(255,100,119,0.10);}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.accent-bar{background:linear-gradient(90deg,var(--primary),var(--accent-cyan));height:2px;border-radius:2px;}
+
+/* Wireframe primitives — 灰白盒 + 标签 */
+.wire{border:1px dashed var(--wire-stroke);background:var(--wire-fill);border-radius:8px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 10px;line-height:1.5;}
+.wire-focus{border-color:var(--wire-focus-stroke);background:var(--wire-focus-fill);color:var(--text-default);}
+.wire-label{font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-faint);margin-bottom:4px;}
+.wire-grid{display:grid;gap:8px;}
+.wire-frame{border:1px solid var(--border-strong);background:var(--bg-elevated);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+.wire-tab-active{background:var(--primary);color:white;border-color:var(--primary);}
+.wire-faded{opacity:0.55;}
+.wire-stripe{background-image:repeating-linear-gradient(45deg,var(--border-hairline),var(--border-hairline) 4px,transparent 4px,transparent 8px);}
+
+table.compare{width:100%;font-size:12px;}
+table.compare th{text-align:left;font-weight:500;color:var(--text-faint);padding:8px 10px;border-bottom:1px solid var(--border-hairline);text-transform:uppercase;letter-spacing:0.04em;font-size:10px;}
+table.compare td{padding:8px 10px;border-bottom:1px solid var(--border-hairline);vertical-align:top;}
+.before-after{display:grid;grid-template-columns:1fr 24px 1fr;gap:8px;align-items:stretch;}
+.before, .after{padding:12px 14px;border-radius:10px;border:1px solid var(--border-hairline);font-size:12px;line-height:1.55;}
+.before{background:rgba(255,100,119,0.06);border-color:rgba(255,100,119,0.18);}
+.after{background:rgba(68,209,138,0.06);border-color:rgba(68,209,138,0.20);}
+.arrow{display:grid;place-items:center;color:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:14px;}
+
+/* IA tree */
+.tree-node{font-family:'JetBrains Mono',monospace;font-size:12px;padding:4px 8px;border-radius:4px;background:var(--bg-soft);border:1px solid var(--border-hairline);display:inline-flex;align-items:center;gap:6px;}
+.tree-l1{border-color:var(--primary);color:var(--primary);background:var(--primary-soft);}
+.tree-l2{border-color:var(--accent-cyan);color:var(--accent-cyan);background:rgba(56,200,216,0.08);}
+.tree-l3{border-color:var(--accent-violet);color:var(--accent-violet);background:rgba(139,108,255,0.08);}
+
+details > summary{list-style:none;cursor:pointer;}
+details > summary::-webkit-details-marker{display:none;}
+details > summary::after{content:'▾';color:var(--text-faint);margin-left:6px;transition:transform .15s;display:inline-block;}
+details[open] > summary::after{transform:rotate(180deg);}
+</style>
+</head>
+<body class="min-h-screen">
+
+<header class="sticky top-0 z-50 backdrop-blur-xl" style="background:color-mix(in srgb,var(--bg-base) 80%,transparent);border-bottom:1px solid var(--border-hairline);">
+  <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,var(--primary),var(--accent-violet));">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M3 4h18M3 12h18M3 20h18"/></svg>
+      </div>
+      <span class="text-strong font-semibold">KB · 重设计方案</span>
+      <span class="pill pill-primary"><span class="dot"></span>调研 + 提案</span>
+    </div>
+    <button id="themeToggle" class="px-3 py-1.5 rounded-md text-muted hover:text-strong border border-hairline text-sm">主题</button>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero-mesh">
+  <div class="max-w-6xl mx-auto px-6 pt-14 pb-10">
+    <div class="flex items-center gap-2 mb-5">
+      <span class="pill">2026-04-27</span>
+      <span class="pill">不动代码 · 仅设计</span>
+    </div>
+    <h1 class="text-4xl md:text-5xl font-semibold tracking-tight leading-[1.1] text-strong mb-4">
+      把单页 KB 拆成 <span class="gradient-text">三级页面</span>
+      <br/>每一级只回答一个问题
+    </h1>
+    <p class="text-base text-muted max-w-3xl mb-6">
+      你说"信息密度太高 · 搞个两三级页面下钻"。我把 KB 现状审计了一遍 ·
+      调研了 NotebookLM / Glean / Notion / Mem.ai / Custom GPTs / Claude Projects /
+      Obsidian 7 个一线产品的 IA · 提了一份三级路由方案。
+      下面 wireframe 不是真界面, 是示意 · 看清结构 · 不看像素。
+    </p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+      <div class="card p-3"><div class="text-xs text-faint">现在</div><div class="text-strong text-lg font-semibold">1 页 · 12 表面</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">提案</div><div class="text-strong text-lg font-semibold">3 级 · 5 个 tab</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">参考产品</div><div class="text-strong text-lg font-semibold">7</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">工作量估</div><div class="text-strong text-lg font-semibold">~5 天 / 6 phase</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 1. 问题诊断 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">1 · 现状审计 · 单页堆了多少东西</h2>
+  <p class="text-muted mb-6 text-sm">在一个 viewport 里, 极端情况下能同时存在这些 UI 表面:</p>
+
+  <div class="card p-5 overflow-x-auto">
+    <pre class="mono text-[12px] leading-relaxed text-muted">
+<span class="text-strong">/knowledge</span>(单页 · ~3700 行 · 单组件管 30+ useState)
+
+├─ <span class="text-strong">PageHeader</span> · title + count
+├─ <span class="text-strong">顶 toolbar</span>(5 控件: KB select · + 新建 · 搜/问 toggle · Upload split + URL 子菜单)
+├─ <span class="text-strong">Stale embedding banner</span>(条件性出现)
+├─ <span class="text-strong">左 sidebar 280px</span>
+│   ├─ KBInfoCard
+│   ├─ KBHealthCard          ← KPI + sparkline + top tags
+│   ├─ TagsCard
+│   └─ ToolsCard
+├─ <span class="text-strong">主区</span>(mode-multiplexed router)
+│   ├─ OnboardingWizard      ┐
+│   ├─ DocumentsView         │  四选一
+│   ├─ SearchResultsView     │
+│   └─ AskAnswerView         ┘
+│       └─ 多轮列表 + StarterChips + sticky composer
+├─ <span class="text-strong">右 slide-over Drawer</span>(条件)
+│   └─ 3 tabs: Overview · Original · Chunks · DocTagsEditor
+└─ <span class="text-strong">Modal 层</span>(条件)
+    ├─ CreateKBModal
+    ├─ UrlIngestModal
+    ├─ BulkTagModal
+    └─ KBSettingsModal · 4 sub-tabs: Basic · Diagnose · Advanced · Danger</pre>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-4 mt-6 text-sm">
+    <div class="card p-5">
+      <div class="text-xs uppercase tracking-wide text-faint mb-2">7 个真实痛点</div>
+      <ul class="space-y-2 text-muted">
+        <li>📊 <span class="text-strong">看不清自己 KB 里有啥</span> · 大局信息被挤进 280px 窄卡</li>
+        <li>💬 <span class="text-strong">Ask 体验受限</span> · 满屏一半 · 多轮 / sources / composer 挤一起</li>
+        <li>⚙ <span class="text-strong">设置是 modal</span> · 切模型 / 跑 diagnose 都该满屏认真做</li>
+        <li>📄 <span class="text-strong">doc detail 是 drawer</span> · 想"原文 + 分片并排"做不到</li>
+        <li>🔗 <span class="text-strong">没有可分享 URL</span> · 搜了问了, URL 不变, 转给同事就丢</li>
+        <li>↺ <span class="text-strong">切 KB 丢上下文</span> · Ask 对话清空但 URL 没变</li>
+        <li>📱 <span class="text-strong">窄屏崩溃</span> · toolbar wrap · sidebar 占太多</li>
+      </ul>
+    </div>
+    <div class="card p-5">
+      <div class="text-xs uppercase tracking-wide text-faint mb-2">一句话诊断</div>
+      <p class="text-strong text-base leading-relaxed">
+        把"<strong>KB 总览 / 文档管理 / 搜 / 问 / 设置 / 单文档详情</strong>" 6 个不同心智活动塞在一个 URL 里, 用 mode 字段在 React 里来回切, 就是密度过高的根源。
+      </p>
+      <p class="mt-3 text-muted text-sm">
+        每个活动的"工具" / "上下文" / "正确视宽" 都不一样, 凑在一起就是相互妥协 ·
+        谁都没拿到该有的舞台。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 2. 一线产品调研 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">2 · 一线产品调研 · 7 个对标</h2>
+  <p class="text-muted mb-6 text-sm">不同产品的 IA 树 · 看它们怎么分层。</p>
+
+  <div class="card p-6 overflow-x-auto mb-4">
+    <table class="compare min-w-[900px]">
+      <thead><tr><th>产品</th><th>L1 入口</th><th>L2 工作区</th><th>L3 详情</th><th>对我们的启发</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="mono text-strong">NotebookLM</td>
+          <td class="text-muted">Notebook 网格</td>
+          <td class="text-muted">三栏:Sources / Chat / Studio(audio · briefing · FAQ)</td>
+          <td class="text-muted">Source 详情大画布</td>
+          <td>三栏布局 · 衍生输出独立分区</td>
+        </tr>
+        <tr>
+          <td class="mono text-strong">Glean</td>
+          <td class="text-muted">Search-first home</td>
+          <td class="text-muted">Glean Chat 独立 surface</td>
+          <td class="text-muted">点 result 跳源 app</td>
+          <td>搜 / 问 各自 first-class · 不混 doc-grid</td>
+        </tr>
+        <tr>
+          <td class="mono text-strong">Notion AI</td>
+          <td class="text-muted">Sidebar tree</td>
+          <td class="text-muted">每个 page = 自己 URL</td>
+          <td class="text-muted">嵌套 sub-page</td>
+          <td>每个 doc 自己 URL · Q&amp;A 是 ⌘K 飘窗 · 不抢主区</td>
+        </tr>
+        <tr>
+          <td class="mono text-strong">Mem.ai</td>
+          <td class="text-muted">Mem feed(时间轴)</td>
+          <td class="text-muted">单 mem 自己 URL · 可编辑</td>
+          <td class="text-muted">Chat sidebar 全局</td>
+          <td>"全局 chat" 与"单 doc"分离</td>
+        </tr>
+        <tr>
+          <td class="mono text-strong">Custom GPTs</td>
+          <td class="text-muted">GPT/Project list</td>
+          <td class="text-muted">三栏:Configure / Knowledge / Test</td>
+          <td class="text-muted">File preview drawer</td>
+          <td>配置 / 知识 / 测试 同 L2 但分栏</td>
+        </tr>
+        <tr>
+          <td class="mono text-strong">Claude Projects</td>
+          <td class="text-muted">Project list</td>
+          <td class="text-muted">Chat 主导 · 文件 panel 可折叠</td>
+          <td class="text-muted">File preview modal</td>
+          <td>对话是主, 知识是辅</td>
+        </tr>
+        <tr>
+          <td class="mono text-strong">Obsidian</td>
+          <td class="text-muted">File tree(永远 sidebar)</td>
+          <td class="text-muted">Note canvas + outline 右</td>
+          <td class="text-muted">Backlinks / graph view</td>
+          <td>每个 note 独立画布</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card p-5">
+    <div class="text-xs uppercase tracking-wide text-faint mb-3">跨产品 4 条共识</div>
+    <div class="grid md:grid-cols-2 gap-3 text-sm">
+      <div class="card-elev p-3"><span class="text-primary font-semibold">①</span> <span class="text-strong">每个东西配自己的 URL</span> · KB / doc / project 都是 · 浏览器后退能用 · 链接能粘</div>
+      <div class="card-elev p-3"><span class="text-primary font-semibold">②</span> <span class="text-strong">搜索和问答各自 first-class</span> · 不和 doc list 共享同一画布做 mode 切换</div>
+      <div class="card-elev p-3"><span class="text-primary font-semibold">③</span> <span class="text-strong">设置/配置是独立 surface</span> · 至少独立大区域 · 不是飘窗</div>
+      <div class="card-elev p-3"><span class="text-primary font-semibold">④</span> <span class="text-strong">drill-down 心智深度通常 2-3 级</span> · 再深就用 expand panel · 不再切页</div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. 提案 IA -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">3 · 提案 · 三级 IA + 路由树</h2>
+  <p class="text-muted mb-6 text-sm">3 个层级 · 每级只回答一个问题 · URL 决定一切。</p>
+
+  <div class="card p-6 mb-4 overflow-x-auto">
+    <pre class="mono text-[12.5px] leading-[1.8]">
+<span class="tree-node tree-l1">/knowledge</span>                                  <span class="text-faint">L1 · "我有几个 KB · 哪个值得进?"</span>
+├── <span class="text-faint">/knowledge/new</span>                          <span class="text-faint">(modal · 不是 route)</span>
+└── <span class="tree-node tree-l2">/knowledge/[kbId]</span>                       <span class="text-faint">L2 · "这个 KB 我要干啥?" (默认 Overview)</span>
+    ├── <span class="tree-node tree-l2">/knowledge/[kbId]/docs</span>              <span class="text-faint">L2 tab · 文档管理</span>
+    ├── <span class="tree-node tree-l2">/knowledge/[kbId]/ask</span>               <span class="text-faint">L2 tab · 全屏对话</span>
+    ├── <span class="tree-node tree-l2">/knowledge/[kbId]/search</span>            <span class="text-faint">L2 tab · 全屏搜索</span>
+    ├── <span class="tree-node tree-l2">/knowledge/[kbId]/settings</span>          <span class="text-faint">L2 tab · 设置(满屏 · 4 sub)</span>
+    └── <span class="tree-node tree-l3">/knowledge/[kbId]/docs/[docId]</span>      <span class="text-faint">L3 · "这一份文档里有啥?"</span></pre>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-4">
+    <div class="card p-4">
+      <div class="pill pill-primary mb-3"><span class="dot"></span>L1</div>
+      <h3 class="text-strong font-semibold mb-2">KB hub</h3>
+      <p class="text-muted text-sm leading-relaxed">卡片网格 · 每张卡是一个 KB · 名 / doc count / sparkline / 上次活跃 / 是否需要修复 一眼读完 · 点击进 L2。</p>
+    </div>
+    <div class="card p-4">
+      <div class="pill" style="color:var(--accent-cyan);border-color:rgba(56,200,216,0.3);background:rgba(56,200,216,0.08);"><span class="dot"></span>L2</div>
+      <h3 class="text-strong font-semibold mb-2">单 KB 工作区 · 5 tab</h3>
+      <p class="text-muted text-sm leading-relaxed">Overview(默认) / Documents / Ask / Search / Settings · 每个 tab 自己 URL · 全屏布局 · 不再 mode-multiplex。</p>
+    </div>
+    <div class="card p-4">
+      <div class="pill" style="color:var(--accent-violet);border-color:rgba(139,108,255,0.3);background:rgba(139,108,255,0.08);"><span class="dot"></span>L3</div>
+      <h3 class="text-strong font-semibold mb-2">单文档页</h3>
+      <p class="text-muted text-sm leading-relaxed">替代当前 drawer · 满屏画布 + 320px side rail · Original ↔ Chunks 平级 tab · 支持 split view。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Wireframes -->
+<section class="max-w-6xl mx-auto px-6 py-10 space-y-10">
+
+  <div>
+    <div class="accent-bar w-10 mb-3"></div>
+    <h2 class="text-2xl font-semibold text-strong mb-2">4 · Wireframes · 每一级长啥样</h2>
+    <p class="text-muted mb-6 text-sm">灰色虚线框 = 占位 · 蓝色实线框 = 当前焦点区 · 不是真像素 · 看结构。</p>
+  </div>
+
+  <!-- L1 Wireframe -->
+  <div>
+    <div class="flex items-center gap-2 mb-3">
+      <span class="pill pill-primary"><span class="dot"></span>L1</span>
+      <h3 class="text-xl font-semibold text-strong">/knowledge · KB hub</h3>
+    </div>
+    <p class="text-muted text-sm mb-4">"我有几个 KB · 哪个值得进?" 一屏看完所有 KB 状态。</p>
+
+    <div class="wire-frame">
+      <!-- top bar -->
+      <div class="flex items-center justify-between gap-2">
+        <div class="wire" style="flex:1;">📚 知识库 · 2 个</div>
+        <div class="wire">⌘K 全局搜索</div>
+        <div class="wire wire-focus">＋ 新建 KB</div>
+      </div>
+      <!-- KB cards grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+        <div class="wire wire-focus" style="padding:12px 14px;">
+          <div class="wire-label">KB CARD · 主点击区</div>
+          <div class="text-strong text-sm font-semibold mb-1">📔 Personal Brain</div>
+          <div class="text-faint text-[10px] mb-2">5 docs · 36 chunks · 2.1k tokens · 3h ago</div>
+          <div class="mb-2 text-[10px]">▁▂▁▃▅▂▁▁▁▁▁▁▁▁▁▂▁ <span class="text-faint">30 day</span></div>
+          <div class="flex gap-1 flex-wrap text-[10px]">
+            <span class="pill">#ml</span><span class="pill">#retrieval</span><span class="pill">#notes</span>
+          </div>
+          <div class="mt-2 text-[10px]"><span class="pill pill-success"><span class="dot"></span>Ask 已配 · v3</span></div>
+        </div>
+        <div class="wire" style="padding:12px 14px;">
+          <div class="wire-label">KB CARD</div>
+          <div class="text-strong text-sm font-semibold mb-1">📔 Work Notes</div>
+          <div class="text-faint text-[10px] mb-2">12 docs · 89 chunks · 8.7k tokens · 2d ago</div>
+          <div class="mb-2 text-[10px]">▁▁▂▁▁▃▁▁▂▁▁▁▁▄▁▁▂▁ <span class="text-faint">30 day</span></div>
+          <div class="flex gap-1 flex-wrap text-[10px]">
+            <span class="pill">#meeting</span><span class="pill">#spec</span>
+          </div>
+          <div class="mt-2 text-[10px]"><span class="pill pill-warning"><span class="dot"></span>演示模式 · 仅关键词</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-3 text-[11px] text-faint mono">→ 点 KB card · 跳 L2 · /knowledge/[kbId]</div>
+  </div>
+
+  <!-- L2 Wireframe -->
+  <div>
+    <div class="flex items-center gap-2 mb-3">
+      <span class="pill" style="color:var(--accent-cyan);border-color:rgba(56,200,216,0.3);background:rgba(56,200,216,0.08);"><span class="dot"></span>L2</span>
+      <h3 class="text-xl font-semibold text-strong">/knowledge/[kbId] · 单 KB 工作区</h3>
+    </div>
+    <p class="text-muted text-sm mb-4">"这个 KB 我要干啥?" 顶部 chrome 共享 · 5 个 tab 各自全屏。</p>
+
+    <!-- Shared chrome -->
+    <div class="wire-frame mb-3" style="padding-bottom:0;">
+      <div class="flex items-center gap-3">
+        <div class="wire" style="font-size:10px;">◀ KB hub</div>
+        <div class="wire" style="flex:1;">📔 Personal Brain ✏ <span class="text-faint">· 5 docs · 36 chunks · ▁▂▁▃▅</span></div>
+      </div>
+      <div class="flex gap-1 mt-1 -mb-2">
+        <div class="wire wire-focus" style="border-radius:8px 8px 0 0;border-bottom:none;">Overview</div>
+        <div class="wire" style="border-radius:8px 8px 0 0;border-bottom:none;">Documents</div>
+        <div class="wire" style="border-radius:8px 8px 0 0;border-bottom:none;">💬 Ask</div>
+        <div class="wire" style="border-radius:8px 8px 0 0;border-bottom:none;">🔍 Search</div>
+        <div class="wire" style="border-radius:8px 8px 0 0;border-bottom:none;">⚙ Settings</div>
+      </div>
+    </div>
+
+    <!-- Overview tab body -->
+    <div class="wire-frame">
+      <div class="wire-label">L2 TAB · OVERVIEW · 默认</div>
+      <!-- Hero -->
+      <div class="wire wire-focus">
+        <div class="wire-label">HERO STRIP · 描述(可编辑)</div>
+        <span class="text-strong">"我自己的私有大脑 · 收纳所有想记住的东西" ✏</span>
+      </div>
+      <!-- Health full width -->
+      <div class="wire wire-focus">
+        <div class="wire-label">HEALTH · 满宽 · KPI + sparkline + tags</div>
+        <div class="grid grid-cols-3 gap-2 mt-1">
+          <div class="wire" style="text-align:center;"><div class="text-faint text-[9px]">DOCS</div><div class="text-strong text-base">5</div></div>
+          <div class="wire" style="text-align:center;"><div class="text-faint text-[9px]">CHUNKS</div><div class="text-strong text-base">36</div></div>
+          <div class="wire" style="text-align:center;"><div class="text-faint text-[9px]">TOKENS</div><div class="text-strong text-base">2.1k</div></div>
+        </div>
+        <div class="mt-2 text-[10px]">▁▂▁▃▅▂▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁ <span class="text-faint">30 day</span></div>
+        <div class="mt-2 flex gap-1"><span class="pill">#ml ×3</span><span class="pill">#retrieval ×2</span><span class="pill">#notes ×1</span></div>
+      </div>
+      <!-- 2 columns -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div class="wire">
+          <div class="wire-label">最近 5 个文档</div>
+          • RRF survey · ready<br/>• bge-reranker · ready<br/>• urls.md · ready<br/>
+          <span class="text-primary text-[10px]">→ 全部文档(到 Documents tab)</span>
+        </div>
+        <div class="wire">
+          <div class="wire-label">现在能问什么</div>
+          ✨ RRF 怎么工作?<br/>✨ bge-reranker 提升多少?<br/>✨ 关键词命中和向量召回区别?<br/>
+          <span class="text-primary text-[10px]">→ 去 Ask 模式</span>
+        </div>
+      </div>
+      <!-- Quick actions -->
+      <div class="wire">
+        <div class="wire-label">QUICK ACTIONS</div>
+        <div class="flex gap-2 mt-1 flex-wrap">
+          <span class="pill pill-primary">📤 上传</span>
+          <span class="pill">🔗 抓 URL</span>
+          <span class="pill">💬 问一下</span>
+          <span class="pill">⚙ 设置</span>
+        </div>
+      </div>
+    </div>
+
+    <details class="mt-4">
+      <summary class="text-strong text-sm font-medium">▾ 看其他 4 个 tab 的 wireframe</summary>
+
+      <!-- Documents tab -->
+      <div class="wire-frame mt-3">
+        <div class="wire-label">L2 TAB · DOCUMENTS · 文档管理</div>
+        <div class="flex gap-2"><div class="wire">全部状态 ▾</div><div class="wire">全部标签 ▾</div><div class="wire">排序: 最近 ▾</div><div style="flex:1;"></div><div class="wire">选中 N · 批量 ▾</div></div>
+        <div class="grid grid-cols-3 gap-2">
+          <div class="wire">📄 doc1</div><div class="wire">📄 doc2</div><div class="wire">📄 doc3</div>
+          <div class="wire">📄 doc4</div><div class="wire">📄 doc5</div><div class="wire">📄 doc6</div>
+        </div>
+        <div class="text-[11px] text-faint">→ 点 doc card · 跳 L3 · /docs/[docId] · <strong>不再用 drawer</strong></div>
+      </div>
+
+      <!-- Ask tab -->
+      <div class="wire-frame mt-3">
+        <div class="wire-label">L2 TAB · ASK · 全屏对话</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div class="md:col-span-2 wire wire-focus" style="min-height:160px;">
+            <div class="wire-label">CONVERSATION · 多轮</div>
+            Q1: what is rrf?<br/>
+            A1: RRF is a fusion method [1] ...<br/><br/>
+            Q2: 和 bge-reranker 比?<br/>
+            A2: bge-reranker improves ... [2][3]<br/><br/>
+            <div class="wire" style="margin-top:8px;">▶ 继续追问 …</div>
+          </div>
+          <div class="wire">
+            <div class="wire-label">SOURCES PANEL · 可折叠</div>
+            [1] doc abc · § RRF<br/>
+            [2] doc def · § ...<br/>
+            [3] doc ghi · § ...
+          </div>
+        </div>
+        <div class="text-[11px] text-faint">URL 含 ?thread=abc123 · 后续可持久化对话历史</div>
+      </div>
+
+      <!-- Search tab -->
+      <div class="wire-frame mt-3">
+        <div class="wire-label">L2 TAB · SEARCH · 全屏搜索</div>
+        <div class="wire wire-focus">🔍 搜 Personal Brain 里的内容…</div>
+        <div class="wire">
+          <div class="wire-label">RESULT #1 · BM25 #1 vec #3 · 0.71</div>
+          doc xyz · § RRF Fusion<br/>
+          Reciprocal Rank Fusion (RRF) is ...<br/>
+          <div class="wire" style="margin-top:6px;font-size:10px;">▾ 为什么排在这<br/>BM25 ████████░░ 80% · Vector ██░░░░░░░░ 20%<br/>Matched: rrf ✓ fusion ✓ parameter ✗</div>
+        </div>
+        <div class="wire">
+          <div class="wire-label">RESULT #2</div>
+          doc def · § ...
+        </div>
+        <div class="text-[11px] text-faint">URL 含 ?q=rrf · 同事打开同链接看到同结果</div>
+      </div>
+
+      <!-- Settings tab -->
+      <div class="wire-frame mt-3">
+        <div class="wire-label">L2 TAB · SETTINGS · 满屏 · 不是 modal</div>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <div class="wire">
+            <div class="wire-label">SUB NAV</div>
+            • Basic ←<br/>• Retrieval<br/>• Diagnose<br/>• Danger zone
+          </div>
+          <div class="md:col-span-3 wire wire-focus" style="min-height:140px;">
+            <div class="wire-label">ACTIVE SUB · BASIC</div>
+            <strong class="text-strong text-[12px]">Embedding model</strong><br/>
+            ✓ 阿里云百炼 · text-embedding-v3 · 1024d · 当前<br/>
+            　 阿里云百炼 · text-embedding-v4 · 1024d<br/><br/>
+            <strong class="text-strong text-[12px]">名称 · 描述 · visibility</strong><br/>
+            ...
+          </div>
+        </div>
+        <div class="text-[11px] text-faint">Diagnose 子 tab 终于能站满 width 跑三栏对比, 不再被 modal 挤扁</div>
+      </div>
+    </details>
+  </div>
+
+  <!-- L3 Wireframe -->
+  <div>
+    <div class="flex items-center gap-2 mb-3">
+      <span class="pill" style="color:var(--accent-violet);border-color:rgba(139,108,255,0.3);background:rgba(139,108,255,0.08);"><span class="dot"></span>L3</span>
+      <h3 class="text-xl font-semibold text-strong">/knowledge/[kbId]/docs/[docId] · 单文档页</h3>
+    </div>
+    <p class="text-muted text-sm mb-4">替代 drawer · 满屏画布 · 支持 Original + Chunks <strong>split view</strong>(drawer 做不到)。</p>
+
+    <div class="wire-frame">
+      <div class="wire-label">BREADCRUMB · 永远在</div>
+      <div class="wire">◀ Personal Brain · Documents · 📄 RRF Survey</div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div class="md:col-span-2 wire wire-focus" style="min-height:240px;">
+          <div class="wire-label">MAIN · 4 TAB</div>
+          <div class="flex gap-1 -mb-2">
+            <div class="wire" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:10px;">Overview</div>
+            <div class="wire wire-focus" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:10px;">Original</div>
+            <div class="wire" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:10px;">Chunks</div>
+            <div class="wire" style="border-radius:6px 6px 0 0;border-bottom:none;font-size:10px;">Backlinks</div>
+          </div>
+          <div class="wire" style="margin-top:8px;">
+            # Hybrid Retrieval<br/><br/>
+            Brief overview of combining ...<br/><br/>
+            ## RRF Fusion<br/>
+            Reciprocal Rank Fusion is ...<br/><br/>
+            <span class="text-faint text-[10px]">点段落 · side rail 显示对应 chunk 高亮</span>
+          </div>
+        </div>
+        <div class="wire">
+          <div class="wire-label">SIDE RAIL · 320px</div>
+          <strong class="text-strong text-[11px]">Tags</strong><br/>
+          #ml ✕  #retrieval ✕<br/>
+          + 加 · ✨ AI 推荐<br/><br/>
+          <strong class="text-strong text-[11px]">Metadata</strong><br/>
+          ID abc123<br/>
+          Mime markdown<br/>
+          Source upload<br/>
+          Created 2d ago<br/>
+          Updated 3h ago<br/><br/>
+          <strong class="text-strong text-[11px]">Versions</strong><br/>
+          v1 (current)<br/><br/>
+          <strong class="text-strong text-[11px]">Actions</strong><br/>
+          Reindex · Delete
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 wire-frame">
+      <div class="wire-label">CHUNKS TAB · SPLIT VIEW(新增 · drawer 做不到)</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div class="wire">
+          <div class="wire-label">LEFT · CHUNKS LIST</div>
+          1. # Hybrid Retrieval ...<br/>
+          <strong class="text-primary">2. ## RRF Fusion · selected</strong><br/>
+          3. ## Reranking ...
+        </div>
+        <div class="wire wire-focus">
+          <div class="wire-label">RIGHT · ORIGINAL · 自动滚到 + 高亮</div>
+          # Hybrid Retrieval<br/>Brief overview ...<br/>
+          <mark style="background:rgba(74,125,255,0.20);padding:1px 2px;">## RRF Fusion<br/>Reciprocal Rank Fusion ...</mark>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Before / After -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">5 · 信息密度 · Before / After</h2>
+  <p class="text-muted mb-6 text-sm">用同一个 viewport 标尺度量 · 单位 = "视觉表面"。</p>
+
+  <div class="card p-6">
+    <div class="before-after">
+      <div class="before">
+        <div class="text-xs text-faint mb-2 uppercase tracking-wider">现在 · 单页 /knowledge</div>
+        <strong class="text-strong">极端情况 ≈ 12 个 UI 表面同框</strong>
+        <ul class="mt-2 space-y-1 text-[11px]">
+          <li>顶 PageHeader</li>
+          <li>顶 toolbar 5 控件</li>
+          <li>Stale embedding banner</li>
+          <li>Sidebar KBInfo · KBHealth · Tags · Tools 4 张卡</li>
+          <li>主区(本身又是 4 选 1: onboarding/docs/search/ask)</li>
+          <li>Slide-over Drawer(3 sub-tab)</li>
+          <li>Modal(create / url / bulk-tag / settings 4 选)</li>
+          <li>Settings modal 自身 4 sub-tab</li>
+        </ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="after">
+        <div class="text-xs text-faint mb-2 uppercase tracking-wider">提案 · 三级 5 tab</div>
+        <strong class="text-strong">每个 viewport ≤ 5 个 UI 表面</strong>
+        <ul class="mt-2 space-y-1 text-[11px]">
+          <li>L1 KB hub: header + grid + new button (~3)</li>
+          <li>L2 Overview: chrome + tab + hero + health + recent + starters + actions (~5)</li>
+          <li>L2 Docs: chrome + tab + filter + grid + bulk bar (~5)</li>
+          <li>L2 Ask: chrome + tab + 对话区 + sources + composer (~5)</li>
+          <li>L2 Search: chrome + tab + query + 结果列 (~4)</li>
+          <li>L2 Settings: chrome + tab + sub-nav + 表单 (~4)</li>
+          <li>L3 doc: breadcrumb + main(4 sub-tab)+ side rail (~4)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Phase 拆迁 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">6 · 拆迁路线 · 6 phase / ~5 天</h2>
+  <p class="text-muted mb-6 text-sm">每个 phase 独立可 ship · 独立合 main · 不破现有测试。</p>
+
+  <div class="card p-6 overflow-x-auto">
+    <table class="compare min-w-[700px]">
+      <thead><tr><th>Phase</th><th>输出</th><th>估时</th><th>是否阻塞下一步</th></tr></thead>
+      <tbody>
+        <tr><td class="mono"><strong class="text-primary">P1</strong></td><td>L1 hub · KB cards 网格 + 跳转</td><td class="text-faint">半天</td><td>否</td></tr>
+        <tr><td class="mono"><strong class="text-primary">P2</strong></td><td>L2 layout · 共享 chrome + Overview 默认页</td><td class="text-faint">1 天</td><td>否</td></tr>
+        <tr><td class="mono"><strong class="text-primary">P3</strong></td><td>拆 Documents / Ask / Search 三个 tab page</td><td class="text-faint">1.5 天</td><td>否</td></tr>
+        <tr><td class="mono"><strong class="text-primary">P4</strong></td><td>L3 doc 页 · 替代 drawer + 新 split view</td><td class="text-faint">1 天</td><td>否</td></tr>
+        <tr><td class="mono"><strong class="text-primary">P5</strong></td><td>L2 settings 满屏页 · 替代 modal</td><td class="text-faint">半天</td><td>否</td></tr>
+        <tr><td class="mono"><strong class="text-primary">P6</strong></td><td>清理老路径 + 删老组件 + 测试更新</td><td class="text-faint">半天</td><td>—</td></tr>
+        <tr style="background:var(--bg-soft);"><td class="mono"><strong class="text-strong">Σ</strong></td><td><strong class="text-strong">合计</strong></td><td class="text-strong">~5 天</td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card p-5 mt-4">
+    <div class="text-xs uppercase tracking-wide text-faint mb-2">已有组件分流地图(节选)</div>
+    <table class="compare">
+      <thead><tr><th>现在</th><th>去向</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">DocumentsView</td><td class="text-muted">原样搬去 L2 docs tab</td></tr>
+        <tr><td class="mono">AskAnswerView</td><td class="text-muted">搬去 L2 ask tab + 多轮持久化(future)</td></tr>
+        <tr><td class="mono">SearchResultsView + SearchResultCard</td><td class="text-muted">搬去 L2 search tab</td></tr>
+        <tr><td class="mono">KBHealthCard + KBInfoCard + TagsCard + ToolsCard</td><td class="text-muted">拆碎 · 重组进 L2 Overview</td></tr>
+        <tr><td class="mono">DocDrawer · 3 sub-tab</td><td class="text-muted"><span class="pill pill-danger">删</span> 替换成 L3 doc 页 + side rail</td></tr>
+        <tr><td class="mono">KBSettingsModal · 4 sub-tab</td><td class="text-muted">拆成 L2 settings 页 + 4 sub-route</td></tr>
+        <tr><td class="mono">Create · UrlIngest · BulkTag modal</td><td class="text-muted">保留(action-triggered overlay 合理)</td></tr>
+        <tr><td class="mono">StarterChips · OnboardingWizard</td><td class="text-muted">分别移 L2 Overview · L1 hub 0-KB 状态</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 7. 决策点 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">7 · 等你拍板的几个决策点</h2>
+  <p class="text-muted mb-6 text-sm">下面 5 条我各有倾向 · 但都可改 · 你定。</p>
+
+  <ol class="space-y-3 text-sm">
+    <li class="card p-4">
+      <div class="flex items-start gap-3">
+        <span class="pill pill-primary mono mt-0.5">1</span>
+        <div class="flex-1">
+          <strong class="text-strong">Overview tab vs 直接进 Docs</strong>
+          <p class="text-muted mt-1">我推荐 Overview 默认 · 给用户摸底机会。也可以 smart default:第一次给 Overview · 之后记住上次的 tab。</p>
+        </div>
+      </div>
+    </li>
+    <li class="card p-4">
+      <div class="flex items-start gap-3">
+        <span class="pill pill-primary mono mt-0.5">2</span>
+        <div class="flex-1">
+          <strong class="text-strong">L2 chrome 是 tab bar 还是 sidebar nav</strong>
+          <p class="text-muted mt-1">Tab bar 更轻; sidebar nav 视觉更"工作区"。我倾向 tab bar · 5 个 tab 不算多。</p>
+        </div>
+      </div>
+    </li>
+    <li class="card p-4">
+      <div class="flex items-start gap-3">
+        <span class="pill pill-primary mono mt-0.5">3</span>
+        <div class="flex-1">
+          <strong class="text-strong">Ask thread 持久化 是否进本次</strong>
+          <p class="text-muted mt-1">我推荐 <strong>不进</strong> · 它是单独 feature(需要 conversation 表)· 一并做范围太大。</p>
+        </div>
+      </div>
+    </li>
+    <li class="card p-4">
+      <div class="flex items-start gap-3">
+        <span class="pill pill-primary mono mt-0.5">4</span>
+        <div class="flex-1">
+          <strong class="text-strong">Settings 满屏页 vs 大 sheet drawer</strong>
+          <p class="text-muted mt-1">我倾向满屏页 · diagnose 子 tab 的三栏对比真的需要 width。</p>
+        </div>
+      </div>
+    </li>
+    <li class="card p-4">
+      <div class="flex items-start gap-3">
+        <span class="pill pill-primary mono mt-0.5">5</span>
+        <div class="flex-1">
+          <strong class="text-strong">Next.js parallel routes / intercepting routes</strong>
+          <p class="text-muted mt-1">把 doc 页同时支持"满屏"和"从 docs tab 浮起的 modal"。技术性优化 · 不是 v0 必需 · 可放 P4 之后单独评估。</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- 8. 落实标准 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">8 · 落实标准 · 完成后用这 6 条对照</h2>
+  <p class="text-muted mb-6 text-sm">凡有一条没满足 · 都要继续修。</p>
+
+  <div class="card p-6">
+    <ul class="space-y-3 text-sm">
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <strong class="text-strong">L1 任何 KB card 一眼能看到</strong>
+          <span class="text-muted"> · 名 + doc count + sparkline + 上次活跃 + 是否需要修复(stale embedding)</span>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <strong class="text-strong">L2 任何 tab 内不再出现"4 张 sidebar 卡 + 主区 + drawer + modal"同框</strong>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <strong class="text-strong">L3 doc 页支持原文 + chunks 并排</strong>
+          <span class="text-muted"> · 点 chunk 直接在原文里高亮</span>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <strong class="text-strong">所有路由可分享</strong>
+          <span class="text-muted"> · URL 编码 active KB / docId / search query / ask thread</span>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <strong class="text-strong">浏览器后退按钮在每一级都符合直觉</strong>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <strong class="text-strong">移动端 / 窄屏不再 wrap 出乱七八糟的工具栏</strong>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<footer class="max-w-6xl mx-auto px-6 py-12 text-center">
+  <p class="text-faint text-[11px] mono">
+    完整设计草稿在 <span class="kbd">docs/specs/kb/2026-04-27-redesign-proposal.md</span> · 这份 HTML 是给你看的 · md 是给我自己看的 ·
+    动手实现等你点头
+  </p>
+</footer>
+
+<script>
+const root=document.documentElement;
+const btn=document.getElementById('themeToggle');
+btn?.addEventListener('click',()=>{
+  const next=root.getAttribute('data-theme')==='dark'?'light':'dark';
+  root.setAttribute('data-theme',next);
+});
+</script>
+</body>
+</html>

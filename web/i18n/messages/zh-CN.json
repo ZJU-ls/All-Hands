@@ -7,6 +7,8 @@
   },
   "shell": {
     "workspaceVersion": "v0 · mvp",
+    "workspaceWelcomeAria": "打开欢迎页 · 产品介绍 / 首次运行向导",
+    "workspaceWelcomeTitle": "回欢迎页 · 看产品介绍",
     "usage": "用量",
     "tokens": "{used} / {total} tokens",
     "search": {
@@ -61,7 +63,6 @@
       "conversations": "历史会话",
       "artifacts": "制品库",
       "employees": "员工",
-      "employeeDesign": "员工设计",
       "skills": "技能",
       "mcpServers": "MCP 服务器",
       "knowledge": "知识库",

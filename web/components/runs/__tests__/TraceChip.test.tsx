@@ -1,50 +1,35 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@/tests/test-utils/i18n-render";
-import { TraceChip, TRACE_QUERY_KEY } from "../TraceChip";
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@/tests/test-utils/i18n-render";
+import { TraceChip, traceHref, TRACE_QUERY_KEY } from "../TraceChip";
 
-const { routerReplaceMock } = vi.hoisted(() => ({
-  routerReplaceMock: vi.fn(),
-}));
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: routerReplaceMock, push: vi.fn() }),
-  usePathname: () => "/tasks",
-  useSearchParams: () => new URLSearchParams(""),
-}));
-
-beforeEach(() => routerReplaceMock.mockReset());
 afterEach(cleanup);
 
 describe("TraceChip", () => {
-  it("exports the shared query key used by the drawer", () => {
+  it("still exports the legacy query key (read by /traces and cockpit list)", () => {
     expect(TRACE_QUERY_KEY).toBe("trace");
   });
 
-  it("pushes ?trace=<run_id> onto the current route without scroll reset", () => {
-    render(<TraceChip runId="run_abc" />);
-    fireEvent.click(screen.getByTestId("trace-chip"));
-    expect(routerReplaceMock).toHaveBeenCalledWith(
-      "/tasks?trace=run_abc",
-      expect.objectContaining({ scroll: false }),
+  it("traceHref points to the observatory L3 page and url-encodes the id", () => {
+    expect(traceHref("run_abc")).toBe("/observatory/runs/run_abc");
+    expect(traceHref("run with space")).toBe(
+      "/observatory/runs/run%20with%20space",
     );
   });
 
-  it("stops event propagation so parent row links don't fire", () => {
-    const parentClick = vi.fn();
-    render(
-      <div onClick={parentClick}>
-        <TraceChip runId="run_xyz" />
-      </div>,
-    );
-    fireEvent.click(screen.getByTestId("trace-chip"));
-    expect(parentClick).not.toHaveBeenCalled();
-    expect(routerReplaceMock).toHaveBeenCalledTimes(1);
+  it("renders an anchor that links to the observatory L3 trace page", () => {
+    render(<TraceChip runId="run_abc" />);
+    const chip = screen.getByTestId("trace-chip");
+    expect(chip.tagName).toBe("A");
+    expect(chip.getAttribute("href")).toBe("/observatory/runs/run_abc");
+    expect(chip.getAttribute("data-run-id")).toBe("run_abc");
   });
 
   it("supports a `link` variant with arrow glyph", () => {
     render(<TraceChip runId="run_link" variant="link" label="查看" />);
     const chip = screen.getByTestId("trace-chip");
+    expect(chip.tagName).toBe("A");
     expect(chip.textContent).toContain("查看");
     expect(chip.textContent).toContain("↗");
+    expect(chip.getAttribute("href")).toBe("/observatory/runs/run_link");
   });
 });

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -14,20 +14,15 @@ import { KeyboardShortcutsModal } from "@/components/shell/KeyboardShortcutsModa
 import { RouteProgress } from "@/components/shell/RouteProgress";
 import { useDocumentTitle } from "@/lib/use-document-title";
 
-// Lazy-load the two global overlays so their module graph (DotGridBackdrop,
-// RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
-// into every route's dev cold-compile. ⌘K and `?trace=` are both infrequent
-// user-triggered surfaces, so a one-shot dynamic import on first open is
-// unnoticeable vs. the 2-6s per-route compile cost it saves. See L08.
+// Lazy-load the global ⌘K palette so its module graph isn't dragged into
+// every route's dev cold-compile. (The trace drawer used to live here too;
+// it was removed when trace viewing moved into observatory's L3 page —
+// /observatory/runs/[id] · TraceChip now navigates rather than opening an
+// overlay. See `docs/specs/2026-04-27-trace-into-observatory.md`.)
 const CommandPalette = dynamic(
   () => import("@/components/ui/CommandPalette").then((m) => m.CommandPalette),
   { ssr: false },
 );
-const RunTraceDrawer = dynamic(
-  () => import("@/components/runs/RunTraceDrawer").then((m) => m.RunTraceDrawer),
-  { ssr: false },
-);
-const TRACE_QUERY_KEY = "trace";
 
 type MenuItem = { labelKey: string; href: string; icon: IconName; badge?: string };
 type MenuSection = { titleKey: string; items: MenuItem[] };
@@ -48,7 +43,6 @@ const MENU: MenuSection[] = [
     titleKey: "team",
     items: [
       { labelKey: "employees", href: "/employees", icon: "users" },
-      { labelKey: "employeeDesign", href: "/employees/design", icon: "user-plus" },
       { labelKey: "skills", href: "/skills", icon: "wand-2" },
       { labelKey: "mcpServers", href: "/mcp-servers", icon: "plug" },
       { labelKey: "knowledge", href: "/knowledge", icon: "book-open" },
@@ -214,16 +208,22 @@ function matchActive(pathname: string, href: string, allHrefs: string[]): boolea
 
 function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations("shell");
+  // 2026-04-27 · 之前这里只是个空 button,带 chevrons-up-down 图标暗示
+  // "可切换",但完全没有 onClick — affordance 谎言。用户合理预期:点
+  // logo / 工作区名应该能"回首页 / 看欢迎页 / 切换工作区"。v0 还没有
+  // 多工作区,把这个槽位用到"打开欢迎页"上是最稳的:首次运行的 hero
+  // 体验 + 产品介绍的入口。改用 next/link 让中键点开新标签也工作,
+  // chevrons 改成 home 图标避免再误导"下拉切换"。
+  const cls = collapsed
+    ? "flex h-11 w-full items-center justify-center rounded-xl border border-transparent hover:border-border-strong hover:bg-surface-2 transition duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+    : "group flex h-11 w-full items-center gap-2.5 rounded-xl border border-transparent px-2 hover:border-border-strong hover:bg-surface-2 transition duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
   return (
-    <button
-      type="button"
-      className={
-        collapsed
-          ? "flex h-11 w-full items-center justify-center rounded-xl border border-transparent hover:border-border-strong hover:bg-surface-2 transition duration-fast"
-          : "flex h-11 w-full items-center gap-2.5 rounded-xl border border-transparent px-2 hover:border-border-strong hover:bg-surface-2 transition duration-fast"
-      }
-      aria-label="allhands"
-      title="allhands"
+    <Link
+      href="/welcome"
+      className={cls}
+      aria-label={t("workspaceWelcomeAria")}
+      title={t("workspaceWelcomeTitle")}
+      data-testid="workspace-switcher"
     >
       <AllhandsLogo size={32} className="shadow-soft-sm" />
       {collapsed ? null : (
@@ -236,10 +236,14 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
               {t("workspaceVersion")}
             </div>
           </div>
-          <Icon name="chevrons-up-down" size={14} className="text-text-subtle" />
+          <Icon
+            name="home"
+            size={14}
+            className="text-text-subtle opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity"
+          />
         </>
       )}
-    </button>
+    </Link>
   );
 }
 
@@ -365,8 +369,6 @@ export function AppShell({
   const [paletteMounted, setPaletteMounted] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const searchParams = useSearchParams();
-  const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
 
   // Sync browser tab title with the page-supplied title (locale-aware via
   // the `title` prop the caller computed from useTranslations).
@@ -495,7 +497,6 @@ export function AppShell({
       {paletteMounted && (
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       )}
-      {hasTrace && <RunTraceDrawer />}
       <KeyboardShortcutsModal
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}

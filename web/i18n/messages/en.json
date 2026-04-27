@@ -7,6 +7,8 @@
   },
   "shell": {
     "workspaceVersion": "v0 · mvp",
+    "workspaceWelcomeAria": "Open the welcome page · product intro / first-run walkthrough",
+    "workspaceWelcomeTitle": "Back to welcome",
     "usage": "Usage",
     "tokens": "{used} / {total} tokens",
     "search": {
@@ -61,7 +63,6 @@
       "conversations": "History",
       "artifacts": "Artifacts",
       "employees": "Employees",
-      "employeeDesign": "Employee Designer",
       "skills": "Skills",
       "mcpServers": "MCP Servers",
       "knowledge": "Knowledge Base",

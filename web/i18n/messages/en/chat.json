@@ -8,6 +8,7 @@
     },
     "conversation": {
       "shellTitle": "One for All · A single Lead Agent that does it all",
+      "shellTitleEmployee": "{name} · Chat",
       "backendOffline": "Backend offline · reconnecting automatically",
       "attempt": "Attempt {n}",
       "retryNow": "Retry now",
