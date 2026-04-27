@@ -9,7 +9,6 @@ from .preview import Preset
 PLAN_WITH_SUBAGENT_PRESET = Preset(
     id="plan_with_subagent",
     friendly_name_zh="计划+派子代理",
-    description="先做计划并派子代理并行执行,20 步上限。",
     tool_ids_base=[
         "allhands.meta.plan_create",
         "allhands.meta.plan_update_step",

@@ -1171,3 +1171,17 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 **结果**:本轮零代码改动 · 38 backend + 1999 web tests 全绿
 
 **commits**:仅本条 log
+
+## Round 56 · 2026-04-27 09:43 (cron · 30m)
+
+**主题**:删 R55 调查的 Preset.description 未消费字段
+
+**做的事**:
+- 删 `Preset.description` Pydantic 字段(preview.py)
+- 三个 preset 实例(execute / plan / plan_with_subagent)同步去掉 `description=`
+- 该字段全栈无消费者 · 删了不影响行为 · 同时消除「中文 description 看起来
+  像漏译」的视觉噪音(R55 已确认是误判,现在也消除源代码层面的疑惑)
+
+**结果**:1706 backend tests + 38 i18n + 1999 web tests · 全绿
+
+**commits**:见 git log
