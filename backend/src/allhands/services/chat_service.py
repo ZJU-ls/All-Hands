@@ -837,8 +837,27 @@ class ChatService:
         error_payload: dict[str, object] | None = None
         # Stamp the parent conversation_id into the contextvar so any
         # dispatch_employee / spawn_subagent invoked downstream emits its
-        # run.* events with the right conversation_id. Reset in finally.
-        _conv_token = _parent_conversation_id.set(conversation_id)
+        # run.* events with the right conversation_id.
+        #
+        # NOTE on async-generator + contextvars: this function is an async
+        # generator. ContextVar tokens are pinned to the context where
+        # `set()` ran. The async generator can be advanced from a
+        # different task (SSE heartbeat / asyncio.wait switching / GC of
+        # the generator on cancellation) — `reset(token)` from another
+        # context raises:
+        #
+        #   ValueError: <Token ...> was created in a different Context
+        #
+        # which previously surfaced to the user as a 「上游拒绝」 banner
+        # at the end of every chat turn that streamed long enough to
+        # cross contexts (artifact creation routinely does, given chart
+        # / image / tool batches).
+        #
+        # Fix: skip tokens · save the prior value and restore it
+        # manually in finally. Equivalent semantics for our request-
+        # scoped pattern, no cross-context check.
+        _conv_prev = _parent_conversation_id.get()
+        _parent_conversation_id.set(conversation_id)
         # Per-run telemetry · accumulated across every LLMCallEvent so the
         # ``run.completed`` payload carries authoritative totals for the
         # observatory KPIs / trace drawer. Each individual call also gets
@@ -1187,10 +1206,14 @@ class ChatService:
             # round-trip, and after flush() so the assistant message is
             # durable first (if this errors, at least the reply is saved).
             await self._flush_runtime(conversation_id)
-            # Restore the parent conversation_id contextvar set at the top
-            # of this generator so a subsequent reuse of this asyncio task
-            # doesn't see a stale value.
-            _parent_conversation_id.reset(_conv_token)
+            # Restore the parent conversation_id contextvar set at the
+            # top of this generator. We use manual save/restore (not the
+            # token-based reset()) because async generators can advance
+            # in a different context than the one where set() ran ·
+            # token-based reset would raise "Token ... created in a
+            # different Context" at the end of long turns. See the
+            # comment at the set() site for full root-cause notes.
+            _parent_conversation_id.set(_conv_prev)
 
     async def _write_pending_confirmation(self, event: Any) -> None:
         """Persist a Confirmation row on InterruptEvent (ADR 0014 Phase 4d).
