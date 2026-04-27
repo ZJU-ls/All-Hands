@@ -497,9 +497,7 @@ class AgentLoop:
                                     "correction": empty_response_corrections,
                                 },
                             )
-                            lc_messages.append(
-                                self._to_lc_assistant_message(assistant_msg)
-                            )
+                            lc_messages.append(self._to_lc_assistant_message(assistant_msg))
                             lc_messages.append(
                                 SystemMessage(
                                     content=(

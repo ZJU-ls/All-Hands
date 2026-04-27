@@ -1185,3 +1185,19 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 **结果**:1706 backend tests + 38 i18n + 1999 web tests · 全绿
 
 **commits**:见 git log
+
+## Round 57 · 2026-04-27 10:13 (cron · 30m)
+
+**主题**:main 新增的 _ARTIFACT_HALLUC_PATTERNS 扩展不影响 i18n
+
+**main 新动作**:agent_loop.py 加 7 个新 LLM artifact-hallucination 检测词
+("已为您生成" / "已为您创建" / "为您生成了" 等 qwen3-plus 变体)+ test_agent_loop.py 同步。
+
+**评估**:
+- 这些是 LLM 输出文本的检测词表(用来 nudge 模型再调 artifact_create) ·
+  不是 UI 展示文案 · by-design 中文 · R10 / R34 / R56 都已 document
+- 没有 i18n 漏洞
+
+**结果**:13 backend i18n + 1999 web tests 全绿 · 本轮零代码改动
+
+**commits**:仅本条 log
