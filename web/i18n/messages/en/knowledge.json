@@ -145,10 +145,55 @@
     "stale": {
       "body": "{missing}/{total} chunks have no vector (BM25 still works; vector recall will miss them)",
       "cta": "Re-embed all",
-      "running": "Working…"
+      "running": "Working…",
+      "doneSummary": "Re-embed done · {processed} processed · {succeeded} ok · {failed} failed"
+    },
+    "l2": {
+      "loadingTitle": "Loading KB…",
+      "loadingDesc": "Reading KB metadata and health",
+      "backToHub": "All KBs",
+      "tabs": {
+        "overview": "Overview",
+        "docs": "Documents",
+        "ask": "Ask",
+        "search": "Search",
+        "settings": "Settings"
+      }
     },
     "reembed": {
       "summary": "Re-embed done · {processed} processed · {succeeded} ok · {failed} failed"
+    },
+    "overview": {
+      "descriptionLabel": "Description",
+      "noDescription": "(no description · click edit ↗ to add one)",
+      "editDescription": "Edit in settings",
+      "healthLabel": "Health",
+      "lastActive": "Last active · {when}",
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activity30d": "Last 30-day ingest cadence",
+      "recentUploads": "Last 5 documents",
+      "loading": "Loading…",
+      "emptyDocs": "No documents yet · upload one to start",
+      "noStarters": "Upload docs to get suggested starters · or chat provider not configured",
+      "seeAllDocs": "All documents",
+      "quickActions": "Quick actions",
+      "upload": "Upload",
+      "ingestUrl": "Ingest URL",
+      "ask": "Ask",
+      "search": "Search",
+      "settings": "Settings"
+    },
+    "card": {
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activity30d": "Last 30 days",
+      "never": "—",
+      "demoMode": "Demo mode",
+      "staleEmbedding": "{missing} chunks missing vec",
+      "ready": "Ask ready"
     },
     "health": {
       "sectionLabel": "Health",
