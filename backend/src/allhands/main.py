@@ -16,17 +16,27 @@ log = structlog.get_logger()
 app = create_app()
 
 
-def _should_seed(env: str) -> bool:
-    """I-0020: auto-seed only in dev/test or when ALLHANDS_SEED=1.
+def _should_seed_demo() -> bool:
+    """Demo data (providers / models / employees / conversations / events /
+    MCP) is OPT-IN only · enabled by ``ALLHANDS_SEED_DEMO=1``.
 
-    Prod operators who explicitly opt in (e.g. first-run of a staging env)
-    can flip the flag without changing code.
+    Cold-start contract (2026-04-27): a fresh clone gets exactly:
+      - alembic migrations applied
+      - Lead Agent created (entry point · always required)
+      - builtin skills loaded from disk into SkillRegistry (lazy memoize)
+
+    Everything else — providers / models / other employees / conversations
+    / events — is built by the user via UI (/gateway, Lead chat). Previously
+    `env in ("dev", "test")` defaulted demo seeds on for local dev,
+    surprising new contributors with a pre-populated workspace they didn't
+    create. Set ``ALLHANDS_SEED_DEMO=1`` to restore the "full house" view.
+
+    The legacy ``ALLHANDS_SEED=1`` env var is also honoured for backwards
+    compat (CI scripts may set it); both names mean the same thing now.
     """
     import os
 
-    if env in ("dev", "test"):
-        return True
-    return os.environ.get("ALLHANDS_SEED") == "1"
+    return os.environ.get("ALLHANDS_SEED_DEMO") == "1" or os.environ.get("ALLHANDS_SEED") == "1"
 
 
 @app.on_event("startup")
@@ -98,11 +108,12 @@ async def startup() -> None:
     except Exception as exc:
         log.warning("drawio_creator.scan.failed", error=str(exc))
 
-    # Dev / test seed: ensure every page has real "full house" data on cold start
-    # (I-0020). No-op in prod unless ALLHANDS_SEED=1. Track N's seed_service
-    # supersedes Track K's bootstrap_service.ensure_gateway_demo_seeds — the
-    # latter is retained as a util but no longer wired into startup.
-    if _should_seed(settings.env):
+    # Demo data · OPT-IN. A pristine clone starts with only Lead Agent +
+    # builtin skills (above); providers / models / other employees /
+    # conversations / events are user-built via /gateway + Lead chat. Set
+    # ALLHANDS_SEED_DEMO=1 (or legacy ALLHANDS_SEED=1) to load the dev
+    # "full house" view used by demos and screenshot tests.
+    if _should_seed_demo():
         try:
             maker = get_sessionmaker()
             async with maker() as session, session.begin():

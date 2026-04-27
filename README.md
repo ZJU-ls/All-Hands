@@ -74,18 +74,33 @@ pnpm dev                                  # 起 :3000 dev server
 
 ---
 
-## 配置 LLM Gateway
+## 第一次启动 · 拉下来后会自动初始化什么
 
-启动后,首次进入会让你配 provider:
+冷启动是"最小可用"原则 —— 跑起来你只会看到必要的脚手架,**其余空白由你自己搭**。
+
+| 项目 | 启动时是否自动 | 说明 |
+|---|---|---|
+| 数据库 schema(alembic migrations) | ✅ 自动 | `alembic upgrade head` 把 `backend/data/app.db` 升级到最新 |
+| **Lead Agent**(全局唯一) | ✅ 自动 | 没就建,有就同步 prompt(系统提示词来自 `execution/prompts/lead_agent.md`)|
+| **内建 Skills** | ✅ 自动 | 从 `backend/skills/builtin/<id>/SKILL.yaml` 直接 lazy 加载到内存 SkillRegistry · **不写 DB** · git pull 即生效 |
+| LLM providers / models | ❌ 手动 | 你去 `/gateway` 自己加(OpenAI / Anthropic / 阿里百炼 / OpenRouter ...) |
+| 其他员工 | ❌ 手动 | 跟 Lead Agent 对话 ("帮我建个员工") 或者 `/employees/new` 自建 |
+| MCP servers | ❌ 手动 | `/mcp-servers` 添加 · 或让 Lead 帮你装 |
+| 演示对话 / 历史 events | ❌ 手动 | 空白起步 |
+
+> **要"满桌"?** 设 `ALLHANDS_SEED_DEMO=1` 启动 · 会写入 1 套演示 providers / models / 6 个员工 / MCP / 对话 / events,主要用于截图与录屏。日常开发用空白起步更舒服。
+
+### 配置 LLM Gateway · 第一次必做
+
+冷启动后跟 Lead Agent 对话会报「No enabled LLM provider configured」 —— 因为没 model。两步:
 
 1. 打开 **<http://localhost:3000/gateway>**
 2. 点 **「+ 添加 Provider」**,从预设里挑一家(OpenAI / Anthropic / 阿里百炼 / OpenRouter ...)
-3. 粘贴 API key + base_url,点「测试连通」确认 OK
-4. 注册一个具体的 model(如 `qwen3-plus` / `gpt-4o-mini`),点「设为默认」
+3. 粘贴 API key + base_url · 点「测试连通」 · 注册一个具体的 model(如 `qwen3-plus` / `gpt-4o-mini`)· 点「设为默认」
 
 完成后回到 `/chat` 就能跟 Lead Agent 对话了。
 
-> **`.env` 是可选的。** 项目所有 provider / model / 默认模型都通过 UI 配置并存在本地 SQLite 里。`.env.example` 里的 `OPENAI_API_KEY` 之类只在你想用环境变量预设而不是 UI 输入时才需要。
+> **`.env` 是可选的。** 所有 provider / model / 默认模型都通过 UI 配置并存在本地 SQLite 里。`.env.example` 里的 `OPENAI_API_KEY` 之类只在你想用环境变量预设而不是 UI 输入时才需要。
 
 ---
 
