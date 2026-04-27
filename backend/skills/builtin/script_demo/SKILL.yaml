@@ -1,0 +1,11 @@
+id: allhands.script_demo
+name: 脚本 Demo
+description: 执行 skill 内 Python · echo / Excel 对账 · run_skill_script 验证
+version: 0.1.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.read_skill_file
+  - allhands.meta.run_skill_script
+
+prompt_fragment_file: prompts/guidance.md
