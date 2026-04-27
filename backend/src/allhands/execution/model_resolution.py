@@ -145,8 +145,9 @@ def resolve_effective_model(
 
     if workspace is None:
         raise DomainError(
-            "No enabled LLM provider configured. Add one in Providers settings "
-            "before sending messages."
+            "No enabled LLM provider configured. Open /gateway, add a provider "
+            "(OpenAI / Anthropic / 阿里百炼 / OpenRouter ...), register at least "
+            "one model under it, and set it as default before sending messages."
         )
     provider, name = workspace
     return ResolvedModel(provider=provider, model_name=name, source="global_default")

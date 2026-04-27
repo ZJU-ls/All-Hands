@@ -1,4 +1,10 @@
-"""Unit tests for `allhands-seed` CLI safety + startup gating (I-0020)."""
+"""Unit tests for `allhands-seed` CLI safety + startup gating.
+
+2026-04-27 contract change: demo seeds are now strict opt-in via
+``ALLHANDS_SEED_DEMO=1`` (or legacy ``ALLHANDS_SEED=1``). Cold start no
+longer auto-loads demo data even in dev — a fresh clone shows only Lead
+Agent + builtin skills.
+"""
 
 from __future__ import annotations
 
@@ -7,27 +13,27 @@ import os
 import pytest
 
 from allhands.cli.seed import _do_reset, build_parser
-from allhands.main import _should_seed
+from allhands.main import _should_seed_demo
 
 
-class TestShouldSeed:
-    def test_dev_env_seeds(self) -> None:
-        assert _should_seed("dev") is True
-
-    def test_test_env_seeds(self) -> None:
-        assert _should_seed("test") is True
-
-    def test_prod_env_does_not_seed_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+class TestShouldSeedDemo:
+    def test_off_by_default_in_any_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ALLHANDS_SEED_DEMO", raising=False)
         monkeypatch.delenv("ALLHANDS_SEED", raising=False)
-        assert _should_seed("prod") is False
+        assert _should_seed_demo() is False
 
-    def test_prod_env_seeds_when_explicit_flag_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_enabled_when_seed_demo_flag_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ALLHANDS_SEED_DEMO", "1")
+        assert _should_seed_demo() is True
+
+    def test_legacy_seed_flag_still_works(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ALLHANDS_SEED_DEMO", raising=False)
         monkeypatch.setenv("ALLHANDS_SEED", "1")
-        assert _should_seed("prod") is True
+        assert _should_seed_demo() is True
 
-    def test_prod_env_ignores_other_seed_values(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("ALLHANDS_SEED", "true")  # only literal "1" enables
-        assert _should_seed("prod") is False
+    def test_only_literal_one_enables(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ALLHANDS_SEED_DEMO", "true")  # only "1" enables
+        assert _should_seed_demo() is False
 
 
 class TestSeedResetSafety:
@@ -68,14 +74,10 @@ class TestCliArgParsing:
 # Guardrail for the test env not leaking into later runs.
 @pytest.fixture(autouse=True)
 def _restore_env() -> None:
-    original_env = os.environ.get("ALLHANDS_ENV")
-    original_seed = os.environ.get("ALLHANDS_SEED")
+    saved = {k: os.environ.get(k) for k in ("ALLHANDS_ENV", "ALLHANDS_SEED", "ALLHANDS_SEED_DEMO")}
     yield
-    if original_env is None:
-        os.environ.pop("ALLHANDS_ENV", None)
-    else:
-        os.environ["ALLHANDS_ENV"] = original_env
-    if original_seed is None:
-        os.environ.pop("ALLHANDS_SEED", None)
-    else:
-        os.environ["ALLHANDS_SEED"] = original_seed
+    for k, v in saved.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
