@@ -801,3 +801,448 @@ node web/scripts/audit-i18n-dead-keys.mjs --list
 **结果**:1984 web tests · typecheck · lint · regression net 全绿
 
 **commits**:见 git log
+
+## Round 38 · 2026-04-27 00:43 (cron · 30m)
+
+**main 新动作**:新 `/observatory/pricing` 路由 + components/ui/ErrorBoundary +
+新 backend 测试(pricing meta tools / tool-arg validation / web search tool)+
+ADR 0021 自解释 tool。
+
+**做的事**:
+- pricing page 漏一个 `new Date(iso).toLocaleString()` 没传 locale ·
+  fix:formatDate(iso, locale) + useLocale() · 调用点更新
+- ErrorBoundary 是通用 class component,无文案,fallback 由调用者注入
+- 验证三个新 backend 测试不引入 i18n 漏洞
+- pnpm install 拉新依赖 + pnpm build 刷新 routes manifest(routes-smoke
+  之前两个失败是 .next 缓存陈旧,build 后绿)
+- grep 复查 0 处 `.toLocaleString\(\)` 无 locale 残留
+
+**结果**:1999 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
+
+## Round 39 · 2026-04-27 01:13 (cron · 30m)
+
+**主题**:resolver 多 alias 多重 decl 验证 + dead-key 数据更新
+
+**做的事**:
+- 验证 `tr` / `ta` 等非 `t` 命名 alias 仍能被 resolver 正确扫描:
+  - app/mcp-servers/[id] 三个 `const tr = useTranslations(...)` 不同 ns ·
+    每个 `tr.rich/...` 调用按 line-proximity 解析到正确 decl
+  - app/knowledge `const ta = useTranslations("knowledge.advanced")` 同理
+  - 现有 resolver 测试包含所有这些调用,通过
+- dead-key 审计更新:catalog 2452 → 2481(+29 全在 pricing namespace,
+  全部 alive)· 死 key 仍 259(10.4%)
+- 大头仍然是 `common.*` 的 21 个通用词(`back / cancel / close / loading /
+  ok / yes / no / save / search / settings / refresh / copy / copied …`)·
+  这些是「共享词汇」预留 · 各页面用的是页内同义 key · 未删除(留作公约)
+
+**结果**:本轮零代码改动 · regression net 全绿
+
+**commits**:仅本条 log
+
+## Round 40 · 2026-04-27 01:43 (cron · 30m)
+
+**主题**:dead-key 审计两类假阳性收口
+
+**发现**:R36 上线的 dead-key audit 有两类假阳性:
+1. `t(varName)` 模式(运行时变量当 key)被全归为死 · employeeBadges.* 这种
+   `badgeT(b)` 调用看不出来 b 是什么 · key 实际全活
+2. `const t = await getTranslations("ns")`(server component metadata)·
+   declRe 不允许 `=` 和 `getTranslations` 之间有 `await` · metadata.description
+   误判死
+
+**做的事**:
+- audit-i18n-dead-keys.mjs:
+  - 加 varRe 抓 `name(varName,?)` 模式 · 命中后 namespace 整体进 `usedRuntimeNs`
+    set · key 扫描时若任一 prefix 在该 set 里就算 alive
+  - declRe 加 `(?:await\s+)?` 容许 await 关键字
+- tests/i18n-keys-resolve.test.ts 同款 declRe 升级(以后 SSR getTranslations
+  也不会被 resolver 漏掉)
+
+**结果**:dead key 数 259 → 128(假阳性下降一半)· 1999 web tests 全绿 ·
+剩下的 128 大多是真死 key(common.* 共享词 + 历史代码删过的 i18n 残留),
+留作后续清理基线
+
+**commits**:见 git log
+
+## Round 41 · 2026-04-27 02:13 (cron · 30m)
+
+**主题**:dead-key audit varRe 三期 · 处理 indexed lookup + 全动态 template
+
+**继续 R40 的假阳性收口**:
+
+audit 还漏两类 t() 调用形式:
+1. `t(STATUS_KEYS[r.status])` indexed expression(varRe 只接受 bare ident)
+2. `tH(\`${key}.eyebrow\`)` 全动态 template(无静态前缀,backticks 之前直接被排除)
+
+**做的事**:
+- varRe 改成 negative-character class:第一字符不是 `"` / `'` / `)` / `whitespace`,
+  且允许 `` ` `` 紧跟 `$`(覆盖 `\`${var}…\`` 全动态模板)
+- 简化 while 循环
+
+**结果**:dead key 数 128 → 78(再砍掉 50 个假阳性)
+- catalog 2481 / live literal 8665 / template prefix 38 / runtime ns 29 / 死 78 (3.1%)
+- 1999 web tests · typecheck · lint 全绿
+
+**剩 78 多是真死** · 大头 `common.*`(共享词预留)+ 几个废弃 settings.cards.* +
+welcome.highlights.* 那些动态 key 仍漏(因为 helper 函数参数别名,audit
+heuristic 静态分析做不了)。继续保留作清理基线。
+
+**commits**:见 git log
+
+## Round 42 · 2026-04-27 02:43 (cron · 30m)
+
+**主题**:第一波小心翼翼的 dead-key 物理清理
+
+**做的事**:
+- 二次确认 5 个 catalog 残留 key 完全不被引用(grep app/+components+ts):
+  - `triggers.list.card.firesPrefix` / `firesSuffix` / `lastPrefix`
+    (R6 split-translation → ICU rich 之后留下的旧三段拼接 key)
+  - `viz.table.densityCompact` / `densityCozy`(table 组件密度切换被删后忘清)
+- 从 zh-CN/runs-traces.json + zh-CN/render-viz.json + en 同款两文件删除
+
+**结果**:catalog 2481 → 2476(-5)· 死 key 78 → 73(2.9%)· 1999 tests
+全绿 · 没有任何运行时回归(下次跑 audit 验证)
+
+**继续保留**:
+- `common.*` 21 个共享词 — 当公约 vocabulary 留作未来代码调用
+- 其它需要更细致 case-by-case 评估,后续轮次慢慢清
+
+**commits**:见 git log
+
+## Round 43 · 2026-04-27 03:13 (cron · 30m)
+
+**主题**:helper-参数别名识别 + 第二波 dead-key 物理清理
+
+**audit 升级**:加 passRe 抓 helper 函数把 `useTranslations` 绑定当参数传出去
+的模式(e.g. `targetSummary(ch, tTarget)`)· 命中后整 namespace 进 runtime-ns set
+· 死 key 73 → 31 → 23(再砍 50)
+
+**实物清理 8 个真死 key**:
+- artifacts.csv.loadFailed · artifacts.pdf.{loading,loadFailed}(对应 view 组件
+  根本没用 loading/loadFailed 文案 · pdf 组件甚至没绑 useTranslations)
+- runs.artifacts.open(RunArtifacts.tsx 只用 title/subtitle/version/new)
+- market.detail.appShellFallback(market 详情页直接用 decoded symbol 当 title)
+- gateway.{page.heroTitleAria,page.sectionCapability,providerSection.setAsDefault}
+  (grep 全栈零引用)
+
+**结果**:catalog 2476 → 2468(-8)· 死 key 23(0.9%)· 1999 tests 全绿
+- 21/23 是 `common.*` 共享词预留 + 2 个其它待 case-by-case
+
+**commits**:见 git log
+
+## Round 44 · 2026-04-27 03:43 (cron · 30m)
+
+**主题**:第三波 dead-key 清理 · catalog 死率归零
+
+**做的事**:
+- `employees.skillPicker.selected`(英文 "selected" 字面量,无人调用)删
+- `errors.network`(catalog 有,no consumer · 异步错误都走 page-namespace 自己的)删
+- `common.*` 21 个共享词 - 只剩 `retry`(唯一被 3 处调用):
+  - 删 loading / save / cancel / confirm / delete / edit / create / search /
+    back / next / previous / close / ok / yes / no / more / settings / refresh /
+    copy / copied / comingSoon(20 个)
+  - 公约论无视 — Linear / Notion 等 i18n 实践都是 page-scope 维护,
+    避免 common 黑洞抢词
+
+**结果**:catalog 2466 → 2445(-21)· 死 key **0** (0.0%)· 1999 tests
+全绿 · typecheck · lint 全绿
+
+**回滚指引**:如果未来某代码想要某 common 通用词,加回时同步加在
+zh-CN.json + en.json `common` 块下即可,catalog-audit 会防止引用错位。
+
+**commits**:见 git log
+
+## Round 45 · 2026-04-27 04:13 (cron · 30m)
+
+**主题**:backend 也做 dead-key 清理 + resolver 加 `t as alias` 识别
+
+**做的事**:
+- backend 写一次性 dead-key audit 脚本 → 抓出 10 个 catalog 候选死 key
+  · 1 处假阳性是单引号 `t('errors.stream.error_prefix')`(f-string 内)
+  · 2 处假阳性是 `_t(...)` 别名(`from allhands.i18n import t as _t`)
+- backend resolver test 升级:
+  - CALL_RE / TPL_RE 接 single + double quote
+  - ALIAS_RE 解析 `from allhands.i18n import t as <name>` · 用 alias 名构造 regex
+- 删 7 个二次确认无引用的 backend key:
+  - errors.unknown · errors.no_default_provider · errors.conflict.task_state ·
+    errors.stream(误算) · errors.not_found.{task,employee,conversation,version_blob}
+  - 所有都是历史 router 重构后留的孤儿(employee → employee_id 这种 rename)
+
+**结果**:backend catalog 57 → 50(-7)· 13 backend i18n tests 全绿 ·
+1999 web tests 全绿 · 双侧 catalog 死率都极低(backend 4% 全是 alias 假
+阳性 / web 0%)
+
+**commits**:见 git log
+
+## Round 46 · 2026-04-27 04:43 (cron · 30m)
+
+**主题**:验证 web 侧 alias / 单引号 / 直接 messages 访问的全空状态
+
+**做的事**:
+- grep `useTranslations as` / `t as` / `getTranslations as` → web 侧 0 处 alias
+  (跟 backend 不一样,backend tasks.py 用 `_t` alias)
+- grep `messages[`/`getMessages()` 直接访问 → 仅 layout.tsx:36 标准模式
+- grep web 单引号 `useTranslations(` / `t(` → 0 处 · 全部双引号一致
+- pnpm build → 47+ 路由全 ok / 0 warning · pnpm lint 0 错 · pnpm test 全绿
+- backend `_t` alias 已被 R45 的 ALIAS_RE 覆盖
+
+**结果**:catalog 双侧死率极低(web 0% / backend 4% 全是 alias 假阳性 ·
+一次性脚本还没升 alias-aware,但 in-source resolver test 已经覆盖)
+
+**commits**:仅本条 log
+
+## Round 47 · 2026-04-27 05:13 (cron · 30m)
+
+**主题**:数据模型层中文(skill descriptors / market enums)是否需要 i18n
+
+**审查**:
+- `backend/skills/builtin/*/SKILL.yaml` — name / description 单语 Chinese ·
+  Skills 页直接展示 · en 用户看 Chinese 名字
+- `backend/src/allhands/core/market.py:92` — `Literal["财报", "分红", "重大事项",
+  "停复牌", "其他"]` enum 域值 · 是 stock 事件类型分类
+
+**结论**:这两类是数据模型设计选择,不是 i18n 漏洞:
+- skill name/description 如果要 i18n,需要 schema 改成 `name: { zh-CN: ..., en: ... }`
+  或单独维护 skill_id → localized 映射 · 显著重构
+- market kind 是 Literal type 当 enum value 用,翻译会破坏 type contract
+  · 正确做法是前端按 enum value lookup catalog(fronend 当前不展示这些 enum)
+- 都是显式 trade-off · v0 阶段保留单语,文档化在 docs/i18n-final-report
+  Section 4("Known intentional non-translations")
+
+**额外检查**:`app/error.tsx:29` 用 `t("unknown")` 拉 web 侧
+`errors.unknown`(R44/R45 删的是 backend 同名 key,web 侧还在,被 error.tsx
+用 · resolver 通过)· 双侧 catalog 互不影响
+
+**结果**:零代码改动 · 双侧测试全绿
+
+**commits**:仅本条 log
+
+## Round 48 · 2026-04-27 05:43 (cron · 30m)
+
+**主题**:iframe `title` 属性补译
+
+**发现**:`HtmlView` 和 `PdfView` 这两个 artifact viewer 用 iframe 嵌入内容,
+title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
+屏幕阅读器 zh 用户依然念英文。这两个组件之前没接 useTranslations,
+被 R20 a11y 收口轮漏掉。
+
+**做的事**:
+- catalog 加 `artifacts.html.iframeTitle` + `artifacts.pdf.iframeTitle`(zh + en)
+- HtmlView / PdfView 引入 useTranslations + t("iframeTitle")
+- 13 个 artifact view kinds 中现在 6 → 8 用 i18n;其余 5 个(CodeView /
+  DataView / ImageView / MarkdownView 等)真没有用户可见 UI 文本
+
+**结果**:1999 web tests · typecheck · lint 全绿
+
+**commits**:见 git log
+
+## Round 49 · 2026-04-27 06:13 (cron · 30m)
+
+**主题**:Round 48 后再扫一轮 iframe / native HTML 验证
+
+**做的事**:
+- iframe / img / video 的 title / alt 硬编码英文 → 0 处(R48 修干净)
+- `<input>` 的 native HTML5 validation(required / pattern / minLength /
+  maxLength)→ 0 处使用(都走自定义校验,避免 browser-locale 字符串)
+- document.title 使用 → 唯一一处是 lib/use-document-title.ts(R17 抽的
+  共享 hook),其它代码都通过 AppShell title prop 间接设置
+- layout.tsx → `<html lang={locale}>` + `description: t("description")` 都
+  正确 · `title: "allhands"` 是 brand,故意 locale-independent
+
+**结果**:1999 web tests + 13 backend i18n tests + regression net 全绿 ·
+本轮零代码改动
+
+**commits**:仅本条 log
+
+## Round 50 · 2026-04-27 06:43 (cron · 30m) 🎉
+
+**主题**:小整数 milestone 审计 · 50 轮回看
+
+**做的事**:
+- grep 没有 useTranslations/useLocale/getTranslations 的 .tsx 文件 → 12 个,
+  全部确认无用户可见文案(纯 UI 原子 / dev-only / 转发组件):
+  - app/page.tsx(渲染 Cockpit · Cockpit 自己有 i18n)
+  - app/runs/[run_id]/page.tsx(title `trace · {id}` · trace 是技术术语 · 双语通用)
+  - app/gateway/{providers,models}/page.tsx(legacy 重定向)
+  - app/design-lab/* 和 __tests__(dev-only)
+  - components/ui/{icon,PageHeader,HoverPeek,HairlineAccent,StatusPill,Sparkline,
+    DotGridAvatar,DotGridBackdrop,icons}.tsx(纯视觉原子)
+
+**50 轮里程碑回顾**:
+- catalog: web 2445 + backend 50 keys · 死率 0% · 双侧 resolver test 守护
+- 硬编码扫描:web `i18n-no-hardcoded-zh.test` + backend `test_no_hardcoded_chinese_in_routers`
+  + 两侧 `test_i18n_keys_resolve` 共 4 套回归网
+- 双语完整覆盖:48 个 page · 100+ component · backend 17 个 router 文件 ·
+  7 个 channel adapter · LLM prompts / DB seed 等 by-design 单语已文档化
+- 全栈 `.toLocaleString()` 都跟随 useLocale · 浏览器 tab title 跟随 locale ·
+  iframe / aria-label 跟随 locale
+
+**结果**:零代码改动 · 双侧测试全绿 · 平台 i18n 在长期可维护状态
+
+**commits**:仅本条 log
+
+## Round 51 · 2026-04-27 07:13 (cron · 30m)
+
+**主题**:R50 注的 trace detail 页 i18n 收口
+
+**做的事**:
+- `app/runs/[run_id]/page.tsx` 把 AppShell title 从硬编码 `` `trace · ${id}` ``
+  改成 `t("shellTitle", { id })`
+- 加 `runs.detail.shellTitle` catalog key:
+  - zh-CN:"追踪 · {id}"
+  - en:"Trace · {id}"
+- 浏览器 tab 现在会显示「追踪 · abc12345…」/「Trace · abc12345…」· 跟其它
+  页面行为一致
+
+**结果**:1999 web tests · typecheck · lint · regression net 全绿
+
+**commits**:见 git log
+
+## Round 52 · 2026-04-27 07:43 (cron · 30m)
+
+**主题**:server-side / dialog-default / 非-HTTPException 后端错误的最终复核
+
+**做的事**:
+- next-intl/server 用法 → 只在 layout.tsx · standard pattern · 正确
+- ConfirmDialog 默认值 fallback `t("confirm") / t("cancel")` →
+  `ui.confirmDialog.confirm/cancel` 已在 catalog · 不依赖被 R44 删的 `common.*`
+- 后端 raise XxxError(literal) 模式 + 直接 return JSONResponse(中文) →
+  全栈 0 处发现
+
+**结果**:本轮零代码改动 · regression net 全绿
+
+**commits**:仅本条 log
+
+## Round 53 · 2026-04-27 08:13 (cron · 30m)
+
+**主题**:KnowledgeService.update_embedding 漏的一个 raise 中文 fix
+
+**发现**:`backend/src/allhands/services/knowledge_service.py:1020`
+`raise KBError(f"模型 {new_ref!r} 不可用: {exc}")` — embedding 切换时,
+模型不可用错误抛出的是中文 f-string · zh / en 用户都看到中文。
+之前 R10 / R26 都漏了这处(发生在 update_embedding 路径,触发概率低)。
+
+**做的事**:
+- 加 `knowledge.embedding.model_unusable` catalog key(zh + en)
+- raise KBError(t("...", ref=repr(new_ref), detail=str(exc)))
+
+**结果**:38 backend tests 全绿(11 i18n + 1 keys-resolve + 1 hardcoded scan +
+25 knowledge service)· 全栈 `raise XxxError("中文...")` 模式现在 0 处
+
+**commits**:见 git log
+
+## Round 54 · 2026-04-27 08:43 (cron · 30m)
+
+**主题**:全栈 raise / DOM 属性 / 默认值的最终 negative-result 扫描
+
+**做的事**:
+- backend `raise [Exception](f"中文 ...")` 多种变体 → 0 处(R53 修干净)
+- frontend `aria-describedby / data-tooltip / aria-roledescription` 等 ·
+  `<noscript>` fallback → 0 处 hardcoded 文本
+- backend `system_prompt = "..."` literal 默认值 → 0 处中文(spawn_subagent
+  用动态 join,无固定字面量)
+- backend `message=/text=/summary= "中文"` 字典 shape 字面量 → 0 处
+- backend `_logger.error(...)` 字符串拼接 → 没有 user-facing concatenation
+
+**结果**:web 1999 + backend 38 i18n tests · regression net 全绿 ·
+本轮零代码改动
+
+**commits**:仅本条 log
+
+## Round 55 · 2026-04-27 09:13 (cron · 30m)
+
+**主题**:Preset.description 字段调查
+
+**发现**:`backend/src/allhands/execution/modes/{execute,plan,plan_with_subagent}.py`
+三个 Preset 实例的 `description` 字段是中文 · 看起来像漏译。
+
+**调查**:
+- Preset.friendly_name_zh 字段名直接写明 zh · 是 by-design 单语
+- grep 全栈 `preset.description` 没人消费 · 仅在源文件里存在,不通过任何
+  router 出口
+- 前端通过 `employees.presetRadio.{executeLabel,executeCaption,planLabel,...}`
+  catalog key 自己维护双语描述(R40 dead-key audit 时 runtime-arg ns 已识别)
+
+**结论**:不是 i18n 漏洞 · 是源代码 metadata · 留作以后清理(未消费字段)·
+更稳妥的做法是直接删 description 字段 · 但那是 API 重构,不属本轮范围
+
+**结果**:本轮零代码改动 · 38 backend + 1999 web tests 全绿
+
+**commits**:仅本条 log
+
+## Round 56 · 2026-04-27 09:43 (cron · 30m)
+
+**主题**:删 R55 调查的 Preset.description 未消费字段
+
+**做的事**:
+- 删 `Preset.description` Pydantic 字段(preview.py)
+- 三个 preset 实例(execute / plan / plan_with_subagent)同步去掉 `description=`
+- 该字段全栈无消费者 · 删了不影响行为 · 同时消除「中文 description 看起来
+  像漏译」的视觉噪音(R55 已确认是误判,现在也消除源代码层面的疑惑)
+
+**结果**:1706 backend tests + 38 i18n + 1999 web tests · 全绿
+
+**commits**:见 git log
+
+## Round 57 · 2026-04-27 10:13 (cron · 30m)
+
+**主题**:main 新增的 _ARTIFACT_HALLUC_PATTERNS 扩展不影响 i18n
+
+**main 新动作**:agent_loop.py 加 7 个新 LLM artifact-hallucination 检测词
+("已为您生成" / "已为您创建" / "为您生成了" 等 qwen3-plus 变体)+ test_agent_loop.py 同步。
+
+**评估**:
+- 这些是 LLM 输出文本的检测词表(用来 nudge 模型再调 artifact_create) ·
+  不是 UI 展示文案 · by-design 中文 · R10 / R34 / R56 都已 document
+- 没有 i18n 漏洞
+
+**结果**:13 backend i18n + 1999 web tests 全绿 · 本轮零代码改动
+
+**commits**:仅本条 log
+
+## Round 58 · 2026-04-27 10:43 (cron · 30m)
+
+**主题**:TypeScript 类型 + extended metadata 的 negative 扫描
+
+**做的事**:
+- TypeScript 类型联合中文成员(`type Foo = "中文" | "..."`) → 0 处
+- enum 中文成员 → 0 处
+- app/layout.tsx 的 `Metadata` 扩展字段(openGraph / keywords / twitter / robots)
+  → 0 处使用 · 仅 title + description(后者已 i18n)
+
+**结果**:13 backend i18n + 1999 web tests · regression net 全绿 ·
+本轮零代码改动
+
+**commits**:仅本条 log
+
+## Round 59 · 2026-04-27 11:13 (cron · 30m)
+
+**主题**:e2e 测试 + dead-key 状态复检
+
+**做的事**:
+- regression net + i18n contract tests 全过 · 1999 web tests
+- dead-key audit:catalog 2448(R52 后又增了 3 个新 key 在合并里)·
+  死率仍 0%
+- e2e tests scan:
+  - tests/e2e/skills.spec.ts / mcp-servers.spec.ts / cockpit.spec.ts
+    含中文断言("卸载" / "重试" / "驾驶舱" 等)
+  - 这些是 Playwright fixture 用的 zh-CN UI 文案 · 测试默认 locale 是
+    zh-CN · 当前 OK
+  - 跨 locale e2e 是分开的工作(每个 spec 加 `await setLocale("en")` /
+    切到 en cookie 重跑)· 不在本审计范围
+
+**结果**:本轮零代码改动
+
+**commits**:仅本条 log
+
+## Round 60 · 2026-04-27 11:43 (cron · 30m)
+
+**main 新动作**:agent_loop.py 的 hallucination nudge 改成 HumanMessage(从
+SystemMessage)· 因为 Anthropic 拒收中段 SystemMessage。仅内部协议调整,
+不引入新文案。
+
+**结果**:13 backend i18n + 1999 web tests · 全绿 · 零代码改动
+
+**commits**:仅本条 log

@@ -434,13 +434,14 @@
       "saved": "已保存",
       "saveFailed": "保存失败"
     },
-    "pdf": {
-      "loading": "加载 PDF…",
-      "loadFailed": "PDF 加载失败:{error}"
-    },
     "csv": {
-      "empty": "(无数据)",
-      "loadFailed": "CSV 解析失败:{error}"
+      "empty": "(无数据)"
+    },
+    "html": {
+      "iframeTitle": "HTML 制品预览"
+    },
+    "pdf": {
+      "iframeTitle": "PDF 预览"
     },
     "xlsx": {
       "loading": "加载 Excel…",

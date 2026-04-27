@@ -434,13 +434,14 @@
       "saved": "Saved",
       "saveFailed": "Save failed"
     },
-    "pdf": {
-      "loading": "Loading PDF…",
-      "loadFailed": "PDF load failed: {error}"
-    },
     "csv": {
-      "empty": "(no data)",
-      "loadFailed": "CSV parse failed: {error}"
+      "empty": "(no data)"
+    },
+    "html": {
+      "iframeTitle": "HTML artifact preview"
+    },
+    "pdf": {
+      "iframeTitle": "PDF preview"
     },
     "xlsx": {
       "loading": "Loading Excel…",

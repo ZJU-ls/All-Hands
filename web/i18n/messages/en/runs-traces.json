@@ -1,5 +1,8 @@
 {
   "runs": {
+    "detail": {
+      "shellTitle": "Trace · {id}"
+    },
     "header": {
       "employee": "Employee",
       "model": "Model",
@@ -52,8 +55,7 @@
       "title": "Artifacts · {count}",
       "subtitle": "Files written or updated by this run · click to open details",
       "version": "v{version}",
-      "new": "new",
-      "open": "Open"
+      "new": "new"
     }
   },
   "traces": {
@@ -128,10 +130,7 @@
       "card": {
         "autoDisabled": "Auto-disabled",
         "failedStreak": "{count} failures",
-        "firesPrefix": "Fired",
-        "firesSuffix": "times",
         "firesTotal": "Fired <n></n> times",
-        "lastPrefix": "Last",
         "lastFiredAt": "Last fired <time></time>",
         "neverFired": "Never fired",
         "fireNow": "Fire now",

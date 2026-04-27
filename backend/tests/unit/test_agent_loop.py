@@ -153,19 +153,23 @@ async def test_loop_splits_reasoning_from_text() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_empty_response_surfaces_distinct_reason() -> None:
-    """A turn where the model emits no text AND no tool_calls (e.g. it
-    tried to call a de-registered tool and the phantom got dropped) must
-    NOT silently `completed` — emit `empty_response` so the UI can show
-    something instead of going silent."""
+    """A turn where the model emits no text AND no tool_calls must NOT
+    silently `completed`. The loop nudges once (self-correction), and only
+    if the next turn is ALSO empty does it bail with `empty_response`.
+
+    The bail message must read "even after one corrective nudge" so ops
+    can distinguish "single empty turn" (recovered) from "model truly
+    stuck" (bailed). This is the invariant the round-22 self-correction
+    pinned · don't soften it back to a single-shot exit.
+    """
 
     class _EmptyModel:
         def bind_tools(self, *_a: object, **_kw: object) -> Any:
             return self
 
         async def astream(self, *_a: object, **_kw: object) -> Any:
-            # Mimics what happens when a model wants to call a tool that
-            # isn't in lc_tools: it emits a phantom tool_call_chunk that
-            # gets dropped, leaving the turn with no text + no tool_uses.
+            # Always returns empty — the corrective nudge can't help, so
+            # the second pass also produces nothing and we bail.
             yield AIMessageChunk(content="")
 
     with patch("allhands.execution.agent_loop._build_model", return_value=_EmptyModel()):
@@ -181,7 +185,51 @@ async def test_loop_empty_response_surfaces_distinct_reason() -> None:
     assert exits[-1].reason == "empty_response", (
         f"got reason={exits[-1].reason!r} detail={exits[-1].detail!r}"
     )
-    assert exits[-1].detail and "no text and no tool calls" in exits[-1].detail
+    assert exits[-1].detail and "even after one corrective nudge" in exits[-1].detail
+
+
+@pytest.mark.asyncio
+async def test_loop_empty_first_then_text_recovers_via_nudge() -> None:
+    """Self-correction happy path: model is empty on iteration 1 (LLM
+    halted on a hard decision), the nudge goes in, iteration 2 produces
+    real text, loop exits `completed` with no error surfaced to UI.
+
+    Pins the 'don't kill the chat on one empty turn' invariant from
+    round-22 fix(agent_loop) self-correction.
+    """
+
+    class _EmptyThenTextModel:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def bind_tools(self, *_a: object, **_kw: object) -> Any:
+            return self
+
+        async def astream(self, *_a: object, **_kw: object) -> Any:
+            self.calls += 1
+            if self.calls == 1:
+                # Empty pass · the nudge happens here.
+                yield AIMessageChunk(content="")
+            else:
+                # Recovers on iteration 2 with real text.
+                yield AIMessageChunk(content="recovered after nudge.")
+
+    fake = _EmptyThenTextModel()
+    with patch("allhands.execution.agent_loop._build_model", return_value=fake):
+        loop = AgentLoop(
+            employee=_employee(),
+            tool_registry=ToolRegistry(),
+            gate=AutoApproveGate(),
+        )
+        events = [ev async for ev in loop.stream(messages=[{"role": "user", "content": "hi"}])]
+
+    exits = [ev for ev in events if isinstance(ev, LoopExited)]
+    assert len(exits) == 1
+    assert exits[-1].reason == "completed", (
+        f"nudge should let the loop recover · got reason={exits[-1].reason!r}"
+    )
+    # Two iterations: first empty (the LLM call), second the recovery.
+    assert fake.calls == 2
 
 
 @pytest.mark.asyncio

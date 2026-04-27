@@ -89,7 +89,7 @@ function extractFromFile(file: string): Call[] {
   // preceding useTranslations within ~80 lines.
   type Decl = { name: string; ns: string; line: number };
   const decls: Decl[] = [];
-  const declRe = /\b(?:const|let|var)\s+(\w+)\s*=\s*(?:useTranslations|getTranslations)\(\s*"([^"]+)"\s*\)/g;
+  const declRe = /\b(?:const|let|var)\s+(\w+)\s*=\s*(?:await\s+)?(?:useTranslations|getTranslations)\(\s*"([^"]+)"\s*\)/g;
   for (let i = 0; i < lines.length; i++) {
     declRe.lastIndex = 0;
     let m: RegExpExecArray | null;

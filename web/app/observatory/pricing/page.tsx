@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon } from "@/components/ui/icon";
 import { fetchModelPrices, type PriceRowDto } from "@/lib/pricing-api";
@@ -25,10 +25,10 @@ function formatPrice(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-function formatDate(iso: string | null): string {
+function formatDate(iso: string | null, locale: string): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString();
+    return new Date(iso).toLocaleString(locale);
   } catch {
     return iso;
   }
@@ -36,6 +36,7 @@ function formatDate(iso: string | null): string {
 
 export default function PricingPage() {
   const t = useTranslations("pages.observatory.pricing");
+  const locale = useLocale();
   const [state, setState] = useState<State>("idle");
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<PriceRowDto[]>([]);
@@ -237,7 +238,7 @@ export default function PricingPage() {
                       {row.note ?? <span className="text-text-subtle">—</span>}
                     </td>
                     <td className="py-2 px-4 text-right font-mono text-[11px] text-text-subtle tabular-nums">
-                      {formatDate(row.updated_at)}
+                      {formatDate(row.updated_at, locale)}
                     </td>
                   </tr>
                 ))}

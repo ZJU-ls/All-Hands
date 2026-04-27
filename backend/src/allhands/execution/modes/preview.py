@@ -14,7 +14,6 @@ class Preset(BaseModel):
 
     id: str
     friendly_name_zh: str
-    description: str
     tool_ids_base: list[str] = Field(default_factory=list)
     skill_ids_whitelist: list[str] = Field(default_factory=list)
     max_iterations: int = Field(ge=1, le=10000)

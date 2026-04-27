@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  /* All Hands Brand Blue · Dual Theme · 单页骨架
+     替换 __TITLE__ / 内容即可 · 改色调请只动 :root token */
+  :root {
+    --bg: #F6F8FC; --surface: #FFFFFF; --surface-2: #EDF1F8; --surface-3: #DFE6F0;
+    --text: #141A26; --text-muted: #5C667A; --text-subtle: #8B96AB;
+    --border: #DFE6F0; --border-strong: #B9C4D4;
+    --primary: #0A5BFF; --primary-hover: #0848D1; --accent: #4EA8FF;
+    --primary-soft: rgba(10,91,255,.10); --primary-glow: rgba(10,91,255,.22);
+    --success: #0FA57A; --warning: #D97706; --danger: #DC2626;
+    --success-soft: rgba(15,165,122,.10); --warning-soft: rgba(217,119,6,.10);
+    --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
+    --shadow-md: 0 4px 14px rgba(15,23,42,.06), 0 2px 4px rgba(15,23,42,.04);
+    --shadow-glow: 0 8px 24px rgba(10,91,255,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0A0D14; --surface: #11151F; --surface-2: #1A1F2E; --surface-3: #242A3C;
+      --text: #E2E6F1; --text-muted: #8690AE; --text-subtle: #5A6483;
+      --border: rgba(255,255,255,.06); --border-strong: rgba(255,255,255,.12);
+      --primary: #2E5BFF; --primary-hover: #4A74FF; --accent: #6E8BFF;
+      --primary-soft: rgba(46,91,255,.14); --primary-glow: #6E8BFF;
+      --success: #2EBD85; --warning: #F5A524; --danger: #F04438;
+      --success-soft: rgba(46,189,133,.14); --warning-soft: rgba(245,165,36,.14);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+      --shadow-md: 0 8px 24px rgba(0,0,0,.5);
+      --shadow-glow: 0 0 0 1px rgba(110,139,255,.35), 0 12px 32px rgba(46,91,255,.4);
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Inter",
+                  "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 48px 32px; }
+
+  /* Hero · 渐变标题 + tagline + 可选 mesh */
+  .hero { position: relative; padding: 24px 0 32px; overflow: hidden; }
+  @media (prefers-color-scheme: dark) {
+    .hero::before {
+      content: ""; position: absolute; inset: -40px; z-index: 0;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(46,91,255,.25), transparent 45%),
+        radial-gradient(circle at 80% 70%, rgba(110,139,255,.18), transparent 50%);
+      filter: blur(40px); pointer-events: none;
+    }
+  }
+  .hero > * { position: relative; z-index: 1; }
+  h1 {
+    font-size: 36px; font-weight: 700; letter-spacing: -.025em;
+    margin: 0 0 8px; line-height: 1.15;
+    background: linear-gradient(135deg, var(--primary) 0%, #6366F1 50%, var(--accent) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .tagline { color: var(--text-muted); font-size: 15px; margin: 0; }
+
+  h2 { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 40px 0 14px; }
+  h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: var(--text); }
+  p { margin: 8px 0; }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { color: var(--primary-hover); }
+
+  /* Card · hairline + soft shadow + hover lift */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 22px;
+    box-shadow: var(--shadow-sm); margin: 14px 0;
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  }
+  .card:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); border-color: var(--border-strong); }
+
+  .grid { display: grid; gap: 14px; }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 760px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+
+  /* Pill · 微小标签 */
+  .pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 500;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text-muted);
+  }
+  .pill.primary { color: var(--primary); background: var(--primary-soft); border-color: rgba(10,91,255,.3); }
+  .pill.success { color: var(--success); background: var(--success-soft); border-color: rgba(15,165,122,.3); }
+  .pill.warning { color: var(--warning); background: var(--warning-soft); border-color: rgba(217,119,6,.3); }
+
+  /* Stat · 关键指标 */
+  .stat { padding: 16px 18px; }
+  .stat .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+  .stat .value { font-size: 28px; font-weight: 700; margin-top: 4px; letter-spacing: -.02em;
+                 font-variant-numeric: tabular-nums; }
+  .stat .delta { font-size: 12px; color: var(--text-subtle); font-family: ui-monospace, "SF Mono", monospace; margin-top: 2px; }
+  .stat .value.brand {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  /* Button */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 36px; padding: 0 16px; border-radius: 8px;
+    font: inherit; font-weight: 500; font-size: 13px;
+    background: var(--primary); color: #fff; border: 0; cursor: pointer;
+    transition: all 200ms ease; box-shadow: var(--shadow-sm);
+  }
+  .btn:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: var(--shadow-glow); }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); box-shadow: none; }
+  .btn.ghost:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-1px); box-shadow: none; }
+
+  /* Hairline divider · 大段之间的轻分隔 */
+  .hairline { border: 0; border-top: 1px solid var(--border); margin: 36px 0; }
+
+  /* Table · 紧凑数据 */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-muted); font-weight: 600; background: var(--surface-2);
+       font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+
+  /* Code · 代码块 */
+  code, pre { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; }
+  code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); }
+  pre { background: var(--surface-2); padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border);
+        overflow: auto; line-height: 1.55; }
+  pre code { background: transparent; border: 0; padding: 0; }
+
+  /* Footnote */
+  .footnote { font-size: 12px; color: var(--text-subtle); margin-top: 36px; padding-top: 14px;
+              border-top: 1px dashed var(--border); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ========== HERO ========== -->
+  <section class="hero">
+    <h1>__TITLE__</h1>
+    <p class="tagline">__SUBTITLE__</p>
+    <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
+      <span class="pill primary">All Hands</span>
+      <span class="pill">__TAG__</span>
+    </div>
+  </section>
+
+  <!-- ========== KPI ROW ========== -->
+  <section class="grid grid-3" style="margin-top: 24px">
+    <div class="card stat">
+      <div class="label">__KPI_1_LABEL__</div>
+      <div class="value brand">__KPI_1_VALUE__</div>
+      <div class="delta">__KPI_1_DELTA__</div>
+    </div>
+    <div class="card stat">
+      <div class="label">__KPI_2_LABEL__</div>
+      <div class="value">__KPI_2_VALUE__</div>
+      <div class="delta">__KPI_2_DELTA__</div>
+    </div>
+    <div class="card stat">
+      <div class="label">__KPI_3_LABEL__</div>
+      <div class="value">__KPI_3_VALUE__</div>
+      <div class="delta">__KPI_3_DELTA__</div>
+    </div>
+  </section>
+
+  <!-- ========== CONTENT SECTION ========== -->
+  <h2>__SECTION_TITLE__</h2>
+  <div class="card">
+    <p>__SECTION_BODY__</p>
+  </div>
+
+  <hr class="hairline">
+
+  <div class="footnote">__FOOTER__</div>
+</div>
+</body>
+</html>
