@@ -253,6 +253,20 @@
           "latencyP95": "Latency p95",
           "tokens": "Total tokens",
           "cost": "Est. cost"
+        },
+        "table": {
+          "trace": "TRACE",
+          "model": "MODEL",
+          "status": "STATUS",
+          "duration": "DURATION",
+          "tokens": "TOKENS",
+          "started": "STARTED",
+          "employee": "EMPLOYEE"
+        },
+        "status": {
+          "ok": "ok",
+          "failed": "failed",
+          "running": "running"
         }
       },
       "toolDetail": {

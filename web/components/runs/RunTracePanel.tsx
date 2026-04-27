@@ -18,9 +18,18 @@ import { RunTurnList } from "./RunTurnList";
 import { RunArtifacts } from "./RunArtifacts";
 import { RunError } from "./RunError";
 
-type Props =
+type Props = (
   | { runId: string; run?: never }
-  | { run: RunDetailDto; runId?: never };
+  | { run: RunDetailDto; runId?: never }
+) & {
+  /**
+   * Hide the duplicate TraceChip in the embedded RunHeader when the parent
+   * route already IS the L3 trace page (`/observatory/runs/[id]`). Chip
+   * navigating to itself is dead UX. Defaults to false so legacy embedders
+   * (drawer historically, chat callouts) keep showing the chip.
+   */
+  hideHeaderTraceChip?: boolean;
+};
 
 type State =
   | { status: "idle" }
@@ -32,6 +41,7 @@ export function RunTracePanel(props: Props) {
   const t = useTranslations("runs.tracePanel");
   const initialRun = "run" in props ? props.run : undefined;
   const runId = "runId" in props ? props.runId : undefined;
+  const hideHeaderTraceChip = props.hideHeaderTraceChip ?? false;
 
   const [state, setState] = useState<State>(() =>
     initialRun ? { status: "ready", run: initialRun } : { status: "idle" },
@@ -104,7 +114,7 @@ export function RunTracePanel(props: Props) {
       data-state="ready"
       className="flex flex-col gap-3"
     >
-      <RunHeader run={run} />
+      <RunHeader run={run} showTraceChip={!hideHeaderTraceChip} />
       {run.error && <RunError error={run.error} />}
       <RunTurnList turns={run.turns} />
       <RunArtifacts artifacts={run.artifacts} />
