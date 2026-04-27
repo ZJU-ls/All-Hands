@@ -1,0 +1,63 @@
+{
+  "_doc": "Section divider · big number + chapter name. One per chapter transition. Replace `01` and the chapter name.",
+  "background": {
+    "color_hex": "#0a0e1a"
+  },
+  "shapes": [
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 0.22,
+      "h": 7.5,
+      "fill_hex": "#3b82f6"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 1.4,
+      "w": 11.5,
+      "h": 3.6,
+      "text": "01",
+      "font": {
+        "size": 220,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      },
+      "align": "left"
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 5.2,
+      "w": 0.8,
+      "h": 0.06,
+      "fill_hex": "#60a5fa"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 5.4,
+      "w": 11.5,
+      "h": 0.9,
+      "text": "Chapter title",
+      "font": {
+        "size": 56,
+        "weight": "bold",
+        "color_hex": "#e7eaf3"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 6.4,
+      "w": 11.5,
+      "h": 0.5,
+      "text": "Optional subtitle (one short line)",
+      "font": {
+        "size": 20,
+        "color_hex": "#93a0b4"
+      }
+    }
+  ]
+}

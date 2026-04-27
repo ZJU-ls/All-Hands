@@ -1236,3 +1236,83 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 **结果**:本轮零代码改动
 
 **commits**:仅本条 log
+
+## Round 60 · 2026-04-27 11:43 (cron · 30m)
+
+**main 新动作**:agent_loop.py 的 hallucination nudge 改成 HumanMessage(从
+SystemMessage)· 因为 Anthropic 拒收中段 SystemMessage。仅内部协议调整,
+不引入新文案。
+
+**结果**:13 backend i18n + 1999 web tests · 全绿 · 零代码改动
+
+**commits**:仅本条 log
+
+## Round 61 · 2026-04-27 12:13 (cron · 30m)
+
+**main 新动作**:dispatch.py + spawn_subagent.py + chat_service.py 改动
++ 新 test_subagent_trace_events.py(222 行):
+- 内部协议变更:subagent trace events 上抛到父 conversation
+- 没有引入新 user-facing 文案(diff grep `"中文" / detail= / raise(`
+  全 0 处)
+- dispatch.py 仅 docstring 提到 "当前父任务:" 是 system_prompt 模板字符串
+  · 给 subagent LLM 看 · 由父 agent 注入 · by-design
+
+**结果**:13 backend i18n + 1999 web tests · 全绿 · 零代码改动
+
+**commits**:仅本条 log
+
+## Round 62 · 2026-04-27 12:43 (cron · 30m)
+
+**主题**:稳态健康检查 · 无 main 改动
+
+**做的事**:i18n 回归网两侧全过
+
+**结果**:1999 web tests + 2 backend i18n key resolver tests · 0 改动
+
+**commits**:仅本条 log
+
+## Round 63 · 2026-04-27 13:13 (cron · 30m)
+
+**主题**:稳态 · 无 main 改动 · 回归网通过
+
+**结果**:1999 web tests · regression net 全绿 · 0 改动
+
+**commits**:仅本条 log
+
+## Round 64 · 2026-04-27 13:43 (cron · 30m)
+
+**主题**:稳态 · 无 main 改动 · 回归网通过
+
+**结果**:1999 web tests · 0 改动
+
+**commits**:仅本条 log
+
+## Round 65 · 2026-04-27 14:13 (cron · 30m)
+
+**主题**:稳态 · 无 main 改动
+
+**结果**:1999 web tests · 0 改动 · regression 全绿
+
+**commits**:仅本条 log
+
+## Round 66 · 2026-04-27 14:43 (cron · 30m)
+
+**主题**:稳态 · 无 main 改动
+
+**做的事**:
+- pnpm test 一次出现 1 个 flaky failure(可能 ProgressPanel act 警告相关)·
+  立即重跑全过 1999/1999 · 不是回归 bug
+- 单独跑 i18n contract suite(keys-resolve / no-hardcoded-zh / catalog-audit /
+  locale-switcher)→ 9 passed · 干净
+
+**结果**:0 改动 · regression 健康
+
+**commits**:仅本条 log
+
+## Round 67 · 2026-04-27 15:13 (cron · 30m)
+
+**主题**:稳态 · 无 main 改动 · i18n contract 9/9
+
+**结果**:0 改动
+
+**commits**:仅本条 log

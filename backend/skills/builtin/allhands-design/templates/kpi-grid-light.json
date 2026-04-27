@@ -1,0 +1,277 @@
+{
+  "_doc": "KPI grid · 4 metrics in a row. Replace each (label, value, delta) by editing the three text shapes per cell. Don't go past 4 cells; reduce to 2 or 3 if you have fewer numbers.",
+  "background": {
+    "color_hex": "#ffffff"
+  },
+  "shapes": [
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 0.22,
+      "h": 7.5,
+      "fill_hex": "#2563eb"
+    },
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 7.42,
+      "w": 13.333,
+      "h": 0.04,
+      "fill_hex": "#e6eaf2"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 0.7,
+      "w": 11.5,
+      "h": 0.8,
+      "text": "KPI snapshot",
+      "font": {
+        "size": 36,
+        "weight": "bold",
+        "color_hex": "#0a0e1a"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 1.5,
+      "w": 11.5,
+      "h": 0.4,
+      "text": "Numbers as of last business day",
+      "font": {
+        "size": 16,
+        "color_hex": "#64748b"
+      }
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 1.9,
+      "w": 2.97,
+      "h": 4.4,
+      "fill_hex": "#f6f8fc",
+      "corner_radius_in": 0.12
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 1.9,
+      "w": 2.97,
+      "h": 0.06,
+      "fill_hex": "#2563eb"
+    },
+    {
+      "type": "text",
+      "x": 0.8999999999999999,
+      "y": 2.3,
+      "w": 2.37,
+      "h": 0.5,
+      "text": "ACTIVE USERS",
+      "font": {
+        "size": 12,
+        "weight": "bold",
+        "color_hex": "#64748b"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0.8999999999999999,
+      "y": 2.9,
+      "w": 2.37,
+      "h": 2.4,
+      "text": "12.4K",
+      "font": {
+        "size": 72,
+        "weight": "bold",
+        "color_hex": "#0a0e1a"
+      },
+      "v_align": "middle"
+    },
+    {
+      "type": "text",
+      "x": 0.8999999999999999,
+      "y": 5.5,
+      "w": 2.37,
+      "h": 0.5,
+      "text": "+18% MoM",
+      "font": {
+        "size": 14,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      }
+    },
+    {
+      "type": "rect",
+      "x": 3.7500000000000004,
+      "y": 1.9,
+      "w": 2.97,
+      "h": 4.4,
+      "fill_hex": "#f6f8fc",
+      "corner_radius_in": 0.12
+    },
+    {
+      "type": "rect",
+      "x": 3.7500000000000004,
+      "y": 1.9,
+      "w": 2.97,
+      "h": 0.06,
+      "fill_hex": "#e6eaf2"
+    },
+    {
+      "type": "text",
+      "x": 4.050000000000001,
+      "y": 2.3,
+      "w": 2.37,
+      "h": 0.5,
+      "text": "CONVERSION",
+      "font": {
+        "size": 12,
+        "weight": "bold",
+        "color_hex": "#64748b"
+      }
+    },
+    {
+      "type": "text",
+      "x": 4.050000000000001,
+      "y": 2.9,
+      "w": 2.37,
+      "h": 2.4,
+      "text": "4.7%",
+      "font": {
+        "size": 72,
+        "weight": "bold",
+        "color_hex": "#0a0e1a"
+      },
+      "v_align": "middle"
+    },
+    {
+      "type": "text",
+      "x": 4.050000000000001,
+      "y": 5.5,
+      "w": 2.37,
+      "h": 0.5,
+      "text": "+0.6 pp",
+      "font": {
+        "size": 14,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      }
+    },
+    {
+      "type": "rect",
+      "x": 6.9,
+      "y": 1.9,
+      "w": 2.97,
+      "h": 4.4,
+      "fill_hex": "#f6f8fc",
+      "corner_radius_in": 0.12
+    },
+    {
+      "type": "rect",
+      "x": 6.9,
+      "y": 1.9,
+      "w": 2.97,
+      "h": 0.06,
+      "fill_hex": "#e6eaf2"
+    },
+    {
+      "type": "text",
+      "x": 7.2,
+      "y": 2.3,
+      "w": 2.37,
+      "h": 0.5,
+      "text": "CYCLE TIME",
+      "font": {
+        "size": 12,
+        "weight": "bold",
+        "color_hex": "#64748b"
+      }
+    },
+    {
+      "type": "text",
+      "x": 7.2,
+      "y": 2.9,
+      "w": 2.37,
+      "h": 2.4,
+      "text": "3.2 d",
+      "font": {
+        "size": 72,
+        "weight": "bold",
+        "color_hex": "#0a0e1a"
+      },
+      "v_align": "middle"
+    },
+    {
+      "type": "text",
+      "x": 7.2,
+      "y": 5.5,
+      "w": 2.37,
+      "h": 0.5,
+      "text": "−1.1 d",
+      "font": {
+        "size": 14,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      }
+    },
+    {
+      "type": "rect",
+      "x": 10.05,
+      "y": 1.9,
+      "w": 2.97,
+      "h": 4.4,
+      "fill_hex": "#f6f8fc",
+      "corner_radius_in": 0.12
+    },
+    {
+      "type": "rect",
+      "x": 10.05,
+      "y": 1.9,
+      "w": 2.97,
+      "h": 0.06,
+      "fill_hex": "#e6eaf2"
+    },
+    {
+      "type": "text",
+      "x": 10.350000000000001,
+      "y": 2.3,
+      "w": 2.37,
+      "h": 0.5,
+      "text": "NPS",
+      "font": {
+        "size": 12,
+        "weight": "bold",
+        "color_hex": "#64748b"
+      }
+    },
+    {
+      "type": "text",
+      "x": 10.350000000000001,
+      "y": 2.9,
+      "w": 2.37,
+      "h": 2.4,
+      "text": "62",
+      "font": {
+        "size": 72,
+        "weight": "bold",
+        "color_hex": "#0a0e1a"
+      },
+      "v_align": "middle"
+    },
+    {
+      "type": "text",
+      "x": 10.350000000000001,
+      "y": 5.5,
+      "w": 2.37,
+      "h": 0.5,
+      "text": "+9",
+      "font": {
+        "size": 14,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      }
+    }
+  ]
+}

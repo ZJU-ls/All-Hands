@@ -199,36 +199,75 @@ ARTIFACT_CREATE_PPTX_TOOL = Tool(
     kind=ToolKind.META,
     name="artifact_create_pptx",
     description=(
-        "PowerPoint deck from a list of slides. Layouts: title / bullets / "
-        "section / image-right. The .pptx is fully Office-compatible · the "
-        "in-app preview is text-only (slide titles + bullets); users open "
-        "PowerPoint or Keynote for full fidelity. Example: "
-        '{"name":"deck.pptx","slides":['
-        '{"layout":"title","title":"季度回顾","subtitle":"Q1 2026"},'
-        '{"layout":"bullets","title":"亮点","bullets":["营收 +18%","客户 +35"]}]}'
+        "Build a .pptx deck from low-level shape primitives. Each slide "
+        "carries an explicit `shapes` list — primitives are `text` / "
+        "`rect` / `line` / `image` / `chart` — with absolute (x, y, w, h) "
+        "coordinates in inches. The tool has no opinion on layout, "
+        "color, or typography; the caller supplies all visual choices. "
+        "Layout templates and design tokens live in design skills (e.g. "
+        "read_skill_file('allhands-design', 'templates/<name>.json') "
+        "returns a ready-to-paste slide spec). Default canvas is 16:9 "
+        '(13.333"x7.5"). Per-slide background and speaker notes are '
+        "supported via `slides[i].background` and `slides[i].notes`."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "name": {"type": "string"},
+            "page": {
+                "type": "object",
+                "properties": {
+                    "width_in": {"type": "number", "minimum": 1, "maximum": 56},
+                    "height_in": {"type": "number", "minimum": 1, "maximum": 56},
+                    "background": {
+                        "type": "object",
+                        "properties": {
+                            "color_hex": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-fA-F]{6}$",
+                            }
+                        },
+                    },
+                },
+            },
             "slides": {
                 "type": "array",
                 "minItems": 1,
                 "items": {
                     "type": "object",
                     "properties": {
-                        "layout": {
-                            "type": "string",
-                            "enum": ["title", "bullets", "section", "image-right"],
-                            "default": "bullets",
+                        "background": {
+                            "type": "object",
+                            "properties": {
+                                "color_hex": {
+                                    "type": "string",
+                                    "pattern": "^#[0-9a-fA-F]{6}$",
+                                }
+                            },
                         },
-                        "title": {"type": "string"},
-                        "subtitle": {"type": "string"},
-                        "bullets": {"type": "array", "items": {"type": "string"}},
-                        "body": {"type": "string"},
-                        "image_url": {"type": "string"},
+                        "shapes": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "text",
+                                            "rect",
+                                            "line",
+                                            "image",
+                                            "chart",
+                                        ],
+                                    }
+                                },
+                                "required": ["type"],
+                            },
+                        },
+                        "notes": {"type": "string"},
                     },
-                    "required": ["title"],
+                    "required": ["shapes"],
                 },
             },
             "description": {"type": "string"},
