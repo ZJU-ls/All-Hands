@@ -18,10 +18,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import re
 import secrets
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from urllib.parse import quote as _urlquote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
@@ -47,6 +49,39 @@ logger = logging.getLogger(__name__)
 _HEARTBEAT_SECONDS = 15.0
 
 router = APIRouter(prefix="/artifacts", tags=["artifacts"])
+
+
+# Replace any byte that can't survive a latin-1 HTTP header with `_`.
+# We keep ASCII letters, digits, hyphen / underscore / dot / space, plus
+# the small set of ASCII punctuation that's safe inside a quoted-string.
+# Anything else (CJK · accented · emoji) collapses to underscore so old
+# clients that ignore RFC 5987 still get a usable filename.
+_HEADER_SAFE_RE = re.compile(r"[^A-Za-z0-9 ._\-+()\[\]]")
+
+
+def _content_disposition(name: str) -> str:
+    """Build a non-explosive Content-Disposition for any artifact name.
+
+    HTTP headers are latin-1; passing a name with CJK characters (e.g.
+    'AllHands-产品战略与路线图.pptx') crashes the server with a generic
+    500. RFC 6266 / 5987 lets us emit both an ASCII fallback and a
+    UTF-8 percent-encoded variant — modern browsers (Chrome/Safari/
+    Firefox/Edge) prefer the `filename*` form and render the original
+    Chinese name correctly.
+
+    Format::
+
+        Content-Disposition: attachment;
+            filename="<ascii-safe>";
+            filename*=UTF-8''<percent-encoded utf-8>
+    """
+    ascii_fallback = _HEADER_SAFE_RE.sub("_", name).strip()
+    if not ascii_fallback:
+        ascii_fallback = "download"
+    # `quote` encodes per RFC 3986; that's a strict superset of what
+    # RFC 5987 expects for the filename* value.
+    encoded = _urlquote(name, safe="")
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
 
 
 class ArtifactResponse(BaseModel):
@@ -362,7 +397,7 @@ async def get_artifact_content(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     headers: dict[str, str] = {}
     if download:
-        headers["Content-Disposition"] = f'attachment; filename="{art.name}"'
+        headers["Content-Disposition"] = _content_disposition(art.name)
     return Response(content=blob, media_type=art.mime_type, headers=headers)
 
 
