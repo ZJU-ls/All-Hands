@@ -47,7 +47,7 @@ async def startup() -> None:
     from allhands.persistence.db import get_sessionmaker
     from allhands.persistence.sql_repos import SqlEmployeeRepo
     from allhands.services import seed_service
-    from allhands.services.bootstrap_service import ensure_lead_agent
+    from allhands.services.bootstrap_service import ensure_expert_programmer, ensure_lead_agent
 
     settings = get_settings()
     settings.ensure_data_dir()
@@ -67,15 +67,17 @@ async def startup() -> None:
     except Exception as exc:
         log.warning("alembic.upgrade.failed", error=str(exc))
 
-    # Seed Lead Agent
+    # Seed Lead Agent + ExpertProgrammer
     try:
         maker = get_sessionmaker()
         async with maker() as session, session.begin():
             repo = SqlEmployeeRepo(session)
             lead = await ensure_lead_agent(repo)
             log.info("lead_agent.ready", id=lead.id, name=lead.name)
+            programmer = await ensure_expert_programmer(repo)
+            log.info("expert_programmer.ready", id=programmer.id, name=programmer.name)
     except Exception as exc:
-        log.warning("lead_agent.seed.failed", error=str(exc))
+        log.warning("employee.seed.failed", error=str(exc))
 
     # 2026-04-26 P3 · drawio-creator skill was merged into allhands.artifacts.
     # Sanity scan: any stale 'allhands.drawio-creator' reference in the DB

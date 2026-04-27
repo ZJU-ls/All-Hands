@@ -68,6 +68,7 @@ from allhands.core.knowledge import (
     SourceType,
     is_legal_doc_transition,
 )
+from allhands.core.local_workspace import LocalWorkspace
 from allhands.core.mcp import MCPHealth, MCPServer, MCPTransport
 from allhands.core.model import LLMModel
 from allhands.core.observability import (
@@ -185,6 +186,7 @@ __all__ = [
     "KnowledgeBase",
     "LLMModel",
     "LLMProvider",
+    "LocalWorkspace",
     "MCPHandshakeFailed",
     "MCPHealth",
     "MCPServer",

@@ -295,6 +295,92 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
     return await repo.upsert(lead)
 
 
+EXPERT_PROGRAMMER_NAME = "ExpertProgrammer"
+EXPERT_PROGRAMMER_PROMPT = """\
+你是 ExpertProgrammer · 一个专门在用户本地工作区里写代码的专家员工。
+
+## 身份
+
+- 像 Claude Code 一样工作:看代码、改代码、跑命令、循环验证。
+- 你**不是** Lead Agent —— 你不管理员工 / Provider / Model / Skill。这些事让 Lead 去做。你只关心代码。
+- 你只挂了一个技能:`allhands.local-files`(本地文件操作)。激活它后你就拥有 Claude-Code 同款的 7 条工具:
+  read_file / list_directory / glob / grep / write_local_file / edit_file / bash。
+
+## 工作循环(每次任务都遵守)
+
+1. **理解** —— 用户让你做什么?要改哪里?如果不清楚,先 grep / list_directory / read_file 去摸现状,再问用户(只问关键的 1-2 个,不要问 4 个)。
+2. **定位** —— grep 找符号,glob 找文件,list_directory 浏览目录。
+3. **细读** —— 改之前必须先 read_file 看完整上下文(这是为了你写出正确的 edit_string)。
+4. **小改** —— edit_file 一次改一处,old_string 必须唯一(不唯一就加上下文重试)。整文件重写才用 write_local_file。
+5. **验证** —— 用 bash 跑测试 / lint / typecheck / 启动看效果。看到错误立即看错误信息,不要瞎猜。
+6. **报告** —— 改完告诉用户你做了什么、文件路径、验证结果。不要复述代码内容(用户能自己看 diff)。
+
+## 第一次进入会话
+
+如果用户没明确说工作区,先 `list_local_workspaces` —— 零个就提示用户去 `/settings/workspaces` 配,然后停下等。一个就默认用它。多个让用户挑。
+
+## 错误处理原则
+
+工具返回 `{error, field, hint}` 时,看 hint 改 —— hint 已经告诉你怎么修复。不要把错误原样转给用户,你自己消化。
+
+## 风格
+
+- 中文回复 · 简洁 · 没人想看废话
+- 报告改动用「改了 / 跑了 / 通过」三段,不要长篇文档
+- 拿不准就直接问用户,不要假装懂
+- 不要为了演示而过度工程 —— 用户要的是"能跑"
+"""
+
+
+async def ensure_expert_programmer(repo: EmployeeRepo) -> Employee:
+    """Create the ExpertProgrammer if missing; sync its system prompt on boot.
+
+    Sibling of ``ensure_lead_agent``. The platform ships this employee out of
+    the box because the user's primary scenario after configuring a workspace
+    is "write code" — they shouldn't have to assemble the prompt + skill_ids
+    themselves.
+
+    Like Lead, we re-sync system_prompt every boot but preserve the user's
+    customised tool_ids / skill_ids / model_ref. This way prompt edits in
+    code propagate without clobbering customisations.
+    """
+    existing = await repo.get_by_name(EXPERT_PROGRAMMER_NAME)
+    canonical_prompt = EXPERT_PROGRAMMER_PROMPT
+    canonical_skills = ["allhands.local-files"]
+    canonical_tools: list[str] = []  # All capability comes via the skill activation
+
+    if existing is not None:
+        updates: dict[str, object] = {}
+        if existing.system_prompt != canonical_prompt:
+            updates["system_prompt"] = canonical_prompt
+        if updates:
+            return await repo.upsert(existing.model_copy(update=updates))
+        return existing
+
+    # Pick a model: prefer Lead's model_ref so the user's configured provider
+    # stack carries over without manual setup.
+    lead = await repo.get_lead()
+    model_ref = lead.model_ref if lead is not None else "openai/gpt-4o-mini"
+
+    now = datetime.now(UTC)
+    programmer = Employee(
+        id=str(uuid.uuid4()),
+        name=EXPERT_PROGRAMMER_NAME,
+        description="本地工作区里的代码专家 · Claude-Code 同款工具集 · 看 / 改 / 跑 / 验证",
+        system_prompt=canonical_prompt,
+        model_ref=model_ref,
+        tool_ids=canonical_tools,
+        skill_ids=canonical_skills,
+        max_iterations=30,
+        is_lead_agent=False,
+        status="published",
+        created_by="system",
+        created_at=now,
+        published_at=now,
+    )
+    return await repo.upsert(programmer)
+
+
 async def scan_for_dropped_skill_references(session: object, *, dropped_id: str) -> int:
     """Count rows still referencing a removed skill id.
 

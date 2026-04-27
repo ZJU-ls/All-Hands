@@ -27,6 +27,7 @@ from allhands.core import (
     InteractionSpec,
     LLMModel,
     LLMProvider,
+    LocalWorkspace,
     MCPHealth,
     MCPServer,
     MCPTransport,
@@ -65,6 +66,7 @@ from allhands.persistence.orm.models import (
     EventRow,
     LLMModelRow,
     LLMProviderRow,
+    LocalWorkspaceRow,
     MCPServerRow,
     MessageRow,
     ModelPriceRow,
@@ -625,6 +627,69 @@ class SqlMCPServerRepo:
 
     async def delete(self, server_id: str) -> None:
         row = await self._s.get(MCPServerRow, server_id)
+        if row:
+            await self._s.delete(row)
+            await self._s.commit()
+
+
+def _row_to_local_workspace(row: LocalWorkspaceRow) -> LocalWorkspace:
+    return LocalWorkspace(
+        id=row.id,
+        name=row.name,
+        root_path=row.root_path,
+        read_only=bool(row.read_only),
+        denied_globs=list(row.denied_globs or []),
+        created_at=_utc(row.created_at),
+        updated_at=_utc(row.updated_at),
+    )
+
+
+class SqlLocalWorkspaceRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, workspace_id: str) -> LocalWorkspace | None:
+        row = await self._s.get(LocalWorkspaceRow, workspace_id)
+        return _row_to_local_workspace(row) if row else None
+
+    async def get_by_name(self, name: str) -> LocalWorkspace | None:
+        result = await self._s.execute(
+            select(LocalWorkspaceRow).where(LocalWorkspaceRow.name == name)
+        )
+        row = result.scalar_one_or_none()
+        return _row_to_local_workspace(row) if row else None
+
+    async def list_all(self) -> list[LocalWorkspace]:
+        result = await self._s.execute(
+            select(LocalWorkspaceRow).order_by(LocalWorkspaceRow.created_at)
+        )
+        return [_row_to_local_workspace(r) for r in result.scalars().all()]
+
+    async def upsert(self, workspace: LocalWorkspace) -> LocalWorkspace:
+        existing = await self._s.get(LocalWorkspaceRow, workspace.id)
+        if existing:
+            existing.name = workspace.name
+            existing.root_path = workspace.root_path
+            existing.read_only = workspace.read_only
+            existing.denied_globs = list(workspace.denied_globs)
+            existing.updated_at = _naive(workspace.updated_at)
+        else:
+            self._s.add(
+                LocalWorkspaceRow(
+                    id=workspace.id,
+                    name=workspace.name,
+                    root_path=workspace.root_path,
+                    read_only=workspace.read_only,
+                    denied_globs=list(workspace.denied_globs),
+                    created_at=_naive(workspace.created_at),
+                    updated_at=_naive(workspace.updated_at),
+                )
+            )
+        await self._s.commit()
+        return workspace
+
+    async def delete(self, workspace_id: str) -> None:
+        row = await self._s.get(LocalWorkspaceRow, workspace_id)
         if row:
             await self._s.delete(row)
             await self._s.commit()
