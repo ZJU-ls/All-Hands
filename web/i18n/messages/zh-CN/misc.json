@@ -172,6 +172,13 @@
           "updated": "更新时间"
         }
       },
+      "runDetail": {
+        "shellTitle": "Trace · {id}",
+        "breadcrumb": {
+          "aria": "面包屑导航",
+          "trace": "trace"
+        }
+      },
       "costPanel": {
         "title": "成本面板 · 24h",
         "today": "今日累计",
@@ -434,13 +441,14 @@
       "saved": "已保存",
       "saveFailed": "保存失败"
     },
-    "pdf": {
-      "loading": "加载 PDF…",
-      "loadFailed": "PDF 加载失败:{error}"
-    },
     "csv": {
-      "empty": "(无数据)",
-      "loadFailed": "CSV 解析失败:{error}"
+      "empty": "(无数据)"
+    },
+    "html": {
+      "iframeTitle": "HTML 制品预览"
+    },
+    "pdf": {
+      "iframeTitle": "PDF 预览"
     },
     "xlsx": {
       "loading": "加载 Excel…",
@@ -631,7 +639,7 @@
         "conversations": "历史会话",
         "tasks": "异步任务",
         "employees": "数字员工",
-        "employeeDesign": "设计新员工",
+        "employeeNew": "招聘新员工",
         "skills": "技能包",
         "mcp": "外部 MCP",
         "gateway": "供应商与模型网关",
@@ -652,7 +660,7 @@
         "conversations": "历史会话",
         "tasks": "任务",
         "employees": "员工",
-        "employeeDesign": "员工设计",
+        "employeeNew": "招聘新员工",
         "skills": "技能",
         "mcp": "MCP 服务器",
         "gateway": "供应商与模型",

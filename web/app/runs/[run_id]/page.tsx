@@ -1,25 +1,17 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { use } from "react";
-import { AppShell } from "@/components/shell/AppShell";
-import { RunTracePanel } from "@/components/runs/RunTracePanel";
-
-export default function RunDetailPage({
+/**
+ * Legacy `/runs/[run_id]` route — preserved as a redirect after trace
+ * viewing was consolidated into `/observatory/runs/[run_id]` (the
+ * observatory L3 detail page). External links / bookmarks / agent
+ * outputs that still point here keep working; we'll watch usage and
+ * delete the redirect in a follow-up once the legacy path goes quiet.
+ */
+export default async function LegacyRunDetailRedirect({
   params,
 }: {
   params: Promise<{ run_id: string }>;
 }) {
-  const { run_id: runId } = use(params);
-  const shortId = runId.length > 10 ? `${runId.slice(0, 10)}…` : runId;
-
-  return (
-    <AppShell title={`trace · ${shortId}`}>
-      <div
-        data-testid="run-detail-page"
-        className="mx-auto h-full w-full max-w-4xl overflow-y-auto px-6 py-6"
-      >
-        <RunTracePanel runId={runId} />
-      </div>
-    </AppShell>
-  );
+  const { run_id } = await params;
+  redirect(`/observatory/runs/${encodeURIComponent(run_id)}`);
 }

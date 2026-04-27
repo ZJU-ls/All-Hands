@@ -72,16 +72,13 @@ OBSERVATORY_GET_TRACE_TOOL = Tool(
     kind=ToolKind.META,
     name="observatory.get_trace",
     description=(
-        "Fetch a single trace by id with its summary row (employee, "
-        "duration, tokens, status, started_at).\n\n"
-        "**WHEN TO USE**: User referenced a specific trace id and wants "
-        "the details ('what happened in run abc123'), or a follow-up on "
-        "a trace_id returned by observatory.query_traces.\n\n"
-        "**WHEN NOT TO USE**: You don't have a specific id yet (list first "
-        "via observatory.query_traces). For the full Langfuse span tree / "
-        "raw token stream, hand the user the trace_id and let them click "
-        "through to the Langfuse UI on `/observatory`.\n\n"
-        "**PARAMS**: trace_id (required)."
+        "Fetch a single trace by id · returns summary (employee, duration, "
+        "tokens, status, started_at).\n"
+        "WHEN TO USE: user named a specific trace id, or you got one from "
+        "`observatory.query_traces`.\n"
+        "WHEN NOT TO USE: no id yet (list first) · user wants the full "
+        "Langfuse span tree (link them to /observatory).\n"
+        "PARAMS: trace_id (required)."
     ),
     input_schema={
         "type": "object",

@@ -24,6 +24,7 @@ from __future__ import annotations
 import os
 import uuid
 from contextvars import ContextVar
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, Field
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from allhands.core import Employee
+    from allhands.execution.event_bus import EventBus
     from allhands.execution.events import AgentEvent
     from allhands.persistence.repositories import EmployeeRepo
 
@@ -42,6 +44,12 @@ if TYPE_CHECKING:
 
 _dispatch_depth: ContextVar[int] = ContextVar("allhands_dispatch_depth", default=0)
 _parent_run_id: ContextVar[str | None] = ContextVar("allhands_parent_run_id", default=None)
+# Optional: set by ChatService at the top of each turn so subagents can
+# attribute their run.* events back to the parent's conversation. Empty
+# string when running outside a chat turn (tests, CLI).
+_parent_conversation_id: ContextVar[str | None] = ContextVar(
+    "allhands_parent_conversation_id", default=None
+)
 
 
 def current_dispatch_depth() -> int:
@@ -50,6 +58,10 @@ def current_dispatch_depth() -> int:
 
 def current_parent_run_id() -> str | None:
     return _parent_run_id.get()
+
+
+def current_parent_conversation_id() -> str | None:
+    return _parent_conversation_id.get()
 
 
 def _default_max_depth() -> int:
@@ -125,10 +137,17 @@ class DispatchService:
         employee_repo: EmployeeRepo,
         runner_factory: RunnerFactory,
         max_depth: int | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._employees = employee_repo
         self._runner_factory = runner_factory
         self._max_depth = max_depth if max_depth is not None else _default_max_depth()
+        # Optional event_bus · when wired, every dispatch emits run.started +
+        # run.completed/failed so observatory's ``get_run_detail`` can find
+        # the sub-run by its run_id (mirrors chat_service contract). When
+        # None, subagent runs leave no trace — that was the pre-2026-04-27
+        # bug behind "trace 已不在".
+        self._bus = event_bus
 
     @property
     def max_depth(self) -> int:
@@ -160,13 +179,30 @@ class DispatchService:
         run_id = str(uuid.uuid4())
         thread_id = str(uuid.uuid4())
         invoker_run_id = _parent_run_id.get()
+        invoker_conversation_id = _parent_conversation_id.get() or ""
 
         depth_token = _dispatch_depth.set(new_depth)
         parent_token = _parent_run_id.set(run_id)
+        run_started_at = datetime.now(UTC)
+        # Emit run.started so observatory.get_run_detail can find this
+        # sub-run later. parent_run_id chains the trace tree; depth lets
+        # the trace viewer indent properly.
+        if self._bus is not None:
+            self._bus.publish_best_effort(
+                kind="run.started",
+                payload={
+                    "run_id": run_id,
+                    "employee_id": child.id,
+                    "conversation_id": invoker_conversation_id,
+                    "depth": new_depth,
+                    "parent_run_id": invoker_run_id,
+                },
+            )
         try:
             runner = self._runner_factory(child, new_depth)
             summary_parts: list[str] = []
             renders: list[dict[str, object]] = []
+            error_msg: str | None = None
             async for event in runner.stream(
                 messages=[{"role": "user", "content": task}],
                 thread_id=thread_id,
@@ -186,16 +222,45 @@ class DispatchService:
                         if isinstance(envelope, dict):
                             renders.append(envelope)
                 elif kind == "error":
-                    return DispatchResult(
-                        run_id=run_id,
-                        status="err_sub_run_failed",
-                        summary=getattr(event, "message", "sub-run failed"),
-                        thread_id=thread_id,
-                        parent_run_id=invoker_run_id,
-                    )
+                    error_msg = getattr(event, "message", "sub-run failed")
+                    break
         finally:
             _parent_run_id.reset(parent_token)
             _dispatch_depth.reset(depth_token)
+
+        duration_s = (datetime.now(UTC) - run_started_at).total_seconds()
+        if error_msg is not None:
+            if self._bus is not None:
+                self._bus.publish_best_effort(
+                    kind="run.failed",
+                    payload={
+                        "run_id": run_id,
+                        "employee_id": child.id,
+                        "conversation_id": invoker_conversation_id,
+                        "duration_s": duration_s,
+                        "error": error_msg,
+                        "parent_run_id": invoker_run_id,
+                    },
+                )
+            return DispatchResult(
+                run_id=run_id,
+                status="err_sub_run_failed",
+                summary=error_msg,
+                thread_id=thread_id,
+                parent_run_id=invoker_run_id,
+            )
+
+        if self._bus is not None:
+            self._bus.publish_best_effort(
+                kind="run.completed",
+                payload={
+                    "run_id": run_id,
+                    "employee_id": child.id,
+                    "conversation_id": invoker_conversation_id,
+                    "duration_s": duration_s,
+                    "parent_run_id": invoker_run_id,
+                },
+            )
 
         out = DispatchResult(
             run_id=run_id,

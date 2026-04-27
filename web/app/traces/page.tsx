@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
@@ -24,7 +24,6 @@ import {
   sortTraces,
   type TraceSort,
 } from "@/components/traces/TraceTable";
-import { TRACE_QUERY_KEY } from "@/components/runs/TraceChip";
 
 const PAGE_SIZE = 50;
 
@@ -77,9 +76,6 @@ function TracesPageInner() {
   const t = useTranslations("traces.page");
   const tCommon = useTranslations("common");
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const selectedId = searchParams?.get(TRACE_QUERY_KEY) ?? null;
 
   const [filters, setFilters] = useState<TraceFilterState>(DEFAULT_FILTERS);
   const [sort, setSort] = useState<TraceSort>(DEFAULT_SORT);
@@ -91,13 +87,14 @@ function TracesPageInner() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
 
+  // Trace detail moved to the observatory L3 page (2026-04-27); navigate
+  // there instead of pushing the legacy ``?trace=`` query that the global
+  // drawer used to consume.
   const openTrace = useCallback(
     (runId: string) => {
-      const params = new URLSearchParams(searchParams?.toString() ?? "");
-      params.set(TRACE_QUERY_KEY, runId);
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      router.push(`/observatory/runs/${encodeURIComponent(runId)}`);
     },
-    [pathname, router, searchParams],
+    [router],
   );
 
   const load = useCallback(async (next: TraceFilterState) => {
@@ -207,7 +204,7 @@ function TracesPageInner() {
                 <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm">
                   <TraceTable
                     traces={visible}
-                    selectedId={selectedId}
+                    selectedId={null}
                     sort={sort}
                     onSort={setSort}
                     onSelect={(t) => openTrace(t.trace_id)}

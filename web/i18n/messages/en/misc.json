@@ -172,6 +172,13 @@
           "updated": "Updated"
         }
       },
+      "runDetail": {
+        "shellTitle": "Trace · {id}",
+        "breadcrumb": {
+          "aria": "Breadcrumb",
+          "trace": "trace"
+        }
+      },
       "costPanel": {
         "title": "Cost panel · 24h",
         "today": "Today",
@@ -434,13 +441,14 @@
       "saved": "Saved",
       "saveFailed": "Save failed"
     },
-    "pdf": {
-      "loading": "Loading PDF…",
-      "loadFailed": "PDF load failed: {error}"
-    },
     "csv": {
-      "empty": "(no data)",
-      "loadFailed": "CSV parse failed: {error}"
+      "empty": "(no data)"
+    },
+    "html": {
+      "iframeTitle": "HTML artifact preview"
+    },
+    "pdf": {
+      "iframeTitle": "PDF preview"
     },
     "xlsx": {
       "loading": "Loading Excel…",
@@ -631,7 +639,7 @@
         "conversations": "past conversations",
         "tasks": "async tasks",
         "employees": "digital employees",
-        "employeeDesign": "design new employee",
+        "employeeNew": "hire new employee",
         "skills": "skill packs",
         "mcp": "external mcp",
         "gateway": "provider + model gateway",
@@ -652,7 +660,7 @@
         "conversations": "Conversations",
         "tasks": "Tasks",
         "employees": "Employees",
-        "employeeDesign": "Employee design",
+        "employeeNew": "New employee",
         "skills": "Skills",
         "mcp": "MCP servers",
         "gateway": "Providers & models",

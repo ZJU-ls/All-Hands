@@ -3,19 +3,35 @@
 /**
  * TraceChip · Brand Blue Dual Theme V2 (ADR 0016)
  *
- * Chip variant: rounded-full primary-tinted pill with external-link glyph.
- * Link variant: inline text button with the `↗` arrow (tests pin that glyph).
+ * Renders a link into the observatory L3 trace page
+ * (``/observatory/runs/<run_id>``). Two visual variants:
  *
- * Preserves public API + data-testid.
+ *   - **chip** · rounded-full primary-tinted pill (default · dense lists)
+ *   - **link** · inline text link with `↗` glyph (ToolCallCard expand)
+ *
+ * Pre-2026-04-27 this pushed ``?trace=<id>`` and a global drawer popped on
+ * top of whatever page the user was on. That coupled trace viewing to chat
+ * UX and produced 3 parallel trace surfaces. The integration plan
+ * consolidates trace into observatory's L3 — this component is the
+ * single hand-off; tests pin the href contract.
+ *
+ * ``TRACE_QUERY_KEY`` stays exported as ``"trace"`` because some observatory
+ * sub-views (cockpit ActiveRunsList, traces page) still use it as a
+ * URL-state key for selection · they navigate to /observatory/runs/<id>
+ * via this chip but read the legacy query for backward-compat.
  */
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import type { MouseEvent } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/icon";
 
 export const TRACE_QUERY_KEY = "trace";
+
+/** Single source of truth for the L3 trace href. */
+export function traceHref(runId: string): string {
+  return `/observatory/runs/${encodeURIComponent(runId)}`;
+}
 
 type Props = {
   runId: string;
@@ -32,23 +48,12 @@ export function TraceChip({
 }: Props) {
   const t = useTranslations("runs.traceChip");
   const resolvedLabel = label ?? t("label");
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const handleClick = (ev: MouseEvent<HTMLButtonElement>) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
-    params.set(TRACE_QUERY_KEY, runId);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  };
+  const href = traceHref(runId);
 
   if (variant === "link") {
     return (
-      <button
-        type="button"
-        onClick={handleClick}
+      <Link
+        href={href}
         data-testid="trace-chip"
         data-run-id={runId}
         className={cn(
@@ -58,14 +63,13 @@ export function TraceChip({
       >
         <span aria-hidden>↗</span>
         {resolvedLabel}
-      </button>
+      </Link>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
+    <Link
+      href={href}
       data-testid="trace-chip"
       data-run-id={runId}
       className={cn(
@@ -75,6 +79,6 @@ export function TraceChip({
     >
       <Icon name="external-link" size={10} strokeWidth={2} aria-hidden />
       {label}
-    </button>
+    </Link>
   );
 }

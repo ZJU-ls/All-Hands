@@ -37,22 +37,13 @@ TASK_CREATE_TOOL = Tool(
     kind=ToolKind.META,
     name="tasks_create",
     description=(
-        "Create a new asynchronous task assigned to an employee. **Use this whenever the "
-        "user asks for something that will take more than one of your turns** (writing, "
-        "research, multi-step coordination). After creating, reply to the user with the "
-        "task id and STOP talking — do not stream progress updates into the chat; the user "
-        "watches /tasks for progress.\n\n"
-        "**Do NOT use** for questions you can answer inline, or for things that are "
-        "essentially a single search + synthesis (use dispatch_employee instead for "
-        "in-chat delegation).\n\n"
-        "**DoD is mandatory**. Write a 2-4 bullet Definition of Done covering:\n"
-        "- output format (markdown? file? image?)\n"
-        "- what MUST be included\n"
-        "- what MUST NOT be included\n"
-        "- acceptance signal (what tells the employee it's done)\n"
-        "If you can't write a DoD, you don't understand the request — ask the user first.\n\n"
-        "Params: title (short display), goal (full markdown), dod (markdown), "
-        "assignee_id, token_budget (optional · auto-cancel if exceeded)."
+        "Create an asynchronous task assigned to an employee. Returns "
+        "`{task_id, status}`. The task runs out-of-band; the user watches "
+        "/tasks for progress. Suited for multi-turn work (writing / "
+        "research / coordination). For inline single-turn delegation use "
+        "`dispatch_employee` instead. `dod` (Definition of Done) drives "
+        "automatic acceptance — see the `task_management` skill body for "
+        "what makes a good DoD."
     ),
     input_schema={
         "type": "object",

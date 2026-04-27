@@ -3,28 +3,7 @@
     "ariaLabel": "通知"
   },
   "common": {
-    "loading": "加载中…",
-    "save": "保存",
-    "cancel": "取消",
-    "confirm": "确认",
-    "delete": "删除",
-    "edit": "编辑",
-    "create": "新建",
-    "search": "搜索",
-    "back": "返回",
-    "next": "下一步",
-    "previous": "上一步",
-    "close": "关闭",
-    "ok": "确定",
-    "yes": "是",
-    "no": "否",
-    "more": "更多",
-    "settings": "设置",
-    "retry": "重试",
-    "refresh": "刷新",
-    "copy": "复制",
-    "copied": "已复制",
-    "comingSoon": "即将上线"
+    "retry": "重试"
   },
   "shell": {
     "workspaceVersion": "v0 · mvp",
@@ -79,12 +58,11 @@
     },
     "menu": {
       "cockpit": "驾驶舱",
-      "chat": "Lead 对话",
+      "chat": "对话",
       "tasks": "任务",
       "conversations": "历史会话",
       "artifacts": "制品库",
       "employees": "员工",
-      "employeeDesign": "员工设计",
       "skills": "技能",
       "mcpServers": "MCP 服务器",
       "knowledge": "知识库",
@@ -214,7 +192,6 @@
   },
   "errors": {
     "unknown": "未知错误",
-    "network": "网络错误,请检查连接后重试",
     "notFoundEyebrow": "404 · not found",
     "notFoundTitle": "页面不存在",
     "notFoundBody": "这个地址没有对应的页面。",

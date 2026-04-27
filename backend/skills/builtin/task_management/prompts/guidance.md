@@ -4,6 +4,18 @@
 
 用户说「这个任务跑到哪了」「取消那个任务」「批准 / 验收」「这个任务挂上 X 制品」 → 先 `tasks.list(status=...)` 找到,再 get 看详情。
 
+## 创建任务的契约
+
+调 `tasks_create(title, goal, dod, assignee_id, token_budget?)` 时:
+
+- **DoD(Definition of Done)是必填**。写不出 2-4 条 DoD = 你没真懂用户在要什么 · 先问清楚,别先建任务。
+  - output format(markdown / 文件 / 图)
+  - 必须包含的内容
+  - 必须不包含的内容
+  - 验收信号(怎么知道完成了)
+- **创建之后**告诉用户 task_id · 然后**停下别讲了** —— 任务跑在后台,用户去 `/tasks` 看进度。再在聊天里 stream 进度只会让对话噪音化。
+- **不该建任务的场景**:你能在当前一轮直接答的问题、单纯一次搜索 + 综合(用 `dispatch_employee` 在聊天里直接跑就行)。
+
 ## 典型工作流
 
 1. **盘点** — `tasks.list(workspace_id?, statuses=["running","awaiting_input"])` · 默认按更新时间倒序

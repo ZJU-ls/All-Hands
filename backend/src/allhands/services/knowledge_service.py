@@ -1017,7 +1017,9 @@ class KnowledgeService:
         try:
             provider = await resolve_provider_with_db(new_ref, self._session_maker)
         except ValueError as exc:
-            raise KBError(f"模型 {new_ref!r} 不可用: {exc}") from None
+            raise KBError(
+                t("knowledge.embedding.model_unusable", ref=repr(new_ref), detail=str(exc))
+            ) from None
         new_embedder = Embedder(model_ref=new_ref, provider=provider)
 
         # 2. Persist on KB row
