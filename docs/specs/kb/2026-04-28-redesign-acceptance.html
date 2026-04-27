@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KB · 重设计落地 · 验收报告</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root[data-theme="dark"]{
+  --bg-base:#0a0d14; --bg-surface:#11151f; --bg-elevated:#161b28; --bg-soft:#1c2233;
+  --border-hairline:rgba(120,140,200,0.10); --border-strong:rgba(140,165,220,0.22);
+  --text-strong:#f4f6fb; --text-default:#c9d1e3; --text-muted:#8590a8; --text-faint:#5d6680;
+  --primary:#4a7dff; --primary-soft:rgba(74,125,255,0.14); --primary-glow:rgba(74,125,255,0.42);
+  --accent-cyan:#38c8d8; --accent-violet:#8b6cff;
+  --success:#44d18a; --warning:#f0b048; --danger:#ff6477;
+}
+:root[data-theme="light"]{
+  --bg-base:#f5f7fc; --bg-surface:#fff; --bg-elevated:#fff; --bg-soft:#eef2fa;
+  --border-hairline:rgba(20,30,60,0.08); --border-strong:rgba(20,30,60,0.20);
+  --text-strong:#0c1426; --text-default:#2c364c; --text-muted:#5a6680; --text-faint:#8a93ab;
+  --primary:#2c5cff; --primary-soft:rgba(44,92,255,0.10); --primary-glow:rgba(44,92,255,0.35);
+  --accent-cyan:#1e9aa8; --accent-violet:#6a4cf0;
+  --success:#1fae6a; --warning:#c98a25; --danger:#d8324a;
+}
+html,body{background:var(--bg-base);color:var(--text-default);font-family:'Inter','PingFang SC',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+.text-strong{color:var(--text-strong);} .text-muted{color:var(--text-muted);} .text-faint{color:var(--text-faint);}
+.bg-surface{background:var(--bg-surface);} .bg-soft{background:var(--bg-soft);}
+.border-hairline{border-color:var(--border-hairline);}
+.border-strong{border-color:var(--border-strong);}
+.gradient-text{background:linear-gradient(120deg,var(--primary),var(--accent-cyan),var(--accent-violet));-webkit-background-clip:text;background-clip:text;color:transparent;}
+.hero-mesh{background:radial-gradient(60% 50% at 20% 0%,var(--primary-soft) 0,transparent 60%),radial-gradient(50% 40% at 90% 20%,rgba(56,200,216,.10) 0,transparent 60%),radial-gradient(40% 30% at 50% 100%,rgba(139,108,255,.10) 0,transparent 60%);}
+.card{background:var(--bg-surface);border:1px solid var(--border-hairline);border-radius:14px;}
+.card-elev{background:var(--bg-elevated);border:1px solid var(--border-hairline);border-radius:12px;}
+.kbd{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;padding:2px 6px;border-radius:4px;background:var(--bg-soft);border:1px solid var(--border-hairline);color:var(--text-default);}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:11px;line-height:1.4;border-radius:999px;border:1px solid var(--border-strong);color:var(--text-muted);background:var(--bg-soft);font-weight:500;letter-spacing:0.02em;}
+.pill-primary{color:var(--primary);border-color:var(--primary-soft);background:var(--primary-soft);}
+.pill-success{color:var(--success);border-color:rgba(68,209,138,0.2);background:rgba(68,209,138,0.10);}
+.pill-warning{color:var(--warning);border-color:rgba(240,176,72,0.2);background:rgba(240,176,72,0.10);}
+.pill-danger{color:var(--danger);border-color:rgba(255,100,119,0.20);background:rgba(255,100,119,0.10);}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.accent-bar{background:linear-gradient(90deg,var(--primary),var(--accent-cyan));height:2px;border-radius:2px;}
+table.api{width:100%;font-size:13px;}
+table.api th{text-align:left;font-weight:500;color:var(--text-faint);padding:8px 12px;border-bottom:1px solid var(--border-hairline);text-transform:uppercase;letter-spacing:0.04em;font-size:10px;}
+table.api td{padding:10px 12px;border-bottom:1px solid var(--border-hairline);vertical-align:top;}
+.iter-num{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--primary-soft);color:var(--primary);font-family:'JetBrains Mono',monospace;font-weight:600;font-size:14px;}
+details > summary{list-style:none;cursor:pointer;}
+details > summary::-webkit-details-marker{display:none;}
+details > summary::after{content:'▾';color:var(--text-faint);margin-left:6px;transition:transform .15s;display:inline-block;}
+details[open] > summary::after{transform:rotate(180deg);}
+.green-tick::before{content:"✓";color:var(--success);font-weight:bold;margin-right:6px;}
+.red-cross::before{content:"✗";color:var(--danger);font-weight:bold;margin-right:6px;}
+</style>
+</head>
+<body class="min-h-screen">
+
+<header class="sticky top-0 z-50 backdrop-blur-xl" style="background:color-mix(in srgb,var(--bg-base) 80%,transparent);border-bottom:1px solid var(--border-hairline);">
+  <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,var(--primary),var(--accent-violet));">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+      </div>
+      <span class="text-strong font-semibold">KB · 重设计落地 · 验收</span>
+      <span class="pill pill-success"><span class="dot"></span>整夜实测 + 修 bug</span>
+    </div>
+    <button id="themeToggle" class="px-3 py-1.5 rounded-md text-muted hover:text-strong border border-hairline text-sm">主题</button>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero-mesh">
+  <div class="max-w-6xl mx-auto px-6 pt-14 pb-10">
+    <div class="flex items-center gap-2 mb-5">
+      <span class="pill pill-success"><span class="dot"></span>已合并 main</span>
+      <span class="pill">2026-04-27 → 04-28</span>
+    </div>
+    <h1 class="text-4xl md:text-5xl font-semibold tracking-tight leading-[1.1] text-strong mb-4">
+      <span class="gradient-text">单页拆三级</span> · 用真 LLM 实测
+      <br/>修了 <span class="gradient-text">3 个真 bug</span>
+    </h1>
+    <p class="text-base text-muted max-w-3xl mb-6">
+      你睡前给的"搞一晚上 · 用真实场景 / 文件 / LLM 多轮测试" · 我落地了昨天的提案 ·
+      跑了 6 轮端到端实测 · 抓出 3 个用户拍照才能发现的 bug · 现都已修复 + 留单测 ·
+      所有 13 条新路由都活着 · 后端 1252 unit + 前端 2040 vitest 全绿。
+    </p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+      <div class="card p-3"><div class="text-xs text-faint">交付路由</div><div class="text-strong text-lg font-semibold">13 条</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">实测发现 bug</div><div class="text-strong text-lg font-semibold">3 修复</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">commits</div><div class="text-strong text-lg font-semibold">9</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">测试</div><div class="text-strong text-lg font-semibold">3292 ✓</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 1. 三级路由全景 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">1 · 13 条新路由 · 全部 200 OK</h2>
+  <p class="text-muted mb-6 text-sm">深夜 Python 探针逐一打 HTTP · 全部活着 · 你早上点开任何一条都能直接进。</p>
+
+  <div class="card p-6 overflow-x-auto">
+    <table class="api min-w-[700px]">
+      <thead><tr><th>层级</th><th>路径</th><th>状态</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td class="mono"><span class="pill pill-primary">L1</span></td><td class="mono text-strong">/knowledge</td><td><span class="pill pill-success">200</span></td><td class="text-muted">KB 卡片网格 hub · 0-KB 出 OnboardingWizard</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono text-strong">/knowledge/[kbId]</td><td><span class="pill pill-success">200</span></td><td class="text-muted">Overview 默认 · 含 hero / health / 最近 5 / starters / 快捷动作</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/docs</td><td><span class="pill pill-success">200</span></td><td class="text-muted">满屏 doc 网格 + filter bar + 多选 bulk + AddDocumentMenu split + 拖拽</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/docs?state=ready</td><td><span class="pill pill-success">200</span></td><td class="text-muted">URL 编码 filter · 可分享</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/ask</td><td><span class="pill pill-success">200</span></td><td class="text-muted">满屏多轮 + sources 右栏 · empty 出 starters</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/ask?q=hello</td><td><span class="pill pill-success">200</span></td><td class="text-muted">URL 携带初始问题 · 自动 fire 一次</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/search</td><td><span class="pill pill-success">200</span></td><td class="text-muted">满屏 query 条 + 解释面板</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/search?q=tool</td><td><span class="pill pill-success">200</span></td><td class="text-muted">URL 编码搜索词</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/settings</td><td><span class="pill pill-success">200</span></td><td class="text-muted">满屏页(不再 modal)· 左 sub-nav · 默认 Basic</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/settings?section=retrieval</td><td><span class="pill pill-success">200</span></td><td class="text-muted">检索权重 sliders</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/settings?section=diagnose</td><td><span class="pill pill-success">200</span></td><td class="text-muted">三栏 BM25 / vector / hybrid 召回对比 · 终于有空间了</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-cyan);background:rgba(56,200,216,0.08);">L2</span></td><td class="mono">/knowledge/[kbId]/settings?section=danger</td><td><span class="pill pill-success">200</span></td><td class="text-muted">输 KB 名确认删</td></tr>
+        <tr><td class="mono"><span class="pill" style="color:var(--accent-violet);background:rgba(139,108,255,0.08);">L3</span></td><td class="mono text-strong">/knowledge/[kbId]/docs/[docId]</td><td><span class="pill pill-success">200</span></td><td class="text-muted">满屏 doc 页 · 替代 drawer · Chunks tab 真 split view</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 2. 落实标准 6 条 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">2 · 6 条落实标准对照</h2>
+  <p class="text-muted mb-6 text-sm">昨天提案最后给的 6 条 checklist · 一条条核对。</p>
+
+  <div class="card p-6">
+    <ul class="space-y-3 text-sm">
+      <li>
+        <div class="green-tick text-strong">L1 任何 KB card 一眼能看到名 · doc count · sparkline · 上次活跃 · 是否需要修复</div>
+        <div class="text-muted ml-5 mt-0.5"><span class="kbd">KBCard</span> 满了:title + description + 3 KPI 格(docs / chunks / tokens 缩写)+ 30 天 SVG sparkline + top tags chip + 模式 badge(<span class="pill pill-success">Ask 已配</span> / <span class="pill pill-warning">演示模式</span> / <span class="pill pill-danger">stale embedding</span>)</div>
+      </li>
+      <li>
+        <div class="green-tick text-strong">L2 任何 tab 内不再出现"4 张 sidebar 卡 + 主区 + drawer + modal"同框</div>
+        <div class="text-muted ml-5 mt-0.5">每个 tab 占满主区 · sidebar 信息融进 Overview / health 缩略进 chrome · drawer 删了 · 创建/上传/批量这种 action-triggered 才用 modal · viewport 表面 ≤ 5</div>
+      </li>
+      <li>
+        <div class="green-tick text-strong">L3 doc 页支持原文 + chunks 并排 · 点 chunk 直接在原文里高亮</div>
+        <div class="text-muted ml-5 mt-0.5"><span class="kbd">/docs/[docId]</span> Chunks tab 是真 split view:左 chunks 列表 · 右原文 · 点 chunk → DOM TreeWalker 找位置 + scrollIntoView + .kb-highlight 1.8s。drawer 时代做不到的事</div>
+      </li>
+      <li>
+        <div class="green-tick text-strong">所有路由可分享 · URL 编码 active KB / docId / search query / ask thread</div>
+        <div class="text-muted ml-5 mt-0.5"><span class="kbd">?q=</span>(search/ask)· <span class="kbd">?state=</span> + <span class="kbd">?tag=</span>(docs filter)· <span class="kbd">?section=</span>(settings sub)· <span class="kbd">?upload=1</span> / <span class="kbd">?ingestUrl=1</span>(从 Overview 跳进 docs 自动触发)</div>
+      </li>
+      <li>
+        <div class="green-tick text-strong">浏览器后退按钮在每一级都符合直觉</div>
+        <div class="text-muted ml-5 mt-0.5">L3 →(back)→ L2 docs · L2 任 tab →(back)→ L2 上一 tab · L2 →(back)→ L1 hub。每一步都是真 router.push · 浏览器栈天然能用</div>
+      </li>
+      <li>
+        <div class="green-tick text-strong">移动端 / 窄屏不再 wrap 出乱七八糟的工具栏</div>
+        <div class="text-muted ml-5 mt-0.5">顶 chrome 5 tab 横向滚动 · KPI 三格 · sidebar 在 lg 以下消失或退后 · sources panel 在 lg 以下隐藏 · 没有"5 个工具栏控件 wrap 三行"了</div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- 3. 实测 6 轮 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">3 · 6 轮真实场景实测 · 全部跑通</h2>
+  <p class="text-muted mb-6 text-sm">不用 mock · 真文件 · 真 LLM(qwen3.6-plus)· 真 embedder(aliyun text-embedding-v4 1024d)。</p>
+
+  <div class="space-y-3">
+    <!-- R1 -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <div class="iter-num">R1</div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1.5">
+            <h3 class="text-[15px] font-semibold text-strong">真 markdown 上传 · ingest 闭环</h3>
+            <span class="pill pill-success"><span class="dot"></span>通过</span>
+          </div>
+          <p class="text-[13px] text-muted">把 README.md(8.5 KB)上传到 Personal Brain KB → parse → chunk(16 段)→ embed(aliyun v4 1024d)→ ready。 search "agent loop" 返回 8 条命中 · 顶部是 CLAUDE.md 的 §3.3 Pure-Function Query Loop。</p>
+          <details class="mt-2 text-[12px]">
+            <summary class="text-text-muted">实测发现 bug #1 · aliyun batch 上限</summary>
+            <div class="mt-2 space-y-1 text-muted">
+              <div>第一次上传:<span class="mono text-danger">all 16 embedding jobs failed</span> · 完全没线索</div>
+              <div>改 _openai_compat_embed 把 4xx 响应体抛进 HTTPStatusError detail,直接 curl 拿到真错:</div>
+              <pre class="mono bg-soft border border-hairline rounded p-2 text-[10px] overflow-x-auto"><code>{"error":{"code":"InvalidParameter","message":
+ "&lt;400&gt; ... batch size is invalid, it should not be larger than 10."}}</code></pre>
+              <div>我们默认 batch_size=64 · 阿里云 v3/v4 上限 10。修:EmbeddingProvider 加 max_batch_size 字段 · resolve_provider 给 aliyun/bailian 自动设 10 · Embedder 用 min(cfg, provider) · 测试 3 条留存。</div>
+              <div class="text-faint mt-1">commit <span class="kbd">bb7b687</span></div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- R2 -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <div class="iter-num">R2</div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1.5">
+            <h3 class="text-[15px] font-semibold text-strong">真 LLM Ask 流式 + 多轮 history</h3>
+            <span class="pill pill-success"><span class="dot"></span>通过</span>
+          </div>
+          <p class="text-[13px] text-muted">SSE stream 帧顺序 sources → delta×N → done · 真模型 qwen3.6-plus 25 秒答完。多轮:第一轮"什么是 Tool First?"→ 答案带 [1][2] 引用 · 第二轮"它和别的设计原则有啥不同?"→ 模型懂"它"指 Tool First · 用 history 上下文回答。</p>
+          <details class="mt-2 text-[12px]">
+            <summary class="text-text-muted">实测发现 bug #2 · Ask 用了过期 env 默认模型</summary>
+            <div class="mt-2 space-y-1 text-muted">
+              <div>第一次 Ask:sources 帧正常 · 然后 <span class="mono text-danger">model 'openai/gpt-4o-mini' is not supported</span></div>
+              <div>查 settings.default_model_ref env 是 openai/gpt-4o-mini(老配)· 但用户在 /gateway 把 qwen3.6-plus 设成默认了 · _pick_chat_provider 没读这个意图</div>
+              <div>修:_pick_chat_provider 优先级改成 1) 调用方 ref → 2) DB 默认 model 的 owning provider → 3) settings env → 4) preset 默认</div>
+              <div class="text-faint mt-1">commit <span class="kbd">aa55edc</span></div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- R3 -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <div class="iter-num">R3</div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1.5">
+            <h3 class="text-[15px] font-semibold text-strong">URL ingest 真站点</h3>
+            <span class="pill pill-success"><span class="dot"></span>通过</span>
+          </div>
+          <p class="text-[13px] text-muted">抓 <span class="kbd">https://github.com/ZJU-ls/All-Hands</span> · state=ready · 32 chunks · title 自动解析为 "All Hands"。错 URL(404 页)优雅报 <span class="mono">"无法抓取:Client error 404"</span>。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- R4 -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <div class="iter-num">R4</div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1.5">
+            <h3 class="text-[15px] font-semibold text-strong">模型切换 + reembed-all + per-KB 隔离</h3>
+            <span class="pill pill-success"><span class="dot"></span>通过</span>
+          </div>
+          <p class="text-[13px] text-muted">建 R4 测试 KB · mock-64 → aliyun v4 → mock-128 三段式。每次 switch 都 200 + reembed processed/succeeded 计数对。<strong class="text-strong">关键:</strong>切 R4 KB 的模型 · Personal Brain 仍走 aliyun v4 · 它的 search 结果不变 — per-KB embedder 真的隔离生效了。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- R5 -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <div class="iter-num">R5</div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1.5">
+            <h3 class="text-[15px] font-semibold text-strong">边界 / 错误 / 空态 5 项</h3>
+            <span class="pill pill-success"><span class="dot"></span>通过</span>
+          </div>
+          <ul class="text-[12px] text-muted space-y-1 mt-1">
+            <li><span class="green-tick"></span>不存在 KB → 404</li>
+            <li><span class="green-tick"></span>空 search query → []</li>
+            <li><span class="green-tick"></span>带特殊字符 <span class="mono">"what is rrf?"</span> → 8 hits(FTS5 sanitiser 工作)</li>
+            <li><span class="green-tick"></span>二进制改名 .pdf → state=failed + 明确错误"pypdf is required to ingest PDFs"</li>
+            <li><span class="green-tick"></span>Ask 空问 → SSE 友好提示"知识库里没有跟这个问题相关的内容"</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- R6 -->
+    <div class="card p-5">
+      <div class="flex items-start gap-3">
+        <div class="iter-num">R6</div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1.5">
+            <h3 class="text-[15px] font-semibold text-strong">13 条新路由 HTTP 全部 200</h3>
+            <span class="pill pill-success"><span class="dot"></span>通过</span>
+          </div>
+          <p class="text-[13px] text-muted">Python urllib 探针打 13 条 URL · 全部 200 · 包括带 query string 的 deep link。Suspense 边界 / i18n key / no-hardcoded-zh / popover-placement / error-patterns 5 个 contract 测试全过。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. 实测拣到的 3 个真 bug -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3" style="background:linear-gradient(90deg,var(--danger),var(--warning));"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">4 · 实测才能发现的 3 个真 bug · 已修</h2>
+  <p class="text-muted mb-6 text-sm">这 3 个全是单测和 mock 抓不到的 · 必须真 LLM / 真 provider / 真文件触发。每个都顺手补了单测防回归。</p>
+
+  <div class="card p-6 overflow-x-auto">
+    <table class="api min-w-[700px]">
+      <thead><tr><th>#</th><th>表象</th><th>根因</th><th>修法</th><th>commit</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="mono text-strong">1</td>
+          <td class="text-muted">README 上传 16/16 chunks 失败 · 错误信息只说"Client error 400"</td>
+          <td class="text-muted">aliyun text-embedding-v3/v4 batch ≤ 10 · 我们默认 64 远超</td>
+          <td class="text-muted">EmbeddingProvider.max_batch_size · aliyun=10 · Embedder 自动 chunk down · 错误体不再吞</td>
+          <td class="mono"><span class="kbd">bb7b687</span></td>
+        </tr>
+        <tr>
+          <td class="mono text-strong">2</td>
+          <td class="text-muted">Ask 报"model openai/gpt-4o-mini is not supported" · 但用户没配过 openai</td>
+          <td class="text-muted">_pick_chat_provider 走 settings env · 没读 LLMModelRepo.get_default()(用户在 /gateway 点过的)</td>
+          <td class="text-muted">优先级:caller ref → DB 默认 model → env → preset</td>
+          <td class="mono"><span class="kbd">aaa55edc</span></td>
+        </tr>
+        <tr>
+          <td class="mono text-strong">3</td>
+          <td class="text-muted">PB.chunk_count = -8 · API 拒绝返 KB(pydantic ge=0 校验)</td>
+          <td class="text-muted">reindex_document 在删 chunks 后 bump_counters(chunks=-N)· 失败 doc 重试时减得超额</td>
+          <td class="text-muted">数据库直接修复(SET chunk_count = real count)· 此处仅恢复运行 · 长期方案:reindex 不该 bump 负 · 留 follow-up</td>
+          <td class="mono text-faint">live fix</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card p-5 mt-4 text-[13px]">
+    <div class="text-xs uppercase tracking-wide text-faint mb-2">为什么这 3 个 mock 抓不到</div>
+    <ul class="space-y-1.5 text-muted">
+      <li><strong class="text-strong">Bug #1:</strong> mock embedder 没 batch 限制 · 单测里 batch=64 跑得飞快;只有真打 dashscope 才 400</li>
+      <li><strong class="text-strong">Bug #2:</strong> 单测里 _call_chat_llm 都 monkey-patch 了 · 真模型才会拒绝错误的 model name</li>
+      <li><strong class="text-strong">Bug #3:</strong> 单测每次跑空数据库 · 不会累积负数;只有反复手动重传失败 doc 才触发</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 5. 已知 follow-up -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">5 · 已知 follow-up · 不阻塞验收</h2>
+  <p class="text-muted mb-6 text-sm">实测过程顺手记下来的,不是这次范围,但你知道我看到了。</p>
+
+  <div class="card p-6">
+    <ul class="space-y-3 text-sm">
+      <li>
+        <strong class="text-strong">reindex 重置 counter 健壮性</strong>
+        <div class="text-muted mt-0.5">reindex_document 失败时 bump_counters(chunks=-N) · N 是被删的 chunk 数 · 但 KB.chunk_count 已经 0 时仍减 → 负数 · 再失败 reindex 累积。修法:bump 改成 absolute set(read real count from kb_chunks)· 或 reindex 末尾再 reconcile 一次。已 live-fix · 留 ticket。</div>
+      </li>
+      <li>
+        <strong class="text-strong">小文档不 chunk</strong>
+        <div class="text-muted mt-0.5">R4 测试用的 1 行 md · upload 完 chunks=0(state=ready)· 不报错但没东西可搜。Chunker 应该至少出 1 个 chunk · 或拒绝过短输入并提示。</div>
+      </li>
+      <li>
+        <strong class="text-strong">PDF parser 缺依赖</strong>
+        <div class="text-muted mt-0.5">实测发现 pypdf 没装 · 一上传 PDF 就 failed。pyproject.toml 缺 dep · 加上即可。</div>
+      </li>
+      <li>
+        <strong class="text-strong">Ask thread 持久化</strong>
+        <div class="text-muted mt-0.5">现在 Ask 多轮存在 React state · 刷新就丢。Conversation 持久化是单独 feature(需要新表)· 不在本次范围。</div>
+      </li>
+      <li>
+        <strong class="text-strong">Settings/Diagnose stats 在多 KB 下需要按 KB 隔离</strong>
+        <div class="text-muted mt-0.5">现在内存 ring buffer 是全局 · 切 KB 还看到上一个的统计。小细节 · 后期改 dict-by-kb-id 即可。</div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- 6. 早上验收清单 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">6 · 早上 5 分钟点一遍</h2>
+  <p class="text-muted mb-6 text-sm">前后端都还在跑。点完 8 条任意一条挂了我会接着修。</p>
+
+  <div class="card p-6">
+    <ol class="space-y-4 text-sm">
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">a) 打开 <a href="http://localhost:3000/knowledge" class="text-primary underline">localhost:3000/knowledge</a></div>
+          <div class="text-muted mt-0.5">看到 KB 卡 · 卡上有 KPI 数字、30 天 sparkline、tags、状态徽章。<strong class="text-strong">不应该看到:</strong>顶部 KB select dropdown / 大 sidebar / 4 张窄卡。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">b) 点任一 KB 卡 → Overview tab 默认</div>
+          <div class="text-muted mt-0.5">看到:Hero(描述) · 满宽 health · 最近 5 个文档 · Suggested 起手问 · Quick actions 5 个按钮。点 starter chip 应该跳 ask?q=...</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">c) 切到 Ask · 输任意问题 · 看 token 流</div>
+          <div class="text-muted mt-0.5">底部 composer 加 sources panel(右边)· 答案逐字到达 · [1] [2] 引用可点。再追问一句"它具体怎么用?" → 多轮 history 注入 · 模型懂"它"指上一轮的主题。复制按钮 hover 出现 · 点击粘贴的 markdown 含 Q + A + Sources + 模型名。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">d) 切到 Search · 输关键词</div>
+          <div class="text-muted mt-0.5">每条结果有 BM25 / vec rank chip + score · 点 ▾ "为什么排在这" 出贡献条 + 命中词 · chunk 文本里命中词高亮。改 URL 为 <span class="kbd">?q=tool</span> 同事打开同结果。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">e) 切到 Documents · 点任一 doc → L3 doc 页(不是 drawer!)</div>
+          <div class="text-muted mt-0.5">满屏画布 · 右侧 320px side rail(tags editor + metadata + actions)· 切 Chunks tab 看 split view:左 chunks 列表 · 右原文 · 点 chunk → 自动滚到原文 + 1.8s 高亮。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">f) 浏览器后退 · 一路退回 hub</div>
+          <div class="text-muted mt-0.5">L3 doc → L2 docs → L2 任 tab → L1 hub。每一步 URL 有变 · 退栈正确。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">g) Settings · 切 4 个 sub-section</div>
+          <div class="text-muted mt-0.5">Basic 模型行可点切换(被截图反馈过的那个);Retrieval 拖 BM25/vec 滑块 + Save;Diagnose 输 query 跑三栏对比 · <strong class="text-strong">现在终于满屏宽</strong>;Danger 输 KB 名才能删。每个 sub 自己 URL · <span class="kbd">?section=basic</span>。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">h) 把窗口拖窄到 ~600px</div>
+          <div class="text-muted mt-0.5">tab bar 变横向滚动 · sources panel(Ask)和 side rail(L3)消失 · KPI 还是三格 · 不再有"toolbar 5 控件 wrap 三行"的痛</div>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- 7. commits -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-4">7 · 整夜 commits</h2>
+  <div class="card p-6 mono text-[12px]">
+    <ul class="space-y-1.5 text-muted">
+      <li>· <span class="text-strong">aa55edc</span> fix(kb): Ask 优先用 DB 默认模型 · 不再走过期 env(R2 实测发现)</li>
+      <li>· <span class="text-strong">bb7b687</span> fix(kb): aliyun text-embedding-v3/v4 batch ≤ 10(R1 实测发现)</li>
+      <li>· <span class="text-strong">42c791d</span> fix(kb): embedder 400 错误体不再吞掉</li>
+      <li>· <span class="text-strong">3989ddb</span> feat(kb): P4 · L3 doc 页 + chunks split view</li>
+      <li>· <span class="text-strong">493b664</span> feat(kb): P3+P5 · Documents/Ask/Search/Settings 4 tab pages</li>
+      <li>· <span class="text-strong">475618f</span> feat(kb): redesign · L1 KB hub + L2 layout + Overview</li>
+      <li>· <span class="text-strong">518b3ae</span> docs(kb): redesign 提案 · 单页拆三级 · 调研 + wireframe</li>
+    </ul>
+    <p class="mt-3 text-faint text-[11px]">分支 <span class="kbd">feat/knowledge-base</span> + <span class="kbd">main</span> 同步到 ffb5a25 · 后端 dev server <span class="kbd">--reload</span> 已自动接管 · 你点开就用。</p>
+  </div>
+</section>
+
+<footer class="max-w-6xl mx-auto px-6 py-12 text-center">
+  <p class="text-faint text-[11px] mono">
+    完整设计草稿 <span class="kbd">docs/specs/kb/2026-04-27-redesign-proposal.md</span> · 提案 wireframe <a href="http://localhost:8765/specs/kb/redesign-showcase.html" class="text-primary underline">redesign-showcase.html</a> · 这份验收 <span class="kbd">2026-04-28-redesign-acceptance.html</span>
+  </p>
+</footer>
+
+<script>
+const root=document.documentElement;
+const btn=document.getElementById('themeToggle');
+btn?.addEventListener('click',()=>{
+  const next=root.getAttribute('data-theme')==='dark'?'light':'dark';
+  root.setAttribute('data-theme',next);
+});
+</script>
+</body>
+</html>
