@@ -1236,3 +1236,13 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 **结果**:本轮零代码改动
 
 **commits**:仅本条 log
+
+## Round 60 · 2026-04-27 11:43 (cron · 30m)
+
+**main 新动作**:agent_loop.py 的 hallucination nudge 改成 HumanMessage(从
+SystemMessage)· 因为 Anthropic 拒收中段 SystemMessage。仅内部协议调整,
+不引入新文案。
+
+**结果**:13 backend i18n + 1999 web tests · 全绿 · 零代码改动
+
+**commits**:仅本条 log
