@@ -1132,3 +1132,21 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 25 knowledge service)· 全栈 `raise XxxError("中文...")` 模式现在 0 处
 
 **commits**:见 git log
+
+## Round 54 · 2026-04-27 08:43 (cron · 30m)
+
+**主题**:全栈 raise / DOM 属性 / 默认值的最终 negative-result 扫描
+
+**做的事**:
+- backend `raise [Exception](f"中文 ...")` 多种变体 → 0 处(R53 修干净)
+- frontend `aria-describedby / data-tooltip / aria-roledescription` 等 ·
+  `<noscript>` fallback → 0 处 hardcoded 文本
+- backend `system_prompt = "..."` literal 默认值 → 0 处中文(spawn_subagent
+  用动态 join,无固定字面量)
+- backend `message=/text=/summary= "中文"` 字典 shape 字面量 → 0 处
+- backend `_logger.error(...)` 字符串拼接 → 没有 user-facing concatenation
+
+**结果**:web 1999 + backend 38 i18n tests · regression net 全绿 ·
+本轮零代码改动
+
+**commits**:仅本条 log
