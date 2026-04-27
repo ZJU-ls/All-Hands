@@ -42,6 +42,15 @@ if TYPE_CHECKING:
 
 
 _BUILTIN_SKILLS_ROOT = Path(__file__).resolve().parents[3] / "skills" / "builtin"
+# Anthropic skills (https://github.com/anthropics/skills) bundled at install
+# time · same SKILL.md format Claude Code uses, so the agent's experience is
+# identical when reading their docs / scripts. Cloned into:
+#   backend/skills/imported/anthropic/skills/<name>/
+# Each `<name>/SKILL.md` carries YAML frontmatter (`name: pdf, description: ...`)
+# and bundles `scripts/*.py` that our run_skill_script tool can execute.
+_ANTHROPIC_SKILLS_ROOT = (
+    Path(__file__).resolve().parents[3] / "skills" / "imported" / "anthropic" / "skills"
+)
 
 
 def _truncate(text: str) -> str:
@@ -142,6 +151,72 @@ class SkillRegistry:
         return True
 
 
+class _SkillManifestError(ValueError):
+    """SKILL.md / SKILL.yaml is missing required keys or malformed."""
+
+
+def _split_md_frontmatter(text: str) -> tuple[dict[str, object], str]:
+    """Parse `---\\n<yaml>\\n---\\n<body>` · used by anthropic SKILL.md format."""
+    if not text.startswith("---"):
+        raise _SkillManifestError("SKILL.md missing frontmatter header (---)")
+    closing = text.find("\n---", 3)
+    if closing < 0:
+        raise _SkillManifestError("SKILL.md frontmatter not terminated by ---")
+    fm_block = text[3:closing].strip()
+    body = text[closing + 4 :].lstrip("\n")
+    data = yaml.safe_load(fm_block) or {}
+    if not isinstance(data, dict):
+        raise _SkillManifestError("SKILL.md frontmatter is not a mapping")
+    return data, body
+
+
+def _load_anthropic_skill_manifest(
+    skill_dir: Path,
+) -> tuple[SkillDescriptor, Callable[[], Skill]]:
+    """Adapt anthropic SKILL.md (Claude Code format) to our SkillRegistry shape.
+
+    Anthropic's frontmatter only carries `name` and `description` — no `id`,
+    `tool_ids`, or `version`. We synthesize:
+
+      id = "anthropic.<name>"
+      tool_ids = [read_skill_file, run_skill_script] (always · anthropic skills
+                 are read-then-execute scripts, no other meta tools needed)
+      version = "anthropic"
+
+    The full SKILL.md body is loaded as the prompt fragment so the agent has
+    the same decision-tree / instructions Claude Code agents see.
+    """
+    md_path = skill_dir / "SKILL.md"
+    text = md_path.read_text(encoding="utf-8")
+    data, body = _split_md_frontmatter(text)
+    if "name" not in data:
+        raise _SkillManifestError(f"{md_path}: missing 'name' in frontmatter")
+
+    name = str(data["name"])
+    description = _truncate(str(data.get("description", "")))
+    skill_id = f"anthropic.{name}"
+
+    descriptor = SkillDescriptor(id=skill_id, name=name, description=description)
+
+    def _loader() -> Skill:
+        return Skill(
+            id=skill_id,
+            name=name,
+            description=str(data.get("description", "")),
+            tool_ids=[
+                "allhands.meta.read_skill_file",
+                "allhands.meta.run_skill_script",
+            ],
+            prompt_fragment=body.strip() or None,
+            version="anthropic",
+            source=SkillSource.GITHUB,
+            source_url="https://github.com/anthropics/skills",
+            path=str(skill_dir),
+        )
+
+    return descriptor, _loader
+
+
 def _load_builtin_skill_manifest(skill_dir: Path) -> tuple[SkillDescriptor, Callable[[], Skill]]:
     """Read only SKILL.yaml metadata (cheap) and return a lazy loader for body.
 
@@ -210,6 +285,26 @@ def seed_skills(registry: SkillRegistry) -> None:
         for entry in sorted(_BUILTIN_SKILLS_ROOT.iterdir()):
             if entry.is_dir() and (entry / "SKILL.yaml").exists():
                 descriptor, loader = _load_builtin_skill_manifest(entry)
+                registry.register_lazy(descriptor, loader)
+
+    # Anthropic skills — same lazy registration but parsed from SKILL.md
+    # frontmatter (Claude Code's format). Lets our agent run their pdf/pptx/
+    # xlsx/docx skills bit-for-bit. Skips silently if not vendored.
+    if _ANTHROPIC_SKILLS_ROOT.is_dir():
+        for entry in sorted(_ANTHROPIC_SKILLS_ROOT.iterdir()):
+            if entry.is_dir() and (entry / "SKILL.md").exists():
+                try:
+                    descriptor, loader = _load_anthropic_skill_manifest(entry)
+                except _SkillManifestError:
+                    # Don't break boot if one anthropic skill is malformed; the
+                    # others should still load. Log via stdlib (no logger
+                    # injected here) so it shows up in dev console.
+                    import logging
+
+                    logging.getLogger(__name__).warning(
+                        "skipped malformed anthropic skill at %s", entry
+                    )
+                    continue
                 registry.register_lazy(descriptor, loader)
 
 
