@@ -28,6 +28,8 @@
   },
   "shell": {
     "workspaceVersion": "v0 · mvp",
+    "workspaceWelcomeAria": "打开欢迎页 · 产品介绍 / 首次运行向导",
+    "workspaceWelcomeTitle": "回欢迎页 · 看产品介绍",
     "usage": "用量",
     "tokens": "{used} / {total} tokens",
     "search": {
