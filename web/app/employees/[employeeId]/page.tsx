@@ -1,32 +1,51 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState } from "@/components/state";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/icon";
+import { DesignForm } from "@/components/employee-design/DesignForm";
 import {
+  createConversation,
+  deleteEmployee,
   getEmployee,
   listConversations,
-  createConversation,
+  listMcpServers,
+  listSkills,
+  publishEmployee,
   type ConversationDto,
   type EmployeeDto,
+  type McpServerDto,
+  type SkillDto,
 } from "@/lib/api";
 import { deriveProfile } from "@/lib/employee-profile";
 
 /**
- * Employee detail · single-employee dashboard (ADR 0016 · V2 Azure Live).
+ * Employee detail · employee-centric single-employee dashboard.
  *
- * Hero card (gradient primary · avatar · pill badges · action cluster) lands
- * the user; a KPI meta-strip summarises volume and latency; read-only skill
- * chip row + system-prompt preview explain the composition; recent
- * conversations list gives a direct jump back into the chat.
+ * Phase 2 layout (ADR 0016 V2 + 2026-04-27 v2 mock):
+ *   1. Hero card — avatar / name / status / description / capability chips +
+ *      action cluster (start chat · edit · dispatch).
+ *   2. KPI strip — conversations · skills · tools · max_iter cards.
+ *   3. Tabs — Overview / Config / Files. Overview pulls in skills + prompt +
+ *      recent conversations. Config hosts <DesignForm initial={...} /> plus the
+ *      publish / try / delete lifecycle toolbar that used to live on
+ *      /employees/design. Files is a placeholder pending Phase 3.
  *
- * Data / mutation contract unchanged: parallel fetch of employee + its
- * conversations, createConversation → push to /chat/:id.
+ * The hero "Edit" button switches to the Config tab in-place (`?tab=config`)
+ * so we never leave the page just to tweak a field.
  */
+
+type TabKey = "overview" | "config" | "files";
+const VALID_TABS: readonly TabKey[] = ["overview", "config", "files"];
+
+function isTab(value: string | null): value is TabKey {
+  return value !== null && (VALID_TABS as readonly string[]).includes(value);
+}
 
 function avatarInitials(name: string): string {
   const trimmed = name.trim();
@@ -45,36 +64,102 @@ function modelDisplay(modelRef: string, fallback: string): string {
 }
 
 export default function EmployeePage() {
+  return (
+    // useSearchParams must run inside a Suspense boundary in app router.
+    <Suspense fallback={<EmployeeShellFallback />}>
+      <EmployeePageInner />
+    </Suspense>
+  );
+}
+
+function EmployeeShellFallback() {
+  const t = useTranslations("employees.detail");
+  return (
+    <AppShell title={t("shellTitleFallback")}>
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-6 py-8">
+          <LoadingState title={t("loadingEmployee")} />
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+function EmployeePageInner() {
   const t = useTranslations("employees.detail");
   const badgeT = useTranslations("employeeBadges");
   const locale = useLocale();
   const { employeeId } = useParams<{ employeeId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab: TabKey = isTab(tabParam) ? tabParam : "overview";
+
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
   const [conversations, setConversations] = useState<ConversationDto[] | null>(null);
+  const [skills, setSkills] = useState<SkillDto[] | null>(null);
+  const [mcpServers, setMcpServers] = useState<McpServerDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [busyAction, setBusyAction] = useState<"publish" | "delete" | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const reload = useCallback(async () => {
+    try {
+      const [e, c, sk, mcp] = await Promise.all([
+        getEmployee(employeeId),
+        listConversations({ employeeId }),
+        listSkills().catch(() => [] as SkillDto[]),
+        listMcpServers().catch(() => [] as McpServerDto[]),
+      ]);
+      setEmployee(e);
+      setConversations(c);
+      setSkills(sk);
+      setMcpServers(mcp);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [employeeId]);
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    void (async () => {
       try {
-        const [e, c] = await Promise.all([
+        const [e, c, sk, mcp] = await Promise.all([
           getEmployee(employeeId),
           listConversations({ employeeId }),
+          listSkills().catch(() => [] as SkillDto[]),
+          listMcpServers().catch(() => [] as McpServerDto[]),
         ]);
         if (cancelled) return;
         setEmployee(e);
         setConversations(c);
+        setSkills(sk);
+        setMcpServers(mcp);
       } catch (err) {
         if (!cancelled) setError(String(err));
       }
-    }
-    void load();
+    })();
     return () => {
       cancelled = true;
     };
   }, [employeeId]);
+
+  const setTab = useCallback(
+    (next: TabKey) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "overview") {
+        params.delete("tab");
+      } else {
+        params.set("tab", next);
+      }
+      const qs = params.toString();
+      router.replace(`/employees/${employeeId}${qs ? `?${qs}` : ""}`, {
+        scroll: false,
+      });
+    },
+    [employeeId, router, searchParams],
+  );
 
   async function handleNewConversation() {
     if (creating) return;
@@ -85,6 +170,34 @@ export default function EmployeePage() {
     } catch (err) {
       setError(String(err));
       setCreating(false);
+    }
+  }
+
+  async function handlePublish() {
+    if (!employee) return;
+    setBusyAction("publish");
+    setError(null);
+    try {
+      await publishEmployee(employee.id);
+      await reload();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!employee) return;
+    setBusyAction("delete");
+    setError(null);
+    try {
+      await deleteEmployee(employee.id);
+      router.push("/employees");
+    } catch (e) {
+      setError(String(e));
+      setBusyAction(null);
+      setDeleteOpen(false);
     }
   }
 
@@ -128,6 +241,7 @@ export default function EmployeePage() {
                 isLead={isLead}
                 creating={creating}
                 onNewConversation={() => void handleNewConversation()}
+                onEdit={() => setTab("config")}
               />
 
               <MetaStrip
@@ -135,132 +249,51 @@ export default function EmployeePage() {
                 conversationCount={conversations?.length ?? 0}
               />
 
-              <Section
-                title={t("skillsTitle")}
-                subtitle={t("skillsSubtitle", { count: employee.skill_ids.length })}
-                icon="wand-2"
-              >
-                {employee.skill_ids.length === 0 ? (
-                  <p className="text-[12px] text-text-subtle italic">
-                    {t("skillsEmpty")}
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {employee.skill_ids.map((id) => (
-                      <span
-                        key={id}
-                        className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary-muted text-primary text-caption font-mono font-medium"
-                      >
-                        <Icon name="sparkles" size={10} strokeWidth={2} />
-                        {id.replace(/^allhands\.(skills|builtin)\./, "")}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {badges.length > 0 && (
-                  <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-                    <span className="font-mono text-caption uppercase tracking-wider text-text-subtle">
-                      {t("profileLabel")}
-                    </span>
-                    {badges.map((b) => (
-                      <span
-                        key={b}
-                        className="inline-flex items-center h-5 px-2 rounded-full bg-surface-2 border border-border text-text-muted text-caption font-medium"
-                      >
-                        {badgeT(b)}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </Section>
+              <TabBar active={activeTab} onSelect={setTab} />
 
-              <Section
-                title={t("promptTitle")}
-                subtitle={t("promptSubtitle")}
-                icon="file-code-2"
-              >
-                {employee.system_prompt?.trim() ? (
-                  <pre className="rounded-lg bg-surface-2 border border-border p-4 text-[12px] font-mono text-text whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
-                    {employee.system_prompt}
-                  </pre>
-                ) : (
-                  <p className="text-[12px] text-text-subtle italic">
-                    {t("promptEmpty")}
-                  </p>
-                )}
-              </Section>
+              {activeTab === "overview" && (
+                <OverviewPane
+                  employee={employee}
+                  conversations={conversations}
+                  badges={badges}
+                  badgeT={badgeT}
+                  locale={locale}
+                  creating={creating}
+                  onNewConversation={() => void handleNewConversation()}
+                />
+              )}
 
-              <Section
-                title={t("conversationsTitle")}
-                subtitle={
-                  conversations === null
-                    ? t("conversationsLoading")
-                    : conversations.length === 0
-                      ? t("conversationsEmpty")
-                      : t("conversationsCount", { count: conversations.length })
-                }
-                icon="message-square"
-                actions={
-                  <button
-                    type="button"
-                    onClick={() => void handleNewConversation()}
-                    disabled={creating || !employee}
-                    data-testid="employee-detail-new-conversation"
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium bg-primary hover:bg-primary-hover text-primary-fg shadow-soft-sm transition-colors duration-fast disabled:opacity-60"
-                  >
-                    {creating ? (
-                      <>
-                        <Icon name="loader" size={12} className="animate-spin" />
-                        {t("creating")}
-                      </>
-                    ) : (
-                      <>
-                        <Icon name="plus" size={12} strokeWidth={2.25} />
-                        {t("newConversation")}
-                      </>
-                    )}
-                  </button>
-                }
-              >
-                {conversations === null ? (
-                  <ConversationsSkeleton />
-                ) : conversations.length === 0 ? (
-                  <EmptyConversations employeeName={employee.name} />
-                ) : (
-                  <ul className="space-y-2">
-                    {conversations.map((c) => (
-                      <li key={c.id}>
-                        <Link
-                          href={`/chat/${c.id}`}
-                          className="group flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 shadow-soft-sm hover:-translate-y-px hover:shadow-soft hover:border-border-strong transition duration-base"
-                        >
-                          <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-muted text-primary shrink-0">
-                            <Icon name="message-square" size={14} />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[13px] text-text truncate">
-                              {c.title ?? t("untitled")}
-                            </p>
-                            <p className="mt-0.5 font-mono text-caption text-text-subtle truncate">
-                              {c.id.slice(0, 8)} ·{" "}
-                              {new Date(c.created_at).toLocaleString(locale)}
-                            </p>
-                          </div>
-                          <Icon
-                            name="arrow-right"
-                            size={14}
-                            className="mt-1 text-text-subtle group-hover:text-primary group-hover:translate-x-0.5 transition duration-base"
-                          />
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Section>
+              {activeTab === "config" && (
+                <ConfigPane
+                  employee={employee}
+                  skills={skills}
+                  mcpServers={mcpServers}
+                  busyAction={busyAction}
+                  onPublish={() => void handlePublish()}
+                  onDelete={() => setDeleteOpen(true)}
+                  onTry={() => void handleNewConversation()}
+                  onSaved={async () => {
+                    await reload();
+                  }}
+                />
+              )}
+
+              {activeTab === "files" && <FilesPane employeeName={employee.name} />}
             </>
           ) : null}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title={t("deleteTitle", { name: employee?.name ?? "" })}
+        message={t("deleteMessage")}
+        confirmLabel={t("deleteConfirm")}
+        danger
+        busy={busyAction === "delete"}
+        onConfirm={() => void handleConfirmDelete()}
+        onCancel={() => setDeleteOpen(false)}
+      />
     </AppShell>
   );
 }
@@ -274,11 +307,13 @@ function HeroCard({
   isLead,
   creating,
   onNewConversation,
+  onEdit,
 }: {
   employee: EmployeeDto;
   isLead: boolean;
   creating: boolean;
   onNewConversation: () => void;
+  onEdit: () => void;
 }) {
   const t = useTranslations("employees.detail");
   return (
@@ -286,7 +321,6 @@ function HeroCard({
       data-testid="employee-hero"
       className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-surface to-surface border border-primary/20 shadow-soft-lg p-6"
     >
-      {/* Decorative orb */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl opacity-60"
@@ -324,6 +358,7 @@ function HeroCard({
               </span>
             )}
             <span
+              data-testid={`employee-hero-status-${employee.status}`}
               className={`inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-caption font-mono font-semibold uppercase tracking-wider ${
                 employee.status === "draft"
                   ? "bg-warning-soft text-warning"
@@ -343,7 +378,9 @@ function HeroCard({
               {employee.description}
             </p>
           ) : (
-            <p className="mt-2 text-[13px] text-text-subtle italic">{t("noDescription")}</p>
+            <p className="mt-2 text-[13px] text-text-subtle italic">
+              {t("noDescription")}
+            </p>
           )}
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-surface-2 border border-border font-mono text-caption text-text-muted">
@@ -381,14 +418,15 @@ function HeroCard({
               </>
             )}
           </button>
-          <Link
-            href={`/employees/design`}
+          <button
+            type="button"
+            onClick={onEdit}
             data-testid="employee-hero-edit"
             className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
           >
             <Icon name="edit" size={14} />
             {t("edit")}
-          </Link>
+          </button>
           <Link
             href={`/chat?prefill=${encodeURIComponent(
               t("dispatchPrefill", { name: employee.name }),
@@ -536,6 +574,346 @@ function StatKpi({
 }
 
 // ---------------------------------------------------------------------------
+// Tab bar
+// ---------------------------------------------------------------------------
+
+function TabBar({
+  active,
+  onSelect,
+}: {
+  active: TabKey;
+  onSelect: (tab: TabKey) => void;
+}) {
+  const t = useTranslations("employees.detail.tabs");
+  const tabs: { key: TabKey; icon: "list" | "settings" | "folder" }[] = [
+    { key: "overview", icon: "list" },
+    { key: "config", icon: "settings" },
+    { key: "files", icon: "folder" },
+  ];
+  return (
+    <nav
+      data-testid="employee-detail-tabs"
+      role="tablist"
+      aria-label={t("ariaLabel")}
+      className="flex gap-1 border-b border-border"
+    >
+      {tabs.map(({ key, icon }) => {
+        const isActive = key === active;
+        return (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            data-testid={`employee-detail-tab-${key}`}
+            data-active={isActive ? "true" : "false"}
+            onClick={() => onSelect(key)}
+            className={`-mb-px inline-flex items-center gap-1.5 h-9 px-3 border-b-2 text-[12.5px] transition-colors duration-fast ${
+              isActive
+                ? "border-primary text-primary font-semibold"
+                : "border-transparent text-text-muted hover:text-text"
+            }`}
+          >
+            <Icon name={icon} size={13} strokeWidth={2} />
+            {t(key)}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Overview tab · skills + prompt + recent conversations
+// ---------------------------------------------------------------------------
+
+function OverviewPane({
+  employee,
+  conversations,
+  badges,
+  badgeT,
+  locale,
+  creating,
+  onNewConversation,
+}: {
+  employee: EmployeeDto;
+  conversations: ConversationDto[] | null;
+  badges: string[];
+  badgeT: (key: string) => string;
+  locale: string;
+  creating: boolean;
+  onNewConversation: () => void;
+}) {
+  const t = useTranslations("employees.detail");
+  return (
+    <div data-testid="employee-tab-overview" className="space-y-6">
+      <Section
+        title={t("skillsTitle")}
+        subtitle={t("skillsSubtitle", { count: employee.skill_ids.length })}
+        icon="wand-2"
+      >
+        {employee.skill_ids.length === 0 ? (
+          <p className="text-[12px] text-text-subtle italic">{t("skillsEmpty")}</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {employee.skill_ids.map((id) => (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary-muted text-primary text-caption font-mono font-medium"
+              >
+                <Icon name="sparkles" size={10} strokeWidth={2} />
+                {id.replace(/^allhands\.(skills|builtin)\./, "")}
+              </span>
+            ))}
+          </div>
+        )}
+        {badges.length > 0 && (
+          <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+            <span className="font-mono text-caption uppercase tracking-wider text-text-subtle">
+              {t("profileLabel")}
+            </span>
+            {badges.map((b) => (
+              <span
+                key={b}
+                className="inline-flex items-center h-5 px-2 rounded-full bg-surface-2 border border-border text-text-muted text-caption font-medium"
+              >
+                {badgeT(b)}
+              </span>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section
+        title={t("promptTitle")}
+        subtitle={t("promptSubtitle")}
+        icon="file-code-2"
+      >
+        {employee.system_prompt?.trim() ? (
+          <pre className="rounded-lg bg-surface-2 border border-border p-4 text-[12px] font-mono text-text whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
+            {employee.system_prompt}
+          </pre>
+        ) : (
+          <p className="text-[12px] text-text-subtle italic">{t("promptEmpty")}</p>
+        )}
+      </Section>
+
+      <Section
+        title={t("conversationsTitle")}
+        subtitle={
+          conversations === null
+            ? t("conversationsLoading")
+            : conversations.length === 0
+              ? t("conversationsEmpty")
+              : t("conversationsCount", { count: conversations.length })
+        }
+        icon="message-square"
+        actions={
+          <button
+            type="button"
+            onClick={onNewConversation}
+            disabled={creating || !employee}
+            data-testid="employee-detail-new-conversation"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium bg-primary hover:bg-primary-hover text-primary-fg shadow-soft-sm transition-colors duration-fast disabled:opacity-60"
+          >
+            {creating ? (
+              <>
+                <Icon name="loader" size={12} className="animate-spin" />
+                {t("creating")}
+              </>
+            ) : (
+              <>
+                <Icon name="plus" size={12} strokeWidth={2.25} />
+                {t("newConversation")}
+              </>
+            )}
+          </button>
+        }
+      >
+        {conversations === null ? (
+          <ConversationsSkeleton />
+        ) : conversations.length === 0 ? (
+          <EmptyConversations employeeName={employee.name} />
+        ) : (
+          <ul className="space-y-2">
+            {conversations.map((c) => (
+              <li key={c.id}>
+                <Link
+                  href={`/chat/${c.id}`}
+                  className="group flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 shadow-soft-sm hover:-translate-y-px hover:shadow-soft hover:border-border-strong transition duration-base"
+                >
+                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-muted text-primary shrink-0">
+                    <Icon name="message-square" size={14} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] text-text truncate">
+                      {c.title ?? t("untitled")}
+                    </p>
+                    <p className="mt-0.5 font-mono text-caption text-text-subtle truncate">
+                      {c.id.slice(0, 8)} ·{" "}
+                      {new Date(c.created_at).toLocaleString(locale)}
+                    </p>
+                  </div>
+                  <Icon
+                    name="arrow-right"
+                    size={14}
+                    className="mt-1 text-text-subtle group-hover:text-primary group-hover:translate-x-0.5 transition duration-base"
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Config tab · DesignForm + lifecycle toolbar (publish · try · delete)
+// ---------------------------------------------------------------------------
+
+function ConfigPane({
+  employee,
+  skills,
+  mcpServers,
+  busyAction,
+  onPublish,
+  onDelete,
+  onTry,
+  onSaved,
+}: {
+  employee: EmployeeDto;
+  skills: SkillDto[] | null;
+  mcpServers: McpServerDto[] | null;
+  busyAction: "publish" | "delete" | null;
+  onPublish: () => void;
+  onDelete: () => void;
+  onTry: () => void;
+  onSaved: (emp: EmployeeDto) => Promise<void> | void;
+}) {
+  const t = useTranslations("employees.detail");
+  const isDraft = employee.status === "draft";
+  const busy = busyAction !== null;
+  return (
+    <div data-testid="employee-tab-config" className="space-y-5">
+      <section
+        data-testid="employee-config-toolbar"
+        className="rounded-xl border border-border bg-surface shadow-soft-sm p-4"
+      >
+        <div className="flex items-start gap-3 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[14px] font-semibold text-text">
+              {t("configHeading")}
+            </h2>
+            <p className="mt-0.5 text-caption text-text-muted">
+              {t("configSubtitle")}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onTry}
+              disabled={busy}
+              data-testid="employee-config-try"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base disabled:opacity-40"
+            >
+              <Icon name="play" size={12} strokeWidth={2.25} />
+              {t("tryEmployee")}
+            </button>
+            {isDraft && (
+              <button
+                type="button"
+                onClick={onPublish}
+                disabled={busy}
+                data-testid="employee-config-publish"
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-primary hover:bg-primary-hover text-primary-fg text-[12px] font-medium shadow-soft-sm hover:-translate-y-px transition duration-base disabled:opacity-40"
+              >
+                {busyAction === "publish" ? (
+                  <>
+                    <Icon name="loader" size={12} className="animate-spin" />
+                    {t("publishing")}
+                  </>
+                ) : (
+                  <>
+                    <Icon name="check-circle-2" size={12} strokeWidth={2} />
+                    {t("publish")}
+                  </>
+                )}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={busy || employee.is_lead_agent}
+              title={
+                employee.is_lead_agent ? t("leadCannotDelete") : t("deleteHint")
+              }
+              data-testid="employee-config-delete"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/40 bg-surface text-danger hover:bg-danger-soft text-[12px] font-medium shadow-soft-sm transition duration-base disabled:opacity-30 disabled:hover:bg-surface"
+            >
+              <Icon name="trash-2" size={12} strokeWidth={2} />
+              {busyAction === "delete" ? t("deleting") : t("delete")}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {skills === null || mcpServers === null ? (
+        <LoadingState title={t("loadingForm")} />
+      ) : (
+        <DesignForm
+          key={employee.id}
+          skills={skills}
+          mcpServers={mcpServers}
+          initial={employee}
+          onSaved={onSaved}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Files tab · placeholder pending Phase 3
+// ---------------------------------------------------------------------------
+
+function FilesPane({ employeeName }: { employeeName: string }) {
+  const t = useTranslations("employees.detail");
+  return (
+    <div data-testid="employee-tab-files">
+      <div className="relative overflow-hidden rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 opacity-30 pointer-events-none"
+          style={{
+            backgroundImage:
+              "radial-gradient(var(--color-border) 1px, transparent 1px)",
+            backgroundSize: "16px 16px",
+          }}
+        />
+        <div className="relative">
+          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-primary-muted text-primary">
+            <Icon name="folder" size={20} strokeWidth={2} />
+          </div>
+          <p className="text-[14px] text-text">
+            {t("filesEmptyHeading", { name: employeeName })}
+          </p>
+          <p className="mt-1 text-[12px] text-text-muted">{t("filesEmptyBody")}</p>
+          <Link
+            href="/artifacts"
+            className="mt-4 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition-colors duration-fast"
+          >
+            <Icon name="folder" size={12} />
+            {t("filesGotoArtifacts")}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Section wrapper
 // ---------------------------------------------------------------------------
 
@@ -564,9 +942,7 @@ function Section({
               {title}
             </h2>
             {subtitle && (
-              <p className="mt-0.5 text-caption text-text-muted truncate">
-                {subtitle}
-              </p>
+              <p className="mt-0.5 text-caption text-text-muted truncate">{subtitle}</p>
             )}
           </div>
         </div>
@@ -620,9 +996,7 @@ function EmptyConversations({ employeeName }: { employeeName: string }) {
         <p className="text-[14px] text-text">
           {t("emptyConvosHeading", { name: employeeName })}
         </p>
-        <p className="mt-1 text-[12px] text-text-muted">
-          {t("emptyConvosBody")}
-        </p>
+        <p className="mt-1 text-[12px] text-text-muted">{t("emptyConvosBody")}</p>
       </div>
     </div>
   );
