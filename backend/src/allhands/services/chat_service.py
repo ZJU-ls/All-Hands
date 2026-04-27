@@ -23,7 +23,7 @@ from allhands.core import (
 )
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
-from allhands.execution.dispatch import DispatchService
+from allhands.execution.dispatch import DispatchService, _parent_conversation_id
 from allhands.execution.model_resolution import ResolvedModel, resolve_effective_model
 from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
@@ -650,9 +650,15 @@ class ChatService:
                 overrides = base_overrides.model_copy(update={"system_override": combined})
 
         runner_factory = self._build_runner_factory(provider)
+        # Pass the EventBus into both subagent services so they emit
+        # run.started + run.completed/failed for every dispatched / spawned
+        # sub-run. Without this, observatory.get_run_detail can't resolve
+        # the sub-run's run_id and the trace drawer falls back to the
+        # "trace 已不在" empty state (regression fixed 2026-04-27).
         dispatch_service = DispatchService(
             employee_repo=self._employees,
             runner_factory=runner_factory,
+            event_bus=self._bus,
         )
         spawn_subagent_service = SpawnSubagentService(
             employee_repo=self._employees,
@@ -662,6 +668,7 @@ class ChatService:
             # OpenAI provider — the previous hardcoded fallback was broken on
             # qwen / glm / kimi gateways).
             default_model_ref=effective_model_ref or employee.model_ref,
+            event_bus=self._bus,
         )
         runner = AgentRunner(
             employee=employee,
@@ -828,6 +835,10 @@ class ChatService:
         persisted = False
         run_finalized = False
         error_payload: dict[str, object] | None = None
+        # Stamp the parent conversation_id into the contextvar so any
+        # dispatch_employee / spawn_subagent invoked downstream emits its
+        # run.* events with the right conversation_id. Reset in finally.
+        _conv_token = _parent_conversation_id.set(conversation_id)
         # Per-run telemetry · accumulated across every LLMCallEvent so the
         # ``run.completed`` payload carries authoritative totals for the
         # observatory KPIs / trace drawer. Each individual call also gets
@@ -1176,6 +1187,10 @@ class ChatService:
             # round-trip, and after flush() so the assistant message is
             # durable first (if this errors, at least the reply is saved).
             await self._flush_runtime(conversation_id)
+            # Restore the parent conversation_id contextvar set at the top
+            # of this generator so a subsequent reuse of this asyncio task
+            # doesn't see a stale value.
+            _parent_conversation_id.reset(_conv_token)
 
     async def _write_pending_confirmation(self, event: Any) -> None:
         """Persist a Confirmation row on InterruptEvent (ADR 0014 Phase 4d).
@@ -1335,6 +1350,7 @@ class ChatService:
         skill_registry = self._skills
         gate = self._gate
         employee_repo = self._employees
+        bus = self._bus
 
         def factory(child: Employee, depth: int) -> AgentRunner:
             # Sub-runner also gets a dispatch_service so nested dispatch works
@@ -1346,11 +1362,13 @@ class ChatService:
             nested_dispatch = DispatchService(
                 employee_repo=employee_repo,
                 runner_factory=nested_factory,
+                event_bus=bus,
             )
             nested_spawn = SpawnSubagentService(
                 employee_repo=employee_repo,
                 runner_factory=nested_factory,
                 default_model_ref=child.model_ref,
+                event_bus=bus,
             )
             child_runtime = bootstrap_employee_runtime(child, skill_registry, tool_registry)
             return AgentRunner(
