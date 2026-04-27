@@ -104,7 +104,16 @@ def _openai_compat_embed(
                 headers=headers,
                 json={"model": model, "input": texts, "encoding_format": "float"},
             )
-            r.raise_for_status()
+            if r.status_code >= 400:
+                # Surface the upstream body — dashscope / openai both return
+                # `{"error": {"message": "..."}}` on 4xx, which is far more
+                # actionable than a bare "Client error 400".
+                detail = r.text[:500]
+                raise httpx.HTTPStatusError(
+                    f"{r.status_code} from {base_url}: {detail}",
+                    request=r.request,
+                    response=r,
+                )
             data = r.json()["data"]
         return [normalize(item["embedding"]) for item in data]
 
