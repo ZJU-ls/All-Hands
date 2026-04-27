@@ -74,6 +74,9 @@ def get_tool_registry() -> ToolRegistry:
     # because they close over SkillService; the execution layer is
     # forbidden from importing services/ by the import-linter contract.
     from allhands.api.knowledge_executors import kb_executors_for
+    from allhands.api.local_files_executors import build_local_files_executors
+    from allhands.api.local_workspace_executors import build_local_workspace_executors
+    from allhands.api.mcp_executors import build_mcp_invocation_executors
     from allhands.api.skill_executors import build_skill_management_executors
     from allhands.services.knowledge_service import KnowledgeService
 
@@ -82,6 +85,15 @@ def get_tool_registry() -> ToolRegistry:
     extras = {
         **build_skill_management_executors(maker),
         **kb_executors_for(KnowledgeService(maker)),
+        # 2026-04-27: wire test_mcp_connection / list_mcp_server_tools /
+        # invoke_mcp_server_tool. These tools were registered with declarations
+        # but no executors — fell through to _async_noop returning {}, so Lead
+        # could "connect" to an MCP server but never list/invoke its tools.
+        **build_mcp_invocation_executors(maker),
+        # local-files skill · workspace CRUD meta tools
+        **build_local_workspace_executors(maker),
+        # local-files skill · 7 file/bash builtin tools
+        **build_local_files_executors(maker),
     }
     discover_builtin_tools(reg, session_maker=maker, extra_executors=extras)
     return reg

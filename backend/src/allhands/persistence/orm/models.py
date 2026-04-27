@@ -80,6 +80,18 @@ class MCPServerRow(Base):
     health: Mapped[str] = mapped_column(String(32), default="unknown")
 
 
+class LocalWorkspaceRow(Base):
+    __tablename__ = "local_workspaces"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    root_path: Mapped[str] = mapped_column(String(1024))
+    read_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
+    denied_globs: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class AgentPlanRow(Base):
     __tablename__ = "agent_plans"
 

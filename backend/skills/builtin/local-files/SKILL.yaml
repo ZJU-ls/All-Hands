@@ -1,0 +1,24 @@
+id: allhands.local-files
+name: 本地文件
+description: 在用户工作区里读写代码 · 找符号 · 跑命令(Claude-Code 同款工具)
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  # 探索
+  - allhands.local.list_directory
+  - allhands.local.glob
+  - allhands.local.grep
+  - allhands.local.read_file
+  # 修改
+  - allhands.local.write_file
+  - allhands.local.edit_file
+  # 跑命令
+  - allhands.local.bash
+  # 工作区管理(L01 对称)
+  - allhands.meta.list_local_workspaces
+  - allhands.meta.add_local_workspace
+  # skill self
+  - allhands.meta.read_skill_file
+
+prompt_fragment_file: prompts/guidance.md

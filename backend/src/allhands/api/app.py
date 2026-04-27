@@ -24,6 +24,7 @@ from allhands.api.routers.cockpit import router as cockpit_router
 from allhands.api.routers.confirmations import router as confirmations_router
 from allhands.api.routers.employees import router as employees_router
 from allhands.api.routers.knowledge import router as knowledge_router
+from allhands.api.routers.local_workspaces import router as local_workspaces_router
 from allhands.api.routers.market import (
     router as market_router,  # single-line register: Wave 2 market-data
 )
@@ -200,6 +201,7 @@ def create_app() -> FastAPI:
     )  # single-line register: Wave 2 notification-channels
     app.include_router(market_router, prefix="/api")  # single-line register: Wave 2 market-data
     app.include_router(knowledge_router, prefix="/api")
+    app.include_router(local_workspaces_router, prefix="/api")
     app.include_router(observatory_router, prefix="/api")
     app.include_router(pricing_router, prefix="/api")
     app.include_router(system_router, prefix="/api")

@@ -8,12 +8,13 @@ import { AutoTitleToggle } from "@/components/settings/AutoTitleToggle";
 import { StoragePathsCard } from "@/components/settings/StoragePathsCard";
 import Link from "next/link";
 
-type CardKey = "providers" | "models" | "mcp" | "notifications";
+type CardKey = "providers" | "models" | "mcp" | "notifications" | "workspaces";
 const CARD_DEFS: { key: CardKey; icon: IconName; href: string }[] = [
   { key: "providers", icon: "server", href: "/gateway/providers" },
   { key: "models", icon: "brain", href: "/gateway/models" },
   { key: "mcp", icon: "plug", href: "/mcp-servers" },
   { key: "notifications", icon: "bell", href: "/channels" },
+  { key: "workspaces", icon: "folder", href: "/settings/workspaces" },
 ];
 
 export default function SettingsPage() {

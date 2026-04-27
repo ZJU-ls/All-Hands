@@ -15,6 +15,7 @@ from allhands.execution.tools.builtin.ask_user_question import (
 )
 from allhands.execution.tools.builtin.fetch_url import TOOL as FETCH_URL_TOOL
 from allhands.execution.tools.builtin.fetch_url import execute as fetch_url_execute
+from allhands.execution.tools.builtin.local_files import ALL_LOCAL_FILE_TOOLS
 from allhands.execution.tools.builtin.web_search import TOOL as WEB_SEARCH_TOOL
 from allhands.execution.tools.builtin.web_search import execute as web_search_execute
 from allhands.execution.tools.builtin.write_file import TOOL as WRITE_FILE_TOOL
@@ -32,6 +33,7 @@ from allhands.execution.tools.meta.employee_tools import (
     execute_create_employee,
 )
 from allhands.execution.tools.meta.knowledge_tools import ALL_KB_META_TOOLS
+from allhands.execution.tools.meta.local_workspace_tools import ALL_LOCAL_WORKSPACE_META_TOOLS
 from allhands.execution.tools.meta.market_tools import (  # single-line register: Wave 2 market-data
     ALL_MARKET_META_TOOLS,
 )
@@ -182,6 +184,8 @@ def discover_builtin_tools(
         *ALL_OBSERVATORY_META_TOOLS,
         *ALL_PRICING_META_TOOLS,
         *ALL_KB_META_TOOLS,
+        *ALL_LOCAL_WORKSPACE_META_TOOLS,
+        *ALL_LOCAL_FILE_TOOLS,
     ):
         if tool.id in _META_EXECUTOR_TOOL_IDS:
             continue
