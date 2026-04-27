@@ -105,7 +105,10 @@
       "cancel": "Cancel",
       "bulkDelete": "Delete selected",
       "bulkTags": "Tags…",
-      "retryIngest": "Retry ingest"
+      "retryIngest": "Retry ingest",
+      "loading": "Loading…",
+      "allTags": "All tags",
+      "uploadingProgress": "Upload · {done}/{total} done"
     },
     "uploads": {
       "summary": "Uploads · {done}/{total} done",
@@ -122,6 +125,10 @@
       "bm25Rank": "BM25 #{rank}",
       "vecRank": "vec #{rank}",
       "scoreLabel": "score",
+      "placeholder": "Search inside {kb}…",
+      "submit": "Search",
+      "running": "…",
+      "emptyHint": "Type to search inside {kb} · BM25 + vector retrieval run in parallel · expand a result to see why it ranks where it does",
       "explainLabel": "Why this rank?",
       "matchedTokens": "matched {matched}/{total}",
       "matchedHeader": "Query terms · matched in chunk",
@@ -227,7 +234,16 @@
       "copyAsCitation": "Copy",
       "copyAsCitationTitle": "Copy markdown · question / answer / source list",
       "copied": "Copied",
-      "copyFailed": "Copy failed · the browser may have blocked the clipboard API"
+      "copyFailed": "Copy failed · the browser may have blocked the clipboard API",
+      "emptyTitle": "Ask {kb} anything",
+      "emptyDesc": "AI answers from your KB content · each fact is tagged [N] with a clickable source",
+      "placeholderFirst": "Ask {kb}…",
+      "placeholderFollowUp": "Follow up · same citation numbers carry over…",
+      "send": "Ask",
+      "running": "…",
+      "hint": "Enter to send · Shift+Enter for newline · same retrieved snippets carry across turns",
+      "sourcesEmpty": "Sources used in answers will appear here after you ask",
+      "sourceColumnHelp": "Aggregated sources across all turns · deduped · click to jump to source"
     },
     "bulkTags": {
       "title": "Tag {count} selected documents",
@@ -285,6 +301,7 @@
         "basic": "Basic",
         "diagnose": "Tune retrieval",
         "advanced": "Advanced",
+        "retrieval": "Retrieval",
         "danger": "Danger"
       }
     },
@@ -317,6 +334,7 @@
       "statsRow": "{hits} hits · {ms} ms"
     },
     "basic": {
+      "sectionTitle": "Embedding model",
       "demoStatus": "Demo mode · keyword-only matching",
       "semanticStatus": "Semantic search is on",
       "demoBody": "Searching for \"camera\" won't match \"camcorder\". To understand synonyms you need to wire up a real embedding model.",
