@@ -31,6 +31,7 @@ from allhands.core import (
     MCPServer,
     MCPTransport,
     Message,
+    ModelPriceEntry,
     ObservabilityConfig,
     PlanStep,
     RenderPayload,
@@ -66,6 +67,7 @@ from allhands.persistence.orm.models import (
     LLMProviderRow,
     MCPServerRow,
     MessageRow,
+    ModelPriceRow,
     ObservabilityConfigRow,
     SkillRow,
     SkillRuntimeRow,
@@ -768,6 +770,8 @@ def _row_to_model(row: LLMModelRow) -> LLMModel:
         name=row.name,
         display_name=row.display_name,
         context_window=row.context_window,
+        max_input_tokens=row.max_input_tokens,
+        max_output_tokens=row.max_output_tokens,
         enabled=row.enabled,
         is_default=row.is_default,
     )
@@ -808,6 +812,8 @@ class SqlLLMModelRepo:
             existing.name = model.name
             existing.display_name = model.display_name
             existing.context_window = model.context_window
+            existing.max_input_tokens = model.max_input_tokens
+            existing.max_output_tokens = model.max_output_tokens
             existing.enabled = model.enabled
             existing.is_default = model.is_default
         else:
@@ -818,6 +824,8 @@ class SqlLLMModelRepo:
                     name=model.name,
                     display_name=model.display_name,
                     context_window=model.context_window,
+                    max_input_tokens=model.max_input_tokens,
+                    max_output_tokens=model.max_output_tokens,
                     enabled=model.enabled,
                     is_default=model.is_default,
                 )
@@ -1484,36 +1492,24 @@ class SqlTaskRepo:
 
 
 class SqlObservabilityConfigRepo:
-    """Single-row observability_config repo (spec § 4.1).
+    """Single-row system-config repo · post-Langfuse (2026-04-25).
 
-    The id=1 row is seeded by migration 0012; `load()` materialises it even if
-    a caller hits the DB before the seed has landed (fresh SQLite in tests).
+    Now only carries ``auto_title_enabled``; the langfuse credential /
+    bootstrap columns were dropped via migration 0023. The id=1 row is
+    seeded by migration 0012 and topped up here on first read so a fresh
+    SQLite in tests doesn't NPE before alembic runs.
     """
 
     def __init__(self, session: AsyncSession) -> None:
         self._s = session
 
     async def load(self) -> ObservabilityConfig:
-        from allhands.core import BootstrapStatus
-
         row = await self._s.get(ObservabilityConfigRow, 1)
         if row is None:
-            row = ObservabilityConfigRow(
-                id=1, bootstrap_status="pending", updated_at=datetime.now(UTC).replace(tzinfo=None)
-            )
+            row = ObservabilityConfigRow(id=1, updated_at=datetime.now(UTC).replace(tzinfo=None))
             self._s.add(row)
             await self._s.commit()
         return ObservabilityConfig(
-            public_key=row.public_key,
-            secret_key=row.secret_key,
-            host=row.host,
-            org_id=row.org_id,
-            project_id=row.project_id,
-            admin_email=row.admin_email,
-            admin_password=row.admin_password,
-            bootstrap_status=BootstrapStatus(row.bootstrap_status),
-            bootstrap_error=row.bootstrap_error,
-            bootstrapped_at=_utc(row.bootstrapped_at) if row.bootstrapped_at else None,
             updated_at=_utc(row.updated_at) if row.updated_at else None,
             auto_title_enabled=bool(row.auto_title_enabled),
         )
@@ -1522,20 +1518,8 @@ class SqlObservabilityConfigRepo:
         row = await self._s.get(ObservabilityConfigRow, 1)
         now = datetime.now(UTC).replace(tzinfo=None)
         if row is None:
-            row = ObservabilityConfigRow(
-                id=1, bootstrap_status=config.bootstrap_status.value, updated_at=now
-            )
+            row = ObservabilityConfigRow(id=1, updated_at=now)
             self._s.add(row)
-        row.public_key = config.public_key
-        row.secret_key = config.secret_key
-        row.host = config.host
-        row.org_id = config.org_id
-        row.project_id = config.project_id
-        row.admin_email = config.admin_email
-        row.admin_password = config.admin_password
-        row.bootstrap_status = config.bootstrap_status.value
-        row.bootstrap_error = config.bootstrap_error
-        row.bootstrapped_at = _naive(config.bootstrapped_at) if config.bootstrapped_at else None
         row.auto_title_enabled = config.auto_title_enabled
         row.updated_at = now
         await self._s.commit()
@@ -1705,3 +1689,65 @@ class SqlConversationEventRepo:
         )
         await self._s.execute(stmt)
         await self._s.commit()
+
+
+def _row_to_price(row: ModelPriceRow) -> ModelPriceEntry:
+    return ModelPriceEntry(
+        model_ref=row.model_ref,
+        input_per_million_usd=row.input_per_million_usd,
+        output_per_million_usd=row.output_per_million_usd,
+        source="db",
+        source_url=row.source_url,
+        note=row.note,
+        updated_at=_utc(row.updated_at),
+        updated_by_run_id=row.updated_by_run_id,
+    )
+
+
+class SqlModelPriceRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def list_all(self) -> list[ModelPriceEntry]:
+        result = await self._s.execute(select(ModelPriceRow))
+        return [_row_to_price(r) for r in result.scalars().all()]
+
+    async def get(self, model_ref: str) -> ModelPriceEntry | None:
+        row = await self._s.get(ModelPriceRow, model_ref)
+        return _row_to_price(row) if row else None
+
+    async def upsert(self, entry: ModelPriceEntry) -> ModelPriceEntry:
+        existing = await self._s.get(ModelPriceRow, entry.model_ref)
+        ts = (
+            _naive(entry.updated_at) if entry.updated_at else datetime.now(UTC).replace(tzinfo=None)
+        )
+        if existing:
+            existing.input_per_million_usd = entry.input_per_million_usd
+            existing.output_per_million_usd = entry.output_per_million_usd
+            existing.source_url = entry.source_url
+            existing.note = entry.note
+            existing.updated_at = ts
+            existing.updated_by_run_id = entry.updated_by_run_id
+        else:
+            self._s.add(
+                ModelPriceRow(
+                    model_ref=entry.model_ref,
+                    input_per_million_usd=entry.input_per_million_usd,
+                    output_per_million_usd=entry.output_per_million_usd,
+                    source_url=entry.source_url,
+                    note=entry.note,
+                    updated_at=ts,
+                    updated_by_run_id=entry.updated_by_run_id,
+                )
+            )
+        await self._s.commit()
+        # Re-read to ensure source/updated_at consistency
+        return entry.model_copy(update={"source": "db", "updated_at": _utc(ts)})
+
+    async def delete(self, model_ref: str) -> bool:
+        row = await self._s.get(ModelPriceRow, model_ref)
+        if not row:
+            return False
+        await self._s.delete(row)
+        await self._s.commit()
+        return True

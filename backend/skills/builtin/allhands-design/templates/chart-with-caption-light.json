@@ -1,0 +1,87 @@
+{
+  "_doc": "Full-page chart with a one-line caption above. Replace `categories` and `series.values` on the chart shape · the primary color is honored via series.color_hex. Use bar / line / pie / column.",
+  "background": {
+    "color_hex": "#ffffff"
+  },
+  "shapes": [
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 0.22,
+      "h": 7.5,
+      "fill_hex": "#2563eb"
+    },
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 7.42,
+      "w": 13.333,
+      "h": 0.04,
+      "fill_hex": "#e6eaf2"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 0.7,
+      "w": 11.5,
+      "h": 0.7,
+      "text": "Chart title",
+      "font": {
+        "size": 32,
+        "weight": "bold",
+        "color_hex": "#0a0e1a"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 1.5,
+      "w": 11.5,
+      "h": 0.4,
+      "text": "One-sentence reading of what the chart shows",
+      "font": {
+        "size": 16,
+        "color_hex": "#64748b"
+      }
+    },
+    {
+      "type": "chart",
+      "x": 0.6,
+      "y": 2.1,
+      "w": 12.1,
+      "h": 4.9,
+      "chart_type": "bar",
+      "categories": [
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4"
+      ],
+      "series": [
+        {
+          "name": "Revenue",
+          "values": [
+            120,
+            145,
+            168,
+            192
+          ],
+          "color_hex": "#2563eb"
+        },
+        {
+          "name": "Target",
+          "values": [
+            110,
+            135,
+            160,
+            180
+          ],
+          "color_hex": "#3b82f6"
+        }
+      ],
+      "show_legend": true,
+      "show_data_labels": false
+    }
+  ]
+}

@@ -8,7 +8,7 @@
  * chip. Underneath, a dense token/time metadata row.
  */
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { RunDetailDto, RunStatusDto } from "@/lib/observatory-api";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -43,18 +43,16 @@ const STATUS: Record<RunStatusDto, StatusVisual> = {
   },
 };
 
+import { formatDuration as _fmtDur, formatTokens } from "@/lib/format";
+
 function formatDuration(s: number | null): string {
   if (s === null) return "—";
-  if (s < 1) return `${Math.round(s * 1000)}ms`;
-  if (s < 60) return `${s.toFixed(1)}s`;
-  const m = Math.floor(s / 60);
-  const r = Math.round(s - m * 60);
-  return `${m}m ${r}s`;
+  return _fmtDur(s * 1000);
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, locale: string): string {
   try {
-    return new Date(iso).toLocaleString("zh-CN", {
+    return new Date(iso).toLocaleString(locale, {
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
@@ -74,6 +72,7 @@ function initial(name: string | null | undefined): string {
 
 export function RunHeader({ run }: { run: RunDetailDto }) {
   const t = useTranslations("runs.header");
+  const locale = useLocale();
   const status = STATUS[run.status];
   const spin = run.status === "running";
   const fallback = t("fallback");
@@ -144,9 +143,9 @@ export function RunHeader({ run }: { run: RunDetailDto }) {
           <dt className="text-text-muted">{t("tokens")}</dt>
           {run.tokens.total > 0 ? (
             <dd className="font-mono text-text">
-              {run.tokens.total.toLocaleString()}
+              {formatTokens(run.tokens.total)}
               <span className="ml-1 text-text-subtle text-[10px]">
-                · in {run.tokens.prompt.toLocaleString()} · out {run.tokens.completion.toLocaleString()}
+                · in {formatTokens(run.tokens.prompt)} · out {formatTokens(run.tokens.completion)}
               </span>
             </dd>
           ) : (
@@ -155,7 +154,7 @@ export function RunHeader({ run }: { run: RunDetailDto }) {
         </div>
         <div>
           <dt className="text-text-muted">{t("startedAt")}</dt>
-          <dd className="font-mono text-text">{formatTime(run.started_at)}</dd>
+          <dd className="font-mono text-text">{formatTime(run.started_at, locale)}</dd>
         </div>
       </dl>
     </header>

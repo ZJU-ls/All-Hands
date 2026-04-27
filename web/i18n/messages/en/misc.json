@@ -73,14 +73,6 @@
       },
       "refreshing": "Refreshing…",
       "refresh": "Refresh",
-      "bootstrap": {
-        "headlinePrefix": "Langfuse",
-        "headlineSuffix": "· tracing not connected",
-        "body": "Agents keep running, but every run's trace is dropped. The trace list below reads run.* events from the local events table, not Langfuse.",
-        "lastPrefix": "last ·",
-        "retrying": "Retrying…",
-        "retry": "Retry bootstrap"
-      },
       "loadFailed": {
         "title": "Failed to load",
         "fallback": "Couldn't fetch observability data. Tap retry on the right.",
@@ -94,34 +86,126 @@
         "failure": "Failure rate",
         "failureWarn": "Watch",
         "failureStable": "Stable",
-        "tokens": "Avg tokens · run",
-        "tokensDelta": "{count} total traces"
+        "tokens": "Avg tokens / run",
+        "tokensDelta": "{count} total traces",
+        "totalTokens": "Tokens consumed · 24h",
+        "totalTokensDelta": "in {input} · out {output} · avg {avg}/run",
+        "llmCalls": "Model requests · 24h",
+        "llmCallsDelta": "{runs} runs · avg {avg} calls/run",
+        "llmCallsEmpty": "No model calls in last 24h",
+        "vsYesterday": "vs yesterday",
+        "clickHint": "Click for consumption curve →"
       },
       "panels": {
-        "langfuse": "Langfuse · tracing backend",
+        "telemetry": "Self-instrumented · 24h",
         "topEmployees": "Top employees · 24h",
         "byModel": "By model · 24h",
+        "byTool": "Top tools · 24h",
+        "byToolHint": "{n} tools · {invocations} calls",
+        "byToolEmpty": "No tool invocations in the window.",
+        "topErrors": "Top errors · 24h",
+        "topErrorsHint": "{n} kinds · {count} failures",
+        "topErrorsEmpty": "Quiet — no failures in the last 24h.",
         "noData": "No data yet",
-        "moreLabel": "{title} more",
+        "moreLabel": "More {title}",
         "rows": {
-          "bootstrap": "Bootstrap status",
-          "observability": "Observability",
-          "host": "Host",
+          "observability": "Telemetry",
+          "latencyP50": "Latency p50",
+          "latencyP95": "Latency p95",
+          "latencyP99": "Latency p99",
+          "estimatedCost": "Est. cost · 24h",
           "totalTraces": "Total traces"
         },
         "values": {
           "enabled": "enabled",
           "disabled": "disabled",
+          "selfInstrumented": "self-instrumented",
           "runs": "{count} runs"
+        },
+        "modelTable": {
+          "model": "model",
+          "runs": "runs",
+          "in": "in",
+          "out": "out",
+          "total": "total",
+          "cost": "cost",
+          "modelsCount": "{n} models · {calls} calls"
         }
+      },
+      "anomalies": {
+        "title": "{n} anomaly callouts · rule-based, no ML"
+      },
+      "sessions": {
+        "title": "Sessions · top 8",
+        "hint": "Conversations sorted by cost · Langfuse Sessions inspired",
+        "empty": "No conversation-level data in window",
+        "openConversation": "Open conversation"
+      },
+      "share": {
+        "title": "Copy current view link · includes range + search",
+        "share": "Share view",
+        "copied": "Copied"
+      },
+      "pricing": {
+        "title": "Model price table",
+        "subtitle": "USD-per-1M prices that drive every cost number on the observatory · code-shipped defaults + DB runtime overrides",
+        "breadcrumb": {
+          "observatory": "Observatory",
+          "pricing": "Pricing"
+        },
+        "curatorHint": "Need to update a price? Go to <chat>chat</chat> and invoke the <skill>price-curator</skill> employee — it'll fetch the upstream page, write a DB overlay, and keep the source_url.",
+        "filter": {
+          "all": "All",
+          "db": "DB override",
+          "code": "Code seed"
+        },
+        "searchPlaceholder": "Search model_ref…",
+        "loading": "Loading…",
+        "loadFailed": "Load failed",
+        "empty": "No rows match this filter",
+        "col": {
+          "model": "Model",
+          "source": "Source",
+          "input": "Input",
+          "output": "Output",
+          "note": "Note",
+          "updated": "Updated"
+        }
+      },
+      "costPanel": {
+        "title": "Cost panel · 24h",
+        "today": "Today",
+        "dailyProjection": "Daily projection",
+        "monthlyProjection": "Monthly projection",
+        "hint24h": "Extrapolated from last 24h",
+        "hintMonthly": "If the current pace held for 30 days",
+        "topEmployees": "Top employees by cost",
+        "topModels": "Top models by cost",
+        "noData": "No cost data in window",
+        "seeChart": "Open chart"
+      },
+      "heatmap": {
+        "title": "Latency heatmap · 24h",
+        "hint": "{runs} runs · darker cell = more runs in that bucket",
+        "empty": "No runs in this window · heatmap unavailable.",
+        "oldest": "24h ago",
+        "now": "now"
       },
       "incidents": {
         "title": "Recent incidents",
         "count": "{count} failed",
-        "tokensSuffix": "tok"
+        "tokensSuffix": "tokens"
       },
       "traces": {
         "title": "Latest 50 traces",
+        "openFullTrace": "Open full trace",
+        "selfInstrumentedNote": "self-instrumented · local events.run.*",
+        "searchPlaceholder": "Search trace_id / employee / model / status",
+        "searchAria": "Search traces",
+        "searchEmpty": {
+          "title": "No matches",
+          "description": "Adjust the search, or clear it to show all 50 traces."
+        },
         "empty": {
           "title": "No run events yet",
           "description": "Chat with Lead and kick off the first task — trace summaries will appear here."
@@ -138,6 +222,111 @@
           "ok": "ok",
           "failed": "failed",
           "running": "running"
+        }
+      },
+      "employeeDetail": {
+        "eyebrow": "Employee detail",
+        "breadcrumb": "Employees",
+        "title": "Employee detail",
+        "subtitle": "Runtime profile of employee {id} · all metrics auto-scoped",
+        "viewConversations": "View conversations",
+        "scopedToEmployee": "scoped to this employee",
+        "modelsUsedTitle": "Models used",
+        "modelsUsedEmpty": "No model usage recorded in this window",
+        "toolsUsedTitle": "Tools invoked",
+        "toolsUsedEmpty": "No tool invocations in this window",
+        "model": "Model",
+        "inv": "calls",
+        "recentRuns": "Recent runs · {n}",
+        "noRuns": "No runs in this window",
+        "kpi": {
+          "runs": "Last 50 runs",
+          "failureRate": "Failure rate",
+          "latencyP50": "Latency p50",
+          "latencyP95": "Latency p95",
+          "tokens": "Total tokens",
+          "cost": "Est. cost"
+        }
+      },
+      "toolDetail": {
+        "eyebrow": "Tool detail",
+        "breadcrumb": "Tools",
+        "subtitle": "Workspace-wide invocation profile of this tool_id",
+        "kpi": {
+          "invocations": "Invocations",
+          "failures": "Failures",
+          "failureRate": "Failure rate",
+          "avgDuration": "Avg duration"
+        },
+        "notSeen": "No invocations of this tool recorded in window.",
+        "possibleCallers": "Likely callers",
+        "possibleCallersHint": "Tool events do not yet carry employee_id; we approximate by listing active workspace employees. Per-employee tool slicing is planned.",
+        "runs": "runs"
+      },
+      "errorDetail": {
+        "eyebrow": "Error category",
+        "breadcrumb": "Errors",
+        "subtitle": "Failed runs grouped by error_kind · Sentry-style issue view",
+        "kpi": {
+          "count": "Occurrences",
+          "lastSeen": "Last seen",
+          "severity": "Severity"
+        },
+        "severityHigh": "High",
+        "severityMid": "Mid",
+        "severityLow": "Low",
+        "lastMessage": "Last error message",
+        "notSeen": "No errors of this kind recorded in window.",
+        "recentFailures": "Recent failed traces",
+        "noFailures": "No failed traces in last 24h."
+      },
+      "modelDetail": {
+        "eyebrow": "Model detail",
+        "breadcrumb": "Models",
+        "subtitle": "Usage profile of model_ref {ref} · all metrics auto-scoped",
+        "scopedToModel": "scoped to this model",
+        "topEmployeesTitle": "Employees using this model",
+        "topEmployeesEmpty": "No employee called this model in window",
+        "kpi": {
+          "runs": "Last 50 runs",
+          "failureRate": "Failure rate",
+          "latencyP50": "Latency p50",
+          "tokens": "Total tokens",
+          "cost": "Est. cost",
+          "calls": "Model calls"
+        },
+        "pricing": "USD per 1M tokens",
+        "pricingMissing": "Not in price table · cost shows as 0"
+      },
+      "metricDrawer": {
+        "close": "Close",
+        "loading": "Loading series…",
+        "loadFailed": "Failed to load. Tap retry.",
+        "retry": "Retry",
+        "empty": "No data in the selected window.",
+        "bucket1h": "1-hour buckets",
+        "bucket5m": "5-minute buckets",
+        "rangeLastHour": "Last hour",
+        "range24h": "24 hours",
+        "range7d": "7 days",
+        "rangeAria": "Time window",
+        "tooltipCount": "{n} runs",
+        "summaryLabel": {
+          "max": "Peak",
+          "avg": "Avg",
+          "current": "Latest"
+        },
+        "metric": {
+          "runs": "Runs",
+          "failure_rate": "Failure rate",
+          "latency_p50": "Latency p50",
+          "latency_p95": "Latency p95",
+          "latency_p99": "Latency p99",
+          "tokens_total": "Total tokens",
+          "tokens_input": "Input tokens",
+          "tokens_output": "Output tokens",
+          "llm_calls": "LLM calls",
+          "cost": "Estimated cost"
         }
       }
     },
@@ -166,11 +355,13 @@
       "loadFailed": "Failed to load artifact: {error}",
       "loadingMeta": "Loading…",
       "loadingContent": "Loading content…",
+      "contentMissing": "The artifact's content file is no longer on disk (the metadata row stayed). Likely cleaned up or the workspace was swapped — regenerate or delete the metadata.",
       "download": "Download",
       "unsupportedKind": "Kind {kind} can't be previewed in the panel.",
       "copyFailed": "Copy failed: {error}",
       "rollbackConfirm": "Roll back the current version to v{target}?\nA new version v{next} will be created with content from v{target}.",
       "toolbarCopyTitle": "Copy content to clipboard",
+      "toolbarCopyIdTitle": "Click to copy artifact ID (debugging / feedback)",
       "toolbarEditTitle": "Switch to edit mode",
       "toolbarOpenNewTitle": "Open in a new window — full-screen render",
       "toolbarDownloadTitle": "Download to local",
@@ -189,8 +380,20 @@
     "editor": {
       "loading": "Loading editor…"
     },
+    "peek": {
+      "size": "size",
+      "updated": "updated",
+      "created": "created",
+      "justNow": "just now",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago"
+    },
     "list": {
       "pinned": "Pinned",
+      "pinnedAria": "Pinned",
+      "groupAria": "Artifacts",
+      "groupOther": "Other",
       "empty": "No artifacts yet. Have an employee produce a doc, code, or diagram."
     },
     "panel": {
@@ -200,6 +403,8 @@
       "offline": "offline",
       "closeAria": "Close artifacts panel",
       "closeTitle": "Close · Cmd/Ctrl+J",
+      "resizeAria": "Drag to resize artifacts panel",
+      "resizeTitle": "Drag to resize",
       "back": "Back to list",
       "loading": {
         "title": "Loading artifacts",
@@ -215,14 +420,46 @@
       }
     },
     "versionSwitcher": {
-      "ariaLabel": "Switch version"
+      "ariaLabel": "Switch version",
+      "rollbackTitle": "Roll back to v{current} (creates a new version v{next} with content from v{current})",
+      "rollbackLabel": "Roll back to v{v}"
     },
     "mermaid": {
       "renderFailed": "Mermaid render failed: {error}"
     },
     "drawio": {
       "title": "drawio diagram",
-      "loading": "Loading drawio editor…"
+      "loading": "Loading drawio editor…",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "saveFailed": "Save failed"
+    },
+    "csv": {
+      "empty": "(no data)"
+    },
+    "html": {
+      "iframeTitle": "HTML artifact preview"
+    },
+    "pdf": {
+      "iframeTitle": "PDF preview"
+    },
+    "xlsx": {
+      "loading": "Loading Excel…",
+      "empty": "(empty sheet)",
+      "loadFailed": "xlsx parse failed: {error}"
+    },
+    "docx": {
+      "loading": "Rendering Word document…",
+      "loadFailed": "In-browser preview doesn't support some feature in this doc ({error}).",
+      "downloadFallback": "Download · open in Word / WPS"
+    },
+    "pptx": {
+      "loading": "Parsing PowerPoint…",
+      "loadFailed": "pptx parse failed: {error}",
+      "empty": "(no slide text could be extracted · please download)",
+      "untitledSlide": "(untitled)",
+      "count": "{n} slides",
+      "download": "Download .pptx"
     },
     "page": {
       "title": "Artifacts",
@@ -239,8 +476,74 @@
         "size_desc": "Size large→small"
       },
       "empty": "No artifacts match the current filter.",
+      "emptyAll": "No artifacts in this workspace yet",
+      "emptyAllHint": "Once an employee produces a doc, code or diagram, it shows up here.",
+      "emptyKind": "No {kind} artifacts",
+      "emptyQuery": "Nothing matches \"{query}\"",
+      "emptyKindAndQ": "No {kind} artifact matches \"{query}\"",
+      "emptyClearHint": "Clear the filter to see all · or try a different keyword",
+      "detailErrorTitle": "Couldn't render this artifact",
+      "detailErrorHint": "Parsing may have failed because the file is corrupted, the format isn't supported by the frontend viewer, or the browser ran out of memory. The raw bytes are still downloadable.",
+      "detailErrorShow": "Show error detail",
+      "detailErrorRetry": "Retry render",
+      "detailErrorDownload": "Download raw",
       "loadFailed": "Failed to load artifacts: {error}",
-      "count": "{n} artifacts"
+      "count": "{n} artifacts",
+      "selectHint": "Pick an artifact on the left to see its detail",
+      "filters": {
+        "pinnedOnly": "Pinned only",
+        "dateAll": "All time",
+        "date7d": "Last 7d",
+        "date30d": "Last 30d",
+        "clearAll": "Clear filters",
+        "activeChip": "Filter: {label}",
+        "removeChipAria": "Remove filter {label}"
+      },
+      "clearSearchAria": "Clear search",
+      "bulkActionsAria": "Bulk actions",
+      "clearSelectionAria": "Clear selection",
+      "bulk": {
+        "selected": "{n} selected",
+        "pin": "Pin",
+        "unpin": "Unpin",
+        "delete": "Delete",
+        "toast": {
+          "pinned": "Pinned {n, plural, one {# artifact} other {# artifacts}}",
+          "unpinned": "Unpinned {n, plural, one {# artifact} other {# artifacts}}",
+          "pinPartial": "{ok} of {total} failed",
+          "pinPartialDesc": "Reverted those rows",
+          "deletedAll": "Deleted {n, plural, one {# artifact} other {# artifacts}}",
+          "deletedAllDesc": "Soft delete · still recoverable",
+          "deletedPartial": "Deleted {ok} · {failed} failed",
+          "deletedNone": "Failed to delete {n, plural, one {# artifact} other {# artifacts}}"
+        }
+      },
+      "view": {
+        "list": "List",
+        "grid": "Grid",
+        "listAria": "Switch to list view",
+        "gridAria": "Switch to grid view"
+      },
+      "kbd": {
+        "search": "/",
+        "navHint": "j / k navigate · / search · Esc clear"
+      },
+      "stats": {
+        "total": "Total",
+        "totalHint": "All artifacts",
+        "size": "Disk usage",
+        "sizeHint": "Sum across versions",
+        "pinned": "Pinned",
+        "pinnedHint": "Team favorites",
+        "last7d": "Last 7d",
+        "last7dHint": "Recently created",
+        "byKind": "By kind",
+        "topKindHint": "Largest kind · {kind}",
+        "activity": "Last 14 days",
+        "activityHint": "Artifacts created per day",
+        "contributors": "Top contributors",
+        "contributorsHint": "Most prolific employees in this workspace"
+      }
     }
   },
   "brand": {
@@ -251,7 +554,22 @@
       "missingId": "Artifact.Preview is missing artifact_id",
       "loadFailed": "Failed to load artifact: {error}",
       "loading": "Loading artifact…",
-      "unsupportedKind": "Kind {kind} can't be previewed"
+      "unsupportedKind": "Kind {kind} can't be previewed",
+      "openInPanel": "Open in artifact panel",
+      "open": "Open",
+      "openInNewTab": "Open in new tab",
+      "download": "Download",
+      "copy": "Copy content",
+      "copied": "Copied"
+    },
+    "artifactCard": {
+      "missingId": "Artifact.Card is missing artifact_id",
+      "loadFailed": "Failed to load · click to open in panel",
+      "loading": "Loading…",
+      "loadingHint": "Loading artifact metadata…",
+      "openInPanel": "Open in artifact panel",
+      "clickToOpen": "Click to open in panel",
+      "open": "Open"
     },
     "employeeCard": {
       "untitled": "(Unnamed employee)",
@@ -302,6 +620,7 @@
       "placeholder": "Jump to a page · search employees · skills · models",
       "noMatch": "No matches · try a different keyword",
       "suggestions": "Suggestions · {count}",
+      "recent": "Recent · {count}",
       "footer": {
         "navigate": "navigate",
         "open": "open",
@@ -313,7 +632,7 @@
         "conversations": "past conversations",
         "tasks": "async tasks",
         "employees": "digital employees",
-        "employeeDesign": "design new employee",
+        "employeeNew": "hire new employee",
         "skills": "skill packs",
         "mcp": "external mcp",
         "gateway": "provider + model gateway",
@@ -321,7 +640,7 @@
         "triggers": "scheduled + webhook",
         "channels": "slack email webhook",
         "confirmations": "pending approvals",
-        "traces": "langfuse traces",
+        "traces": "run traces",
         "observatory": "platform observability",
         "stockAssistant": "market anomaly demo",
         "review": "agent review",
@@ -330,11 +649,11 @@
       },
       "entries": {
         "cockpit": "Cockpit",
-        "chat": "Chat",
+        "chat": "Lead chat",
         "conversations": "Conversations",
         "tasks": "Tasks",
         "employees": "Employees",
-        "employeeDesign": "Employee design",
+        "employeeNew": "New employee",
         "skills": "Skills",
         "mcp": "MCP servers",
         "gateway": "Providers & models",
@@ -355,6 +674,10 @@
       "cancel": "Cancel",
       "processing": "Working…",
       "closeAria": "Close"
+    },
+    "searchInput": {
+      "placeholder": "Search…",
+      "clear": "Clear"
     },
     "dotGridAvatar": {},
     "dotGridBackdrop": {},

@@ -15,6 +15,7 @@ import {
 import { ConversationSwitcher } from "@/components/chat/ConversationSwitcher";
 import { AppShell } from "@/components/shell/AppShell";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
+import { useArtifactFocus } from "@/lib/artifact-focus-store";
 import { ErrorState } from "@/components/state";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -29,7 +30,10 @@ import {
 import { useChatStore } from "@/lib/store";
 import type { Message } from "@/lib/protocol";
 
+// Legacy + new (Lead-scoped) storage keys. We clear both on a stale 404 so
+// neither one can pin /chat to a missing conversation.
 const CONVERSATION_STORAGE_KEY = "allhands_conversation_id";
+const LEAD_CONVERSATION_STORAGE_KEY = "allhands_lead_conversation_id";
 
 type LoadState =
   | { kind: "loading" }
@@ -107,6 +111,15 @@ export default function ConversationPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const resetChatStore = useChatStore((s) => s.reset);
+
+  // 2026-04-26 · click-to-focus: a chat-side Artifact.Card click writes to
+  // the focus store · this auto-opens the panel · ArtifactPanel itself
+  // listens to the same store and jumps into the detail view.
+  const focusedArtifactId = useArtifactFocus((s) => s.artifactId);
+  const focusBumpTick = useArtifactFocus((s) => s.bumpTick);
+  useEffect(() => {
+    if (focusedArtifactId) setPanelOpen(true);
+  }, [focusedArtifactId, focusBumpTick]);
   const retryAttemptRef = useRef(0);
   const manualRetryRef = useRef<() => void>(() => {});
 
@@ -163,6 +176,7 @@ export default function ConversationPage() {
         if (e instanceof ApiError && e.status === 404 && !(e instanceof BackendUnreachableError)) {
           try {
             localStorage.removeItem(CONVERSATION_STORAGE_KEY);
+            localStorage.removeItem(LEAD_CONVERSATION_STORAGE_KEY);
           } catch {
             // SSR / private-mode guard — safe to ignore
           }
@@ -214,9 +228,16 @@ export default function ConversationPage() {
   }, []);
 
   const headerEmployee = employee ? toHeaderEmployee(employee) : null;
+  // Non-Lead employees get their own shell title — the "One for All · single
+  // Lead Agent" tagline only fits the Lead surface. Loading falls back to the
+  // tagline since we don't yet know which employee owns this conversation.
+  const shellTitle =
+    employee && !employee.is_lead_agent
+      ? t("shellTitleEmployee", { name: employee.name })
+      : t("shellTitle");
 
   return (
-    <AppShell title={t("shellTitle")}>
+    <AppShell title={shellTitle}>
       <div className="flex h-full min-h-0 min-w-0">
         <div className="flex h-full min-h-0 flex-1 flex-col min-w-0">
           {loadState.kind === "unreachable" && (

@@ -119,7 +119,6 @@ function makeSnapshot(overrides: Partial<WorkspaceSummaryDto> = {}): WorkspaceSu
     health: {
       gateway: { name: "gateway", status: "ok", detail: null },
       mcp_servers: { name: "mcp", status: "ok", detail: null },
-      langfuse: { name: "langfuse", status: "ok", detail: null },
       db: { name: "db", status: "ok", detail: null },
       triggers: { name: "triggers", status: "ok", detail: null },
     },

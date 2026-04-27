@@ -55,6 +55,24 @@ LEAD_EXTRA_SKILL_IDS: tuple[str, ...] = (
     "allhands.skill_management",
     "allhands.mcp_management",
     "allhands.cockpit_admin",
+    # 2026-04-25 · 渐进式 skill pack · spec
+    # docs/specs/2026-04-25-progressive-skill-packs.md
+    # 把原本裸露在 ALL_*_TOOLS 里的 36 个 meta tool 装进 6 个新 skill ·
+    # Lead 上下文 -8.7k token / turn(冷激活路径)。其他员工也可以挂 ·
+    # 例如 「金融分析师」 = market_data + stock_assistant + artifacts。
+    "allhands.triggers_management",
+    "allhands.channels_management",
+    "allhands.task_management",
+    "allhands.market_data",
+    "allhands.observatory",
+    "allhands.review_gates",
+    # 2026-04-27 round-22 · 品牌设计语言挂上 Lead · 用户说「画个高大上的
+    # 落地页 / 海报 / 仪表盘」 时 Lead turn 0 就看到 allhands.design
+    # 描述符 ·  触发关键词命中即激活 · 注入 Brand Blue 双主题 token +
+    # 模板 · 产出比默认 ChatGPT 大白页有品牌感。
+    # NOTE: 老的 allhands.drawio-creator 已在 round-21 P3 物理删除 · 数据
+    # 迁移见 alembic 0029。drawio 能力现在挂在 allhands.artifacts skill 里。
+    "allhands.design",
 )
 LEAD_SKILL_IDS: tuple[str, ...] = DEFAULT_SKILL_IDS + LEAD_EXTRA_SKILL_IDS
 

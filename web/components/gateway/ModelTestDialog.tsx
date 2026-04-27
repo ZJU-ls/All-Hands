@@ -31,7 +31,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { Composer, ThinkingToggle } from "@/components/chat/Composer";
 import { BrandMark } from "@/components/brand/BrandMark";
@@ -73,10 +73,10 @@ function fmtDuration(ms: number | undefined): string {
  *  Keeps small counts readable as exact integers (token-level audits) while
  *  large counts collapse to readable order-of-magnitude.
  */
-function fmtCount(n: number | undefined): string {
+function fmtCount(n: number | undefined, locale: string): string {
   if (n === undefined || n === null || !Number.isFinite(n)) return "—";
   const v = Math.round(n);
-  if (v < 10_000) return v.toLocaleString();
+  if (v < 10_000) return v.toLocaleString(locale);
   if (v < 1_000_000) return `${(v / 1_000).toFixed(1)}k`;
   return `${(v / 1_000_000).toFixed(2)}M`;
 }
@@ -127,9 +127,18 @@ const ERROR_KEYS: Record<ErrorCategory, string> = {
   unknown: "errorUnknown",
 };
 
+type Warning = {
+  message: string;
+  category: string;
+};
+
 type LastRun = {
   metrics?: TestMetrics;
   error?: { category: ErrorCategory; message: string };
+  /** Per-turn upstream warnings — e.g. "thinking field auto-stripped after
+   *  upstream 400" so the user knows why a model thinks despite their
+   *  toggle being off (or vice-versa). Visible above the metrics card. */
+  warnings?: Warning[];
   streaming: boolean;
 };
 
@@ -253,6 +262,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
 
     let acc = "";
     let accReasoning = "";
+    const warnings: Warning[] = [];
     let errored = false;
 
     const handle = openStream(
@@ -274,6 +284,20 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
           setPhase("thinking");
         },
         onCustom: (name, value) => {
+          if (name === "allhands.model_test_warning") {
+            // 上游协议异常的透明告知 — 比如 "thinking 字段被某些模型拒绝,
+            // 已自动剥离重试"。累积到 warnings,在 metrics 卡片上方渲染,
+            // 避免用户看到模型行为异常(关了思考还在思考 / 等)却找不到
+            // 原因。
+            const data = (value ?? {}) as { message?: string; category?: string };
+            if (data.message) {
+              warnings.push({
+                message: data.message,
+                category: data.category ?? "unknown",
+              });
+            }
+            return;
+          }
           if (name === "allhands.model_test_metrics") {
             const data = (value ?? {}) as {
               response?: string;
@@ -313,6 +337,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 outputTokens: usage.output_tokens ?? 0,
                 totalTokens: usage.total_tokens ?? 0,
               },
+              warnings: warnings.length > 0 ? [...warnings] : undefined,
             });
           } else if (name === "allhands.model_test_error") {
             errored = true;
@@ -474,7 +499,7 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 onClick={() => setShowAdvanced((v) => !v)}
                 data-testid="model-test-advanced-toggle"
                 aria-expanded={showAdvanced}
-                className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] font-medium text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast"
+                className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] font-medium text-text-muted hover:text-text hover:bg-surface-2 transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <Icon name="settings" size={12} />
                 {t("advancedToggle")}
@@ -565,6 +590,29 @@ export function ModelTestDialog({ model, onClose }: ModelTestDialogProps) {
                 />
               )}
             </div>
+
+            {/* Vendor-specific protocol fallback notice — surfaces things like
+                "thinking field auto-stripped after upstream 400" so the user
+                sees why a model thought when toggle was off (or vice-versa).
+                Yellow band, not red — request still succeeded, just with a
+                different effective config. */}
+            {lastRun?.warnings && lastRun.warnings.length > 0 && (
+              <div
+                data-testid="model-test-warnings"
+                className="mt-3 rounded-xl border border-warning/25 bg-warning-soft p-3 text-[12px] flex items-start gap-2.5"
+              >
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-warning/15 text-warning shrink-0">
+                  <Icon name="alert-triangle" size={12} strokeWidth={2} />
+                </span>
+                <div className="flex-1 min-w-0 space-y-1">
+                  {lastRun.warnings.map((w, i) => (
+                    <p key={i} className="text-[12px] leading-relaxed text-text">
+                      {w.message}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {lastRun?.metrics && !lastRun.error && (
               <MetricsRow metrics={lastRun.metrics} />
@@ -913,7 +961,7 @@ function ReasoningBlock({
           ref={bodyRef}
           data-testid="model-test-reasoning-body"
           className={`border-t border-primary/15 px-3 py-2 text-[12px] leading-relaxed text-text-muted ${
-            isStreaming ? "max-h-60 overflow-y-auto" : ""
+            isStreaming ? "max-h-80 overflow-y-auto scroll-fade-bottom" : ""
           }`}
         >
           <AgentMarkdown
@@ -928,15 +976,16 @@ function ReasoningBlock({
 
 function MetricsRow({ metrics }: { metrics: TestMetrics }) {
   const t = useTranslations("modelTestMetrics");
+  const locale = useLocale();
   const showReasoningMetric =
     metrics.reasoningFirstMs !== undefined && metrics.reasoningFirstMs > 0;
   // 把 tok i/o/t 拆成三个独立 chip ——
   // 旧设计把 "28 / 568 / 596" 塞进单个 chip,4 列 grid 下宽度不够就被
   // truncate 截成 "28 / 568 / 5..."。每个数据点单独一个 chip 后,任何一
   // 列宽都装得下单个数字,truncate 不会触发。
-  const tokIn = metrics.inputTokens !== undefined ? fmtCount(metrics.inputTokens) : "—";
-  const tokOut = metrics.inputTokens !== undefined ? fmtCount(metrics.outputTokens ?? 0) : "—";
-  const tokTot = metrics.inputTokens !== undefined ? fmtCount(metrics.totalTokens ?? 0) : "—";
+  const tokIn = metrics.inputTokens !== undefined ? fmtCount(metrics.inputTokens, locale) : "—";
+  const tokOut = metrics.inputTokens !== undefined ? fmtCount(metrics.outputTokens ?? 0, locale) : "—";
+  const tokTot = metrics.inputTokens !== undefined ? fmtCount(metrics.totalTokens ?? 0, locale) : "—";
   return (
     <div
       data-testid="model-test-metrics"

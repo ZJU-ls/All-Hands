@@ -1,0 +1,70 @@
+{
+  "_doc": "Most-used inner slide · title + lead + paragraph. Replace the three text shapes. Body text uses line_spacing=1.4 for readability.",
+  "background": {
+    "color_hex": "#0a0e1a"
+  },
+  "shapes": [
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 0.22,
+      "h": 7.5,
+      "fill_hex": "#3b82f6"
+    },
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 7.42,
+      "w": 13.333,
+      "h": 0.04,
+      "fill_hex": "#1e2536"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 0.7,
+      "w": 11.5,
+      "h": 0.8,
+      "text": "Slide title",
+      "font": {
+        "size": 36,
+        "weight": "bold",
+        "color_hex": "#e7eaf3"
+      }
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 1.55,
+      "w": 0.6,
+      "h": 0.04,
+      "fill_hex": "#60a5fa"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 1.75,
+      "w": 11.5,
+      "h": 0.6,
+      "text": "Lead sentence that frames the slide.",
+      "font": {
+        "size": 22,
+        "color_hex": "#93a0b4"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 2.8,
+      "w": 11.5,
+      "h": 4.0,
+      "text": "Body paragraph one — explain the idea in plain prose.\n\nBody paragraph two — supporting evidence, numbers, or a single quote.",
+      "font": {
+        "size": 18,
+        "color_hex": "#e7eaf3"
+      },
+      "line_spacing": 1.4
+    }
+  ]
+}

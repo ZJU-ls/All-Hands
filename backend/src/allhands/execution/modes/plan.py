@@ -9,7 +9,6 @@ from .preview import Preset
 PLAN_PRESET = Preset(
     id="plan",
     friendly_name_zh="先出计划",
-    description="先做计划再自己执行,15 步上限,不调用子代理。",
     tool_ids_base=[
         "allhands.builtin.fetch_url",
         "allhands.meta.plan_create",

@@ -23,7 +23,7 @@ from allhands.core import (
 )
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
-from allhands.execution.dispatch import DispatchService
+from allhands.execution.dispatch import DispatchService, _parent_conversation_id
 from allhands.execution.model_resolution import ResolvedModel, resolve_effective_model
 from allhands.execution.runner import AgentRunner
 from allhands.execution.skills import SkillRuntime, bootstrap_employee_runtime
@@ -586,6 +586,16 @@ class ChatService:
         resolved = await self.resolve_model_for_conversation(conv, employee)
         provider = resolved.provider if resolved is not None else None
         effective_model_ref = resolved.ref if resolved is not None else conv.model_ref_override
+        # 2026-04-25 · per-model output cap. If the registered LLMModel has
+        # max_output_tokens set, thread it into AgentLoop so build_llm bakes
+        # it into the LangChain ctor (Anthropic's max_tokens is ctor-time
+        # only). None when not registered or not configured → stay opt-in.
+        effective_max_output_tokens: int | None = None
+        if resolved is not None and self._models is not None:
+            for m in await self._models.list_all():
+                if m.provider_id == resolved.provider.id and m.name == resolved.model_name:
+                    effective_max_output_tokens = m.max_output_tokens
+                    break
 
         if first_message_for_title:
             await self._maybe_llm_title(conv, user_content, employee, provider, effective_model_ref)
@@ -640,13 +650,25 @@ class ChatService:
                 overrides = base_overrides.model_copy(update={"system_override": combined})
 
         runner_factory = self._build_runner_factory(provider)
+        # Pass the EventBus into both subagent services so they emit
+        # run.started + run.completed/failed for every dispatched / spawned
+        # sub-run. Without this, observatory.get_run_detail can't resolve
+        # the sub-run's run_id and the trace drawer falls back to the
+        # "trace 已不在" empty state (regression fixed 2026-04-27).
         dispatch_service = DispatchService(
             employee_repo=self._employees,
             runner_factory=runner_factory,
+            event_bus=self._bus,
         )
         spawn_subagent_service = SpawnSubagentService(
             employee_repo=self._employees,
             runner_factory=runner_factory,
+            # Inherit the parent's model_ref so preset subagents talk to the
+            # same gateway (fixes "tool_call_dropped" on deployments without an
+            # OpenAI provider — the previous hardcoded fallback was broken on
+            # qwen / glm / kimi gateways).
+            default_model_ref=effective_model_ref or employee.model_ref,
+            event_bus=self._bus,
         )
         runner = AgentRunner(
             employee=employee,
@@ -662,6 +684,7 @@ class ChatService:
             conversation_id=conversation_id,
             user_input_signal=self._user_input_signal,
             run_id=run_id,
+            max_output_tokens=effective_max_output_tokens,
         )
         # ADR 0017 · per-turn thread_id. Claude Code invariant (V02 § 1.3):
         # each query() gets a fresh in-memory messages array; there's no
@@ -812,6 +835,29 @@ class ChatService:
         persisted = False
         run_finalized = False
         error_payload: dict[str, object] | None = None
+        # Stamp the parent conversation_id into the contextvar so any
+        # dispatch_employee / spawn_subagent invoked downstream emits its
+        # run.* events with the right conversation_id.
+        #
+        # NOTE on async-generator + contextvars: this function is an async
+        # generator. ContextVar tokens are pinned to the context where
+        # `set()` ran. The async generator can be advanced from a
+        # different task (SSE heartbeat / asyncio.wait switching / GC of
+        # the generator on cancellation) — `reset(token)` from another
+        # context raises:
+        #
+        #   ValueError: <Token ...> was created in a different Context
+        #
+        # which previously surfaced to the user as a 「上游拒绝」 banner
+        # at the end of every chat turn that streamed long enough to
+        # cross contexts (artifact creation routinely does, given chart
+        # / image / tool batches).
+        #
+        # Fix: skip tokens · save the prior value and restore it
+        # manually in finally. Equivalent semantics for our request-
+        # scoped pattern, no cross-context check.
+        _conv_prev = _parent_conversation_id.get()
+        _parent_conversation_id.set(conversation_id)
         # Per-run telemetry · accumulated across every LLMCallEvent so the
         # ``run.completed`` payload carries authoritative totals for the
         # observatory KPIs / trace drawer. Each individual call also gets
@@ -1160,6 +1206,14 @@ class ChatService:
             # round-trip, and after flush() so the assistant message is
             # durable first (if this errors, at least the reply is saved).
             await self._flush_runtime(conversation_id)
+            # Restore the parent conversation_id contextvar set at the
+            # top of this generator. We use manual save/restore (not the
+            # token-based reset()) because async generators can advance
+            # in a different context than the one where set() ran ·
+            # token-based reset would raise "Token ... created in a
+            # different Context" at the end of long turns. See the
+            # comment at the set() site for full root-cause notes.
+            _parent_conversation_id.set(_conv_prev)
 
     async def _write_pending_confirmation(self, event: Any) -> None:
         """Persist a Confirmation row on InterruptEvent (ADR 0014 Phase 4d).
@@ -1319,6 +1373,7 @@ class ChatService:
         skill_registry = self._skills
         gate = self._gate
         employee_repo = self._employees
+        bus = self._bus
 
         def factory(child: Employee, depth: int) -> AgentRunner:
             # Sub-runner also gets a dispatch_service so nested dispatch works
@@ -1330,10 +1385,13 @@ class ChatService:
             nested_dispatch = DispatchService(
                 employee_repo=employee_repo,
                 runner_factory=nested_factory,
+                event_bus=bus,
             )
             nested_spawn = SpawnSubagentService(
                 employee_repo=employee_repo,
                 runner_factory=nested_factory,
+                default_model_ref=child.model_ref,
+                event_bus=bus,
             )
             child_runtime = bootstrap_employee_runtime(child, skill_registry, tool_registry)
             return AgentRunner(

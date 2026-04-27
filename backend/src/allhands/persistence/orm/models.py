@@ -13,6 +13,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -203,6 +204,14 @@ class LLMModelRow(Base):
     name: Mapped[str] = mapped_column(String(128), index=True)
     display_name: Mapped[str] = mapped_column(String(128), default="")
     context_window: Mapped[int] = mapped_column(Integer, default=0)
+    # Optional explicit caps. None → "use model default" (we don't constrain
+    # the request). When set, max_input_tokens drives the composer's budget
+    # chip denominator and max_output_tokens is forwarded as `max_tokens` on
+    # outbound chat requests. Kept separate from `context_window` because
+    # vendors expose three distinct numbers (total / input / output) and
+    # collapsing them produced the "6/64k" UX confusion.
+    max_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # System-wide singleton: at most one row has is_default=True. Service
     # layer enforces — see LLMModelRepo.set_default(). Indexed because
@@ -352,19 +361,15 @@ class TaskRow(Base):
 
 
 class ObservabilityConfigRow(Base):
+    """Singleton system-config row · post-Langfuse (2026-04-25).
+
+    The langfuse credential + bootstrap columns were dropped via migration
+    0023 once self-instrumentation became the only path.
+    """
+
     __tablename__ = "observability_config"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    public_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    secret_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    host: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    org_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    project_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    admin_email: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    admin_password: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    bootstrap_status: Mapped[str] = mapped_column(String(32), default="pending")
-    bootstrap_error: Mapped[str | None] = mapped_column(String, nullable=True)
-    bootstrapped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
     auto_title_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
@@ -437,3 +442,28 @@ class ConversationEventRow(Base):
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_compacted: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class ModelPriceRow(Base):
+    """Runtime overlay for per-model token pricing.
+
+    Codebase ships seed prices in ``services/model_pricing.py``; this table
+    overrides them at runtime so an Agent (or admin) can correct prices
+    when a provider's page changes — without a code redeploy. Look-up
+    semantics: DB row wins, code dict is fallback. ``model_ref`` is the
+    same key the LLMModel layer uses (e.g. ``openai/gpt-4o-mini``).
+
+    ``source_url`` carries the citation the curator-Agent used; ``note``
+    is free-form (e.g. "promo until 2026-Q3"). ``updated_by_run_id``
+    links back to the Observatory run that wrote the row — provenance.
+    """
+
+    __tablename__ = "model_prices"
+
+    model_ref: Mapped[str] = mapped_column(String(128), primary_key=True)
+    input_per_million_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    output_per_million_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    updated_by_run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

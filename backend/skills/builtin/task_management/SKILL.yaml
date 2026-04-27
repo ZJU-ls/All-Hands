@@ -1,0 +1,16 @@
+id: allhands.task_management
+name: 任务管理
+description: 异步任务 长流程跟进 · 列表 详情 取消 批准 答用户输入 挂制品
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.meta.tasks.list
+  - allhands.meta.tasks.get
+  - allhands.meta.tasks.create
+  - allhands.meta.tasks.cancel
+  - allhands.meta.tasks.approve
+  - allhands.meta.tasks.answer_input
+  - allhands.meta.tasks.add_artifact
+
+prompt_fragment_file: prompts/guidance.md

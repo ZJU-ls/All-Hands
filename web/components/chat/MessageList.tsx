@@ -13,7 +13,8 @@ type Props = { conversationId: string };
 const STICK_THRESHOLD_PX = 64;
 
 export function MessageList({ conversationId }: Props) {
-  const { messages, streamingMessage, streamError, isStreaming } = useChatStore();
+  const { messages, streamingMessage, streamError, isStreaming, streamHeartbeatTick } =
+    useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
 
@@ -29,9 +30,14 @@ export function MessageList({ conversationId }: Props) {
   // Token deltas / reasoning deltas / tool-call updates all bump it; while
   // it's stable, we treat the stream as silent (likely buffering or paused
   // between tool calls) and the chip can shift to a "still waiting" tone.
+  // Include `streamHeartbeatTick` so server-sent heartbeats (every 10s of
+  // agent silence · e.g. while LLM is thinking through a tool result) reset
+  // the chip's silence counter. Without this the chip wrongly enters
+  // 「停止」 state at 25s silent · users panic-click and get
+  // client_disconnect even though backend is fine. Fix 2026-04-26.
   const progressSignature = streamingMessage
-    ? `${streamingMessage.content.length}|${streamingMessage.reasoning?.length ?? 0}|${streamingMessage.tool_calls.length}|${streamingMessage.render_payloads.length}`
-    : "";
+    ? `${streamingMessage.content.length}|${streamingMessage.reasoning?.length ?? 0}|${streamingMessage.tool_calls.length}|${streamingMessage.render_payloads.length}|hb:${streamHeartbeatTick}`
+    : `hb:${streamHeartbeatTick}`;
 
   useEffect(() => {
     if (!isStreaming) {

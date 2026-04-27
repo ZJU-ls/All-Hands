@@ -1,10 +1,11 @@
 id: sk_planner
-name: Planning · Output before Act
-description: Always emit a full plan via render_plan before taking action.
-version: 0.1.0
+name: Planning · Update Plan
+description: Track multi-step work with a single update_plan tool — Claude Code TodoWrite style.
+version: 1.0.0
 builtin: true
 
 tool_ids:
-  - allhands.builtin.render_plan
+  - allhands.meta.update_plan
+  - allhands.meta.view_plan
 
 prompt_fragment_file: prompts/guidance.md

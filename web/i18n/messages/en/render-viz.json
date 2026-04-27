@@ -51,7 +51,8 @@
     "pieChart": {
       "empty": "No slices",
       "isolated": "Focused · click to release",
-      "tooltip": "{value} · {pct}% · click to focus"
+      "tooltip": "{value} · {pct}% · click to focus",
+      "ariaLabel": "Pie chart"
     },
     "stat": {
       "copyLabel": "Copy metric",
@@ -70,8 +71,6 @@
     },
     "table": {
       "searchPlaceholder": "Filter rows…",
-      "densityCozy": "Cozy",
-      "densityCompact": "Compact",
       "copyCsv": "Copy as CSV",
       "noMatch": "No matching rows",
       "empty": "No rows",
@@ -89,7 +88,9 @@
   "renderShared": {
     "copyButton": {
       "label": "Copy",
-      "copied": "Copied"
+      "copied": "Copied",
+      "failed": "Copy failed",
+      "failedDetail": "Clipboard access blocked · check browser permissions or copy manually."
     },
     "searchInput": {
       "placeholder": "Search…",

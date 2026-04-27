@@ -20,6 +20,7 @@ import {
 import {
   DEFAULT_SORT,
   TraceTable,
+  TraceTableSkeleton,
   sortTraces,
   type TraceSort,
 } from "@/components/traces/TraceTable";
@@ -177,10 +178,15 @@ function TracesPageInner() {
           />
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {state === "loading" && traces.length === 0 ? (
-              <LoadingState
-                title={t("loadingList")}
-                description={t("loadingDescription")}
-              />
+              <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-soft-sm">
+                <TraceTableSkeleton />
+                <span className="sr-only">
+                  <LoadingState
+                    title={t("loadingList")}
+                    description={t("loadingDescription")}
+                  />
+                </span>
+              </div>
             ) : state === "error" && traces.length === 0 ? (
               <ErrorState
                 title={t("errorTitle")}

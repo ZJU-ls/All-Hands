@@ -23,7 +23,6 @@ directly — no events yielded mid-flight, gather composes naturally.
 from __future__ import annotations
 
 import inspect
-import json
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
@@ -38,6 +37,11 @@ from allhands.execution.internal_events import (
     InternalEvent,
     ToolMessageCommitted,
     UserInputRequested,
+)
+from allhands.execution.tool_arg_validation import (
+    ToolArgError,
+    coerce_and_validate,
+    lenient_coerce,
 )
 
 if TYPE_CHECKING:
@@ -114,11 +118,22 @@ class Batch:
 
 def _is_concurrent_safe(tool: Tool | None) -> bool:
     """A tool is concurrent-safe iff it's READ scope AND doesn't require
-    confirmation. Any other combination — write, irreversible, bootstrap,
-    or read-with-confirmation — gets its own serial batch."""
+    confirmation AND doesn't require user input. Any other combination —
+    write, irreversible, bootstrap, read-with-confirmation, or
+    read-with-user-input — gets its own serial batch.
+
+    The ``requires_user_input`` clause prevents the concurrent path
+    (which bypasses ``permission_check``) from running an
+    ``ask_user_question``-style READ tool without firing its
+    UserInputDeferred. Without it, the question would silently execute
+    against an empty answer dict (R1 review · C3)."""
     if tool is None:
         return False
-    return tool.scope == ToolScope.READ and not tool.requires_confirmation
+    if tool.scope != ToolScope.READ:
+        return False
+    if tool.requires_confirmation:
+        return False
+    return not getattr(tool, "requires_user_input", False)
 
 
 def partition_tool_uses(
@@ -177,47 +192,37 @@ async def _maybe_await(value: Any) -> Any:
 
 
 def _coerce_stringified_json(kwargs: dict[str, Any]) -> dict[str, Any]:
-    """Recover nested object/array args that the LLM serialized as JSON
-    strings. Some providers (and some models on fuzzy tool-use training)
-    flatten nested object / array arguments to a single JSON-encoded
-    string instead of sending a structured value. Pydantic v2 in lax mode
-    does NOT auto-parse `str → dict` or `str → list`, so the tool call
-    blows up with `ValidationError` on input. This walker rescues any
-    `str` value that parses to a `dict` or `list`, leaves everything else
-    untouched.
+    """Schema-less coercion · re-exports `lenient_coerce` for back-compat.
 
-    Real-world trigger (regression for runner.py + render tools):
-    `render_stat` called with `delta='{"value": 2, ...}'` instead of
-    `delta={"value": 2, ...}`.
+    Iter 2 (2026-04-27 round-22) split tool-arg handling into the proper
+    schema-driven validator (`coerce_and_validate`) plus this lenient
+    fallback. New code should call `coerce_and_validate(tool, kwargs)`
+    directly · only legacy paths without a Tool reference end up here.
     """
-    out: dict[str, Any] = {}
-    for k, v in kwargs.items():
-        if isinstance(v, str):
-            stripped = v.strip()
-            if stripped.startswith(("{", "[")):
-                try:
-                    parsed = json.loads(stripped)
-                except (ValueError, TypeError):
-                    parsed = None
-                if isinstance(parsed, dict | list):
-                    out[k] = parsed
-                    continue
-        out[k] = v
-    return out
+    return lenient_coerce(kwargs)
 
 
 async def _invoke_executor(
     executor: ToolExecutor,
     args: dict[str, Any],
+    *,
+    tool: Tool | None = None,
 ) -> Any:
     """Call the bound tool executor with the LLM-provided args.
 
-    Args coerced for stringified-JSON nested values so executors with
-    Pydantic schema validation accept what fuzzy LLMs produce. Wrapping
-    in try/except is the caller's responsibility — different paths
-    (concurrent vs iter) record errors differently.
+    When `tool` is supplied, args go through `coerce_and_validate` against
+    `tool.input_schema` BEFORE the executor sees them. Validation failure
+    raises `ToolArgError` carrying a structured payload (field / expected
+    / received / hint) — the caller turns that into a ToolMessage so the
+    LLM gets a self-explanatory error and can self-correct on the next
+    turn (no prompt patches required).
+
+    Without `tool` we fall back to the legacy schema-less coercion (parse
+    stringified JSON only) for backwards compatibility with any tests or
+    paths that haven't migrated yet.
     """
-    return await _maybe_await(executor(**_coerce_stringified_json(args)))
+    coerced = coerce_and_validate(tool, args) if tool is not None else lenient_coerce(args)
+    return await _maybe_await(executor(**coerced))
 
 
 # --- Concurrent path (parallel-safe, no defer possible) -------------------
@@ -242,7 +247,15 @@ async def execute_tool_use_concurrent(
             conversation_id=conversation_id,
         )
     try:
-        result = await _invoke_executor(binding.executor, dict(block.input))
+        result = await _invoke_executor(binding.executor, dict(block.input), tool=binding.tool)
+    except ToolArgError as exc:
+        # Self-explanatory envelope · LLM reads field/expected/received/hint
+        # and corrects on the next turn (E22 · principle 9).
+        return _make_tool_message(
+            tool_use_id=block.id,
+            content=exc.to_payload(),
+            conversation_id=conversation_id,
+        )
     except Exception as exc:
         return _make_tool_message(
             tool_use_id=block.id,
@@ -350,7 +363,16 @@ async def execute_tool_use_iter(
 
     # Allow path or post-approval Defer path: invoke executor.
     try:
-        result = await _invoke_executor(binding.executor, exec_args)
+        result = await _invoke_executor(binding.executor, exec_args, tool=binding.tool)
+    except ToolArgError as exc:
+        yield ToolMessageCommitted(
+            message=_make_tool_message(
+                tool_use_id=block.id,
+                content=exc.to_payload(),
+                conversation_id=conversation_id,
+            )
+        )
+        return
     except Exception as exc:
         yield ToolMessageCommitted(
             message=_make_tool_message(

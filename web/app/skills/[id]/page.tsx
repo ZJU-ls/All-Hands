@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
+import { AgentMarkdown } from "@/components/chat/AgentMarkdown";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/state";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { SkillExplainer } from "@/components/skills/SkillExplainer";
+import { SkillFilesTab } from "@/components/skills/SkillFilesTab";
 
 /**
  * Skill detail page · ADR 0016 V2 Azure Live polish.
@@ -46,13 +48,14 @@ type Employee = {
   model_ref: string;
 };
 
-type Tab = "overview" | "prompt" | "versions" | "dependencies";
+type Tab = "overview" | "prompt" | "files" | "versions" | "dependencies";
 
 type LoadStatus = "loading" | "ready" | "notfound" | "error";
 
 const TABS: ReadonlyArray<readonly [Tab, IconName]> = [
   ["overview", "layout-grid"],
   ["prompt", "file-code-2"],
+  ["files", "folder"],
   ["versions", "clock"],
   ["dependencies", "share-2"],
 ];
@@ -193,6 +196,18 @@ export default function SkillDetailPage() {
                 <Overview skill={skill} dependents={dependents} />
               )}
               {tab === "prompt" && <PromptTab skill={skill} />}
+              {tab === "files" && (
+                <SkillFilesTab
+                  skillId={skill.id}
+                  source={
+                    (skill.source as
+                      | "builtin"
+                      | "github"
+                      | "market"
+                      | "local") ?? "local"
+                  }
+                />
+              )}
               {tab === "versions" && <VersionsTab skill={skill} />}
               {tab === "dependencies" && <DependenciesTab skill={skill} />}
             </>
@@ -413,6 +428,7 @@ function Overview({
   dependents: Employee[];
 }) {
   const t = useTranslations("skills.detail.overview");
+  const locale = useLocale();
   return (
     <div data-testid="tab-panel-overview" className="space-y-5">
       <SkillExplainer skillId={skill.id} />
@@ -423,7 +439,7 @@ function Overview({
             { k: t("source"), v: skill.source, mono: true },
             {
               k: t("installedAt"),
-              v: skill.installed_at ? formatTime(skill.installed_at) : "—",
+              v: skill.installed_at ? formatTime(skill.installed_at, locale) : "—",
               mono: true,
             },
             { k: t("tools"), v: String(skill.tool_ids.length), mono: true },
@@ -463,6 +479,8 @@ function Overview({
           </ul>
         )}
       </Section>
+
+      <SkillReferencesSection skillId={skill.id} />
 
       <Section
         title={t("dependents", { count: dependents.length })}
@@ -519,18 +537,87 @@ function Overview({
   );
 }
 
+type SkillFileEntry = { relative_path: string; size_bytes: number };
+
+/**
+ * SkillReferencesSection · 2026-04-26 · 显示这个 skill 的 references /
+ * templates 子文件 · 拉自 GET /api/skills/{id}/files。
+ *
+ * 没文件时整个 section 不渲染(避免给用户「这是错」的感觉)。
+ */
+function SkillReferencesSection({ skillId }: { skillId: string }) {
+  const t = useTranslations("skills.detail.references");
+  const [files, setFiles] = useState<SkillFileEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/skills/${encodeURIComponent(skillId)}/files`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { files: SkillFileEntry[] };
+        if (!cancelled) setFiles(body.files);
+      } catch (e) {
+        if (!cancelled) setError(String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [skillId]);
+
+  if (error) return null;
+  if (!files || files.length === 0) return null;
+
+  return (
+    <Section title={t("section", { count: files.length })} icon="book-open">
+      <ul className="flex flex-col gap-1.5">
+        {files.map((f) => (
+          <li
+            key={f.relative_path}
+            className="inline-flex items-center justify-between gap-3 h-9 px-3 rounded-lg bg-surface-2 border border-border"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Icon name="file" size={11} className="text-text-muted shrink-0" />
+              <span className="font-mono text-[12px] text-text truncate">
+                {f.relative_path}
+              </span>
+            </div>
+            <span className="font-mono text-[10px] text-text-subtle shrink-0">
+              {formatBytes(f.size_bytes)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[11px] leading-relaxed text-text-subtle">
+        {t("hint")}
+      </p>
+    </Section>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+}
+
 function PromptTab({ skill }: { skill: Skill }) {
   const t = useTranslations("skills.detail.prompt");
   return (
     <div data-testid="tab-panel-prompt" className="space-y-5">
       <Section title={t("section")} icon="file-code-2">
         {skill.prompt_fragment ? (
-          <pre
+          <div
             data-testid="prompt-fragment"
-            className="text-[12px] font-mono text-text bg-surface-2 border border-border rounded-lg p-4 whitespace-pre-wrap break-words leading-relaxed"
+            className="rounded-lg border border-border bg-surface-2 p-4"
           >
-            {skill.prompt_fragment}
-          </pre>
+            <AgentMarkdown
+              content={skill.prompt_fragment}
+              className="text-[13px] leading-relaxed"
+            />
+          </div>
         ) : (
           <p
             data-testid="prompt-empty"
@@ -573,6 +660,7 @@ function PromptTab({ skill }: { skill: Skill }) {
 
 function VersionsTab({ skill }: { skill: Skill }) {
   const t = useTranslations("skills.detail.versions");
+  const locale = useLocale();
   return (
     <div data-testid="tab-panel-versions" className="space-y-5">
       <Section title={t("section")} icon="clock">
@@ -581,7 +669,7 @@ function VersionsTab({ skill }: { skill: Skill }) {
             { k: t("version"), v: `v${skill.version}`, mono: true },
             {
               k: t("installedAt"),
-              v: skill.installed_at ? formatTime(skill.installed_at) : "—",
+              v: skill.installed_at ? formatTime(skill.installed_at, locale) : "—",
               mono: true,
             },
             {
@@ -683,10 +771,10 @@ function DependenciesTab({ skill }: { skill: Skill }) {
   );
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, locale: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString();
+    return d.toLocaleString(locale);
   } catch {
     return iso;
   }

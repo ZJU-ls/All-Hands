@@ -1,0 +1,81 @@
+{
+  "_doc": "Image left, text right. Replace the image's `data_b64` with a real PNG/JPEG (no data: prefix); the placeholder is a 1x1 transparent pixel that will render invisibly. Right-side bullets are kept short (≤6 lines).",
+  "background": {
+    "color_hex": "#0a0e1a"
+  },
+  "shapes": [
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 0.22,
+      "h": 7.5,
+      "fill_hex": "#3b82f6"
+    },
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 7.42,
+      "w": 13.333,
+      "h": 0.04,
+      "fill_hex": "#1e2536"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 0.7,
+      "w": 11.5,
+      "h": 0.8,
+      "text": "Slide title",
+      "font": {
+        "size": 36,
+        "weight": "bold",
+        "color_hex": "#e7eaf3"
+      }
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 1.9,
+      "w": 6.0,
+      "h": 4.8,
+      "fill_hex": "#131826",
+      "corner_radius_in": 0.12
+    },
+    {
+      "type": "image",
+      "x": 0.6,
+      "y": 1.9,
+      "w": 6.0,
+      "h": 4.8,
+      "data_b64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "alt_text": "Replace data_b64 with a real image; placeholder is 1x1 PNG"
+    },
+    {
+      "type": "text",
+      "x": 7.0,
+      "y": 1.9,
+      "w": 5.7,
+      "h": 0.5,
+      "text": "Caption / framing line",
+      "font": {
+        "size": 14,
+        "weight": "bold",
+        "color_hex": "#60a5fa"
+      }
+    },
+    {
+      "type": "text",
+      "x": 7.0,
+      "y": 2.5,
+      "w": 5.7,
+      "h": 4.2,
+      "text": "•  Point one — keep each bullet under one line.\n\n•  Point two\n\n•  Point three\n\n•  Point four",
+      "font": {
+        "size": 16,
+        "color_hex": "#e7eaf3"
+      },
+      "line_spacing": 1.5
+    }
+  ]
+}

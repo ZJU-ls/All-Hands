@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 /**
  * HtmlView · sandboxed preview for HTML artifacts.
  *
@@ -21,12 +23,13 @@
  *   kind if a future artifact format genuinely needs them.
  */
 export function HtmlView({ content }: { content: string }) {
+  const t = useTranslations("artifacts.html");
   return (
     <iframe
       className="h-[60vh] w-full border-0 bg-bg"
       sandbox="allow-scripts"
       srcDoc={content}
-      title="artifact-html"
+      title={t("iframeTitle")}
     />
   );
 }

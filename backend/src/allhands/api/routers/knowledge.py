@@ -23,7 +23,11 @@ Endpoints:
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
+
 from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from allhands.core import (
@@ -35,6 +39,7 @@ from allhands.core import (
     RetrievalConfig,
     ScoredChunk,
 )
+from allhands.i18n import t
 from allhands.services.knowledge_service import (
     DocumentNotFound,
     KBError,
@@ -226,7 +231,7 @@ async def list_embedding_models() -> list[EmbeddingModelOut]:
     out options where ``available=false`` and surfaces ``reason`` so the
     user knows which env var to set.
     """
-    opts = _service().list_embedding_models()
+    opts = await _service().list_embedding_models()
     return [
         EmbeddingModelOut(
             ref=o.ref,
@@ -318,6 +323,29 @@ async def list_documents(
     return [_doc_out(d) for d in docs]
 
 
+class IngestUrlPayload(BaseModel):
+    url: str
+    title: str | None = None
+    tags: list[str] | None = None
+
+
+@router.post("/{kb_id}/ingest-url", status_code=201)
+async def ingest_url(kb_id: str, payload: IngestUrlPayload) -> DocOut:
+    """Fetch a URL and ingest as document. v0 only handles HTML pages
+    that don't require JS rendering."""
+    try:
+        doc = await _service().ingest_url(
+            kb_id, payload.url, title=payload.title, tags=payload.tags
+        )
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=t("errors.kb_fetch_failed", detail=str(exc))
+        ) from exc
+    return _doc_out(doc)
+
+
 @router.post("/{kb_id}/documents", status_code=201)
 async def upload_document(
     kb_id: str,
@@ -350,7 +378,7 @@ async def get_document(kb_id: str, doc_id: str) -> DocOut:
     except DocumentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if doc.kb_id != kb_id:
-        raise HTTPException(status_code=404, detail="document not in this kb")
+        raise HTTPException(status_code=404, detail=t("errors.not_found.document_in_kb"))
     return _doc_out(doc)
 
 
@@ -363,9 +391,90 @@ async def get_document_text(kb_id: str, doc_id: str) -> dict[str, str]:
     return {"document_id": doc_id, "content": text}
 
 
+class ChunkOut(BaseModel):
+    id: int
+    ordinal: int
+    text: str
+    token_count: int
+    section_path: str | None
+    span_start: int
+    span_end: int
+    page: int | None
+
+
+@router.get("/{kb_id}/documents/{doc_id}/chunks")
+async def list_document_chunks(kb_id: str, doc_id: str) -> list[ChunkOut]:
+    """All chunks of a document in ordinal order. Used by the doc drawer
+    "分片" tab so users can verify how the chunker split their file."""
+    try:
+        doc = await _service().get_document(doc_id)
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if doc.kb_id != kb_id:
+        raise HTTPException(status_code=404, detail=t("errors.not_found.document_in_kb"))
+    chunks = await _service().list_chunks_for_document(doc_id)
+    return [
+        ChunkOut(
+            id=c.id,
+            ordinal=c.ordinal,
+            text=c.text,
+            token_count=c.token_count,
+            section_path=c.section_path,
+            span_start=c.span_start,
+            span_end=c.span_end,
+            page=c.page,
+        )
+        for c in chunks
+    ]
+
+
 @router.delete("/{kb_id}/documents/{doc_id}", status_code=204)
 async def delete_document(kb_id: str, doc_id: str) -> None:
     await _service().soft_delete_document(doc_id)
+
+
+@router.post("/{kb_id}/documents/{doc_id}/reindex")
+async def reindex_document(kb_id: str, doc_id: str) -> DocOut:
+    """Wipe + re-run ingest. Surfaces the resulting Document state."""
+    try:
+        doc = await _service().reindex_document(doc_id)
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _doc_out(doc)
+
+
+@router.post("/{kb_id}/documents/{doc_id}/suggest-tags")
+async def suggest_tags(kb_id: str, doc_id: str) -> dict[str, list[str]]:
+    """LLM-suggested tags for a document. Empty list means the LLM was
+    unreachable or returned nothing useful — UI hides the chip row."""
+    try:
+        tags = await _service().suggest_tags_for_document(doc_id, max_tags=3)
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"tags": tags}
+
+
+class TagPatchPayload(BaseModel):
+    add: list[str] | None = None
+    remove: list[str] | None = None
+    replace: list[str] | None = None
+
+
+@router.patch("/{kb_id}/documents/{doc_id}/tags")
+async def patch_document_tags(kb_id: str, doc_id: str, payload: TagPatchPayload) -> DocOut:
+    """Add / remove / replace tags on a single document.
+
+    Bulk paths (e.g. tag N selected docs) issue this in a loop client-side
+    — no dedicated bulk endpoint yet because the per-doc op is cheap and
+    the front-end wants per-row error tolerance anyway.
+    """
+    try:
+        doc = await _service().update_document_tags(
+            doc_id, add=payload.add, remove=payload.remove, replace=payload.replace
+        )
+    except DocumentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _doc_out(doc)
 
 
 # ----------------------------------------------------------------------
@@ -380,6 +489,244 @@ async def search_kb(kb_id: str, payload: SearchPayload = Body(...)) -> list[Scor
     except KBNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return [_scored_out(r) for r in results]
+
+
+class AskHistoryTurn(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class AskPayload(BaseModel):
+    question: str
+    top_k: int | None = 5
+    model_ref: str | None = None
+    history: list[AskHistoryTurn] | None = None
+
+
+class AskSourceOut(BaseModel):
+    n: int
+    chunk_id: int
+    doc_id: str
+    section_path: str | None
+    page: int | None
+    citation: str
+    text: str
+    score: float
+
+
+class AskOut(BaseModel):
+    answer: str
+    sources: list[AskSourceOut]
+    used_model: str | None
+    latency_ms: float
+
+
+@router.post("/{kb_id}/ask")
+async def ask_kb(kb_id: str, payload: AskPayload) -> AskOut:
+    """RAG QA over a KB. Search → context → LLM → answer with [N] cites
+    pointing into the returned `sources` list."""
+    try:
+        out = await _service().ask(
+            kb_id,
+            payload.question,
+            top_k=payload.top_k or 5,
+            model_ref=payload.model_ref,
+            history=[h.model_dump() for h in payload.history] if payload.history else None,
+        )
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KBError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    raw_sources = out["sources"]
+    sources_list: list[AskSourceOut] = []
+    if isinstance(raw_sources, list):
+        for s in raw_sources:
+            if isinstance(s, dict):
+                sources_list.append(AskSourceOut(**s))
+    return AskOut(
+        answer=str(out["answer"]),
+        sources=sources_list,
+        used_model=out["used_model"] if isinstance(out["used_model"], str) else None,
+        latency_ms=float(out["latency_ms"]) if isinstance(out["latency_ms"], (int, float)) else 0.0,
+    )
+
+
+@router.post("/{kb_id}/ask/stream")
+async def ask_kb_stream(kb_id: str, payload: AskPayload) -> StreamingResponse:
+    """Streaming RAG QA — Server-Sent Events.
+
+    Frame protocol (one JSON object per ``data:`` line, terminated by a
+    blank line per the SSE spec):
+
+    - ``{"event": "sources", "sources": [...]}`` (always first)
+    - ``{"event": "delta", "text": "..."}`` (zero or more)
+    - ``{"event": "done", "used_model": "...", "latency_ms": 123.4}`` (terminal)
+    - ``{"event": "error", "message": "..."}`` (terminal — replaces ``done``)
+
+    Front-end iterates with ``ReadableStream`` + a small SSE splitter; the
+    ``[N]`` chip rewrite happens after ``done`` so partial deltas don't
+    flicker. KB existence and "no chat provider" errors are reported as
+    in-stream ``error`` frames (HTTP status is still 200) — keeps the
+    fetch promise resolved and lets the UI render the error inline.
+    """
+
+    async def event_source() -> AsyncIterator[bytes]:
+        try:
+            async for frame in _service().ask_stream(
+                kb_id,
+                payload.question,
+                top_k=payload.top_k or 5,
+                model_ref=payload.model_ref,
+                history=([h.model_dump() for h in payload.history] if payload.history else None),
+            ):
+                yield f"data: {json.dumps(frame, ensure_ascii=False)}\n\n".encode()
+        except Exception as exc:
+            err = {"event": "error", "message": f"streaming aborted: {exc}"}
+            yield f"data: {json.dumps(err, ensure_ascii=False)}\n\n".encode()
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",  # disable nginx buffering when proxied
+        },
+    )
+
+
+class HealthOut(BaseModel):
+    doc_count: int
+    chunk_count: int
+    token_sum: int
+    last_activity: str | None
+    daily_doc_counts: list[dict[str, object]]
+    top_tags: list[dict[str, object]]
+    mime_breakdown: list[dict[str, object]]
+    chunks_missing_embeddings: int
+
+
+@router.get("/{kb_id}/health")
+async def kb_health(kb_id: str, days: int = 30) -> HealthOut:
+    """Sidebar "health" snapshot — totals, activity sparkline, top tags."""
+    try:
+        h = await _service().get_kb_health(kb_id, days=days)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return HealthOut(**h)
+
+
+class ReembedOut(BaseModel):
+    processed: int
+    succeeded: int
+    failed: int
+
+
+class SwitchEmbeddingPayload(BaseModel):
+    new_ref: str
+
+
+class SwitchEmbeddingOut(BaseModel):
+    kb: KBOut
+    reembed: ReembedOut
+
+
+@router.post("/{kb_id}/embedding-model")
+async def switch_embedding_model(kb_id: str, payload: SwitchEmbeddingPayload) -> SwitchEmbeddingOut:
+    """Re-bind a KB to a different embedding model + reindex all docs.
+
+    Synchronous in v0 — fine for small KBs. Returns the updated KB row and
+    the per-doc reembed result so the UI can show "switched + N docs
+    re-indexed" in one response.
+    """
+    try:
+        out = await _service().switch_embedding_model(kb_id, payload.new_ref)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KBError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    kb_dict = out["kb"]
+    reembed_dict = out["reembed"]
+    if not isinstance(kb_dict, dict) or not isinstance(reembed_dict, dict):
+        raise HTTPException(status_code=500, detail=t("errors.malformed_response"))
+    return SwitchEmbeddingOut(
+        kb=KBOut(**kb_dict),
+        reembed=ReembedOut(**reembed_dict),
+    )
+
+
+@router.post("/{kb_id}/reembed-all")
+async def reembed_all(kb_id: str) -> ReembedOut:
+    """Re-run ingest for every doc in the KB. Backfills missing vectors
+    (e.g. after fixing the embedding provider config). Synchronous in v0
+    — fine for small KBs (<100 docs); needs a BackgroundTasks queue when
+    we go bigger."""
+    try:
+        result = await _service().reembed_all(kb_id)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ReembedOut(**result)
+
+
+@router.get("/{kb_id}/starter-questions")
+async def starter_questions(kb_id: str, limit: int = 4) -> dict[str, list[str]]:
+    """Return ``limit`` LLM-suggested starter questions for the KB.
+
+    Cached per (kb, updated_at, limit). Empty list when KB has no docs
+    or no chat provider is configured — UI hides the chip row gracefully.
+    """
+    try:
+        qs = await _service().suggest_starter_questions(kb_id, limit=limit)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"questions": qs}
+
+
+class DiagnoseOut(BaseModel):
+    bm25_only: list[ScoredChunkOut]
+    vector_only: list[ScoredChunkOut]
+    hybrid: list[ScoredChunkOut]
+
+
+@router.post("/{kb_id}/search/diagnose")
+async def diagnose_search(kb_id: str, payload: SearchPayload = Body(...)) -> DiagnoseOut:
+    """Same query under three lenses (BM25-only / vector-only / hybrid).
+    For the recall-test UI side-by-side comparison."""
+    try:
+        out = await _service().diagnose_search(kb_id, payload.query, top_k=payload.top_k or 8)
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return DiagnoseOut(
+        bm25_only=[_scored_out(r) for r in out["bm25_only"]],
+        vector_only=[_scored_out(r) for r in out["vector_only"]],
+        hybrid=[_scored_out(r) for r in out["hybrid"]],
+    )
+
+
+class StatsRecent(BaseModel):
+    at: str
+    query: str
+    latency_ms: float
+    hits: int
+
+
+class StatsOut(BaseModel):
+    count: int
+    avg_latency_ms: float | None
+    recent: list[StatsRecent]
+
+
+@router.get("/{kb_id}/stats")
+async def get_kb_stats(kb_id: str) -> StatsOut:
+    """In-process search stats (this process only · ring buffer of 50)."""
+    s = _service().get_search_stats(kb_id)
+    return StatsOut(
+        count=s.count,
+        avg_latency_ms=s.avg_latency_ms,
+        recent=[
+            StatsRecent(at=r.at, query=r.query, latency_ms=r.latency_ms, hits=r.hits)
+            for r in s.recent
+        ],
+    )
 
 
 # ----------------------------------------------------------------------

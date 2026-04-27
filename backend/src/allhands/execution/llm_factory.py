@@ -51,6 +51,7 @@ def build_llm(
     model_ref: str,
     *,
     thinking: bool | None = None,
+    max_output_tokens: int | None = None,
 ) -> Any:
     """Return a LangChain BaseChatModel bound to `provider` + `model_ref`.
 
@@ -90,6 +91,10 @@ def build_llm(
             kwargs["thinking"] = (
                 {"type": "enabled", "budget_tokens": 8000} if thinking else {"type": "disabled"}
             )
+        if max_output_tokens is not None:
+            # ChatAnthropic's `max_tokens` is also ctor-time only — bind() does
+            # not propagate to the request payload, mirroring `thinking`.
+            kwargs["max_tokens"] = max_output_tokens
         return ChatAnthropic(**kwargs)
 
     from langchain_openai import ChatOpenAI
@@ -99,6 +104,8 @@ def build_llm(
         kwargs["api_key"] = provider.api_key
     if provider.base_url:
         kwargs["base_url"] = provider.base_url
+    if max_output_tokens is not None:
+        kwargs["max_tokens"] = max_output_tokens
     return ChatOpenAI(**kwargs)
 
 

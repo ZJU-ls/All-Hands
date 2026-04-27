@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__POSTER_TITLE__</title>
+<style>
+  /* 单图海报模板 · 1080×1920 (mobile) 默认尺寸 · 适合截图分享 */
+  :root {
+    --primary: #2E5BFF; --accent: #6E8BFF; --accent-2: #A78BFA;
+    --bg: #0A0D14; --surface: rgba(255,255,255,.06); --text: #E2E6F1; --text-muted: #8690AE;
+    --border: rgba(255,255,255,.10);
+  }
+  html, body { margin: 0; padding: 0; background: #000; }
+  body {
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", system-ui, sans-serif;
+    color: var(--text); -webkit-font-smoothing: antialiased;
+    min-height: 100vh; display: grid; place-items: center; padding: 40px 0;
+  }
+  .poster {
+    position: relative; width: 1080px; max-width: 100%; aspect-ratio: 9/16;
+    border-radius: 24px; overflow: hidden;
+    background:
+      radial-gradient(circle at 25% 20%, rgba(46,91,255,.5), transparent 50%),
+      radial-gradient(circle at 75% 75%, rgba(167,139,250,.4), transparent 50%),
+      linear-gradient(160deg, #0A0D14 0%, #11151F 50%, #1A1F2E 100%);
+    box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);
+  }
+  .grid-noise::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+    background-size: 32px 32px; opacity: .6;
+  }
+  .content {
+    position: relative; z-index: 1; height: 100%;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 80px 60px;
+  }
+  .top .eyebrow {
+    display: inline-block; padding: 6px 16px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-muted); font-size: 12px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: .12em;
+  }
+  .center h1 {
+    font-size: clamp(56px, 8vw, 96px); font-weight: 800; letter-spacing: -.03em;
+    margin: 0; line-height: 1.05; max-width: 880px;
+    background: linear-gradient(135deg, #FFFFFF 0%, var(--accent) 50%, var(--accent-2) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .center .lead {
+    color: var(--text-muted); font-size: 22px; line-height: 1.5;
+    max-width: 720px; margin: 32px 0 0;
+  }
+  .stats { display: flex; gap: 60px; margin-top: 48px; }
+  .stats .stat .num {
+    font-size: 56px; font-weight: 700; letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .stats .stat .label { color: var(--text-muted); font-size: 14px; margin-top: 4px;
+                        text-transform: uppercase; letter-spacing: .08em; }
+  .bottom { display: flex; align-items: end; justify-content: space-between; }
+  .bottom .brand {
+    font-size: 18px; font-weight: 700; letter-spacing: -.02em;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .bottom .meta { color: var(--text-muted); font-family: ui-monospace, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="poster grid-noise">
+  <div class="content">
+    <div class="top">
+      <span class="eyebrow">__EYEBROW__</span>
+    </div>
+    <div class="center">
+      <h1>__HEADLINE__</h1>
+      <p class="lead">__SUB__</p>
+      <div class="stats">
+        <div class="stat"><div class="num">__N1__</div><div class="label">__L1__</div></div>
+        <div class="stat"><div class="num">__N2__</div><div class="label">__L2__</div></div>
+        <div class="stat"><div class="num">__N3__</div><div class="label">__L3__</div></div>
+      </div>
+    </div>
+    <div class="bottom">
+      <span class="brand">__BRAND__</span>
+      <span class="meta">__DATE__</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

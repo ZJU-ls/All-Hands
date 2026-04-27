@@ -1,5 +1,11 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// 2026-04-27 · 严格对齐 backend ArtifactKind enum
+// (backend/src/allhands/core/artifact.py)。原前端含"video"是幽灵类型,
+// 后端从未支持 — 这种 frontend-only 类型一旦在 KIND_ICON / Record map
+// 里被消费,会让 TS 编译通过但运行时 backend 永远不会发送 → 死代码 +
+// 误导用户(filter 下拉里能选 video,但永远 0 个结果)。
+// 真正要支持视频时,先在后端加 enum,再扩前端。
 export type ArtifactKind =
   | "markdown"
   | "code"
@@ -8,8 +14,11 @@ export type ArtifactKind =
   | "data"
   | "mermaid"
   | "drawio"
-  | "pptx"
-  | "video";
+  | "pdf"
+  | "xlsx"
+  | "csv"
+  | "docx"
+  | "pptx";
 
 export type ArtifactDto = {
   id: string;
@@ -44,9 +53,17 @@ export type ArtifactContentDto = {
   truncated: boolean;
 };
 
-// drawio is XML text on disk (mxfile), surfaced as `content` like markdown/html.
-// pptx / video remain binary placeholders for forward-compat kinds.
-const BINARY: ReadonlySet<ArtifactKind> = new Set(["image", "pptx", "video"]);
+// drawio + csv are text-identity (XML / CSV both round-trip as utf-8). The
+// rest of the office family (pdf / xlsx / docx / pptx) lands as binary blobs
+// the LLM never reads back as raw text — viewers fetch via /content
+// directly. Image stays binary.
+const BINARY: ReadonlySet<ArtifactKind> = new Set([
+  "image",
+  "pdf",
+  "xlsx",
+  "docx",
+  "pptx",
+]);
 
 export function isBinaryKind(kind: ArtifactKind): boolean {
   return BINARY.has(kind);
@@ -77,6 +94,28 @@ export type ArtifactListFilter = {
   createdBefore?: string;
 };
 
+export type ContributorEntry = { key: string; count: number };
+
+export type ArtifactStatsDto = {
+  total: number;
+  pinned: number;
+  last_7d: number;
+  total_bytes: number;
+  by_kind: Record<string, number>;
+  largest_kind: string | null;
+  latest_updated_at: string | null;
+  /** 14-day daily creation histogram, oldest → newest. */
+  daily_counts: number[];
+  /** Top 5 employees by artifact count. */
+  top_employees: ContributorEntry[];
+};
+
+export async function getArtifactStats(): Promise<ArtifactStatsDto> {
+  const res = await fetch(`${BASE}/api/artifacts/stats`);
+  if (!res.ok) throw new Error(`getArtifactStats failed: ${res.status}`);
+  return res.json() as Promise<ArtifactStatsDto>;
+}
+
 export async function listArtifacts(
   filter: ArtifactListFilter = {},
 ): Promise<ArtifactDto[]> {
@@ -106,8 +145,27 @@ export async function getArtifact(id: string): Promise<ArtifactDto> {
   return res.json() as Promise<ArtifactDto>;
 }
 
+export class ArtifactContentMissingError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ArtifactContentMissingError";
+    this.status = status;
+  }
+}
+
 export async function getArtifactTextContent(id: string): Promise<string> {
   const res = await fetch(`${BASE}/api/artifacts/${id}/content`);
+  if (res.status === 404) {
+    // Backend distinguishes "no such artifact" from "row exists but file
+    // gone" (ArtifactContentMissing → 404 with descriptive detail). Surface
+    // it as a typed error so the UI can render an empty-state instead of
+    // a red "Failed: 404".
+    throw new ArtifactContentMissingError(
+      "artifact content is missing on disk",
+      404,
+    );
+  }
   if (!res.ok) throw new Error(`getArtifactTextContent failed: ${res.status}`);
   return res.text();
 }
@@ -174,6 +232,32 @@ export async function updateArtifact(
     throw new Error(`updateArtifact failed: ${res.status} ${detail}`);
   }
   return res.json() as Promise<ArtifactDto>;
+}
+
+/** Pin / unpin · REST mirror of the artifact_pin meta tool. */
+export async function pinArtifact(
+  id: string,
+  pinned: boolean,
+): Promise<ArtifactDto> {
+  const res = await fetch(`${BASE}/api/artifacts/${id}/pin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pinned }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`pinArtifact failed: ${res.status} ${detail}`);
+  }
+  return res.json() as Promise<ArtifactDto>;
+}
+
+/** Soft-delete · REST mirror of the artifact_delete meta tool. */
+export async function deleteArtifact(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/artifacts/${id}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    const detail = await res.text();
+    throw new Error(`deleteArtifact failed: ${res.status} ${detail}`);
+  }
 }
 
 /**

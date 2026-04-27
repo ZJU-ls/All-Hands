@@ -74,7 +74,7 @@ function RunRow({ r }: { r: ActiveRunCardDto }) {
     <li>
       <Link
         href={`/chat?run=${r.run_id}`}
-        className="group relative block px-4 py-3 transition-colors duration-base hover:bg-surface-2"
+        className="group relative block px-4 py-3 transition-colors duration-base hover:bg-surface-2 focus-visible:outline-none focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
       >
         <div className="flex items-start gap-3">
           <span

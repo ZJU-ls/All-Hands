@@ -1,43 +1,79 @@
 # 可视化渲染指南 · allhands.render
 
-当你要向用户展示信息时,**优先使用 `allhands.render.*` 工具**,而不是把结构直接写进一大段 markdown。结构化工具让用户一眼看到关键数据,而不用读完整段文字。
+> 注: `render_*` 工具是 always-hot · 不需要 `resolve_skill('allhands.render')` —— 直接调即可。**不要写**「已激活 render 技能」「activated render skill」这种话(技能本来就在 toolset · 这种叙述是幻觉,用户最后只看到空话)。直接调工具。
 
-## 判断表(先查这张)
+## 何时调用
 
-| 你想展示 | 用这个工具 |
+向用户展示信息时优先用 `allhands.render.*` 工具,而不是写一大段 markdown。结构化工具让用户一眼看到关键数据。
+
+触发关键词:展示「比较 / 列表 / 表格 / KPI / 趋势 / 进度 / 对比 / 选项 / 步骤」 → 用这套技能。
+
+## 工作流
+
+1. **判断展示形态**(看下面对照表)
+2. **选 1 个工具调用** — 一条消息一个 viz · 必要时再组合
+3. **保证数据完整** — 用户决策需要的字段全部露出 · 不能只给 ✓/✗
+
+## 判断表(对照选工具)
+
+| 展示什么 | 用这个工具 |
 |---|---|
-| 多条记录 × 多个属性的对比 | `allhands.render.table` |
-| 单个对象的详情(属性 / 配置) | `allhands.render.kv` |
-| 2-6 个并列方案 / 选项 | `allhands.render.cards` |
-| 时间顺序的事件 / 计划历史 | `allhands.render.timeline` |
-| 固定顺序的步骤 / wizard | `allhands.render.steps` |
+| 多条记录 × 多属性 | `allhands.render.table` |
+| 单对象详情 | `allhands.render.kv` |
+| 2-6 个并列方案 | `allhands.render.cards` |
+| 时间顺序 | `allhands.render.timeline` |
+| 步骤 / wizard | `allhands.render.steps` |
 | 代码片段 | `allhands.render.code` |
-| 代码或文本的前后对比 | `allhands.render.diff` |
-| 提示 / 警告 / 成功 / 错误 | `allhands.render.callout` |
-| 单条外链推荐 | `allhands.render.link_card` |
-| 长篇说明(> 500 字) | `allhands.render.markdown_card` |
-| 单个关键数值(KPI / 总数 / 延迟)| `allhands.render.stat` |
-| 数值随时间/顺序的趋势 | `allhands.render.line_chart` |
-| 跨类别对比数值(不超过 20 项) | `allhands.render.bar_chart` |
-| 占比 / 分摊(≤ 6 片)| `allhands.render.pie_chart` |
+| 文本前后对比 | `allhands.render.diff` |
+| 提示 / 警告 | `allhands.render.callout` |
+| 外链推荐 | `allhands.render.link_card` |
+| 长说明 (>500 字) | `allhands.render.markdown_card` |
+| 单 KPI 数值 | `allhands.render.stat` |
+| 时间趋势 | `allhands.render.line_chart` |
+| 类别对比 (≤ 20) | `allhands.render.bar_chart` |
+| 占比 (≤ 6 片) | `allhands.render.pie_chart` |
 
-## 原则
+## 调用示例
 
-1. **结构化优先**:任何能用表格 / 卡片 / 时间线表达的内容,不要写成"1. 这个...2. 那个..."的 markdown 列表。
-2. **一条消息 = 一个 viz**(通常):只有在必要时才组合多个(如先 callout 再 table)。
-3. **数据量超过 100 行**:不要 table,改成 `artifact.create` 存 data 制品 + `artifact.render` 预览。
-4. **键盘友好**:除非有很强的交互需求,不生成带按钮的 interactive UI;让 render tool 只做展示。
+```
+# 「展示三个候选模型的延迟对比」
+allhands.render.bar_chart({
+  title: "三模型延迟对比 (p50)",
+  bars: [
+    {label: "gpt-4o", value: 320},
+    {label: "claude-3-haiku", value: 180},
+    {label: "qwen3-plus", value: 240}
+  ],
+  unit: "ms"
+})
 
-## 何时不用 render
+# 「展示运行结果」
+allhands.render.kv({
+  title: "Q1 销售简报已生成",
+  rows: [
+    {key: "运行耗时", value: "2.3s"},
+    {key: "Token 用量", value: "8,432"},
+    {key: "artifact id", value: "art_xxx"}
+  ]
+})
+```
 
-- 单行简短回复("好的,已完成")→ 直接说,不用 render
-- 用户明确说"用文字说就行"→ 尊重
-- 不确定用哪个 → 先 `allhands.render.markdown_card`,下次迭代
+## 常见坑
 
-## 关键数据必须露出(与 P11 相关)
+- **不要写「1. 这个 2. 那个」markdown 列表** · 能用 cards / steps / table 就用
+- **数据量 > 100 行** · 不要 table · 改 `artifact_create(kind=data)` 存数据 + `artifact_render` 预览
+- **不生成带按钮的交互 UI**(除非用户明确要)· render 只展示
+- **运行 / 测试 / 实验结果** 必须把用户下一步决策需要的字段全部露出(延迟 / Token / 成本 / 失败原因) · 不能只 ✓/✗
+- **单行简短回复**(「好的 · 已完成」)直接说 · 不用 render
 
-展示运行 / 测试 / 实验结果时,务必让用户下一步决策需要的数据**全部**出现在同一张 viz 里:延迟(p50/p95)、Token、成本、失败原因。不要只给一个 ✓/✗。
+## 失败时怎么办
+
+| 现象 | 做什么 |
+|---|---|
+| 不确定用哪个 viz | 先 `allhands.render.markdown_card` · 下一轮迭代 |
+| `bar_chart` 数据 > 20 项 | 切换 `table` 或者把数据筛 top-N |
+| 用户说「太花哨」 | 简化成 callout / kv / 或纯文本回复 |
 
 ## 视觉契约
 
-你不用管颜色和间距 —— 前端组件已经按 Linear Precise 规范实现。你只需把正确的数据塞进对应工具即可。
+颜色 / 间距 / 边框由前端按 Brand Blue Dual Theme 实现 · 你只塞正确数据即可。

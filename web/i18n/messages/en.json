@@ -1,27 +1,9 @@
 {
+  "toast": {
+    "ariaLabel": "Notifications"
+  },
   "common": {
-    "loading": "Loading…",
-    "save": "Save",
-    "cancel": "Cancel",
-    "confirm": "Confirm",
-    "delete": "Delete",
-    "edit": "Edit",
-    "create": "New",
-    "search": "Search",
-    "back": "Back",
-    "next": "Next",
-    "previous": "Previous",
-    "close": "Close",
-    "ok": "OK",
-    "yes": "Yes",
-    "no": "No",
-    "more": "More",
-    "settings": "Settings",
-    "retry": "Retry",
-    "refresh": "Refresh",
-    "copy": "Copy",
-    "copied": "Copied",
-    "comingSoon": "Coming soon"
+    "retry": "Retry"
   },
   "shell": {
     "workspaceVersion": "v0 · mvp",
@@ -40,7 +22,30 @@
       "themeAriaLight": "Switch to light theme",
       "themeAriaDark": "Switch to dark theme",
       "languageTitle": "Change language",
-      "languageAria": "Change language"
+      "languageAria": "Change language",
+      "shortcutsAria": "Keyboard shortcuts",
+      "shortcutsTitle": "? · Keyboard shortcuts"
+    },
+    "sidebar": {
+      "collapse": "Collapse sidebar",
+      "expand": "Expand sidebar",
+      "toggleHint": "⌘B"
+    },
+    "shortcuts": {
+      "title": "Keyboard shortcuts",
+      "close": "Close",
+      "footer": "Press ? anywhere to reopen this list.",
+      "section": {
+        "global": "Global",
+        "navigation": "Navigation"
+      },
+      "openPalette": "Open command palette",
+      "toggleSidebar": "Toggle sidebar",
+      "openHelp": "Show this list",
+      "dismiss": "Close any overlay",
+      "home": "Go to cockpit",
+      "artifacts": "Go to artifacts",
+      "employees": "Go to employees"
     },
     "sections": {
       "workspace": "Workspace",
@@ -56,7 +61,6 @@
       "conversations": "History",
       "artifacts": "Artifacts",
       "employees": "Employees",
-      "employeeDesign": "Employee Designer",
       "skills": "Skills",
       "mcpServers": "MCP Servers",
       "knowledge": "Knowledge Base",
@@ -75,12 +79,16 @@
     "en": "English",
     "label": "Language"
   },
+  "metadata": {
+    "description": "One for All — an open-source, self-hosted digital workforce platform"
+  },
   "healthBadge": {
     "ok": "backend ok · {version}",
     "error": "backend unreachable",
     "pinging": "pinging backend…"
   },
   "welcome": {
+    "docTitle": "Welcome",
     "skip": "Maybe later →",
     "eyebrow": "v0 · Open Source · Self-hosted",
     "h1Line1": "Welcome to allhands.",
@@ -135,8 +143,8 @@
     "subtitle": "Preferences and workspace config · theme toggle is top-right · find models / providers under \"Model Gateway\"",
     "language": "Language",
     "languageDescription": "Choose the interface language; takes effect immediately.",
-    "autoTitle": "Auto-summarise conversation titles",
-    "autoTitleDescription": "When on, the default model summarises your first message into a short title; when off, the literal first message is truncated (max 40 chars).",
+    "autoTitle": "Auto-summarize conversation titles",
+    "autoTitleDescription": "When on, the default model summarizes your first message into a short title; when off, the literal first message is truncated (max 40 chars).",
     "autoTitleOn": "Enabled · model summary",
     "autoTitleOff": "Disabled · literal copy",
     "autoTitleSaving": "Saving…",
@@ -182,7 +190,6 @@
   },
   "errors": {
     "unknown": "Unknown error",
-    "network": "Network error, please check your connection and retry",
     "notFoundEyebrow": "404 · not found",
     "notFoundTitle": "Page not found",
     "notFoundBody": "There's no page at this address.",

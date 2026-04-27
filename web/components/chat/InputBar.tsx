@@ -31,6 +31,10 @@ type ToolCallAccumulator = {
   name: string;
   argsBuf: string;
   started: boolean;
+  // Last terminal status — preserved across separate END/RESULT frames so
+  // RESULT (which inspects the envelope for `{error}`) wins over a generic
+  // END that can't tell success from failure.
+  lastStatus?: "pending" | "running" | "succeeded" | "failed";
 };
 
 export function InputBar({
@@ -58,6 +62,7 @@ export function InputBar({
     finalizeStreaming,
     cancelStreaming,
     setStreamError,
+    bumpHeartbeat,
   } = useChatStore();
 
   // ADR 0014 Phase 4e · build the AG-UI stream callbacks once per render so
@@ -96,12 +101,27 @@ export function InputBar({
       onToolCallEnd: (f) => {
         const acc = toolCalls.get(f.toolCallId);
         if (!acc) return;
-        updateToolCall(materializeToolCall(acc, "succeeded"));
+        // Don't unconditionally stamp succeeded — TOOL_CALL_RESULT carries
+        // the real envelope; if it's already arrived (some adapters fire
+        // result before end), preserve whatever status we already set.
+        const existing = acc.lastStatus;
+        updateToolCall(materializeToolCall(acc, existing ?? "succeeded"));
       },
       onToolCallResult: (f) => {
         const acc = toolCalls.get(f.toolCallId);
         if (!acc) return;
-        updateToolCall(materializeToolCall(acc, "succeeded", f.content));
+        // Inspect the tool result for an error envelope (R2 review · agent
+        // diagnosis): tool_pipeline returns {"error": "..."} for any
+        // executor failure / permission denied / confirmation expired /
+        // unknown-tool path. Without this check, every failed tool was
+        // displayed as ✓ ok with the error tucked inside an expanded card —
+        // a misleading green checkmark on what's really a failure.
+        const errorMessage = extractErrorEnvelope(f.content);
+        const status = errorMessage ? "failed" : "succeeded";
+        acc.lastStatus = status;
+        const tc = materializeToolCall(acc, status, f.content);
+        if (errorMessage) tc.error = errorMessage;
+        updateToolCall(tc);
       },
       onCustom: (name, value) => {
         if (name === "allhands.confirm_required") {
@@ -151,6 +171,10 @@ export function InputBar({
           };
           if (!ev.message_id || !ev.payload) return;
           addRenderPayload(ev.message_id, ev.payload);
+        } else if (name === "allhands.heartbeat") {
+          // 2026-04-26 · 服务端 10s 一次心跳 · 让 chip 的「无响应」 计时
+          // reset · 否则 LLM 长 thinking 期间 chip 会错误地进入「停止」 状态。
+          bumpHeartbeat();
         }
       },
       onRunError: (err) => {
@@ -185,6 +209,7 @@ export function InputBar({
     finalizeStreaming,
     cancelStreaming,
     setStreamError,
+    bumpHeartbeat,
     t,
   ]);
 
@@ -314,6 +339,36 @@ export function InputBar({
       />
     </div>
   );
+}
+
+/** Tool result envelopes produced by `tool_pipeline.py` look like:
+ *   - success: anything (string, dict, list)
+ *   - failure: { "error": "<reason>" }
+ * Frontend was always stamping "succeeded" on TOOL_CALL_END/RESULT regardless,
+ * so genuine failures (permission denied, expired confirmation, executor
+ * exception) were rendered with a green ✓ — extremely misleading. R2
+ * diagnosis caught this. Returns the error message string when the envelope
+ * is a failure, null otherwise.
+ */
+function extractErrorEnvelope(rawContent: string | undefined | null): string | null {
+  if (!rawContent) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawContent);
+  } catch {
+    return null;
+  }
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    !Array.isArray(parsed) &&
+    "error" in (parsed as Record<string, unknown>)
+  ) {
+    const err = (parsed as Record<string, unknown>).error;
+    if (typeof err === "string") return err;
+    return JSON.stringify(err);
+  }
+  return null;
 }
 
 /** Flatten an accumulator into the canonical ToolCall shape expected by the

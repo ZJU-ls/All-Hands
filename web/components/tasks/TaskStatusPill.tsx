@@ -1,6 +1,9 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { TaskStatus } from "@/lib/tasks-api";
-import { statusLabel, statusTone } from "@/lib/tasks-api";
+import { statusTone } from "@/lib/tasks-api";
 
 type Tone = ReturnType<typeof statusTone>;
 
@@ -35,6 +38,7 @@ export function TaskStatusPill({
   status: TaskStatus;
   compact?: boolean;
 }) {
+  const t = useTranslations("tasks.status");
   const tone = statusTone(status);
   const icon = STATUS_ICON[status];
   const isRunning = status === "running";
@@ -55,7 +59,7 @@ export function TaskStatusPill({
         size={size}
         className={isRunning ? "animate-spin" : undefined}
       />
-      <span>{statusLabel(status)}</span>
+      <span>{t(status)}</span>
     </span>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   createConversation,
   listConversations,
@@ -42,6 +42,7 @@ type Props = {
 export function ConversationSwitcher({ employeeId, currentConversationId }: Props) {
   const router = useRouter();
   const t = useTranslations("chat.switcher");
+  const locale = useLocale();
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ConversationDto[] | null>(null);
@@ -136,7 +137,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
 
   const disabled = !employeeId;
   const baseBtn =
-    "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] font-medium text-text-muted transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-surface";
+    "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-[12px] font-medium text-text-muted transition-colors duration-fast hover:text-text hover:border-border-strong hover:bg-surface-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary/40";
 
   return (
     <div ref={popRef} className="relative flex items-center gap-2">
@@ -228,7 +229,8 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
                       data-testid="chat-history-item"
                       aria-current={isCurrent ? "true" : undefined}
                       className={cn(
-                        "group relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[12px] transition-colors duration-fast",
+                        "group relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors duration-fast",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:bg-surface-2",
                         isCurrent
                           ? "bg-primary-muted text-primary"
                           : "text-text-muted hover:bg-surface-2 hover:text-text",
@@ -251,7 +253,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
                       />
                       <span className="min-w-0 flex-1 truncate">{label}</span>
                       <span className="shrink-0 font-mono text-[10px] text-text-subtle">
-                        {formatRelative(c.created_at, t)}
+                        {formatRelative(c.created_at, t, locale)}
                       </span>
                       {!isCurrent && (
                         <Icon
@@ -275,6 +277,7 @@ export function ConversationSwitcher({ employeeId, currentConversationId }: Prop
 function formatRelative(
   iso: string,
   t: (key: string, values?: Record<string, string | number>) => string,
+  locale: string,
 ): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -286,5 +289,5 @@ function formatRelative(
   if (hr < 24) return t("hoursAgo", { n: hr });
   const day = Math.round(hr / 24);
   if (day < 30) return t("daysAgo", { n: day });
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString(locale);
 }

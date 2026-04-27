@@ -17,7 +17,6 @@ export type ComponentStatusDto = {
 export type HealthSnapshotDto = {
   gateway: ComponentStatusDto;
   mcp_servers: ComponentStatusDto;
-  langfuse: ComponentStatusDto;
   db: ComponentStatusDto;
   triggers: ComponentStatusDto;
 };

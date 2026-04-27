@@ -1,24 +1,39 @@
-"""ADR 0019 C1 · Plan tool executors · the agent's working memo.
+"""Plan tool executors · ADR 0019 C1 · Claude-Code-style atomic todo list.
 
-Phase C1 fills in the executor side of the plan_create / plan_update_step /
-plan_complete_step / plan_view tools that have been declared in
-``plan_tools.py`` since the v0 spec but only had no-op stubs in the
-registry.
+The new executor is a single function bound to (plan_repo, conversation_id,
+employee_id). Every call replaces the conversation's plan steps atomically.
 
-Plans are agent-internal: scope=WRITE but ``requires_confirmation=False``
-because they don't touch external systems. They're persisted via
-:class:`AgentPlanRepo` so progress survives uvicorn reloads, and
-plan_view returns a Render envelope (``{component: "PlanTimeline", ...}``)
-which the existing PlanTimeline frontend component picks up via the
-component registry.
+Status mapping
+--------------
 
-Per ADR 0019: no plan mode, no permission gating, no enter/exit ritual —
-plan is a tool, agent CRUDs freely, user sees the timeline render in
-chat. Permission management deferred to a later review per user feedback.
+The agent-facing API uses Claude Code's three statuses (pending / in_progress
+/ completed). We map them to the existing AgentPlan StepStatus enum so the
+DB schema and frontend types don't need to change:
+
+    pending      → StepStatus.PENDING
+    in_progress  → StepStatus.RUNNING
+    completed    → StepStatus.DONE
+
+Validation rules (rejected with structured error envelope):
+  - 1-20 todos
+  - each content / activeForm non-empty after strip()
+  - **at most one todo with status="in_progress"** — Claude Code's rule
+  - status string must be one of the three values
+
+Atomic replace semantics:
+  - Look up the conversation's latest plan
+  - If exists: keep its plan_id, replace its title (if explicitly given) +
+    steps wholesale, bump updated_at
+  - If not: create a fresh plan with a new uuid
+
+This means within a single conversation, the plan_id is stable across
+update_plan calls — the UI's GET /plans/latest just keeps refreshing the
+same panel rather than seeing a flicker between two plans.
 """
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -30,200 +45,223 @@ if TYPE_CHECKING:
     from allhands.persistence.repositories import AgentPlanRepo
 
 
-PLAN_CREATE_TOOL_ID = "allhands.meta.plan_create"
-PLAN_UPDATE_STEP_TOOL_ID = "allhands.meta.plan_update_step"
-PLAN_COMPLETE_STEP_TOOL_ID = "allhands.meta.plan_complete_step"
-PLAN_VIEW_TOOL_ID = "allhands.meta.plan_view"
+UPDATE_PLAN_TOOL_ID = "allhands.meta.update_plan"
+VIEW_PLAN_TOOL_ID = "allhands.meta.view_plan"
+
+
+# R1 review · C4: per-conversation lock so concurrent update_plan calls
+# don't race read-then-write on the same plan row. Two browser tabs / two
+# overlapping SSE turns hitting the same conversation would each
+# get_latest_for_conversation() simultaneously, both compute "no existing
+# plan" and upsert with different plan_ids — the second silently overwrites
+# the first. The lock serializes the read-modify-write atomically without
+# requiring a DB migration. Keyed by conversation_id; the dict grows
+# unbounded but in practice ≤ active conversations (low cardinality).
+_PLAN_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _conversation_lock(conversation_id: str) -> asyncio.Lock:
+    lock = _PLAN_LOCKS.get(conversation_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _PLAN_LOCKS[conversation_id] = lock
+    return lock
+
+
+_STATUS_MAP: dict[str, StepStatus] = {
+    "pending": StepStatus.PENDING,
+    "in_progress": StepStatus.RUNNING,
+    "completed": StepStatus.DONE,
+}
+
+_REVERSE_STATUS_MAP: dict[StepStatus, str] = {v: k for k, v in _STATUS_MAP.items()}
 
 
 def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _render_envelope(plan: AgentPlan) -> dict[str, Any]:
-    """Project an AgentPlan into the PlanTimeline render envelope.
-
-    The envelope shape ({component, props, interactions}) is duck-typed
-    by ``_as_render_envelope`` in tool_pipeline / runner; emitting it
-    triggers a RenderEvent which the frontend component registry
-    dispatches into ``components/render/PlanTimeline.tsx``.
+def _summarize(todos: list[dict[str, Any]]) -> str:
+    """Tiny human-readable echo, returned as the tool result so the agent
+    sees "3/5 done · 1 in progress" and can compose its next status line.
     """
-    return {
-        "component": "PlanTimeline",
-        "props": {
-            "title": plan.title,
-            "steps": [
-                {
-                    "title": s.title,
-                    "status": s.status.value,
-                    "note": s.note,
-                }
-                for s in plan.steps
-            ],
-        },
-        "interactions": [],
-    }
+    total = len(todos)
+    done = sum(1 for t in todos if t.get("status") == "completed")
+    running = sum(1 for t in todos if t.get("status") == "in_progress")
+    bits = [f"{done}/{total} done"]
+    if running:
+        bits.append(f"{running} in progress")
+    pending = total - done - running
+    if pending:
+        bits.append(f"{pending} pending")
+    return " · ".join(bits)
 
 
-def make_plan_create_executor(
+def make_update_plan_executor(
     *,
     repo: AgentPlanRepo,
     conversation_id: str,
     employee_id: str,
 ) -> ToolExecutor:
-    """Build the plan_create executor.
-
-    Creates a fresh AgentPlan with PENDING steps, persists, returns
-    plan_id + step_count so the agent can update steps later.
-    """
-
-    async def _exec(*, title: str, steps: list[str]) -> dict[str, Any]:
-        if not title.strip():
-            return {"error": "title must not be empty"}
-        if not steps:
-            return {"error": "steps must contain at least one item"}
-        if len(steps) > 20:
-            return {"error": "plan supports up to 20 steps"}
-        plan_id = str(uuid.uuid4())
-        now = _now()
-        plan = AgentPlan(
-            id=plan_id,
-            conversation_id=conversation_id,
-            run_id=None,
-            owner_employee_id=employee_id,
-            title=title.strip(),
-            steps=[
-                PlanStep(index=i, title=s.strip(), status=StepStatus.PENDING)
-                for i, s in enumerate(steps)
-                if s.strip()
-            ],
-            created_at=now,
-            updated_at=now,
-        )
-        await repo.upsert(plan)
-        return {"plan_id": plan_id, "step_count": len(plan.steps)}
-
-    return _exec
-
-
-def make_plan_update_step_executor(
-    *,
-    repo: AgentPlanRepo,
-    conversation_id: str,
-) -> ToolExecutor:
-    """Build the plan_update_step executor.
-
-    Mutates a single PlanStep's status (and optional note). AgentPlan +
-    PlanStep are frozen Pydantic models, so we rebuild the plan with a
-    new step list. ``conversation_id`` is used as a defense-in-depth
-    check that callers can't cross-update plans from other conversations.
-    """
+    """Build the update_plan executor bound to this conversation."""
 
     async def _exec(
         *,
-        plan_id: str,
-        step_index: int,
-        status: str,
-        note: str | None = None,
+        todos: list[Any] | None = None,
+        title: str | None = None,
     ) -> dict[str, Any]:
-        try:
-            new_status = StepStatus(status)
-        except ValueError:
+        # ── Validation: shape ────────────────────────────────────────────
+        if not isinstance(todos, list) or not todos:
+            return {"error": "todos must be a non-empty list"}
+        if len(todos) > 20:
+            return {"error": "plan supports up to 20 todos"}
+
+        # ── Validation: per-item ─────────────────────────────────────────
+        normalized: list[tuple[str, str, StepStatus]] = []
+        in_progress_count = 0
+        for i, raw in enumerate(todos):
+            if not isinstance(raw, dict):
+                return {"error": f"todo[{i}] must be an object"}
+            content = str(raw.get("content", "")).strip()
+            active_form = str(raw.get("activeForm", "")).strip()
+            status_str = str(raw.get("status", "")).strip()
+
+            if not content:
+                return {"error": f"todo[{i}].content is empty"}
+            if not active_form:
+                # Soft-default activeForm to content when the model forgot —
+                # Claude Code's prompt warns models to provide both, but
+                # weaker models miss this. Falling back keeps progress
+                # moving instead of failing the call.
+                active_form = content
+
+            mapped = _STATUS_MAP.get(status_str)
+            if mapped is None:
+                return {
+                    "error": (
+                        f"todo[{i}].status must be one of {list(_STATUS_MAP)}, got {status_str!r}"
+                    ),
+                }
+            if mapped is StepStatus.RUNNING:
+                in_progress_count += 1
+
+            normalized.append((content, active_form, mapped))
+
+        # Claude Code rule: at most one in_progress at a time.
+        if in_progress_count > 1:
             return {
-                "error": f"unknown status {status!r}; expected one of "
-                f"{[s.value for s in StepStatus]}",
+                "error": (
+                    f"only one todo may be in_progress at a time "
+                    f"(got {in_progress_count}). Mark the others completed "
+                    "or pending."
+                ),
             }
-        plan = await repo.get(plan_id)
-        if plan is None:
-            return {"error": f"plan {plan_id!r} not found"}
-        if plan.conversation_id != conversation_id:
-            return {"error": "plan does not belong to this conversation"}
-        if step_index < 0 or step_index >= len(plan.steps):
-            return {
-                "error": f"step_index {step_index} out of range [0..{len(plan.steps) - 1}]",
-            }
-        new_steps = [
-            (
+
+        # ── Atomic replace semantics (R1 · C4 — serialized per conversation) ─
+        # Lock so the read-then-write below can't race against another
+        # concurrent update_plan call on the same conversation. Without it,
+        # two writers see existing=None at the same moment, both upsert
+        # with different plan_ids, second silently wins.
+        async with _conversation_lock(conversation_id):
+            existing = await repo.get_latest_for_conversation(conversation_id)
+            now = _now()
+
+            if existing is not None:
+                plan_id = existing.id
+                new_title = title.strip() if title and title.strip() else existing.title
+                created_at = existing.created_at
+            else:
+                plan_id = str(uuid.uuid4())
+                new_title = title.strip() if title and title.strip() else _derive_title(normalized)
+                created_at = now
+
+            steps = [
                 PlanStep(
-                    index=s.index,
-                    title=s.title,
-                    status=new_status,
-                    note=note if note is not None else s.note,
+                    index=i,
+                    title=content,
+                    status=status,
+                    # Stash activeForm into note for now — the backend's
+                    # PlanStep doesn't have a dedicated activeForm column. UI
+                    # already renders note as the secondary line, so this
+                    # surfaces nicely without a migration.
+                    note=active_form if active_form != content else None,
                 )
-                if i == step_index
-                else s
+                for i, (content, active_form, status) in enumerate(normalized)
+            ]
+
+            plan = AgentPlan(
+                id=plan_id,
+                conversation_id=conversation_id,
+                run_id=None,
+                owner_employee_id=employee_id,
+                title=new_title,
+                steps=steps,
+                created_at=created_at,
+                updated_at=now,
             )
-            for i, s in enumerate(plan.steps)
-        ]
-        updated = plan.model_copy(
-            update={"steps": new_steps, "updated_at": _now()},
-        )
-        await repo.upsert(updated)
+            await repo.upsert(plan)
+
+        # Echo back the summary + plan_id so the agent's next text turn can
+        # reference progress without a separate view_plan call.
         return {
             "plan_id": plan_id,
-            "step_index": step_index,
-            "status": new_status.value,
+            "summary": _summarize(todos),
         }
 
     return _exec
 
 
-def make_plan_complete_step_executor(
+def _derive_title(
+    normalized: list[tuple[str, str, StepStatus]],
+) -> str:
+    """When the agent doesn't provide a title on the first call, fall back
+    to a short auto-derived one so the UI doesn't render an empty header.
+    """
+    if not normalized:
+        return "Plan"
+    first_content = normalized[0][0]
+    snippet = first_content[:48]
+    return f"Plan · {snippet}{'…' if len(first_content) > 48 else ''}"
+
+
+def make_view_plan_executor(
     *,
     repo: AgentPlanRepo,
     conversation_id: str,
 ) -> ToolExecutor:
-    """plan_complete_step is plan_update_step with status='done' baked in.
-    Convenience for the common case so the agent doesn't have to remember
-    the enum string.
-    """
-    update = make_plan_update_step_executor(repo=repo, conversation_id=conversation_id)
+    """view_plan returns the current plan as a structured object (NOT a
+    render envelope this time — the UI already shows the timeline via
+    ProgressPanel pulling from /plans/latest).
 
-    async def _exec(*, plan_id: str, step_index: int) -> dict[str, Any]:
-        result: dict[str, Any] = await update(plan_id=plan_id, step_index=step_index, status="done")
-        return result
-
-    return _exec
-
-
-def make_plan_view_executor(
-    *,
-    repo: AgentPlanRepo,
-    conversation_id: str,
-) -> ToolExecutor:
-    """plan_view returns a Render envelope so the chat renders a
-    PlanTimeline inline. With no plan_id, fetches the latest plan for
-    the current conversation. Returns a simple error envelope when no
-    plan exists yet — agent will typically call plan_create before
-    plan_view, but a guard against off-script flows.
+    Used when the chat has been compacted and the model needs to recall
+    its own plan.
     """
 
-    async def _exec(*, plan_id: str | None = None) -> dict[str, Any]:
-        plan: AgentPlan | None
-        if plan_id:
-            plan = await repo.get(plan_id)
-            if plan is None:
-                return {"error": f"plan {plan_id!r} not found"}
-            if plan.conversation_id != conversation_id:
-                return {"error": "plan does not belong to this conversation"}
-        else:
-            plan = await repo.get_latest_for_conversation(conversation_id)
-            if plan is None:
-                return {
-                    "error": "no plan exists for this conversation yet — call plan_create first"
+    async def _exec() -> dict[str, Any]:
+        plan = await repo.get_latest_for_conversation(conversation_id)
+        if plan is None:
+            return {
+                "error": ("no plan exists for this conversation yet — call update_plan first"),
+            }
+        return {
+            "plan_id": plan.id,
+            "title": plan.title,
+            "todos": [
+                {
+                    "content": s.title,
+                    "activeForm": s.note or s.title,
+                    "status": _REVERSE_STATUS_MAP.get(s.status, "pending"),
                 }
-        return _render_envelope(plan)
+                for s in plan.steps
+            ],
+        }
 
     return _exec
 
 
 __all__ = [
-    "PLAN_COMPLETE_STEP_TOOL_ID",
-    "PLAN_CREATE_TOOL_ID",
-    "PLAN_UPDATE_STEP_TOOL_ID",
-    "PLAN_VIEW_TOOL_ID",
-    "make_plan_complete_step_executor",
-    "make_plan_create_executor",
-    "make_plan_update_step_executor",
-    "make_plan_view_executor",
+    "UPDATE_PLAN_TOOL_ID",
+    "VIEW_PLAN_TOOL_ID",
+    "make_update_plan_executor",
+    "make_view_plan_executor",
 ]

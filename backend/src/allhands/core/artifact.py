@@ -38,11 +38,21 @@ class ArtifactKind(StrEnum):
     # 2026-04-25 · drawio diagrams · embedded via diagrams.net iframe.
     # Stored as XML (.drawio extension, application/vnd.jgraph.mxfile mime).
     DRAWIO = "drawio"
+    # 2026-04-25 · office artifact family (spec
+    # docs/specs/2026-04-25-artifact-kinds-roadmap.md). All structured-build
+    # input modes except CSV which is text-identity.
+    PDF = "pdf"
+    XLSX = "xlsx"
+    CSV = "csv"
+    DOCX = "docx"
+    PPTX = "pptx"
 
 
 # Retained for backward-compat with callers that still branch on "is this
 # rendered as text or binary upstream"; storage no longer uses these splits.
 # DRAWIO is a TEXT kind (XML body); the renderer happens to embed an iframe.
+# CSV is text-identity (utf-8 string round-trip), the rest of the office
+# family lands as binary blobs the LLM never reads back as raw text.
 TEXT_KINDS: frozenset[ArtifactKind] = frozenset(
     {
         ArtifactKind.MARKDOWN,
@@ -51,9 +61,18 @@ TEXT_KINDS: frozenset[ArtifactKind] = frozenset(
         ArtifactKind.DATA,
         ArtifactKind.MERMAID,
         ArtifactKind.DRAWIO,
+        ArtifactKind.CSV,
     }
 )
-BINARY_KINDS: frozenset[ArtifactKind] = frozenset({ArtifactKind.IMAGE})
+BINARY_KINDS: frozenset[ArtifactKind] = frozenset(
+    {
+        ArtifactKind.IMAGE,
+        ArtifactKind.PDF,
+        ArtifactKind.XLSX,
+        ArtifactKind.DOCX,
+        ArtifactKind.PPTX,
+    }
+)
 
 
 ArtifactStatus = Literal["draft", "published", "archived"]

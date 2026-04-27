@@ -13,7 +13,7 @@
  * users into thinking the row was clickable, and was removed 2026-04-25.
  */
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { PingIndicator, type PingState } from "./PingIndicator";
@@ -24,6 +24,11 @@ export type GatewayModel = {
   name: string;
   display_name: string;
   context_window: number;
+  /** Optional advanced caps. null = "use model default". When set,
+   *  max_input_tokens drives the composer chip denominator and
+   *  max_output_tokens is forwarded as max_tokens on outbound chat. */
+  max_input_tokens: number | null;
+  max_output_tokens: number | null;
   enabled: boolean;
   /** Singleton flag — at most one row across the whole table is_default=true. */
   is_default: boolean;
@@ -50,6 +55,7 @@ export function ModelRow({
   onEdit: () => void;
 }) {
   const t = useTranslations("gateway.modelRow");
+  const locale = useLocale();
   const running = pingState.status === "running";
   const title = model.display_name || model.name;
   const showAlias = model.display_name && model.display_name !== model.name;
@@ -83,7 +89,7 @@ export function ModelRow({
         {model.context_window > 0 && (
           <span
             className="shrink-0 inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-2 border border-border font-mono text-[10px] text-text-muted tabular-nums"
-            title={t("contextWindowTitle", { tokens: model.context_window.toLocaleString() })}
+            title={t("contextWindowTitle", { tokens: model.context_window.toLocaleString(locale) })}
           >
             {formatCtx(model.context_window)}
           </span>
@@ -105,10 +111,10 @@ export function ModelRow({
           <span
             data-testid={`gateway-default-badge-${model.id}`}
             className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm bg-primary/10 border border-primary/25 text-primary text-[10px] font-semibold"
-            title="工作区默认模型 · Lead Agent 与 AI 解读默认走这一对 (provider, model)"
+            title={t("defaultBadgeTitle")}
           >
             <Icon name="star" size={10} strokeWidth={2} />
-            默认
+            {t("defaultBadge")}
           </span>
         ) : (
           model.enabled && (
@@ -116,11 +122,11 @@ export function ModelRow({
               type="button"
               onClick={onSetDefault}
               data-testid={`gateway-set-default-${model.id}`}
-              title="设为工作区默认 (provider + model 一起切)"
+              title={t("setDefaultTitle")}
               className="shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-sm border border-dashed border-border bg-transparent text-text-subtle text-[10px] font-medium hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors duration-fast opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               <Icon name="star" size={10} strokeWidth={2} />
-              设为默认
+              {t("setDefault")}
             </button>
           )
         )}
@@ -191,7 +197,7 @@ function RowIconButton({
       aria-label={label}
       title={label}
       data-testid={testId}
-      className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-fast disabled:opacity-40 disabled:pointer-events-none ${toneCls}`}
+      className={`grid h-7 w-7 place-items-center rounded-md transition-colors duration-fast disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${toneCls}`}
     >
       <Icon name={icon} size={13} />
     </button>

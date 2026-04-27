@@ -20,7 +20,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -572,6 +572,7 @@ function TriggerCard({
 }) {
   const t = useTranslations("triggers.list.card");
   const tActions = useTranslations("triggers.list.actions");
+  const locale = useLocale();
   const actionIcon = ACTION_ICON[trigger.action.type];
   const actionLabel = tActions(trigger.action.type);
   const kindIcon: IconName = trigger.kind === "timer" ? "clock" : "zap";
@@ -657,12 +658,24 @@ function TriggerCard({
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-text-muted">
             <span className="inline-flex items-center gap-1">
               <Icon name="activity" size={11} className="text-text-subtle" />
-              {t("firesPrefix")} <span className="font-mono tabular-nums text-text">{trigger.fires_total}</span> {t("firesSuffix")}
+              {t.rich("firesTotal", {
+                n: () => (
+                  <span className="font-mono tabular-nums text-text">
+                    {trigger.fires_total}
+                  </span>
+                ),
+              })}
             </span>
             <span className="inline-flex items-center gap-1">
               <Icon name="clock" size={11} className="text-text-subtle" />
               {trigger.last_fired_at ? (
-                <>{t("lastPrefix")} <span className="font-mono text-text-subtle">{formatTime(trigger.last_fired_at)}</span></>
+                t.rich("lastFiredAt", {
+                  time: () => (
+                    <span className="font-mono text-text-subtle">
+                      {formatTime(trigger.last_fired_at!, locale)}
+                    </span>
+                  ),
+                })
               ) : (
                 t("neverFired")
               )}
@@ -1263,10 +1276,10 @@ function Field({
   );
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, locale: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString();
+    return d.toLocaleString(locale);
   } catch {
     return iso;
   }

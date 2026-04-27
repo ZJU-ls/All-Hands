@@ -8,6 +8,7 @@
     },
     "conversation": {
       "shellTitle": "One for All · A single Lead Agent that does it all",
+      "shellTitleEmployee": "{name} · Chat",
       "backendOffline": "Backend offline · reconnecting automatically",
       "attempt": "Attempt {n}",
       "retryNow": "Retry now",
@@ -32,11 +33,12 @@
       "send": "Send",
       "thinking": "Deep thinking",
       "thinkingTooltipOn": "On · model thinks (sends thinking: enabled)",
-      "thinkingTooltipOff": "Off · model does not think (sends thinking: disabled). If the upstream proxy does not recognise the field, it returns an empty response and the dialog will suggest switching providers"
+      "thinkingTooltipOff": "Off · model does not think (sends thinking: disabled). If the upstream proxy doesn't recognize the field it'll return an empty response, and the dialog will suggest swapping providers."
     },
     "header": {
       "loading": "Loading…",
       "viewEmployee": "View {name}'s profile",
+      "breadcrumbEmployees": "Employees",
       "modelOverridden": "Overridden for this chat: {ref}",
       "modelInherited": "Following employee default · {ref}"
     },
@@ -64,7 +66,10 @@
     },
     "messageBubble": {
       "thinkingProcess": "Thinking",
-      "thinkingProcessLive": "Thinking…"
+      "thinkingProcessLive": "Thinking…",
+      "interrupted": "Interrupted · response incomplete",
+      "interruptedTitle": "This reply didn't finish — interrupted by the user, network drop, or a backend error. Whatever was streamed before the cut is kept.",
+      "toolPulse": "Running tools…"
     },
     "messageList": {
       "jumpToLatest": "Jump to latest",
@@ -107,7 +112,39 @@
     "usageChip": {
       "compacting": "Compacting…",
       "compact": "Compact",
-      "tooltip": "{used} / {total} tokens (estimated)"
+      "tooltip": "Estimated input {used} tokens / model context window {total} tokens · we'll suggest compacting as you approach the cap"
+    },
+    "toolCall": {
+      "subagentRun": "Subagent run",
+      "viewTrace": "View trace →"
+    },
+    "subagent": {
+      "title": "Active subagents",
+      "runningCount": "· {n} running",
+      "viewTrace": "View trace ↗",
+      "status": {
+        "running": "Running",
+        "succeeded": "Done",
+        "failed": "Failed"
+      }
+    },
+    "planProgress": {
+      "runningCount": "· {n} running",
+      "failedCount": "· {n} failed",
+      "fallbackTitle": "Plan",
+      "step": {
+        "done": "Done",
+        "running": "Running",
+        "failed": "Failed",
+        "skipped": "Skipped",
+        "pending": "Pending"
+      }
+    },
+    "progressPanel": {
+      "subagentTab": "Subagents",
+      "runningSuffix": "· {n} running",
+      "failedSuffix": "· {n} failed",
+      "ariaLabel": "Agent progress"
     }
   }
 }

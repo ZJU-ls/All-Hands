@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  ArtifactContentMissingError,
   getArtifact,
   getArtifactTextContent,
   getArtifactVersionContent,
@@ -21,6 +22,12 @@ import { HtmlView } from "./kinds/HtmlView";
 import { ImageView } from "./kinds/ImageView";
 import { DataView } from "./kinds/DataView";
 import { MermaidView } from "./kinds/MermaidView";
+import { DrawioView } from "./kinds/DrawioView";
+import { PdfView } from "./kinds/PdfView";
+import { CsvView } from "./kinds/CsvView";
+import { XlsxView } from "./kinds/XlsxView";
+import { DocxView } from "./kinds/DocxView";
+import { PptxView } from "./kinds/PptxView";
 import { ArtifactVersionSwitcher } from "./ArtifactVersionSwitcher";
 import { ArtifactEditor, pickEditorLanguage } from "./ArtifactEditor";
 
@@ -29,7 +36,8 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 type LoadedContent =
   | { kind: "text"; content: string }
   | { kind: "base64"; mime: string; base64: string }
-  | { kind: "binary-src"; src: string };
+  | { kind: "binary-src"; src: string }
+  | { kind: "missing" };
 
 function extractLanguage(mime: string): string | undefined {
   if (!mime.startsWith("text/")) return undefined;
@@ -48,7 +56,21 @@ function renderBody(
   artifact: ArtifactDto,
   loaded: LoadedContent,
   unsupportedMsg: string,
+  missingMsg: string,
 ): React.ReactNode {
+  // Workspace drift / disk wipe can leave the metadata row in place while the
+  // backing file is gone. Render a calm placeholder rather than letting each
+  // kind render `null` (blank) or hit `loaded.content` and crash.
+  if (loaded.kind === "missing") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-surface-2 text-text-muted">
+          <Icon name="alert-circle" size={18} />
+        </span>
+        <p className="text-sm text-text-muted">{missingMsg}</p>
+      </div>
+    );
+  }
   switch (artifact.kind) {
     case "markdown":
       return loaded.kind === "text" ? <MarkdownView content={loaded.content} /> : null;
@@ -62,6 +84,12 @@ function renderBody(
       return loaded.kind === "text" ? <DataView content={loaded.content} /> : null;
     case "mermaid":
       return loaded.kind === "text" ? <MermaidView content={loaded.content} /> : null;
+    case "drawio":
+      return loaded.kind === "text" ? (
+        <DrawioView content={loaded.content} editable artifactId={artifact.id} fillHeight />
+      ) : null;
+    case "csv":
+      return loaded.kind === "text" ? <CsvView content={loaded.content} /> : null;
     case "image": {
       const src =
         loaded.kind === "base64"
@@ -71,6 +99,14 @@ function renderBody(
             : "";
       return <ImageView src={src} alt={artifact.name} />;
     }
+    case "pdf":
+      return <PdfView artifactId={artifact.id} height={640} />;
+    case "xlsx":
+      return <XlsxView artifactId={artifact.id} />;
+    case "docx":
+      return <DocxView artifactId={artifact.id} />;
+    case "pptx":
+      return <PptxView artifactId={artifact.id} artifactName={artifact.name} />;
     default:
       return (
         <div className="px-4 py-3 text-xs text-text-muted">
@@ -95,6 +131,7 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
   // edit calls PATCH /artifacts/{id}, which bumps version on the server
   // and SSE-pushes the change back so the panel auto-refreshes.
   const [mode, setMode] = useState<ToolbarMode>("view");
+  const [contentScrolled, setContentScrolled] = useState(false);
   const [draft, setDraft] = useState<string>("");
   const [busy, setBusy] = useState<null | "save" | "rollback">(null);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
@@ -147,7 +184,17 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
         const dto = await getArtifactVersionContent(meta.id, currentVersion!);
         if (!cancelled) setContent(contentFromDto(dto));
       } catch (e) {
-        if (!cancelled) setError(String(e));
+        if (cancelled) return;
+        // Distinguish "content gone" from real fetch errors so we render
+        // a friendly placeholder instead of a red banner. Workspace data
+        // can drift across worktrees / restored snapshots — the metadata
+        // row stays, the file disappears, and the user shouldn't see a
+        // 404/500 error chip for an artifact whose card is right there.
+        if (e instanceof ArtifactContentMissingError) {
+          setContent({ kind: "missing" });
+          return;
+        }
+        setError(String(e));
       }
     }
     void load();
@@ -240,18 +287,43 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header: name + meta */}
+      {/* Header: name + meta + 复制 id (R9 · 调试和反馈用,工程师常需要)。
+          R9 · 标题区可点击 → 把 ID 复制到剪贴板,光标变 pointer 暗示
+          可交互。视觉信号弱(text-text-subtle 仅在 hover 显示 ✓),不
+          抢主操作的注意力。 */}
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-semibold text-text">{meta.name}</div>
-          <div className="truncate font-mono text-[10px] text-text-subtle">
-            {meta.kind} · v{meta.version} · {meta.mime_type} · {meta.size_bytes} B
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                void navigator.clipboard.writeText(meta.id);
+              }
+            }}
+            title={t("toolbarCopyIdTitle")}
+            className="group flex w-full min-w-0 items-center gap-1 truncate font-mono text-[10px] text-text-subtle hover:text-text-muted transition-colors"
+          >
+            <span className="truncate">
+              {meta.kind} · v{meta.version} · {meta.mime_type} · {meta.size_bytes} B
+            </span>
+            <Icon
+              name="copy"
+              size={9}
+              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            />
+          </button>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-3 py-1.5">
+      {/* Toolbar — sticky in flex column · scrolled = subtle elevation */}
+      <div
+        className={
+          contentScrolled
+            ? "flex shrink-0 items-center gap-1.5 border-b border-border bg-surface/90 px-3 py-1.5 shadow-soft-sm backdrop-blur-sm transition duration-base"
+            : "flex shrink-0 items-center gap-1.5 border-b border-border px-3 py-1.5 transition duration-base"
+        }
+      >
         {mode === "view" ? (
           <>
             {canCopy && (
@@ -356,8 +428,21 @@ export function ArtifactDetail({ artifactId }: { artifactId: string }) {
             disabled={busy != null}
           />
         ) : content ? (
-          <div className="h-full overflow-y-auto">
-            {renderBody(meta, content, t("unsupportedKind", { kind: meta.kind }))}
+          // 2026-04-27 · scroll-fade-bottom 给长内容底部 28px 渐隐 mask,
+          // 视觉提示"还有内容滚不到位"。content 较短时无视觉影响。
+          <div
+            className="h-full overflow-y-auto scroll-fade-bottom"
+            onScroll={(e) => {
+              const top = (e.currentTarget as HTMLDivElement).scrollTop;
+              setContentScrolled(top > 4);
+            }}
+          >
+            {renderBody(
+              meta,
+              content,
+              t("unsupportedKind", { kind: meta.kind }),
+              t("contentMissing"),
+            )}
           </div>
         ) : (
           <div className="px-4 py-3 text-[12px] text-text-muted">{t("loadingContent")}</div>

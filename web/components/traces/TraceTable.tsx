@@ -1,8 +1,40 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { Skeleton } from "@/components/ui/Skeleton";
 import type { TraceSummaryDto } from "@/lib/observatory-api";
+
+/**
+ * Skeleton row stack for the trace table loading state. Matches the table's
+ * column proportions so layout doesn't jump on first paint of real data.
+ * `rows` defaults to 6 — enough to fill the viewport without overflowing.
+ */
+export function TraceTableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div
+      aria-hidden
+      data-testid="trace-table-skeleton"
+      className="divide-y divide-border"
+    >
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 px-3 py-3"
+          style={{ animationDelay: `${i * 60}ms` }}
+        >
+          <Skeleton className="h-3 w-[180px]" />
+          <Skeleton className="h-3 w-[120px]" />
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <div className="flex-1" />
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="h-3 w-14" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export type TraceSortKey = "started_at" | "duration_s" | "tokens";
 export type SortDirection = "asc" | "desc";
@@ -20,10 +52,10 @@ function formatDuration(s: number | null): string {
   return `${s.toFixed(2)}s`;
 }
 
-function formatStartedAt(iso: string): string {
+function formatStartedAt(iso: string, locale: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("zh-CN", {
+  return d.toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -80,6 +112,7 @@ export function TraceTable({
   onSelect: (trace: TraceSummaryDto) => void;
 }) {
   const t = useTranslations("traces.table");
+  const locale = useLocale();
   const toggleSort = (key: TraceSortKey) => {
     if (sort.key === key) {
       onSort({ key, dir: sort.dir === "asc" ? "desc" : "asc" });
@@ -201,14 +234,14 @@ export function TraceTable({
                 className="py-2.5 px-3 text-right font-mono text-[11px] text-text-muted tabular-nums"
                 title={
                   row.tokens.total > 0
-                    ? `in ${row.tokens.prompt.toLocaleString()} · out ${row.tokens.completion.toLocaleString()} · total ${row.tokens.total.toLocaleString()}`
+                    ? `in ${row.tokens.prompt.toLocaleString(locale)} · out ${row.tokens.completion.toLocaleString(locale)} · total ${row.tokens.total.toLocaleString(locale)}`
                     : undefined
                 }
               >
-                {row.tokens.total > 0 ? row.tokens.total.toLocaleString() : "—"}
+                {row.tokens.total > 0 ? row.tokens.total.toLocaleString(locale) : "—"}
               </td>
               <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted">
-                {formatStartedAt(row.started_at)}
+                {formatStartedAt(row.started_at, locale)}
               </td>
             </tr>
           );

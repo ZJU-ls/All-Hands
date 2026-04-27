@@ -9,7 +9,7 @@ import { LoadingState } from "@/components/state";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Icon } from "@/components/ui/icon";
 import { createConversation, listEmployees, type EmployeeDto } from "@/lib/api";
-import { deriveProfile, BADGE_LABEL } from "@/lib/employee-profile";
+import { deriveProfile } from "@/lib/employee-profile";
 
 /**
  * Employees · card grid view (ADR 0016 · V2 Azure Live polish).
@@ -85,7 +85,7 @@ export default function EmployeesPage() {
       title={t("shellTitle")}
       actions={
         <Link
-          href="/employees/design"
+          href="/employees/new"
           data-testid="goto-employee-design"
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
         >
@@ -148,6 +148,7 @@ function EmployeeCard({
   anyBusy: boolean;
 }) {
   const t = useTranslations("employees.list");
+  const badgeT = useTranslations("employeeBadges");
   const badges = deriveProfile(employee).filter((b) => b !== "react");
   const isLead = employee.is_lead_agent;
 
@@ -214,7 +215,7 @@ function EmployeeCard({
               key={b}
               className="inline-flex items-center h-5 px-2 rounded-full bg-surface-2 text-text-muted text-caption font-medium border border-border"
             >
-              {BADGE_LABEL[b]}
+              {badgeT(b)}
             </span>
           ))}
         </div>
@@ -376,7 +377,7 @@ function EmptyEmployees() {
             {t("hireEmployee")}
           </Link>
           <Link
-            href="/employees/design"
+            href="/employees/new"
             data-testid="employees-empty-cta-design"
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-surface border border-border text-[13px] font-semibold text-text hover:border-primary hover:text-primary hover:-translate-y-px transition duration-base"
           >

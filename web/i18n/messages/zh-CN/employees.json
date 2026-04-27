@@ -60,7 +60,37 @@
       "kpiMaxIter": "Max iter",
       "kpiMaxIterHint": "单次最大轮次",
       "emptyConvosHeading": "还没有和 {name} 的对话",
-      "emptyConvosBody": "点上方「新对话」开始第一段 · 对话会自动保存并出现在这里。"
+      "emptyConvosBody": "点上方「新对话」开始第一段 · 对话会自动保存并出现在这里。",
+      "tabs": {
+        "ariaLabel": "员工详情页签",
+        "overview": "概览",
+        "config": "配置",
+        "files": "文件"
+      },
+      "configHeading": "编辑员工",
+      "configSubtitle": "调整技能 / 工具 / 迭代上限 / 提示词 · 发布或删除",
+      "loadingForm": "加载表单依赖",
+      "tryEmployee": "试一试",
+      "publish": "发布",
+      "publishing": "发布中",
+      "delete": "删除",
+      "deleting": "删除中",
+      "deleteHint": "删除该员工 · 对话历史保留但失去员工引用",
+      "leadCannotDelete": "Lead Agent 不可删除",
+      "deleteTitle": "删除员工「{name}」?",
+      "deleteMessage": "此操作不可撤销。该员工名下的对话历史仍会保留,但会失去对员工档案的引用。",
+      "deleteConfirm": "删除",
+      "filesEmptyHeading": "还没有 {name} 的产出文件",
+      "filesEmptyBody": "这位员工生成的报告 / 图表 / 导出件会出现在这里。当前请前往「制品库」查看全部。",
+      "filesGotoArtifacts": "前往制品库"
+    },
+    "new": {
+      "shellTitle": "招聘新员工",
+      "backToList": "员工列表",
+      "eyebrow": "Phase 2 · /employees/new",
+      "heading": "招聘新员工",
+      "subtitle": "选择 preset 套用合理默认值,再调整技能 / 工具 / 最大迭代数。保存后跳到新员工详情页,可在「配置」标签页继续调整或发布。",
+      "loadingForm": "加载表单依赖"
     },
     "design": {
       "shellTitle": "员工设计",
@@ -95,6 +125,9 @@
       "delete": "删除"
     },
     "designForm": {
+      "field": {
+        "required": "必填字段不能为空"
+      },
       "sectionBasics": "基础信息",
       "fieldName": "名称",
       "namePlaceholder": "例如 researcher-a",
@@ -128,7 +161,14 @@
       "sectionDryRunSubtitle": "展开后的三列 —— 与落库 payload 一致",
       "cancel": "取消",
       "hiring": "招聘中…",
-      "hire": "招聘"
+      "hire": "招聘",
+      "saveEdit": "保存改动",
+      "savingEdit": "保存中…",
+      "savedFlash": "已保存",
+      "dirty": "有未保存改动",
+      "savedJustNow": "刚刚已保存",
+      "savedMinutesAgo": "已保存 · {n} 分钟前",
+      "savedHoursAgo": "已保存 · {n} 小时前"
     },
     "dryRun": {
       "title": "Dry run 预览",
@@ -145,7 +185,14 @@
       "emptyChips": "(空)"
     },
     "mcpPicker": {
-      "empty": "还没有注册 MCP 服务器。先去「MCP 服务器」页注册,再回来挂载。"
+      "empty": "还没有注册 MCP 服务器。先去「MCP 服务器」页注册,再回来挂载。",
+      "searchPlaceholder": "搜索 MCP · 名称 / 协议 / 健康",
+      "groupSelected": "已选",
+      "selectedEmpty": "暂未挂载,从下方分组中点选",
+      "groupHealthy": "在线",
+      "groupUnhealthy": "不健康",
+      "noMatch": "没有匹配「{query}」的 MCP",
+      "chipFailedTitle": "当前健康状态:{health}(失败的服务器仍可挂载,但工具调用会失败)"
     },
     "presetRadio": {
       "ariaLabel": "运转方式",
@@ -158,7 +205,15 @@
     },
     "skillPicker": {
       "empty": "还没有安装的 Skill。先在「技能」页安装,再回来挂载。",
-      "selected": "selected"
+      "searchPlaceholder": "搜索技能 · 名称或描述",
+      "groupSelected": "已选",
+      "selectedEmpty": "暂未挂载,从下方分组中点选",
+      "groupBuiltin": "内建",
+      "groupMarket": "市场",
+      "groupGithub": "GitHub",
+      "groupUploaded": "上传",
+      "groupOther": "其他",
+      "noMatch": "没有匹配「{query}」的技能"
     }
   },
   "tasks": {
@@ -271,6 +326,26 @@
       "cancel": "取消",
       "creating": "创建中…",
       "submit": "创建任务"
+    },
+    "status": {
+      "queued": "排队中",
+      "running": "执行中",
+      "needs_input": "等你回答",
+      "needs_approval": "等你审批",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
+    "source": {
+      "user": "用户",
+      "lead": "Lead",
+      "trigger": "触发器",
+      "employee": "员工"
     }
+  },
+  "employeeBadges": {
+    "react": "可执行",
+    "planner": "会做计划",
+    "coordinator": "能带团队"
   }
 }

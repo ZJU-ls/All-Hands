@@ -93,6 +93,12 @@ type ChatState = {
   pendingUserInputs: PendingUserInput[];
   isStreaming: boolean;
   streamError: StreamError | null;
+  /** Increments on every server-sent allhands.heartbeat (every 10s of
+   * agent-side silence). MessageList feeds this into the chip's silence
+   * signature so the「无响应」 计时不会在长 LLM thinking / tool execution
+   * 期间错误膨胀(2026-04-26 修复:thinking 模型填模板 25s+ 时 chip 错
+   * 误进入 「停止」 状态 · 用户误以为卡死按了停止)。 */
+  streamHeartbeatTick: number;
 
   setConversationId: (id: string) => void;
   addMessage: (msg: Message) => void;
@@ -123,6 +129,8 @@ type ChatState = {
   addUserInput: (ui: PendingUserInput) => void;
   removeUserInput: (userInputId: string) => void;
   setStreamError: (err: StreamError | null) => void;
+  /** Bump on each server heartbeat · feeds chip 「无响应」 计时 reset。 */
+  bumpHeartbeat: () => void;
   reset: () => void;
 };
 
@@ -134,6 +142,7 @@ export const useChatStore = create<ChatState>((set) => ({
   pendingUserInputs: [],
   isStreaming: false,
   streamError: null,
+  streamHeartbeatTick: 0,
 
   setConversationId: (id) => set({ conversationId: id }),
 
@@ -319,7 +328,22 @@ export const useChatStore = create<ChatState>((set) => ({
 
   updateToolCall: (toolCall) =>
     set((state) => {
-      if (!state.streamingMessage) return state;
+      // Same seed-on-first-event pattern as addRenderPayload below.
+      // Tool calls fire before the LLM produces any text (resolve_skill,
+      // read_skill_file, artifact_create are all pre-text); without
+      // seeding here, the chip never appears live · only on reload.
+      // We use the tool_call id as a temporary message_id seed; the next
+      // text/reasoning event will rewrite it via startStreaming.
+      if (!state.streamingMessage) {
+        const seeded = makeEmptyStreaming(toolCall.id);
+        seeded.tool_calls = [toolCall];
+        seeded.segments = [{ kind: "tool_call", tool_call_id: toolCall.id }];
+        return {
+          isStreaming: true,
+          streamError: null,
+          streamingMessage: seeded,
+        };
+      }
       const existing = state.streamingMessage.tool_calls.find(
         (tc) => tc.id === toolCall.id,
       );
@@ -345,9 +369,24 @@ export const useChatStore = create<ChatState>((set) => ({
       };
     }),
 
-  addRenderPayload: (_messageId, payload) =>
+  addRenderPayload: (messageId, payload) =>
     set((state) => {
-      if (!state.streamingMessage) return state;
+      // Render envelopes commonly arrive BEFORE the first text token —
+      // tools (artifact_create / render_drawio / etc.) execute first, the
+      // LLM speaks afterwards. Without seeding here, the render payload is
+      // dropped on the floor mid-stream (DB still has it, so reload shows
+      // the card · live chat doesn't · 「对话的时候没有,刷新页面才有」).
+      // Mirrors `appendReasoning`'s seed pattern below.
+      if (!state.streamingMessage) {
+        const seeded = makeEmptyStreaming(messageId);
+        seeded.render_payloads = [payload];
+        seeded.segments = [{ kind: "render", index: 0 }];
+        return {
+          isStreaming: true,
+          streamError: null,
+          streamingMessage: seeded,
+        };
+      }
       const nextIndex = state.streamingMessage.render_payloads.length;
       return {
         streamingMessage: {
@@ -386,6 +425,8 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
 
   setStreamError: (err) => set({ streamError: err }),
+
+  bumpHeartbeat: () => set((s) => ({ streamHeartbeatTick: s.streamHeartbeatTick + 1 })),
 
   reset: () =>
     set({

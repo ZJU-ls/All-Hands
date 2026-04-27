@@ -38,6 +38,8 @@ class ModelResponse(BaseModel):
     name: str
     display_name: str
     context_window: int
+    max_input_tokens: int | None = None
+    max_output_tokens: int | None = None
     enabled: bool
     is_default: bool
 
@@ -61,12 +63,16 @@ class CreateModelRequest(BaseModel):
     name: str
     display_name: str = ""
     context_window: int = 0
+    max_input_tokens: int | None = Field(default=None, ge=1)
+    max_output_tokens: int | None = Field(default=None, ge=1)
 
 
 class UpdateModelRequest(BaseModel):
     name: str | None = None
     display_name: str | None = None
     context_window: int | None = None
+    max_input_tokens: int | None = Field(default=None, ge=1)
+    max_output_tokens: int | None = Field(default=None, ge=1)
     enabled: bool | None = None
 
 
@@ -101,6 +107,8 @@ def _to_response(m: LLMModel) -> ModelResponse:
         name=m.name,
         display_name=m.display_name,
         context_window=m.context_window,
+        max_input_tokens=m.max_input_tokens,
+        max_output_tokens=m.max_output_tokens,
         enabled=m.enabled,
         is_default=m.is_default,
     )
@@ -143,6 +151,8 @@ async def create_model(
         name=body.name,
         display_name=body.display_name,
         context_window=body.context_window,
+        max_input_tokens=body.max_input_tokens,
+        max_output_tokens=body.max_output_tokens,
     )
     if model is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
@@ -161,6 +171,8 @@ async def update_model(
         name=body.name,
         display_name=body.display_name,
         context_window=body.context_window,
+        max_input_tokens=body.max_input_tokens,
+        max_output_tokens=body.max_output_tokens,
         enabled=body.enabled,
     )
     if model is None:
@@ -333,6 +345,16 @@ async def test_model_stream(
                 metrics = {k: v for k, v in evt.items() if k != "type"}
                 yield agui.encode_sse(agui.custom("allhands.model_test_metrics", metrics))
                 yield agui.encode_sse(agui.run_finished(thread_id, run_id))
+            elif kind == "warning":
+                # 让用户知道发生了 vendor-specific fallback(例:'thinking'
+                # 字段被某些模型拒绝时,我们自动剥离重试)— 透明告知,而不是
+                # 默默 retry 让用户困惑"我没勾深度思考为啥还在思考"。
+                yield agui.encode_sse(
+                    agui.custom(
+                        "allhands.model_test_warning",
+                        {k: v for k, v in evt.items() if k != "type"},
+                    )
+                )
             elif kind == "error":
                 err_msg = str(evt.get("error", "upstream error"))
                 err_code = str(evt.get("error_category", "INTERNAL"))

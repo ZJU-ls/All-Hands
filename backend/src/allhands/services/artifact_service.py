@@ -56,6 +56,11 @@ _KIND_EXT: dict[ArtifactKind, str] = {
     ArtifactKind.DATA: "json",
     ArtifactKind.MERMAID: "mmd",
     ArtifactKind.DRAWIO: "drawio",
+    ArtifactKind.PDF: "pdf",
+    ArtifactKind.XLSX: "xlsx",
+    ArtifactKind.CSV: "csv",
+    ArtifactKind.DOCX: "docx",
+    ArtifactKind.PPTX: "pptx",
 }
 
 _DEFAULT_MIME: dict[ArtifactKind, str] = {
@@ -66,6 +71,11 @@ _DEFAULT_MIME: dict[ArtifactKind, str] = {
     ArtifactKind.DATA: "application/json",
     ArtifactKind.MERMAID: "text/vnd.mermaid",
     ArtifactKind.DRAWIO: "application/vnd.jgraph.mxfile",
+    ArtifactKind.PDF: "application/pdf",
+    ArtifactKind.XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ArtifactKind.CSV: "text/csv",
+    ArtifactKind.DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ArtifactKind.PPTX: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
 
@@ -75,6 +85,17 @@ class ArtifactError(DomainError):
 
 class ArtifactNotFound(ArtifactError):
     pass
+
+
+class ArtifactContentMissing(ArtifactError):
+    """The DB row exists but the on-disk file is gone (orphaned content).
+
+    This happens when the workspace's data directory was reset / partially
+    copied / pruned without dropping the matching DB rows — e.g. moving
+    between worktrees or restoring an old snapshot. Surfaced as 404 from
+    the router so the UI can render a friendlier "content gone" state
+    instead of a 500.
+    """
 
 
 class ArtifactService:
@@ -395,11 +416,26 @@ class ArtifactService:
 
     def read_bytes(self, artifact: Artifact) -> bytes:
         """Read the latest version's bytes off disk."""
-        return self.absolute_path(artifact.file_path).read_bytes()
+        path = self.absolute_path(artifact.file_path)
+        try:
+            return path.read_bytes()
+        except FileNotFoundError as exc:
+            raise ArtifactContentMissing(
+                f"Artifact {artifact.id!r} content is missing on disk "
+                f"(expected at {path}). The DB row exists but the file "
+                f"is gone — workspace data may have drifted."
+            ) from exc
 
     def read_version_bytes(self, version: ArtifactVersion) -> bytes:
         """Read a specific version's bytes off disk."""
-        return self.absolute_path(version.file_path).read_bytes()
+        path = self.absolute_path(version.file_path)
+        try:
+            return path.read_bytes()
+        except FileNotFoundError as exc:
+            raise ArtifactContentMissing(
+                f"Artifact version {version.artifact_id!r} v{version.version} "
+                f"is missing on disk (expected at {path})."
+            ) from exc
 
     def read_text(self, artifact: Artifact, encoding: str = "utf-8") -> str:
         """Read the latest version as decoded text. Caller decides whether

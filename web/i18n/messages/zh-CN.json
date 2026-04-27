@@ -1,27 +1,9 @@
 {
+  "toast": {
+    "ariaLabel": "通知"
+  },
   "common": {
-    "loading": "加载中…",
-    "save": "保存",
-    "cancel": "取消",
-    "confirm": "确认",
-    "delete": "删除",
-    "edit": "编辑",
-    "create": "新建",
-    "search": "搜索",
-    "back": "返回",
-    "next": "下一步",
-    "previous": "上一步",
-    "close": "关闭",
-    "ok": "确定",
-    "yes": "是",
-    "no": "否",
-    "more": "更多",
-    "settings": "设置",
-    "retry": "重试",
-    "refresh": "刷新",
-    "copy": "复制",
-    "copied": "已复制",
-    "comingSoon": "即将上线"
+    "retry": "重试"
   },
   "shell": {
     "workspaceVersion": "v0 · mvp",
@@ -40,7 +22,30 @@
       "themeAriaLight": "切换到浅色主题",
       "themeAriaDark": "切换到深色主题",
       "languageTitle": "切换语言",
-      "languageAria": "切换语言"
+      "languageAria": "切换语言",
+      "shortcutsAria": "键盘快捷键",
+      "shortcutsTitle": "? · 键盘快捷键"
+    },
+    "sidebar": {
+      "collapse": "收起侧边栏",
+      "expand": "展开侧边栏",
+      "toggleHint": "⌘B"
+    },
+    "shortcuts": {
+      "title": "键盘快捷键",
+      "close": "关闭",
+      "footer": "在任意位置按 ? 可再次打开。",
+      "section": {
+        "global": "全局",
+        "navigation": "导航"
+      },
+      "openPalette": "打开命令面板",
+      "toggleSidebar": "切换侧边栏",
+      "openHelp": "显示快捷键列表",
+      "dismiss": "关闭浮层",
+      "home": "返回控制台",
+      "artifacts": "进入制品页",
+      "employees": "进入员工页"
     },
     "sections": {
       "workspace": "工作区",
@@ -56,7 +61,6 @@
       "conversations": "历史会话",
       "artifacts": "制品库",
       "employees": "员工",
-      "employeeDesign": "员工设计",
       "skills": "技能",
       "mcpServers": "MCP 服务器",
       "knowledge": "知识库",
@@ -75,12 +79,16 @@
     "en": "English",
     "label": "语言"
   },
+  "metadata": {
+    "description": "One for All — 开源自部署的数字员工组织平台"
+  },
   "healthBadge": {
     "ok": "后端正常 · {version}",
     "error": "后端不可达",
     "pinging": "正在 ping 后端…"
   },
   "welcome": {
+    "docTitle": "欢迎",
     "skip": "稍后再说 →",
     "eyebrow": "v0 · Open Source · Self-hosted",
     "h1Line1": "欢迎来到 allhands。",
@@ -182,7 +190,6 @@
   },
   "errors": {
     "unknown": "未知错误",
-    "network": "网络错误,请检查连接后重试",
     "notFoundEyebrow": "404 · not found",
     "notFoundTitle": "页面不存在",
     "notFoundBody": "这个地址没有对应的页面。",

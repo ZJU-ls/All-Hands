@@ -145,7 +145,7 @@ export function StoragePathsCard() {
                         <button
                           type="button"
                           onClick={() => handleCopy(entry)}
-                          className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 font-mono text-[10px] text-text-muted hover:border-border-strong hover:text-text"
+                          className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 font-mono text-[10px] text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                           title={t("copyTitle")}
                         >
                           <Icon
@@ -157,7 +157,7 @@ export function StoragePathsCard() {
                         <button
                           type="button"
                           onClick={() => handleOpen(entry)}
-                          className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 font-mono text-[10px] text-text-muted hover:border-border-strong hover:text-text"
+                          className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 font-mono text-[10px] text-text-muted hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                           title={t("openTitle")}
                         >
                           <Icon name="arrow-right" size={11} />

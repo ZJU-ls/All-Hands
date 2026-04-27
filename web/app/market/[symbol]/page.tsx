@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon } from "@/components/ui/icon";
 import { Sparkline } from "@/components/ui/Sparkline";
@@ -196,6 +196,7 @@ function QuoteHero({
   loading: boolean;
 }) {
   const t = useTranslations("market.detail");
+  const locale = useLocale();
   const positive = quote ? quote.change >= 0 : false;
   return (
     <section
@@ -272,7 +273,7 @@ function QuoteHero({
           )}
           {quote && (
             <p className="mt-3 font-mono text-caption text-text-subtle">
-              {t("quoteSource", { source: quote.source, time: new Date(quote.ts).toLocaleString() })}
+              {t("quoteSource", { source: quote.source, time: new Date(quote.ts).toLocaleString(locale) })}
             </p>
           )}
         </div>
@@ -451,6 +452,7 @@ function NewsCard({
   rows: News[];
 }) {
   const t = useTranslations("market.detail");
+  const locale = useLocale();
   return (
     <Section
       icon={icon}
@@ -482,7 +484,7 @@ function NewsCard({
                     {n.title}
                   </p>
                   <p className="mt-0.5 font-mono text-caption text-text-subtle truncate">
-                    {t("newsTimestamp", { time: new Date(n.published_at).toLocaleString(), source: n.source })}
+                    {t("newsTimestamp", { time: new Date(n.published_at).toLocaleString(locale), source: n.source })}
                   </p>
                 </div>
                 <Icon

@@ -1,0 +1,14 @@
+id: allhands.design
+name: All Hands 设计语言
+description: 用 Brand Blue 双主题画 All Hands 风格的高级感 HTML / drawio / PPT 制品
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.artifacts.create
+  - allhands.artifacts.render_drawio
+  - allhands.artifacts.create_pptx
+  - allhands.artifacts.create_pdf
+  - allhands.meta.read_skill_file
+
+prompt_fragment_file: prompts/guidance.md

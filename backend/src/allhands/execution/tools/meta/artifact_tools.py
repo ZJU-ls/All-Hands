@@ -18,7 +18,20 @@ from __future__ import annotations
 
 from allhands.core import Tool, ToolKind, ToolScope
 
-_KIND_ENUM = ["markdown", "code", "html", "image", "data", "mermaid"]
+_KIND_ENUM = [
+    "markdown",
+    "code",
+    "html",
+    "image",
+    "data",
+    "mermaid",
+    "drawio",
+    "pdf",
+    "xlsx",
+    "csv",
+    "docx",
+    "pptx",
+]
 
 ARTIFACT_CREATE_TOOL = Tool(
     id="allhands.artifacts.create",
@@ -119,9 +132,10 @@ ARTIFACT_RENDER_TOOL = Tool(
     kind=ToolKind.META,
     name="artifact_render",
     description=(
-        "Emit an `Artifact.Preview` render payload in the chat so the user sees the "
-        "artifact without the full content hitting the agent's context. Call this after "
-        "every create / update."
+        "Re-emit an Artifact.Preview render payload for an EXISTING artifact "
+        "(legacy / re-show after a long gap in the conversation). New artifacts "
+        "created via `artifact_create*` already include the render envelope in "
+        "their tool result — no follow-up call needed."
     ),
     input_schema={
         "type": "object",

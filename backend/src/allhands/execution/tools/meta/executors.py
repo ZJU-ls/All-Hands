@@ -43,12 +43,14 @@ from allhands.core import (
     ArtifactVersion,
 )
 from allhands.core.errors import DomainError
+from allhands.i18n import t
 from allhands.persistence.sql_repos import (
     SqlArtifactRepo,
     SqlEmployeeRepo,
     SqlLLMModelRepo,
     SqlLLMProviderRepo,
     SqlMCPServerRepo,
+    SqlModelPriceRepo,
     SqlSkillRepo,
 )
 
@@ -307,6 +309,11 @@ _ARTIFACT_DEFAULT_MIME: dict[ArtifactKind, str] = {
     ArtifactKind.DATA: "application/json",
     ArtifactKind.MERMAID: "text/vnd.mermaid",
     ArtifactKind.DRAWIO: "application/vnd.jgraph.mxfile",
+    ArtifactKind.PDF: "application/pdf",
+    ArtifactKind.XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ArtifactKind.CSV: "text/csv",
+    ArtifactKind.DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ArtifactKind.PPTX: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
 _ARTIFACT_EXT: dict[ArtifactKind, str] = {
@@ -317,6 +324,11 @@ _ARTIFACT_EXT: dict[ArtifactKind, str] = {
     ArtifactKind.DATA: "json",
     ArtifactKind.MERMAID: "mmd",
     ArtifactKind.DRAWIO: "drawio",
+    ArtifactKind.PDF: "pdf",
+    ArtifactKind.XLSX: "xlsx",
+    ArtifactKind.CSV: "csv",
+    ArtifactKind.DOCX: "docx",
+    ArtifactKind.PPTX: "pptx",
 }
 
 
@@ -493,11 +505,12 @@ def make_artifact_create_executor(
             return {"error": str(exc)}
         except Exception as exc:
             return {"error": f"artifact_create failed: {exc}"}
-        return {
-            "artifact_id": artifact.id,
-            "version": artifact.version,
-            "kind": artifact.kind.value,
-        }
+        return _artifact_create_result(
+            artifact_id=artifact.id,
+            version=artifact.version,
+            kind_value=artifact.kind.value,
+            size_bytes=artifact.size_bytes,
+        )
 
     return _exec
 
@@ -813,7 +826,8 @@ def make_artifact_rollback_executor(
                         file_path=rel,
                         diff_from_prev=diff,
                         created_at=now,
-                        change_message=change_message or f"回退到 v{to_version}",
+                        change_message=change_message
+                        or t("artifacts.revert_default", version=to_version),
                         parent_version=to_version,
                         created_by_employee_id=employee_id,
                         created_by_run_id=run_id,
@@ -882,6 +896,587 @@ def make_artifact_search_executor(
     return _exec
 
 
+# 2026-04-25 · structured-build artifact factories. Each follows the same
+# pattern as make_artifact_create_executor: build bytes via a generator
+# module, persist + emit a v1 ArtifactVersion, return {artifact_id, version,
+# warnings?}. The provenance binding (conversation_id / employee_id /
+# run_id) is identical across all five so the /artifacts page can filter by
+# any of them.
+
+
+# Inline-renderable kinds (聊天里直接显示完整内容)
+_INLINE_KINDS: frozenset[str] = frozenset({"html", "drawio", "mermaid", "image", "csv", "data"})
+# Always Card-only — 内联体验差(只能看占位)
+_CARD_ONLY_KINDS: frozenset[str] = frozenset({"pptx", "docx"})
+# Size threshold for text kinds (markdown / code / xlsx) — 超就降级 Card
+_INLINE_SIZE_LIMIT_BYTES = 200_000
+# PDF 单独阈值(2MB)— 小 PDF 仍内联,大 PDF 给卡片
+_PDF_INLINE_LIMIT_BYTES = 2_000_000
+
+
+def _pick_artifact_envelope(kind_value: str, size_bytes: int | None) -> str:
+    """Return "Artifact.Preview" or "Artifact.Card" based on kind + size.
+
+    See ADR-pending (artifacts unification 2026-04-26 §5):
+    - INLINE_KINDS (html, drawio, mermaid, image, csv, data) → Preview · 聊天里
+      直接显示完整内容
+    - CARD_ONLY_KINDS (pptx, docx) → Card · 点击在制品区打开
+    - markdown / code / xlsx → Preview if size ≤ 200KB else Card
+    - pdf → Preview if size ≤ 2MB else Card
+    Default: Card (safe — visible affordance, no broken inline)
+    """
+    if kind_value in _CARD_ONLY_KINDS:
+        return "Artifact.Card"
+    if kind_value in _INLINE_KINDS:
+        return "Artifact.Preview"
+    if kind_value == "pdf":
+        if size_bytes is None or size_bytes <= _PDF_INLINE_LIMIT_BYTES:
+            return "Artifact.Preview"
+        return "Artifact.Card"
+    if kind_value in {"markdown", "code", "xlsx"}:
+        if size_bytes is None or size_bytes <= _INLINE_SIZE_LIMIT_BYTES:
+            return "Artifact.Preview"
+        return "Artifact.Card"
+    return "Artifact.Card"
+
+
+def _artifact_create_result(
+    *,
+    artifact_id: str,
+    version: int,
+    kind_value: str,
+    size_bytes: int | None = None,
+    warnings: list[str] | None = None,
+) -> dict[str, Any]:
+    """Unified return shape for every artifact_create* tool.
+
+    Carries BOTH a render envelope (so the chat shows an Artifact preview
+    card automatically · the agent no longer needs a follow-up
+    artifact_render call · _as_render_envelope picks up component+props)
+    AND the flat artifact_id / version / kind keys (so downstream tools
+    like artifact_update / artifact_pin / agent prose can chain).
+
+    The component split (Preview vs Card) decides whether the chat
+    inlines the full content or shows a click-to-open card. See
+    `_pick_artifact_envelope` for the routing.
+    """
+    component = _pick_artifact_envelope(kind_value, size_bytes)
+    out: dict[str, Any] = {
+        "component": component,
+        "props": {
+            "artifact_id": artifact_id,
+            "version": version,
+            "kind": kind_value,
+        },
+        "interactions": [],
+        # Flat fields for agent ergonomics + backwards compat. Agents call
+        # `result["artifact_id"]` to chain into update/delete/pin.
+        "artifact_id": artifact_id,
+        "version": version,
+        "kind": kind_value,
+    }
+    if warnings:
+        out["warnings"] = warnings
+    return out
+
+
+async def _persist_office_artifact(
+    *,
+    maker: async_sessionmaker[AsyncSession],
+    name: str,
+    kind: ArtifactKind,
+    blob: bytes,
+    description: str | None,
+    tags: list[str] | None,
+    change_message: str | None,
+    conversation_id: str | None,
+    employee_id: str | None,
+    run_id: str | None,
+) -> dict[str, Any]:
+    """Shared write path for office artifacts. Validates name, sizes the
+    blob, writes the v1 file, and persists Artifact + ArtifactVersion."""
+    _validate_artifact_name(name)
+    size = len(blob)
+    if size > _MAX_BINARY_BYTES:
+        raise _ArtifactExecutorError(f"size {size}B exceeds binary ceiling {_MAX_BINARY_BYTES}B")
+    mime = _ARTIFACT_DEFAULT_MIME[kind]
+    now = datetime.now(UTC)
+    artifact_id = str(uuid.uuid4())
+    file_path = _write_artifact_blob(
+        _DEFAULT_WORKSPACE_ID,
+        artifact_id,
+        version=1,
+        kind=kind,
+        mime=mime,
+        blob=blob,
+    )
+    artifact = Artifact(
+        id=artifact_id,
+        workspace_id=_DEFAULT_WORKSPACE_ID,
+        name=name,
+        kind=kind,
+        mime_type=mime,
+        file_path=file_path,
+        size_bytes=size,
+        version=1,
+        created_at=now,
+        updated_at=now,
+        conversation_id=conversation_id,
+        created_by_employee_id=employee_id,
+        created_by_run_id=run_id,
+        description=description,
+        tags=list(tags) if tags else [],
+    )
+    async with _session_context(maker) as session:
+        repo = SqlArtifactRepo(session)
+        await repo.upsert(artifact)
+        await repo.save_version(
+            ArtifactVersion(
+                id=str(uuid.uuid4()),
+                artifact_id=artifact.id,
+                version=1,
+                file_path=file_path,
+                diff_from_prev=None,
+                created_at=now,
+                change_message=change_message or "initial",
+                parent_version=None,
+                created_by_employee_id=employee_id,
+                created_by_run_id=run_id,
+                size_bytes=size,
+            )
+        )
+    return _artifact_create_result(
+        artifact_id=artifact.id,
+        version=1,
+        kind_value=kind.value,
+        size_bytes=size,
+    )
+
+
+def make_artifact_create_pdf_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.pdf import (
+        ArtifactGenerationError,
+        render_pdf,
+    )
+
+    async def _exec(
+        name: str,
+        source: str = "markdown",
+        content: str = "",
+        title: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        if source not in ("markdown", "html"):
+            return {"error": f"source must be 'markdown' or 'html', got {source!r}"}
+        try:
+            blob = render_pdf(source=source, content=content, title=title)  # type: ignore[arg-type]
+            return await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.PDF,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create_pdf failed: {exc}"}
+
+    return _exec
+
+
+def make_artifact_create_xlsx_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.pdf import ArtifactGenerationError
+    from allhands.execution.artifact_generators.xlsx import render_xlsx
+
+    async def _exec(
+        name: str,
+        sheets: list[dict[str, Any]] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        try:
+            blob = render_xlsx(sheets=sheets or [])
+            return await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.XLSX,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create_xlsx failed: {exc}"}
+
+    return _exec
+
+
+def make_artifact_create_csv_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.csv import render_csv
+    from allhands.execution.artifact_generators.pdf import ArtifactGenerationError
+
+    async def _exec(
+        name: str,
+        rows: list[list[Any]] | None = None,
+        headers: list[str] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        try:
+            blob = render_csv(headers=headers, rows=rows or [])
+            return await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.CSV,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create_csv failed: {exc}"}
+
+    return _exec
+
+
+def make_artifact_create_docx_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.docx import render_docx
+    from allhands.execution.artifact_generators.pdf import ArtifactGenerationError
+
+    async def _exec(
+        name: str,
+        blocks: list[dict[str, Any]] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        try:
+            blob, warnings = render_docx(blocks=blocks or [])
+            result = await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.DOCX,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+            if warnings:
+                result["warnings"] = warnings
+            return result
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"artifact_create_docx failed: {exc}"}
+
+    return _exec
+
+
+def make_artifact_create_pptx_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    from allhands.execution.artifact_generators.pdf import ArtifactGenerationError
+    from allhands.execution.artifact_generators.pptx import render_pptx
+
+    async def _exec(
+        name: str,
+        page: dict[str, Any] | None = None,
+        slides: list[dict[str, Any]] | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        # ToolArgError raised by render_pptx propagates to the pipeline
+        # for the structured {error,field,expected,received,hint}
+        # envelope (ADR 0021). We only catch the generic generator /
+        # persistence failures here.
+        try:
+            blob, warnings = render_pptx(page=page, slides=slides or [])
+            result = await _persist_office_artifact(
+                maker=maker,
+                name=name,
+                kind=ArtifactKind.PPTX,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+            if warnings:
+                result["warnings"] = warnings
+            return result
+        except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
+            return {"error": str(exc)}
+
+    return _exec
+
+
+_DRAWIO_WRAPPER_OPEN = (
+    '<mxfile host="app.diagrams.net" agent="allhands">'
+    '<diagram id="diagram" name="Diagram">'
+    '<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" '
+    'tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" '
+    'pageWidth="850" pageHeight="1100" math="0" shadow="0"><root>'
+    '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+)
+_DRAWIO_WRAPPER_CLOSE = "</root></mxGraphModel></diagram></mxfile>"
+
+
+def _normalize_drawio_xml(xml: str) -> str:
+    """Make agent-supplied XML render-ready.
+
+    drawio renders nothing if the outer ``<mxfile>`` envelope is missing
+    or if ``<mxCell id="0"/>`` / ``<mxCell id="1" parent="0"/>`` aren't
+    present. We accept three input shapes and normalize:
+
+    1. Full ``<mxfile>...`` — passed through.
+    2. Bare ``<mxGraphModel>...`` — wrap in mxfile/diagram.
+    3. Just a list of ``<mxCell>`` shapes — wrap in full scaffolding.
+    """
+    body = xml.strip()
+    if body.startswith("<mxfile"):
+        return body
+    if body.startswith("<diagram"):
+        return f'<mxfile host="app.diagrams.net" agent="allhands">{body}</mxfile>'
+    if body.startswith("<mxGraphModel"):
+        return (
+            '<mxfile host="app.diagrams.net" agent="allhands">'
+            '<diagram id="diagram" name="Diagram">'
+            f"{body}"
+            "</diagram></mxfile>"
+        )
+    return f"{_DRAWIO_WRAPPER_OPEN}{body}{_DRAWIO_WRAPPER_CLOSE}"
+
+
+def _normalize_drawio_name(name: str) -> str:
+    name = name.strip()
+    if not name.lower().endswith(".drawio"):
+        name = f"{name}.drawio"
+    return name
+
+
+def make_render_drawio_executor(
+    maker: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    run_id: str | None = None,
+) -> ToolExecutor:
+    """Single-call drawio: persist XML as artifact AND return render envelope.
+
+    The product intent (2026-04-26): drop the four-step ritual
+    (read_skill_file → fill placeholders → artifact_create → artifact_render).
+    One tool · one call · the chat shows the diagram, the artifact panel
+    shows the file. XML auto-wraps if the model only sent the inner body.
+    """
+
+    async def _exec(
+        name: str,
+        xml: str = "",
+        description: str | None = None,
+        tags: list[str] | None = None,
+        change_message: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        if not xml or not xml.strip():
+            return {"error": "xml is empty — pass a mxfile or mxGraphModel body"}
+        try:
+            normalized_xml = _normalize_drawio_xml(xml)
+            normalized_name = _normalize_drawio_name(name)
+            blob = normalized_xml.encode("utf-8")
+            persisted = await _persist_office_artifact(
+                maker=maker,
+                name=normalized_name,
+                kind=ArtifactKind.DRAWIO,
+                blob=blob,
+                description=description,
+                tags=tags,
+                change_message=change_message,
+                conversation_id=conversation_id,
+                employee_id=employee_id,
+                run_id=run_id,
+            )
+        except _ArtifactExecutorError as exc:
+            return {"error": str(exc)}
+        except Exception as exc:
+            return {"error": f"render_drawio failed: {exc}"}
+        # _persist_office_artifact already returns the unified shape
+        # (component + props + flat artifact_id/version/kind), so a bare
+        # passthrough is correct. Keeps drawio in lock-step with all the
+        # other artifact_create* tools — same auto-render contract.
+        return persisted
+
+    return _exec
+
+
+def make_list_model_prices_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    """List the merged price table (DB overlay + un-overridden code seed).
+
+    Inlines the merge instead of importing from ``services.model_pricing``
+    because ``execution/`` cannot depend on ``services/`` per the layered
+    contract. The merge here is intentionally a near-mirror of
+    ``model_pricing.list_all_with_source``; the divergence risk is low —
+    both read the same code seed via ``_PRICING_SEED_REFS``.
+    """
+
+    async def _exec(**_: Any) -> dict[str, Any]:
+        from allhands.execution.pricing_seed import iter_seed_entries
+
+        async with _session_context(maker) as session:
+            db_entries = await SqlModelPriceRepo(session).list_all()
+        seen = {e.model_ref.lower().strip() for e in db_entries}
+        rows: list[dict[str, Any]] = [
+            {
+                "model_ref": e.model_ref,
+                "input_per_million_usd": e.input_per_million_usd,
+                "output_per_million_usd": e.output_per_million_usd,
+                "source": e.source,
+                "source_url": e.source_url,
+                "note": e.note,
+                "updated_at": e.updated_at.isoformat() if e.updated_at else None,
+                "updated_by_run_id": e.updated_by_run_id,
+            }
+            for e in db_entries
+        ]
+        for ref, in_usd, out_usd in iter_seed_entries():
+            if ref in seen:
+                continue
+            rows.append(
+                {
+                    "model_ref": ref,
+                    "input_per_million_usd": in_usd,
+                    "output_per_million_usd": out_usd,
+                    "source": "code",
+                    "source_url": None,
+                    "note": None,
+                    "updated_at": None,
+                    "updated_by_run_id": None,
+                }
+            )
+        rows.sort(key=lambda r: (r["source"] == "code", r["model_ref"]))
+        return {
+            "prices": rows,
+            "count": len(rows),
+            "db_count": sum(1 for r in rows if r["source"] == "db"),
+            "code_count": sum(1 for r in rows if r["source"] == "code"),
+        }
+
+    return _exec
+
+
+def make_upsert_model_price_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(
+        model_ref: str,
+        input_per_million_usd: float,
+        output_per_million_usd: float,
+        source_url: str,
+        note: str | None = None,
+        # Confirmation pipeline injects these from the agent context:
+        _run_id: str | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        from datetime import UTC
+
+        from allhands.core import ModelPriceEntry
+
+        async with _session_context(maker) as session:
+            entry = ModelPriceEntry(
+                model_ref=model_ref,
+                input_per_million_usd=float(input_per_million_usd),
+                output_per_million_usd=float(output_per_million_usd),
+                source="db",
+                source_url=source_url,
+                note=note,
+                updated_at=datetime.now(UTC),
+                updated_by_run_id=_run_id,
+            )
+            saved = await SqlModelPriceRepo(session).upsert(entry)
+        return {
+            "model_ref": saved.model_ref,
+            "input_per_million_usd": saved.input_per_million_usd,
+            "output_per_million_usd": saved.output_per_million_usd,
+            "source": saved.source,
+            "source_url": saved.source_url,
+            "note": saved.note,
+            "updated_at": saved.updated_at.isoformat() if saved.updated_at else None,
+        }
+
+    return _exec
+
+
+def make_delete_model_price_override_executor(
+    maker: async_sessionmaker[AsyncSession],
+) -> ToolExecutor:
+    async def _exec(model_ref: str, **_: Any) -> dict[str, Any]:
+        async with _session_context(maker) as session:
+            removed = await SqlModelPriceRepo(session).delete(model_ref)
+        return {"model_ref": model_ref, "removed": removed}
+
+    return _exec
+
+
 def _make_delete_conversation_exec_factory() -> Callable[
     [async_sessionmaker[AsyncSession]], ToolExecutor
 ]:
@@ -919,6 +1514,12 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     # ArtifactService so agent-produced HTML / markdown / code / images /
     # mermaid / data actually persist and can be re-rendered.
     "allhands.artifacts.create": make_artifact_create_executor,
+    "allhands.artifacts.create_pdf": make_artifact_create_pdf_executor,
+    "allhands.artifacts.create_xlsx": make_artifact_create_xlsx_executor,
+    "allhands.artifacts.create_csv": make_artifact_create_csv_executor,
+    "allhands.artifacts.create_docx": make_artifact_create_docx_executor,
+    "allhands.artifacts.create_pptx": make_artifact_create_pptx_executor,
+    "allhands.artifacts.render_drawio": make_render_drawio_executor,
     "allhands.artifacts.render": make_artifact_render_executor,
     "allhands.artifacts.list": make_artifact_list_executor,
     "allhands.artifacts.read": make_artifact_read_executor,
@@ -929,4 +1530,9 @@ READ_META_EXECUTORS: dict[str, Callable[[async_sessionmaker[AsyncSession]], Tool
     "allhands.artifacts.search": make_artifact_search_executor,
     # History-panel conversation lifecycle (Tool First · L01).
     "allhands.meta.delete_conversation": _make_delete_conversation_exec_factory(),
+    # Model-pricing overlay (Tool First · L01) · paired with REST in
+    # api/routers/pricing.py.
+    "allhands.meta.list_model_prices": make_list_model_prices_executor,
+    "allhands.meta.upsert_model_price": make_upsert_model_price_executor,
+    "allhands.meta.delete_model_price_override": make_delete_model_price_override_executor,
 }

@@ -7,7 +7,7 @@ import json
 import logging
 import secrets
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -121,7 +121,7 @@ async def create_conversation(
         await emp_svc.get(body.employee_id)
     except EmployeeNotFound as exc:
         raise HTTPException(
-            status_code=404, detail=f"Employee {body.employee_id!r} not found."
+            status_code=404, detail=t("errors.not_found.employee_id", id=repr(body.employee_id))
         ) from exc
     conv = await chat_svc.create_conversation(body.employee_id)
     return await _to_conversation_response(conv, session)
@@ -147,7 +147,7 @@ async def list_conversations(
             await emp_svc.get(employee_id)
         except EmployeeNotFound as exc:
             raise HTTPException(
-                status_code=404, detail=f"Employee {employee_id!r} not found."
+                status_code=404, detail=t("errors.not_found.employee_id", id=repr(employee_id))
             ) from exc
         convs = await conv_repo.list_for_employee(employee_id)
     else:
@@ -170,7 +170,9 @@ async def get_conversation(
     conv_repo = await get_conversation_repo(session)
     conv = await conv_repo.get(conversation_id)
     if conv is None:
-        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.conversation_id", id=repr(conversation_id))
+        )
     counts = await conv_repo.count_messages([conv.id])
     return await _to_conversation_response(conv, session, message_count=counts.get(conv.id, 0))
 
@@ -189,7 +191,9 @@ async def delete_conversation(
     conv_repo = await get_conversation_repo(session)
     deleted = await conv_repo.delete(conversation_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.conversation_id", id=repr(conversation_id))
+        )
     return Response(status_code=204)
 
 
@@ -210,7 +214,9 @@ async def update_conversation(
     conv_repo = await get_conversation_repo(session)
     conv = await conv_repo.get(conversation_id)
     if conv is None:
-        raise HTTPException(status_code=404, detail=f"Conversation {conversation_id!r} not found.")
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.conversation_id", id=repr(conversation_id))
+        )
     if body.title is not None:
         conv.title = body.title
     if body.clear_model_ref_override:
@@ -458,25 +464,37 @@ async def _encode_chat_sse(
     try:
         stream = await open_stream()
         stream_iter = stream.__aiter__()
+        # 2026-04-26 第一性原理修复:旧版 asyncio.wait_for(coro, timeout=10s)
+        # 心跳触发时会 cancel 内部 coro · CancelledError 沿链路炸下去
+        # (stream_iter → agent_loop → runner → 子代理 astream)· 整轮 abort
+        # · 用户看到 "cancelled [ABORTED]"。
+        #
+        # 改用 asyncio.wait({task}, timeout=10s) — 超时不 cancel 任务 ·
+        # 任务保持存活继续等真正事件。LLM thinking 60s+ 也不会被打断。
+        next_event_task: asyncio.Task[Any] | None = None
         while True:
             if await request.is_disconnected():
                 log.info(
                     "chat.send_message: client disconnected; cancelling agent stream",
                     extra={"conversation_id": conversation_id},
                 )
+                if next_event_task is not None and not next_event_task.done():
+                    next_event_task.cancel()
                 break
-            try:
-                event = await asyncio.wait_for(
-                    stream_iter.__anext__(),
-                    timeout=heartbeat_interval,
-                )
-            except StopAsyncIteration:
-                break
-            except TimeoutError:
-                # No agent event in the last 10s → tell the client we're
-                # still alive. ts is plain ISO so the client can compute
-                # silence locally; payload is intentionally tiny to keep
-                # idle-conversation cost negligible.
+
+            if next_event_task is None:
+
+                async def _next_event() -> Any:
+                    return await stream_iter.__anext__()
+
+                next_event_task = asyncio.create_task(_next_event())
+
+            done, _pending = await asyncio.wait(
+                {next_event_task},
+                timeout=heartbeat_interval,
+            )
+            if not done:
+                # Heartbeat tick · task 仍在跑 · 不 cancel · 下个迭代重等。
                 yield agui.encode_sse(
                     agui.custom(
                         "allhands.heartbeat",
@@ -484,6 +502,17 @@ async def _encode_chat_sse(
                     )
                 )
                 continue
+
+            # Task 完成 · 消费结果。
+            task_done = next_event_task
+            next_event_task = None
+            try:
+                event = task_done.result()
+            except StopAsyncIteration:
+                break
+            except asyncio.CancelledError:
+                # task 被 cancel · 退出循环 · 让 finally 走清理路径
+                break
             if event.kind == "token":
                 # Seeing user-visible text closes any still-open reasoning
                 # block — thinking always precedes the final answer in

@@ -7,7 +7,8 @@
       "pageTitle": "Skills",
       "subtitle": "A skill pack = list of tool IDs + a prompt fragment. Install from GitHub, the official market (<mono>anthropics/skills</mono>), or a local .zip, and assign to any employee.",
       "tabs": {
-        "installed": "Installed",
+        "installed": "User-installed",
+        "builtin": "Platform built-in",
         "market": "Official market",
         "github": "Install from GitHub",
         "upload": "Upload .zip"
@@ -30,6 +31,12 @@
       "uninstallConfirm": "Uninstall",
       "noDescription": "No description",
       "builtinLabel": "Builtin",
+      "searchPlaceholder": "Search skills · name / description / id",
+      "noMatch": "No skill matches \"{query}\".",
+      "sortAriaLabel": "Sort by",
+      "sortRecent": "Recent",
+      "sortName": "Name",
+      "sortTools": "Tools",
       "uninstallAria": "Uninstall {name}",
       "loadingLabel": "Loading skills",
       "empty": {
@@ -43,11 +50,14 @@
         "sourceUpload": "Upload .zip"
       },
       "market": {
-        "searchPlaceholder": "Search by name, description, or tag...",
+        "searchPlaceholder": "Search by name, description, or tag…",
         "searchAria": "Search official market",
-        "loading": "Searching...",
+        "loading": "Searching…",
         "tagsLabel": "Tags",
         "tagsAll": "All",
+        "tagsShowMore": "+ {n} more",
+        "tagsShowLess": "− show less",
+        "loadMore": "Load {batch} more · {remaining} left",
         "summary": "{shown} / {total} skills",
         "summaryWithTag": " · tag:",
         "installedSummary": "{count} installed",
@@ -65,12 +75,12 @@
         "ai": "AI explanation",
         "raw": "Raw SKILL.md",
         "close": "Close",
-        "loadingMeta": "Reading skill metadata...",
-        "loadingMd": "Reading SKILL.md...",
+        "loadingMeta": "Reading skill metadata…",
+        "loadingMd": "Reading SKILL.md…",
         "noBody": "Explanation failed: response has no body",
         "regenerate": "Re-explain",
         "aiHint": "AI explanation based on SKILL.md · for reference only",
-        "aiWaiting": "AI is reading SKILL.md, hang on...",
+        "aiWaiting": "AI is reading SKILL.md, hang on…",
         "filesHeading": "Files ({count})",
         "skillMdHeading": "SKILL.md",
         "installed": "Installed",
@@ -112,6 +122,7 @@
       "tabs": {
         "overview": "Overview",
         "prompt": "Prompt / template",
+        "files": "Files",
         "versions": "Version history",
         "dependencies": "Dependencies"
       },
@@ -134,6 +145,10 @@
         "dependents": "Employees using this skill · {count}",
         "dependentsEmpty": "No employees reference this skill yet.",
         "leadBadge": "lead"
+      },
+      "references": {
+        "section": "References · {count} files",
+        "hint": "The agent can pull these on demand with read_skill_file(skill_id, relative_path) — templates, cheat sheets, troubleshooting matrices."
       },
       "prompt": {
         "section": "System prompt fragment",
@@ -158,17 +173,40 @@
         "thIndex": "#",
         "thToolId": "tool_id",
         "thKind": "kind"
+      },
+      "files": {
+        "loading": "Loading file tree",
+        "loadingHint": "Fetching every file in this skill's directory…",
+        "loadFailed": "Load failed · {error}",
+        "loadingFile": "Reading",
+        "readFailed": "Read failed · {error}",
+        "treeEmpty": "Empty directory",
+        "treeEmptyHint": "This skill ships no files.",
+        "noSelection": "Pick a file to view / edit",
+        "noSelectionHint": "Select a file on the left; the editor opens on the right.",
+        "editable": "editable",
+        "readOnly": "read-only",
+        "binary": "binary",
+        "binaryNotPreviewable": "Binary file · preview not supported.",
+        "saved": "Saved",
+        "unsaved": "Unsaved",
+        "saving": "Saving",
+        "saveBtn": "Save",
+        "deleteBtn": "Delete",
+        "deleteTooltip": "Remove this file from disk",
+        "deleteConfirm": "Delete \"{path}\"? This writes to disk and cannot be undone.",
+        "builtinWarning": "This is a builtin skill (shipped with the backend code). Edits take effect in memory immediately, but the next git checkout / docker rebuild will overwrite them. Commit the change to the repo to keep it permanent."
       }
     },
     "explainer": {
       "trigger": "AI explain",
       "tooltip": "Use AI to explain what this skill does and when to use it",
       "panelTitle": "AI explanation",
-      "generating": "Generating...",
+      "generating": "Generating…",
       "done": "Done",
       "regenerate": "Re-explain",
       "noBody": "Explanation failed: response has no body",
-      "waiting": "Waiting for the first chunk..."
+      "waiting": "Waiting for the first chunk…"
     }
   },
   "market": {
@@ -249,12 +287,11 @@
         "notesHint": "Optional",
         "close": "Close",
         "cancel": "Cancel",
-        "saving": "Saving...",
+        "saving": "Saving…",
         "save": "Save"
       }
     },
     "detail": {
-      "appShellFallback": "Symbol detail",
       "backToMarket": "Back to market",
       "exchangeShanghai": "Shanghai",
       "exchangeShenzhen": "Shenzhen",
@@ -315,6 +352,15 @@
       },
       "loadErrorTitle": "Failed to load MCP servers",
       "retry": "Retry",
+      "searchPlaceholder": "Search MCP · name / transport / health",
+      "noMatch": "No server matches \"{query}\".",
+      "noUnhealthy": "All servers healthy · nothing to triage.",
+      "unhealthyOnly": "Show only unhealthy · {n}",
+      "sortAriaLabel": "Sort by",
+      "sortHealth": "Default",
+      "sortName": "Name",
+      "sortTools": "Tools",
+      "sortRecent": "Last sync",
       "deleteTitle": "Delete MCP server {name}?",
       "deleteMessage": "This permanently removes the registration record. The external service itself is unaffected.",
       "deleteConfirm": "Delete",
@@ -337,8 +383,10 @@
         "test": "Test",
         "tools": "Tools",
         "delete": "Delete",
-        "loadingTools": "Loading tools...",
+        "loadingTools": "Loading tools…",
         "emptyTools": "This server declares no tools.",
+        "toolsSearchPlaceholder": "Search tools…",
+        "toolsNoMatch": "No tool matches \"{query}\"",
         "featured": "featured"
       },
       "empty": {

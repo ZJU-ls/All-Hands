@@ -28,7 +28,7 @@ type EntryKey =
   | "conversations"
   | "tasks"
   | "employees"
-  | "employeeDesign"
+  | "employeeNew"
   | "skills"
   | "mcp"
   | "gateway"
@@ -62,7 +62,7 @@ const ENTRY_DEFS: EntryDef[] = [
   { key: "conversations", href: "/conversations", hint: "past conversations", icon: "clock", keywords: "history conversations" },
   { key: "tasks", href: "/tasks", hint: "async tasks", icon: "check-circle-2", keywords: "tasks jobs async" },
   { key: "employees", href: "/employees", hint: "digital employees", icon: "users", keywords: "employees agents team" },
-  { key: "employeeDesign", href: "/employees/design", hint: "design new employee", icon: "user-plus", keywords: "employee design new" },
+  { key: "employeeNew", href: "/employees/new", hint: "hire new employee", icon: "user-plus", keywords: "employee new hire design" },
   { key: "skills", href: "/skills", hint: "skill packs", icon: "wand-2", keywords: "skills abilities prompts" },
   { key: "mcp", href: "/mcp-servers", hint: "external mcp", icon: "plug", keywords: "mcp plugins servers" },
   { key: "gateway", href: "/gateway", hint: "provider + model gateway", icon: "server", keywords: "gateway llm provider model openai anthropic" },
@@ -70,7 +70,7 @@ const ENTRY_DEFS: EntryDef[] = [
   { key: "triggers", href: "/triggers", hint: "scheduled + webhook", icon: "zap", keywords: "triggers cron webhook schedule" },
   { key: "channels", href: "/channels", hint: "slack email webhook", icon: "bell", keywords: "channels notifications slack email webhook" },
   { key: "confirmations", href: "/confirmations", hint: "pending approvals", icon: "shield-check", keywords: "confirmations approvals gate" },
-  { key: "traces", href: "/traces", hint: "langfuse traces", icon: "activity", keywords: "traces observability langfuse" },
+  { key: "traces", href: "/traces", hint: "run traces", icon: "activity", keywords: "traces observability events runs" },
   { key: "observatory", href: "/observatory", hint: "platform observability", icon: "brain", keywords: "observatory metrics dashboard" },
   { key: "stockAssistant", href: "/stock-assistant", hint: "market anomaly demo", icon: "trending-up", keywords: "stock market demo" },
   { key: "review", href: "/review", hint: "agent review", icon: "check", keywords: "review approvals" },
@@ -140,8 +140,35 @@ export function CommandPalette({
   );
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [recents, setRecents] = useState<string[]>([]);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Hydrate recents on first open · ring of last 5 picked hrefs.
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const raw = window.localStorage.getItem("ah.cmdk.recents");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setRecents(arr.filter((s) => typeof s === "string").slice(0, 5));
+      }
+    } catch {
+      // ignore
+    }
+  }, [open]);
+
+  const pushRecent = useCallback((href: string) => {
+    setRecents((prev) => {
+      const next = [href, ...prev.filter((h) => h !== href)].slice(0, 5);
+      try {
+        window.localStorage.setItem("ah.cmdk.recents", JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     const scored = ENTRIES.map((e) => ({ e, score: fuzzyMatch(query, e) }))
@@ -179,11 +206,18 @@ export function CommandPalette({
 
   const pick = useCallback(
     (href: string) => {
+      pushRecent(href);
       setOpen(false);
       router.push(href);
     },
-    [router, setOpen],
+    [router, setOpen, pushRecent],
   );
+
+  const recentEntries = useMemo(() => {
+    if (query) return [];
+    const map = new Map(ENTRIES.map((e) => [e.href, e] as const));
+    return recents.map((h) => map.get(h)).filter((e): e is Entry => Boolean(e));
+  }, [query, recents, ENTRIES]);
 
   const onListKey = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -247,6 +281,34 @@ export function CommandPalette({
             </div>
           ) : (
             <>
+              {!query && recentEntries.length > 0 && (
+                <>
+                  <div className="px-3 pb-1.5 pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
+                    {t("recent", { count: recentEntries.length })}
+                  </div>
+                  <ul className="mb-2 space-y-0.5">
+                    {recentEntries.map((e) => (
+                      <li key={`recent-${e.href}`}>
+                        <Link
+                          href={e.href}
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            pick(e.href);
+                          }}
+                          className="relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-muted hover:bg-surface-2 hover:text-text transition duration-fast"
+                        >
+                          <Icon name="clock" size={13} className="text-text-subtle" />
+                          <span className="flex-1 truncate font-medium">{e.label}</span>
+                          <span className="font-mono text-[10px] text-text-subtle opacity-60">
+                            {e.href}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mx-1 mb-1 h-px bg-border/60" aria-hidden />
+                </>
+              )}
               {!query && (
                 <div className="px-3 pb-1.5 pt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
                   {t("suggestions", { count: filtered.length })}

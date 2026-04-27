@@ -3,6 +3,7 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useRef,
   type KeyboardEvent,
@@ -80,6 +81,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
   }));
+
+  // Autosize: grow with content up to ~8 rows, then internal scroll. Without
+  // this users typing a 200-char paragraph stare at a 2-line window with the
+  // cursor falling off the bottom — a chat-first product should feel like
+  // ChatGPT / Claude, not a console line edit.
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    const lineHeight = 22; // matches leading-[1.55] @ 14px
+    const maxHeight = lineHeight * 8 + 12;
+    const next = Math.min(ta.scrollHeight, maxHeight);
+    ta.style.height = `${next}px`;
+    ta.style.overflowY = ta.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [value]);
 
   const canSend = !isStreaming && !disabled && value.trim().length > 0;
 
@@ -186,7 +202,7 @@ function SendOrStopButton({
       data-state={isStreaming ? "streaming" : canSend ? "ready" : "idle"}
       className={cn(
         "inline-flex h-8 w-8 shrink-0 items-center justify-center self-end rounded-lg",
-        "transition-colors duration-fast",
+        "transition-colors duration-fast focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30",
         disabled
           ? "bg-surface-2 text-text-subtle"
           : "bg-primary text-primary-fg shadow-soft-sm hover:bg-primary-hover",
@@ -243,6 +259,7 @@ export function ThinkingToggle({
       data-state={enabled ? "on" : "off"}
       className={cn(
         "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[11px] transition-colors duration-fast disabled:opacity-50",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
         enabled
           ? "border-primary/40 bg-primary-muted text-primary"
           : "border-border bg-surface text-text-muted hover:text-text hover:border-border-strong hover:bg-surface-2",

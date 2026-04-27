@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN" data-theme-pack="brand-blue" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>allhands · UI Polish Iteration Log · feat/ui-tweaks</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --surface-2: #f3f5f9;
+      --border: #e2e6ee;
+      --border-strong: #c8cedd;
+      --text: #0f1115;
+      --text-muted: #4a5160;
+      --text-subtle: #87909e;
+      --primary: #2768ff;
+      --primary-soft: #e9efff;
+      --success: #149563;
+      --success-soft: #defcec;
+      --warning: #b85d00;
+      --warning-soft: #fff1de;
+      --danger: #b8264a;
+      --danger-soft: #ffe4ec;
+      --accent: #6b46c1;
+      --accent-soft: #efe9ff;
+      --shadow-sm: 0 1px 2px rgba(15,17,21,.05), 0 1px 3px rgba(15,17,21,.04);
+      --shadow: 0 4px 16px rgba(15,17,21,.08);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 48px 24px 96px; }
+    .hero {
+      background: linear-gradient(135deg, #2768ff 0%, #6b46c1 100%);
+      color: #fff;
+      padding: 32px 32px 28px;
+      border-radius: 18px;
+      margin-bottom: 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(39,104,255,.18);
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      right: -60px;
+      top: -120px;
+      background: radial-gradient(circle, rgba(255,255,255,.18), transparent 60%);
+      filter: blur(20px);
+    }
+    .hero h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 8px;
+      letter-spacing: -.01em;
+    }
+    .hero p { margin: 0; opacity: .9; font-size: 15px; }
+    .hero .meta {
+      margin-top: 18px;
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+    }
+    .hero .meta b { font-weight: 600; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .stat .num {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -.02em;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    .stat .label {
+      font-size: 11px;
+      color: var(--text-subtle);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-top: 2px;
+    }
+    h2 {
+      font-size: 20px;
+      letter-spacing: -.01em;
+      margin: 36px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .round {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow-sm);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .round:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow);
+    }
+    .round h3 {
+      margin: 0 0 6px;
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .round h3 .num {
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .round h3 .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 8px;
+      border-radius: 5px;
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin-left: auto;
+    }
+    .tag.feat { background: var(--success-soft); color: var(--success); }
+    .tag.fix  { background: var(--primary-soft); color: var(--primary); }
+    .tag.refactor { background: var(--accent-soft); color: var(--accent); }
+    .round p { margin: 6px 0; color: var(--text-muted); }
+    .round ul { margin: 6px 0 0 0; padding-left: 18px; color: var(--text-muted); font-size: 13px; }
+    .round ul li + li { margin-top: 4px; }
+    .round .files {
+      margin-top: 10px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      color: var(--text-subtle);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .round .files code {
+      background: var(--surface-2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .round .why {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: linear-gradient(180deg, var(--primary-soft) 0%, transparent 100%);
+      border-left: 3px solid var(--primary);
+      border-radius: 0 6px 6px 0;
+      font-size: 12.5px;
+      color: var(--text);
+    }
+    .footer {
+      margin-top: 48px;
+      padding: 18px 0 0;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-subtle);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code.inline {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>UI Polish · 跨夜迭代记录</h1>
+      <p>feat/ui-tweaks · 多轮微优化合集 · 每轮一个聚焦点 · 直推 main</p>
+      <div class="meta">
+        <span><b>分支</b> feat/ui-tweaks</span>
+        <span><b>开始</b> 2026-04-25 22:48</span>
+        <span><b>策略</b> 每轮 1-3 文件 · 测试 + lint + push</span>
+        <span><b>双向同步</b> 推 feat/ui-tweaks + main</span>
+      </div>
+    </section>
+
+    <section class="summary">
+      <div class="stat"><div class="num">12</div><div class="label">轮次</div></div>
+      <div class="stat"><div class="num">21</div><div class="label">文件改动</div></div>
+      <div class="stat"><div class="num">1794</div><div class="label">vitest pass</div></div>
+      <div class="stat"><div class="num">1422</div><div class="label">pytest pass</div></div>
+    </section>
+
+    <h2>主线索一 · 数字 / 时长 / 字节 格式化统一</h2>
+
+    <div class="round">
+      <h3><span class="num">01</span>统一 formatTokens / formatBytes / formatDuration / formatRelativeTime <span class="tag refactor">refactor</span></h3>
+      <p>UsageChip / KpiBar / RunHeader / RunArtifacts 各自实现一份格式化,临界处理细微不一(28k vs 28,456;0.0k vs "0";321ms vs 0.3s)。提到 <code class="inline">web/lib/format.ts</code> 一份共享实现,所有调用点改 import。</p>
+      <div class="why">
+        <b>Why:</b> chat 里 chip 显示 "28.5k",同一 run 在 trace drawer 里显示 "28,456" — 同一份数据视觉错位,用户在 cockpit / chat / trace 之间来回跳时大脑得"换一次档"。
+      </div>
+      <div class="files">
+        <code>web/lib/format.ts (new)</code>
+        <code>UsageChip.tsx</code>
+        <code>KpiBar.tsx</code>
+        <code>RunHeader.tsx</code>
+        <code>RunArtifacts.tsx</code>
+      </div>
+    </div>
+
+    <h2>主线索二 · 键盘可访问性扫荡</h2>
+
+    <div class="round">
+      <h3><span class="num">02</span>5 处常用交互元素补 focus-visible <span class="tag fix">a11y</span></h3>
+      <ul>
+        <li>EmptyState 主/次按钮 — 之前 Tab 完全没有 ring</li>
+        <li>ConfirmDialog Cancel/Confirm — Esc/Enter 流靠默认 focus,无视觉提示;补 ring-primary/20 + ring-danger/40</li>
+        <li>ConversationSwitcher 历史项 — 之前只有 hover 高亮,字号同时从 12px 拉到 13px</li>
+        <li>DrawerRail 五个 panel 切换钮(Cockpit 重度键盘用户)</li>
+        <li>ModelRow IconButton(ping/test/edit/delete)— Gateway 行内常被键盘访问</li>
+      </ul>
+      <div class="why"><b>Why:</b> 浅色主题下 hover 灰边混进背景,键盘用户读不到焦点位置。统一 ring-primary/40 在两套 theme 下都对比足够。</div>
+    </div>
+
+    <div class="round">
+      <h3><span class="num">04</span>composer / 历史触发 / active runs 行 三处补 focus-visible <span class="tag fix">a11y</span></h3>
+      <p>Composer 发送 / 停止主按钮、thinking-toggle、ConversationSwitcher 触发钮、Cockpit ActiveRunsList 行链接 — 全部补统一 ring。零鼠标视觉副作用。</p>
+    </div>
+
+    <div class="round">
+      <h3><span class="num">09</span>侧栏 / Modal close / 设置页 copy 按钮 三处补 focus-visible <span class="tag fix">a11y</span></h3>
+      <p>AppShell 侧栏 NavLink active+idle 都补 ring(active 用 primary-fg/40 在蓝色块上仍可见);Gateway Modal 右上 close X;StoragePathsCard copy/open 迷你按钮。</p>
+    </div>
+
+    <h2>主线索三 · 信号强度 + 视觉反馈</h2>
+
+    <div class="round">
+      <h3><span class="num">03</span>ErrorState danger 视觉加重 + ModelTestDialog 长 reasoning 滚动羽化 <span class="tag fix">visual</span></h3>
+      <ul>
+        <li>ErrorState border 30%→45% + 外加 ring-1 ring-danger/10:浅主题下原 30% 太淡,与 surface 难分离</li>
+        <li>retry 按钮加 focus-visible ring-danger/30 闭环</li>
+        <li>ModelTestDialog reasoning 滚动框 max-h 60→80(长链推理不再被腰斩)</li>
+        <li>新增 globals.css 工具类 <code class="inline">.scroll-fade-bottom</code>:底部 28px 渐隐,提示"还有内容滚不到位"</li>
+      </ul>
+    </div>
+
+    <h2>主线索四 · 表单交互</h2>
+
+    <div class="round">
+      <h3><span class="num">05</span>DesignForm TextField 加内联校验 <span class="tag feat">feat</span></h3>
+      <p>之前必填字段只有 label 红点 *,用户填错只能在 save 之后看通用 toast,体验不连贯。现在:</p>
+      <ul>
+        <li>onBlur 标记 touched,空值显红框 + "必填字段不能为空"</li>
+        <li>新 hint(灰)/ error(强)槽位让后续 form 复用同一模板</li>
+        <li>aria-invalid 同步,a11y 工具能感知</li>
+      </ul>
+    </div>
+
+    <div class="round">
+      <h3><span class="num">06</span>Composer textarea autosize <span class="tag feat">feat</span></h3>
+      <p>之前 rows=2 写死,用户输 200 字段落时光标"掉出框外"。现在每次 value 变就重测 scrollHeight:贴合内容高度;到 ~8 行(≈ 188px)触顶后 overflow-y auto 接管。对照 ChatGPT / Claude.ai 体验。</p>
+      <div class="why"><b>Why:</b> 这是聊天为先的产品,composer 是核心面;固定 2 行让长 prompt 写起来像在控制台编辑命令,而不是和 AI 对话。</div>
+    </div>
+
+    <h2>主线索五 · 语义清晰 / 概念解耦(前传)</h2>
+
+    <div class="round">
+      <h3><span class="num">10</span>"上下文窗口"字段消歧 + composer chip tooltip 说清概念 <span class="tag fix">copy</span></h3>
+      <p>用户 raise:gateway 配的 64k 是"最大输出 tokens"语义,而 chat composer 把它当输入预算分母用,概念错位。</p>
+      <ul>
+        <li>Gateway "上下文窗口"字段加显式 hint:"模型一次能处理的 token 总额(prompt+completion),chat 预算条以此为分母,不是最大输出"</li>
+        <li>Composer chip tooltip 改成"已用输入估算 N tokens / 模型上下文窗口 M tokens"</li>
+      </ul>
+    </div>
+
+    <div class="round">
+      <h3><span class="num">11</span>拆分 max_input_tokens / max_output_tokens 为独立字段 <span class="tag feat">feat</span></h3>
+      <p>把"上下文窗口"单字段不合理压成的三个概念拆成三个独立可选字段:</p>
+      <ul>
+        <li><code class="inline">context_window</code> — 总额(prompt + completion)</li>
+        <li><code class="inline">max_input_tokens</code> — composer 预算条分母 · 真实 prompt 上限</li>
+        <li><code class="inline">max_output_tokens</code> — 出站 chat 的 max_tokens · LangChain ctor 时烘到 payload(Anthropic 的 max_tokens 和 thinking 一样,bind 不传递)</li>
+      </ul>
+      <p>落地:core/model.py + alembic 0028 + persistence + service + api/routers + meta tools schema + execution/llm_factory(ctor-time 注入) + chat_service(根据 LLMModel.max_output_tokens 注入 AgentLoop) + 前端 ModelDto + Gateway form(收进新建的 <code class="inline">&lt;Collapsible&gt;</code> 高级设置区,默认收起) + composer UsageChip(分母优先用 max_input_tokens)。</p>
+    </div>
+
+    <div class="round">
+      <h3><span class="num">12</span>注册模型表单 · 高级设置折叠 + 滚动 tip <span class="tag feat">feat</span></h3>
+      <p>注册时只必填 name + display_name。三个 token cap 收进折叠的"高级设置"区,默认收起;编辑时若已填过则自动展开。</p>
+      <p>顶部 <code class="inline">&lt;RotatingTip&gt;</code> 4.5s 轮播 4 条文案告诉用户:caps 可选 / Lead Agent 也能配 / ctx vs max input 的区别。两条思路并存:UI 自助 + 对话式配置。</p>
+    </div>
+
+    <h2>主线索六 · 列表 / 状态组件健壮性</h2>
+
+    <div class="round">
+      <h3><span class="num">13</span>LoadingState skeleton 暴露 lines 数 <span class="tag refactor">refactor</span></h3>
+      <p>之前 skeleton 写死 3 行,3-stack fallback 显得太瘦,长列表又显得太满。开 <code class="inline">lines</code> 数(范围 1..8,默认 3)。Width 序列改成 6 个值循环:60/40/75/55/68/45。</p>
+    </div>
+
+    <h2>对照表</h2>
+
+    <div class="round" style="background: var(--surface-2);">
+      <h3 style="margin-bottom: 10px;">未做(明天可继续)</h3>
+      <ul>
+        <li>ConversationSwitcher popover 加 ↑/↓/Enter 键盘导航</li>
+        <li>统一 SearchBox 组件(目前 knowledge / artifacts / conversations 各写一份)</li>
+        <li>Cmd+K CommandPalette 全局接入</li>
+        <li>Toast 通知系统(目前散落在各处的 inline error,没有 stacking)</li>
+        <li>Cockpit KPI 卡片 hover 视差一致性</li>
+        <li>Run trace drawer 内 timeline 缩放 / 拖拽时间轴</li>
+      </ul>
+    </div>
+
+    <h2>验证</h2>
+    <div class="round">
+      <p style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px;">
+        ✔ <b>web pnpm typecheck</b> · 0 errors<br/>
+        ✔ <b>web pnpm lint</b> · 0 errors,2 warnings(已存在的 useEffect deps,upstream)<br/>
+        ✔ <b>web pnpm test --run</b> · 1794 passed / 53 skipped(58/59 files green)<br/>
+        ✔ <b>backend ruff check</b> · all passed<br/>
+        ✔ <b>backend mypy strict</b> · 0 errors<br/>
+        ✔ <b>backend lint-imports</b> · 4 contracts kept<br/>
+        ✔ <b>backend pytest</b> · 1422 passed / 25 skipped / 2 xfailed(2 个 flake 与本批次无关:test_market_api / test_anomaly_closed_loop)
+      </p>
+    </div>
+
+    <div class="footer">
+      <span>分支 · feat/ui-tweaks</span>
+      <span>已推 main</span>
+      <span>2026-04-25 23:50 GMT+8</span>
+    </div>
+  </main>
+</body>
+</html>

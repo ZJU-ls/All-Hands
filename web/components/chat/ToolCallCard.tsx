@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { ToolCall } from "@/lib/protocol";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
@@ -113,6 +114,7 @@ function iconForToolId(toolId: string): IconName {
  * running state gets a spinner that replaces the pill.
  */
 export function ToolCallCard({ toolCall }: Props) {
+  const t = useTranslations("chat.toolCall");
   const [expanded, setExpanded] = useState(false);
   const color = STATUS_COLOR[toolCall.status] ?? "text-text-muted";
   const statusLabel = STATUS_LABEL[toolCall.status] ?? toolCall.status;
@@ -213,11 +215,11 @@ export function ToolCallCard({ toolCall }: Props) {
             return (
               <div data-testid="tool-call-card-subrun-link">
                 <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-text-subtle">
-                  子代理 run
+                  {t("subagentRun")}
                 </p>
                 <TraceChip
                   runId={subRunId}
-                  label="查看链路详情 →"
+                  label={t("viewTrace")}
                   variant="link"
                 />
               </div>

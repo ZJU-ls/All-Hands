@@ -72,15 +72,19 @@ from allhands.core.mcp import MCPHealth, MCPServer, MCPTransport
 from allhands.core.model import LLMModel
 from allhands.core.observability import (
     ArtifactSummary,
-    BootstrapStatus,
     ObservabilityConfig,
+    ObservatoryConversationBreakdown,
     ObservatoryEmployeeBreakdown,
+    ObservatoryErrorBreakdown,
     ObservatoryModelBreakdown,
     ObservatorySummary,
+    ObservatoryToolBreakdown,
     RunDetail,
     RunError,
     RunStatus,
     RunTokenUsage,
+    TimeSeries,
+    TimeSeriesPoint,
     TraceSummary,
     Turn,
     TurnLLMCall,
@@ -90,6 +94,7 @@ from allhands.core.observability import (
     TurnUserInput,
 )
 from allhands.core.plan import AgentPlan, PlanStep, StepStatus
+from allhands.core.pricing import ModelPriceEntry, PriceSource
 from allhands.core.provider import LLMProvider
 from allhands.core.run_overrides import RunOverrides
 from allhands.core.skill import Skill, SkillSource
@@ -147,7 +152,6 @@ __all__ = [
     "ArtifactKind",
     "ArtifactSummary",
     "ArtifactVersion",
-    "BootstrapStatus",
     "Chunk",
     "Collection",
     "ComponentStatus",
@@ -189,11 +193,16 @@ __all__ = [
     "MaxIterationsReached",
     "Message",
     "MessageRole",
+    "ModelPriceEntry",
     "ObservabilityConfig",
+    "ObservatoryConversationBreakdown",
     "ObservatoryEmployeeBreakdown",
+    "ObservatoryErrorBreakdown",
     "ObservatoryModelBreakdown",
     "ObservatorySummary",
+    "ObservatoryToolBreakdown",
     "PlanStep",
+    "PriceSource",
     "RenderPayload",
     "RetrievalConfig",
     "RunDetail",
@@ -212,6 +221,8 @@ __all__ = [
     "Task",
     "TaskSource",
     "TaskStatus",
+    "TimeSeries",
+    "TimeSeriesPoint",
     "TimerSpec",
     "Tool",
     "ToolCall",

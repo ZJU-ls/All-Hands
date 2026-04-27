@@ -18,10 +18,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import re
 import secrets
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from urllib.parse import quote as _urlquote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
@@ -30,7 +32,12 @@ from pydantic import BaseModel
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_artifact_service
 from allhands.core import BINARY_KINDS, Artifact, ArtifactKind, ArtifactVersion
-from allhands.services.artifact_service import ArtifactNotFound, ArtifactService
+from allhands.i18n import t
+from allhands.services.artifact_service import (
+    ArtifactContentMissing,
+    ArtifactNotFound,
+    ArtifactService,
+)
 
 if TYPE_CHECKING:
     from allhands.core import EventEnvelope
@@ -42,6 +49,39 @@ logger = logging.getLogger(__name__)
 _HEARTBEAT_SECONDS = 15.0
 
 router = APIRouter(prefix="/artifacts", tags=["artifacts"])
+
+
+# Replace any byte that can't survive a latin-1 HTTP header with `_`.
+# We keep ASCII letters, digits, hyphen / underscore / dot / space, plus
+# the small set of ASCII punctuation that's safe inside a quoted-string.
+# Anything else (CJK · accented · emoji) collapses to underscore so old
+# clients that ignore RFC 5987 still get a usable filename.
+_HEADER_SAFE_RE = re.compile(r"[^A-Za-z0-9 ._\-+()\[\]]")
+
+
+def _content_disposition(name: str) -> str:
+    """Build a non-explosive Content-Disposition for any artifact name.
+
+    HTTP headers are latin-1; passing a name with CJK characters (e.g.
+    'AllHands-产品战略与路线图.pptx') crashes the server with a generic
+    500. RFC 6266 / 5987 lets us emit both an ASCII fallback and a
+    UTF-8 percent-encoded variant — modern browsers (Chrome/Safari/
+    Firefox/Edge) prefer the `filename*` form and render the original
+    Chinese name correctly.
+
+    Format::
+
+        Content-Disposition: attachment;
+            filename="<ascii-safe>";
+            filename*=UTF-8''<percent-encoded utf-8>
+    """
+    ascii_fallback = _HEADER_SAFE_RE.sub("_", name).strip()
+    if not ascii_fallback:
+        ascii_fallback = "download"
+    # `quote` encodes per RFC 3986; that's a strict superset of what
+    # RFC 5987 expects for the filename* value.
+    encoded = _urlquote(name, safe="")
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
 
 
 class ArtifactResponse(BaseModel):
@@ -75,6 +115,43 @@ class ArtifactContentResponse(BaseModel):
     content: str | None = None
     content_base64: str | None = None
     truncated: bool = False
+
+
+class ContributorEntry(BaseModel):
+    """One row of the top-contributors leaderboard. `key` is whatever was
+    populated on the artifacts (employee_id) — the page resolves it to a
+    display name from its own employee cache. `count` is the artifact tally."""
+
+    key: str
+    count: int
+
+
+class ArtifactStatsResponse(BaseModel):
+    """Workspace-wide artifact aggregations for the /artifacts dashboard.
+
+    Computed from `list_all` so we share one query path; the page asks for
+    stats once on mount + after any artifact_changed SSE frame, not on every
+    keystroke. If we ever cross the ~10k-rows mark we'll move to a SQL
+    GROUP BY in the repo, but at that point the global page should also
+    paginate; for v0 the catalog is well under that.
+
+    iter 6 additions:
+      daily_counts · last 14 days, oldest → newest, count of artifacts
+                     created on that day (UTC). Drives the activity
+                     sparkline.
+      top_employees · employee_id keyed leaderboard (top 5) of who
+                      authored the most. UI resolves to display names.
+    """
+
+    total: int
+    pinned: int
+    last_7d: int
+    total_bytes: int
+    by_kind: dict[str, int]
+    largest_kind: str | None
+    latest_updated_at: str | None
+    daily_counts: list[int]
+    top_employees: list[ContributorEntry]
 
 
 def _to_response(art: Artifact) -> ArtifactResponse:
@@ -133,7 +210,9 @@ async def list_artifacts(
         try:
             parsed_kind = ArtifactKind(kind)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=f"unknown kind {kind!r}") from exc
+            raise HTTPException(
+                status_code=400, detail=t("errors.unknown_kind", kind=repr(kind))
+            ) from exc
     items = await svc.list_all(
         kind=parsed_kind,
         name_prefix=name_prefix,
@@ -150,6 +229,58 @@ async def list_artifacts(
         created_before=created_before,
     )
     return [_to_response(a) for a in items]
+
+
+@router.get("/stats", response_model=ArtifactStatsResponse)
+async def artifact_stats(
+    svc: ArtifactService = Depends(get_artifact_service),
+) -> ArtifactStatsResponse:
+    """Workspace-wide artifact aggregations for the /artifacts dashboard."""
+    items = await svc.list_all(limit=500, include_deleted=False)
+    by_kind: dict[str, int] = {}
+    total_bytes = 0
+    pinned = 0
+    last_7d = 0
+    latest_updated: datetime | None = None
+    now = datetime.now(UTC)
+    cutoff_7d = now.timestamp() - 7 * 24 * 3600
+    # 14-day daily histogram · index 0 = 13 days ago, index 13 = today
+    daily_counts = [0] * 14
+    by_employee: dict[str, int] = {}
+    today_midnight = datetime(now.year, now.month, now.day, tzinfo=UTC)
+    for a in items:
+        by_kind[a.kind.value] = by_kind.get(a.kind.value, 0) + 1
+        total_bytes += a.size_bytes
+        if a.pinned:
+            pinned += 1
+        if a.created_at.timestamp() >= cutoff_7d:
+            last_7d += 1
+        if latest_updated is None or a.updated_at > latest_updated:
+            latest_updated = a.updated_at
+        # Slot creation into the 14-day bucket (UTC days). Older artifacts
+        # silently fall outside; the histogram is short on purpose for a
+        # peek-not-deep-dive sparkline.
+        delta_days = int((today_midnight - a.created_at).total_seconds() // (24 * 3600))
+        if 0 <= delta_days < 14:
+            daily_counts[13 - delta_days] += 1
+        if a.created_by_employee_id:
+            by_employee[a.created_by_employee_id] = by_employee.get(a.created_by_employee_id, 0) + 1
+    largest_kind = max(by_kind.items(), key=lambda kv: kv[1])[0] if by_kind else None
+    top_employees = [
+        ContributorEntry(key=k, count=v)
+        for k, v in sorted(by_employee.items(), key=lambda kv: -kv[1])[:5]
+    ]
+    return ArtifactStatsResponse(
+        total=len(items),
+        pinned=pinned,
+        last_7d=last_7d,
+        total_bytes=total_bytes,
+        by_kind=by_kind,
+        largest_kind=largest_kind,
+        latest_updated_at=latest_updated.isoformat() if latest_updated else None,
+        daily_counts=daily_counts,
+        top_employees=top_employees,
+    )
 
 
 @router.get("/stream")
@@ -257,10 +388,16 @@ async def get_artifact_content(
     except ArtifactNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    blob = svc.read_bytes(art)
+    try:
+        blob = svc.read_bytes(art)
+    except ArtifactContentMissing as exc:
+        # 404 is the right status here · the DB row exists but the file is
+        # gone (worktree drift / disk wipe). The UI maps 404 to a friendly
+        # "content missing" empty state, much better than 500.
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     headers: dict[str, str] = {}
     if download:
-        headers["Content-Disposition"] = f'attachment; filename="{art.name}"'
+        headers["Content-Disposition"] = _content_disposition(art.name)
     return Response(content=blob, media_type=art.mime_type, headers=headers)
 
 
@@ -355,7 +492,10 @@ async def get_artifact_version_content(
     except ArtifactNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    blob = svc.read_version_bytes(v)
+    try:
+        blob = svc.read_version_bytes(v)
+    except ArtifactContentMissing as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     if art.kind in BINARY_KINDS:
         return ArtifactContentResponse(
             id=art.id,
@@ -371,3 +511,39 @@ async def get_artifact_version_content(
         mime_type=art.mime_type,
         content=blob.decode("utf-8"),
     )
+
+
+# ─── Pin / delete · REST mirrors of the Meta Tool side (CLAUDE.md §3.1)
+# Agent-managed resources are allowed REST CRUD as long as a same-name
+# Meta Tool exists; both already do (artifact_pin · artifact_delete).
+# These endpoints power the UI's bulk-action toolbar without forcing
+# every action through the chat surface.
+
+
+class PinArtifactRequest(BaseModel):
+    pinned: bool
+
+
+@router.post("/{artifact_id}/pin", response_model=ArtifactResponse)
+async def pin_artifact(
+    artifact_id: str,
+    body: PinArtifactRequest,
+    svc: ArtifactService = Depends(get_artifact_service),
+) -> ArtifactResponse:
+    try:
+        updated = await svc.set_pinned(artifact_id, body.pinned)
+    except ArtifactNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _to_response(updated)
+
+
+@router.delete("/{artifact_id}", status_code=204)
+async def delete_artifact(
+    artifact_id: str,
+    svc: ArtifactService = Depends(get_artifact_service),
+) -> Response:
+    try:
+        await svc.delete(artifact_id)
+    except ArtifactNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(status_code=204)

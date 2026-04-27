@@ -51,7 +51,8 @@
     "pieChart": {
       "empty": "暂无数据",
       "isolated": "已聚焦 · 点击恢复",
-      "tooltip": "{value} · {pct}% · 点击聚焦"
+      "tooltip": "{value} · {pct}% · 点击聚焦",
+      "ariaLabel": "饼图"
     },
     "stat": {
       "copyLabel": "复制指标",
@@ -70,8 +71,6 @@
     },
     "table": {
       "searchPlaceholder": "筛选行…",
-      "densityCozy": "宽",
-      "densityCompact": "紧",
       "copyCsv": "复制为 CSV",
       "noMatch": "没有匹配的行",
       "empty": "暂无数据",
@@ -89,7 +88,9 @@
   "renderShared": {
     "copyButton": {
       "label": "复制",
-      "copied": "已复制"
+      "copied": "已复制",
+      "failed": "复制失败",
+      "failedDetail": "剪贴板权限被阻止 · 请检查浏览器权限或手动复制。"
     },
     "searchInput": {
       "placeholder": "搜索…",
