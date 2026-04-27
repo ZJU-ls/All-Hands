@@ -1114,3 +1114,21 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 **结果**:本轮零代码改动 · regression net 全绿
 
 **commits**:仅本条 log
+
+## Round 53 · 2026-04-27 08:13 (cron · 30m)
+
+**主题**:KnowledgeService.update_embedding 漏的一个 raise 中文 fix
+
+**发现**:`backend/src/allhands/services/knowledge_service.py:1020`
+`raise KBError(f"模型 {new_ref!r} 不可用: {exc}")` — embedding 切换时,
+模型不可用错误抛出的是中文 f-string · zh / en 用户都看到中文。
+之前 R10 / R26 都漏了这处(发生在 update_embedding 路径,触发概率低)。
+
+**做的事**:
+- 加 `knowledge.embedding.model_unusable` catalog key(zh + en)
+- raise KBError(t("...", ref=repr(new_ref), detail=str(exc)))
+
+**结果**:38 backend tests 全绿(11 i18n + 1 keys-resolve + 1 hardcoded scan +
+25 knowledge service)· 全栈 `raise XxxError("中文...")` 模式现在 0 处
+
+**commits**:见 git log
