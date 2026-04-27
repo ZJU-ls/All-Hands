@@ -1,5 +1,8 @@
 {
   "runs": {
+    "detail": {
+      "shellTitle": "追踪 · {id}"
+    },
     "header": {
       "employee": "员工",
       "model": "模型",
@@ -52,8 +55,7 @@
       "title": "产出制品 · {count}",
       "subtitle": "本次 run 写入或更新的文件 · 点击进入详情",
       "version": "v{version}",
-      "new": "新建",
-      "open": "打开"
+      "new": "新建"
     }
   },
   "traces": {
@@ -128,10 +130,7 @@
       "card": {
         "autoDisabled": "自动停用",
         "failedStreak": "连败 {count}",
-        "firesPrefix": "触发",
-        "firesSuffix": "次",
         "firesTotal": "触发 <n></n> 次",
-        "lastPrefix": "最近",
         "lastFiredAt": "最近触发 <time></time>",
         "neverFired": "尚未触发",
         "fireNow": "立即触发",
