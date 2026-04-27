@@ -1150,3 +1150,24 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 本轮零代码改动
 
 **commits**:仅本条 log
+
+## Round 55 · 2026-04-27 09:13 (cron · 30m)
+
+**主题**:Preset.description 字段调查
+
+**发现**:`backend/src/allhands/execution/modes/{execute,plan,plan_with_subagent}.py`
+三个 Preset 实例的 `description` 字段是中文 · 看起来像漏译。
+
+**调查**:
+- Preset.friendly_name_zh 字段名直接写明 zh · 是 by-design 单语
+- grep 全栈 `preset.description` 没人消费 · 仅在源文件里存在,不通过任何
+  router 出口
+- 前端通过 `employees.presetRadio.{executeLabel,executeCaption,planLabel,...}`
+  catalog key 自己维护双语描述(R40 dead-key audit 时 runtime-arg ns 已识别)
+
+**结论**:不是 i18n 漏洞 · 是源代码 metadata · 留作以后清理(未消费字段)·
+更稳妥的做法是直接删 description 字段 · 但那是 API 重构,不属本轮范围
+
+**结果**:本轮零代码改动 · 38 backend + 1999 web tests 全绿
+
+**commits**:仅本条 log
