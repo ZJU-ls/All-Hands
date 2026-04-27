@@ -37,6 +37,7 @@
     "header": {
       "loading": "Loading…",
       "viewEmployee": "View {name}'s profile",
+      "breadcrumbEmployees": "Employees",
       "modelOverridden": "Overridden for this chat: {ref}",
       "modelInherited": "Following employee default · {ref}"
     },

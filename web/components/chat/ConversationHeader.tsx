@@ -67,6 +67,11 @@ export function ConversationHeader({
 
   const modelName = modelDisplayName(effectiveModelRef);
 
+  // Non-Lead employees get a 「员工 /」 breadcrumb prefix so the user can see
+  // they're in a per-employee chat (and click back to /employees). Lead's
+  // chat is the "main" chat and skips the prefix to stay terse.
+  const isLead = Boolean(employee.is_lead_agent);
+
   return (
     <div className="flex items-center gap-3 min-w-0">
       <span
@@ -80,6 +85,20 @@ export function ConversationHeader({
         {employeeInitials(employee.name)}
       </span>
       <div className="flex min-w-0 items-center gap-2">
+        {!isLead && (
+          <>
+            <Link
+              href="/employees"
+              className="shrink-0 text-text-subtle hover:text-text transition-colors duration-base text-[12px] font-mono"
+              aria-label={t("breadcrumbEmployees")}
+            >
+              {t("breadcrumbEmployees")}
+            </Link>
+            <span className="text-text-subtle shrink-0" aria-hidden="true">
+              /
+            </span>
+          </>
+        )}
         <Link
           href={`/employees/${employee.id}`}
           className="min-w-0 text-text hover:text-primary transition-colors duration-base"

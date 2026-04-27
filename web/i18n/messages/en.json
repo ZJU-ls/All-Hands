@@ -56,7 +56,7 @@
     },
     "menu": {
       "cockpit": "Cockpit",
-      "chat": "Lead Chat",
+      "chat": "Chat",
       "tasks": "Tasks",
       "conversations": "History",
       "artifacts": "Artifacts",

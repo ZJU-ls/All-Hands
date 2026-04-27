@@ -37,6 +37,7 @@
     "header": {
       "loading": "加载中…",
       "viewEmployee": "查看员工 {name} 主页",
+      "breadcrumbEmployees": "员工",
       "modelOverridden": "本对话覆盖为 {ref}",
       "modelInherited": "跟随员工默认 · {ref}"
     },
