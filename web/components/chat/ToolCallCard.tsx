@@ -201,9 +201,10 @@ export function ToolCallCard({ toolCall }: Props) {
       {expanded && (
         <div className="space-y-2.5 border-t border-border bg-surface px-3 py-2.5">
           {/* ADR 0019 C2 · subagent run_id surfaces a link into the
-              RunTraceDrawer (?trace=<run_id>). Detected by duck-typing
-              the result envelope; no special tool flag — any tool that
-              wants its run inspectable can include run_id in its result. */}
+              observatory L3 trace page (/observatory/runs/<run_id>). Detected
+              by duck-typing the result envelope; no special tool flag — any
+              tool that wants its run inspectable can include run_id in its
+              result. (Pre-2026-04-27 this opened a global ?trace= drawer.) */}
           {(() => {
             const subRunId =
               toolCall.result &&

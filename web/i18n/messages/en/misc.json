@@ -172,6 +172,13 @@
           "updated": "Updated"
         }
       },
+      "runDetail": {
+        "shellTitle": "Trace · {id}",
+        "breadcrumb": {
+          "aria": "Breadcrumb",
+          "trace": "trace"
+        }
+      },
       "costPanel": {
         "title": "Cost panel · 24h",
         "today": "Today",

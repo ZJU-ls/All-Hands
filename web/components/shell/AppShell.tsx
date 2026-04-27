@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -14,20 +14,15 @@ import { KeyboardShortcutsModal } from "@/components/shell/KeyboardShortcutsModa
 import { RouteProgress } from "@/components/shell/RouteProgress";
 import { useDocumentTitle } from "@/lib/use-document-title";
 
-// Lazy-load the two global overlays so their module graph (DotGridBackdrop,
-// RunTracePanel, AgentMarkdown, runs/* components, icons pack) isn't dragged
-// into every route's dev cold-compile. ⌘K and `?trace=` are both infrequent
-// user-triggered surfaces, so a one-shot dynamic import on first open is
-// unnoticeable vs. the 2-6s per-route compile cost it saves. See L08.
+// Lazy-load the global ⌘K palette so its module graph isn't dragged into
+// every route's dev cold-compile. (The trace drawer used to live here too;
+// it was removed when trace viewing moved into observatory's L3 page —
+// /observatory/runs/[id] · TraceChip now navigates rather than opening an
+// overlay. See `docs/specs/2026-04-27-trace-into-observatory.md`.)
 const CommandPalette = dynamic(
   () => import("@/components/ui/CommandPalette").then((m) => m.CommandPalette),
   { ssr: false },
 );
-const RunTraceDrawer = dynamic(
-  () => import("@/components/runs/RunTraceDrawer").then((m) => m.RunTraceDrawer),
-  { ssr: false },
-);
-const TRACE_QUERY_KEY = "trace";
 
 type MenuItem = { labelKey: string; href: string; icon: IconName; badge?: string };
 type MenuSection = { titleKey: string; items: MenuItem[] };
@@ -365,8 +360,6 @@ export function AppShell({
   const [paletteMounted, setPaletteMounted] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const searchParams = useSearchParams();
-  const hasTrace = Boolean(searchParams?.get(TRACE_QUERY_KEY));
 
   // Sync browser tab title with the page-supplied title (locale-aware via
   // the `title` prop the caller computed from useTranslations).
@@ -495,7 +488,6 @@ export function AppShell({
       {paletteMounted && (
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       )}
-      {hasTrace && <RunTraceDrawer />}
       <KeyboardShortcutsModal
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
