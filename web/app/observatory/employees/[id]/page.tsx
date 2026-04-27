@@ -245,12 +245,12 @@ export default function EmployeeDetailPage({
                   <table className="w-full text-[12.5px]">
                     <thead className="bg-surface-2 text-[10px] uppercase tracking-wider text-text-subtle">
                       <tr>
-                        <th className="text-left py-2 px-3">trace</th>
-                        <th className="text-left py-2 px-3">{tEmp("model")}</th>
-                        <th className="text-left py-2 px-3">status</th>
-                        <th className="text-right py-2 px-3">duration</th>
-                        <th className="text-right py-2 px-3">tokens</th>
-                        <th className="text-left py-2 px-3">started</th>
+                        <th className="text-left py-2 px-3">{tEmp("table.trace")}</th>
+                        <th className="text-left py-2 px-3">{tEmp("table.model")}</th>
+                        <th className="text-left py-2 px-3">{tEmp("table.status")}</th>
+                        <th className="text-right py-2 px-3">{tEmp("table.duration")}</th>
+                        <th className="text-right py-2 px-3">{tEmp("table.tokens")}</th>
+                        <th className="text-left py-2 px-3">{tEmp("table.started")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -288,7 +288,7 @@ export default function EmployeeDetailPage({
                                       : "bg-success-soft text-success"
                                 }`}
                               >
-                                {tr.status}
+                                {tEmp(`status.${tr.status}`)}
                               </span>
                             </td>
                             <td className="py-2 px-3 text-right font-mono text-[11px] tabular-nums text-text-muted">

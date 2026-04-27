@@ -106,9 +106,9 @@ export default function ObservatoryRunDetailPage({
         </nav>
 
         {state.status === "ready" ? (
-          <RunTracePanel run={state.run} />
+          <RunTracePanel run={state.run} hideHeaderTraceChip />
         ) : (
-          <RunTracePanel runId={runId} />
+          <RunTracePanel runId={runId} hideHeaderTraceChip />
         )}
       </div>
     </AppShell>
