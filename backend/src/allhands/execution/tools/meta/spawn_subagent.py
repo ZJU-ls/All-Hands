@@ -27,6 +27,7 @@ from allhands.core import Employee, Tool, ToolKind, ToolScope
 from allhands.execution.dispatch import (
     _dispatch_depth,
     _parent_run_id,
+    current_parent_conversation_id,
     current_parent_run_id,
 )
 from allhands.execution.modes import MODES, expand_preset
@@ -44,6 +45,7 @@ DEFAULT_SPAWN_TIMEOUT_S = 180.0
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from allhands.execution.event_bus import EventBus
     from allhands.persistence.repositories import EmployeeRepo
 
 
@@ -187,6 +189,7 @@ class SpawnSubagentService:
         runner_factory: SubRunnerFactory,
         max_depth: int = 1,
         default_model_ref: str | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._employees = employee_repo
         self._runner_factory = runner_factory
@@ -195,6 +198,10 @@ class SpawnSubagentService:
         # When None, falls back to a sensible default (kept for backward compat
         # with tests that don't bind a parent model).
         self._default_model_ref = default_model_ref or "openai/gpt-4o-mini"
+        # Optional event_bus · same role as DispatchService._bus — emits
+        # run.started + run.completed/failed so observatory can find this
+        # sub-run by its trace_id (which we also surface as run_id).
+        self._bus = event_bus
 
     async def spawn(
         self,
@@ -245,6 +252,25 @@ class SpawnSubagentService:
         # GRANDPARENT's run_id, breaking trace tree links in observatory.
         parent_run_token = _parent_run_id.set(trace_id)
 
+        invoker_run_id = current_parent_run_id()
+        invoker_conv_id = current_parent_conversation_id() or ""
+        run_started_at = datetime.now(UTC)
+        # Emit run.started so observatory.get_run_detail can find the sub-run
+        # by ``trace_id`` (we surface it as ``run_id`` to the FE TraceChip).
+        # Pre-2026-04-27 these events were never written and the drawer
+        # showed "trace 已不在".
+        if self._bus is not None:
+            self._bus.publish_best_effort(
+                kind="run.started",
+                payload={
+                    "run_id": trace_id,
+                    "employee_id": child.id,
+                    "conversation_id": invoker_conv_id,
+                    "depth": new_depth,
+                    "parent_run_id": invoker_run_id,
+                },
+            )
+
         async def _drive() -> tuple[list[str], str, list[dict[str, Any]]]:
             """Drive the inner runner · collect token text AND render envelopes.
 
@@ -290,6 +316,22 @@ class SpawnSubagentService:
                     break
             return parts, status_local, renders
 
+        def _emit_terminal(*, failed: bool, error_msg: str | None) -> None:
+            if self._bus is None:
+                return
+            duration_s = (datetime.now(UTC) - run_started_at).total_seconds()
+            self._bus.publish_best_effort(
+                kind="run.failed" if failed else "run.completed",
+                payload={
+                    "run_id": trace_id,
+                    "employee_id": child.id,
+                    "conversation_id": invoker_conv_id,
+                    "duration_s": duration_s,
+                    "parent_run_id": invoker_run_id,
+                    "error": error_msg,
+                },
+            )
+
         try:
             try:
                 parts, status, renders = await asyncio.wait_for(
@@ -303,6 +345,7 @@ class SpawnSubagentService:
                     profile,
                     task[:80],
                 )
+                _emit_terminal(failed=True, error_msg="timeout")
                 return {
                     "result": (
                         f"Subagent timed out after {DEFAULT_SPAWN_TIMEOUT_S:.0f}s "
@@ -311,6 +354,7 @@ class SpawnSubagentService:
                         "smaller pieces or raising max_iterations_override."
                     ),
                     "trace_id": trace_id,
+                    "run_id": trace_id,
                     "iterations_used": 0,
                     "status": "error",
                     "parent_run_id": current_parent_run_id(),
@@ -320,9 +364,11 @@ class SpawnSubagentService:
                     "spawn_subagent inner runner raised: profile=%s",
                     profile,
                 )
+                _emit_terminal(failed=True, error_msg=f"{type(exc).__name__}: {exc}")
                 return {
                     "result": (f"Subagent crashed: {type(exc).__name__}: {exc}"),
                     "trace_id": trace_id,
+                    "run_id": trace_id,
                     "iterations_used": 0,
                     "status": "error",
                     "parent_run_id": current_parent_run_id(),
@@ -331,10 +377,18 @@ class SpawnSubagentService:
             _dispatch_depth.reset(depth_token)
             _parent_run_id.reset(parent_run_token)
 
+        _emit_terminal(
+            failed=(status == "error"),
+            error_msg=None if status != "error" else "inner runner reported error",
+        )
         result_text = "".join(parts).strip()
         out: dict[str, Any] = {
             "result": result_text,
             "trace_id": trace_id,
+            # Surface the same id under run_id so the FE TraceChip
+            # (ToolCallCard.tsx) can detect this sub-run uniformly with
+            # dispatch_employee — both feed into ?trace=<id> + RunTraceDrawer.
+            "run_id": trace_id,
             "iterations_used": 0,
             "status": status,
             "parent_run_id": current_parent_run_id(),

@@ -27,9 +27,7 @@ def test_write_scopes_require_confirmation() -> None:
 
 
 def test_upsert_requires_source_url() -> None:
-    upsert = next(
-        t for t in ALL_PRICING_META_TOOLS if t.id == "allhands.meta.upsert_model_price"
-    )
+    upsert = next(t for t in ALL_PRICING_META_TOOLS if t.id == "allhands.meta.upsert_model_price")
     required = upsert.input_schema.get("required") or []
     assert "source_url" in required, (
         "source_url must be required — drives the audit trail and prevents "
@@ -39,9 +37,7 @@ def test_upsert_requires_source_url() -> None:
 
 def test_delete_requires_only_model_ref() -> None:
     delete = next(
-        t
-        for t in ALL_PRICING_META_TOOLS
-        if t.id == "allhands.meta.delete_model_price_override"
+        t for t in ALL_PRICING_META_TOOLS if t.id == "allhands.meta.delete_model_price_override"
     )
     required = delete.input_schema.get("required") or []
     assert required == ["model_ref"]
