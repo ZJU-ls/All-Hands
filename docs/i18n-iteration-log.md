@@ -1216,3 +1216,23 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 本轮零代码改动
 
 **commits**:仅本条 log
+
+## Round 59 · 2026-04-27 11:13 (cron · 30m)
+
+**主题**:e2e 测试 + dead-key 状态复检
+
+**做的事**:
+- regression net + i18n contract tests 全过 · 1999 web tests
+- dead-key audit:catalog 2448(R52 后又增了 3 个新 key 在合并里)·
+  死率仍 0%
+- e2e tests scan:
+  - tests/e2e/skills.spec.ts / mcp-servers.spec.ts / cockpit.spec.ts
+    含中文断言("卸载" / "重试" / "驾驶舱" 等)
+  - 这些是 Playwright fixture 用的 zh-CN UI 文案 · 测试默认 locale 是
+    zh-CN · 当前 OK
+  - 跨 locale e2e 是分开的工作(每个 spec 加 `await setLocale("en")` /
+    切到 en cookie 重跑)· 不在本审计范围
+
+**结果**:本轮零代码改动
+
+**commits**:仅本条 log
