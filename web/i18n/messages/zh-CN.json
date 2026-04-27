@@ -56,12 +56,11 @@
     },
     "menu": {
       "cockpit": "驾驶舱",
-      "chat": "Lead 对话",
+      "chat": "对话",
       "tasks": "任务",
       "conversations": "历史会话",
       "artifacts": "制品库",
       "employees": "员工",
-      "employeeDesign": "员工设计",
       "skills": "技能",
       "mcpServers": "MCP 服务器",
       "knowledge": "知识库",

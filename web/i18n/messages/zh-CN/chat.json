@@ -8,6 +8,7 @@
     },
     "conversation": {
       "shellTitle": "One for All · 一个 Lead Agent 搞定一切",
+      "shellTitleEmployee": "{name} · 对话",
       "backendOffline": "后端未就绪 · 正在自动重连",
       "attempt": "尝试 {n}",
       "retryNow": "立即重试",
@@ -37,6 +38,7 @@
     "header": {
       "loading": "加载中…",
       "viewEmployee": "查看员工 {name} 主页",
+      "breadcrumbEmployees": "员工",
       "modelOverridden": "本对话覆盖为 {ref}",
       "modelInherited": "跟随员工默认 · {ref}"
     },

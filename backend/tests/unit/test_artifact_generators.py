@@ -155,11 +155,47 @@ def test_docx_unknown_block_collected_as_warning() -> None:
 # ----------------------------------------------------------------------
 
 
-def test_pptx_renders_title_and_bullets() -> None:
+def test_pptx_renders_primitive_text_and_extracts_title() -> None:
+    """Smoke for the primitives-mode renderer · the deeper coverage
+    lives in `test_render_pptx.py` (per-primitive + ToolArgError paths).
+    Kept here to keep the legacy generator-suite touch-point alive."""
     blob, warnings = render_pptx(
         slides=[
-            {"layout": "title", "title": "Cover", "subtitle": "Q1"},
-            {"layout": "bullets", "title": "Agenda", "bullets": ["one", "two"]},
+            {
+                "shapes": [
+                    {
+                        "type": "text",
+                        "x": 1,
+                        "y": 1,
+                        "w": 6,
+                        "h": 1.2,
+                        "text": "Cover",
+                        "font": {"size": 36},
+                    }
+                ]
+            },
+            {
+                "shapes": [
+                    {
+                        "type": "text",
+                        "x": 1,
+                        "y": 1,
+                        "w": 6,
+                        "h": 1.2,
+                        "text": "Agenda",
+                        "font": {"size": 36},
+                    },
+                    {
+                        "type": "text",
+                        "x": 1,
+                        "y": 3,
+                        "w": 6,
+                        "h": 0.6,
+                        "text": "one",
+                        "font": {"size": 14},
+                    },
+                ]
+            },
         ]
     )
     assert warnings == []
@@ -167,13 +203,6 @@ def test_pptx_renders_title_and_bullets() -> None:
     assert len(outline) == 2
     assert outline[0]["title"] == "Cover"
     assert "one" in outline[1]["body"]
-
-
-def test_pptx_image_url_yields_warning() -> None:
-    _, warnings = render_pptx(
-        slides=[{"layout": "image-right", "title": "T", "image_url": "https://x"}]
-    )
-    assert any("image_url" in w for w in warnings)
 
 
 def test_pptx_empty_raises() -> None:

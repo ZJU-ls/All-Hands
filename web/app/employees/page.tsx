@@ -85,7 +85,7 @@ export default function EmployeesPage() {
       title={t("shellTitle")}
       actions={
         <Link
-          href="/employees/design"
+          href="/employees/new"
           data-testid="goto-employee-design"
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
         >
@@ -377,7 +377,7 @@ function EmptyEmployees() {
             {t("hireEmployee")}
           </Link>
           <Link
-            href="/employees/design"
+            href="/employees/new"
             data-testid="employees-empty-cta-design"
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-surface border border-border text-[13px] font-semibold text-text hover:border-primary hover:text-primary hover:-translate-y-px transition duration-base"
           >

@@ -43,6 +43,7 @@ from allhands.core import (
     ArtifactVersion,
 )
 from allhands.core.errors import DomainError
+from allhands.i18n import t
 from allhands.persistence.sql_repos import (
     SqlArtifactRepo,
     SqlEmployeeRepo,
@@ -825,7 +826,8 @@ def make_artifact_rollback_executor(
                         file_path=rel,
                         diff_from_prev=diff,
                         created_at=now,
-                        change_message=change_message or f"回退到 v{to_version}",
+                        change_message=change_message
+                        or t("artifacts.revert_default", version=to_version),
                         parent_version=to_version,
                         created_by_employee_id=employee_id,
                         created_by_run_id=run_id,
@@ -1233,14 +1235,19 @@ def make_artifact_create_pptx_executor(
 
     async def _exec(
         name: str,
+        page: dict[str, Any] | None = None,
         slides: list[dict[str, Any]] | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
         change_message: str | None = None,
         **_: Any,
     ) -> dict[str, Any]:
+        # ToolArgError raised by render_pptx propagates to the pipeline
+        # for the structured {error,field,expected,received,hint}
+        # envelope (ADR 0021). We only catch the generic generator /
+        # persistence failures here.
         try:
-            blob, warnings = render_pptx(slides=slides or [])
+            blob, warnings = render_pptx(page=page, slides=slides or [])
             result = await _persist_office_artifact(
                 maker=maker,
                 name=name,
@@ -1258,8 +1265,6 @@ def make_artifact_create_pptx_executor(
             return result
         except (ArtifactGenerationError, _ArtifactExecutorError) as exc:
             return {"error": str(exc)}
-        except Exception as exc:
-            return {"error": f"artifact_create_pptx failed: {exc}"}
 
     return _exec
 

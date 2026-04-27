@@ -1,0 +1,97 @@
+{
+  "_doc": "Closing slide · short close + next-step bullets. One per deck. Replace the headline and the three next-step lines.",
+  "background": {
+    "color_hex": "#0a0e1a"
+  },
+  "shapes": [
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 0.22,
+      "h": 7.5,
+      "fill_hex": "#3b82f6"
+    },
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 7.42,
+      "w": 13.333,
+      "h": 0.04,
+      "fill_hex": "#1e2536"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 1.0,
+      "w": 11.5,
+      "h": 0.5,
+      "text": "CLOSING",
+      "font": {
+        "size": 14,
+        "weight": "bold",
+        "color_hex": "#60a5fa"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 1.7,
+      "w": 11.5,
+      "h": 1.6,
+      "text": "Thanks. Let's pick the next step together.",
+      "font": {
+        "size": 56,
+        "weight": "bold",
+        "color_hex": "#e7eaf3"
+      },
+      "line_spacing": 1.05
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 4.0,
+      "w": 0.5,
+      "h": 0.04,
+      "fill_hex": "#60a5fa"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 4.2,
+      "w": 11.5,
+      "h": 0.5,
+      "text": "NEXT STEPS",
+      "font": {
+        "size": 14,
+        "weight": "bold",
+        "color_hex": "#93a0b4"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 4.8,
+      "w": 11.5,
+      "h": 1.8,
+      "text": "1.  First concrete commitment with a deadline\n\n2.  Second commitment · who owns it\n\n3.  Decision needed by EOD",
+      "font": {
+        "size": 20,
+        "color_hex": "#e7eaf3"
+      },
+      "line_spacing": 1.5
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 6.85,
+      "w": 11.5,
+      "h": 0.4,
+      "text": "AUTHOR · CONTACT",
+      "font": {
+        "size": 12,
+        "color_hex": "#93a0b4"
+      }
+    }
+  ]
+}

@@ -43,7 +43,6 @@ const MENU: MenuSection[] = [
     titleKey: "team",
     items: [
       { labelKey: "employees", href: "/employees", icon: "users" },
-      { labelKey: "employeeDesign", href: "/employees/design", icon: "user-plus" },
       { labelKey: "skills", href: "/skills", icon: "wand-2" },
       { labelKey: "mcpServers", href: "/mcp-servers", icon: "plug" },
       { labelKey: "knowledge", href: "/knowledge", icon: "book-open" },

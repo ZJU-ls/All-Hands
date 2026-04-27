@@ -228,9 +228,16 @@ export default function ConversationPage() {
   }, []);
 
   const headerEmployee = employee ? toHeaderEmployee(employee) : null;
+  // Non-Lead employees get their own shell title — the "One for All · single
+  // Lead Agent" tagline only fits the Lead surface. Loading falls back to the
+  // tagline since we don't yet know which employee owns this conversation.
+  const shellTitle =
+    employee && !employee.is_lead_agent
+      ? t("shellTitleEmployee", { name: employee.name })
+      : t("shellTitle");
 
   return (
-    <AppShell title={t("shellTitle")}>
+    <AppShell title={shellTitle}>
       <div className="flex h-full min-h-0 min-w-0">
         <div className="flex h-full min-h-0 flex-1 flex-col min-w-0">
           {loadState.kind === "unreachable" && (

@@ -1,19 +1,22 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * /employees/design · Track L (I-0021) Phase 3B e2e.
+ * Employee designer e2e — Phase 2 split.
  *
- * Phase 2 shipped the skeleton (skill/mcp mount + disabled preset). Phase 3B
- * enables the preset region per SIGNOFF-agent-runtime-contract.md Q6-Q10:
+ *   /employees/new            · hire surface
+ *   /employees/{id}?tab=config · edit / publish / delete
  *
- *  - 3 presets radio group with friendly Chinese labels
- *    (标准执行 / 先出计划 / 计划+派子代理)
- *  - Default selection = `execute`
- *  - Switching preset pre-populates tool + skill pickers + max_iterations
- *  - Dry run panel calls `preview_employee_composition` meta tool
- *  - `plan_with_subagent` max_iterations = 15 (SIGNOFF Q7, NOT the contract's 20)
- *  - Submit → POST /api/employees with the expanded tool_ids/skill_ids/max_iterations
- *  - §3.2 red line: `mode` never appears in the submitted body or the page source
+ * Old `/employees/design` route now 302s to /employees, so the spec covers
+ * both the new hire flow and the inline-config tab on the detail page.
+ *
+ * Carried over invariants:
+ *   - Preset radio (3 options · default execute · friendly Chinese labels)
+ *   - Switching preset pre-populates skills + max_iterations
+ *   - plan_with_subagent max_iterations = 15 (SIGNOFF Q7)
+ *   - Dry-run panel calls preview_employee_composition
+ *   - Submit → POST /api/employees with expanded arrays · §3.2 red line: no
+ *     `mode` field anywhere in body or page source
+ *   - Lifecycle: publish flips status · delete removes employee
  */
 
 type Json = Record<string, unknown>;
@@ -132,7 +135,7 @@ function installRoutes(
       // §3.2 red line: the submitted body must never contain `mode`.
       expect(Object.keys(body)).not.toContain("mode");
       const created = {
-        id: "new",
+        id: "emp-new",
         name: body.name,
         description: body.description ?? "",
         system_prompt: body.system_prompt ?? "",
@@ -175,6 +178,14 @@ function installRoutes(
     const idx = state.employees.findIndex(
       (e) => (e as { id: string }).id === id,
     );
+    if (method === "GET") {
+      if (idx < 0) {
+        await route.fulfill({ status: 404, json: { detail: "missing" } });
+        return;
+      }
+      await route.fulfill({ json: state.employees[idx] });
+      return;
+    }
     if (method === "PATCH") {
       if (idx < 0) {
         await route.fulfill({ status: 404, json: { detail: "missing" } });
@@ -206,16 +217,23 @@ function installRoutes(
     }
     await route.continue();
   });
+  // Detail page also pulls /api/conversations?employee_id=... — return empty.
+  page.route(/\/api\/conversations(\?[^/]*)?$/, async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    await route.continue();
+  });
 }
 
-test.describe("/employees/design · Phase 3B preset + dry run", () => {
+test.describe("/employees/new · hire flow", () => {
   test("preset radio: 3 options with Chinese labels, default = execute", async ({
     page,
   }) => {
     installRoutes(page, { employees: [] });
-    await page.goto("/employees/design");
+    await page.goto("/employees/new");
 
-    // 3 radios present, enabled, with friendly Chinese labels visible.
     await expect(page.getByTestId("preset-execute")).toBeEnabled();
     await expect(page.getByTestId("preset-plan")).toBeEnabled();
     await expect(page.getByTestId("preset-plan_with_subagent")).toBeEnabled();
@@ -223,9 +241,7 @@ test.describe("/employees/design · Phase 3B preset + dry run", () => {
     await expect(page.getByText("先出计划")).toBeVisible();
     await expect(page.getByText("计划+派子代理")).toBeVisible();
 
-    // Default = execute.
     await expect(page.getByTestId("preset-execute")).toBeChecked();
-    // And the old "locked" notice is gone.
     await expect(page.getByTestId("preset-locked-notice")).toHaveCount(0);
   });
 
@@ -233,12 +249,10 @@ test.describe("/employees/design · Phase 3B preset + dry run", () => {
     page,
   }) => {
     installRoutes(page, { employees: [] });
-    await page.goto("/employees/design");
+    await page.goto("/employees/new");
     await page.getByTestId("preset-plan").check();
 
-    // Skill whitelist pre-checks sk_planner.
     await expect(page.getByTestId("skill-sk_planner-checked")).toBeVisible();
-    // max_iterations slider/input shows preset default (3).
     await expect(page.getByTestId("field-max-iterations")).toHaveValue("3");
   });
 
@@ -246,10 +260,9 @@ test.describe("/employees/design · Phase 3B preset + dry run", () => {
     page,
   }) => {
     installRoutes(page, { employees: [] });
-    await page.goto("/employees/design");
+    await page.goto("/employees/new");
     await page.getByTestId("preset-plan_with_subagent").check();
 
-    // The SIGNOFF Q7 answer lowered max_iterations from the contract's 20 to 15.
     await expect(page.getByTestId("field-max-iterations")).toHaveValue("15");
   });
 
@@ -257,7 +270,7 @@ test.describe("/employees/design · Phase 3B preset + dry run", () => {
     page,
   }) => {
     installRoutes(page, { employees: [] });
-    await page.goto("/employees/design");
+    await page.goto("/employees/new");
     await page.getByTestId("preset-execute").check();
     await page.getByTestId("dryrun-button").click();
 
@@ -271,20 +284,21 @@ test.describe("/employees/design · Phase 3B preset + dry run", () => {
     await expect(panel).toContainText("10");
   });
 
-  test("submit: posts expanded tool_ids / skill_ids / max_iterations, never `mode`", async ({
+  test("submit: posts expanded arrays · navigates to detail page config tab · §3.2 no mode", async ({
     page,
   }) => {
     const state: { employees: Json[]; lastPost?: Json } = { employees: [] };
     installRoutes(page, state);
-    await page.goto("/employees/design");
+    await page.goto("/employees/new");
 
     await page.getByTestId("field-name").fill("researcher-a");
     await page.getByTestId("preset-execute").check();
     await page.getByTestId("design-save").click();
 
-    await expect(page.getByTestId("design-emp-new")).toBeVisible();
+    // After save the new page redirects to /employees/{id}?tab=config.
+    await page.waitForURL(/\/employees\/emp-new\?tab=config/);
+    await expect(page.getByTestId("employee-tab-config")).toBeVisible();
 
-    // The body POSTed by the form must carry the preset-expanded arrays.
     expect(state.lastPost).toBeTruthy();
     const posted = state.lastPost as Json;
     expect(Object.keys(posted)).not.toContain("mode");
@@ -303,16 +317,20 @@ test.describe("/employees/design · Phase 3B preset + dry run", () => {
 
   test("page source never mentions `mode`", async ({ page }) => {
     installRoutes(page, { employees: [] });
-    await page.goto("/employees/design");
+    await page.goto("/employees/new");
     const html = await page.content();
-    // §3.2 red-line grep. The page must not render `mode=` as an attribute
-    // nor surface `mode:` in quoted string content.
     expect(html).not.toContain("mode=");
     expect(html).not.toMatch(/\bmode\b\s*:\s*['"]/);
   });
+
+  test("legacy /employees/design redirects to roster", async ({ page }) => {
+    installRoutes(page, { employees: [] });
+    await page.goto("/employees/design");
+    await page.waitForURL(/\/employees(\?.*)?$/);
+  });
 });
 
-test.describe("/employees/design · Round 3 lifecycle (publish + delete + try)", () => {
+test.describe("/employees/{id}?tab=config · lifecycle (publish + delete + try)", () => {
   const draftEmp = {
     id: "emp-draft-1",
     name: "drafty",
@@ -327,56 +345,50 @@ test.describe("/employees/design · Round 3 lifecycle (publish + delete + try)",
     published_at: null,
   } satisfies Json;
 
-  const pubEmp = {
-    id: "emp-pub-1",
-    name: "onroster",
-    description: "roster",
-    system_prompt: "",
-    is_lead_agent: false,
-    tool_ids: ["allhands.builtin.fetch_url"],
-    skill_ids: [],
-    max_iterations: 10,
-    model_ref: "openai/gpt-4o-mini",
-    status: "published",
-    published_at: "2026-04-20T00:00:00Z",
-  } satisfies Json;
-
-  test("draft shows 草稿 tag in sidebar; published does not", async ({ page }) => {
-    installRoutes(page, { employees: [{ ...draftEmp }, { ...pubEmp }] });
-    await page.goto("/employees/design");
-    await expect(page.getByTestId(`design-emp-${draftEmp.id}-draft-tag`)).toBeVisible();
-    await expect(
-      page.getByTestId(`design-emp-${pubEmp.id}-draft-tag`),
-    ).toHaveCount(0);
-  });
-
-  test("selecting a draft shows publish + delete toolbar; publish flips status", async ({
+  test("draft hero shows draft chip; config tab exposes publish + delete", async ({
     page,
   }) => {
     installRoutes(page, { employees: [{ ...draftEmp }] });
-    await page.goto("/employees/design");
-    await page.getByTestId(`design-emp-${draftEmp.id}`).click();
+    await page.goto(`/employees/${draftEmp.id}?tab=config`);
 
-    await expect(page.getByTestId("design-status-chip-draft")).toBeVisible();
-    await expect(page.getByTestId("design-publish")).toBeVisible();
-
-    await page.getByTestId("design-publish").click();
-    await expect(page.getByTestId("design-status-chip-published")).toBeVisible();
-    // Publish button hides once already published.
-    await expect(page.getByTestId("design-publish")).toHaveCount(0);
+    await expect(page.getByTestId("employee-hero-status-draft")).toBeVisible();
+    await expect(page.getByTestId("employee-config-publish")).toBeVisible();
+    await expect(page.getByTestId("employee-config-delete")).toBeVisible();
   });
 
-  test("delete button confirms then removes employee and resets selection", async ({
-    page,
-  }) => {
+  test("publish flips status; the publish button hides", async ({ page }) => {
     installRoutes(page, { employees: [{ ...draftEmp }] });
-    page.on("dialog", (d) => void d.accept());
-    await page.goto("/employees/design");
-    await page.getByTestId(`design-emp-${draftEmp.id}`).click();
-    await page.getByTestId("design-delete").click();
+    await page.goto(`/employees/${draftEmp.id}?tab=config`);
 
-    // After delete: back to "new employee" form (empty name).
-    await expect(page.getByTestId("field-name")).toHaveValue("");
-    await expect(page.getByTestId(`design-emp-${draftEmp.id}`)).toHaveCount(0);
+    await page.getByTestId("employee-config-publish").click();
+    await expect(page.getByTestId("employee-hero-status-published")).toBeVisible();
+    await expect(page.getByTestId("employee-config-publish")).toHaveCount(0);
+  });
+
+  test("delete confirms then routes back to /employees roster", async ({ page }) => {
+    installRoutes(page, { employees: [{ ...draftEmp }] });
+    await page.goto(`/employees/${draftEmp.id}?tab=config`);
+
+    await page.getByTestId("employee-config-delete").click();
+    // ConfirmDialog → confirm (scope to the dialog so we don't re-click the
+    // toolbar delete button that opened it).
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^删除$|^Delete$/ })
+      .click();
+
+    await page.waitForURL(/\/employees(\?.*)?$/);
+  });
+
+  test("hero edit button switches to config tab in place", async ({ page }) => {
+    installRoutes(page, { employees: [{ ...draftEmp }] });
+    await page.goto(`/employees/${draftEmp.id}`);
+
+    // Default tab is overview.
+    await expect(page.getByTestId("employee-tab-overview")).toBeVisible();
+    await page.getByTestId("employee-hero-edit").click();
+
+    await expect(page.getByTestId("employee-tab-config")).toBeVisible();
+    await expect(page).toHaveURL(/tab=config/);
   });
 });
