@@ -60,7 +60,37 @@
       "kpiMaxIter": "Max iter",
       "kpiMaxIterHint": "Max iterations per run",
       "emptyConvosHeading": "No conversations with {name} yet",
-      "emptyConvosBody": "Click \"New chat\" above to start the first one — chats save automatically and appear here."
+      "emptyConvosBody": "Click \"New chat\" above to start the first one — chats save automatically and appear here.",
+      "tabs": {
+        "ariaLabel": "Employee detail tabs",
+        "overview": "Overview",
+        "config": "Config",
+        "files": "Files"
+      },
+      "configHeading": "Edit employee",
+      "configSubtitle": "Tweak skills · tools · iterations · prompt · publish or remove",
+      "loadingForm": "Loading form dependencies",
+      "tryEmployee": "Try out",
+      "publish": "Publish",
+      "publishing": "Publishing",
+      "delete": "Delete",
+      "deleting": "Deleting",
+      "deleteHint": "Remove this employee · conversations stay but lose their profile reference",
+      "leadCannotDelete": "The Lead Agent cannot be deleted",
+      "deleteTitle": "Delete employee \"{name}\"?",
+      "deleteMessage": "This cannot be undone. Conversations from this employee are kept, but they lose the reference to the profile.",
+      "deleteConfirm": "Delete",
+      "filesEmptyHeading": "No artifacts from {name} yet",
+      "filesEmptyBody": "Files this employee produces (reports, charts, exports) will land here. Browse all artifacts in the dedicated panel for now.",
+      "filesGotoArtifacts": "Open artifacts"
+    },
+    "new": {
+      "shellTitle": "Hire new employee",
+      "backToList": "Employee list",
+      "eyebrow": "Phase 2 · /employees/new",
+      "heading": "Hire a new employee",
+      "subtitle": "Pick a preset to seed sensible defaults, then tune skills / tools / max iterations. After saving you'll land on the new employee's detail page where you can publish or keep editing.",
+      "loadingForm": "Loading form dependencies"
     },
     "design": {
       "shellTitle": "Employee designer",

@@ -28,7 +28,7 @@ type EntryKey =
   | "conversations"
   | "tasks"
   | "employees"
-  | "employeeDesign"
+  | "employeeNew"
   | "skills"
   | "mcp"
   | "gateway"
@@ -62,7 +62,7 @@ const ENTRY_DEFS: EntryDef[] = [
   { key: "conversations", href: "/conversations", hint: "past conversations", icon: "clock", keywords: "history conversations" },
   { key: "tasks", href: "/tasks", hint: "async tasks", icon: "check-circle-2", keywords: "tasks jobs async" },
   { key: "employees", href: "/employees", hint: "digital employees", icon: "users", keywords: "employees agents team" },
-  { key: "employeeDesign", href: "/employees/design", hint: "design new employee", icon: "user-plus", keywords: "employee design new" },
+  { key: "employeeNew", href: "/employees/new", hint: "hire new employee", icon: "user-plus", keywords: "employee new hire design" },
   { key: "skills", href: "/skills", hint: "skill packs", icon: "wand-2", keywords: "skills abilities prompts" },
   { key: "mcp", href: "/mcp-servers", hint: "external mcp", icon: "plug", keywords: "mcp plugins servers" },
   { key: "gateway", href: "/gateway", hint: "provider + model gateway", icon: "server", keywords: "gateway llm provider model openai anthropic" },
