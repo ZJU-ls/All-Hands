@@ -1201,3 +1201,18 @@ title 属性硬编码英文(`title="artifact-html"` / `title="pdf preview"`)。
 **结果**:13 backend i18n + 1999 web tests 全绿 · 本轮零代码改动
 
 **commits**:仅本条 log
+
+## Round 58 · 2026-04-27 10:43 (cron · 30m)
+
+**主题**:TypeScript 类型 + extended metadata 的 negative 扫描
+
+**做的事**:
+- TypeScript 类型联合中文成员(`type Foo = "中文" | "..."`) → 0 处
+- enum 中文成员 → 0 处
+- app/layout.tsx 的 `Metadata` 扩展字段(openGraph / keywords / twitter / robots)
+  → 0 处使用 · 仅 title + description(后者已 i18n)
+
+**结果**:13 backend i18n + 1999 web tests · regression net 全绿 ·
+本轮零代码改动
+
+**commits**:仅本条 log
