@@ -130,7 +130,10 @@ def test_update_employee_partial_fields(client: TestClient) -> None:
     assert body["tool_ids"] == ["allhands.builtin.fetch_url"]
 
 
-def test_delete_employee_204_then_404(client: TestClient) -> None:
+def test_delete_employee_default_is_soft_delete(client: TestClient) -> None:
+    """v3: DELETE without ``hard=true`` archives — row stays, conversations
+    keep their employee link, GET returns the archived employee. Listing
+    without filter excludes archived; ``?status=archived`` shows them again."""
     created = client.post(
         "/api/employees",
         json={
@@ -142,12 +145,66 @@ def test_delete_employee_204_then_404(client: TestClient) -> None:
             "skill_ids": [],
         },
     ).json()
-    assert client.delete(f"/api/employees/{created['id']}").status_code == 204
-    assert client.get(f"/api/employees/{created['id']}").status_code == 404
+    emp_id = created["id"]
+    assert client.delete(f"/api/employees/{emp_id}").status_code == 204
+    # Row stays — GET still returns it with status=archived.
+    detail = client.get(f"/api/employees/{emp_id}")
+    assert detail.status_code == 200
+    assert detail.json()["status"] == "archived"
+    # Default list excludes archived.
+    listed = client.get("/api/employees").json()
+    assert all(e["id"] != emp_id for e in listed)
+    # Archived tab surfaces them.
+    archived = client.get("/api/employees?status=archived").json()
+    assert any(e["id"] == emp_id for e in archived)
+
+
+def test_delete_employee_hard_drops_row(client: TestClient) -> None:
+    created = client.post(
+        "/api/employees",
+        json={
+            "name": "hard-del",
+            "description": "d",
+            "system_prompt": "p",
+            "model_ref": "openai/gpt-4o-mini",
+            "tool_ids": ["allhands.builtin.fetch_url"],
+            "skill_ids": [],
+        },
+    ).json()
+    emp_id = created["id"]
+    assert client.delete(f"/api/employees/{emp_id}?hard=true").status_code == 204
+    assert client.get(f"/api/employees/{emp_id}").status_code == 404
+
+
+def test_restore_employee_flips_archived_to_published(client: TestClient) -> None:
+    created = client.post(
+        "/api/employees",
+        json={
+            "name": "restore-me",
+            "description": "d",
+            "system_prompt": "p",
+            "model_ref": "openai/gpt-4o-mini",
+            "tool_ids": ["allhands.builtin.fetch_url"],
+            "skill_ids": [],
+        },
+    ).json()
+    emp_id = created["id"]
+    client.delete(f"/api/employees/{emp_id}")  # soft
+    assert client.get(f"/api/employees/{emp_id}").json()["status"] == "archived"
+    restored = client.post(f"/api/employees/{emp_id}/restore")
+    assert restored.status_code == 200
+    assert restored.json()["status"] == "published"
+    # Surfaces back on the default roster.
+    listed = client.get("/api/employees").json()
+    assert any(e["id"] == emp_id for e in listed)
 
 
 def test_delete_missing_returns_404(client: TestClient) -> None:
     assert client.delete("/api/employees/missing").status_code == 404
+
+
+def test_restore_missing_returns_404(client: TestClient) -> None:
+    assert client.post("/api/employees/missing/restore").status_code == 404
 
 
 def test_create_defaults_to_draft_then_publish(client: TestClient) -> None:
