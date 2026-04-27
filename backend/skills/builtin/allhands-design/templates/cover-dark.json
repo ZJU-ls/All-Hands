@@ -1,0 +1,80 @@
+{
+  "_doc": "Cover slide · one per deck. Replace `text` on the title shape (big · ≥56pt) and the subtitle/byline shapes. Color tokens are drawn from references/pptx-deck.md `dark` palette.",
+  "background": {
+    "color_hex": "#0a0e1a"
+  },
+  "shapes": [
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 0.22,
+      "h": 7.5,
+      "fill_hex": "#3b82f6"
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 0.5,
+      "w": 0.5,
+      "h": 0.06,
+      "fill_hex": "#60a5fa"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 0.7,
+      "w": 11.5,
+      "h": 0.5,
+      "text": "EYEBROW",
+      "font": {
+        "size": 14,
+        "weight": "bold",
+        "color_hex": "#60a5fa"
+      },
+      "align": "left"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 2.4,
+      "w": 12.0,
+      "h": 1.8,
+      "text": "DECK TITLE\nSECOND LINE",
+      "font": {
+        "size": 64,
+        "weight": "bold",
+        "color_hex": "#e7eaf3"
+      },
+      "line_spacing": 1.05,
+      "align": "left"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 4.6,
+      "w": 11.5,
+      "h": 0.6,
+      "text": "Subtitle that explains the deck in one short line",
+      "font": {
+        "size": 22,
+        "color_hex": "#93a0b4"
+      },
+      "align": "left"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 6.6,
+      "w": 11.5,
+      "h": 0.4,
+      "text": "AUTHOR · DATE · CONFIDENTIAL",
+      "font": {
+        "size": 12,
+        "color_hex": "#93a0b4"
+      },
+      "align": "left"
+    }
+  ],
+  "notes": "Open with the deck title spoken in one breath; pause; then deliver the subtitle."
+}

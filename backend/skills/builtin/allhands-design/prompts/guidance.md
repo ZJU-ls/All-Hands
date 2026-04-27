@@ -19,13 +19,14 @@
    | 落地页 / 单页 demo / 仪表盘 / 报告页 | `html` | `artifact_create({kind:"html"})` |
    | 海报 / 卡片 / 单图 | `html`(导出 PNG)或 `image` | 同上 |
    | 流程图 / 架构图 | `drawio` | `render_drawio` · 走 brand-styled mxfile(见 §drawio) |
-   | 演示稿 | `pptx` | `artifact_create_pptx` · 标题页 + 章节封 + bullets |
+   | 演示稿 | `pptx` | `artifact_create_pptx` · primitives + 模板复用(见 §pptx) |
 2. 大模板按需 read:
    - `read_skill_file('allhands.design', 'references/html-base.html')` —— 完整单页骨架
    - `read_skill_file('allhands.design', 'references/landing.html')` —— 落地页 hero + features
    - `read_skill_file('allhands.design', 'references/dashboard.html')` —— 数据看板
    - `read_skill_file('allhands.design', 'references/poster.html')` —— 海报 / 封面
-   - `read_skill_file('allhands.design', 'references/pptx-deck.md')` —— pptx 标准 6-slide 大纲 + slides[] 调用示例
+   - `read_skill_file('allhands.design', 'references/pptx-deck.md')` —— pptx 设计原则 + token 表 + 模板索引
+   - `read_skill_file('allhands.design', 'templates/<name>-<theme>.json')` —— 单页 pptx 模板 spec(直接放 slides[i])
    - `read_skill_file('allhands.design', 'references/components.md')` —— 组件代码片段(card / button / pill / kbd / hairline-divider / glass-panel)
    - `read_skill_file('allhands.design', 'references/tokens.md')` —— 全部 design tokens 详表
 3. 简单需求直接抄 base · 复杂需求用 landing / dashboard / poster · 都改占位文字 + 数据

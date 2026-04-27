@@ -1,0 +1,254 @@
+{
+  "_doc": "Agenda slide · numbered list of 3-5 items. Replace each item string in the `text` of the right-side text shapes. Numbers auto-generated; if you want fewer items, drop trailing rect+text triples.",
+  "background": {
+    "color_hex": "#0a0e1a"
+  },
+  "shapes": [
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 0.22,
+      "h": 7.5,
+      "fill_hex": "#3b82f6"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 0.7,
+      "w": 11.5,
+      "h": 0.7,
+      "text": "Agenda",
+      "font": {
+        "size": 44,
+        "weight": "bold",
+        "color_hex": "#e7eaf3"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 1.4,
+      "w": 11.5,
+      "h": 0.4,
+      "text": "What we cover today",
+      "font": {
+        "size": 18,
+        "color_hex": "#93a0b4"
+      }
+    },
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 7.42,
+      "w": 13.333,
+      "h": 0.04,
+      "fill_hex": "#1e2536"
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 1.96,
+      "w": 0.6,
+      "h": 0.6,
+      "fill_hex": "#131826",
+      "border": {
+        "color_hex": "#3b82f6",
+        "thickness_pt": 1.5
+      },
+      "corner_radius_in": 0.08
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 1.96,
+      "w": 0.6,
+      "h": 0.6,
+      "text": "01",
+      "font": {
+        "size": 18,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      },
+      "align": "center",
+      "v_align": "middle"
+    },
+    {
+      "type": "text",
+      "x": 1.5,
+      "y": 1.96,
+      "w": 11.0,
+      "h": 0.6,
+      "text": "Background & motivation",
+      "font": {
+        "size": 22,
+        "color_hex": "#e7eaf3"
+      },
+      "v_align": "middle"
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 2.7399999999999998,
+      "w": 0.6,
+      "h": 0.6,
+      "fill_hex": "#131826",
+      "border": {
+        "color_hex": "#3b82f6",
+        "thickness_pt": 1.5
+      },
+      "corner_radius_in": 0.08
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 2.7399999999999998,
+      "w": 0.6,
+      "h": 0.6,
+      "text": "02",
+      "font": {
+        "size": 18,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      },
+      "align": "center",
+      "v_align": "middle"
+    },
+    {
+      "type": "text",
+      "x": 1.5,
+      "y": 2.7399999999999998,
+      "w": 11.0,
+      "h": 0.6,
+      "text": "Current state",
+      "font": {
+        "size": 22,
+        "color_hex": "#e7eaf3"
+      },
+      "v_align": "middle"
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 3.52,
+      "w": 0.6,
+      "h": 0.6,
+      "fill_hex": "#131826",
+      "border": {
+        "color_hex": "#3b82f6",
+        "thickness_pt": 1.5
+      },
+      "corner_radius_in": 0.08
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 3.52,
+      "w": 0.6,
+      "h": 0.6,
+      "text": "03",
+      "font": {
+        "size": 18,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      },
+      "align": "center",
+      "v_align": "middle"
+    },
+    {
+      "type": "text",
+      "x": 1.5,
+      "y": 3.52,
+      "w": 11.0,
+      "h": 0.6,
+      "text": "Proposal",
+      "font": {
+        "size": 22,
+        "color_hex": "#e7eaf3"
+      },
+      "v_align": "middle"
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 4.3,
+      "w": 0.6,
+      "h": 0.6,
+      "fill_hex": "#131826",
+      "border": {
+        "color_hex": "#3b82f6",
+        "thickness_pt": 1.5
+      },
+      "corner_radius_in": 0.08
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 4.3,
+      "w": 0.6,
+      "h": 0.6,
+      "text": "04",
+      "font": {
+        "size": 18,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      },
+      "align": "center",
+      "v_align": "middle"
+    },
+    {
+      "type": "text",
+      "x": 1.5,
+      "y": 4.3,
+      "w": 11.0,
+      "h": 0.6,
+      "text": "Risks & mitigations",
+      "font": {
+        "size": 22,
+        "color_hex": "#e7eaf3"
+      },
+      "v_align": "middle"
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 5.079999999999999,
+      "w": 0.6,
+      "h": 0.6,
+      "fill_hex": "#131826",
+      "border": {
+        "color_hex": "#3b82f6",
+        "thickness_pt": 1.5
+      },
+      "corner_radius_in": 0.08
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 5.079999999999999,
+      "w": 0.6,
+      "h": 0.6,
+      "text": "05",
+      "font": {
+        "size": 18,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      },
+      "align": "center",
+      "v_align": "middle"
+    },
+    {
+      "type": "text",
+      "x": 1.5,
+      "y": 5.079999999999999,
+      "w": 11.0,
+      "h": 0.6,
+      "text": "Next steps",
+      "font": {
+        "size": 22,
+        "color_hex": "#e7eaf3"
+      },
+      "v_align": "middle"
+    }
+  ]
+}

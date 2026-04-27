@@ -1,0 +1,107 @@
+{
+  "_doc": "Two columns · paired comparison. Each column has its own header (bold) and body. Replace the four text shapes.",
+  "background": {
+    "color_hex": "#0a0e1a"
+  },
+  "shapes": [
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 0.22,
+      "h": 7.5,
+      "fill_hex": "#3b82f6"
+    },
+    {
+      "type": "rect",
+      "x": 0,
+      "y": 7.42,
+      "w": 13.333,
+      "h": 0.04,
+      "fill_hex": "#1e2536"
+    },
+    {
+      "type": "text",
+      "x": 0.6,
+      "y": 0.7,
+      "w": 11.5,
+      "h": 0.8,
+      "text": "Comparison title",
+      "font": {
+        "size": 36,
+        "weight": "bold",
+        "color_hex": "#e7eaf3"
+      }
+    },
+    {
+      "type": "rect",
+      "x": 0.6,
+      "y": 2.0,
+      "w": 5.9,
+      "h": 4.6,
+      "fill_hex": "#131826",
+      "corner_radius_in": 0.12
+    },
+    {
+      "type": "text",
+      "x": 0.9,
+      "y": 2.2,
+      "w": 5.4,
+      "h": 0.6,
+      "text": "Option A",
+      "font": {
+        "size": 24,
+        "weight": "bold",
+        "color_hex": "#3b82f6"
+      }
+    },
+    {
+      "type": "text",
+      "x": 0.9,
+      "y": 2.9,
+      "w": 5.4,
+      "h": 3.5,
+      "text": "First reason this option matters.\n\nSecond reason · the cost or trade-off involved.\n\nThird reason · what success looks like.",
+      "font": {
+        "size": 16,
+        "color_hex": "#e7eaf3"
+      },
+      "line_spacing": 1.5
+    },
+    {
+      "type": "rect",
+      "x": 6.84,
+      "y": 2.0,
+      "w": 5.9,
+      "h": 4.6,
+      "fill_hex": "#131826",
+      "corner_radius_in": 0.12
+    },
+    {
+      "type": "text",
+      "x": 7.14,
+      "y": 2.2,
+      "w": 5.4,
+      "h": 0.6,
+      "text": "Option B",
+      "font": {
+        "size": 24,
+        "weight": "bold",
+        "color_hex": "#60a5fa"
+      }
+    },
+    {
+      "type": "text",
+      "x": 7.14,
+      "y": 2.9,
+      "w": 5.4,
+      "h": 3.5,
+      "text": "First reason this option matters.\n\nSecond reason · the cost or trade-off involved.\n\nThird reason · what success looks like.",
+      "font": {
+        "size": 16,
+        "color_hex": "#e7eaf3"
+      },
+      "line_spacing": 1.5
+    }
+  ]
+}
