@@ -43,6 +43,7 @@ from allhands.core import (
     ArtifactVersion,
 )
 from allhands.core.errors import DomainError
+from allhands.i18n import t
 from allhands.persistence.sql_repos import (
     SqlArtifactRepo,
     SqlEmployeeRepo,
@@ -825,7 +826,8 @@ def make_artifact_rollback_executor(
                         file_path=rel,
                         diff_from_prev=diff,
                         created_at=now,
-                        change_message=change_message or f"回退到 v{to_version}",
+                        change_message=change_message
+                        or t("artifacts.revert_default", version=to_version),
                         parent_version=to_version,
                         created_by_employee_id=employee_id,
                         created_by_run_id=run_id,
