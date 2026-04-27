@@ -526,8 +526,14 @@ class AgentLoop:
                         # 2026-04-26 · 检测「制品幻觉」 — 模型在回复里描述
                         # 「这是一个 X / 我已经为你 X」 但本轮没调 artifact_create
                         # · 用户看不到任何东西。这一轮已经委身在 lc_messages
-                        # 里 · 注入一句 system 反馈让模型下一轮纠正,而不是
-                        # 直接 return completed。
+                        # 里 · 注入一句反馈让模型下一轮纠正。
+                        #
+                        # 2026-04-27 · 改用 HumanMessage 而不是 SystemMessage:
+                        # Anthropic API 要求 system message 仅在最前一条,
+                        # 中段插入会触发 ValueError("Received multiple
+                        # non-consecutive system messages") · 用户复现了。
+                        # HumanMessage 可以出现在任意位置,模型读到「[system
+                        # nudge]:...」前缀同样能纠正。
                         if _looks_like_artifact_hallucination(text_full):
                             _log.warning(
                                 "agent_loop.artifact_hallucination_detected",
@@ -535,9 +541,9 @@ class AgentLoop:
                             )
                             lc_messages.append(self._to_lc_assistant_message(assistant_msg))
                             lc_messages.append(
-                                SystemMessage(
+                                HumanMessage(
                                     content=(
-                                        "用户看不到任何制品 · 你的上一条回复描述了一个 "
+                                        "[system nudge] 用户看不到任何制品 · 你的上一条回复描述了一个 "
                                         "HTML / 图表 / 文档,但你这一轮没有调用 "
                                         "artifact_create 工具。请立即调 "
                                         "artifact_create({kind, name, content}) 真正产出 · "
