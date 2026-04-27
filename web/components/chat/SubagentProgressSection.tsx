@@ -3,18 +3,22 @@
 /**
  * SubagentProgressSection · ADR 0019 C2
  *
- * Collapsible section listing active sub-agent dispatches. Header
- * shows running count; expand to see per-row status + a "查看链路 →"
- * button that pushes ?trace=<run_id> (the existing RunTraceDrawer
- * picks it up). Expand state persists in localStorage.
+ * Collapsible section listing active sub-agent dispatches. Header shows
+ * running count; expand to see per-row status + a "查看链路 →" link to
+ * the observatory L3 trace page (`/observatory/runs/<run_id>`). Expand
+ * state persists in localStorage.
+ *
+ * Pre-2026-04-27 the link pushed `?trace=<id>` and a global drawer popped
+ * over chat. That coupled trace viewing to chat UX; trace was moved into
+ * observatory's L3 to close the five-tier drilldown loop.
  */
 
 import { useEffect, useState } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
-import { TRACE_QUERY_KEY } from "@/components/runs/TraceChip";
+import { traceHref } from "@/components/runs/TraceChip";
 import type { ActiveSubagent } from "./progress-hooks";
 
 const STORAGE_KEY = "allhands.progress.subagent.expanded";
@@ -24,9 +28,6 @@ type Props = { subagents: ActiveSubagent[]; embedded?: boolean };
 export function SubagentProgressSection({ subagents, embedded = false }: Props) {
   const t = useTranslations("chat.subagent");
   const [expanded, setExpanded] = useState<boolean>(true);
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (embedded) return;
@@ -49,12 +50,6 @@ export function SubagentProgressSection({ subagents, embedded = false }: Props) 
       }
       return next;
     });
-  };
-
-  const openTrace = (runId: string) => {
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
-    params.set(TRACE_QUERY_KEY, runId);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const running = subagents.filter((s) => s.status === "running").length;
@@ -85,14 +80,13 @@ export function SubagentProgressSection({ subagents, embedded = false }: Props) 
             {t(`status.${s.status}`)}
           </span>
           {s.runId ? (
-            <button
-              type="button"
-              onClick={() => openTrace(s.runId!)}
+            <Link
+              href={traceHref(s.runId)}
               data-testid={`subagent-trace-${s.toolCallId}`}
               className="shrink-0 rounded-md border border-primary/30 bg-primary-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-primary transition-[background-color,border-color] duration-fast hover:border-primary/50 hover:bg-primary-muted"
             >
               {t("viewTrace")}
-            </button>
+            </Link>
           ) : (
             <span className="w-[68px] shrink-0" aria-hidden />
           )}

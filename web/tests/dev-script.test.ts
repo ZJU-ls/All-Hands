@@ -10,11 +10,15 @@ import { describe, expect, it } from "vitest";
  *
  *   1. The dev script must keep `--turbopack` — webpack dev cold-compile was
  *      2-14s per route; Turbopack drops that to 200-600ms per route.
- *   2. AppShell must NOT statically import the two global overlays
- *      (CommandPalette, RunTraceDrawer) — their module graphs must stay
- *      behind `next/dynamic` so they don't inflate every route's cold
- *      compile. Early-return (`if (!open) return null`) is a render-time
- *      optimization and does NOT exclude a module from the compile graph.
+ *   2. AppShell must NOT statically import CommandPalette — its module
+ *      graph must stay behind `next/dynamic` so it doesn't inflate every
+ *      route's cold compile. Early-return (`if (!open) return null`) is a
+ *      render-time optimization and does NOT exclude a module from the
+ *      compile graph.
+ *
+ *      (The companion lazy gate for RunTraceDrawer was retired on
+ *      2026-04-27 when trace viewing moved into the observatory L3 page —
+ *      /observatory/runs/[id] — and the global drawer was deleted.)
  *
  * See docs/claude/learnings.md § L08.
  */
@@ -29,24 +33,35 @@ describe("L08 · dev ergonomics regression guards", () => {
     expect(pkg.scripts.dev).toMatch(/--turbopack\b/);
   });
 
-  it("AppShell does not statically import CommandPalette or RunTraceDrawer", () => {
+  it("AppShell keeps CommandPalette behind next/dynamic", () => {
     const src = readFileSync(
       resolve(ROOT, "components/shell/AppShell.tsx"),
       "utf8",
     );
     // No top-level `import { CommandPalette } from "@/components/ui/CommandPalette"`
-    // or equivalent for RunTraceDrawer. `next/dynamic` is fine (it produces an
-    // `import(...)` call, not a static `import X from` declaration).
+    // — `next/dynamic` is fine (it produces an `import(...)` call, not a
+    // static `import X from` declaration).
     const importCommandPalette =
       /^\s*import\s*(?:\{[^}]*\b(?:CommandPalette)\b[^}]*\}|\w+)\s*from\s*["']@\/components\/ui\/CommandPalette["']/m;
-    const importRunTraceDrawer =
-      /^\s*import\s*(?:\{[^}]*\b(?:RunTraceDrawer)\b[^}]*\}|\w+)\s*from\s*["']@\/components\/runs\/RunTraceDrawer["']/m;
     expect(src).not.toMatch(importCommandPalette);
-    expect(src).not.toMatch(importRunTraceDrawer);
     // And the dynamic form IS present — don't let a future refactor silently
     // remove the lazy gate by inlining a usage.
-    expect(src).toMatch(/dynamic\s*\(\s*\(\)\s*=>\s*import\(\s*["']@\/components\/ui\/CommandPalette["']/);
-    expect(src).toMatch(/dynamic\s*\(\s*\(\)\s*=>\s*import\(\s*["']@\/components\/runs\/RunTraceDrawer["']/);
+    expect(src).toMatch(
+      /dynamic\s*\(\s*\(\)\s*=>\s*import\(\s*["']@\/components\/ui\/CommandPalette["']/,
+    );
+  });
+
+  it("RunTraceDrawer has been removed (trace moved to observatory L3 page)", () => {
+    // Pin the architectural decision: trace viewing lives at
+    // /observatory/runs/[id]; the global ?trace= drawer is gone. If anyone
+    // brings it back, this test fails loudly.
+    const drawerPath = resolve(ROOT, "components/runs/RunTraceDrawer.tsx");
+    expect(() => readFileSync(drawerPath, "utf8")).toThrow();
+    const appShell = readFileSync(
+      resolve(ROOT, "components/shell/AppShell.tsx"),
+      "utf8",
+    );
+    expect(appShell).not.toMatch(/RunTraceDrawer/);
   });
 
   it("the ⌘K keydown listener lives in AppShell, not inside CommandPalette", () => {

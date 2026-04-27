@@ -172,6 +172,13 @@
           "updated": "更新时间"
         }
       },
+      "runDetail": {
+        "shellTitle": "Trace · {id}",
+        "breadcrumb": {
+          "aria": "面包屑导航",
+          "trace": "trace"
+        }
+      },
       "costPanel": {
         "title": "成本面板 · 24h",
         "today": "今日累计",
