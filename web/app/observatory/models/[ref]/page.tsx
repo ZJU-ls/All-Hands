@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { use } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon } from "@/components/ui/icon";
 import { TraceChip } from "@/components/runs/TraceChip";
@@ -53,6 +53,7 @@ export default function ModelDetailPage({
   const modelRef = decodeURIComponent(encodedRef);
   const t = useTranslations("pages.observatory");
   const tMod = useTranslations("pages.observatory.modelDetail");
+  const locale = useLocale();
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [traces, setTraces] = useState<TraceSummaryDto[]>([]);
   const [state, setState] = useState<State>("loading");
@@ -137,7 +138,7 @@ export default function ModelDetailPage({
               <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <Tile
                   label={tMod("kpi.runs")}
-                  value={traces.length.toLocaleString()}
+                  value={traces.length.toLocaleString(locale)}
                   onClick={() => setDrawerMetric("runs")}
                 />
                 <Tile
@@ -159,7 +160,7 @@ export default function ModelDetailPage({
                 />
                 <Tile
                   label={tMod("kpi.calls")}
-                  value={summary.llm_calls_total.toLocaleString()}
+                  value={summary.llm_calls_total.toLocaleString(locale)}
                   onClick={() => setDrawerMetric("llm_calls")}
                 />
                 <Tile
@@ -317,7 +318,7 @@ export default function ModelDetailPage({
                                 : "—"}
                             </td>
                             <td className="py-2 px-3 font-mono text-[11px] text-text-muted">
-                              {new Date(tr.started_at).toLocaleString()}
+                              {new Date(tr.started_at).toLocaleString(locale)}
                             </td>
                           </tr>
                         ))

@@ -15,6 +15,8 @@ from allhands.execution.tools.builtin.ask_user_question import (
 )
 from allhands.execution.tools.builtin.fetch_url import TOOL as FETCH_URL_TOOL
 from allhands.execution.tools.builtin.fetch_url import execute as fetch_url_execute
+from allhands.execution.tools.builtin.web_search import TOOL as WEB_SEARCH_TOOL
+from allhands.execution.tools.builtin.web_search import execute as web_search_execute
 from allhands.execution.tools.builtin.write_file import TOOL as WRITE_FILE_TOOL
 from allhands.execution.tools.builtin.write_file import execute as write_file_execute
 from allhands.execution.tools.meta.artifact_office import ALL_ARTIFACT_OFFICE_TOOLS
@@ -37,6 +39,7 @@ from allhands.execution.tools.meta.mcp_server_tools import ALL_MCP_SERVER_META_T
 from allhands.execution.tools.meta.model_tools import ALL_MODEL_META_TOOLS
 from allhands.execution.tools.meta.observatory_tools import ALL_OBSERVATORY_META_TOOLS
 from allhands.execution.tools.meta.plan_tools import ALL_PLAN_TOOLS
+from allhands.execution.tools.meta.pricing_tools import ALL_PRICING_META_TOOLS
 from allhands.execution.tools.meta.provider_tools import ALL_PROVIDER_META_TOOLS
 from allhands.execution.tools.meta.resolve_skill import RESOLVE_SKILL_TOOL
 from allhands.execution.tools.meta.review_tools import ALL_REVIEW_META_TOOLS
@@ -141,6 +144,7 @@ def discover_builtin_tools(
     """
 
     registry.register(FETCH_URL_TOOL, fetch_url_execute)
+    registry.register(WEB_SEARCH_TOOL, web_search_execute)
     registry.register(WRITE_FILE_TOOL, write_file_execute)
     registry.register(ASK_USER_QUESTION_TOOL, ask_user_question_execute)
     for tool, executor in _RENDER_TOOLS:
@@ -176,6 +180,7 @@ def discover_builtin_tools(
         *ALL_STOCK_ASSISTANT_TOOLS,  # single-line register: Wave 2 stock-assistant
         *ALL_REVIEW_META_TOOLS,
         *ALL_OBSERVATORY_META_TOOLS,
+        *ALL_PRICING_META_TOOLS,
         *ALL_KB_META_TOOLS,
     ):
         if tool.id in _META_EXECUTOR_TOOL_IDS:

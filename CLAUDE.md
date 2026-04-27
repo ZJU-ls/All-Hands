@@ -32,11 +32,13 @@
 
 ## 3. 核心设计原则(必须遵守,违反则打回)
 
-> **8 条原则 · 排序即优先级。** 完整版在 [`product/00-north-star.md § 核心设计原则`](product/00-north-star.md#核心设计原则8-条排序即优先级--原则-1-7-见-adr-0011--原则-8-见-adr-0017) · 每条的"不变量 / 来源 / 推论 / 回归防御"四段结构在那里。本节是 **review 时的快速对照速查**。
+> **9 条原则 · 排序即优先级。** 完整版在 [`product/00-north-star.md § 核心设计原则`](product/00-north-star.md) · 每条的"不变量 / 来源 / 推论 / 回归防御"四段结构在那里。本节是 **review 时的快速对照速查**。
 >
 > 本次 v1 refresh 见 [ADR 0011](product/adr/0011-principles-refresh.md)(4 条 → 6 条 · 参考 Claude Code + LangGraph 核心抽象)。
 >
 > **2026-04-24 新增原则 8 · 参考系统**(见 [ADR 0017](product/adr/0017-event-sourced-claude-code-pattern.md)):Claude Code(`ref-src-claude/`)是首要架构参考 · LangGraph 仅作局部工具编排引擎 · 不作消息历史 / resume / subagent / 压缩的 SoT。事件日志 + 纯投影替代 dual-SoT + delta-send。
+>
+> **2026-04-27 新增原则 9 · Tool / Skill 自解释**(见 [ADR 0021](product/adr/0021-tool-skill-self-explanation.md)):Tool 说契约 · Skill 说偏好 · Lead 说身份 + 通用工作流 · 三层不漂移。错误回 `{error, field, expected, received, hint}` 让 LLM 自纠 · 不打 prompt 补丁 · 不吐 stack trace。
 
 ### 3.1 Tool First(2026-04-18 扩展版 · 见 L01)
 
@@ -153,6 +155,27 @@
 新增任何 `web/` 组件前,先过一遍 [`design-system/MASTER.md` §0 自检清单](design-system/MASTER.md#0-每次开发前的自检清单)。Token / 组件契约变更同步路径:`product/03-visual-design.md`(规范)→ `web/styles/themes/brand-blue/*.css`(实现)→ `tailwind.config.ts`(映射)→ `design-system/MASTER.md`(速查)。
 
 **违反原则 1-3 → review 打回。** 原则 4-5 允许在 code review 讨论具体边界。
+
+### 3.9 Tool / Skill 自解释 · 不打 prompt 补丁(新 · 见 [ADR 0021](product/adr/0021-tool-skill-self-explanation.md))
+
+> **三层职责清晰,不漂移。** Tool 说"我吃什么 + 我做什么"(契约) · Skill 说"用户在说 X 时该用 Y / 行为指导"(偏好) · Lead 说身份 + 4 步通用 workflow + capability discovery(身份)。错误回 LLM 用结构化 envelope `{error, field, expected, received, hint}` 让模型自纠 —— 不再吐 stack trace · 不再用祈使句给 LLM 打补丁。
+
+**不允许(review 打回):**
+- ❌ Tool description 里写 "**You must**" / "**MUST**" / "do NOT chain" / "**WHEN NOT TO USE**" 块外的全大写警告
+- ❌ Lead prompt 复述某个具体工具的用法(那是 tool description 该说的)
+- ❌ Skill body 复述工具的 scope / requires_confirmation / required(已是 schema 一部分)
+- ❌ Pydantic ValidationError 直接吐回 ToolMessage
+- ❌ 用 prompt instruction 解决可以用 enum / required / 类型约束解决的问题
+
+**应该这样:**
+- ✅ Tool description 用陈述句 "Returns X. Use after Y."
+- ✅ Skill body 决策树 "用户在说 X → 用 Y"
+- ✅ 错误回 envelope `{error, field, expected, received, hint}` · LLM 一眼能改
+- ✅ 用 scope=WRITE + requires_confirmation=True 表达"危险操作要确认"
+- ✅ 用 input_schema enum: [...] 表达"只能是这几个值"
+
+- 实现:`backend/src/allhands/execution/tool_arg_validation.py` · `coerce_and_validate(tool, kwargs)` + `ToolArgError`
+- 回归:`tests/unit/test_tool_arg_validation.py`(17 cases)+ `tests/unit/test_tool_pipeline.py::test_*_arg_validation_*`(4 e2e cases)
 
 ---
 

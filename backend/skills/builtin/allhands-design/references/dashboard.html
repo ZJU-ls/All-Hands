@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root {
+    --bg: #F6F8FC; --surface: #FFFFFF; --surface-2: #EDF1F8; --surface-3: #DFE6F0;
+    --text: #141A26; --text-muted: #5C667A; --text-subtle: #8B96AB;
+    --border: #DFE6F0; --border-strong: #B9C4D4;
+    --primary: #0A5BFF; --primary-hover: #0848D1; --accent: #4EA8FF;
+    --primary-soft: rgba(10,91,255,.10);
+    --success: #0FA57A; --warning: #D97706; --danger: #DC2626;
+    --success-soft: rgba(15,165,122,.10); --warning-soft: rgba(217,119,6,.10); --danger-soft: rgba(220,38,38,.10);
+    --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
+    --shadow-md: 0 4px 14px rgba(15,23,42,.06);
+    --viz-1: #0A5BFF; --viz-2: #0FA57A; --viz-3: #D97706; --viz-4: #DC2626; --viz-5: #6366F1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0A0D14; --surface: #11151F; --surface-2: #1A1F2E; --surface-3: #242A3C;
+      --text: #E2E6F1; --text-muted: #8690AE; --text-subtle: #5A6483;
+      --border: rgba(255,255,255,.06); --border-strong: rgba(255,255,255,.12);
+      --primary: #2E5BFF; --primary-hover: #4A74FF; --accent: #6E8BFF;
+      --primary-soft: rgba(46,91,255,.14);
+      --success: #2EBD85; --warning: #F5A524; --danger: #F04438;
+      --success-soft: rgba(46,189,133,.14); --warning-soft: rgba(245,165,36,.14); --danger-soft: rgba(240,68,56,.14);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+      --shadow-md: 0 8px 24px rgba(0,0,0,.5);
+      --viz-1: #4A74FF; --viz-2: #2DD4BF; --viz-3: #FBBF24; --viz-4: #F87171; --viz-5: #A78BFA;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+  header h1 {
+    font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin: 0;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header .meta { color: var(--text-muted); font-size: 12px; font-family: ui-monospace, monospace; margin-left: auto; }
+
+  .row { display: grid; gap: 14px; margin-bottom: 14px; }
+  .row.k4 { grid-template-columns: repeat(4, 1fr); }
+  .row.k2 { grid-template-columns: 1fr 1fr; }
+  .row.split { grid-template-columns: 2fr 1fr; }
+  @media (max-width: 880px) { .row.k4, .row.k2, .row.split { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; box-shadow: var(--shadow-sm);
+  }
+
+  /* KPI */
+  .stat .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+  .stat .value { font-size: 26px; font-weight: 700; margin-top: 4px; letter-spacing: -.02em;
+                 font-variant-numeric: tabular-nums; }
+  .stat .delta { font-size: 11px; color: var(--text-subtle); font-family: ui-monospace, monospace; margin-top: 2px; }
+  .stat .delta.up { color: var(--success); }
+  .stat .delta.down { color: var(--danger); }
+  .stat .value.brand {
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  /* Sparkline · 内联 SVG */
+  .spark { width: 100%; height: 48px; margin-top: 8px; }
+
+  /* Bar chart · 纯 CSS 横条 */
+  .bar-row { display: grid; grid-template-columns: 100px 1fr 60px; align-items: center;
+             gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .bar-row:last-child { border-bottom: 0; }
+  .bar-row .name { color: var(--text); }
+  .bar-row .track { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .bar-row .fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius: 999px; }
+  .bar-row .num { font-variant-numeric: tabular-nums; text-align: right; color: var(--text-muted);
+                  font-family: ui-monospace, monospace; font-size: 12px; }
+
+  /* Legend pills */
+  .legend { display: flex; gap: 12px; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+  .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 4px; vertical-align: middle; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-muted); font-weight: 600; background: var(--surface-2);
+       font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+
+  .h2 { font-size: 14px; font-weight: 600; margin: 0 0 12px; color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>__DASHBOARD_TITLE__</h1>
+    <span class="meta">__TIMESTAMP__</span>
+  </header>
+
+  <!-- KPI row -->
+  <section class="row k4">
+    <div class="card stat">
+      <div class="label">__KPI_1_LABEL__</div>
+      <div class="value brand">__KPI_1_VALUE__</div>
+      <div class="delta up">▲ __KPI_1_DELTA__</div>
+    </div>
+    <div class="card stat">
+      <div class="label">__KPI_2_LABEL__</div>
+      <div class="value">__KPI_2_VALUE__</div>
+      <div class="delta up">▲ __KPI_2_DELTA__</div>
+    </div>
+    <div class="card stat">
+      <div class="label">__KPI_3_LABEL__</div>
+      <div class="value">__KPI_3_VALUE__</div>
+      <div class="delta down">▼ __KPI_3_DELTA__</div>
+    </div>
+    <div class="card stat">
+      <div class="label">__KPI_4_LABEL__</div>
+      <div class="value">__KPI_4_VALUE__</div>
+      <div class="delta">━ __KPI_4_DELTA__</div>
+    </div>
+  </section>
+
+  <!-- Charts row -->
+  <section class="row split">
+    <div class="card">
+      <div class="h2">__TREND_TITLE__</div>
+      <div class="legend">
+        <span><span class="dot" style="background: var(--viz-1)"></span>__TREND_LEGEND_1__</span>
+        <span><span class="dot" style="background: var(--viz-2)"></span>__TREND_LEGEND_2__</span>
+      </div>
+      <!-- 替换 polyline points 为真实数据 · 0..400 wide / 0..100 tall · 注意 y 轴反向 -->
+      <svg class="spark" viewBox="0 0 400 100" preserveAspectRatio="none" style="height: 200px;">
+        <polyline fill="none" stroke="var(--viz-1)" stroke-width="2"
+                  points="0,80 50,72 100,60 150,55 200,40 250,35 300,28 350,20 400,18" />
+        <polyline fill="none" stroke="var(--viz-2)" stroke-width="2"
+                  points="0,90 50,85 100,82 150,78 200,72 250,68 300,65 350,60 400,58" />
+      </svg>
+    </div>
+    <div class="card">
+      <div class="h2">__BREAKDOWN_TITLE__</div>
+      <div class="bar-row">
+        <span class="name">__BAR_1_NAME__</span>
+        <span class="track"><span class="fill" style="width: 78%"></span></span>
+        <span class="num">__BAR_1_NUM__</span>
+      </div>
+      <div class="bar-row">
+        <span class="name">__BAR_2_NAME__</span>
+        <span class="track"><span class="fill" style="width: 62%"></span></span>
+        <span class="num">__BAR_2_NUM__</span>
+      </div>
+      <div class="bar-row">
+        <span class="name">__BAR_3_NAME__</span>
+        <span class="track"><span class="fill" style="width: 41%"></span></span>
+        <span class="num">__BAR_3_NUM__</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Table row -->
+  <section class="row">
+    <div class="card">
+      <div class="h2">__TABLE_TITLE__</div>
+      <table>
+        <thead>
+          <tr><th>__TH_1__</th><th>__TH_2__</th><th class="num">__TH_3__</th><th class="num">__TH_4__</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>__R1_C1__</td><td>__R1_C2__</td><td class="num">__R1_C3__</td><td class="num">__R1_C4__</td></tr>
+          <tr><td>__R2_C1__</td><td>__R2_C2__</td><td class="num">__R2_C3__</td><td class="num">__R2_C4__</td></tr>
+          <tr><td>__R3_C1__</td><td>__R3_C2__</td><td class="num">__R3_C3__</td><td class="num">__R3_C4__</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>制品库 bug 修复与体验整改 · allhands</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --surface-2: #f3f5f9;
+      --border: #e2e6ee;
+      --text: #0f1115;
+      --text-muted: #4a5160;
+      --text-subtle: #87909e;
+      --primary: #2768ff;
+      --primary-soft: #e9efff;
+      --success: #149563;
+      --success-soft: #defcec;
+      --warning: #b85d00;
+      --warning-soft: #fff1de;
+      --danger: #b8264a;
+      --danger-soft: #ffe4ec;
+      --accent: #6b46c1;
+      --accent-soft: #efe9ff;
+      --shadow-sm: 0 1px 2px rgba(15,17,21,.05), 0 1px 3px rgba(15,17,21,.04);
+      --shadow: 0 4px 16px rgba(15,17,21,.08);
+      --shadow-lg: 0 12px 40px rgba(39,104,255,.18);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; font-size: 14px;
+    }
+    main { max-width: 1080px; margin: 0 auto; padding: 48px 28px 96px; }
+    .hero {
+      background: linear-gradient(135deg, #b8264a 0%, #2768ff 60%, #6b46c1 100%);
+      color: #fff;
+      padding: 36px 36px 32px;
+      border-radius: 20px;
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      width: 360px; height: 360px;
+      right: -80px; top: -140px;
+      background: radial-gradient(circle, rgba(255,255,255,.2), transparent 60%);
+      filter: blur(20px);
+    }
+    .hero h1 { font-size: 30px; font-weight: 700; margin: 0 0 10px; letter-spacing: -.02em; }
+    .hero .subtitle { margin: 0 0 18px; opacity: .9; font-size: 15px; }
+    .hero .meta { display: flex; flex-wrap: wrap; gap: 18px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+    .hero .meta b { font-weight: 600; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 36px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px 18px; box-shadow: var(--shadow-sm); }
+    .stat .num { font-size: 28px; font-weight: 700; color: var(--primary);
+      letter-spacing: -.02em; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .stat .label { font-size: 11px; color: var(--text-subtle); text-transform: uppercase;
+      letter-spacing: .08em; margin-top: 2px; }
+    h2 { font-size: 22px; letter-spacing: -.01em; margin: 44px 0 16px;
+      padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+    .principle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px 20px; box-shadow: var(--shadow-sm);
+      transition: transform .15s ease, box-shadow .15s ease; }
+    .card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+    .round { background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px 22px; margin-bottom: 14px; box-shadow: var(--shadow-sm);
+      transition: transform .15s ease, box-shadow .15s ease; }
+    .round:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+    .round-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .round-head .num { display: inline-grid; place-items: center; width: 28px; height: 28px;
+      border-radius: 8px; background: var(--primary-soft); color: var(--primary);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; font-weight: 700; }
+    .round-head h3 { font-size: 16px; flex: 1; }
+    .round-head .tag { display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+      border-radius: 6px; font-size: 11px; font-weight: 500;
+      letter-spacing: .04em; text-transform: uppercase; }
+    .tag.fix { background: var(--danger-soft); color: var(--danger); }
+    .tag.feat { background: var(--success-soft); color: var(--success); }
+    .tag.refactor { background: var(--accent-soft); color: var(--accent); }
+    .round p { margin: 6px 0; color: var(--text-muted); font-size: 13.5px; }
+    .round ul { margin: 6px 0; padding-left: 22px; color: var(--text-muted); font-size: 13.5px; }
+    .round ul li + li { margin-top: 4px; }
+    .why { margin-top: 12px; padding: 10px 14px;
+      background: linear-gradient(180deg, var(--primary-soft) 0%, transparent 100%);
+      border-left: 3px solid var(--primary); border-radius: 0 6px 6px 0;
+      font-size: 13px; color: var(--text); }
+    .files { margin-top: 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px; color: var(--text-subtle); display: flex; flex-wrap: wrap; gap: 6px; }
+    .files code { background: var(--surface-2); padding: 3px 7px; border-radius: 5px;
+      border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background: var(--surface-2); font-weight: 600; font-size: 12px; color: var(--text-muted); }
+    tr:last-child td { border-bottom: 0; }
+    .heat-3 { color: var(--danger); font-weight: 600; }
+    .heat-2 { color: var(--warning); font-weight: 600; }
+    .heat-1 { color: var(--text-muted); }
+    .pill {
+      display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px;
+      border-radius: 11px; font-size: 11.5px; font-weight: 500;
+    }
+    .pill.success { background: var(--success-soft); color: var(--success); }
+    .pill.danger { background: var(--danger-soft); color: var(--danger); }
+    .pill.warning { background: var(--warning-soft); color: var(--warning); }
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+    .compare > div { padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); }
+    .compare .before { background: var(--danger-soft); border-color: rgba(184,38,74,.25); }
+    .compare .after { background: var(--success-soft); border-color: rgba(20,149,99,.25); }
+    .compare h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    .compare .before h4 { color: var(--danger); }
+    .compare .after h4 { color: var(--success); }
+    .compare p { margin: 0; font-size: 13px; color: var(--text); }
+    .ascii-block { background: #0d1117; color: #e8edf5; padding: 16px 18px; border-radius: 10px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+      line-height: 1.55; overflow-x: auto; margin: 14px 0; }
+    .footer { margin-top: 56px; padding: 18px 0 0; border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--text-subtle); display: flex;
+      justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    code.inline { font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px; background: var(--surface-2); padding: 1px 6px;
+      border-radius: 4px; border: 1px solid var(--border); }
+    blockquote { margin: 14px 0; padding: 12px 16px; background: var(--surface);
+      border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0;
+      color: var(--text); font-size: 13px; }
+    @media (max-width: 720px) {
+      .stats, .principle-grid, .compare { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>制品库 bug 修复与体验整改</h1>
+      <p class="subtitle">用户报"筛 csv 时左侧空白 + 右侧详情 stale" 引发的 10 轮诊断</p>
+      <div class="meta">
+        <span><b>分支</b> feat/ui-tweaks</span>
+        <span><b>日期</b> 2026-04-27</span>
+        <span><b>触发点</b> 用户截图 + 现场反馈</span>
+        <span><b>双向同步</b> feat/ui-tweaks + main</span>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><div class="num">10</div><div class="label">轮次</div></div>
+      <div class="stat"><div class="num">3</div><div class="label">关键 bug 修复</div></div>
+      <div class="stat"><div class="num">12</div><div class="label">i18n 新增 key</div></div>
+      <div class="stat"><div class="num">5</div><div class="label">独立 commit</div></div>
+    </section>
+
+    <h2>0 · 现场复现</h2>
+
+    <div class="card">
+      <ul>
+        <li>顶部 stats 卡显示 <span class="pill warning">csv · 2</span></li>
+        <li>用户点击 csv 类型 filter</li>
+        <li>过滤面包屑显示 <span class="pill success">csv ×</span> + <span class="pill warning">2 个制品</span></li>
+        <li>但<b>左侧列表完全空白</b></li>
+        <li><b>右侧详情面板还在显示之前选中的 .drawio 文件</b></li>
+      </ul>
+      <p style="margin-top: 10px; color: var(--text-muted);">
+        这是<b>两个独立的故障一起暴露</b>:csv 类型不渲染 + selectedId 不回收。
+      </p>
+    </div>
+
+    <h2>1 · 根因分析(三连级联)</h2>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">A</span>
+        <h3>前端 KIND_ORDER 不全</h3>
+        <span class="tag fix">critical</span>
+      </div>
+      <p><code class="inline">web/components/artifacts/ArtifactList.tsx</code> 的 KIND_ORDER 只列了 7+1 个 kind(含一个根本不存在的 video),漏掉 csv / xlsx / docx / pdf。</p>
+      <div class="ascii-block">for (const kind of KIND_ORDER) {
+  const items = byKind.get(kind);  // csv 永远找不到 bucket
+  if (items?.length > 0) sections.push({ title: kind, items });
+}
+→ csv 制品落入 byKind map 但 KIND_ORDER 不遍历,整组被静默吞掉。</div>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">B</span>
+        <h3>KINDS array 不全</h3>
+        <span class="tag fix">critical</span>
+      </div>
+      <p>filter 下拉根本选不出 csv。用户能从 stats 卡点 "csv · 2" 是因为 stats 卡用 setKind(k) 直接传字符串,绕过了下拉选项。</p>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">C</span>
+        <h3>selectedId 不回收</h3>
+        <span class="tag fix">critical</span>
+      </div>
+      <p>useEffect 拉新 list 后只 setItems(next),从不验证 selectedId 是否还在新 list 里。filter 变化后,详情面板继续渲染 stale 的 drawio。</p>
+    </div>
+
+    <h2>2 · 10 轮迭代摘要</h2>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R1</span>
+        <h3>修 csv 过滤空白(三连修复)</h3>
+        <span class="tag fix">fix</span>
+      </div>
+      <ul>
+        <li>KINDS 数组补全 12 项(对齐 backend ArtifactKind enum)</li>
+        <li>KIND_ORDER 补全 12 项 + 引入 <code class="inline">FALLBACK_BUCKET = "other"</code> 兜底,<b>未来 backend 加新 kind 时不会再被静默吞</b></li>
+        <li><code class="inline">setSelectedId((cur) => next.some(a =&gt; a.id === cur) ? cur : null)</code>:filter 切换后自洽回收</li>
+      </ul>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R2</span>
+        <h3>删除 / 批量后状态回收</h3>
+        <span class="tag fix">fix</span>
+      </div>
+      <p>bulkSelected 在 list 刷新时同步剔除"不在新 list 里的项",防止"看不见但勾选了"的项被误删。单删 / 批量删 / SSE 删除 全链路自洽。</p>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R3</span>
+        <h3>KIND_LABEL / ICON 补全 12 类</h3>
+        <span class="tag refactor">refactor</span>
+      </div>
+      <p>ArtifactListItem 之前漏 csv/xlsx/docx/pdf,显示原始 kind 字符串 + 通用 file 图标。语义优化:</p>
+      <ul>
+        <li>csv / xlsx → table icon · data 类继续用 database 区分</li>
+        <li>docx → file-text(文档)</li>
+        <li>pdf / pptx → file</li>
+      </ul>
+      <p>新注册 lucide Table + FileText 到 icon 单件。同步统一 page / Grid / Peek 三处 KIND_ICON。</p>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R4</span>
+        <h3>幽灵 video 类型移除</h3>
+        <span class="tag refactor">refactor</span>
+      </div>
+      <p>前端 ArtifactKind 含 "video" 但 backend enum 没有 — 死代码 + 误导(filter 下拉里能选 video,但永远 0 个结果)。lib + 4 个 KIND_ICON 表全部去 video 行。要支持视频时先动后端。</p>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R5</span>
+        <h3>SSE artifact_changed 同步刷 list</h3>
+        <span class="tag fix">fix</span>
+      </div>
+      <p>原实现只刷 stats,导致"顶部 +1 但 sidebar 看不到"。落地:</p>
+      <ul>
+        <li>filtersRef 持有 filter 当前值</li>
+        <li>fetchList useCallback 不带 deps,SSE handler 调用时永远拿最新 filter</li>
+        <li>inflight busy flag 简单防抖避免 burst create 连发</li>
+        <li>selectedId / bulkSelected 在 SSE 后也走自洽回收</li>
+      </ul>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R6</span>
+        <h3>空态文案与 filter context 联动</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <table>
+        <tr><th>触发条件</th><th>文案</th></tr>
+        <tr><td>仅 kind</td><td>没有 {kind} 类型的制品</td></tr>
+        <tr><td>仅 query</td><td>没有匹配「{query}」的制品</td></tr>
+        <tr><td>kind + query</td><td>{kind} 类型里没有匹配「{query}」的制品</td></tr>
+        <tr><td>pinnedOnly / dateRange</td><td>当前筛选下没有制品</td></tr>
+        <tr><td>全空</td><td>工作区里还没有任何制品 + 引导去 chat</td></tr>
+      </table>
+      <div class="why"><b>业界对照:</b>GitHub Issues 空态会写 "No issues match: is:open author:foo"。反馈"系统现在过滤的是什么"比"空"重要。</div>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R7</span>
+        <h3>搜索 debounce 250ms</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>每次按键都打 200-item 请求 → 6 字符 = 6 个 query。debouncedQ 让 effect 只在键入暂停 250ms 后触发刷新;离散 filter(kind/sort/pinned/dateRange)继续立即生效。fetchList 通过 filtersRef 读 q,debounce 只控<b>请求频率</b>,不影响显示值。</p>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R8</span>
+        <h3>ErrorBoundary 包裹详情面板</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <p>新增 <code class="inline">web/components/ui/ErrorBoundary.tsx</code> 标准 React class boundary:</p>
+      <ul>
+        <li>resetKey={selectedId} 切换制品自动 reset</li>
+        <li>&lt;details&gt; 折叠原始 stack(默认收起,不污染信息层级)</li>
+        <li>「重试渲染」按钮 onReset 触发 boundary reset</li>
+        <li>「下载原文件」走 /api/artifacts/{id}/content?download · <b>即便前端 view 渲染挂了也能拿原始字节流</b></li>
+      </ul>
+      <div class="why"><b>业界对照:</b>Sentry React 文档推荐做法 / Linear / GitHub 文件预览失败时的"无法渲染此文件 · 下载查看"模式。</div>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R9</span>
+        <h3>详情面板 polish</h3>
+        <span class="tag feat">feat</span>
+      </div>
+      <ul>
+        <li>标题副信息整行可点击复制 artifact ID,工程师调试 / 反馈 bug 常用 · 视觉信号弱(group-hover 才显 ✓)避免抢主操作</li>
+        <li>内容区滚动框加 .scroll-fade-bottom mask:底部 28px 渐隐,长内容时暗示"还有内容滚不到位"</li>
+      </ul>
+    </div>
+
+    <div class="round">
+      <div class="round-head">
+        <span class="num">R10</span>
+        <h3>md + html 收尾报告</h3>
+        <span class="tag refactor">docs</span>
+      </div>
+      <p>本文档。</p>
+    </div>
+
+    <h2>3 · 改造前 / 改造后</h2>
+
+    <div class="compare">
+      <div class="before">
+        <h4>改造前</h4>
+        <p>筛 csv → 顶部说 2 个 · 列表空白 · 详情仍是 drawio</p>
+      </div>
+      <div class="after">
+        <h4>改造后</h4>
+        <p>筛 csv → 列表正常显示 2 个 csv · 详情自动回收为空</p>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="before">
+        <h4>改造前</h4>
+        <p>SSE 创建后:顶部 +1 · 但 sidebar 看不到</p>
+      </div>
+      <div class="after">
+        <h4>改造后</h4>
+        <p>顶部 + sidebar 同步刷新 · count chip 永远准</p>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="before">
+        <h4>改造前</h4>
+        <p>详情面板 view 崩溃 → 整个面板黑屏</p>
+      </div>
+      <div class="after">
+        <h4>改造后</h4>
+        <p>降级文案 + 重试按钮 + 下载原文件 出口</p>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="before">
+        <h4>改造前</h4>
+        <p>搜索 6 字符 = 6 个 200-item 请求</p>
+      </div>
+      <div class="after">
+        <h4>改造后</h4>
+        <p>250ms debounce · 一次有效 query</p>
+      </div>
+    </div>
+
+    <h2>4 · 风险面回顾</h2>
+
+    <table>
+      <thead><tr><th>Tier</th><th>项</th><th>状态</th></tr></thead>
+      <tbody>
+        <tr><td class="heat-3">🔥🔥🔥</td><td>csv filter → empty list + stale detail</td><td><span class="pill success">✅ R1</span></td></tr>
+        <tr><td class="heat-2">🔥🔥</td><td>删除后 selectedId 不回收</td><td><span class="pill success">✅ R2</span></td></tr>
+        <tr><td class="heat-2">🔥🔥</td><td>bulkSelected 漂移到不可见项</td><td><span class="pill success">✅ R2</span></td></tr>
+        <tr><td class="heat-2">🔥🔥</td><td>SSE 刷 stats 不刷 list</td><td><span class="pill success">✅ R5</span></td></tr>
+        <tr><td class="heat-2">🔥🔥</td><td>KIND_LABEL/ICON 5 个 office 类漏</td><td><span class="pill success">✅ R3</span></td></tr>
+        <tr><td class="heat-2">🔥🔥</td><td>幽灵 video 类型</td><td><span class="pill success">✅ R4</span></td></tr>
+        <tr><td class="heat-1">🔥</td><td>搜索每键发请求</td><td><span class="pill success">✅ R7</span></td></tr>
+        <tr><td class="heat-1">🔥</td><td>空态文案不区分 filter context</td><td><span class="pill success">✅ R6</span></td></tr>
+        <tr><td class="heat-1">🔥</td><td>一个 view 崩溃整面板黑屏</td><td><span class="pill success">✅ R8</span></td></tr>
+        <tr><td class="heat-1">🔥</td><td>长内容滚动无视觉提示</td><td><span class="pill success">✅ R9</span></td></tr>
+        <tr><td class="heat-1">🟡</td><td>大列表无 virtualization</td><td><span class="pill warning">待跟踪 (&lt;500 项无影响)</span></td></tr>
+        <tr><td class="heat-1">🟡</td><td>bulk pin 失败的部分回滚体验</td><td><span class="pill warning">已有,可加单元测试</span></td></tr>
+        <tr><td class="heat-1">🟡</td><td>后端 enum 加新值时前端守护</td><td><span class="pill success">FALLBACK_BUCKET 已铺底</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2>5 · 设计沉淀</h2>
+
+    <div class="principle-grid">
+      <div class="card">
+        <h3>三条心智模型</h3>
+        <p style="margin-top:8px;"><b>1. 类型穷举的 Record map 是结构性 bug 防线。</b><br/>
+        <code class="inline">Record&lt;ArtifactKind, T&gt;</code> 的 TS 严格穷举让"漏 csv"立刻爆编译错误。但 <code class="inline">KIND_ORDER as const</code> 是元组,不是穷举,漏了不会爆 — 只会运行时静默吞数据。<b>任何"按 kind 路由 / 分组"的数据结构,优先用 Record 而不是 array。</b></p>
+        <p><b>2. selectedId / bulkSelected 是"派生 from items"的隐式状态。</b><br/>
+        items 一变,所有引用 items[i].id 的状态都该重新对齐。把"自洽回收"做进 fetchList 完成的钩子,而不是散落到每个 mutator 里。</p>
+        <p><b>3. 空态文案要回答用户"现在为什么是空"。</b><br/>
+        "暂无制品"是 0 信息文案。GitHub / Linear 的范式:显式列出当前过滤维度 + 引导清空。</p>
+      </div>
+
+      <div class="card">
+        <h3>三个常见错误(纠正了)</h3>
+        <p style="margin-top:8px;"><b>1. 前后端类型不对齐。</b><br/>
+        前端 ArtifactKind 含 "video" 是死代码 + UI 误导。每次扩枚举,前端要 Record + 后端 enum 双侧改,任一漏会立刻爆。</p>
+        <p><b>2. 单一信号一刷。</b><br/>
+        SSE artifact_changed 只刷 stats 没刷 list,因为最初实现时只想用它"提示数字变化"。但用户期望"看到的就是真的"— 必须同步刷 list。</p>
+        <p><b>3. 长内容无 mask。</b><br/>
+        长 csv / 大 markdown 滚动到底部时,如果底部直接被 toolbar 切断,用户分不清"是真没了"还是"还有更多"。28px fade-bottom 是低成本高信号的修复。</p>
+      </div>
+    </div>
+
+    <h2>6 · 后续 / 待办</h2>
+    <div class="card">
+      <ul>
+        <li>🟡 bulk pin 失败的部分回滚体验加单元测试覆盖</li>
+        <li>🟡 大列表(&gt;500)的 virtualization(react-window)</li>
+        <li>🟡 详情 tab 切换的 deep-link(<code class="inline">?selected=xxx&tab=metadata</code>)</li>
+        <li>🟡 ArtifactList 在多类制品时的 collapse-all / expand-all</li>
+        <li>🟡 Skill / MCP / Tools 列表也补 ErrorBoundary</li>
+      </ul>
+    </div>
+
+    <blockquote>
+      <b>诊断 → 实施 → 验证</b> 的纪律比代码本身重要。先盘点风险面,再排序杀伤力,再逐项落地;每轮 commit 独立可回滚 — 这套节奏在生产风险面有限的功能上是最稳的迭代姿势。
+    </blockquote>
+
+    <div class="footer">
+      <span>分支 · feat/ui-tweaks</span>
+      <span>已推 main</span>
+      <span>2026-04-27 · GMT+8</span>
+    </div>
+  </main>
+</body>
+</html>

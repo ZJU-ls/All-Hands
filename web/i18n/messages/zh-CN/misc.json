@@ -146,6 +146,32 @@
         "share": "分享视图",
         "copied": "已复制"
       },
+      "pricing": {
+        "title": "模型价格表",
+        "subtitle": "驱动观测中心成本估算的 USD-per-1M 价格 · 代码内置默认 + DB 运行时覆盖",
+        "breadcrumb": {
+          "observatory": "平台观测",
+          "pricing": "价格表"
+        },
+        "curatorHint": "需要更新价格?去 <chat>对话</chat> 召唤<skill>price-curator</skill> 员工 · 它会查官网 + 写 DB 覆盖 + 留 source_url。",
+        "filter": {
+          "all": "全部",
+          "db": "DB 覆盖",
+          "code": "代码内置"
+        },
+        "searchPlaceholder": "搜 model_ref…",
+        "loading": "加载中…",
+        "loadFailed": "加载失败",
+        "empty": "本筛选下没有数据",
+        "col": {
+          "model": "模型",
+          "source": "来源",
+          "input": "输入价",
+          "output": "输出价",
+          "note": "备注",
+          "updated": "更新时间"
+        }
+      },
       "costPanel": {
         "title": "成本面板 · 24h",
         "today": "今日累计",
@@ -335,6 +361,7 @@
       "copyFailed": "复制失败:{error}",
       "rollbackConfirm": "确认把当前版本回退到 v{target}?\n会创建一个新版本 v{next},内容来自 v{target}。",
       "toolbarCopyTitle": "复制内容到剪贴板",
+      "toolbarCopyIdTitle": "点击复制制品 ID(调试 / 反 馈用)",
       "toolbarEditTitle": "切到编辑模式",
       "toolbarOpenNewTitle": "在新窗口打开 — 看全屏渲染",
       "toolbarDownloadTitle": "下载到本地",
@@ -366,6 +393,7 @@
       "pinned": "置顶",
       "pinnedAria": "已置顶",
       "groupAria": "制品",
+      "groupOther": "其他",
       "empty": "还没有制品。让员工产出一份文档、代码或图。"
     },
     "panel": {
@@ -375,6 +403,8 @@
       "offline": "offline",
       "closeAria": "关闭制品区",
       "closeTitle": "关闭 · Cmd/Ctrl+J",
+      "resizeAria": "拖动调整制品区宽度",
+      "resizeTitle": "拖动调整宽度",
       "back": "返回列表",
       "loading": {
         "title": "加载制品区",
@@ -404,13 +434,14 @@
       "saved": "已保存",
       "saveFailed": "保存失败"
     },
-    "pdf": {
-      "loading": "加载 PDF…",
-      "loadFailed": "PDF 加载失败:{error}"
-    },
     "csv": {
-      "empty": "(无数据)",
-      "loadFailed": "CSV 解析失败:{error}"
+      "empty": "(无数据)"
+    },
+    "html": {
+      "iframeTitle": "HTML 制品预览"
+    },
+    "pdf": {
+      "iframeTitle": "PDF 预览"
     },
     "xlsx": {
       "loading": "加载 Excel…",
@@ -419,7 +450,8 @@
     },
     "docx": {
       "loading": "渲染 Word 文档…",
-      "loadFailed": "docx 渲染失败:{error}"
+      "loadFailed": "在线渲染不支持这份文档的某些特性({error})。",
+      "downloadFallback": "下载用 Word / WPS 打开"
     },
     "pptx": {
       "loading": "解析 PowerPoint…",
@@ -446,6 +478,15 @@
       "empty": "当前筛选下没有制品。",
       "emptyAll": "工作区里还没有任何制品",
       "emptyAllHint": "让员工产出一份文档、代码或图,制品就会出现在这里。",
+      "emptyKind": "没有 {kind} 类型的制品",
+      "emptyQuery": "没有匹配「{query}」的制品",
+      "emptyKindAndQ": "{kind} 类型里没有匹配「{query}」的制品",
+      "emptyClearHint": "清空筛选可看到全部 · 或试试别的关键词",
+      "detailErrorTitle": "无法渲染此制品",
+      "detailErrorHint": "解析失败可能是文件损坏、格式不被前端 view 支持,或浏览器内存不足。原始内容仍可下载查看。",
+      "detailErrorShow": "查看错误详情",
+      "detailErrorRetry": "重试渲染",
+      "detailErrorDownload": "下载原文件",
       "loadFailed": "制品列表加载失败:{error}",
       "count": "{n} 个制品",
       "selectHint": "从左侧选一个制品查看详情",
@@ -515,7 +556,11 @@
       "loading": "读取制品…",
       "unsupportedKind": "kind {kind} 暂不支持预览",
       "openInPanel": "在制品区打开",
-      "open": "打开"
+      "open": "打开",
+      "openInNewTab": "在新窗口打开",
+      "download": "下载",
+      "copy": "复制内容",
+      "copied": "已复制"
     },
     "artifactCard": {
       "missingId": "Artifact.Card 缺少 artifact_id",
@@ -604,7 +649,7 @@
       },
       "entries": {
         "cockpit": "驾驶舱",
-        "chat": "对话",
+        "chat": "Lead 对话",
         "conversations": "历史会话",
         "tasks": "任务",
         "employees": "员工",

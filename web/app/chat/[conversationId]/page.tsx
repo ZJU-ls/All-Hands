@@ -30,7 +30,10 @@ import {
 import { useChatStore } from "@/lib/store";
 import type { Message } from "@/lib/protocol";
 
+// Legacy + new (Lead-scoped) storage keys. We clear both on a stale 404 so
+// neither one can pin /chat to a missing conversation.
 const CONVERSATION_STORAGE_KEY = "allhands_conversation_id";
+const LEAD_CONVERSATION_STORAGE_KEY = "allhands_lead_conversation_id";
 
 type LoadState =
   | { kind: "loading" }
@@ -173,6 +176,7 @@ export default function ConversationPage() {
         if (e instanceof ApiError && e.status === 404 && !(e instanceof BackendUnreachableError)) {
           try {
             localStorage.removeItem(CONVERSATION_STORAGE_KEY);
+            localStorage.removeItem(LEAD_CONVERSATION_STORAGE_KEY);
           } catch {
             // SSR / private-mode guard — safe to ignore
           }

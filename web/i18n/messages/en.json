@@ -3,28 +3,7 @@
     "ariaLabel": "Notifications"
   },
   "common": {
-    "loading": "Loading…",
-    "save": "Save",
-    "cancel": "Cancel",
-    "confirm": "Confirm",
-    "delete": "Delete",
-    "edit": "Edit",
-    "create": "New",
-    "search": "Search",
-    "back": "Back",
-    "next": "Next",
-    "previous": "Previous",
-    "close": "Close",
-    "ok": "OK",
-    "yes": "Yes",
-    "no": "No",
-    "more": "More",
-    "settings": "Settings",
-    "retry": "Retry",
-    "refresh": "Refresh",
-    "copy": "Copy",
-    "copied": "Copied",
-    "comingSoon": "Coming soon"
+    "retry": "Retry"
   },
   "shell": {
     "workspaceVersion": "v0 · mvp",
@@ -77,7 +56,7 @@
     },
     "menu": {
       "cockpit": "Cockpit",
-      "chat": "Chat",
+      "chat": "Lead Chat",
       "tasks": "Tasks",
       "conversations": "History",
       "artifacts": "Artifacts",
@@ -212,7 +191,6 @@
   },
   "errors": {
     "unknown": "Unknown error",
-    "network": "Network error, please check your connection and retry",
     "notFoundEyebrow": "404 · not found",
     "notFoundTitle": "Page not found",
     "notFoundBody": "There's no page at this address.",

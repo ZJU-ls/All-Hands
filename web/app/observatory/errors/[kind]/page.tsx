@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { use } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppShell } from "@/components/shell/AppShell";
 import { Icon } from "@/components/ui/icon";
 import { TraceChip } from "@/components/runs/TraceChip";
@@ -31,6 +31,7 @@ export default function ErrorDetailPage({
   const errorKind = decodeURIComponent(encoded);
   const t = useTranslations("pages.observatory");
   const tErr = useTranslations("pages.observatory.errorDetail");
+  const locale = useLocale();
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [failedTraces, setFailedTraces] = useState<TraceSummaryDto[]>([]);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
@@ -115,13 +116,13 @@ export default function ErrorDetailPage({
                   <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Tile
                       label={tErr("kpi.count")}
-                      value={errorMeta.count.toLocaleString()}
+                      value={errorMeta.count.toLocaleString(locale)}
                     />
                     <Tile
                       label={tErr("kpi.lastSeen")}
                       value={
                         errorMeta.last_seen_at
-                          ? new Date(errorMeta.last_seen_at).toLocaleString()
+                          ? new Date(errorMeta.last_seen_at).toLocaleString(locale)
                           : "—"
                       }
                     />
@@ -231,7 +232,7 @@ export default function ErrorDetailPage({
                                 : "—"}
                             </td>
                             <td className="py-2 px-3 font-mono text-[11px] text-text-muted">
-                              {new Date(tr.started_at).toLocaleString()}
+                              {new Date(tr.started_at).toLocaleString(locale)}
                             </td>
                           </tr>
                         ))

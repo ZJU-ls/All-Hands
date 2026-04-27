@@ -12,6 +12,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/ui/icon";
 import type { ArtifactDto } from "@/lib/artifacts-api";
 
+// 2026-04-27 · 必须含全部 12 个 backend ArtifactKind enum 值。之前漏掉
+// csv/xlsx/docx/pdf · 这些行在 sidebar 显示原始 kind 字符串("csv")
+// 而不是更易读的 3-letter 缩写,且图标 fallback 到通用 "file" 与同类
+// office 文件不区分。删了"video"幽灵 — backend enum 没有 video。
 const KIND_LABEL: Record<string, string> = {
   markdown: "md",
   code: "code",
@@ -20,10 +24,18 @@ const KIND_LABEL: Record<string, string> = {
   data: "data",
   mermaid: "mmd",
   drawio: "drw",
+  csv: "csv",
+  xlsx: "xlsx",
+  docx: "docx",
+  pdf: "pdf",
   pptx: "pptx",
-  video: "vid",
 };
 
+// 图标按"看一眼就知道是啥"的语义贴:
+//   csv/xlsx → table(数据网格)· database 留给真正的 data 类
+//   docx → file-text(文档)
+//   pdf → file(通用)· lucide 没有 pdf 专属 icon
+//   pptx → file(通用)· presentation icon 在 lucide 里没有
 const KIND_ICON: Record<string, IconName> = {
   markdown: "book-open",
   code: "code",
@@ -32,8 +44,11 @@ const KIND_ICON: Record<string, IconName> = {
   data: "database",
   mermaid: "activity",
   drawio: "activity",
+  csv: "table",
+  xlsx: "table",
+  docx: "file-text",
+  pdf: "file",
   pptx: "file",
-  video: "play-circle",
 };
 
 export function ArtifactListItem({

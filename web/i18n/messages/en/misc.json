@@ -146,6 +146,32 @@
         "share": "Share view",
         "copied": "Copied"
       },
+      "pricing": {
+        "title": "Model price table",
+        "subtitle": "USD-per-1M prices that drive every cost number on the observatory · code-shipped defaults + DB runtime overrides",
+        "breadcrumb": {
+          "observatory": "Observatory",
+          "pricing": "Pricing"
+        },
+        "curatorHint": "Need to update a price? Go to <chat>chat</chat> and invoke the <skill>price-curator</skill> employee — it'll fetch the upstream page, write a DB overlay, and keep the source_url.",
+        "filter": {
+          "all": "All",
+          "db": "DB override",
+          "code": "Code seed"
+        },
+        "searchPlaceholder": "Search model_ref…",
+        "loading": "Loading…",
+        "loadFailed": "Load failed",
+        "empty": "No rows match this filter",
+        "col": {
+          "model": "Model",
+          "source": "Source",
+          "input": "Input",
+          "output": "Output",
+          "note": "Note",
+          "updated": "Updated"
+        }
+      },
       "costPanel": {
         "title": "Cost panel · 24h",
         "today": "Today",
@@ -335,6 +361,7 @@
       "copyFailed": "Copy failed: {error}",
       "rollbackConfirm": "Roll back the current version to v{target}?\nA new version v{next} will be created with content from v{target}.",
       "toolbarCopyTitle": "Copy content to clipboard",
+      "toolbarCopyIdTitle": "Click to copy artifact ID (debugging / feedback)",
       "toolbarEditTitle": "Switch to edit mode",
       "toolbarOpenNewTitle": "Open in a new window — full-screen render",
       "toolbarDownloadTitle": "Download to local",
@@ -366,6 +393,7 @@
       "pinned": "Pinned",
       "pinnedAria": "Pinned",
       "groupAria": "Artifacts",
+      "groupOther": "Other",
       "empty": "No artifacts yet. Have an employee produce a doc, code, or diagram."
     },
     "panel": {
@@ -375,6 +403,8 @@
       "offline": "offline",
       "closeAria": "Close artifacts panel",
       "closeTitle": "Close · Cmd/Ctrl+J",
+      "resizeAria": "Drag to resize artifacts panel",
+      "resizeTitle": "Drag to resize",
       "back": "Back to list",
       "loading": {
         "title": "Loading artifacts",
@@ -404,13 +434,14 @@
       "saved": "Saved",
       "saveFailed": "Save failed"
     },
-    "pdf": {
-      "loading": "Loading PDF…",
-      "loadFailed": "PDF load failed: {error}"
-    },
     "csv": {
-      "empty": "(no data)",
-      "loadFailed": "CSV parse failed: {error}"
+      "empty": "(no data)"
+    },
+    "html": {
+      "iframeTitle": "HTML artifact preview"
+    },
+    "pdf": {
+      "iframeTitle": "PDF preview"
     },
     "xlsx": {
       "loading": "Loading Excel…",
@@ -419,7 +450,8 @@
     },
     "docx": {
       "loading": "Rendering Word document…",
-      "loadFailed": "docx render failed: {error}"
+      "loadFailed": "In-browser preview doesn't support some feature in this doc ({error}).",
+      "downloadFallback": "Download · open in Word / WPS"
     },
     "pptx": {
       "loading": "Parsing PowerPoint…",
@@ -446,6 +478,15 @@
       "empty": "No artifacts match the current filter.",
       "emptyAll": "No artifacts in this workspace yet",
       "emptyAllHint": "Once an employee produces a doc, code or diagram, it shows up here.",
+      "emptyKind": "No {kind} artifacts",
+      "emptyQuery": "Nothing matches \"{query}\"",
+      "emptyKindAndQ": "No {kind} artifact matches \"{query}\"",
+      "emptyClearHint": "Clear the filter to see all · or try a different keyword",
+      "detailErrorTitle": "Couldn't render this artifact",
+      "detailErrorHint": "Parsing may have failed because the file is corrupted, the format isn't supported by the frontend viewer, or the browser ran out of memory. The raw bytes are still downloadable.",
+      "detailErrorShow": "Show error detail",
+      "detailErrorRetry": "Retry render",
+      "detailErrorDownload": "Download raw",
       "loadFailed": "Failed to load artifacts: {error}",
       "count": "{n} artifacts",
       "selectHint": "Pick an artifact on the left to see its detail",
@@ -515,7 +556,11 @@
       "loading": "Loading artifact…",
       "unsupportedKind": "Kind {kind} can't be previewed",
       "openInPanel": "Open in artifact panel",
-      "open": "Open"
+      "open": "Open",
+      "openInNewTab": "Open in new tab",
+      "download": "Download",
+      "copy": "Copy content",
+      "copied": "Copied"
     },
     "artifactCard": {
       "missingId": "Artifact.Card is missing artifact_id",
@@ -604,7 +649,7 @@
       },
       "entries": {
         "cockpit": "Cockpit",
-        "chat": "Chat",
+        "chat": "Lead chat",
         "conversations": "Conversations",
         "tasks": "Tasks",
         "employees": "Employees",

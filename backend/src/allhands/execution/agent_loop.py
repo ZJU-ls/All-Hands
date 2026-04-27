@@ -350,6 +350,15 @@ class AgentLoop:
             lc_messages = self._build_lc_messages(messages, overrides)
 
             iteration = 0
+            # Self-correction nudge counters · capped to avoid loops.
+            # When the model emits 0 text + 0 tool_calls (`empty_response`
+            # path), we inject one steering system message and continue
+            # for ONE more iteration. If the next iteration is ALSO empty,
+            # we bail with `empty_response` so the UI sees an honest error
+            # instead of an infinite empty-loop. Same pattern for the
+            # artifact-hallucination nudge.
+            empty_response_corrections = 0
+            empty_response_max_corrections = 1
             while True:
                 iteration += 1
                 if iteration > max_iterations:
@@ -465,20 +474,52 @@ class AgentLoop:
                 tool_use_blocks = [b for b in blocks if isinstance(b, ToolUseBlock)]
                 if not tool_use_blocks:
                     # Distinguish "model finished cleanly with a reply" from
-                    # "model emitted nothing at all". The latter usually means
-                    # the model tried to call a tool that doesn't exist (e.g.
-                    # a stale skill referencing a de-registered tool id) and
-                    # had its phantom tool_call dropped — leaving it with no
-                    # text and no valid tool. Surfacing it as `empty_response`
-                    # lets the UI show an error instead of going silent.
+                    # "model emitted nothing at all". The latter happens when:
+                    #   1. The model halted on a hard decision (multiple
+                    #      producer tools available, can't pick one).
+                    #   2. The model tried to call a tool that doesn't exist
+                    #      (stale skill referencing a de-registered tool id)
+                    #      and had its phantom dropped — left with no text
+                    #      and no valid tool.
+                    #   3. Provider caching / thinking-budget edge cases
+                    #      that consume the output token allowance.
+                    # Cases 1 and 3 are recoverable with one extra iteration
+                    # nudge. Case 2 is hopeless but the nudge is harmless.
+                    # Cap retries (`empty_response_corrections`) so a truly
+                    # stuck model exits cleanly instead of looping silently.
                     if not text_full.strip():
+                        if empty_response_corrections < empty_response_max_corrections:
+                            empty_response_corrections += 1
+                            _log.warning(
+                                "agent_loop.empty_response.nudging",
+                                extra={
+                                    "iteration": iteration,
+                                    "correction": empty_response_corrections,
+                                },
+                            )
+                            lc_messages.append(self._to_lc_assistant_message(assistant_msg))
+                            lc_messages.append(
+                                SystemMessage(
+                                    content=(
+                                        "你上一轮没有输出文字也没有调用任何工具 · "
+                                        "用户在等。可能你在纠结从哪一步开始。"
+                                        "**直接挑一个工具调下去就行 —— 不需要选完美顺序。**"
+                                        "比如要画 HTML / drawio / pptx 三件,先调 "
+                                        "`artifact_create({kind:'html', name, content})` 出第一件 · "
+                                        "下一轮再产 drawio · 再下一轮 pptx。"
+                                        "**不要再次返回空回复**;若实在没头绪,用一句话告诉用户你卡在哪并提议下一步。"
+                                    )
+                                )
+                            )
+                            continue  # next iteration will see the nudge
+                        # Already nudged once and STILL empty → bail.
                         yield LoopExited(
                             reason="empty_response",
                             detail=(
-                                "model produced no text and no tool calls — "
-                                "this typically means a tool referenced by a "
-                                "skill / prompt is not registered for this "
-                                "employee, or the model ran out of ideas mid-turn"
+                                "model produced no text and no tool calls "
+                                "even after one corrective nudge — "
+                                "tool registration / context overflow / "
+                                "thinking-budget exhaustion are likely causes"
                             ),
                         )
                     else:

@@ -71,8 +71,6 @@
     },
     "table": {
       "searchPlaceholder": "Filter rows…",
-      "densityCozy": "Cozy",
-      "densityCompact": "Compact",
       "copyCsv": "Copy as CSV",
       "noMatch": "No matching rows",
       "empty": "No rows",

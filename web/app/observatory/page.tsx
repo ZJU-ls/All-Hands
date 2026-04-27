@@ -701,6 +701,13 @@ function ObservatoryPageInner() {
             </div>
             <div className="flex items-center gap-2">
               <TimeRangePills value={range} onChange={setRange} />
+              <Link
+                href="/observatory/pricing"
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-surface border border-border hover:border-border-strong text-[12px] font-medium text-text transition-colors duration-fast"
+              >
+                <Icon name="tag" size={13} className="text-primary" />
+                {t("pricing.title")}
+              </Link>
               <ShareViewButton />
               <button
                 type="button"
@@ -1143,7 +1150,7 @@ function ObservatoryPageInner() {
                               {row.employee_name ?? row.employee_id ?? "—"}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
-                              {row.runs_count.toLocaleString()}
+                              {row.runs_count.toLocaleString(locale)}
                             </td>
                             <td className="py-2 px-4 text-right font-mono text-[11px] text-text-muted tabular-nums">
                               {formatTokens(row.total_tokens)}

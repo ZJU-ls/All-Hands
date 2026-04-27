@@ -44,6 +44,8 @@ NEW_PACKS = (
     "stock_assistant",
     "executor-spawn",
     # drawio-creator removed 2026-04-26 · merged into allhands.artifacts (P3)
+    # 2026-04-27 round-22 · brand design system as a first-class skill
+    "allhands-design",
 )
 
 SKILLS_ROOT = Path(__file__).resolve().parents[2] / "skills" / "builtin"

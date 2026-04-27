@@ -59,61 +59,13 @@ from allhands.core import Tool, ToolKind, ToolScope
 # ──────────────────────────────────────────────────────────────────────────
 
 UPDATE_PLAN_DESCRIPTION = """\
-Create and manage a structured task list for the current conversation. \
-This is YOUR working memo — the user just observes the timeline render in \
-chat. Atomic replace: every call sends the COMPLETE current todo list.
-
-WHEN TO USE (proactively):
-  • Multi-step tasks with 3+ distinct actions
-  • Non-trivial tasks that benefit from progress tracking
-  • The user explicitly asks for a plan / todo / checklist
-  • The user gives multiple discrete tasks
-  • At the START of any complex task — emit the plan, then immediately begin work
-
-WHEN NOT TO USE:
-  • Single-step tasks
-  • Trivial tasks completable in 1-2 actions
-  • Pure conversational / informational replies
-  • As an approval gate (it isn't one — the user just watches)
-
-HOW TO USE:
-  • Send the COMPLETE list of todos every call (atomic replace, never partial)
-  • Each todo has three required fields:
-      - content: imperative form (e.g. "Run tests")
-      - activeForm: present continuous form for spinner (e.g. "Running tests")
-      - status: "pending" | "in_progress" | "completed"
-  • EXACTLY ONE todo may be in_progress at any time. As you finish a step:
-    in the next update_plan call, mark that step "completed" AND mark the
-    next step "in_progress" — same call.
-  • Update the plan in real-time at every transition. Do NOT batch up several
-    completions before sending an update.
-  • Mark a step "completed" ONLY when fully done — tests pass, no errors,
-    nothing partial. If blocked, leave it in_progress and add a new pending
-    todo describing the blocker.
-  • Companion text in your assistant message should be a short status line
-    (1-2 sentences) — not a re-statement of the whole plan, the plan card
-    already shows that.
-
-EXAMPLES:
-
-  ✅ Initial plan (first todo in_progress, rest pending):
-     update_plan(todos=[
-       {"content": "Read existing auth code", "activeForm": "Reading existing auth code", "status": "in_progress"},
-       {"content": "Add session middleware", "activeForm": "Adding session middleware", "status": "pending"},
-       {"content": "Write tests", "activeForm": "Writing tests", "status": "pending"}
-     ])
-
-  ✅ After finishing step 1 (atomic replace · note both transitions in ONE call):
-     update_plan(todos=[
-       {"content": "Read existing auth code", "activeForm": "Reading existing auth code", "status": "completed"},
-       {"content": "Add session middleware", "activeForm": "Adding session middleware", "status": "in_progress"},
-       {"content": "Write tests", "activeForm": "Writing tests", "status": "pending"}
-     ])
-
-  ❌ Don't send only the changed todo (the call replaces the full list).
-  ❌ Don't have two todos in_progress at once.
-  ❌ Don't mark a todo completed when its work is blocked or partial.
-  ❌ Don't use this for a "say hello" type single-reply task.
+Working todo list for the current conversation · the user watches the \
+timeline render in chat. Atomic replace: every call sends the COMPLETE \
+current todo list (Claude-Code TodoWrite shape). Each todo has \
+`content` (imperative · "Run tests"), `activeForm` (present continuous · \
+"Running tests"), `status` ("pending" / "in_progress" / "completed"). \
+At most one todo may be in_progress at a time. \
+See `planner` skill for examples and decision rules.
 """
 
 UPDATE_PLAN_TOOL = Tool(
