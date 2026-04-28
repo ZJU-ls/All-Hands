@@ -438,10 +438,9 @@ function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <TaskStatusPill status={task.status} />
-              <span className="inline-flex h-5 items-center rounded bg-surface-2 px-1.5 font-mono text-[10px] text-text-muted">
+              <span className="inline-flex h-5 items-center rounded bg-surface-2 px-1.5 text-[10px] text-text-muted">
                 {sourceT(task.source)}
               </span>
-              <span className="font-mono text-[10px] text-text-subtle">{task.id}</span>
             </div>
             <p className="mt-1.5 truncate text-sm font-medium text-text transition-colors duration-base group-hover:text-primary">
               {task.title}
