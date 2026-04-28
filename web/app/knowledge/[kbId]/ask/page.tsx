@@ -21,6 +21,7 @@ import {
   type AskSource,
   type AskStreamFrame,
   askKBStream,
+  getFollowUpQuestions,
   getStarterQuestions,
 } from "@/lib/kb-api";
 
@@ -47,6 +48,9 @@ type AskTurn = {
   // up here so the user sees a search step + a thinking step in real time
   // instead of staring at a blinking dot for 20 s.
   activity: AgentActivity[];
+  // Follow-up question chips, fetched lazily after the turn finishes
+  // streaming. null = not requested · [] = LLM returned nothing useful.
+  followUps: string[] | null;
 };
 
 export default function AskTabPage() {
@@ -129,6 +133,7 @@ function AskTabInner() {
       usedModel: null,
       latencyMs: null,
       activity: [],
+      followUps: null,
     };
     setTurns((prev) => (followUp ? [...prev, blank] : [blank]));
 
@@ -207,6 +212,20 @@ function AskTabInner() {
                 ? { ...a, state: "done" as const, durationMs: Date.now() - a.startedAt }
                 : a,
             );
+            // Fan out follow-up fetch — set state on this turn when it lands.
+            void getFollowUpQuestions(kb.id, {
+              question: tt.question,
+              answer: tt.answer,
+              limit: 3,
+            })
+              .then((qs) =>
+                setTurns((prev2) =>
+                  prev2.map((tt2) =>
+                    tt2.id === turnId ? { ...tt2, followUps: qs } : tt2,
+                  ),
+                ),
+              )
+              .catch(() => undefined);
             return {
               ...tt,
               activity: closed,
@@ -303,9 +322,13 @@ function AskTabInner() {
                     key={turn.id}
                     turn={turn}
                     idx={idx}
+                    isLast={idx === turns.length - 1}
                     onChunkClick={(docId) =>
                       router.push(`/knowledge/${kb.id}/docs/${docId}`)
                     }
+                    onFollowUp={(q) => {
+                      void runTurn(q, true);
+                    }}
                   />
                 ))}
               </div>
@@ -503,10 +526,14 @@ function TurnView({
   turn,
   idx,
   onChunkClick,
+  onFollowUp,
+  isLast,
 }: {
   turn: AskTurn;
   idx: number;
   onChunkClick: (docId: string) => void;
+  onFollowUp: (q: string) => void;
+  isLast: boolean;
 }) {
   const t = useTranslations("knowledge.ask");
   const parts = renderAnswerWithCites(turn.answer, turn.sources, onChunkClick, turn.id);
@@ -554,6 +581,31 @@ function TurnView({
           )}
         </div>
       </div>
+
+      {/* Follow-up chip row (Perplexity-style "Related"). Only on the last
+          turn — past turns showing them would clutter and the user can just
+          ask anyway via composer. */}
+      {isLast && !turn.streaming && turn.followUps && turn.followUps.length > 0 && (
+        <div className="ml-9">
+          <div className="mb-1.5 flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+            <Icon name="sparkles" size={10} />
+            <span>{t("relatedLabel")}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {turn.followUps.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => onFollowUp(q)}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 text-[12px] text-text-muted hover:border-primary/40 hover:bg-primary-muted/30 hover:text-primary"
+              >
+                <Icon name="arrow-right" size={10} />
+                <span>{q}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -253,7 +253,8 @@
       "scrollToBottom": "滚到最新",
       "scrollToBottomStreaming": "↓ 新内容生成中",
       "scrollToBottomTitle": "回到对话底部 · 跟上最新答案",
-      "copyCode": "复制"
+      "copyCode": "复制",
+      "relatedLabel": "相关追问"
     },
     "bulkTags": {
       "title": "给 {count} 个文档批量打标签",

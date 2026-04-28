@@ -253,7 +253,8 @@
       "scrollToBottom": "Latest",
       "scrollToBottomStreaming": "↓ New content streaming",
       "scrollToBottomTitle": "Return to bottom · stay with the latest answer",
-      "copyCode": "Copy"
+      "copyCode": "Copy",
+      "relatedLabel": "Related questions"
     },
     "bulkTags": {
       "title": "Tag {count} selected documents",

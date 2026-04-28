@@ -1304,6 +1304,49 @@ class KnowledgeService:
         _STARTER_CACHE[cache_key] = questions
         return questions
 
+    async def suggest_follow_up_questions(
+        self,
+        kb_id: str,
+        *,
+        question: str,
+        answer: str,
+        limit: int = 3,
+        model_ref: str | None = None,
+    ) -> list[str]:
+        """Given a Q&A turn, propose ``limit`` next questions a curious user
+        would ask. Mirrors Perplexity / ChatGPT's "Related questions" / "Ask
+        a follow-up" pattern. Failure modes (no provider, LLM error) return
+        empty list — UI hides the row gracefully.
+        """
+        await self.get_kb(kb_id)
+        sys = (
+            "Given the user's question and the assistant's answer, propose "
+            f"exactly {limit} short follow-up questions a curious user would "
+            "naturally ask next. Each MUST be answerable from the same "
+            "knowledge base. Output ONE question per line. No numbering, no "
+            "bullets, no quotes. Match the answer's language."
+        )
+        user = (
+            f"Question:\n{question}\n\n"
+            f"Answer:\n{answer.strip()}\n\n"
+            f"Propose {limit} follow-up questions:"
+        )
+        try:
+            text, _ = await self._call_chat_llm(sys, user, model_ref=model_ref)
+        except _NoChatProvider:
+            return []
+        except Exception:
+            _logger.exception("kb.suggest_follow_up_questions LLM error")
+            return []
+        out: list[str] = []
+        for line in text.splitlines():
+            q = line.strip().lstrip("-•*0123456789.) ").strip().strip("\"'")
+            if q and q not in out:
+                out.append(q)
+            if len(out) >= limit:
+                break
+        return out
+
     async def diagnose_search(
         self, kb_id: str, query: str, *, top_k: int = 8
     ) -> dict[str, list[ScoredChunk]]:
