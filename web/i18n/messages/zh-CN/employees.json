@@ -2,7 +2,7 @@
   "employees": {
     "list": {
       "shellTitle": "员工",
-      "designAction": "+ 招聘新员工",
+      "designAction": "招聘新员工",
       "pageTitle": "员工",
       "subtitle": "团队全貌 · 切 tab 查看草稿和已离职 · 点卡片进详情页 · 卡片右下角是常用动作",
       "defaultModel": "默认模型",
