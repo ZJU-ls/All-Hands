@@ -61,6 +61,35 @@ _TERMINAL_OK = "SUCCEEDED"
 _TERMINAL_FAIL = frozenset({"FAILED", "UNKNOWN"})
 
 
+# wanx rejects any dimension outside [512, 1440]. Other ALLOWED_SIZES
+# entries (1536x1024, 2048x2048) are valid for OpenAI/Imagen but not
+# for DashScope. We surface a clear error pre-flight rather than letting
+# DashScope reject the task 4-5s later with a cryptic message.
+_WANX_MIN_DIM = 512
+_WANX_MAX_DIM = 1440
+
+
+def _wanx_dim_ok(dim: int) -> bool:
+    return _WANX_MIN_DIM <= dim <= _WANX_MAX_DIM
+
+
+def _validate_wanx_size(size: str) -> tuple[int, int] | None:
+    """Return (w, h) when valid for wanx, None otherwise.
+
+    'auto' resolves to 1024x1024 which is always valid.
+    """
+    if size == "auto":
+        return (1024, 1024)
+    try:
+        w_s, h_s = size.lower().replace("*", "x").split("x")
+        w, h = int(w_s), int(h_s)
+    except (ValueError, AttributeError):
+        return None
+    if _wanx_dim_ok(w) and _wanx_dim_ok(h):
+        return (w, h)
+    return None
+
+
 # DashScope expects size like "1024*1024" (asterisk · NOT 'x').
 def _to_dashscope_size(size: str) -> str:
     if size == "auto":
@@ -120,6 +149,21 @@ class DashScopeImageAdapter:
                 field="size",
                 expected=f"one of {list(ALLOWED_SIZES)}",
                 received=request.size,
+            )
+        # wanx-specific dimension range · catch before spending 4s on the
+        # round-trip. Discovered via real-LLM soak (ADR 0021 envelope · the
+        # hint tells the agent which sizes wanx actually accepts).
+        if _validate_wanx_size(request.size) is None:
+            raise ImageProviderError(
+                f"size {request.size!r} unsupported by wanx (each side must be 512-1440)",
+                field="size",
+                expected="each dimension in [512, 1440] · try 1024x1024 / 1024x1440 / 1440x1024",
+                received=request.size,
+                hint=(
+                    "DashScope wanx caps each dimension at 1440. The ALLOWED_SIZES "
+                    "values 1536x1024 / 1024x1536 / 2048x2048 are valid for "
+                    "OpenAI/Imagen but not DashScope · pick a smaller size."
+                ),
             )
 
         # The DashScope OpenAI-compat endpoint returns 404 for /images/generations
