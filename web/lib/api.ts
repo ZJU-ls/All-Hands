@@ -40,7 +40,7 @@ async function checkResponse(res: Response, label: string): Promise<void> {
   throw new ApiError(res.status, `${label} failed: ${res.status}`);
 }
 
-export type EmployeeStatus = "draft" | "published";
+export type EmployeeStatus = "draft" | "published" | "archived";
 
 export type EmployeeDto = {
   id: string;
@@ -202,6 +202,14 @@ export type ChatMessageDto = {
    * tell the reader the answer is incomplete.
    */
   interrupted?: boolean;
+  /**
+   * 2026-04-28 · Manual /compact has folded this message into a summary.
+   * UI keeps the row in the transcript but hides it behind a "N 条已压缩"
+   * fold; the LLM context build path filters it out so the token budget
+   * shrinks. The synthetic summary marker (role=system) keeps this false
+   * so it survives the filter and reaches the model.
+   */
+  is_compacted?: boolean;
 };
 
 export async function listConversationMessages(
@@ -313,11 +321,26 @@ export async function updateEmployee(
   return res.json() as Promise<EmployeeDto>;
 }
 
-export async function deleteEmployee(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/api/employees/${id}`, { method: "DELETE" });
+export async function deleteEmployee(
+  id: string,
+  opts: { hard?: boolean } = {},
+): Promise<void> {
+  // Default = soft delete (archive). Hard=true permanently drops the row;
+  // surfaced only behind the 「永久删除」 button inside the 已离职 tab.
+  const qs = opts.hard ? "?hard=true" : "";
+  const res = await fetch(`${BASE}/api/employees/${id}${qs}`, { method: "DELETE" });
   if (!res.ok && res.status !== 204) {
     throw new Error(`deleteEmployee failed: ${res.status}`);
   }
+}
+
+export async function restoreEmployee(id: string): Promise<EmployeeDto> {
+  const res = await fetch(`${BASE}/api/employees/${id}/restore`, { method: "POST" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`restoreEmployee failed: ${res.status} ${text}`);
+  }
+  return res.json() as Promise<EmployeeDto>;
 }
 
 export async function listSkills(): Promise<SkillDto[]> {

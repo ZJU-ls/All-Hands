@@ -167,13 +167,13 @@ describe("/mcp-servers/[id] detail page", () => {
     expect(screen.getByTestId("tool-row-search")).toBeDefined();
     expect(screen.getByTestId("tool-row-create_issue")).toBeDefined();
 
-    // expand schema
+    // expand → Try-it panel renders form fields + Run button (the old
+    // "raw schema dump" was replaced with an in-place runner 2026-04-28).
     fireEvent.click(
       screen.getByTestId("tool-row-search").querySelector("button")!,
     );
-    expect(screen.getByTestId("tool-schema-search").textContent).toContain(
-      "properties",
-    );
+    expect(screen.getByTestId("tool-try-search")).toBeDefined();
+    expect(screen.getByTestId("tool-try-run-search")).toBeDefined();
 
     // logs tab → empty placeholder
     fireEvent.click(screen.getByTestId("tab-logs"));

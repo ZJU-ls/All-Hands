@@ -59,6 +59,10 @@ class SendMessageRequest(BaseModel):
     """
 
     content: str
+    # Optional attachment ids (uploaded via POST /api/attachments). Resolved
+    # at runtime by chat_service into ImageBlock / FileBlock entries on the
+    # user Message.content_blocks. Empty/None = pure text turn (legacy path).
+    attachment_ids: list[str] | None = None
     # Per-turn model knobs (all optional). Scoped to this run only — nothing
     # persists across turns unless the caller threads them again.
     thinking: bool | None = None
@@ -99,6 +103,11 @@ class ChatMessageResponse(BaseModel):
     # done (user 中止 / network drop / mid-stream error). UI uses this
     # to render an 「已中止」 tail. See core.Message.interrupted.
     interrupted: bool = False
+    # Attachment ids on this user-uploaded turn. Empty for assistant/tool
+    # rows. Frontend resolves to thumbnail / file chips via /api/attachments.
+    attachment_ids: list[str] = []
+    # 2026-04-28 · True when manual /compact has soft-flagged this message.
+    is_compacted: bool = False
 
 
 class CompactConversationRequest(BaseModel):

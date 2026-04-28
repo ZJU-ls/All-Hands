@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 _RESERVED_ROLE_NAMES = frozenset({"system", "user", "tool", "assistant"})
 _MAX_NAME_LEN = 64
 
-EmployeeStatus = Literal["draft", "published"]
+EmployeeStatus = Literal["draft", "published", "archived"]
 
 
 def is_valid_employee_name(name: str) -> bool:
@@ -53,7 +53,14 @@ class Employee(BaseModel):
     model_ref: str
     tool_ids: list[str] = Field(default_factory=list)
     skill_ids: list[str] = Field(default_factory=list)
-    max_iterations: int = Field(default=10, ge=1, le=10000)
+    # Default raised 10 → 25 on 2026-04-28 · v1 tool-heavy tasks (multi-tool
+    # research / artifact pipelines) routinely need 12-18 LLM round-trips
+    # per turn (one per tool call + the final synthesis). 10 was the v0
+    # MVP figure when most agents only had 2-3 tools; now budget that's
+    # close enough to "task succeeds" most of the time without runaway.
+    # Per-turn invariant: this counter resets every stream() · NOT
+    # accrued across history (see agent_loop.stream).
+    max_iterations: int = Field(default=25, ge=1, le=10000)
     is_lead_agent: bool = False
     status: EmployeeStatus = "published"
     created_by: str

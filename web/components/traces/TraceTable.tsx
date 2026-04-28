@@ -93,8 +93,8 @@ export function sortTraces(traces: TraceSummaryDto[], sort: TraceSort): TraceSum
  * V2 (ADR 0016) trace table:
  *   - Header row `bg-surface-2/60` · caption-size mono uppercase with
  *     wide letter-spacing.
- *   - Rows: hover `bg-surface-2/40`; selected (matched `?trace=`) gets
- *     `bg-primary-muted` plus a 2px left `bg-primary` bar.
+ *   - Rows: hover `bg-surface-2/40`; selected (passed via `selectedId`)
+ *     gets `bg-primary-muted` plus a 2px left `bg-primary` bar.
  *   - Status cell: tone-soft pill with matching `Icon` (success / danger).
  *   - Sortable header buttons swap chevron direction per column.
  */

@@ -80,6 +80,36 @@ class MCPServerRow(Base):
     health: Mapped[str] = mapped_column(String(32), default="unknown")
 
 
+class AttachmentRow(Base):
+    __tablename__ = "attachments"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    mime: Mapped[str] = mapped_column(String(128))
+    filename: Mapped[str] = mapped_column(String(256))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    storage_path: Mapped[str] = mapped_column(String(512))
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    conversation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    uploaded_by: Mapped[str] = mapped_column(String(64), default="user")
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extracted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class LocalWorkspaceRow(Base):
+    __tablename__ = "local_workspaces"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    root_path: Mapped[str] = mapped_column(String(1024))
+    read_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
+    denied_globs: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
 class AgentPlanRow(Base):
     __tablename__ = "agent_plans"
 
@@ -132,6 +162,14 @@ class MessageRow(Base):
     # See core.Message.interrupted — true when the LLM stream didn't
     # reach a clean done (user 中止 / transport drop / mid-stream error).
     interrupted: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Attachment ids referenced by this message (user uploads). Resolved at
+    # read time via SqlAttachmentRepo to build ImageBlock/FileBlock entries.
+    attachment_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Soft flag set by manual /compact — UI keeps row behind a fold while
+    # the LLM context build path filters it out. Indexed for long convs.
+    is_compacted: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("0"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
     conversation: Mapped[ConversationRow] = relationship(back_populates="messages")
@@ -218,6 +256,12 @@ class LLMModelRow(Base):
     # `model_resolution.resolve()` runs every Lead Agent turn and needs a
     # fast lookup of "the unique default model".
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # Vision capability flag (multimodal upload feature, 2026-04-28). When
+    # False, AgentLoop projects ImageBlocks as text descriptions; when True,
+    # images are passed inline as base64 image_url parts.
+    supports_images: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("0"), nullable=False
+    )
 
 
 class TriggerRow(Base):

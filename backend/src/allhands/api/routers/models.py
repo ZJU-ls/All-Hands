@@ -42,6 +42,7 @@ class ModelResponse(BaseModel):
     max_output_tokens: int | None = None
     enabled: bool
     is_default: bool
+    supports_images: bool = False
 
 
 class SetDefaultModelResponse(BaseModel):
@@ -65,6 +66,9 @@ class CreateModelRequest(BaseModel):
     context_window: int = 0
     max_input_tokens: int | None = Field(default=None, ge=1)
     max_output_tokens: int | None = Field(default=None, ge=1)
+    # Optional explicit override; if omitted the service auto-detects from
+    # the model name (claude-3+, gpt-4o, qwen-vl, gemini, deepseek-vl, …).
+    supports_images: bool | None = None
 
 
 class UpdateModelRequest(BaseModel):
@@ -74,6 +78,7 @@ class UpdateModelRequest(BaseModel):
     max_input_tokens: int | None = Field(default=None, ge=1)
     max_output_tokens: int | None = Field(default=None, ge=1)
     enabled: bool | None = None
+    supports_images: bool | None = None
 
 
 class ChatMessage(BaseModel):
@@ -111,6 +116,7 @@ def _to_response(m: LLMModel) -> ModelResponse:
         max_output_tokens=m.max_output_tokens,
         enabled=m.enabled,
         is_default=m.is_default,
+        supports_images=m.supports_images,
     )
 
 
@@ -153,6 +159,7 @@ async def create_model(
         context_window=body.context_window,
         max_input_tokens=body.max_input_tokens,
         max_output_tokens=body.max_output_tokens,
+        supports_images=body.supports_images,
     )
     if model is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
@@ -174,6 +181,7 @@ async def update_model(
         max_input_tokens=body.max_input_tokens,
         max_output_tokens=body.max_output_tokens,
         enabled=body.enabled,
+        supports_images=body.supports_images,
     )
     if model is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.model"))

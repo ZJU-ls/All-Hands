@@ -70,7 +70,20 @@ function initial(name: string | null | undefined): string {
   return trimmed.length > 0 ? trimmed[0]!.toUpperCase() : "·";
 }
 
-export function RunHeader({ run }: { run: RunDetailDto }) {
+export function RunHeader({
+  run,
+  showTraceChip = true,
+}: {
+  run: RunDetailDto;
+  /**
+   * Hide the TraceChip when the parent is already the L3 trace page —
+   * a chip linking to the run from inside that very run is dead UX
+   * (anchor href === current path → no-op SPA navigation, looks broken).
+   * Defaults true to keep the legacy callers (chat / drawer was there)
+   * unchanged.
+   */
+  showTraceChip?: boolean;
+}) {
   const t = useTranslations("runs.header");
   const locale = useLocale();
   const status = STATUS[run.status];
@@ -121,7 +134,9 @@ export function RunHeader({ run }: { run: RunDetailDto }) {
             <Icon name="clock" size={11} />
             {formatDuration(run.duration_s)}
           </span>
-          <TraceChip runId={run.run_id} label={run.run_id.slice(0, 8)} />
+          {showTraceChip ? (
+            <TraceChip runId={run.run_id} label={run.run_id.slice(0, 8)} />
+          ) : null}
         </div>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-3 text-caption sm:grid-cols-3 lg:grid-cols-5">

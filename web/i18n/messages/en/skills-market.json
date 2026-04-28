@@ -477,13 +477,24 @@
         "section": "Exposed tools",
         "fetching": "Fetching",
         "refresh": "Refresh",
-        "intro": "Click a row to see its <mono>input_schema</mono>.",
+        "intro": "Click a row to expand the <mono>Try it</mono> form — invoke the tool right here to verify connectivity + see the result shape.",
         "loading": "Fetching tool list",
         "errorTitle": "Failed to fetch tools",
         "retry": "Retry",
         "emptyTitle": "This server declares no tools",
         "emptyDescription": "Handshake succeeded but the tool list is empty.",
-        "inputSchema": "input schema"
+        "inputSchema": "input schema",
+        "tryPanel": {
+          "title": "TRY IT",
+          "noArgs": "This tool takes no arguments — just hit Run",
+          "run": "Run",
+          "running": "Running",
+          "reset": "Reset",
+          "ok": "ok",
+          "err": "failed",
+          "result": "Result",
+          "jsonPlaceholder": "Paste valid JSON · invalid input is sent raw and the server reports the error"
+        }
       },
       "logs": {
         "section": "MCP communication logs",

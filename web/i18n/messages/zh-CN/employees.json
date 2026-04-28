@@ -2,9 +2,9 @@
   "employees": {
     "list": {
       "shellTitle": "员工",
-      "designAction": "设计员工",
+      "designAction": "招聘新员工",
       "pageTitle": "员工",
-      "subtitle": "按卡片浏览已发布员工 · 点头像直接起新对话 · 右上「设计员工」进入草稿工作区",
+      "subtitle": "团队全貌 · 切 tab 查看草稿和已离职 · 点卡片进详情页 · 卡片右下角是常用动作",
       "defaultModel": "默认模型",
       "fallbackModel": "跟随默认",
       "noDescription": "暂无描述",
@@ -12,14 +12,51 @@
       "startChatAria": "与 {name} 开始新对话",
       "detail": "详情",
       "chat": "对话",
+      "tryEmployee": "试一试",
       "opening": "打开中",
+      "publish": "发布",
+      "archive": "删除",
+      "archiveHint": "软删除 · 员工进入「已离职」tab,对话历史保留,可重新聘用",
+      "restore": "重新聘用",
+      "hardDelete": "永久删除",
+      "hardDeleteHint": "彻底删除 · 对话失去员工引用 · 不可恢复",
+      "leadCannotDelete": "Lead Agent 不可删除",
+      "statusDraft": "草稿",
+      "statusPublished": "在岗",
+      "statusArchived": "已离职",
+      "archiveTitle": "删除员工「{name}」?",
+      "archiveMessage": "员工会从「在岗」消失,但对话历史保留。可在「已离职」tab 重新聘用。",
+      "archiveConfirm": "删除",
+      "hardDeleteTitle": "永久删除「{name}」?",
+      "hardDeleteMessage": "此操作彻底从数据库删除该员工 · 对话历史保留但失去员工引用 · 无法恢复。",
+      "hardDeleteConfirm": "永久删除",
       "loadingEmployees": "加载员工",
-      "emptyHeading": "Hire your first digital employee",
+      "emptyHeading": "招聘第一位数字员工",
       "emptyBodyPrefix": "和 Lead Agent 对话一句 ",
       "emptyBodySuffix": ",给 Ta 一组 skill 和工具 —— 新员工立刻上岗。",
-      "hireEmployee": "Hire employee",
+      "hireEmployee": "招聘员工",
       "openDesigner": "打开设计器",
-      "popularStarts": "Popular starts"
+      "popularStarts": "热门起点",
+      "toolbar": {
+        "tabsAria": "按状态筛选员工",
+        "tabs": {
+          "all": "全部",
+          "published": "在岗",
+          "draft": "草稿",
+          "archived": "已离职"
+        },
+        "searchPlaceholder": "搜索员工名 / 描述 / 模型 / 技能…"
+      },
+      "emptyFiltered": {
+        "searchHeading": "没有员工匹配「{query}」",
+        "tabHeading": {
+          "all": "还没有员工",
+          "published": "暂无在岗员工",
+          "draft": "暂无草稿",
+          "archived": "暂无已离职员工"
+        },
+        "body": "换一个 tab 或清空搜索看看更多。"
+      }
     },
     "detail": {
       "shellTitleFallback": "员工",
@@ -82,7 +119,15 @@
       "deleteConfirm": "删除",
       "filesEmptyHeading": "还没有 {name} 的产出文件",
       "filesEmptyBody": "这位员工生成的报告 / 图表 / 导出件会出现在这里。当前请前往「制品库」查看全部。",
-      "filesGotoArtifacts": "前往制品库"
+      "filesGotoArtifacts": "前往制品库",
+      "statusArchived": "已离职",
+      "archivedTitle": "该员工已离职",
+      "archivedBody": "对话历史完整保留。点「重新聘用」让 Ta 回到在岗名单,或永久删除从数据库彻底移除。",
+      "restore": "重新聘用",
+      "hardDelete": "永久删除",
+      "hardDeleteTitle": "永久删除「{name}」?",
+      "hardDeleteMessage": "此操作彻底从数据库删除该员工 · 对话历史保留但失去员工引用 · 无法恢复。",
+      "hardDeleteConfirm": "永久删除"
     },
     "new": {
       "shellTitle": "招聘新员工",

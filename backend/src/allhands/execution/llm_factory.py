@@ -106,6 +106,17 @@ def build_llm(
         kwargs["base_url"] = provider.base_url
     if max_output_tokens is not None:
         kwargs["max_tokens"] = max_output_tokens
+    # 2026-04-28 token-bug fix · OpenAI streaming responses do NOT carry
+    # ``usage`` chunks unless the request opts in via ``stream_options=
+    # {"include_usage": True}``. Without this flag, ``AIMessageChunk
+    # .usage_metadata`` stays empty for *every* streaming call, agent_loop
+    # records (0, 0, 0) into ``LLMCallFinished``, the run.completed event
+    # also writes zeros, and the observatory shows "—" cost forever.
+    # ``stream_usage=True`` (langchain-openai ≥ 0.1.16) translates to the
+    # right ``stream_options`` on the wire AND is also honored by all the
+    # OpenAI-compat gateways we route through ChatOpenAI (DashScope /
+    # 百炼 / DeepSeek / Kimi etc · ignore unknown extra opts gracefully).
+    kwargs["stream_usage"] = True
     return ChatOpenAI(**kwargs)
 
 

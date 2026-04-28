@@ -56,7 +56,7 @@ EXPECTED_EXECUTE = {
         "allhands.meta.read_skill_file",
     ],
     "skill_ids": ["sk_research", "sk_write"],
-    "max_iterations": 10,
+    "max_iterations": 25,  # bumped 10→25 on 2026-04-28
 }
 
 EXPECTED_PLAN = {

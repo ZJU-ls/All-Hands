@@ -1,12 +1,13 @@
 /**
- * /traces page · regression suite (track-g + trace-drawer wiring)
+ * /traces page · regression suite
  *
  * Covers the DoD:
  *   1. LoadingState while the first fetch is in-flight.
  *   2. ErrorState when fetchTraces rejects on first load.
  *   3. EmptyState when the filtered result set is empty.
  *   4. Sort toggle on tokens column swaps row order.
- *   5. Row click routes to ?trace=<run_id> so the RunTraceDrawer opens.
+ *   5. Row click navigates to /observatory/runs/<run_id> (post-2026-04-27;
+ *      previously pushed ?trace= to open the global RunTraceDrawer).
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -18,12 +19,12 @@ vi.mock("@/components/shell/AppShell", () => ({
   AppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-const { routerReplaceMock } = vi.hoisted(() => ({
-  routerReplaceMock: vi.fn(),
+const { routerPushMock } = vi.hoisted(() => ({
+  routerPushMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: routerReplaceMock, push: vi.fn() }),
+  useRouter: () => ({ push: routerPushMock, replace: vi.fn() }),
   usePathname: () => "/traces",
   useSearchParams: () => new URLSearchParams(""),
 }));
@@ -70,7 +71,7 @@ function makeTrace(over: Partial<TraceSummaryDto> = {}): TraceSummaryDto {
 beforeEach(() => {
   fetchTracesMock.mockReset();
   listEmployeesMock.mockReset();
-  routerReplaceMock.mockReset();
+  routerPushMock.mockReset();
   listEmployeesMock.mockResolvedValue([
     { id: "emp_1", name: "writer" } as EmployeeDto,
   ]);
@@ -176,7 +177,7 @@ describe("/traces page", () => {
     expect(dataRows()[0]?.textContent).toContain("tr_small");
   });
 
-  it("row click routes to ?trace=<run_id> so RunTraceDrawer opens", async () => {
+  it("row click navigates to /observatory/runs/<run_id>", async () => {
     fetchTracesMock.mockResolvedValue({
       traces: [makeTrace({ trace_id: "tr_open", status: "failed" })],
       count: 1,
@@ -191,9 +192,6 @@ describe("/traces page", () => {
       fireEvent.click(row!);
     });
 
-    expect(routerReplaceMock).toHaveBeenCalledWith(
-      "/traces?trace=tr_open",
-      expect.objectContaining({ scroll: false }),
-    );
+    expect(routerPushMock).toHaveBeenCalledWith("/observatory/runs/tr_open");
   });
 });

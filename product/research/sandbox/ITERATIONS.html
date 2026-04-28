@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>allhands sandbox · 迭代日志(10 轮)</title>
+<style>
+  :root {
+    --bg: #0b1020; --bg-elev: #131a32; --bg-card: #161e3a; --bg-card-2: #1c2547;
+    --border: #232c52; --border-soft: #1d2647;
+    --text: #e7ecff; --text-muted: #9aa6d3; --text-dim: #6c7aa8;
+    --primary: #4f7dff; --primary-soft: #6e94ff; --accent: #8ab4ff;
+    --good: #3ec28f; --warn: #f0b94f; --bad: #ef6f6c;
+    --code-bg: #0e1530; --shadow: 0 8px 32px rgba(0,0,0,0.4);
+    --glow: 0 0 24px rgba(79,125,255,0.15);
+  }
+  html[data-theme="light"] {
+    --bg: #f6f8ff; --bg-elev: #ffffff; --bg-card: #ffffff; --bg-card-2: #f0f4ff;
+    --border: #dbe2f5; --border-soft: #e8edfa;
+    --text: #15203d; --text-muted: #5a6691; --text-dim: #8693bb;
+    --primary: #2a59e6; --primary-soft: #4f7dff; --accent: #2a59e6;
+    --code-bg: #eef2ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); }
+  body {
+    margin: 0;
+    font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  header.hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+  .hero h1 {
+    margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .meta { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
+  .hero .badge {
+    display: inline-block; margin-left: 8px; padding: 2px 10px;
+    background: rgba(79,125,255,0.15); color: var(--primary-soft);
+    border: 1px solid rgba(79,125,255,0.3); border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+  }
+  .theme-toggle {
+    border: 1px solid var(--border); background: var(--bg-elev); color: var(--text);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  }
+
+  .summary-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    margin: 32px 0 48px;
+  }
+  .stat {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px; position: relative; overflow: hidden;
+  }
+  .stat::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+  }
+  .stat .label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .stat .num { font-size: 30px; font-weight: 700; color: var(--primary-soft); margin: 6px 0 4px; line-height: 1; }
+  .stat .sub { color: var(--text-dim); font-size: 12px; }
+
+  .callout {
+    background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 12px;
+    padding: 18px 22px; margin: 18px 0;
+  }
+  .callout strong { color: var(--primary-soft); }
+
+  /* TIMELINE */
+  .timeline {
+    position: relative; margin: 32px 0;
+    padding-left: 36px;
+  }
+  .timeline::before {
+    content: ""; position: absolute; left: 12px; top: 6px; bottom: 6px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--accent), var(--primary), transparent);
+  }
+
+  .iter {
+    position: relative;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px 26px;
+    margin-bottom: 28px;
+    transition: all 0.2s;
+  }
+  .iter:hover { transform: translateX(4px); border-color: rgba(79,125,255,0.45); box-shadow: var(--glow); }
+  .iter::before {
+    content: ""; position: absolute; left: -36px; top: 24px;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--primary); color: white; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 4px var(--bg);
+  }
+  .iter[data-n="1"]::before  { content: "1"; }
+  .iter[data-n="2"]::before  { content: "2"; }
+  .iter[data-n="3"]::before  { content: "3"; }
+  .iter[data-n="4"]::before  { content: "4"; }
+  .iter[data-n="5"]::before  { content: "5"; }
+  .iter[data-n="6"]::before  { content: "6"; }
+  .iter[data-n="7"]::before  { content: "7"; }
+  .iter[data-n="8"]::before  { content: "8"; }
+  .iter[data-n="9"]::before  { content: "9"; }
+  .iter[data-n="10"]::before { content: "10"; background: var(--good); }
+
+  .iter h3 {
+    margin: 0 0 4px; font-size: 18px;
+  }
+  .iter .focus {
+    color: var(--accent); font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 600; margin-bottom: 12px;
+  }
+
+  .triple {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 14px;
+  }
+  .col {
+    background: var(--bg-card-2); border: 1px solid var(--border-soft);
+    border-radius: 10px; padding: 14px;
+  }
+  .col h4 {
+    margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 700;
+  }
+  .col.research h4 { color: var(--accent); }
+  .col.gap     h4 { color: var(--warn); }
+  .col.delta   h4 { color: var(--good); }
+  .col p { margin: 0; font-size: 13px; color: var(--text); }
+  .col ul { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-muted); }
+  .col li { margin: 2px 0; }
+  .col code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; color: var(--accent); }
+
+  .src {
+    margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border-soft);
+    font-size: 11.5px; color: var(--text-dim);
+  }
+  .src a { color: var(--primary-soft); text-decoration: none; margin-right: 12px; }
+  .src a:hover { text-decoration: underline; }
+
+  /* BEFORE/AFTER DIFF TABLE */
+  .diff {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 0; margin: 24px 0; overflow: hidden;
+  }
+  .diff h3 {
+    margin: 0; padding: 14px 22px; font-size: 16px;
+    background: var(--bg-elev); border-bottom: 1px solid var(--border);
+  }
+  .diff table { width: 100%; border-collapse: collapse; }
+  .diff th, .diff td { padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border-soft); font-size: 13.5px; vertical-align: top; }
+  .diff th { background: var(--bg-card-2); color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .diff tr:last-child td { border-bottom: 0; }
+  .diff td.before { color: var(--text-dim); text-decoration: line-through; }
+  .diff td.after  { color: var(--good); font-weight: 500; }
+
+  h2 {
+    font-size: 22px; margin: 56px 0 14px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border); position: relative;
+  }
+  h2::before {
+    content: ""; position: absolute; left: 0; bottom: -1px; width: 56px; height: 2px;
+    background: linear-gradient(90deg, var(--primary), transparent);
+  }
+
+  code {
+    background: var(--code-bg); padding: 2px 6px; border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
+    font-size: 13px; color: var(--accent);
+  }
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    background: rgba(79,125,255,0.15); color: var(--primary-soft);
+    border: 1px solid rgba(79,125,255,0.3);
+  }
+  .tag.good { background: rgba(62,194,143,0.13); color: var(--good); border-color: rgba(62,194,143,0.3); }
+
+  .footer { color: var(--text-dim); font-size: 12px; margin-top: 64px; text-align: center; }
+  a { color: var(--primary-soft); }
+
+  @media (max-width: 880px) {
+    .triple { grid-template-columns: 1fr; }
+    .summary-strip { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <h1>迭代日志 · 10 轮调研优化 <span class="badge">v1 → V2</span></h1>
+    <div class="meta">2026-04-25 → 2026-04-26 · 你睡的时候我做了什么</div>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">切换主题</button>
+</header>
+
+<div class="summary-strip">
+  <div class="stat">
+    <div class="label">迭代轮次</div>
+    <div class="num">10</div>
+    <div class="sub">每轮:研究 → 找 gap → 改设计</div>
+  </div>
+  <div class="stat">
+    <div class="label">Tool 增量</div>
+    <div class="num">8 → 40+</div>
+    <div class="sub">分 6 tier 工具栈</div>
+  </div>
+  <div class="stat">
+    <div class="label">能力域</div>
+    <div class="num">12</div>
+    <div class="sub">FS / 进程 / OS / GUI / MCP / 通信 / 数据 / 记忆 / AI / 自扩展 ...</div>
+  </div>
+  <div class="stat">
+    <div class="label">行业对标</div>
+    <div class="num">6 家</div>
+    <div class="sub">OpenHands · Cline · Goose · Claude Code · Codex · Aider</div>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>给你的快速摘要(2 分钟读完):</strong> 我把 PLAN 从"对齐 Claude Code 的本地执行能力"升级成"<strong>在你电脑上无所不能的全场景 agent</strong>"。新增 6 tier 工具栈、Computer Use、MCP 生态融入、长期记忆(Mem0 风格)、Spotlight 即时索引、Proactive 触发、Skill 自合成 7 大能力。完整方案见 <a href="PLAN-V2.html">PLAN-V2.html</a>(已对应 1100 行 markdown)。下面 10 轮迭代每一轮都解释了"调研发现 → v1 缺什么 → 怎么改"。
+</div>
+
+<h2>📊 关键 Before/After</h2>
+
+<div class="diff">
+  <h3>核心维度对照(v1 vs V2)</h3>
+  <table>
+    <tr><th>维度</th><th>v1</th><th>V2</th><th>抄了谁</th></tr>
+    <tr><td>Tool 数</td><td class="before">8 个 local.*</td><td class="after">40+ 分 6 tier</td><td>OpenHands · Goose</td></tr>
+    <tr><td>OS 集成</td><td class="before">仅 shell</td><td class="after">macOS Shortcuts/AppleScript · Win COM/PS · Linux D-Bus</td><td>原生 / Goose ext</td></tr>
+    <tr><td>GUI 控制</td><td class="before">无</td><td class="after">Anthropic Computer Use API + Playwright</td><td>Claude Code 2026.3 GA</td></tr>
+    <tr><td>MCP 生态</td><td class="before">无</td><td class="after">作 host · 集成 registry · 一键装</td><td>Goose 70+ ext · 3000 server</td></tr>
+    <tr><td>长期记忆</td><td class="before">无</td><td class="after">3 层(core/recall/archival)+ sqlite-vec</td><td>Mem0 · Letta</td></tr>
+    <tr><td>本机文件搜索</td><td class="before">grep / glob</td><td class="after">+ <code>local.find_natural</code>(mdfind 自然语言)</td><td>macOS Spotlight</td></tr>
+    <tr><td>Proactive</td><td class="before">无</td><td class="after">独立 daemon · file watcher · cron · webhook</td><td>OpenClaw / Codex /loop</td></tr>
+    <tr><td>Skill 来源</td><td class="before">5 个内置</td><td class="after">+ <strong>agent 把成功会话沉淀成 skill</strong></td><td>anthropics/skill-creator</td></tr>
+    <tr><td>Sandbox 默认</td><td class="before">off</td><td class="after">light(workspace-write 边界)</td><td>OpenAI Codex</td></tr>
+    <tr><td>Permission 模型</td><td class="before">JSON 三态</td><td class="after">5 级:trust + auto-approve cat + pattern + YOLO + sandbox</td><td>Cline + Codex</td></tr>
+    <tr><td>工作量</td><td class="before">6-8 天</td><td class="after">15-18 天 · 仍可分阶段(7 phase + 2 可选)</td><td>—</td></tr>
+  </table>
+</div>
+
+<h2>🔬 10 轮迭代详解</h2>
+
+<div class="timeline">
+
+  <div class="iter" data-n="1">
+    <h3>迭代 1 · 横扫业界本地 AI agent 方案</h3>
+    <div class="focus">行业对标 · 找抄什么 · 找避什么</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>调研发现</h4>
+        <ul>
+          <li>OpenHands(<strong>同名提醒!</strong>)68k star · Docker runtime + Plugin 系统(Jupyter/VSCode/AgentSkills)· 有 Local + Docker workspace 抽象</li>
+          <li>Cline 58k · VS Code 插件 · per-category auto-approve · YOLO mode · <code>.clinerules</code></li>
+          <li>Aider 41k · CLI · 每改自动 git commit</li>
+          <li>Goose 32k · Rust + Electron 桌面 app · <strong>3000+ MCP server 接入</strong> · 70+ 内置 ext · 已捐 Linux Foundation</li>
+          <li>Continue 31k · BYOM · 配置 YAML · 偏代码补全</li>
+          <li>Claude Code · settings.json 三态 · <code>/loop</code> 自调度 · skill 体系 · Computer Use(2026.3 GA)</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 缺位</h4>
+        <ul>
+          <li>v1 8 个 tool 跟 OpenHands 30+/Cline 15+/Goose 70+ 差距太大</li>
+          <li>没有 Plugin/Extension 系统 · 不能让用户 "装个能力包"</li>
+          <li>Cline 的 <strong>per-category auto-approve</strong> 比我们"每条规则一弹"人性多了</li>
+          <li>Goose 的"<strong>对话里渲染交互 UI</strong>"(buttons/forms)体验比纯文本好</li>
+          <li>Codex 是行业唯一"sandbox 默认开"的</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>V2 调整</h4>
+        <ul>
+          <li>新增 §1 整章"行业对标"作脚手架</li>
+          <li>tool 数从 8 → 40+ · 分 6 tier(借鉴 Computer Use 的 connector→GUI 分层)</li>
+          <li>permission 加第 4 级 "Tool Category Auto-Approve"(抄 Cline)</li>
+          <li>Sandbox 默认从 off → <code>light</code>(抄 Codex workspace-write)</li>
+          <li>Skill 体系扩展为"<strong>知识包 · 能力包(capability pack)</strong>"两层</li>
+        </ul>
+      </div>
+    </div>
+    <div class="src">
+      Sources:
+      <a href="https://docs.openhands.dev/openhands/usage/architecture/runtime">OpenHands Runtime</a>
+      <a href="https://docs.cline.bot/features/auto-approve">Cline auto-approve</a>
+      <a href="https://goose-docs.ai/">Goose docs</a>
+      <a href="https://github.com/bradAGI/awesome-cli-coding-agents">awesome-cli-coding-agents</a>
+    </div>
+  </div>
+
+  <div class="iter" data-n="2">
+    <h3>迭代 2 · 定义"全知全能"能力矩阵</h3>
+    <div class="focus">把"无所不能"拆成 12 个可枚举能力域</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>调研发现</h4>
+        <ul>
+          <li>v1 一直没明确"全知全能"具体是哪些能力 · 只列了 5 场景</li>
+          <li>对比同行 · 通用能力域应该是 12 类:文件 / 进程 / 代码语义 / 包管理 / 网络 / OS 自动化 / GUI / 浏览器 / 数据源 / 通信 / AI 服务 / 自我扩展</li>
+          <li>Cline 不做 OS 自动化 · Goose 靠 ext · 这是差异化空间</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 缺位</h4>
+        <ul>
+          <li>无 OS 自动化(macOS Shortcuts / Win COM / Linux D-Bus)</li>
+          <li>无代码语义层(LSP/AST · 只能 grep)</li>
+          <li>无统一包管理(brew/apt/pip/npm 都靠 bash)</li>
+          <li>无 AI 服务路由(给 agent 调本地 whisper/embedding)</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>V2 调整</h4>
+        <ul>
+          <li>新增 §2 能力矩阵表 · 12 域 × v1 / V2 / 落点 · 作设计脚手架</li>
+          <li>每个 tool 标 tier(0-5) · 落进 §3 6 tier 架构</li>
+          <li>跟 5 同行做"全行业对比矩阵"(§17)· 标差异化高地</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="iter" data-n="3">
+    <h3>迭代 3 · OS 原生自动化</h3>
+    <div class="focus">macOS / Win / Linux · 怎么"指挥"系统</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>调研发现</h4>
+        <ul>
+          <li>macOS:AppleScript via <code>osascript</code> · Shortcuts CLI(<code>shortcuts run "Name"</code>) · 受 TCC(Automation/Accessibility)权限制约</li>
+          <li>Win:PowerShell · COM 自动化 · UI Automation API</li>
+          <li>Linux:D-Bus(KDE/GNOME 通用) · xdotool</li>
+          <li>关键:Shortcuts <strong>不需要 Accessibility 权限</strong>(用户自建的会用 osascript 才会触发)</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 缺位</h4>
+        <ul>
+          <li>v1 完全没考虑发 iMessage / 加日历 / 发 Mail / 弹通知这类系统级操作</li>
+          <li>用户问"提醒我 3 点开会"会失败 · 这是基本盘</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>V2 调整</h4>
+        <ul>
+          <li>新增 Tier 2 · 8 个 <code>os.*</code> tool</li>
+          <li>macOS 优先(覆盖 95% 用户):<code>os.osascript</code> · <code>os.shortcut.run</code> · <code>os.notification</code> · <code>os.imsg.send</code> · <code>os.mail.send</code> · <code>os.calendar.add</code></li>
+          <li>Win/Linux 给 stub · 友好 NotImplementedError</li>
+          <li>R1 风险:首次需要 Accessibility 时一次性引导(参考 Anthropic Computer Use 引导)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="src">
+      Sources:
+      <a href="https://www.macosxautomation.com/automator/accessibility.html">macOS Accessibility & Automation</a>
+      <a href="https://angelica.gitbook.io/hacktricks/macos-hardening/macos-security-and-privilege-escalation/macos-security-protections/macos-tcc">macOS TCC deep-dive</a>
+    </div>
+  </div>
+
+  <div class="iter" data-n="4">
+    <h3>迭代 4 · Computer Use / 浏览器 / GUI 控制</h3>
+    <div class="focus">视觉操作任意 app · 最后兜底</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>调研发现</h4>
+        <ul>
+          <li>Anthropic Computer Use 2026.3 GA · 截屏 + mouse/keyboard · 有 connector 优先,GUI 兜底</li>
+          <li>每次截屏 ~3K tokens · 成本是 Tier 0-2 的 10-100 倍</li>
+          <li>需要 macOS Accessibility 权限 · 用户首次启用要引导</li>
+          <li>Playwright 是浏览器场景下更合适的工具(headless · 快 · 准)</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 缺位</h4>
+        <ul>
+          <li>v1 完全没有 GUI 操作能力 · 用户问"在 Notion 里建个页面"无法做</li>
+          <li>没有 token 成本意识 · 即使加了 Computer Use,也容易让 agent 滥用</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>V2 调整</h4>
+        <ul>
+          <li>新增 Tier 3 · 7 个 <code>gui.*</code> + <code>browser.*</code> tool</li>
+          <li>system prompt 里写死"<strong>Tier 优先级 5→4→2→1→0→3</strong>" · GUI 是最后选项</li>
+          <li>R2 风险:UI 上长任务实时显示 token 用量</li>
+          <li>D12 默认 OFF · 用户在 Settings 显式 opt-in 才启用</li>
+          <li>R9:首次启用要 1 步演示("我点桌面 Finder · 你看截图")建立信任</li>
+        </ul>
+      </div>
+    </div>
+    <div class="src">
+      Sources:
+      <a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool">Computer Use API</a>
+      <a href="https://www.anthropic.com/news/computer-use">Anthropic Announce</a>
+    </div>
+  </div>
+
+  <div class="iter" data-n="5">
+    <h3>迭代 5 · MCP 生态融入</h3>
+    <div class="focus">作为 host · 接通 3000+ server</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>调研发现</h4>
+        <ul>
+          <li>官方 registry 在 <a href="https://registry.modelcontextprotocol.io">registry.modelcontextprotocol.io</a> · 10k+ servers</li>
+          <li>Top installs:Filesystem 485k · GitHub 398k · PostgreSQL 312k · Brave Search 287k</li>
+          <li>Stripe / Supabase / Vercel / Red Hat 都有官方 server</li>
+          <li>Goose 接 70+ extensions · 是 MCP 集成度最深的客户端</li>
+          <li>Claude Desktop / Code / Cursor 共享同一份 <code>mcp.json</code> 格式</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 缺位</h4>
+        <ul>
+          <li>v1 完全没有 MCP 概念 · 用户想接 GitHub/Slack/Notion 都得我们一个一个写</li>
+          <li>错过整个生态红利</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>V2 调整</h4>
+        <ul>
+          <li>新增 Tier 4 · 我们做 MCP host · 用 Python SDK</li>
+          <li>配置文件 <code>~/.allhands/mcp.json</code> 兼容 Claude/Cursor 格式 · 用户能直接搬</li>
+          <li>UI Settings → MCP tab 集成 registry 浏览 + 一键装</li>
+          <li>每个 MCP tool 自动包成我们的 Tool · 共用同一 PermissionGate</li>
+          <li>D13:预装 github / postgres / brave-search 三个 · 都需要 token 才激活</li>
+        </ul>
+      </div>
+    </div>
+    <div class="src">
+      Sources:
+      <a href="https://github.com/modelcontextprotocol/registry">MCP Registry</a>
+      <a href="https://github.com/modelcontextprotocol/python-sdk">Python SDK</a>
+    </div>
+  </div>
+
+  <div class="iter" data-n="6">
+    <h3>迭代 6 · 长期记忆与上下文</h3>
+    <div class="focus">agent 别再健忘 · Mem0 / Spotlight 双管齐下</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>调研发现</h4>
+        <ul>
+          <li>Mem0 是 2026 标准:Postgres 长期事实 + episodic 总结 · 26% 准确率提升 · 91% 延迟降 · 90% token 减</li>
+          <li>Letta 三层模型:core(RAM-like 永远在 context)· archival(向量库 · 显式 search)· recall(对话历史 · 按需搜)</li>
+          <li><code>sqlite-vec</code> 2025.1 GA · 50KB extension · 单文件 · 不引入外部 DB</li>
+          <li>macOS <code>mdfind</code> 已经索引 125+ 元数据 · 文档全文 · 邮件 · 联系人 · <code>-interpret</code> 支持自然语言</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 缺位</h4>
+        <ul>
+          <li>v1 agent 完全无记忆 · 跨会话 0 复用 · 用户"上次怎么处理 sales.xlsx"问到只能再说一遍</li>
+          <li>没有本地知识库 RAG · 用户全机的文档对 agent 不可见</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>V2 调整</h4>
+        <ul>
+          <li>新增 §6 三层记忆 · core(注 system prompt)+ recall(SQLite FTS5)+ archival(sqlite-vec)</li>
+          <li>5 个 <code>memory.*</code> tool · 含 GDPR-style <code>memory.forget</code></li>
+          <li>新增 <code>local.find_natural</code> 包装 mdfind · <strong>macOS 上零成本 RAG</strong></li>
+          <li>降级:Linux <code>locate</code> + <code>recoll</code> · Windows Search COM</li>
+          <li>R6 风险:UI 显示存储占用 · 能"清理 30 天前的 archival"</li>
+        </ul>
+      </div>
+    </div>
+    <div class="src">
+      Sources:
+      <a href="https://mem0.ai/blog/long-term-memory-ai-agents">Mem0 长期记忆</a>
+      <a href="https://atlan.com/know/best-ai-agent-memory-frameworks-2026/">2026 记忆框架对比</a>
+      <a href="https://matthewcassinelli.com/psa-ai-terminal-bots-can-query-macos-spotlight-using-mdfind/">mdfind for AI</a>
+    </div>
+  </div>
+
+  <div class="iter" data-n="7">
+    <h3>迭代 7 · Proactive / Always-on</h3>
+    <div class="focus">让 agent 主动起来 · 不只是 user 开窗才动</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>调研发现</h4>
+        <ul>
+          <li>OpenClaw / Codex 都有 Heartbeat 模式让 agent 持续 alive</li>
+          <li>Task Trigger 模式:cron + file event 触发 · 200ms 响应</li>
+          <li>"Adaptive scheduling" - agent 自己设 next wakeup time(很像我们的 ScheduleWakeup)</li>
+          <li>Python 生态:<code>watchdog</code>(fs)+ <code>apscheduler</code>(cron)+ <code>aiohttp</code>(webhook)三件套</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 缺位</h4>
+        <ul>
+          <li>v1 只会被动响应 · 用户"晨报推到 Slack"做不了</li>
+          <li>"~/Downloads 来新文件就归档"这种自动化无法实现</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>V2 调整</h4>
+        <ul>
+          <li>新增 §8 Proactive 层 · 独立 daemon process</li>
+          <li>触发器配置 <code>~/.allhands/triggers/*.yaml</code> · fs/cron/webhook 三类</li>
+          <li>每个 trigger 指定员工 + prompt + permission_profile</li>
+          <li>Settings → Triggers tab CRUD + 历史</li>
+          <li>R4:trigger 默认 <code>max_runs_per_hour: 5</code> · 强制 paranoid profile · 防跑飞</li>
+          <li>D15:daemon 跟 backend 不同生命周期(backend 关 · daemon 仍跑)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="iter" data-n="8">
+    <h3>迭代 8 · 安全模型重构</h3>
+    <div class="focus">5 级护栏 · 默认更安全 · 老用户体验不退化</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>调研发现</h4>
+        <ul>
+          <li>OpenAI Codex 是行业唯一"sandbox 默认开" · workspace-write 模式 · 很合理</li>
+          <li>Cline 的 per-category auto-approve(read/edit/exec/browser/mcp 各自独立 toggle)极人性</li>
+          <li>Codex 加"trusted/untrusted workspace" · untrusted 时跳过项目级 .codex/ 配置(防恶意目录注入)</li>
+          <li>Cline YOLO mode 给 advanced 用户"我懂风险一键全开"</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 缺位</h4>
+        <ul>
+          <li>v1 只有"3 态 pattern" · 不够灵活 · 也不够安全</li>
+          <li>没有 workspace 信任概念 · 把项目目录当成 ~/ 同等危险</li>
+          <li>没有 YOLO 出口 · 高级用户只能手 allow 每条</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>V2 调整</h4>
+        <ul>
+          <li>§5 重写权限模型 · <strong>5 级</strong>:</li>
+          <li>① YOLO mode(全开 · 红条提醒)</li>
+          <li>② Sandbox boundary(off / <strong>light(默认)</strong> / strict)</li>
+          <li>③ Workspace trust(trusted / untrusted · untrusted 跳过项目级配置)</li>
+          <li>④ Pattern 规则(v1 三态 · 保留)</li>
+          <li>⑤ Auto-approve category(5 个 toggle · 抄 Cline)</li>
+          <li>D11 sandbox 默认 light · D14 untrusted 处理</li>
+        </ul>
+      </div>
+    </div>
+    <div class="src">
+      Sources:
+      <a href="https://developers.openai.com/codex/concepts/sandboxing">Codex sandbox docs</a>
+      <a href="https://docs.cline.bot/features/auto-approve">Cline auto-approve</a>
+      <a href="https://pierce.dev/notes/a-deep-dive-on-agent-sandboxes">Sandbox deep dive</a>
+    </div>
+  </div>
+
+  <div class="iter" data-n="9">
+    <h3>迭代 9 · Tool / Skill 自合成</h3>
+    <div class="focus">让 agent 自我扩展 · 把成功流程变 skill</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>调研发现</h4>
+        <ul>
+          <li>anthropics/skill-creator 是官方 pattern · "完成长任务后,问 agent 要不要把刚学的封成 skill"</li>
+          <li>SKILL.md universal 标准:Claude Code · Cursor · Codex · Gemini CLI · Antigravity 全兼容</li>
+          <li>VoltAgent/awesome-agent-skills 已经 1000+ 社区 skill</li>
+          <li>Goose 的 "recipes" 是另一种实现 · 但偏静态模板,不如 skill 灵活</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 缺位</h4>
+        <ul>
+          <li>v1 skill 全是我们事先写好的 5 个 · 用户场景一变就要等我们出新版</li>
+          <li>没有"沉淀经验"机制 · 同一个流程跑 N 次每次都重新教 agent</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>V2 调整</h4>
+        <ul>
+          <li>§7 全章新增 Skill Self-Synthesis</li>
+          <li><code>meta.create_skill(scope, name)</code> tool · 套 skill-creator 模板生成</li>
+          <li>3 种触发:会话末 ghost button / agent 主动建议(连续 3 次相似任务) / 用户明令</li>
+          <li>沉淀位置 <code>~/.allhands/skills/learned/</code> · D14 自动 git init · 用户能 push GitHub 跟同事分享</li>
+          <li>实验级 Phase 10:<code>meta.create_tool</code> 让 agent 直接造 backend tool(高风险 · 默认 disable)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="src">
+      Sources:
+      <a href="https://github.com/anthropics/skills">anthropics/skills</a>
+      <a href="https://github.com/FrancyJGLisboa/agent-skill-creator">agent-skill-creator</a>
+      <a href="https://github.com/VoltAgent/awesome-agent-skills">awesome-agent-skills(1000+)</a>
+    </div>
+  </div>
+
+  <div class="iter" data-n="10">
+    <h3>迭代 10 · 收尾 · PLAN-V2 + 文档产出</h3>
+    <div class="focus">汇总 9 轮成果 · 产出可读文档 · 准备落地</div>
+    <div class="triple">
+      <div class="col research">
+        <h4>整合工作</h4>
+        <ul>
+          <li>把前 9 轮的设计点拼成完整 PLAN-V2.md(17 个章节 · 1100 行)</li>
+          <li>核对内部一致性:tier 编号 · permission 模型 · Phase 序列 · 决策项</li>
+          <li>对比矩阵:allhands V2 vs OpenHands · Cline · Goose · Claude Code · Codex(§17)</li>
+          <li>R1-R10 新风险列表 · 每个有对策</li>
+          <li>D11-D15 新决策项 · 默认值都给</li>
+        </ul>
+      </div>
+      <div class="col gap">
+        <h4>v1 → V2 兼容承诺</h4>
+        <ul>
+          <li>V2 是 v1 严格超集 · 不破坏</li>
+          <li>Phase 1-3 完全不变(v1 已经 ready · 你睡前的 PR 还能进)</li>
+          <li><code>permissions.json</code> 老配置零迁移 · 多出的字段是 optional</li>
+        </ul>
+      </div>
+      <div class="col delta">
+        <h4>产出物</h4>
+        <ul>
+          <li><a href="PLAN-V2.html">PLAN-V2.html</a>(可视化版 · 17 章节 · 双主题)</li>
+          <li><strong>本页</strong> ITERATIONS.html(你正在看)</li>
+          <li>PLAN-V2.md(纯文本 1100 行 · git tracked)</li>
+          <li>3 条建议落地路径:A 稳健 / <strong>B 平衡(推荐)</strong> / C 全量</li>
+          <li>commit + push 到 <code>research/sandbox</code> 远程分支</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<h2>📋 给你的早安清单</h2>
+
+<div class="callout">
+  <strong>建议你按这个顺序看(15 分钟搞定):</strong>
+  <ol>
+    <li>本页 → 抓"做了什么"(2 分钟)</li>
+    <li><a href="PLAN-V2.html">PLAN-V2.html</a> § 0 TL;DR + § 17 全行业对比矩阵 → 抓"差异化"(3 分钟)</li>
+    <li><a href="PLAN-V2.html">PLAN-V2.html</a> § 11 7 个 Phase 时间线 + § 13 决策清单(D11-D15)→ 抓"该拍什么板"(5 分钟)</li>
+    <li><a href="PLAN-V2.html">PLAN-V2.html</a> § 15 落地路径 A/B/C → 选一个(2 分钟)</li>
+    <li>回复我 "走 B + D11-D15 全默认" 之类(或要改的点) → 我开 Phase 1(3 分钟)</li>
+  </ol>
+</div>
+
+<h2>🎯 你回复我的最小决策</h2>
+
+<table class="diff" style="display: table;">
+  <tr><th>问题</th><th>选项</th></tr>
+  <tr><td>路径</td><td><strong>A</strong> 稳健(只 v1)· <strong>B</strong> 平衡(推荐:v1 + OS 自动化 + 记忆)· <strong>C</strong> 全量(15-18 天)</td></tr>
+  <tr><td>D11 Sandbox 默认</td><td><span class="tag good">light</span>(推荐 · 抄 Codex)/ off(对齐 Claude Code)</td></tr>
+  <tr><td>D12 Computer Use 默认</td><td><span class="tag good">off</span>(推荐 · 用户 opt-in)/ on(全开)</td></tr>
+  <tr><td>D13 预装 MCP</td><td>github · postgres · brave-search 三个(推荐)/ 不预装 / 都装</td></tr>
+  <tr><td>D14 learned skill 自动 git</td><td><span class="tag good">是</span>(推荐 · 方便分享)/ 否</td></tr>
+  <tr><td>D15 daemon 独立生命周期</td><td><span class="tag good">是</span>(推荐 · 真 always-on)/ 否(跟 backend 一致)</td></tr>
+</table>
+
+<div class="footer">
+  allhands · research/sandbox · 2026-04-26 · 10 轮迭代日志 · 主 PLAN 见 <a href="PLAN-V2.html">PLAN-V2.html</a>
+</div>
+
+</div>
+
+<script>
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+</script>
+</body>
+</html>

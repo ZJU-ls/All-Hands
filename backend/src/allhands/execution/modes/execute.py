@@ -19,7 +19,7 @@ EXECUTE_PRESET = Preset(
         "allhands.meta.read_skill_file",
     ],
     skill_ids_whitelist=["sk_research", "sk_write"],
-    max_iterations=10,
+    max_iterations=25,  # bumped 10→25 2026-04-28 · see core/employee.py
 )
 
 ID = EXECUTE_PRESET.id

@@ -23,7 +23,7 @@ from allhands.api.deps import (
     get_session,
     get_skill_registry,
 )
-from allhands.core.errors import DomainError, EmployeeNotFound
+from allhands.core.errors import DomainError, EmployeeNotFound, InvariantViolation
 from allhands.execution.modes import PRESETS, compose_preview
 from allhands.i18n import t
 from allhands.persistence.sql_repos import (
@@ -51,7 +51,7 @@ class EmployeeResponse(BaseModel):
     skill_ids: list[str]
     max_iterations: int
     model_ref: str
-    status: Literal["draft", "published"]
+    status: Literal["draft", "published", "archived"]
     published_at: str | None = None
 
 
@@ -222,13 +222,14 @@ async def get_lead_employee(
 
 @router.get("", response_model=list[EmployeeResponse])
 async def list_employees(
-    status: Literal["draft", "published"] | None = None,
+    status: Literal["draft", "published", "archived"] | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> list[EmployeeResponse]:
     """Browse list. ``status`` filter:
-    - omitted → every employee (used by the design desk which shows both)
+    - omitted → every employee that isn't archived (the default surface)
     - ``published`` → roster surfaces (home grid / @mentions / picker)
     - ``draft`` → design-desk drafts tab
+    - ``archived`` → 「已离职」 tab · soft-deleted employees ready for restore
     """
     svc = await get_employee_service(session)
     employees = await svc.list_all(status=status)
@@ -318,13 +319,40 @@ async def update_employee(
 @router.delete("/{employee_id}", status_code=204)
 async def delete_employee(
     employee_id: str,
+    hard: bool = False,
     session: AsyncSession = Depends(get_session),
 ) -> Response:
+    """Delete an employee.
+
+    Default (``hard=false``) is a soft delete: the row stays in the database
+    with ``status=archived`` so conversations keep their employee link and
+    the user can ``POST /{id}/restore`` to bring them back. Pass
+    ``?hard=true`` for permanent SQL DELETE — surfaced only behind the
+    「永久删除」 button inside the 「已离职」 tab.
+    """
     svc = await get_employee_service(session)
     try:
-        await svc.delete(employee_id)
+        await svc.delete(employee_id, hard=hard)
     except EmployeeNotFound as exc:
         raise HTTPException(
             status_code=404, detail=t("errors.not_found.employee_id", id=repr(employee_id))
         ) from exc
+    except InvariantViolation as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return Response(status_code=204)
+
+
+@router.post("/{employee_id}/restore", response_model=EmployeeResponse)
+async def restore_employee(
+    employee_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> EmployeeResponse:
+    """Re-hire an archived employee. Idempotent when already non-archived."""
+    svc = await get_employee_service(session)
+    try:
+        emp = await svc.restore(employee_id)
+    except EmployeeNotFound as exc:
+        raise HTTPException(
+            status_code=404, detail=t("errors.not_found.employee_id", id=repr(employee_id))
+        ) from exc
+    return _to_response(emp)

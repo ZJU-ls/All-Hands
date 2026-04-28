@@ -7,6 +7,8 @@
   },
   "shell": {
     "workspaceVersion": "v0 · mvp",
+    "workspaceWelcomeAria": "Open the welcome page · product intro / first-run walkthrough",
+    "workspaceWelcomeTitle": "Back to welcome",
     "usage": "Usage",
     "tokens": "{used} / {total} tokens",
     "search": {
@@ -185,8 +187,39 @@
         "title": "Notification Channels",
         "description": "Slack, email, webhooks, and other delivery channels.",
         "cta": "Go to channels"
+      },
+      "workspaces": {
+        "title": "Local Workspaces",
+        "description": "Host directories the ExpertProgrammer (and other agents) can read / write.",
+        "cta": "Manage workspaces"
       }
     }
+  },
+  "workspaces": {
+    "title": "Local Workspaces",
+    "subtitle": "Configure host directories the ExpertProgrammer (and other agents) can read / write / shell into.",
+    "addCta": "Add workspace",
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "loadFailed": "Load failed",
+    "confirmDelete": "Delete this workspace? Files on disk are not touched — the platform just stops accessing them.",
+    "readOnlyBadge": "read-only",
+    "denyPrefix": "deny:",
+    "allowWrites": "Allow writes",
+    "makeReadOnly": "Set read-only",
+    "delete": "Delete",
+    "footnote": "Workspaces are the boundary of the local-files skill — only paths that resolve inside these roots are reachable. Symlink escape is rejected.",
+    "backToSettings": "Back to Settings",
+    "emptyTitle": "No workspaces yet",
+    "emptyDescription": "Add a local directory and any agent with the local-files skill can read/write code in it.",
+    "addTitle": "Add a workspace",
+    "nameLabel": "Name",
+    "namePlaceholder": "my code",
+    "rootPathLabel": "Root path (absolute · must be an existing directory)",
+    "rootPathHint": "Cannot be / or your HOME root. Symlinks are resolved.",
+    "readOnlyLabel": "Read-only (agents cannot write or run commands)",
+    "save": "Save",
+    "saving": "Saving…"
   },
   "errors": {
     "unknown": "Unknown error",

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useTranslations } from "next-intl";
 import { useChatStore } from "@/lib/store";
 import { MessageBubble } from "./MessageBubble";
+import { CompactedFold } from "./CompactedFold";
 import { Icon } from "@/components/ui/icon";
 import type { Message } from "@/lib/protocol";
 
@@ -160,9 +161,53 @@ export function MessageList({ conversationId }: Props) {
           <EmptyState />
         ) : (
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5">
-            {renderRows.map(({ msg, streaming }) => (
-              <MessageBubble key={msg.id} message={msg} isStreaming={streaming} />
-            ))}
+            {(() => {
+              // Group consecutive ``is_compacted=true`` non-system messages
+              // into a single CompactedFold so the transcript stays compact
+              // visually while the underlying rows stay in the DOM (just
+              // hidden until expand). System rows (synthetic summary marker)
+              // and the streaming bubble always render inline.
+              type Group =
+                | { kind: "single"; row: { msg: Message; streaming: boolean } }
+                | { kind: "fold"; messages: Message[]; key: string };
+              const groups: Group[] = [];
+              let bucket: Message[] = [];
+              const flushBucket = () => {
+                const head = bucket[0];
+                if (!head) return;
+                groups.push({
+                  kind: "fold",
+                  messages: bucket,
+                  key: `fold-${head.id}-${bucket.length}`,
+                });
+                bucket = [];
+              };
+              for (const row of renderRows) {
+                const compacted =
+                  Boolean(row.msg.is_compacted) &&
+                  row.msg.role !== "system" &&
+                  !row.streaming;
+                if (compacted) {
+                  bucket.push(row.msg);
+                } else {
+                  flushBucket();
+                  groups.push({ kind: "single", row });
+                }
+              }
+              flushBucket();
+              return groups.map((g) => {
+                if (g.kind === "fold") {
+                  return <CompactedFold key={g.key} messages={g.messages} />;
+                }
+                return (
+                  <MessageBubble
+                    key={g.row.msg.id}
+                    message={g.row.msg}
+                    isStreaming={g.row.streaming}
+                  />
+                );
+              });
+            })()}
             {isPendingAssistant && <PendingAssistantBubble />}
             {streamError && !streamingMessage && (
               <StreamErrorBanner

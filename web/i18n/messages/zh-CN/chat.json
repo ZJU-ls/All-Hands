@@ -24,7 +24,7 @@
       "done": "已压缩 · {n}",
       "idle": "压缩上下文",
       "errorTitle": "压缩失败 · {message}",
-      "tooltip": "将较早的消息折叠成单条摘要,为后续对话腾出上下文窗口",
+      "tooltip": "缩小发给模型的上下文 · 历史消息保留在你的页面里,只是折叠展示",
       "ariaLabel": "手动压缩对话上下文"
     },
     "composer": {
@@ -64,6 +64,26 @@
       "assistantFailed": "助手没能完成这次回复。",
       "hint": "↵ 发送 · ⇧↵ 换行"
     },
+    "attachments": {
+      "attachTitle": "添加附件 (图片 / 文档 / 代码)",
+      "dropHint": "松开鼠标上传文件",
+      "queued": "等待中",
+      "failed": "失败",
+      "remove": "移除",
+      "switchModel": "切换模型 →",
+      "visionFallbackBanner": "当前模型不支持图片理解 · 你的图会自动转成文字描述给模型",
+      "visionFallbackBannerNamed": "当前模型 ({model}) 不支持图片理解 · 你的图会自动转成文字描述给模型",
+      "lightboxClose": "关闭",
+      "fileSize": "{size} KB",
+      "imageDimensions": "{w}×{h}",
+      "downloadTitle": "下载",
+      "morePlaceholder": "+ 还有 {count} 个",
+      "reject": {
+        "empty": "文件为空",
+        "too_large": "文件超过 20 MB 上限",
+        "bad_mime": "不支持的文件类型"
+      }
+    },
     "messageBubble": {
       "thinkingProcess": "思考过程",
       "thinkingProcessLive": "思考过程…",
@@ -83,7 +103,14 @@
       "streamStalled": "等待响应",
       "streamSilent": "无响应 {s}s",
       "streamAbort": "停止",
-      "streamAbortTitle": "停止本次流(无响应过久 · 点击中断 SSE 并解锁输入)"
+      "streamAbortTitle": "停止本次流(无响应过久 · 点击中断 SSE 并解锁输入)",
+      "compactedFold": {
+        "heading": "{n} 条消息已压缩",
+        "subtitle": "完整内容仍保留在这里,只是不再发给模型 · 点击展开查看",
+        "expand": "展开",
+        "collapse": "收起",
+        "rowBadge": "已折叠"
+      }
     },
     "modelOverride": {
       "defaultModel": "默认模型",

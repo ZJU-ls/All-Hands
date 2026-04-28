@@ -47,7 +47,7 @@ async def startup() -> None:
     from allhands.persistence.db import get_sessionmaker
     from allhands.persistence.sql_repos import SqlEmployeeRepo
     from allhands.services import seed_service
-    from allhands.services.bootstrap_service import ensure_lead_agent
+    from allhands.services.bootstrap_service import ensure_expert_programmer, ensure_lead_agent
 
     settings = get_settings()
     settings.ensure_data_dir()
@@ -67,15 +67,40 @@ async def startup() -> None:
     except Exception as exc:
         log.warning("alembic.upgrade.failed", error=str(exc))
 
-    # Seed Lead Agent
+    # Seed Lead Agent + ExpertProgrammer
     try:
         maker = get_sessionmaker()
         async with maker() as session, session.begin():
             repo = SqlEmployeeRepo(session)
             lead = await ensure_lead_agent(repo)
             log.info("lead_agent.ready", id=lead.id, name=lead.name)
+            programmer = await ensure_expert_programmer(repo)
+            log.info("expert_programmer.ready", id=programmer.id, name=programmer.name)
     except Exception as exc:
-        log.warning("lead_agent.seed.failed", error=str(exc))
+        log.warning("employee.seed.failed", error=str(exc))
+
+    # Auto-detect vision capability for already-registered models that pre-date
+    # the supports_images column (default 0). Users get sensible defaults
+    # without having to manually flip a switch for every claude / gpt-4o /
+    # qwen-vl model already in their workspace.
+    try:
+        from allhands.persistence.sql_repos import SqlLLMModelRepo
+        from allhands.services.vision_capability import infer_supports_images
+
+        maker = get_sessionmaker()
+        async with maker() as session:
+            repo_m = SqlLLMModelRepo(session)
+            models = await repo_m.list_all()
+            updated = 0
+            for m in models:
+                inferred = infer_supports_images(m.name)
+                if inferred and not m.supports_images:
+                    await repo_m.upsert(m.model_copy(update={"supports_images": True}))
+                    updated += 1
+            if updated:
+                log.info("models.vision_backfill", updated=updated, total=len(models))
+    except Exception as exc:
+        log.warning("models.vision_backfill.failed", error=str(exc))
 
     # 2026-04-26 P3 · drawio-creator skill was merged into allhands.artifacts.
     # Sanity scan: any stale 'allhands.drawio-creator' reference in the DB

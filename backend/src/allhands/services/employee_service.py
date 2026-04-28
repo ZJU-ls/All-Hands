@@ -144,13 +144,17 @@ class EmployeeService:
             tids = list(tool_ids) if tool_ids is not None else []
             sids = list(skill_ids) if skill_ids is not None else list(DEFAULT_SKILL_IDS)
             if max_iterations is None:
-                max_iterations = 10
+                # Aligned with Employee.max_iterations default (25) and the
+                # execute preset bump (2026-04-28). Same rationale: 10 was
+                # too tight for tool-heavy v1 turns and looked like history
+                # accrual to users.
+                max_iterations = 25
         if is_lead_agent:
             tids = _inject_coordination_tools(tids)
         _validate_dispatch_mount(tids, is_lead_agent)
         if not tids and not sids:
             raise ValueError("Employee must have at least one tool or skill capability.")
-        if status not in ("draft", "published"):
+        if status not in ("draft", "published", "archived"):
             raise ValueError(f"Invalid employee status: {status!r}")
         now = datetime.now(UTC)
         employee = Employee(
@@ -182,8 +186,10 @@ class EmployeeService:
     async def get_lead(self) -> Employee | None:
         return await self._repo.get_lead()
 
-    async def list_all(self, *, status: str | None = None) -> list[Employee]:
-        return await self._repo.list_all(status=status)
+    async def list_all(
+        self, *, status: str | None = None, include_archived: bool = False
+    ) -> list[Employee]:
+        return await self._repo.list_all(status=status, include_archived=include_archived)
 
     async def publish(self, employee_id: str) -> Employee:
         emp = await self.get(employee_id)
@@ -224,6 +230,46 @@ class EmployeeService:
         )
         return await self._repo.upsert(updated)
 
-    async def delete(self, employee_id: str) -> None:
-        await self.get(employee_id)  # raises if not found
+    async def archive(self, employee_id: str) -> Employee:
+        """Soft-delete: flip status to ``archived`` so the employee disappears
+        from default listings but conversations + history stay intact and the
+        record can be ``restore``-d. Lead Agent cannot be archived."""
+        emp = await self.get(employee_id)
+        if emp.is_lead_agent:
+            raise InvariantViolation("Lead Agent cannot be archived.")
+        if emp.status == "archived":
+            return emp
+        updated = emp.model_copy(update={"status": "archived"})
+        return await self._repo.upsert(updated)
+
+    async def restore(self, employee_id: str) -> Employee:
+        """Re-hire a previously archived employee. Returns the employee with
+        status=published; no-op (idempotent) if already non-archived."""
+        emp = await self.get(employee_id)
+        if emp.status != "archived":
+            return emp
+        # Restoring an archived draft would resurrect it as draft, but the
+        # common path is "I deleted by mistake, bring back as live"; we map to
+        # published to match the user-facing 「重新聘用」 verb.
+        updated = emp.model_copy(
+            update={"status": "published", "published_at": datetime.now(UTC)},
+        )
+        return await self._repo.upsert(updated)
+
+    async def hard_delete(self, employee_id: str) -> None:
+        """Permanent SQL DELETE. The router only exposes this with explicit
+        ``?hard=true`` opt-in, and the UI surfaces it only inside the
+        「已离职」 tab — once gone, conversations lose their employee link."""
+        emp = await self.get(employee_id)  # raises if not found
+        if emp.is_lead_agent:
+            raise InvariantViolation("Lead Agent cannot be deleted.")
         await self._repo.delete(employee_id)
+
+    async def delete(self, employee_id: str, *, hard: bool = False) -> None:
+        """Default delete = soft (archive). Pass ``hard=True`` to permanently
+        drop the row. Kept around as a single entry point so existing callers
+        get the safer behaviour without code changes."""
+        if hard:
+            await self.hard_delete(employee_id)
+        else:
+            await self.archive(employee_id)

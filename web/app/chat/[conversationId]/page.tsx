@@ -163,6 +163,7 @@ export default function ConversationPage() {
           // shows the 「已中止」 tail on past partial turns, not just on
           // the live one we just cancelled.
           interrupted: m.interrupted ?? false,
+          is_compacted: m.is_compacted ?? false,
           created_at: m.created_at,
         }));
         setConv(c);
@@ -231,13 +232,18 @@ export default function ConversationPage() {
   // Non-Lead employees get their own shell title — the "One for All · single
   // Lead Agent" tagline only fits the Lead surface. Loading falls back to the
   // tagline since we don't yet know which employee owns this conversation.
+  const isNonLeadEmployee = Boolean(employee && !employee.is_lead_agent);
   const shellTitle =
-    employee && !employee.is_lead_agent
+    isNonLeadEmployee && employee
       ? t("shellTitleEmployee", { name: employee.name })
       : t("shellTitle");
+  // The sidebar 「对话」 entry conceptually owns the Lead-chat surface only.
+  // For an employee chat we anchor the highlight back to 「员工」 so the
+  // user sees they're inside the employee track, not the Lead track.
+  const sidebarActiveOverride = isNonLeadEmployee ? "/employees" : undefined;
 
   return (
-    <AppShell title={shellTitle}>
+    <AppShell title={shellTitle} sidebarActiveOverride={sidebarActiveOverride}>
       <div className="flex h-full min-h-0 min-w-0">
         <div className="flex h-full min-h-0 flex-1 flex-col min-w-0">
           {loadState.kind === "unreachable" && (

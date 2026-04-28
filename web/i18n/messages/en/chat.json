@@ -24,7 +24,7 @@
       "done": "Compacted · {n}",
       "idle": "Compact context",
       "errorTitle": "Compaction failed · {message}",
-      "tooltip": "Fold older messages into a single summary to free up the context window",
+      "tooltip": "Shrinks the context sent to the model · your transcript keeps every message, just folded behind a click-to-expand band",
       "ariaLabel": "Manually compact conversation context"
     },
     "composer": {
@@ -64,6 +64,26 @@
       "assistantFailed": "The assistant couldn't finish this reply.",
       "hint": "↵ send · ⇧↵ newline"
     },
+    "attachments": {
+      "attachTitle": "Attach files (images / docs / code)",
+      "dropHint": "Drop to upload",
+      "queued": "queued",
+      "failed": "failed",
+      "remove": "Remove",
+      "switchModel": "Switch model →",
+      "visionFallbackBanner": "Current model does not support image input — your image will be described in text instead.",
+      "visionFallbackBannerNamed": "Current model ({model}) does not support image input — your image will be described in text instead.",
+      "lightboxClose": "Close",
+      "fileSize": "{size} KB",
+      "imageDimensions": "{w}×{h}",
+      "downloadTitle": "Download",
+      "morePlaceholder": "+ {count} more",
+      "reject": {
+        "empty": "File is empty",
+        "too_large": "File exceeds 20 MB cap",
+        "bad_mime": "Unsupported file type"
+      }
+    },
     "messageBubble": {
       "thinkingProcess": "Thinking",
       "thinkingProcessLive": "Thinking…",
@@ -83,7 +103,14 @@
       "streamStalled": "Waiting for response",
       "streamSilent": "No response for {s}s",
       "streamAbort": "Stop",
-      "streamAbortTitle": "Stop this stream (idle too long · aborts SSE and unlocks the input)"
+      "streamAbortTitle": "Stop this stream (idle too long · aborts SSE and unlocks the input)",
+      "compactedFold": {
+        "heading": "{n} messages compacted",
+        "subtitle": "Stay in your transcript but skipped from the model's context · click to expand",
+        "expand": "Expand",
+        "collapse": "Collapse",
+        "rowBadge": "Folded"
+      }
     },
     "modelOverride": {
       "defaultModel": "Default model",

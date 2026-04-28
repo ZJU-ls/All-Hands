@@ -7,6 +7,8 @@
   },
   "shell": {
     "workspaceVersion": "v0 · mvp",
+    "workspaceWelcomeAria": "打开欢迎页 · 产品介绍 / 首次运行向导",
+    "workspaceWelcomeTitle": "回欢迎页 · 看产品介绍",
     "usage": "用量",
     "tokens": "{used} / {total} tokens",
     "search": {
@@ -185,8 +187,39 @@
         "title": "通知渠道",
         "description": "Slack、邮件、Webhook 等推送渠道配置。",
         "cta": "前往通知"
+      },
+      "workspaces": {
+        "title": "本地工作区",
+        "description": "ExpertProgrammer 等员工可访问的本地代码目录。",
+        "cta": "管理工作区"
       }
     }
+  },
+  "workspaces": {
+    "title": "本地工作区",
+    "subtitle": "配置 ExpertProgrammer 等员工可访问的本地目录 · 读 / 写 / 跑命令仅在这些路径下生效",
+    "addCta": "新增工作区",
+    "cancel": "取消",
+    "loading": "加载中…",
+    "loadFailed": "加载失败",
+    "confirmDelete": "确定删除这个工作区吗?磁盘上的文件不会被删除,只是平台不再访问。",
+    "readOnlyBadge": "只读",
+    "denyPrefix": "deny:",
+    "allowWrites": "允许写入",
+    "makeReadOnly": "改为只读",
+    "delete": "删除",
+    "footnote": "工作区是 local-files 技能的边界 —— 只有路径解析后落在这些根目录内的文件才能被访问。symlink 越界会被拒。员工(如 ExpertProgrammer)挂上该技能后即可在这里读写代码、跑命令。",
+    "backToSettings": "返回 Settings",
+    "emptyTitle": "还没有任何工作区",
+    "emptyDescription": "添加一个本地目录后,挂了 local-files 技能的员工就能在里面读写代码。",
+    "addTitle": "新增本地工作区",
+    "nameLabel": "名称",
+    "namePlaceholder": "我的代码",
+    "rootPathLabel": "根路径 (绝对路径 · 必须是已存在的目录)",
+    "rootPathHint": "不能是 / 或 HOME 根 · symlink 会被解析。",
+    "readOnlyLabel": "只读 (员工无法写入或运行命令)",
+    "save": "保存",
+    "saving": "保存中…"
   },
   "errors": {
     "unknown": "未知错误",

@@ -31,6 +31,9 @@ export default function ErrorDetailPage({
   const errorKind = decodeURIComponent(encoded);
   const t = useTranslations("pages.observatory");
   const tErr = useTranslations("pages.observatory.errorDetail");
+  // Reuse the run-table headers from employeeDetail (trace/employee/model/
+  // duration/started — same shape · single source of truth).
+  const tTable = useTranslations("pages.observatory.employeeDetail");
   const locale = useLocale();
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [failedTraces, setFailedTraces] = useState<TraceSummaryDto[]>([]);
@@ -171,11 +174,11 @@ export default function ErrorDetailPage({
                   <table className="w-full text-[12.5px]">
                     <thead className="bg-surface-2 text-[10px] uppercase tracking-wider text-text-subtle">
                       <tr>
-                        <th className="text-left py-2 px-3">trace</th>
-                        <th className="text-left py-2 px-3">employee</th>
-                        <th className="text-left py-2 px-3">model</th>
-                        <th className="text-right py-2 px-3">duration</th>
-                        <th className="text-left py-2 px-3">started</th>
+                        <th className="text-left py-2 px-3">{tTable("table.trace")}</th>
+                        <th className="text-left py-2 px-3">{tTable("table.employee")}</th>
+                        <th className="text-left py-2 px-3">{tTable("table.model")}</th>
+                        <th className="text-right py-2 px-3">{tTable("table.duration")}</th>
+                        <th className="text-left py-2 px-3">{tTable("table.started")}</th>
                       </tr>
                     </thead>
                     <tbody>

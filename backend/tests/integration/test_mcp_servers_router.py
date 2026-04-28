@@ -84,6 +84,10 @@ def test_list_empty(client: TestClient) -> None:
 
 
 def test_add_stdio_server_returns_201_and_shape(client: TestClient) -> None:
+    """Add returns 201 + shape · health is OK because the eager probe runs
+    against the FakeAdapter (handshake → OK · list_tools → []) post-2026-04-28.
+    Pre-2026-04-28 health stayed UNKNOWN because exposed_tool_ids never got
+    populated → UI tool-count chip stuck at 0 forever."""
     r = client.post(
         "/api/mcp-servers",
         json={
@@ -96,8 +100,9 @@ def test_add_stdio_server_returns_201_and_shape(client: TestClient) -> None:
     body = r.json()
     assert body["name"] == "s1"
     assert body["transport"] == "stdio"
-    assert body["health"] == "unknown"
+    assert body["health"] == "ok"  # eager probe ran successfully
     assert body["enabled"] is True
+    assert body["exposed_tool_ids"] == ["echo"]  # cached from FakeAdapter
 
 
 def test_add_bad_transport_400(client: TestClient) -> None:

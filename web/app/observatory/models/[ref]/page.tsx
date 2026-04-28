@@ -53,6 +53,9 @@ export default function ModelDetailPage({
   const modelRef = decodeURIComponent(encodedRef);
   const t = useTranslations("pages.observatory");
   const tMod = useTranslations("pages.observatory.modelDetail");
+  // The model L2 reuses the employee L2 run-table headers + status labels
+  // verbatim — rather than duplicating the keys we share the namespace.
+  const tTable = useTranslations("pages.observatory.employeeDetail");
   const locale = useLocale();
   const [summary, setSummary] = useState<ObservatorySummaryDto | null>(null);
   const [traces, setTraces] = useState<TraceSummaryDto[]>([]);
@@ -254,12 +257,12 @@ export default function ModelDetailPage({
                   <table className="w-full text-[12.5px]">
                     <thead className="bg-surface-2 text-[10px] uppercase tracking-wider text-text-subtle">
                       <tr>
-                        <th className="text-left py-2 px-3">trace</th>
-                        <th className="text-left py-2 px-3">employee</th>
-                        <th className="text-left py-2 px-3">status</th>
-                        <th className="text-right py-2 px-3">duration</th>
-                        <th className="text-right py-2 px-3">tokens</th>
-                        <th className="text-left py-2 px-3">started</th>
+                        <th className="text-left py-2 px-3">{tTable("table.trace")}</th>
+                        <th className="text-left py-2 px-3">{tTable("table.employee")}</th>
+                        <th className="text-left py-2 px-3">{tTable("table.status")}</th>
+                        <th className="text-right py-2 px-3">{tTable("table.duration")}</th>
+                        <th className="text-right py-2 px-3">{tTable("table.tokens")}</th>
+                        <th className="text-left py-2 px-3">{tTable("table.started")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -306,7 +309,7 @@ export default function ModelDetailPage({
                                       : "bg-success-soft text-success"
                                 }`}
                               >
-                                {tr.status}
+                                {tTable(`status.${tr.status}`)}
                               </span>
                             </td>
                             <td className="py-2 px-3 text-right font-mono text-[11px] tabular-nums text-text-muted">
