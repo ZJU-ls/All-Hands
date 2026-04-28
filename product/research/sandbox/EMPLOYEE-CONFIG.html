@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>员工配置指南 · 整理桌面 / 建代码库 等 Claude 风格场景</title>
+<style>
+  :root { --bg: #0b1020; --bg-elev: #131a32; --bg-card: #161e3a; --bg-card-2: #1c2547;
+    --border: #232c52; --border-soft: #1d2647;
+    --text: #e7ecff; --text-muted: #9aa6d3; --text-dim: #6c7aa8;
+    --primary: #4f7dff; --primary-soft: #6e94ff; --accent: #8ab4ff;
+    --good: #3ec28f; --warn: #f0b94f; --bad: #ef6f6c; --code-bg: #0e1530;
+    --glow: 0 0 24px rgba(79,125,255,0.15); }
+  html[data-theme="light"] { --bg: #f6f8ff; --bg-elev: #ffffff; --bg-card: #ffffff; --bg-card-2: #f0f4ff;
+    --border: #dbe2f5; --text: #15203d; --text-muted: #5a6691;
+    --primary: #2a59e6; --primary-soft: #4f7dff; --accent: #2a59e6; --code-bg: #eef2ff; }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); margin: 0; }
+  body { font: 15px/1.7 -apple-system, "PingFang SC", sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  header.hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+  .hero h1 {
+    margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .meta { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
+  .badge { display: inline-block; padding: 3px 10px; background: rgba(79,125,255,0.15); color: var(--primary-soft);
+    border: 1px solid rgba(79,125,255,0.3); border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 8px; }
+  .theme-toggle { border: 1px solid var(--border); background: var(--bg-elev); color: var(--text);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+
+  .lead { margin: 32px 0; padding: 22px 26px;
+    background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 16px; }
+  .lead strong { color: var(--primary-soft); }
+  .lead.good { background: linear-gradient(135deg, rgba(62,194,143,0.10), rgba(62,194,143,0.04));
+    border-color: rgba(62,194,143,0.25); }
+  .lead.good strong { color: var(--good); }
+
+  h2 { font-size: 22px; margin: 56px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); position: relative; }
+  h2::before { content: ""; position: absolute; left: 0; bottom: -1px; width: 56px; height: 2px; background: linear-gradient(90deg, var(--primary), transparent); }
+  h2 .num { display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background: rgba(79,125,255,0.15); color: var(--primary-soft); border-radius: 8px; font-size: 14px; font-weight: 600; margin-right: 10px; vertical-align: middle; }
+  h3 { font-size: 17px; margin: 24px 0 10px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; background: var(--bg-card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { background: var(--bg-elev); font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  tr:last-child td { border-bottom: 0; }
+
+  code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--accent); }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); overflow: auto; line-height: 1.55; font-size: 12.5px; }
+  pre code { background: transparent; padding: 0; color: var(--text); font-size: 12.5px; }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .tag.good { background: rgba(62,194,143,0.15); color: var(--good); border: 1px solid rgba(62,194,143,0.3); }
+  .tag.warn { background: rgba(240,185,79,0.15); color: var(--warn); border: 1px solid rgba(240,185,79,0.3); }
+  .tag.dim { background: var(--bg-elev); color: var(--text-dim); border: 1px solid var(--border); }
+
+  .callout { background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 12px; padding: 18px 22px; margin: 18px 0; }
+  .callout strong { color: var(--primary-soft); }
+  .callout.warn { background: linear-gradient(135deg, rgba(240,185,79,0.10), rgba(240,185,79,0.02)); border-color: rgba(240,185,79,0.30); }
+  .callout.warn strong { color: var(--warn); }
+
+  .step {
+    display: grid; grid-template-columns: 44px 1fr; gap: 16px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 14px;
+  }
+  .step .n {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white; font-weight: 700; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step h4 { margin: 0 0 4px; font-size: 15px; }
+  .step .where { font-size: 11.5px; color: var(--accent); margin-bottom: 8px; font-family: ui-monospace, monospace; }
+
+  /* config card */
+  .conf {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px 26px; margin: 16px 0; position: relative; overflow: hidden;
+  }
+  .conf::before {
+    content: ""; position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
+    background: linear-gradient(180deg, var(--primary), var(--accent));
+  }
+  .conf h3 { margin: 0 0 4px; font-size: 18px; }
+  .conf .sub { color: var(--text-muted); font-size: 13px; margin-bottom: 14px; }
+  .conf .field {
+    display: grid; grid-template-columns: 130px 1fr; gap: 14px;
+    padding: 8px 0; border-bottom: 1px dashed var(--border-soft);
+    align-items: start;
+  }
+  .conf .field:last-child { border-bottom: 0; }
+  .conf .field .key { color: var(--text-muted); font-size: 12px; font-weight: 600; padding-top: 3px; }
+  .conf .field .val { font-size: 13.5px; }
+  .conf .field .val code { font-size: 12px; }
+  .conf .field .val .chip {
+    display: inline-block; padding: 3px 9px; margin: 2px 4px 2px 0;
+    background: var(--bg-card-2); border: 1px solid var(--border-soft); border-radius: 999px;
+    font-family: ui-monospace, monospace; font-size: 11.5px;
+  }
+  .conf .field .val .chip.skill { background: rgba(138,92,246,0.13); color: #c4a9fe; border-color: rgba(138,92,246,0.3); }
+  .conf .field .val .chip.tool { background: rgba(79,125,255,0.13); color: var(--primary-soft); border-color: rgba(79,125,255,0.3); }
+
+  .talk-script {
+    background: var(--bg-card-2); border: 1px solid var(--border-soft); border-radius: 10px;
+    padding: 14px 18px; margin: 12px 0; font-size: 13.5px;
+  }
+  .talk-script .you { color: var(--primary-soft); font-weight: 600; margin-top: 10px; }
+  .talk-script .agent { color: var(--good); font-weight: 600; margin-top: 10px; }
+  .talk-script .you::before { content: "你 → "; }
+  .talk-script .agent::before { content: "Agent → "; }
+  .talk-script p { margin: 4px 0; padding-left: 30px; color: var(--text); }
+
+  .footer { color: var(--text-dim); font-size: 12px; margin-top: 64px; text-align: center; }
+  a { color: var(--primary-soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <h1>员工配置指南 <span class="badge">Claude 同款</span></h1>
+    <div class="meta">2026-04-28 · 怎么配员工才能像 Claude Code 那样整理桌面 / 建代码库 / 处理 PDF</div>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">切换主题</button>
+</header>
+
+<div class="lead good">
+  <strong>核心机制:</strong> 员工的"能力"= <strong>工作区(Workspace)</strong>(去哪里干活)+ <strong>Skill</strong>(怎么干 · 知识 + 工具集)。<br>
+  你不需要直接挑一个个 tool —— 选对 skill · 工具就自动带上了。整个体验跟 Claude Code 完全一致(因为我们就是抄它的)。
+</div>
+
+<!-- ==================================================== -->
+<h2><span class="num">1</span>3 步通用配置(适用所有场景)</h2>
+
+<div class="step">
+  <div class="n">1</div>
+  <div>
+    <h4>配 1 个工作区(只做一次)</h4>
+    <div class="where">📍 在 web UI:Settings → Workspaces · /settings/workspaces</div>
+    <p>员工的所有文件操作都被锁在工作区根目录内。<strong>不配工作区</strong> · <code>local-files</code> skill 的 7 个工具会全部拒绝执行(平台层硬约束 · 安全)。</p>
+    <p><strong>例:</strong> 整理桌面 → 工作区 root_path = <code>~/Desktop</code> 或 <code>~/Documents</code>;建代码库 → root_path = <code>~/code</code> · <code>~/projects</code> 这种你专门留给 agent 干活的目录。</p>
+    <p>每个工作区还能勾 <code>read_only</code>(只读模式)+ 设 <code>denied_globs</code>(禁这些 pattern · 比如 <code>**/.env</code>)。</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="n">2</div>
+  <div>
+    <h4>创建员工 · 选 skill(自动带工具)</h4>
+    <div class="where">📍 在 web UI:Employees → 新建员工 · /employees/new</div>
+    <p>表单只 4 个核心字段:</p>
+    <table>
+      <tr><th>字段</th><th>填啥</th></tr>
+      <tr><td><strong>Name / Description</strong></td><td>"文件管家" / "代码工程师"等 · 给员工起个角色名</td></tr>
+      <tr><td><strong>Skills</strong>(关键)</td><td>多选 · 见 § 3 / § 4 推荐组合</td></tr>
+      <tr><td><strong>Model</strong></td><td>推荐 Claude Sonnet 4.6 / Haiku 4.5(对长 tool-call 链路最稳定)</td></tr>
+      <tr><td><strong>System Prompt</strong></td><td>角色定位 · 1-2 段 · 不要复述工具用法(skill 已经讲了)</td></tr>
+    </table>
+    <p>保存 → 自动跳到员工详情页 Config tab。</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="n">3</div>
+  <div>
+    <h4>开聊</h4>
+    <div class="where">📍 在 web UI:进员工详情 → 点 "Chat" 或主导航 → 选这个员工</div>
+    <p>说人话 · 像跟 Claude Code 对话。Agent 会:</p>
+    <ol>
+      <li>看到 skill descriptor("本地文件 · Claude-Code 同款工具")</li>
+      <li>判断要做啥 → 调 <code>resolve_skill</code> 激活(注入 skill body)</li>
+      <li>按 skill 决策树调具体 tool(<code>list_directory</code> · <code>bash</code> · <code>read_file</code> · ...)</li>
+      <li>每个 WRITE / IRREVERSIBLE 操作前弹 Confirmation · 点"允许这一次"或"总是允许这种"</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ==================================================== -->
+<h2><span class="num">2</span>当前可用的所有 Skill(选什么)</h2>
+
+<table>
+  <tr><th>Skill ID</th><th>能干啥</th><th>带哪些 tool</th><th>用于场景</th></tr>
+  <tr>
+    <td><code>allhands.local-files</code> <span class="tag good">主力</span></td>
+    <td>读写代码 · 跑 shell · 找符号 · 改 bug · 建项目 · 整理目录 · 执行 skill 脚本</td>
+    <td><code>list_directory</code> · <code>glob</code> · <code>grep</code> · <code>read_file</code> · <code>write_file</code> · <code>edit_file</code> · <code>bash</code> · <code>run_skill_script</code></td>
+    <td><strong>整理桌面</strong> · <strong>建代码库</strong> · 改 bug · 跑测试</td>
+  </tr>
+  <tr>
+    <td><code>anthropic.pdf</code> <span class="tag">官方</span></td>
+    <td>读 PDF · 抽文本 · 抽表单字段 · 合并 / 拆分 · 加水印 · OCR</td>
+    <td>+ 8 个 anthropic 专用 .py(check_fillable_fields · extract_form_structure · ...)</td>
+    <td>处理 PDF</td>
+  </tr>
+  <tr>
+    <td><code>anthropic.xlsx</code> <span class="tag">官方</span></td>
+    <td>读 / 写 Excel · 公式重算 · 数据对账</td>
+    <td>+ recalc.py 等</td>
+    <td>处理 Excel</td>
+  </tr>
+  <tr>
+    <td><code>anthropic.docx</code> · <code>anthropic.pptx</code></td>
+    <td>处理 Word / PPT</td>
+    <td>+ 各自的 scripts/*.py</td>
+    <td>办公文档</td>
+  </tr>
+  <tr>
+    <td><code>anthropic.frontend-design</code> · <code>anthropic.canvas-design</code> · <code>anthropic.algorithmic-art</code></td>
+    <td>设计 UI · 画 SVG / canvas · 算法艺术</td>
+    <td>各种生成脚本</td>
+    <td>视觉创作</td>
+  </tr>
+  <tr>
+    <td><code>anthropic.skill-creator</code></td>
+    <td>会话末尾让 agent 自己封一个 skill 出来</td>
+    <td>scripts/*.py</td>
+    <td>积累自己的 skill 库</td>
+  </tr>
+  <tr>
+    <td><code>allhands.skill_management</code> · <code>...mcp_management</code> · <code>...task_management</code> · ...</td>
+    <td>对话改平台配置(Tool First · Lead Agent 一句话改设置)</td>
+    <td>对应 meta tool</td>
+    <td>系统管理</td>
+  </tr>
+  <tr>
+    <td><code>allhands.script_demo</code></td>
+    <td>echo / word_count / sheet_diff(对账)</td>
+    <td><code>run_skill_script</code> · 3 个 demo 脚本</td>
+    <td>验证 skill 脚本能跑</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>核心 = <code>allhands.local-files</code></strong>。这一个就给员工 8 个 Claude-Code 同款工具 +<strong>跑 anthropic 脚本的能力</strong>。其余按需求叠加。
+</div>
+
+<!-- ==================================================== -->
+<h2><span class="num">3</span>场景 A · 文件管家(整理桌面)</h2>
+
+<div class="conf">
+  <h3>"桌面管家" 员工配置</h3>
+  <div class="sub">让 Agent 帮你整理 ~/Desktop 文件 · 按类型 / 时间 / 主题归档</div>
+
+  <div class="field">
+    <div class="key">Workspace</div>
+    <div class="val">先去 Settings → Workspaces 加一个:<br>
+      <code>name: 桌面 · root_path: /Users/&lt;you&gt;/Desktop · read_only: false</code><br>
+      <span class="tag warn" style="margin-top: 6px; display: inline-block;">注意</span> 桌面有些隐藏文件(<code>.DS_Store</code> 等)· 可加 <code>denied_globs: ["**/.DS_Store"]</code>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="key">Name</div>
+    <div class="val">桌面管家</div>
+  </div>
+
+  <div class="field">
+    <div class="key">Description</div>
+    <div class="val">"按文件类型 / 修改时间整理桌面文件 · 定期清理临时文件"</div>
+  </div>
+
+  <div class="field">
+    <div class="key">Skills</div>
+    <div class="val">
+      <span class="chip skill">allhands.local-files</span>
+      <span class="chip skill">anthropic.pdf</span>
+      <span class="chip skill">anthropic.xlsx</span>
+      <span class="chip skill">anthropic.docx</span>
+      <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 6px;">
+        local-files 是核心(读 / 写 / mv / mkdir / glob)· anthropic.* 让你需要时(发现 .pdf / .xlsx / .docx)能直接抽内容判断怎么归档。
+      </div>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="key">Model</div>
+    <div class="val">claude-haiku-4-5(便宜 + 工具调用稳)</div>
+  </div>
+
+  <div class="field">
+    <div class="key">System Prompt</div>
+    <div class="val">
+<pre style="margin: 4px 0;"><code>你是桌面文件管家。
+
+核心原则:
+1. 先 list_directory 看现状 · 再列计划 · 用户同意后再动手
+2. 移动 / 删除前永远先告诉用户"我准备做 X"
+3. 用 mv 而不是 cp+rm(可逆)
+4. 删除走系统垃圾桶 · 不要 rm -rf
+5. 完成后给一句话总结(移了 N 个 · 删了 M 个 · 释放多少空间)</code></pre>
+    </div>
+  </div>
+</div>
+
+<h3>对话脚本示例</h3>
+
+<div class="talk-script">
+  <div class="you">我桌面好乱 · 帮我整理一下 · 按文件类型分子文件夹</div>
+
+  <div class="agent">好的 · 我先看看桌面有啥。</div>
+  <p style="color: var(--text-dim); padding-left: 30px;">→ 调 <code>resolve_skill(allhands.local-files)</code></p>
+  <p style="color: var(--text-dim); padding-left: 30px;">→ 调 <code>list_directory("/Users/.../Desktop")</code></p>
+
+  <div class="agent">桌面有 47 个文件:<br>
+    📄 12 个 PDF · 📊 5 个 xlsx · 🖼️ 18 张图(jpg/png)· 📝 7 个 markdown · 🗂️ 5 个 zip。<br><br>
+    我准备建 5 个子目录归档:<code>PDFs/</code> · <code>Spreadsheets/</code> · <code>Images/</code> · <code>Notes/</code> · <code>Archives/</code>。<br>
+    要执行吗?</div>
+
+  <div class="you">可以</div>
+
+  <div class="agent">[一系列 Confirmation 弹窗 · 用户点"总是允许 mv:*"后续不再弹]<br>
+    ✅ 完成 · 47 文件 → 5 目录 · 桌面现在只剩这 5 个文件夹。</div>
+</div>
+
+<div class="callout warn">
+  <strong>实操提示:</strong> 第一次跑可能会被 Confirmation 弹哭(每个 mv 弹一次)· 第一个弹窗点 "<strong>总是允许 mv 在桌面工作区</strong>" · 后续静默执行。这跟 Claude Code 的体验一样。
+</div>
+
+<!-- ==================================================== -->
+<h2><span class="num">4</span>场景 B · 代码工程师(建代码库)</h2>
+
+<div class="conf">
+  <h3>"全栈工程师" 员工配置</h3>
+  <div class="sub">让 Agent 像 Claude Code 一样建项目 · 改代码 · 跑测试 · 提交 git</div>
+
+  <div class="field">
+    <div class="key">Workspace</div>
+    <div class="val">
+      <code>name: 代码 · root_path: /Users/&lt;you&gt;/code · read_only: false</code><br>
+      或者每个项目一个 workspace:<code>~/code/myproj</code>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="key">Name</div>
+    <div class="val">全栈工程师</div>
+  </div>
+
+  <div class="field">
+    <div class="key">Description</div>
+    <div class="val">"按需求建项目 · 写代码 · 跑测试 · 维护 git history"</div>
+  </div>
+
+  <div class="field">
+    <div class="key">Skills</div>
+    <div class="val">
+      <span class="chip skill">allhands.local-files</span>
+      <span class="chip skill">allhands.script_demo</span>
+      <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 6px;">
+        local-files 提供完整 read/write/edit/bash/grep/glob 工具集。<br>
+        script_demo 演示如何把"对账"等工作流封成可重复跑的脚本(后续可换成你自己的)。
+      </div>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="key">Model</div>
+    <div class="val">claude-sonnet-4-6(代码任务推荐 · 上下文长 · 推理强)</div>
+  </div>
+
+  <div class="field">
+    <div class="key">System Prompt</div>
+    <div class="val">
+<pre style="margin: 4px 0;"><code>你是工程师 · 跟 Claude Code 风格一致工作。
+
+工作循环:
+1. 探(grep / glob / list_directory)
+2. 看(read_file 读上下文 · 改之前先读)
+3. 改(edit_file 精确替换 · write_file 整文件覆盖)
+4. 验(bash 跑测试 / 跑构建)
+5. 收尾(git status · 必要时提交)
+
+约束:
+- 每步小 · 改完立刻 bash 验
+- TDD · 先写失败测试 · 再写实现
+- commit message 写"为什么" · 不只是"什么"
+- 不擅自 git push · 用户明令才 push</code></pre>
+    </div>
+  </div>
+</div>
+
+<h3>对话脚本示例 · 建项目</h3>
+
+<div class="talk-script">
+  <div class="you">在 ~/code 下建个 todo-cli 项目 · Python · 用 click 库 · 加 add / list / done 三个命令 · 数据存 ~/.todos.json</div>
+
+  <div class="agent">好的 · 三步:① mkdir + git init · ② 写 cli.py + tests · ③ 跑测试。开始?</div>
+
+  <div class="you">开始</div>
+
+  <div class="agent">→ 调 <code>bash mkdir -p ~/code/todo-cli && cd ~/code/todo-cli && git init</code><br>
+    → 调 <code>write_file</code> 建 pyproject.toml · cli.py · tests/test_cli.py · README.md<br>
+    → 调 <code>bash uv pip install click pytest && uv run pytest</code><br>
+    ✅ 项目就位 · 4 个测试全过 · git status 干净。要 add commit 吗?</div>
+
+  <div class="you">commit · message 你写</div>
+
+  <div class="agent">→ <code>git add -A && git commit -m "feat: initial todo-cli (click) · add/list/done"</code><br>
+    ✅ Commit 5a3f1c2 · 工作树干净。</div>
+</div>
+
+<!-- ==================================================== -->
+<h2><span class="num">5</span>常见问题</h2>
+
+<table>
+  <tr><th>问题</th><th>原因 + 解法</th></tr>
+  <tr>
+    <td>tool 调用全被拒</td>
+    <td>没配 workspace · 去 /settings/workspaces 加一个</td>
+  </tr>
+  <tr>
+    <td>路径越界拒绝</td>
+    <td>员工只能动 workspace.root_path 之内的文件 · 想动其他目录就再加 workspace</td>
+  </tr>
+  <tr>
+    <td>Confirmation 弹太多</td>
+    <td>第一次类似操作时点"<strong>总是允许这种</strong>" · 写规则到 permissions(后续静默)</td>
+  </tr>
+  <tr>
+    <td>Agent 不会用 anthropic.pdf 的脚本</td>
+    <td>检查 1)skill 是否选了 2)workspace 配的 cwd 是不是有 PDF 文件 3)<code>uv pip install pypdf</code> 装依赖</td>
+  </tr>
+  <tr>
+    <td>"sk_research / sk_write" 是啥</td>
+    <td>历史 dev 测试 skill · 别选</td>
+  </tr>
+  <tr>
+    <td>怎么共享 skill 给同事</td>
+    <td>(后续 marketplace · 现在临时:把 <code>backend/skills/builtin/&lt;name&gt;</code> 目录直接 copy 给同事)</td>
+  </tr>
+</table>
+
+<!-- ==================================================== -->
+<h2><span class="num">6</span>跟 Claude Code 体验对比</h2>
+
+<table>
+  <tr><th>体验</th><th class="center">Claude Code(CLI)</th><th class="center">allhands(web)</th></tr>
+  <tr><td>读代码 / 文件</td><td class="center">Read tool</td><td class="center"><code>local.read_file</code></td></tr>
+  <tr><td>写代码 / 文件</td><td class="center">Write tool</td><td class="center"><code>local.write_file</code></td></tr>
+  <tr><td>改代码精确替换</td><td class="center">Edit tool</td><td class="center"><code>local.edit_file</code></td></tr>
+  <tr><td>跑命令</td><td class="center">Bash tool</td><td class="center"><code>local.bash</code></td></tr>
+  <tr><td>找文件</td><td class="center">Glob</td><td class="center"><code>local.glob</code></td></tr>
+  <tr><td>找符号 / 全文搜</td><td class="center">Grep</td><td class="center"><code>local.grep</code></td></tr>
+  <tr><td>列目录</td><td class="center">(LS · 隐式)</td><td class="center"><code>local.list_directory</code></td></tr>
+  <tr><td><strong>跑 skill 自带 .py 脚本</strong></td><td class="center">via Bash 调 python</td><td class="center"><strong><code>meta.run_skill_script</code></strong>(更安全 · 不进 LLM context)</td></tr>
+  <tr><td>用 anthropic 官方 skill(pdf/xlsx 等)</td><td class="center">/plugin install</td><td class="center"><strong>已 vendored 17 个</strong> · 选 anthropic.pdf 等即可</td></tr>
+  <tr><td>多用户协作</td><td class="center">❌</td><td class="center"><strong>✅</strong> 多员工 · 每人独立 workspace</td></tr>
+  <tr><td>对话改权限规则(无需重启)</td><td class="center">改 settings.json</td><td class="center">v1 设计 · 后续 phase</td></tr>
+</table>
+
+<!-- ==================================================== -->
+<h2><span class="num">7</span>立刻验收 · 5 分钟跑通流程</h2>
+
+<ol style="font-size: 14px; line-height: 2;">
+  <li>启动 backend + frontend(<code>uv run uvicorn ...</code> + <code>pnpm dev</code>)</li>
+  <li>浏览器开 web UI · 点 <strong>Settings → Workspaces</strong> · 加一个 <code>~/allhands-test</code>(先 <code>mkdir ~/allhands-test</code> · 安全)</li>
+  <li>点 <strong>Employees → 新建</strong> · 起名"测试管家"· 选 skill <code>allhands.local-files</code> + <code>allhands.script_demo</code> · 模型 claude-haiku · 保存</li>
+  <li>跳到员工详情 → <strong>Chat</strong></li>
+  <li>说:"<em>跑一下 echo.py · args 是 ['你好', '早安']</em>"</li>
+  <li>看到:Agent 调 <code>resolve_skill(allhands.script_demo)</code> → 弹 Confirmation 跑 <code>run_skill_script</code> → 你点允许 → 输出 "你好 早安"</li>
+</ol>
+
+<div class="callout">
+  跑通 = 全链路打通(<strong>workspace + skill + tool + run_skill_script + Confirmation Gate</strong>)= 你可以信心满满推 main 给同事用了。
+</div>
+
+<div class="footer">
+  allhands · 员工配置指南 · 2026-04-28 · 主门户 → <a href="MORNING-2026-04-28.html">MORNING-2026-04-28.html</a>
+</div>
+
+</div>
+<script>
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+</script>
+</body>
+</html>
