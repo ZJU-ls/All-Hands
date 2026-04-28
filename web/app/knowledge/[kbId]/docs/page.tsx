@@ -99,14 +99,40 @@ function DocumentsTabInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantUpload]);
 
+  // Sort + view-mode driven by URL so deep-linking holds the layout.
+  const sortBy = (search.get("sort") ?? "recent") as
+    | "recent"
+    | "oldest"
+    | "name"
+    | "size"
+    | "chunks";
+  const view = (search.get("view") ?? "grid") as "grid" | "list";
+
   const filteredDocs = useMemo(() => {
     if (!docs) return [];
-    return docs.filter((d) => {
+    const filtered = docs.filter((d) => {
       if (stateFilter && d.state !== stateFilter) return false;
       if (tagFilter && !d.tags.includes(tagFilter)) return false;
       return true;
     });
-  }, [docs, stateFilter, tagFilter]);
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case "oldest":
+          return a.created_at.localeCompare(b.created_at);
+        case "name":
+          return a.title.localeCompare(b.title);
+        case "size":
+          return b.size_bytes - a.size_bytes;
+        case "chunks":
+          return b.chunk_count - a.chunk_count;
+        case "recent":
+        default:
+          return b.updated_at.localeCompare(a.updated_at);
+      }
+    });
+    return sorted;
+  }, [docs, stateFilter, tagFilter, sortBy]);
 
   const knownTags = useMemo(() => {
     const set = new Set<string>();
@@ -288,6 +314,40 @@ function DocumentsTabInner() {
           </button>
         )}
 
+        {/* Sort dropdown + view toggle — Linear/Notion pattern. URL-encoded. */}
+        <Select
+          value={sortBy}
+          onChange={(v) => setQueryParam("sort", v === "recent" ? null : v)}
+          options={[
+            { value: "recent", label: td("sortRecent") },
+            { value: "oldest", label: td("sortOldest") },
+            { value: "name", label: td("sortName") },
+            { value: "size", label: td("sortSize") },
+            { value: "chunks", label: td("sortChunks") },
+          ]}
+          className="min-w-[120px]"
+          triggerClassName="h-8 rounded-lg text-[12px]"
+          ariaLabel={td("sortAria")}
+        />
+        <div className="inline-flex h-8 items-center rounded-lg border border-border bg-surface p-0.5">
+          {(["grid", "list"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setQueryParam("view", m === "grid" ? null : m)}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition ${
+                view === m
+                  ? "bg-primary-muted text-primary"
+                  : "text-text-subtle hover:text-text"
+              }`}
+              title={m === "grid" ? td("viewGrid") : td("viewList")}
+              aria-label={m === "grid" ? td("viewGrid") : td("viewList")}
+            >
+              <Icon name={m === "grid" ? "layout-grid" : "list"} size={13} />
+            </button>
+          ))}
+        </div>
+
         <div className="ml-auto flex items-center gap-2">
           {selected.size > 0 && (
             <>
@@ -379,18 +439,47 @@ function DocumentsTabInner() {
         ) : filteredDocs.length === 0 ? (
           <p className="text-[12px] text-text-muted">{td("noFilterMatch")}</p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {filteredDocs.map((d) => (
-              <DocCard
-                key={d.id}
-                kbId={kb.id}
-                doc={d}
-                selected={selected.has(d.id)}
-                onToggleSelect={() => toggleSelect(d.id)}
-                onReindex={() => void handleReindex(d)}
-              />
-            ))}
-          </div>
+          view === "list" ? (
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+              <table className="w-full text-[12px]">
+                <thead className="border-b border-border bg-surface-2 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+                  <tr>
+                    <th className="w-8 px-3 py-2"></th>
+                    <th className="px-3 py-2 text-left">{td("colTitle")}</th>
+                    <th className="px-3 py-2 text-left">{td("colState")}</th>
+                    <th className="px-3 py-2 text-left">{td("colChunks")}</th>
+                    <th className="px-3 py-2 text-left">{td("colSize")}</th>
+                    <th className="px-3 py-2 text-left">{td("colUpdated")}</th>
+                    <th className="px-3 py-2 text-left">{td("colTags")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDocs.map((d) => (
+                    <DocRow
+                      key={d.id}
+                      kbId={kb.id}
+                      doc={d}
+                      selected={selected.has(d.id)}
+                      onToggleSelect={() => toggleSelect(d.id)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {filteredDocs.map((d) => (
+                <DocCard
+                  key={d.id}
+                  kbId={kb.id}
+                  doc={d}
+                  selected={selected.has(d.id)}
+                  onToggleSelect={() => toggleSelect(d.id)}
+                  onReindex={() => void handleReindex(d)}
+                />
+              ))}
+            </div>
+          )
         )}
       </div>
 
@@ -505,6 +594,73 @@ function DocCard({
         </button>
       )}
     </div>
+  );
+}
+
+// Compact list row for "list view" mode. Click row → L3 doc page.
+function DocRow({
+  kbId,
+  doc,
+  selected,
+  onToggleSelect,
+}: {
+  kbId: string;
+  doc: DocumentDto;
+  selected: boolean;
+  onToggleSelect: () => void;
+}) {
+  return (
+    <tr
+      className={`border-b border-border last:border-0 transition ${
+        selected ? "bg-primary-muted/10" : "hover:bg-surface-2"
+      }`}
+    >
+      <td className="px-3 py-2">
+        <button
+          type="button"
+          onClick={onToggleSelect}
+          className={`inline-flex h-4 w-4 items-center justify-center rounded border bg-surface ${
+            selected
+              ? "border-primary bg-primary text-primary-fg"
+              : "border-border"
+          }`}
+        >
+          {selected ? <Icon name="check" size={11} /> : null}
+        </button>
+      </td>
+      <td className="px-3 py-2">
+        <Link
+          href={`/knowledge/${kbId}/docs/${doc.id}`}
+          className="line-clamp-1 text-[12px] font-medium text-text hover:text-primary"
+        >
+          {doc.title}
+        </Link>
+      </td>
+      <td className="px-3 py-2">
+        <StateBadge state={doc.state} />
+      </td>
+      <td className="px-3 py-2 font-mono text-[10px] text-text-subtle">
+        {doc.chunk_count}
+      </td>
+      <td className="px-3 py-2 font-mono text-[10px] text-text-subtle">
+        {(doc.size_bytes / 1024).toFixed(1)} KB
+      </td>
+      <td className="px-3 py-2 font-mono text-[10px] text-text-subtle">
+        {new Date(doc.updated_at).toLocaleDateString()}
+      </td>
+      <td className="px-3 py-2">
+        <div className="flex flex-wrap gap-1">
+          {doc.tags.slice(0, 3).map((tg) => (
+            <span
+              key={tg}
+              className="rounded-full border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[9px] text-text-muted"
+            >
+              #{tg}
+            </span>
+          ))}
+        </div>
+      </td>
+    </tr>
   );
 }
 
