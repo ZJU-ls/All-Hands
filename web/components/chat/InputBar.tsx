@@ -31,6 +31,17 @@ type Props = {
   conversation?: ConversationDto | null;
   employee?: EmployeeDto | null;
   onConversationChange?: (next: ConversationDto) => void;
+  /**
+   * 2026-04-28 · run_id of an in-flight broker run for this conversation,
+   * resolved on chat-page mount from `getConversation()`. When non-null
+   * the InputBar opens an SSE subscriber to `POST /runs/{id}/subscribe`
+   * instead of waiting for the user to send a new turn — the buffered
+   * events replay and the live tail attaches in-place. Mirrors the
+   * AgUiCallbacks the send handler builds, so all the state machinery
+   * (reasoning, tool calls, render envelopes, confirmations) reuses
+   * the same wiring.
+   */
+  initialActiveRunId?: string | null;
 };
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -52,6 +63,7 @@ export function InputBar({
   conversation,
   employee,
   onConversationChange,
+  initialActiveRunId,
 }: Props) {
   const t = useTranslations("chat.inputBar");
   const tAtt = useTranslations("chat.attachments");
@@ -475,6 +487,41 @@ export function InputBar({
     allUploaded,
     anyFailed,
   ]);
+
+  // 2026-04-28 · auto-resubscribe to in-flight runs.
+  //
+  // ChatPage hands us the `active_run_id` it read from GET
+  // /api/conversations/{id}. When non-null, an agent is still streaming
+  // events into the broker — the user just opened a tab onto a run that
+  // started earlier (after a refresh, a route change away-and-back, or
+  // even another tab). Hook into POST /runs/{id}/subscribe; the same
+  // AG-UI v1 wire shape replays buffered events then attaches to the
+  // live tail. Disconnect path is identical to a normal turn.
+  useEffect(() => {
+    if (!initialActiveRunId) return;
+    if (streamRef.current) return; // a fresh send already started
+    beginTurn();
+    const handle = openStream(
+      `${BASE}/api/conversations/${conversationId}/runs/${encodeURIComponent(
+        initialActiveRunId,
+      )}/subscribe`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      },
+      buildStreamCallbacks(),
+    );
+    streamRef.current = handle;
+    return () => {
+      handle.abort();
+      if (streamRef.current === handle) streamRef.current = null;
+    };
+    // intentionally not depending on buildStreamCallbacks — that
+    // useCallback rebuilds on every store-state change and would
+    // restart the resubscribe loop. The effect is mount-only by design.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, initialActiveRunId, beginTurn]);
 
   // ADR 0018 · resume protocol simplified to a single round-trip.
   // ConfirmationDialog flips the Confirmation row directly via

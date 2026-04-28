@@ -102,6 +102,11 @@ export type ConversationDto = {
   effective_model_ref: string | null;
   effective_model_source: "override" | "employee" | "global_default" | null;
   created_at: string;
+  /** 2026-04-28 · run_id of an in-flight agent task for this conversation,
+   * or null if no run is active. The chat page reads this on mount and
+   * resubscribes via POST /runs/{id}/subscribe so a tab switch / route
+   * change / refresh doesn't kill the underlying SSE stream. */
+  active_run_id?: string | null;
 };
 
 export async function getConversation(id: string): Promise<ConversationDto> {
