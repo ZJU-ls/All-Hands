@@ -62,6 +62,14 @@ class MCPService:
             health=MCPHealth.UNKNOWN,
         )
         await self._repo.upsert(server)
+        # Best-effort: probe + cache the tool catalogue right after add when
+        # enabled. Failure is non-fatal — the row is already saved and the
+        # user can hit "test" later. Without this, freshly added servers
+        # show "0 tools" until the user manually tests.
+        if enabled:
+            probed = await self.test_connection(server.id)
+            if probed is not None:
+                return probed
         return server
 
     async def update(
@@ -93,15 +101,39 @@ class MCPService:
         await self._repo.delete(server_id)
 
     async def test_connection(self, server_id: str) -> MCPServer | None:
+        """Probe the server + refresh the cached tool catalogue.
+
+        Pre-2026-04-28 this only updated ``health`` + ``last_handshake_at`` ·
+        ``exposed_tool_ids`` was initialised to ``[]`` at ``add()`` time and
+        **never refreshed**, so the UI's "tool count" chip was permanently
+        stuck at 0 even when ``list_server_tools`` returned a full catalogue.
+        Now: on a healthy handshake we list tools in the same call and
+        persist their names to ``exposed_tool_ids`` — single click fixes
+        the count, no extra plumbing.
+        """
         server = await self._repo.get(server_id)
         if server is None:
             return None
+        new_tool_ids: list[str] = list(server.exposed_tool_ids)
         try:
             health = await self._adapter.handshake(server)
         except MCPInvocationError:
             health = MCPHealth.UNREACHABLE
+        if health == MCPHealth.OK:
+            try:
+                tools = await self._adapter.list_tools(server)
+                new_tool_ids = [t.name for t in tools]
+            except MCPInvocationError:
+                # Handshake passed but list_tools failed — leave the cached
+                # ids untouched rather than zeroing them. The UI will still
+                # show last-known count and the user can retry.
+                pass
         updated = server.model_copy(
-            update={"health": health, "last_handshake_at": datetime.now(UTC)},
+            update={
+                "health": health,
+                "last_handshake_at": datetime.now(UTC),
+                "exposed_tool_ids": new_tool_ids,
+            },
         )
         await self._repo.upsert(updated)
         return updated
