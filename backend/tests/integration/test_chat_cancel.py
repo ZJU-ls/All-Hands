@@ -38,6 +38,7 @@ class CancelTrackingChatService:
         conversation_id: str,
         user_content: str,
         overrides: object | None = None,
+        attachment_ids: object | None = None,
     ) -> AsyncIterator[TokenEvent]:
         async def gen() -> AsyncIterator[TokenEvent]:
             try:

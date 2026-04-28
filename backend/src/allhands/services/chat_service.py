@@ -15,6 +15,7 @@ from allhands.core import (
     ConversationEvent,
     Employee,
     EventKind,
+    LLMModel,
     Message,
     RenderPayload,
     ToolCall,
@@ -123,6 +124,7 @@ class ChatService:
         plan_repo: Any = None,
         user_input_signal: Any = None,
         observability_config_repo: ObservabilityConfigRepo | None = None,
+        attachment_repo: Any = None,
     ) -> None:
         self._employees = employee_repo
         self._conversations = conversation_repo
@@ -140,6 +142,11 @@ class ChatService:
         # unit tests don't always wire an MCP repo; snapshot degrades
         # gracefully with "mcp_servers: unknown".
         self._mcp_repo = mcp_repo
+        # Attachment repo for multimodal projection (resolves ImageBlock /
+        # FileBlock attachment_ids to bytes for inline base64 / extracted
+        # text). Optional — when None, attachment_ids on user messages are
+        # silently ignored, history projects as text-only.
+        self._attachments = attachment_repo
         # Optional: lets chat turns surface in the cockpit activity feed.
         # The bus lives on the trigger_runtime singleton; we accept None so
         # CLI / test constructions (no FastAPI Request) still work.
@@ -462,6 +469,7 @@ class ChatService:
         conversation_id: str,
         user_content: str,
         overrides: RunOverrides | None = None,
+        attachment_ids: list[str] | None = None,
     ) -> AsyncIterator[AgentEvent]:
         conv = await self._conversations.get(conversation_id)
         if conv is None:
@@ -485,6 +493,7 @@ class ChatService:
             conversation_id=conversation_id,
             role="user",
             content=user_content,
+            attachment_ids=list(attachment_ids or []),
             parent_run_id=run_id,
             created_at=run_started_at,
         )
@@ -529,7 +538,11 @@ class ChatService:
                         parent_id=None,
                         sequence=await self._event_repo.next_sequence(conversation_id),
                         kind=EventKind.USER,
-                        content_json={"content": user_content, "run_id": run_id},
+                        content_json={
+                            "content": user_content,
+                            "run_id": run_id,
+                            "attachment_ids": list(attachment_ids or []),
+                        },
                         created_at=run_started_at,
                     )
                 )
@@ -630,10 +643,65 @@ class ChatService:
         else:
             history = await self._conversations.list_messages(conversation_id)
             lc_messages = [
-                {"role": m.role, "content": m.content, "id": m.id}
+                {
+                    "role": m.role,
+                    "content": m.content,
+                    "id": m.id,
+                    "attachment_ids": list(m.attachment_ids) if m.role == "user" else [],
+                }
                 for m in history
                 if m.role in ("user", "assistant")
             ]
+
+        # Multimodal projection (2026-04-28). For every user dict carrying
+        # attachment_ids, replace `content` with either a list of OpenAI-style
+        # parts (vision-capable models) or a text string with metadata blocks
+        # appended. Done here — once, in chat_service — so AgentLoop /
+        # _build_lc_messages stays vendor-agnostic and tests don't need to
+        # know about attachments.
+        downgrade_count = 0
+        if self._attachments is not None:
+            from allhands.services.multimodal_projection import project_user_content
+
+            current_model: LLMModel | None = None
+            if self._models is not None and resolved is not None:
+                for _m in await self._models.list_all():
+                    if _m.provider_id == resolved.provider.id and _m.name == resolved.model_name:
+                        current_model = _m
+                        break
+
+            attachment_repo = self._attachments
+
+            async def _resolve(att_id: str) -> tuple[Any, Any] | None:
+                att = await attachment_repo.get(att_id)
+                if att is None:
+                    return None
+                from pathlib import Path as _Path
+
+                p = _Path(att.storage_path)
+                return att, p
+
+            async def _store(att_id: str, text_value: str) -> None:
+                await attachment_repo.update_extracted_text(att_id, text_value)
+
+            for msg_dict in lc_messages:
+                if msg_dict.get("role") != "user":
+                    continue
+                aid_list = msg_dict.get("attachment_ids") or []
+                if not aid_list:
+                    continue
+                text_content = msg_dict.get("content") or ""
+                if not isinstance(text_content, str):
+                    continue
+                projected, result = await project_user_content(
+                    text_content=text_content,
+                    attachment_ids=list(aid_list),
+                    model=current_model,
+                    resolve_attachment=_resolve,
+                    store_extracted_text=_store,
+                )
+                msg_dict["content"] = projected
+                downgrade_count += result.downgraded_image_count
 
         # E20 / L12: Lead turns get a fresh DB-verified snapshot injected as
         # the very first system segment (prepended via RunOverrides.system_override

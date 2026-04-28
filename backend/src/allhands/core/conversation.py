@@ -73,8 +73,45 @@ class ReasoningBlock(BaseModel):
     text: str
 
 
+class ImageBlock(BaseModel):
+    """User-uploaded image referenced by attachment_id.
+
+    The bytes live in the ``attachments`` table / on disk; the message just
+    holds the pointer + cached metadata so the chat list can render the
+    thumbnail without touching the filesystem.
+
+    Capability-aware projection: AgentLoop reads ``LLMModel.supports_images``
+    on the resolved model; if True the loop fetches bytes and embeds them as
+    a base64 image_url part on HumanMessage; if False it injects a textual
+    description (filename + dimensions + alt + extracted_text).
+    """
+
+    type: Literal["image"] = "image"
+    attachment_id: str
+    mime: str
+    width: int | None = None
+    height: int | None = None
+    alt: str | None = None  # user-supplied or auto-generated; used in fallback
+
+
+class FileBlock(BaseModel):
+    """User-uploaded non-image file (pdf / docx / txt / etc.).
+
+    Always projected as text on the wire — vision models don't ingest pdf
+    bytes directly. AttachmentService extracts text on demand and caches it
+    on the attachment row; AgentLoop reads ``extracted_text`` and includes
+    an excerpt in the HumanMessage.
+    """
+
+    type: Literal["file"] = "file"
+    attachment_id: str
+    mime: str
+    filename: str
+    size_bytes: int
+
+
 ContentBlock = Annotated[
-    TextBlock | ToolUseBlock | ReasoningBlock,
+    TextBlock | ToolUseBlock | ReasoningBlock | ImageBlock | FileBlock,
     Field(discriminator="type"),
 ]
 
@@ -114,6 +151,10 @@ class Message(BaseModel):
     #   interrupted=True,  content non-empty   → partial preserved
     #   interrupted=True,  content empty       → started + cancelled before any token
     interrupted: bool = False
+    # Attachment ids uploaded by the user with this turn. Resolved at runtime
+    # into ImageBlock/FileBlock entries in content_blocks. Empty for assistant
+    # / tool messages.
+    attachment_ids: list[str] = Field(default_factory=list)
     created_at: datetime
 
     @model_validator(mode="after")

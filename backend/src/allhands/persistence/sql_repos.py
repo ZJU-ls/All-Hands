@@ -17,6 +17,7 @@ from allhands.core import (
     Artifact,
     ArtifactKind,
     ArtifactVersion,
+    Attachment,
     Confirmation,
     ConfirmationStatus,
     Conversation,
@@ -59,6 +60,7 @@ from allhands.persistence.orm.models import (
     AgentPlanRow,
     ArtifactRow,
     ArtifactVersionRow,
+    AttachmentRow,
     ConfirmationRow,
     ConversationEventRow,
     ConversationRow,
@@ -172,6 +174,7 @@ def _row_to_message(row: MessageRow) -> Message:
         parent_run_id=row.parent_run_id,
         reasoning=row.reasoning,
         interrupted=row.interrupted,
+        attachment_ids=list(getattr(row, "attachment_ids", []) or []),
         created_at=_utc(row.created_at),
     )
 
@@ -345,6 +348,7 @@ class SqlConversationRepo:
             parent_run_id=message.parent_run_id,
             reasoning=message.reasoning,
             interrupted=message.interrupted,
+            attachment_ids=list(message.attachment_ids),
             created_at=_naive(message.created_at),
         )
         self._s.add(row)
@@ -839,6 +843,7 @@ def _row_to_model(row: LLMModelRow) -> LLMModel:
         max_output_tokens=row.max_output_tokens,
         enabled=row.enabled,
         is_default=row.is_default,
+        supports_images=bool(getattr(row, "supports_images", False)),
     )
 
 
@@ -881,6 +886,7 @@ class SqlLLMModelRepo:
             existing.max_output_tokens = model.max_output_tokens
             existing.enabled = model.enabled
             existing.is_default = model.is_default
+            existing.supports_images = model.supports_images
         else:
             self._s.add(
                 LLMModelRow(
@@ -893,6 +899,7 @@ class SqlLLMModelRepo:
                     max_output_tokens=model.max_output_tokens,
                     enabled=model.enabled,
                     is_default=model.is_default,
+                    supports_images=model.supports_images,
                 )
             )
         await self._s.commit()
@@ -1816,3 +1823,94 @@ class SqlModelPriceRepo:
         await self._s.delete(row)
         await self._s.commit()
         return True
+
+
+def _row_to_attachment(row: AttachmentRow) -> Attachment:
+    return Attachment(
+        id=row.id,
+        sha256=row.sha256,
+        mime=row.mime,
+        filename=row.filename,
+        size_bytes=row.size_bytes,
+        storage_path=row.storage_path,
+        width=row.width,
+        height=row.height,
+        conversation_id=row.conversation_id,
+        uploaded_by=row.uploaded_by,
+        extracted_text=row.extracted_text,
+        extracted_at=_utc(row.extracted_at) if row.extracted_at else None,
+        created_at=_utc(row.created_at),
+    )
+
+
+class SqlAttachmentRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def get(self, attachment_id: str) -> Attachment | None:
+        row = await self._s.get(AttachmentRow, attachment_id)
+        return _row_to_attachment(row) if row else None
+
+    async def get_by_sha256(self, sha256: str) -> Attachment | None:
+        result = await self._s.execute(
+            select(AttachmentRow).where(AttachmentRow.sha256 == sha256).limit(1)
+        )
+        row = result.scalar_one_or_none()
+        return _row_to_attachment(row) if row else None
+
+    async def list_for_conversation(self, conversation_id: str) -> list[Attachment]:
+        result = await self._s.execute(
+            select(AttachmentRow)
+            .where(AttachmentRow.conversation_id == conversation_id)
+            .order_by(AttachmentRow.created_at)
+        )
+        return [_row_to_attachment(r) for r in result.scalars().all()]
+
+    async def upsert(self, att: Attachment) -> Attachment:
+        existing = await self._s.get(AttachmentRow, att.id)
+        if existing:
+            existing.sha256 = att.sha256
+            existing.mime = att.mime
+            existing.filename = att.filename
+            existing.size_bytes = att.size_bytes
+            existing.storage_path = att.storage_path
+            existing.width = att.width
+            existing.height = att.height
+            existing.conversation_id = att.conversation_id
+            existing.uploaded_by = att.uploaded_by
+            existing.extracted_text = att.extracted_text
+            existing.extracted_at = _naive(att.extracted_at) if att.extracted_at else None
+        else:
+            self._s.add(
+                AttachmentRow(
+                    id=att.id,
+                    sha256=att.sha256,
+                    mime=att.mime,
+                    filename=att.filename,
+                    size_bytes=att.size_bytes,
+                    storage_path=att.storage_path,
+                    width=att.width,
+                    height=att.height,
+                    conversation_id=att.conversation_id,
+                    uploaded_by=att.uploaded_by,
+                    extracted_text=att.extracted_text,
+                    extracted_at=_naive(att.extracted_at) if att.extracted_at else None,
+                    created_at=_naive(att.created_at),
+                )
+            )
+        await self._s.commit()
+        return att
+
+    async def update_extracted_text(self, attachment_id: str, text_value: str) -> None:
+        row = await self._s.get(AttachmentRow, attachment_id)
+        if not row:
+            return
+        row.extracted_text = text_value
+        row.extracted_at = _naive(datetime.now(UTC))
+        await self._s.commit()
+
+    async def delete(self, attachment_id: str) -> None:
+        row = await self._s.get(AttachmentRow, attachment_id)
+        if row:
+            await self._s.delete(row)
+            await self._s.commit()

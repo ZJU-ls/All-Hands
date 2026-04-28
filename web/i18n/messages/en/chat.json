@@ -64,6 +64,26 @@
       "assistantFailed": "The assistant couldn't finish this reply.",
       "hint": "↵ send · ⇧↵ newline"
     },
+    "attachments": {
+      "attachTitle": "Attach files (images / docs / code)",
+      "dropHint": "Drop to upload",
+      "queued": "queued",
+      "failed": "failed",
+      "remove": "Remove",
+      "switchModel": "Switch model →",
+      "visionFallbackBanner": "Current model does not support image input — your image will be described in text instead.",
+      "visionFallbackBannerNamed": "Current model ({model}) does not support image input — your image will be described in text instead.",
+      "lightboxClose": "Close",
+      "fileSize": "{size} KB",
+      "imageDimensions": "{w}×{h}",
+      "downloadTitle": "Download",
+      "morePlaceholder": "+ {count} more",
+      "reject": {
+        "empty": "File is empty",
+        "too_large": "File exceeds 20 MB cap",
+        "bad_mime": "Unsupported file type"
+      }
+    },
     "messageBubble": {
       "thinkingProcess": "Thinking",
       "thinkingProcessLive": "Thinking…",

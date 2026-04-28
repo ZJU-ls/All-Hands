@@ -72,6 +72,7 @@ class LLMModelService:
         context_window: int = 0,
         max_input_tokens: int | None = None,
         max_output_tokens: int | None = None,
+        supports_images: bool | None = None,
     ) -> LLMModel | None:
         # 2026-04-25: token caps are optional advanced settings. Registration
         # only requires (provider, name) — caps default to None ("use model
@@ -91,6 +92,12 @@ class LLMModelService:
         provider = await self._providers.get(provider_id)
         if provider is None:
             return None
+        # Vision capability: explicit caller value wins; otherwise auto-detect
+        # from the model name (covers claude-3+, gpt-4o, qwen-vl, gemini, …).
+        if supports_images is None:
+            from allhands.services.vision_capability import infer_supports_images
+
+            supports_images = infer_supports_images(name)
         model = LLMModel(
             id=str(uuid.uuid4()),
             provider_id=provider_id,
@@ -99,6 +106,7 @@ class LLMModelService:
             context_window=context_window,
             max_input_tokens=max_input_tokens,
             max_output_tokens=max_output_tokens,
+            supports_images=supports_images,
         )
         return await self._models.upsert(model)
 
@@ -121,6 +129,7 @@ class LLMModelService:
         max_input_tokens: int | None = None,
         max_output_tokens: int | None = None,
         enabled: bool | None = None,
+        supports_images: bool | None = None,
     ) -> LLMModel | None:
         if context_window is not None and context_window < 0:
             raise ModelConfigError(f"context_window must be >= 0 (got {context_window}).")
@@ -145,6 +154,7 @@ class LLMModelService:
                     "max_input_tokens": max_input_tokens,
                     "max_output_tokens": max_output_tokens,
                     "enabled": enabled,
+                    "supports_images": supports_images,
                 }.items()
                 if v is not None
             }

@@ -149,6 +149,26 @@ export type Message = {
    * partial); the bubble shows an 「已中止」 tail to flag the gap.
    */
   interrupted?: boolean;
+  /**
+   * Ids of attachments (images / files) the user uploaded with this turn.
+   * Resolved into thumbnails / file chips on the bubble. Empty for
+   * assistant / tool messages.
+   */
+  attachment_ids?: string[];
+  /**
+   * Optional resolved attachment metadata kept alongside ids for instant
+   * render after sending (no extra fetch needed). Server-side history
+   * reload skips this and the bubble fetches /api/attachments/{id} lazily.
+   */
+  attachments?: Array<{
+    id: string;
+    mime: string;
+    filename: string;
+    size_bytes: number;
+    width: number | null;
+    height: number | null;
+    kind: "image" | "file";
+  }>;
 };
 
 /** SSE event envelope — mirrors backend allhands/execution/events.py AgentEvent union. */

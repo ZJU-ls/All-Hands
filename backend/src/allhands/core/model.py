@@ -38,3 +38,10 @@ class LLMModel(BaseModel):
     max_output_tokens: int | None = Field(default=None, ge=1)
     enabled: bool = True
     is_default: bool = False
+    # Vision capability — whether the model accepts image_url / image content
+    # parts in HumanMessage. False default; whitelisted on seed for known
+    # vision models (claude-3+, gpt-4o+, qwen-vl-*, gemini, deepseek-vl).
+    # Drives AgentLoop multimodal projection: when an attachment is an image
+    # and supports_images=False, the loop falls back to text injection
+    # (filename + dimensions + auto-alt + OCR if enabled).
+    supports_images: bool = False

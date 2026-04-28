@@ -64,6 +64,26 @@
       "assistantFailed": "助手没能完成这次回复。",
       "hint": "↵ 发送 · ⇧↵ 换行"
     },
+    "attachments": {
+      "attachTitle": "添加附件 (图片 / 文档 / 代码)",
+      "dropHint": "松开鼠标上传文件",
+      "queued": "等待中",
+      "failed": "失败",
+      "remove": "移除",
+      "switchModel": "切换模型 →",
+      "visionFallbackBanner": "当前模型不支持图片理解 · 你的图会自动转成文字描述给模型",
+      "visionFallbackBannerNamed": "当前模型 ({model}) 不支持图片理解 · 你的图会自动转成文字描述给模型",
+      "lightboxClose": "关闭",
+      "fileSize": "{size} KB",
+      "imageDimensions": "{w}×{h}",
+      "downloadTitle": "下载",
+      "morePlaceholder": "+ 还有 {count} 个",
+      "reject": {
+        "empty": "文件为空",
+        "too_large": "文件超过 20 MB 上限",
+        "bad_mime": "不支持的文件类型"
+      }
+    },
     "messageBubble": {
       "thinkingProcess": "思考过程",
       "thinkingProcessLive": "思考过程…",

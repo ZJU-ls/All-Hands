@@ -79,6 +79,29 @@ async def startup() -> None:
     except Exception as exc:
         log.warning("employee.seed.failed", error=str(exc))
 
+    # Auto-detect vision capability for already-registered models that pre-date
+    # the supports_images column (default 0). Users get sensible defaults
+    # without having to manually flip a switch for every claude / gpt-4o /
+    # qwen-vl model already in their workspace.
+    try:
+        from allhands.persistence.sql_repos import SqlLLMModelRepo
+        from allhands.services.vision_capability import infer_supports_images
+
+        maker = get_sessionmaker()
+        async with maker() as session:
+            repo_m = SqlLLMModelRepo(session)
+            models = await repo_m.list_all()
+            updated = 0
+            for m in models:
+                inferred = infer_supports_images(m.name)
+                if inferred and not m.supports_images:
+                    await repo_m.upsert(m.model_copy(update={"supports_images": True}))
+                    updated += 1
+            if updated:
+                log.info("models.vision_backfill", updated=updated, total=len(models))
+    except Exception as exc:
+        log.warning("models.vision_backfill.failed", error=str(exc))
+
     # 2026-04-26 P3 · drawio-creator skill was merged into allhands.artifacts.
     # Sanity scan: any stale 'allhands.drawio-creator' reference in the DB
     # would resolve to "skill not found" and break activation. The 0029
