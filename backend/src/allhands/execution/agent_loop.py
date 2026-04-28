@@ -424,16 +424,33 @@ class AgentLoop:
                             reasoning_delta=reasoning_delta,
                         )
 
-                # Per-turn LLM telemetry. ``usage_metadata`` is populated by
-                # LangChain when the provider returns it (OpenAI / Anthropic
-                # / DashScope all do); we surface zeros for any provider that
-                # doesn't, which the consumer treats as "unknown" rather than
-                # a literal zero.
+                # Per-turn LLM telemetry. ``usage_metadata`` is populated
+                # provider-side: Anthropic streams ``message_delta`` events
+                # carrying usage; OpenAI requires ``stream_options=
+                # {"include_usage": True}`` (handled in build_llm via
+                # ``stream_usage=True``). When usage is genuinely missing
+                # (rare aggregator that strips the field, or a custom proxy),
+                # we log once and surface zeros — observatory will show "—"
+                # cost rather than guessing.
                 _llm_duration_s = (_now() - llm_call_started_at).total_seconds()
                 _usage = getattr(accumulated, "usage_metadata", None) or {}
                 _input_tok = int(_usage.get("input_tokens", 0) or 0)
                 _output_tok = int(_usage.get("output_tokens", 0) or 0)
                 _total_tok = int(_usage.get("total_tokens", 0) or 0) or (_input_tok + _output_tok)
+                if not _usage and accumulated is not None:
+                    _log.warning(
+                        "agent_loop.usage_metadata.missing",
+                        extra={
+                            "model_ref": effective_model_ref,
+                            "iteration": iteration,
+                            "hint": (
+                                "provider didn't return usage on the stream. "
+                                "If this is OpenAI-compat, ensure stream_usage=True "
+                                "in llm_factory.build_llm. Cost / token KPIs in "
+                                "observatory will show 0 for this run."
+                            ),
+                        },
+                    )
                 yield LLMCallFinished(
                     message_id=message_id,
                     model_ref=effective_model_ref,

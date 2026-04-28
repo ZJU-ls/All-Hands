@@ -222,3 +222,32 @@ def test_resolve_empty_ref_returns_empty() -> None:
     guarantees a real ref)."""
     p = _provider(kind="aliyun")
     assert resolve_model_name(p, "") == ""
+
+
+def test_build_llm_openai_kind_enables_stream_usage() -> None:
+    """2026-04-28 token-bug regression nail.
+
+    OpenAI streaming responses do NOT include usage metadata in chunks
+    unless ``stream_options={"include_usage": True}`` is sent on every
+    request. langchain_openai exposes this as the ctor flag
+    ``stream_usage``; without it set, ``AIMessageChunk.usage_metadata``
+    stays empty for *every* streaming call, agent_loop records (0,0,0)
+    into LLMCallFinished, and observatory shows "0 tokens" forever for
+    every OpenAI-compat provider (real OpenAI + DashScope + DeepSeek
+    + 百炼 + Kimi all route through ChatOpenAI).
+
+    If anyone removes the kwarg, this test fails loudly.
+    """
+    provider = _p(kind="openai", base_url="https://api.openai.com/v1")
+    llm = build_llm(provider, "gpt-4o-mini")
+    # langchain_openai stores it on the model; pin via attribute lookup
+    # so we don't depend on private internals.
+    assert getattr(llm, "stream_usage", False) is True
+
+
+def test_build_llm_aliyun_kind_also_enables_stream_usage() -> None:
+    """DashScope / 百炼 OpenAI-compat goes through the same ChatOpenAI
+    branch — same flag, same regression risk."""
+    provider = _p(kind="aliyun", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+    llm = build_llm(provider, "qwen-plus")
+    assert getattr(llm, "stream_usage", False) is True
