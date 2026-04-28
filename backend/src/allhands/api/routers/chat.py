@@ -107,6 +107,7 @@ def _to_message_response(m: Message) -> ChatMessageResponse:
         tool_calls=[tc.model_dump(mode="json") for tc in m.tool_calls],
         reasoning=m.reasoning,
         interrupted=m.interrupted,
+        is_compacted=m.is_compacted,
     )
 
 

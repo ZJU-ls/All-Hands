@@ -56,6 +56,13 @@ class ConversationRepo(Protocol):
     async def list_messages_by_run_id(self, run_id: str) -> list[Message]: ...
     async def append_message(self, message: Message) -> Message: ...
     async def delete_messages(self, message_ids: list[str]) -> int: ...
+    async def mark_messages_compacted(self, message_ids: list[str]) -> int:
+        """Flip ``is_compacted=True`` on the given message ids · soft-delete
+        for /compact (compact-dual-view.md). UI keeps these rows visible
+        behind a fold; LLM context build path filters them out.
+        """
+        ...
+
     async def delete(self, conversation_id: str) -> bool:
         """Hard-delete a conversation + cascading rows (messages, events,
         skill runtime). Returns True if a row was removed, False if missing.

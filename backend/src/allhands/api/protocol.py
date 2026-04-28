@@ -99,6 +99,11 @@ class ChatMessageResponse(BaseModel):
     # done (user 中止 / network drop / mid-stream error). UI uses this
     # to render an 「已中止」 tail. See core.Message.interrupted.
     interrupted: bool = False
+    # 2026-04-28 · True when manual /compact has soft-flagged this message.
+    # The UI renders such rows behind a "N 条已压缩" fold instead of inline;
+    # the LLM context build path filters them out (except synthetic system
+    # summary markers, which keep is_compacted=False so they survive).
+    is_compacted: bool = False
 
 
 class CompactConversationRequest(BaseModel):

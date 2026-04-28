@@ -144,6 +144,14 @@ class MessageRow(Base):
     # See core.Message.interrupted — true when the LLM stream didn't
     # reach a clean done (user 中止 / transport drop / mid-stream error).
     interrupted: Mapped[bool] = mapped_column(Boolean, default=False)
+    # See core.Message.is_compacted — soft flag set by manual /compact so the
+    # row stays in the transcript (UI renders it behind a fold) while the LLM
+    # context build path filters it out. Indexed because send_message reads
+    # all messages and filters; with very long conversations this saves a
+    # full table scan.
+    is_compacted: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("0"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
     conversation: Mapped[ConversationRow] = relationship(back_populates="messages")

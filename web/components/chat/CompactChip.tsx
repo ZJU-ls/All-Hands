@@ -54,13 +54,23 @@ export function CompactChip({
     void (async () => {
       try {
         const res = await compactConversation(conversationId, keepLast);
+        // Dual-view (compact-dual-view.md): the server returns the FULL
+        // history with ``is_compacted`` flagged on folded rows + a fresh
+        // system summary marker. We hydrate Message in full so persisted
+        // tool_calls / render_payloads / reasoning still rehydrate behind
+        // the fold (the bug the user reported was that we used to wipe
+        // these on compact). MessageList renders consecutive
+        // ``is_compacted`` non-system rows inside <CompactedFold/>.
         const messages: Message[] = res.messages.map((m) => ({
           id: m.id,
           conversation_id: m.conversation_id,
           role: m.role,
           content: m.content,
-          tool_calls: [],
-          render_payloads: [],
+          tool_calls: m.tool_calls ?? [],
+          render_payloads: m.render_payloads ?? [],
+          reasoning: m.reasoning ?? undefined,
+          interrupted: m.interrupted ?? false,
+          is_compacted: m.is_compacted ?? false,
           created_at: m.created_at,
         }));
         replaceMessages(messages);

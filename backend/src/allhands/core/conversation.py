@@ -114,6 +114,15 @@ class Message(BaseModel):
     #   interrupted=True,  content non-empty   → partial preserved
     #   interrupted=True,  content empty       → started + cancelled before any token
     interrupted: bool = False
+    # 2026-04-28 · context-compact dual-view (compact-dual-view.md).
+    #
+    # True when this message has been folded into a summary by a manual
+    # `/compact` action. Soft flag · the row stays in the database so the UI
+    # transcript keeps it visible (rendered behind a 「N 条已压缩」 fold);
+    # only the LLM context build path filters it out. The single exception
+    # is messages with role=system that carry the synthetic summary marker
+    # itself — those survive the filter so the summary reaches the model.
+    is_compacted: bool = False
     created_at: datetime
 
     @model_validator(mode="after")
