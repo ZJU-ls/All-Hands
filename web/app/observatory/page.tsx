@@ -1227,7 +1227,7 @@ function ObservatoryPageInner() {
                               <Icon name="alert-circle" size={11} />
                               {t("traces.status.failed")}
                             </span>
-                            <TraceChip runId={row.trace_id} label={row.trace_id} />
+                            <TraceChip runId={row.trace_id} label={row.trace_id} variant="page" />
                             <span className="text-[12px] text-text truncate">
                               {row.employee_name ?? row.employee_id ?? "—"}
                             </span>
@@ -1338,7 +1338,7 @@ function ObservatoryPageInner() {
                                   size={11}
                                   className="text-text-subtle"
                                 />
-                                <TraceChip runId={row.trace_id} label={row.trace_id} />
+                                <TraceChip runId={row.trace_id} label={row.trace_id} variant="page" />
                               </span>
                             </td>
                             <td className="py-2.5 px-4 text-text">

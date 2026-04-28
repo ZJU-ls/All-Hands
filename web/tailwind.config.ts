@@ -115,6 +115,8 @@ const config: Config = {
         "ah-fade-up":    { from: { opacity: "0", transform: "translateY(4px)" }, to: { opacity: "1", transform: "translateY(0)" } },
         "ah-float":      { "0%, 100%": { transform: "translateY(0)" }, "50%": { transform: "translateY(-6px)" } },
         "ah-pulse-ring": { "0%": { boxShadow: "0 0 0 0 var(--color-primary-muted)" }, "80%": { boxShadow: "0 0 0 8px rgba(0,0,0,0)" }, "100%": { boxShadow: "0 0 0 0 rgba(0,0,0,0)" } },
+        "ah-fade-in":     { from: { opacity: "0" }, to: { opacity: "1" } },
+        "ah-slide-in-right": { from: { transform: "translateX(100%)" }, to: { transform: "translateX(0)" } },
       },
       animation: {
         "spin-slow":  "ah-spin 1.2s linear infinite",
@@ -122,6 +124,8 @@ const config: Config = {
         "shimmer":    "ah-shimmer 1.8s var(--ease-out) infinite",
         "bar-in":     "ah-bar-in 180ms var(--ease-out)",
         "fade-up":    "ah-fade-up 280ms var(--ease-out-expo)",
+        "fade-in":    "ah-fade-in 180ms var(--ease-out)",
+        "slide-in-right": "ah-slide-in-right 240ms var(--ease-out-expo)",
         "float":      "ah-float 6s var(--ease-out-soft) infinite",
         "pulse-ring": "ah-pulse-ring 1.6s var(--ease-out) infinite",
       },

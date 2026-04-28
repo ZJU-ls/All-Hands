@@ -113,7 +113,7 @@ function RunRow({ r }: { r: ActiveRunCardDto }) {
                 <span className="font-mono text-caption tabular-nums text-text-subtle">
                   {r.iteration}/{r.max_iterations}
                 </span>
-                <TraceChip runId={r.run_id} variant="link" />
+                <TraceChip runId={r.run_id} variant="page" />
               </div>
             </div>
             <p className="mt-1 text-sm text-text-muted truncate">
