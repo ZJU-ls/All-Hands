@@ -182,7 +182,7 @@ async def test_spawn_subagent_builds_preset_child_in_memory() -> None:
     # Preset 'execute' baseline tools include fetch_url + write_file + resolve_skill.
     assert "allhands.meta.resolve_skill" in child.tool_ids
     assert "allhands.builtin.fetch_url" in child.tool_ids
-    assert child.max_iterations == 10  # execute preset
+    assert child.max_iterations == 25  # execute preset · bumped 10→25 on 2026-04-28
 
 
 @pytest.mark.asyncio

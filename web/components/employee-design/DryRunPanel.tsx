@@ -8,6 +8,7 @@ import {
   type EmployeePreset,
   type EmployeePreviewResult,
 } from "@/lib/api";
+import { useSkillNames } from "@/lib/use-skill-names";
 
 /**
  * 点「预览合成」→ 调 POST /api/employees/preview · 展示展开后的
@@ -118,7 +119,7 @@ export function DryRunPanel({
             <IdChips ids={preview.tool_ids} />
           </Row>
           <Row label={t("rowSkillIds", { count: preview.skill_ids.length })}>
-            <IdChips ids={preview.skill_ids} />
+            <IdChips ids={preview.skill_ids} kind="skill" />
           </Row>
           <Row label={t("rowMaxIter")}>
             <span className="font-mono text-[13px] font-medium text-text">
@@ -164,21 +165,29 @@ function StatusChip({ status }: { status: Status }) {
   );
 }
 
-function IdChips({ ids }: { ids: string[] }) {
+function IdChips({ ids, kind }: { ids: string[]; kind?: "skill" | "tool" }) {
   const t = useTranslations("employees.dryRun");
+  const skillName = useSkillNames();
   if (ids.length === 0) {
     return <span className="text-[11px] text-text-subtle">{t("emptyChips")}</span>;
   }
   return (
     <ul className="flex flex-wrap gap-1">
-      {ids.map((id) => (
-        <li
-          key={id}
-          className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-text-muted"
-        >
-          {id}
-        </li>
-      ))}
+      {ids.map((id) => {
+        const label = kind === "skill" ? skillName(id) : id;
+        const isMono = kind !== "skill";
+        return (
+          <li
+            key={id}
+            title={id}
+            className={`rounded-sm bg-surface-2 px-1.5 py-0.5 text-[10px] text-text-muted ${
+              isMono ? "font-mono" : ""
+            }`}
+          >
+            {label}
+          </li>
+        );
+      })}
     </ul>
   );
 }

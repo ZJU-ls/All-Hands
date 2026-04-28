@@ -24,6 +24,16 @@ import {
   getStarterQuestions,
 } from "@/lib/kb-api";
 
+type AgentActivity = {
+  id: string;
+  tool: string;
+  label: string;
+  startedAt: number;
+  durationMs: number | null;
+  resultCount: number | null;
+  state: "running" | "done";
+};
+
 type AskTurn = {
   id: string;
   question: string;
@@ -33,6 +43,10 @@ type AskTurn = {
   error: string | null;
   usedModel: string | null;
   latencyMs: number | null;
+  // Per-turn agent activity log — every tool_call → tool_result pair shows
+  // up here so the user sees a search step + a thinking step in real time
+  // instead of staring at a blinking dot for 20 s.
+  activity: AgentActivity[];
 };
 
 export default function AskTabPage() {
@@ -94,6 +108,7 @@ function AskTabInner() {
       error: null,
       usedModel: null,
       latencyMs: null,
+      activity: [],
     };
     setTurns((prev) => (followUp ? [...prev, blank] : [blank]));
 
@@ -129,17 +144,57 @@ function AskTabInner() {
       prev.map((tt) => {
         if (tt.id !== turnId) return tt;
         switch (frame.event) {
+          case "tool_call": {
+            const entry: AgentActivity = {
+              id: `${frame.tool}-${Date.now()}-${Math.random()
+                .toString(36)
+                .slice(2, 6)}`,
+              tool: frame.tool,
+              label: frame.label,
+              startedAt: Date.now(),
+              durationMs: null,
+              resultCount: null,
+              state: "running",
+            };
+            return { ...tt, activity: [...tt.activity, entry] };
+          }
+          case "tool_result": {
+            // Mark the most recent matching running tool entry as done.
+            const next = [...tt.activity];
+            for (let i = next.length - 1; i >= 0; i--) {
+              const a = next[i];
+              if (a && a.tool === frame.tool && a.state === "running") {
+                next[i] = {
+                  ...a,
+                  state: "done",
+                  durationMs: frame.duration_ms,
+                  resultCount: frame.result_count ?? null,
+                };
+                break;
+              }
+            }
+            return { ...tt, activity: next };
+          }
           case "sources":
             return { ...tt, sources: frame.sources };
           case "delta":
             return { ...tt, answer: tt.answer + frame.text };
-          case "done":
+          case "done": {
+            // Close any still-running activity (the LLM tool_call has no
+            // matching tool_result frame — done is its terminator).
+            const closed = tt.activity.map((a) =>
+              a.state === "running"
+                ? { ...a, state: "done" as const, durationMs: Date.now() - a.startedAt }
+                : a,
+            );
             return {
               ...tt,
+              activity: closed,
               streaming: false,
               usedModel: frame.used_model,
               latencyMs: frame.latency_ms,
             };
+          }
           case "error":
             return { ...tt, streaming: false, error: frame.message };
           default:
@@ -380,6 +435,9 @@ function TurnView({
           <Icon name="sparkles" size={11} />
         </div>
         <div className="flex-1 group relative rounded-xl border border-border bg-surface-2 p-4">
+          {turn.activity.length > 0 && (
+            <ActivityLog activity={turn.activity} streaming={turn.streaming} />
+          )}
           {turn.error ? (
             <div className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-[12px] text-danger">
               {turn.error}
@@ -403,6 +461,61 @@ function TurnView({
         </div>
       </div>
     </div>
+  );
+}
+
+// Agent activity log — small bordered strip above the answer showing each
+// tool the (deterministic) "agent" called and the wall-clock it took. Lets
+// users see step labels live (search → thinking) instead of staring at a
+// silent dot for 20 s. While streaming, the running entry gets a live
+// elapsed-time counter (1-Hz tick).
+function ActivityLog({
+  activity,
+  streaming,
+}: {
+  activity: AgentActivity[];
+  streaming: boolean;
+}) {
+  const t = useTranslations("knowledge.ask");
+  // 1 Hz ticker keeps the running entry's elapsed time fresh; bail when
+  // nothing is running so we don't spin forever.
+  const hasRunning = streaming && activity.some((a) => a.state === "running");
+  const [, force] = useState(0);
+  useEffect(() => {
+    if (!hasRunning) return;
+    const id = setInterval(() => force((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [hasRunning]);
+
+  return (
+    <ul className="mb-3 space-y-1 rounded-lg border border-border bg-surface px-3 py-2">
+      {activity.map((a) => {
+        const elapsed =
+          a.state === "running"
+            ? Date.now() - a.startedAt
+            : (a.durationMs ?? 0);
+        const ms = elapsed.toFixed(0);
+        return (
+          <li
+            key={a.id}
+            className="flex items-center gap-2 font-mono text-[10.5px] text-text-muted"
+          >
+            {a.state === "running" ? (
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            ) : (
+              <Icon name="check" size={11} className="text-success" />
+            )}
+            <span className="flex-1 truncate">{a.label}</span>
+            {a.resultCount !== null && (
+              <span className="text-text-subtle">
+                {t("activityHits", { count: a.resultCount })}
+              </span>
+            )}
+            <span className="text-text-subtle">{ms} ms</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

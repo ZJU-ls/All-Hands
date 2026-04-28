@@ -202,6 +202,14 @@ export type ChatMessageDto = {
    * tell the reader the answer is incomplete.
    */
   interrupted?: boolean;
+  /**
+   * 2026-04-28 · Manual /compact has folded this message into a summary.
+   * UI keeps the row in the transcript but hides it behind a "N 条已压缩"
+   * fold; the LLM context build path filters it out so the token budget
+   * shrinks. The synthetic summary marker (role=system) keeps this false
+   * so it survives the filter and reaches the model.
+   */
+  is_compacted?: boolean;
 };
 
 export async function listConversationMessages(
@@ -356,6 +364,8 @@ export type ProviderDto = {
   enabled: boolean;
 };
 
+export type ModelCapability = "chat" | "image_gen" | "speech" | "embedding";
+
 export type ModelDto = {
   id: string;
   provider_id: string;
@@ -370,10 +380,13 @@ export type ModelDto = {
   max_output_tokens: number | null;
   enabled: boolean;
   // Singleton across the whole table — at most one model has is_default=true.
-  // Indicates the workspace-wide default for Lead Agent + ai_explainer when
-  // nothing more specific is pinned. Backend enforces uniqueness inside one
-  // transaction (see services/model_service.set_as_default).
   is_default: boolean;
+  // 2026-04-28 · multi-modal capability picker (MODEL-GATEWAY.html § 5).
+  // Existing models default to ["chat"] via alembic 0037 server_default;
+  // image-generation models opt in by checking [image_gen] in the dialog.
+  capabilities: ModelCapability[];
+  // Vision (input) — distinct from capabilities (output).
+  supports_images?: boolean;
 };
 
 export async function listProviders(): Promise<ProviderDto[]> {
@@ -386,6 +399,29 @@ export async function listModels(): Promise<ModelDto[]> {
   const res = await fetch(`${BASE}/api/models`);
   if (!res.ok) throw new Error(`listModels failed: ${res.status}`);
   return res.json() as Promise<ModelDto[]>;
+}
+
+export type ModelCatalogLookup = {
+  matched: boolean;
+  name: string;
+  display_name?: string;
+  capabilities?: ModelCapability[];
+  context_window?: number;
+  max_input_tokens?: number | null;
+  max_output_tokens?: number | null;
+};
+
+/** Fetch curated metadata for a typed model name. Returns matched=false
+ *  if the name isn't in the catalog — the UI then leaves user input alone. */
+export async function lookupModelCatalog(
+  name: string,
+  providerKind?: string,
+): Promise<ModelCatalogLookup> {
+  const params = new URLSearchParams({ name });
+  if (providerKind) params.set("provider_kind", providerKind);
+  const res = await fetch(`${BASE}/api/models/catalog/lookup?${params}`);
+  if (!res.ok) return { matched: false, name };
+  return res.json() as Promise<ModelCatalogLookup>;
 }
 
 /**

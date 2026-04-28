@@ -26,6 +26,7 @@ from allhands.persistence.db import get_sessionmaker
 from allhands.persistence.sql_repos import (
     SqlAgentPlanRepo,
     SqlArtifactRepo,
+    SqlAttachmentRepo,
     SqlConfirmationRepo,
     SqlConversationEventRepo,
     SqlConversationRepo,
@@ -223,6 +224,7 @@ async def get_chat_service(
         # System-config singleton (auto_title_enabled etc). Optional —
         # when omitted the service skips LLM-summarised titles.
         observability_config_repo=SqlObservabilityConfigRepo(session),
+        attachment_repo=SqlAttachmentRepo(session),
     )
 
 

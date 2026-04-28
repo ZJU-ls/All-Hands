@@ -6,8 +6,19 @@ import type { ToolCall } from "@/lib/protocol";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 import { TraceChip } from "@/components/runs/TraceChip";
+import { useSkillNames } from "@/lib/use-skill-names";
 
 type Props = { toolCall: ToolCall };
+
+/** Meta tools whose `skill_id` arg is the user-facing handle of an activated
+ * skill — we swap the raw id (e.g. `allhands.skills.pptx-deck`) for the skill
+ * display name so the chat surface speaks human, not registry slug. */
+const SKILL_ID_AWARE_TOOLS = new Set<string>([
+  "allhands.meta.resolve_skill",
+  "allhands.meta.read_skill_file",
+  "allhands.meta.run_skill_script",
+  "allhands.meta.list_skill_files",
+]);
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "text-text-muted",
@@ -119,7 +130,14 @@ export function ToolCallCard({ toolCall }: Props) {
   const color = STATUS_COLOR[toolCall.status] ?? "text-text-muted";
   const statusLabel = STATUS_LABEL[toolCall.status] ?? toolCall.status;
   const statusBg = STATUS_BG[toolCall.status] ?? "bg-surface-2 text-text-muted";
-  const argsSummary = summarizeArgs(toolCall.args);
+  const skillName = useSkillNames();
+  const displayArgs = (() => {
+    if (!SKILL_ID_AWARE_TOOLS.has(toolCall.tool_id)) return toolCall.args;
+    const sid = toolCall.args?.skill_id;
+    if (typeof sid !== "string") return toolCall.args;
+    return { ...toolCall.args, skill_id: skillName(sid) };
+  })();
+  const argsSummary = summarizeArgs(displayArgs);
   const resultSummary =
     toolCall.status === "succeeded" ? summarizeResult(toolCall.result) : "";
   const iconName = iconForToolId(toolCall.tool_id);
@@ -231,7 +249,7 @@ export function ToolCallCard({ toolCall }: Props) {
               args
             </p>
             <pre className="whitespace-pre-wrap break-all rounded-md bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-text">
-              {JSON.stringify(toolCall.args, null, 2)}
+              {JSON.stringify(displayArgs, null, 2)}
             </pre>
           </div>
           {toolCall.result !== undefined && (

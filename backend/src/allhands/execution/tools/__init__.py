@@ -15,6 +15,8 @@ from allhands.execution.tools.builtin.ask_user_question import (
 )
 from allhands.execution.tools.builtin.fetch_url import TOOL as FETCH_URL_TOOL
 from allhands.execution.tools.builtin.fetch_url import execute as fetch_url_execute
+from allhands.execution.tools.builtin.image_generate import TOOL as IMAGE_GENERATE_TOOL
+from allhands.execution.tools.builtin.image_generate import execute as image_generate_execute
 from allhands.execution.tools.builtin.local_files import ALL_LOCAL_FILE_TOOLS
 from allhands.execution.tools.builtin.web_search import TOOL as WEB_SEARCH_TOOL
 from allhands.execution.tools.builtin.web_search import execute as web_search_execute
@@ -150,6 +152,10 @@ def discover_builtin_tools(
     registry.register(WEB_SEARCH_TOOL, web_search_execute)
     registry.register(WRITE_FILE_TOOL, write_file_execute)
     registry.register(ASK_USER_QUESTION_TOOL, ask_user_question_execute)
+    # generate_image stub · real per-conversation executor is wired in
+    # api/deps.py (needs ArtifactService + provider_factory). Without binding
+    # the stub returns a clear self-explanation.
+    registry.register(IMAGE_GENERATE_TOOL, image_generate_execute)
     for tool, executor in _RENDER_TOOLS:
         registry.register(tool, executor)
     for meta_tool, meta_executor in _META_TOOLS_WITH_EXECUTORS:

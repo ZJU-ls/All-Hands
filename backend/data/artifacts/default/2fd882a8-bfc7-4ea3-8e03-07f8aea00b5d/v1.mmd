@@ -1,0 +1,9 @@
+graph TD
+    A[前端应用] --> B(API 网关)
+    B --> C[认证服务]
+    B --> D[业务中台]
+    D --> E[(数据库集群)]
+    D --> F[缓存层 Redis]
+    style A fill:#e1f5fe
+    style B fill:#fff9c4
+    style E fill:#f3e5f5

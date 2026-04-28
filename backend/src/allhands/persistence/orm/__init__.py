@@ -11,6 +11,7 @@ from allhands.persistence.orm import (
 )
 from allhands.persistence.orm.base import Base
 from allhands.persistence.orm.models import (
+    AttachmentRow,
     ConfirmationRow,
     ConversationRow,
     EmployeeRow,
@@ -22,6 +23,7 @@ from allhands.persistence.orm.models import (
 )
 
 __all__ = [
+    "AttachmentRow",
     "Base",
     "ConfirmationRow",
     "ConversationRow",

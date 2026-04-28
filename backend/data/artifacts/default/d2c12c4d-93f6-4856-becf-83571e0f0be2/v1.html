@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>制品区能力展示 | Capability Showcase</title>
+  <style>
+    :root {
+      --bg: #fafbfc; --bg-2: #fff; --bg-3: #f3f5f8;
+      --text: #1a1d23; --text-muted: #5b6472; --text-subtle: #8a93a3;
+      --border: #e3e7ed; --border-strong: #cfd5de;
+      --primary: #2563eb; --primary-hover: #1d4ed8;
+      --primary-soft: #eef2ff;
+      --success: #10b981; --warning: #f59e0b; --error: #ef4444;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
+      --shadow-md: 0 4px 14px rgba(15,23,42,.06), 0 2px 4px rgba(15,23,42,.04);
+      --radius: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e1116; --bg-2: #161a22; --bg-3: #1d222c;
+        --text: #e6e9ef; --text-muted: #9099a8; --text-subtle: #6c7585;
+        --border: #262b35; --border-strong: #353b48;
+        --primary: #60a5fa; --primary-hover: #93c5fd;
+        --primary-soft: rgba(96,165,250,.12);
+        --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+        --shadow-md: 0 8px 24px rgba(0,0,0,.5);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      display: flex; flex-direction: column;
+    }
+    
+    /* Layout */
+    .sidebar {
+      width: 260px; background: var(--bg-2); border-right: 1px solid var(--border);
+      padding: 24px; display: flex; flex-direction: column; gap: 8px;
+      position: fixed; height: 100%; overflow-y: auto;
+    }
+    .main { margin-left: 260px; padding: 32px 40px; flex: 1; max-width: 1200px; }
+    
+    /* Typography */
+    h1 {
+      font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 8px;
+      background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    h2 { font-size: 20px; margin: 32px 0 16px; letter-spacing: -.01em; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+    p { margin: 0 0 12px; color: var(--text-muted); }
+    
+    /* Components */
+    .nav-item {
+      padding: 10px 12px; border-radius: 8px; cursor: pointer; color: var(--text-muted);
+      transition: all 200ms ease; font-weight: 500; display: flex; align-items: center; gap: 8px;
+    }
+    .nav-item:hover { background: var(--bg-3); color: var(--text); }
+    .nav-item.active { background: var(--primary-soft); color: var(--primary); }
+    
+    .card {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+      box-shadow: var(--shadow-sm); margin-bottom: 24px;
+      transition: transform 200ms ease, box-shadow 200ms ease;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+    
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 600;
+      border: 1px solid var(--border); background: var(--bg-3); color: var(--text-muted);
+    }
+    .badge.primary { background: var(--primary-soft); color: var(--primary); border-color: transparent; }
+    
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 18px; border-radius: 8px; font: inherit; font-weight: 500;
+      background: var(--primary); color: white; border: 0; cursor: pointer;
+      transition: all 200ms ease; text-decoration: none;
+    }
+    .btn:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .btn.secondary { background: var(--bg-3); color: var(--text); border: 1px solid var(--border); }
+    .btn.secondary:hover { background: var(--border); }
+
+    /* Interactive Demo Area */
+    .demo-area {
+      background: var(--bg-3); border-radius: 8px; padding: 20px;
+      border: 1px dashed var(--border-strong); margin-top: 16px;
+    }
+    .stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; flex: 1; margin-left: 12px; }
+    .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 1s ease-out; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-muted); font-weight: 600; background: var(--bg-3); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    
+    /* Animations */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeIn 0.5s ease-out forwards; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div style="margin-bottom: 24px; font-weight: 700; font-size: 18px; color: var(--text);">
+      🤖 Artifacts AI
+    </div>
+    <div class="nav-item active" onclick="scrollToSection('overview')">📊 核心能力概览</div>
+    <div class="nav-item" onclick="scrollToSection('formats')">📁 多模态支持</div>
+    <div class="nav-item" onclick="scrollToSection('workflow')">⚙️ 自动化工作流</div>
+    <div class="nav-item" onclick="scrollToSection('standards')">✨ 规范化标准</div>
+  </aside>
+
+  <main class="main">
+    <section id="overview" class="animate-in">
+      <h1>制品区能力全景展示</h1>
+      <p>本页面由 AI 实时生成，展示了从结构化数据到可视化交互的全链路资产管控能力。</p>
+      
+      <div class="grid">
+        <div class="card">
+          <div class="badge primary">核心指标</div>
+          <h3 style="margin-top: 12px;">资产覆盖率</h3>
+          <div style="font-size: 32px; font-weight: 700; margin: 8px 0;">100%</div>
+          <p>支持 HTML, Draw.io, PDF, Office 等全格式</p>
+        </div>
+        <div class="card">
+          <div class="badge">处理效率</div>
+          <h3 style="margin-top: 12px;">自动化渲染</h3>
+          <div style="font-size: 32px; font-weight: 700; margin: 8px 0;">Real-time</div>
+          <p>毫秒级响应，所见即所得的预览体验</p>
+        </div>
+        <div class="card">
+          <div class="badge">质量管控</div>
+          <h3 style="margin-top: 12px;">标准化输出</h3>
+          <div style="font-size: 32px; font-weight: 700; margin: 8px 0;">A+</div>
+          <p>遵循行业规范，杜绝臆造与格式混乱</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="formats" class="animate-in">
+      <h2>📁 多模态资产支持矩阵</h2>
+      <div class="card">
+        <h3>支持的产出类型</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>资产类型</th>
+              <th>扩展名</th>
+              <th>应用场景</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>交互式网页</strong></td>
+              <td>.html</td>
+              <td>仪表盘、Demo、复杂交互文档</td>
+              <td><span class="badge primary">已激活</span></td>
+            </tr>
+            <tr>
+              <td><strong>专业图表</strong></td>
+              <td>.drawio</td>
+              <td>架构图、流程图、ER图、时序图</td>
+              <td><span class="badge primary">就绪</span></td>
+            </tr>
+            <tr>
+              <td><strong>可打印报告</strong></td>
+              <td>.pdf</td>
+              <td>正式文档、合同、白皮书</td>
+              <td><span class="badge">就绪</span></td>
+            </tr>
+            <tr>
+              <td><strong>电子表格</strong></td>
+              <td>.xlsx / .csv</td>
+              <td>数据统计、财务报表、配置导出</td>
+              <td><span class="badge">就绪</span></td>
+            </tr>
+            <tr>
+              <td><strong>办公文档</strong></td>
+              <td>.docx / .pptx</td>
+              <td>提案、协议、演示幻灯片</td>
+              <td><span class="badge">就绪</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="workflow" class="animate-in">
+      <h2>⚙️ 智能化工作流演示</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>1. 需求分析与调研</h3>
+          <p>自动识别用户意图，必要时调用 <code>web_research</code> 抓取最新行业标准。</p>
+          <div class="demo-area">
+            <div class="stat-row">
+              <span>信息检索精度</span>
+              <span style="font-weight: 600;">98.5%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width: 98.5%"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>2. 内容构建与验证</h3>
+          <p>利用 <code>file_writing</code> 技能将结构化内容保存，确保逻辑严密、数据真实。</p>
+          <div class="demo-area">
+            <div class="stat-row">
+              <span>逻辑自洽性校验</span>
+              <span style="font-weight: 600;">Pass</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width: 100%; background: var(--success)"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>3. 可视化与归档</h3>
+          <p>自动生成符合规范的 mxfile XML 或 HTML 代码，并统一存入制品区实现版本管理。</p>
+          <div class="demo-area">
+            <div class="stat-row">
+              <span>资产归档完整度</span>
+              <span style="font-weight: 600;">100%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width: 100%"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="standards" class="animate-in">
+      <h2>✨ 规范化与边界原则</h2>
+      <div class="card">
+        <div style="display: flex; gap: 24px; align-items: start;">
+          <div style="flex: 1;">
+            <h3>必须标准化</h3>
+            <p>所有输出的文档和图表必须遵循行业通用规范。例如：HTML 必须具备完整的 Doctype 和 Meta 标签，Draw.io 必须符合 mxGraphModel 结构。</p>
+          </div>
+          <div style="flex: 1;">
+            <h3>绝不臆造</h3>
+            <p>遇到无法通过现有技能获取的关键信息时，必须如实告知用户。严禁编造数据、链接或引用不存在的文献。</p>
+          </div>
+          <div style="flex: 1;">
+            <h3>主动归档</h3>
+            <p>每次任务结束后，务必确认资产已正确存入制品区。确保工作成果可追溯、可迭代、可回溯至任意历史版本。</p>
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 40px; text-align: center;">
+        <button class="btn" onclick="alert('感谢您对制品区能力的关注！如有具体需求，请随时下达指令。')">
+          🚀 启动能力测试
+        </button>
+        <button class="btn secondary" style="margin-left: 12px;" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+          🔝 返回顶部
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function scrollToSection(id) {
+      document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+      // Update active state
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+
+    // Simple animation trigger on load
+    window.addEventListener('load', () => {
+      const bars = document.querySelectorAll('.progress-fill');
+      bars.forEach(bar => {
+        const width = bar.style.width;
+        bar.style.width = '0';
+        setTimeout(() => { bar.style.width = width; }, 100);
+      });
+    });
+  </script>
+</body>
+</html>

@@ -8,6 +8,10 @@ import { AgentMarkdown } from "./AgentMarkdown";
 import { TraceChip } from "@/components/runs/TraceChip";
 import { classifyToolId } from "@/lib/tool-kind";
 import { Icon } from "@/components/ui/icon";
+import {
+  attachmentContentUrl,
+  attachmentThumbnailUrl,
+} from "@/lib/attachments";
 
 /**
  * Dispatch a tool call to the right renderer based on its tool_id prefix.
@@ -67,10 +71,16 @@ export function MessageBubble({ message, isStreaming }: Props) {
   const hasSegments = !isUser && Array.isArray(message.segments) && message.segments.length > 0;
 
   if (isUser) {
+    const hasAttachments =
+      (message.attachment_ids && message.attachment_ids.length > 0) ||
+      (message.attachments && message.attachments.length > 0);
     return (
       <div className="flex justify-end">
         <div className="ml-auto max-w-[75%] rounded-2xl rounded-tr-md bg-primary px-4 py-3 text-[14px] leading-[1.55] text-primary-fg shadow-soft-sm">
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          {hasAttachments && <UserAttachments message={message} />}
+          {message.content && (
+            <p className="whitespace-pre-wrap">{message.content}</p>
+          )}
         </div>
       </div>
     );
@@ -397,5 +407,157 @@ function StreamingCursor() {
     >
       ▍
     </span>
+  );
+}
+
+
+// ---- User-message attachment rendering (images grid + file chips) -------
+
+const MAX_INLINE_IMAGES = 4;
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+type AttachmentMeta = {
+  id: string;
+  mime: string;
+  filename: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  kind: "image" | "file";
+};
+
+function UserAttachments({ message }: { message: Message }) {
+  const t = useTranslations("chat.attachments");
+  const [resolved, setResolved] = useState<AttachmentMeta[]>(
+    () => (message.attachments ? [...message.attachments] : []),
+  );
+  const [lightbox, setLightbox] = useState<string | null>(null);
+
+  // When the bubble was rehydrated from server history (no preloaded
+  // attachments), fetch metadata by id so we can render thumbnails.
+  useEffect(() => {
+    if (resolved.length > 0) return;
+    const ids = message.attachment_ids || [];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const out: AttachmentMeta[] = [];
+      for (const id of ids) {
+        try {
+          const r = await fetch(`${BASE}/api/attachments/${id}`);
+          if (!r.ok) continue;
+          out.push((await r.json()) as AttachmentMeta);
+        } catch {
+          // ignore
+        }
+      }
+      if (!cancelled) setResolved(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(message.attachment_ids)]);
+
+  const images = resolved.filter((a) => a.kind === "image" || a.mime.startsWith("image/"));
+  const files = resolved.filter((a) => !(a.kind === "image" || a.mime.startsWith("image/")));
+
+  if (images.length === 0 && files.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-2 space-y-2">
+      {images.length > 0 && (
+        <div
+          className="grid gap-2"
+          style={{
+            gridTemplateColumns: `repeat(${Math.min(images.length, 2)}, minmax(0, 1fr))`,
+          }}
+          data-testid="user-image-grid"
+        >
+          {images.slice(0, MAX_INLINE_IMAGES).map((img) => (
+            <button
+              key={img.id}
+              type="button"
+              onClick={() => setLightbox(img.id)}
+              className="group overflow-hidden rounded-md bg-surface-2"
+              title={img.filename}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={attachmentThumbnailUrl(img.id)}
+                alt={img.filename}
+                className="block max-h-48 w-full object-cover transition-transform group-hover:scale-[1.02]"
+              />
+            </button>
+          ))}
+          {images.length > MAX_INLINE_IMAGES && (
+            <div className="grid place-items-center rounded-md bg-surface-2 text-[12px] text-text-muted">
+              {t("morePlaceholder", { count: images.length - MAX_INLINE_IMAGES })}
+            </div>
+          )}
+        </div>
+      )}
+      {files.length > 0 && (
+        <div className="space-y-1.5">
+          {files.map((f) => (
+            <a
+              key={f.id}
+              href={attachmentContentUrl(f.id)}
+              download={f.filename}
+              title={t("downloadTitle")}
+              className="flex items-center gap-2 rounded-lg border border-primary-fg/20 bg-primary-fg/5 px-2 py-1.5 text-[12px] text-primary-fg hover:bg-primary-fg/10"
+            >
+              <Icon name="file" size={16} />
+              <div className="min-w-0 flex-1 truncate">{f.filename}</div>
+              <span className="shrink-0 text-[10px] opacity-80">
+                {Math.max(1, Math.round(f.size_bytes / 1024))} KB
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
+      {lightbox && (
+        <Lightbox
+          src={attachmentContentUrl(lightbox)}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  const t = useTranslations("chat.attachments");
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 grid place-items-center bg-bg/90 p-8 backdrop-blur-sm"
+      role="dialog"
+      aria-label={t("lightboxClose")}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        className="max-h-full max-w-full rounded-md object-contain shadow-soft-md"
+        onClick={(e) => e.stopPropagation()}
+      />
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 rounded-full bg-surface px-3 py-1 text-text"
+      >
+        ✕
+      </button>
+    </div>
   );
 }

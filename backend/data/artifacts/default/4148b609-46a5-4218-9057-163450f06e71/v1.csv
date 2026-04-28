@@ -1,0 +1,5 @@
+﻿Tool Name,Output Kind,Description
+artifact_create,html/markdown/code,通用文本与网页生成
+render_drawio,drawio,专业图表渲染
+artifact_create_xlsx,xlsx,多表工作簿处理
+artifact_create_docx,docx,富文本结构化文档
