@@ -244,7 +244,16 @@
       "hint": "Enter 发送 · Shift+Enter 换行 · 答案沿用同一份检索片段编号",
       "sourcesEmpty": "提问后这里会列出回答用到的来源",
       "sourceColumnHelp": "此面板汇总所有轮次的来源 · 去重 · 点击跳到原文",
-      "activityHits": "{count} 命中"
+      "activityHits": "{count} 命中",
+      "stop": "停止",
+      "stopTitle": "中止当前生成 · 保留已收到的内容",
+      "regenerate": "重新生成",
+      "regenerateTitle": "重发同一个问题 · 换一次模型采样",
+      "newConversationTitle": "清空当前对话 · 重新开始",
+      "scrollToBottom": "滚到最新",
+      "scrollToBottomStreaming": "↓ 新内容生成中",
+      "scrollToBottomTitle": "回到对话底部 · 跟上最新答案",
+      "copyCode": "复制"
     },
     "bulkTags": {
       "title": "给 {count} 个文档批量打标签",
