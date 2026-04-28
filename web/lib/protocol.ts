@@ -149,6 +149,13 @@ export type Message = {
    * partial); the bubble shows an 「已中止」 tail to flag the gap.
    */
   interrupted?: boolean;
+  /**
+   * 2026-04-28 · Manual /compact has folded this row into a summary. The
+   * UI keeps it in the transcript but renders it inside a "N 条已压缩"
+   * fold instead of inline; the LLM context build path filters non-system
+   * compacted rows so the prompt token budget actually shrinks.
+   */
+  is_compacted?: boolean;
 };
 
 /** SSE event envelope — mirrors backend allhands/execution/events.py AgentEvent union. */

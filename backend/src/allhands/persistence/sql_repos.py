@@ -172,6 +172,7 @@ def _row_to_message(row: MessageRow) -> Message:
         parent_run_id=row.parent_run_id,
         reasoning=row.reasoning,
         interrupted=row.interrupted,
+        is_compacted=bool(row.is_compacted),
         created_at=_utc(row.created_at),
     )
 
@@ -369,6 +370,26 @@ class SqlConversationRepo:
         await self._s.execute(delete(MessageRow).where(MessageRow.id.in_(message_ids)))
         await self._s.commit()
         return len(message_ids)
+
+    async def mark_messages_compacted(self, message_ids: list[str]) -> int:
+        """Soft-flag messages as compacted (compact-dual-view.md).
+
+        Used by manual ``/compact`` instead of ``delete_messages``: the row
+        stays so the UI keeps the full transcript, but the LLM context
+        builder filters non-system rows where ``is_compacted=True`` so the
+        token budget actually shrinks. Idempotent: re-flagging an already
+        compacted message is a no-op SQL update.
+        """
+        if not message_ids:
+            return 0
+        from sqlalchemy import update
+
+        result = await self._s.execute(
+            update(MessageRow).where(MessageRow.id.in_(message_ids)).values(is_compacted=True)
+        )
+        await self._s.commit()
+        rowcount = getattr(result, "rowcount", None)
+        return int(rowcount) if rowcount else 0
 
     async def delete(self, conversation_id: str) -> bool:
         """Cascade-aware conversation delete.

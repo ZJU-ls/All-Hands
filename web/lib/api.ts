@@ -202,6 +202,14 @@ export type ChatMessageDto = {
    * tell the reader the answer is incomplete.
    */
   interrupted?: boolean;
+  /**
+   * 2026-04-28 · Manual /compact has folded this message into a summary.
+   * UI keeps the row in the transcript but hides it behind a "N 条已压缩"
+   * fold; the LLM context build path filters it out so the token budget
+   * shrinks. The synthetic summary marker (role=system) keeps this false
+   * so it survives the filter and reaches the model.
+   */
+  is_compacted?: boolean;
 };
 
 export async function listConversationMessages(
