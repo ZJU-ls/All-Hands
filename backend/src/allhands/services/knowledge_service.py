@@ -755,18 +755,23 @@ class KnowledgeService:
     ) -> AsyncIterator[dict[str, Any]]:
         """Streaming variant of :meth:`ask`.
 
-        Yields a sequence of envelope dicts that the SSE encoder serialises:
+        Yields a sequence of envelope dicts that the SSE encoder serialises.
+        Frame protocol (in arrival order — receivers ignore unknown events):
 
-        - ``{"event": "sources", "sources": [...], "kb": {"id"...}}`` first,
-          so the UI can paint the citations area before any text arrives.
-        - ``{"event": "delta", "text": "..."}`` per LLM token chunk.
-          Multiple deltas may be coalesced upstream — order is preserved.
+        - ``{"event": "tool_call", "tool": "kb_search"|"llm_compose_answer",
+              "input": {...}, "label": "..."}`` — agent-style activity log.
+          Lets the UI render "🔍 检索…" / "✨ qwen3.6-plus 思考…" while the
+          slow operation runs, instead of leaving the user staring at a
+          blinking dot for 20 s.
+        - ``{"event": "tool_result", "tool": ..., "result_count": int,
+              "duration_ms": float}`` — companion to tool_call.
+        - ``{"event": "sources", "sources": [...]}`` once after kb_search.
+        - ``{"event": "delta", "text": "..."}`` per LLM token chunk
+          (after the llm_compose_answer tool_call frame).
         - ``{"event": "done", "used_model": str | None, "latency_ms": float}``
           terminal frame after the last delta.
-
-        On hard failure yields ``{"event": "error", "message": str}`` and
-        terminates without a ``done`` frame, so the client can distinguish
-        "model finished cleanly" from "stream aborted mid-flight".
+        - ``{"event": "error", "message": str}`` terminal on hard failure
+          (instead of done — clients can distinguish clean finish vs abort).
         """
         try:
             kb = await self.get_kb(kb_id)
@@ -778,8 +783,26 @@ class KnowledgeService:
         import time
 
         t0 = time.monotonic()
+
+        # Phase 1 · tool_call · kb_search. Surface this so the UI can show
+        # "agent is searching" instead of going opaque-silent. Mirrors the
+        # eventual full-agent path where the LLM picks the tool and we stream
+        # the tool_use back; for now we deterministically run kb_search.
+        yield {
+            "event": "tool_call",
+            "tool": "kb_search",
+            "input": {"kb_id": kb_id, "query": question, "top_k": top_k},
+            "label": "🔍 在知识库里检索…",
+        }
         hits = await self._retriever.search(kb_id, question, cfg)
         sources = _serialise_sources(hits)
+        search_ms = round((time.monotonic() - t0) * 1000, 1)
+        yield {
+            "event": "tool_result",
+            "tool": "kb_search",
+            "result_count": len(hits),
+            "duration_ms": search_ms,
+        }
         yield {"event": "sources", "sources": sources}
 
         if not hits:
@@ -793,6 +816,23 @@ class KnowledgeService:
                 "latency_ms": round((time.monotonic() - t0) * 1000, 1),
             }
             return
+
+        # Phase 2 · LLM thinking. Tell the user *which* model is running so
+        # they understand who's burning the wall-clock when qwen takes 20 s.
+        try:
+            _, picked_ref = await self._pick_chat_provider(model_ref)
+        except _NoChatProvider:
+            yield {
+                "event": "error",
+                "message": t("knowledge.ask.no_chat_provider"),
+            }
+            return
+        yield {
+            "event": "tool_call",
+            "tool": "llm_compose_answer",
+            "input": {"model_ref": picked_ref, "context_chunks": len(hits)},
+            "label": f"✨ {picked_ref} 在生成回答…",
+        }
 
         system, user = _build_ask_prompt(question, hits)
 

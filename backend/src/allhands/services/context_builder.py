@@ -355,6 +355,7 @@ async def build_llm_context(
                     "role": "user",
                     "content": _extract_text(evt.content_json),
                     "id": evt.id,
+                    "attachment_ids": list(evt.content_json.get("attachment_ids", []) or []),
                 }
             )
         elif kind == EventKind.ASSISTANT:

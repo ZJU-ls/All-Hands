@@ -107,6 +107,8 @@ def _to_message_response(m: Message) -> ChatMessageResponse:
         tool_calls=[tc.model_dump(mode="json") for tc in m.tool_calls],
         reasoning=m.reasoning,
         interrupted=m.interrupted,
+        attachment_ids=list(m.attachment_ids),
+        is_compacted=m.is_compacted,
     )
 
 
@@ -406,6 +408,7 @@ async def send_message(
             conversation_id,
             body.content,
             overrides=overrides,
+            attachment_ids=body.attachment_ids,
         )
 
     return StreamingResponse(

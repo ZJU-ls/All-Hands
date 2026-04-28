@@ -13,6 +13,7 @@ from allhands import __version__
 from allhands.api.middleware import LocaleMiddleware
 from allhands.api.routers import health
 from allhands.api.routers.artifacts import router as artifacts_router
+from allhands.api.routers.attachments import router as attachments_router
 from allhands.api.routers.channels import (  # single-line register: Wave 2 notification-channels
     notifications_router,
 )
@@ -191,6 +192,7 @@ def create_app() -> FastAPI:
     app.include_router(triggers_router, prefix="/api")
     app.include_router(webhooks_router, prefix="/api")
     app.include_router(artifacts_router, prefix="/api")
+    app.include_router(attachments_router, prefix="/api")
     app.include_router(cockpit_router, prefix="/api")
     app.include_router(tasks_router, prefix="/api")
     app.include_router(

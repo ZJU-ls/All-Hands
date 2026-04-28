@@ -269,6 +269,7 @@ async def test_chat_stream_emits_ag_ui_envelope(monkeypatch: pytest.MonkeyPatch)
             _cid: str,
             _content: str,
             overrides: object | None = None,
+            attachment_ids: object | None = None,
         ) -> _FakeAsyncIter:
             return _FakeAsyncIter(list(events))
 

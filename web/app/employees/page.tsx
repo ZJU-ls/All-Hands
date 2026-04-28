@@ -200,7 +200,7 @@ export default function EmployeesPage() {
         <Link
           href="/employees/new"
           data-testid="goto-employee-design"
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary text-primary-fg text-[12px] font-medium shadow-soft-sm hover:bg-primary-hover hover:-translate-y-px transition duration-base"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary text-primary-fg text-[12px] font-semibold shadow-soft-sm hover:bg-primary-hover hover:-translate-y-px transition duration-base"
         >
           <Icon name="plus" size={14} strokeWidth={2.25} />
           {t("designAction")}
@@ -437,14 +437,13 @@ function EmployeeCard({
           {avatarInitials(employee.name)}
         </div>
         <div className="min-w-0 flex-1">
+          {/* 2026-04-28 · 名字单独一行,清爽。模型挪到底部 stats 区
+              和 tools/skills 一组,统一作为"用了什么"的元数据呈现。 */}
           <div className="flex items-center gap-1.5 min-w-0 pr-32">
             <span className="text-[14px] font-semibold text-text truncate tracking-tight">
               {employee.name}
             </span>
           </div>
-          <p className="font-mono text-[11px] text-text-subtle truncate mt-0.5">
-            {modelDisplay(employee.model_ref, t("defaultModel")) || t("fallbackModel")}
-          </p>
         </div>
       </Link>
 
@@ -472,6 +471,12 @@ function EmployeeCard({
       )}
 
       <div className="flex items-center gap-3 pt-3 mt-auto border-t border-border flex-wrap">
+        {/* 模型 chip:首先 · brain 图标 · 截断 · title attr 给完整 ref */}
+        <ModelChip
+          modelRef={employee.model_ref}
+          fallback={t("fallbackModel")}
+          defaultLabel={t("defaultModel")}
+        />
         <Stat icon="zap" label="tools" value={employee.tool_ids.length} />
         <Stat icon="wand-2" label="skills" value={employee.skill_ids.length} />
 
@@ -611,6 +616,48 @@ function Stat({
       </span>
       <span className="font-mono text-[10px] uppercase tracking-wider text-text-subtle">
         {label}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * ModelChip · 卡片底部 stats 行的"用了什么模型"指示。
+ *
+ * 之前模型挂在员工名下面、灰色 mono 字体 — 既不显眼又压缩了名字气场。
+ * 现在挪到底部 stats 行,与 tools / skills 计数同列,统一作为"用了什
+ * 么"的元数据呈现:
+ *   [brain] qwen3.6-plus  ·  [zap] 4 TOOLS  ·  [wand] 3 SKILLS
+ *
+ * - 没配 model_ref → 显示"默认模型"(灰)
+ * - 配了 → 取 / 后部分(去 provider 前缀),节省宽度
+ * - max-w + truncate 防卡片撑爆 · title attr 给完整 ref 用于 hover 查
+ */
+function ModelChip({
+  modelRef,
+  fallback,
+  defaultLabel,
+}: {
+  modelRef: string;
+  fallback: string;
+  defaultLabel: string;
+}) {
+  const isDefault = !modelRef;
+  const display = modelDisplay(modelRef, defaultLabel) || fallback;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 min-w-0 max-w-[160px]"
+      title={modelRef || defaultLabel}
+    >
+      <Icon name="brain" size={12} className="text-text-subtle shrink-0" />
+      <span
+        className={
+          isDefault
+            ? "text-[11px] text-text-subtle truncate"
+            : "font-mono text-[11px] text-text-muted truncate"
+        }
+      >
+        {display}
       </span>
     </span>
   );

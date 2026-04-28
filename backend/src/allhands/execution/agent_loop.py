@@ -352,6 +352,13 @@ class AgentLoop:
             )
             lc_messages = self._build_lc_messages(messages, overrides)
 
+            # `iteration` is reset to 0 here EVERY call to stream() · this
+            # is the per-turn invariant. send_message → fresh AgentRunner →
+            # fresh AgentLoop → fresh stream() → fresh iteration counter.
+            # If the user sees "max_iterations" exit on what feels like a
+            # fresh turn, the cause is *this* turn's tool-call sequence
+            # being too long for the budget — not history accumulating.
+            # Test: ``test_agent_loop_iter_reset.py`` pins this contract.
             iteration = 0
             # Self-correction nudge counters · capped to avoid loops.
             # When the model emits 0 text + 0 tool_calls (`empty_response`
@@ -365,7 +372,23 @@ class AgentLoop:
             while True:
                 iteration += 1
                 if iteration > max_iterations:
-                    yield LoopExited(reason="max_iterations")
+                    # Detail spells out the per-turn count + the limit the
+                    # employee was configured with so users + ops can tell
+                    # at a glance whether the budget was reasonable for
+                    # the task — and confirm the counter reset (no history
+                    # creep). Pre-2026-04-28 this was a bare event with no
+                    # numbers, leading users to suspect history accrual.
+                    yield LoopExited(
+                        reason="max_iterations",
+                        detail=(
+                            f"hit per-turn iteration ceiling: used "
+                            f"{iteration - 1}/{max_iterations} (this counter "
+                            "resets every send_message — it does NOT accrue "
+                            "across turns). If your task genuinely needs "
+                            "more tool-call rounds, raise the employee's "
+                            "max_iterations on /employees/{id}."
+                        ),
+                    )
                     return
 
                 # 2026-04-25 (P2): rebuild bindings + tool list every
@@ -401,16 +424,33 @@ class AgentLoop:
                             reasoning_delta=reasoning_delta,
                         )
 
-                # Per-turn LLM telemetry. ``usage_metadata`` is populated by
-                # LangChain when the provider returns it (OpenAI / Anthropic
-                # / DashScope all do); we surface zeros for any provider that
-                # doesn't, which the consumer treats as "unknown" rather than
-                # a literal zero.
+                # Per-turn LLM telemetry. ``usage_metadata`` is populated
+                # provider-side: Anthropic streams ``message_delta`` events
+                # carrying usage; OpenAI requires ``stream_options=
+                # {"include_usage": True}`` (handled in build_llm via
+                # ``stream_usage=True``). When usage is genuinely missing
+                # (rare aggregator that strips the field, or a custom proxy),
+                # we log once and surface zeros — observatory will show "—"
+                # cost rather than guessing.
                 _llm_duration_s = (_now() - llm_call_started_at).total_seconds()
                 _usage = getattr(accumulated, "usage_metadata", None) or {}
                 _input_tok = int(_usage.get("input_tokens", 0) or 0)
                 _output_tok = int(_usage.get("output_tokens", 0) or 0)
                 _total_tok = int(_usage.get("total_tokens", 0) or 0) or (_input_tok + _output_tok)
+                if not _usage and accumulated is not None:
+                    _log.warning(
+                        "agent_loop.usage_metadata.missing",
+                        extra={
+                            "model_ref": effective_model_ref,
+                            "iteration": iteration,
+                            "hint": (
+                                "provider didn't return usage on the stream. "
+                                "If this is OpenAI-compat, ensure stream_usage=True "
+                                "in llm_factory.build_llm. Cost / token KPIs in "
+                                "observatory will show 0 for this run."
+                            ),
+                        },
+                    )
                 yield LLMCallFinished(
                     message_id=message_id,
                     model_ref=effective_model_ref,

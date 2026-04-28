@@ -46,7 +46,7 @@ def test_execute_preset_defaults() -> None:
     assert "allhands.builtin.write_file" not in tools
     assert "allhands.meta.resolve_skill" in tools
     assert skills == ["sk_research", "sk_write"]
-    assert max_it == 10
+    assert max_it == 25  # bumped 10→25 on 2026-04-28 (see modes/execute.py)
 
 
 def test_plan_preset_defaults() -> None:

@@ -144,7 +144,11 @@ class EmployeeService:
             tids = list(tool_ids) if tool_ids is not None else []
             sids = list(skill_ids) if skill_ids is not None else list(DEFAULT_SKILL_IDS)
             if max_iterations is None:
-                max_iterations = 10
+                # Aligned with Employee.max_iterations default (25) and the
+                # execute preset bump (2026-04-28). Same rationale: 10 was
+                # too tight for tool-heavy v1 turns and looked like history
+                # accrual to users.
+                max_iterations = 25
         if is_lead_agent:
             tids = _inject_coordination_tools(tids)
         _validate_dispatch_mount(tids, is_lead_agent)

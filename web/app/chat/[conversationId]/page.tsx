@@ -163,6 +163,7 @@ export default function ConversationPage() {
           // shows the 「已中止」 tail on past partial turns, not just on
           // the live one we just cancelled.
           interrupted: m.interrupted ?? false,
+          is_compacted: m.is_compacted ?? false,
           created_at: m.created_at,
         }));
         setConv(c);

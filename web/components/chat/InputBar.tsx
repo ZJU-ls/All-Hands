@@ -1,15 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { openStream, type AgUiCallbacks, type StreamHandle } from "@/lib/stream-client";
 import { useChatStore } from "@/lib/store";
 import type { RenderPayload, ToolCall, ToolCallStatus } from "@/lib/protocol";
 import type { ConversationDto, EmployeeDto } from "@/lib/api";
+import {
+  makeLocalId,
+  preflight,
+  uploadAttachment,
+  type LocalAttachment,
+} from "@/lib/attachments";
+import { Icon } from "@/components/ui/icon";
 import { Composer, ThinkingToggle } from "./Composer";
 import { UsageChip } from "./UsageChip";
 import { ModelOverrideChip } from "./ModelOverrideChip";
 import { CompactChip } from "./CompactChip";
+import { AttachmentChips } from "./AttachmentChips";
+import { CapabilityBanner } from "./CapabilityBanner";
 
 type Props = {
   conversationId: string;
@@ -45,8 +54,13 @@ export function InputBar({
   onConversationChange,
 }: Props) {
   const t = useTranslations("chat.inputBar");
+  const tAtt = useTranslations("chat.attachments");
   const [value, setValue] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [modelSupportsImages, setModelSupportsImages] = useState<boolean | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<StreamHandle | null>(null);
   const {
     isStreaming,
@@ -213,10 +227,199 @@ export function InputBar({
     t,
   ]);
 
+  // ---- Capability lookup: does the current employee's model support images?
+  // Tries the model gateway. The result is cached per ref string in module
+  // memory to avoid hammering the API on every render.
+  useEffect(() => {
+    let cancelled = false;
+    const ref = employee?.model_ref || employeeModelRef;
+    if (!ref) {
+      setModelSupportsImages(null);
+      return;
+    }
+    void (async () => {
+      try {
+        const cached = capabilityCache.get(ref);
+        if (cached !== undefined) {
+          if (!cancelled) setModelSupportsImages(cached);
+          return;
+        }
+        const res = await fetch(`${BASE}/api/models`);
+        if (!res.ok) return;
+        const all = (await res.json()) as Array<{
+          name: string;
+          provider_id: string;
+          supports_images: boolean;
+        }>;
+        // model_ref is "<provider name>/<model name>" — match on suffix.
+        const slash = ref.indexOf("/");
+        const modelName = slash >= 0 ? ref.slice(slash + 1) : ref;
+        const found = all.find((m) => m.name === modelName);
+        const flag = found ? found.supports_images : false;
+        capabilityCache.set(ref, flag);
+        if (!cancelled) setModelSupportsImages(flag);
+      } catch {
+        if (!cancelled) setModelSupportsImages(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [employee?.model_ref, employeeModelRef]);
+
+  // ---- File handling ------------------------------------------------------
+  const enqueueFiles = useCallback(
+    (files: FileList | File[]) => {
+      const filesArray = Array.from(files);
+      const queued: LocalAttachment[] = [];
+      const rejected: string[] = [];
+      for (const file of filesArray) {
+        const pre = preflight(file);
+        if (!pre.ok) {
+          rejected.push(`${file.name}: ${tAtt(`reject.${pre.reason}`)}`);
+          continue;
+        }
+        const previewUrl = file.type.startsWith("image/")
+          ? URL.createObjectURL(file)
+          : null;
+        queued.push({
+          localId: makeLocalId(),
+          file,
+          previewUrl,
+          status: { state: "queued" },
+        });
+      }
+      if (queued.length === 0) {
+        if (rejected.length > 0) {
+          // soft toast — alert is the simplest in-tree primitive available.
+          // Avoid a fancy toast lib here to keep diff small.
+          alert(rejected.join("\n"));
+        }
+        return;
+      }
+      setAttachments((prev) => [...prev, ...queued]);
+      // Kick off uploads concurrently.
+      for (const att of queued) {
+        void uploadOne(att);
+      }
+      if (rejected.length > 0) alert(rejected.join("\n"));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversationId, tAtt],
+  );
+
+  const uploadOne = useCallback(
+    async (att: LocalAttachment) => {
+      const update = (next: LocalAttachment["status"]) =>
+        setAttachments((prev) =>
+          prev.map((x) => (x.localId === att.localId ? { ...x, status: next } : x)),
+        );
+      update({ state: "uploading", progress: { loaded: 0, total: att.file.size } });
+      try {
+        const dto = await uploadAttachment(att.file, {
+          conversationId,
+          onProgress: (p) =>
+            update({ state: "uploading", progress: p }),
+        });
+        update({ state: "uploaded", dto });
+      } catch (e) {
+        update({ state: "failed", error: String(e instanceof Error ? e.message : e) });
+      }
+    },
+    [conversationId],
+  );
+
+  const removeAttachment = useCallback((localId: string) => {
+    setAttachments((prev) => {
+      const target = prev.find((a) => a.localId === localId);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((a) => a.localId !== localId);
+    });
+  }, []);
+
+  // Drag & drop
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setIsDragging(false);
+  }, []);
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      if (e.dataTransfer.files.length > 0) enqueueFiles(e.dataTransfer.files);
+    },
+    [enqueueFiles],
+  );
+
+  // Paste handler (clipboard images / files)
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        if (item.kind === "file") {
+          const f = item.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        enqueueFiles(files);
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [enqueueFiles]);
+
+  const onFilePickerChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) enqueueFiles(files);
+      e.target.value = "";
+    },
+    [enqueueFiles],
+  );
+
+  const allUploaded = attachments.every((a) => a.status.state === "uploaded");
+  const anyFailed = attachments.some((a) => a.status.state === "failed");
+  const canSendWithContent = useMemo(
+    () =>
+      (value.trim().length > 0 || attachments.length > 0) &&
+      attachments.length > 0
+        ? allUploaded && !anyFailed
+        : true,
+    [value, attachments.length, allUploaded, anyFailed],
+  );
+
   const handleSend = useCallback(() => {
-    if (!value.trim() || isStreaming) return;
+    if (isStreaming) return;
     const content = value.trim();
+    if (!content && attachments.length === 0) return;
+    if (attachments.length > 0 && (!allUploaded || anyFailed)) return;
+
+    // Snapshot uploaded attachment ids and dtos before clearing the chip
+    // strip — the optimistic message bubble + the POST body see the same set.
+    const attachmentIds: string[] = [];
+    const attachmentDtos = [];
+    for (const a of attachments) {
+      if (a.status.state === "uploaded") {
+        attachmentIds.push(a.status.dto.id);
+        attachmentDtos.push(a.status.dto);
+      }
+    }
     setValue("");
+    for (const a of attachments) {
+      if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+    }
+    setAttachments([]);
 
     // Flip `isStreaming` now so the MessageList can paint a pending bubble
     // before the first token lands — otherwise the UI sits silent for the
@@ -230,6 +433,8 @@ export function InputBar({
       tool_calls: [],
       render_payloads: [],
       created_at: new Date().toISOString(),
+      attachment_ids: attachmentIds,
+      attachments: attachmentDtos,
     });
 
     // Model params (temperature / top_p / max_tokens / system override) are
@@ -244,6 +449,9 @@ export function InputBar({
     // Explicit `false` hits `extra_body={"enable_thinking": false}` downstream
     // and the model stops thinking for real.
     const body: Record<string, unknown> = { content, thinking };
+    if (attachmentIds.length > 0) {
+      body.attachment_ids = attachmentIds;
+    }
 
     const handle = openStream(
       `${BASE}/api/conversations/${conversationId}/messages`,
@@ -263,6 +471,9 @@ export function InputBar({
     addMessage,
     beginTurn,
     buildStreamCallbacks,
+    attachments,
+    allUploaded,
+    anyFailed,
   ]);
 
   // ADR 0018 · resume protocol simplified to a single round-trip.
@@ -299,47 +510,94 @@ export function InputBar({
   }, [conversationId]);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 border-t border-border bg-bg px-4 pb-4 pt-3">
-      <Composer
-        value={value}
-        onChange={setValue}
-        onSend={handleSend}
-        onAbort={handleAbort}
-        isStreaming={isStreaming}
-        placeholder={t("placeholder")}
-        rows={3}
-        controls={
-          <div className="flex items-center gap-2">
-            <ThinkingToggle
-              enabled={thinking}
-              onChange={setThinking}
-              disabled={isStreaming}
-            />
-            {conversation && employee && onConversationChange && (
-              <ModelOverrideChip
-                conversation={conversation}
-                employee={employee}
-                onConversationChange={onConversationChange}
-              />
-            )}
-            {employeeModelRef && (
-              <UsageChip
-                conversationId={conversationId}
-                employeeModelRef={employeeModelRef}
+    <div
+      onDragOver={onDragOver}
+      onDragEnter={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={`mx-auto flex w-full max-w-6xl flex-col gap-2 border-t border-border bg-bg px-4 pb-4 pt-3 transition-colors ${
+        isDragging ? "outline outline-2 outline-primary outline-offset-[-8px]" : ""
+      }`}
+    >
+      {isDragging && (
+        <div
+          className="pointer-events-none rounded-lg border-2 border-dashed border-primary bg-primary/5 px-4 py-3 text-center text-[13px] text-primary"
+          data-testid="dropzone-overlay"
+        >
+          <Icon name="upload" size={14} className="mr-1 inline-block" />
+          {tAtt("dropHint")}
+        </div>
+      )}
+      <CapabilityBanner
+        attachments={attachments}
+        modelSupportsImages={modelSupportsImages}
+        modelDisplayName={(employee?.model_ref || employeeModelRef || "").split("/").pop()}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        hidden
+        onChange={onFilePickerChange}
+        accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.json,.csv,.xml,.yaml,.yml,.html"
+      />
+      <div className="rounded-xl border border-border bg-surface">
+        <AttachmentChips attachments={attachments} onRemove={removeAttachment} />
+        <Composer
+          value={value}
+          onChange={setValue}
+          onSend={handleSend}
+          onAbort={handleAbort}
+          isStreaming={isStreaming}
+          placeholder={t("placeholder")}
+          rows={3}
+          disabled={!canSendWithContent && (value.trim().length > 0 || attachments.length > 0)}
+          controls={
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title={tAtt("attachTitle")}
+                className="rounded p-1 text-text-muted hover:bg-surface-2 hover:text-primary"
+                data-testid="attach-button"
+              >
+                <Icon name="paperclip" size={14} />
+              </button>
+              <ThinkingToggle
+                enabled={thinking}
+                onChange={setThinking}
                 disabled={isStreaming}
               />
-            )}
-            <CompactChip
-              conversationId={conversationId}
-              disabled={isStreaming}
-            />
-          </div>
-        }
-        controlsTrailing={<span className="font-mono">{t("hint")}</span>}
-      />
+              {conversation && employee && onConversationChange && (
+                <ModelOverrideChip
+                  conversation={conversation}
+                  employee={employee}
+                  onConversationChange={onConversationChange}
+                />
+              )}
+              {employeeModelRef && (
+                <UsageChip
+                  conversationId={conversationId}
+                  employeeModelRef={employeeModelRef}
+                  disabled={isStreaming}
+                />
+              )}
+              <CompactChip
+                conversationId={conversationId}
+                disabled={isStreaming}
+              />
+            </div>
+          }
+          controlsTrailing={<span className="font-mono">{t("hint")}</span>}
+        />
+      </div>
     </div>
   );
 }
+
+// Module-scope cache for model.supports_images lookups keyed on model_ref.
+// Cleared on hard reload; small enough to forget about.
+const capabilityCache = new Map<string, boolean>();
 
 /** Tool result envelopes produced by `tool_pipeline.py` look like:
  *   - success: anything (string, dict, list)

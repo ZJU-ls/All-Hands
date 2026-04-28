@@ -11,6 +11,7 @@ from allhands.core.artifact import (
     ArtifactKind,
     ArtifactVersion,
 )
+from allhands.core.attachment import Attachment, AttachmentKind
 from allhands.core.cockpit import (
     ActiveRunCard,
     ActiveRunStatus,
@@ -25,13 +26,19 @@ from allhands.core.cockpit import (
 )
 from allhands.core.confirmation import Confirmation, ConfirmationStatus
 from allhands.core.conversation import (
+    ContentBlock,
     Conversation,
+    FileBlock,
+    ImageBlock,
     InteractionSpec,
     Message,
     MessageRole,
+    ReasoningBlock,
     RenderPayload,
+    TextBlock,
     ToolCall,
     ToolCallStatus,
+    ToolUseBlock,
 )
 from allhands.core.conversation_event import (
     ConversationEvent,
@@ -153,6 +160,8 @@ __all__ = [
     "ArtifactKind",
     "ArtifactSummary",
     "ArtifactVersion",
+    "Attachment",
+    "AttachmentKind",
     "Chunk",
     "Collection",
     "ComponentStatus",
@@ -161,6 +170,7 @@ __all__ = [
     "ConfirmationExpired",
     "ConfirmationRejected",
     "ConfirmationStatus",
+    "ContentBlock",
     "ConvCard",
     "Conversation",
     "ConversationEvent",
@@ -177,9 +187,11 @@ __all__ = [
     "EventEnvelope",
     "EventKind",
     "EventPattern",
+    "FileBlock",
     "Grant",
     "GrantScope",
     "HealthSnapshot",
+    "ImageBlock",
     "InteractionSpec",
     "InvariantViolation",
     "KBVisibility",
@@ -205,6 +217,7 @@ __all__ = [
     "ObservatoryToolBreakdown",
     "PlanStep",
     "PriceSource",
+    "ReasoningBlock",
     "RenderPayload",
     "RetrievalConfig",
     "RunDetail",
@@ -223,6 +236,7 @@ __all__ = [
     "Task",
     "TaskSource",
     "TaskStatus",
+    "TextBlock",
     "TimeSeries",
     "TimeSeriesPoint",
     "TimerSpec",
@@ -232,6 +246,7 @@ __all__ = [
     "ToolKind",
     "ToolNotFound",
     "ToolScope",
+    "ToolUseBlock",
     "TraceSummary",
     "Trigger",
     "TriggerAction",

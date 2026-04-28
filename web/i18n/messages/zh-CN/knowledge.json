@@ -243,7 +243,8 @@
       "running": "…",
       "hint": "Enter 发送 · Shift+Enter 换行 · 答案沿用同一份检索片段编号",
       "sourcesEmpty": "提问后这里会列出回答用到的来源",
-      "sourceColumnHelp": "此面板汇总所有轮次的来源 · 去重 · 点击跳到原文"
+      "sourceColumnHelp": "此面板汇总所有轮次的来源 · 去重 · 点击跳到原文",
+      "activityHits": "{count} 命中"
     },
     "bulkTags": {
       "title": "给 {count} 个文档批量打标签",
