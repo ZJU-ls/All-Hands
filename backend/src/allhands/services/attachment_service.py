@@ -160,7 +160,11 @@ class AttachmentService:
         path = directory / f"{sha256}{ext}"
         if not path.exists():
             path.write_bytes(data)
-        return path
+        # Return absolute so the stored storage_path is unambiguous and
+        # `read_bytes` can use it verbatim — without this, the relative
+        # path got re-joined with _root on every read, producing a
+        # double-prefixed "data/attachments/data/attachments/..." path.
+        return path.resolve()
 
 
 def _sanitize_filename(filename: str) -> str:
