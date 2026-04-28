@@ -352,6 +352,13 @@ class AgentLoop:
             )
             lc_messages = self._build_lc_messages(messages, overrides)
 
+            # `iteration` is reset to 0 here EVERY call to stream() · this
+            # is the per-turn invariant. send_message → fresh AgentRunner →
+            # fresh AgentLoop → fresh stream() → fresh iteration counter.
+            # If the user sees "max_iterations" exit on what feels like a
+            # fresh turn, the cause is *this* turn's tool-call sequence
+            # being too long for the budget — not history accumulating.
+            # Test: ``test_agent_loop_iter_reset.py`` pins this contract.
             iteration = 0
             # Self-correction nudge counters · capped to avoid loops.
             # When the model emits 0 text + 0 tool_calls (`empty_response`
@@ -365,7 +372,23 @@ class AgentLoop:
             while True:
                 iteration += 1
                 if iteration > max_iterations:
-                    yield LoopExited(reason="max_iterations")
+                    # Detail spells out the per-turn count + the limit the
+                    # employee was configured with so users + ops can tell
+                    # at a glance whether the budget was reasonable for
+                    # the task — and confirm the counter reset (no history
+                    # creep). Pre-2026-04-28 this was a bare event with no
+                    # numbers, leading users to suspect history accrual.
+                    yield LoopExited(
+                        reason="max_iterations",
+                        detail=(
+                            f"hit per-turn iteration ceiling: used "
+                            f"{iteration - 1}/{max_iterations} (this counter "
+                            "resets every send_message — it does NOT accrue "
+                            "across turns). If your task genuinely needs "
+                            "more tool-call rounds, raise the employee's "
+                            "max_iterations on /employees/{id}."
+                        ),
+                    )
                     return
 
                 # 2026-04-25 (P2): rebuild bindings + tool list every

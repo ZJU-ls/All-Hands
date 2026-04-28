@@ -39,7 +39,8 @@ async def test_preset_execute_defaults(svc) -> None:  # type: ignore[no-untyped-
         model_ref="openai/gpt-4o-mini",
         preset="execute",
     )
-    assert emp.max_iterations == 10
+    # Bumped 10→25 on 2026-04-28 · execute preset default (see modes/execute.py)
+    assert emp.max_iterations == 25
     assert "allhands.meta.resolve_skill" in emp.tool_ids
 
 
