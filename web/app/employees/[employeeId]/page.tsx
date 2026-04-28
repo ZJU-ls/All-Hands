@@ -886,8 +886,7 @@ function OverviewPane({
                     <p className="text-[13px] text-text truncate">
                       {c.title ?? t("untitled")}
                     </p>
-                    <p className="mt-0.5 font-mono text-caption text-text-subtle truncate">
-                      {c.id.slice(0, 8)} ·{" "}
+                    <p className="mt-0.5 text-caption text-text-subtle truncate">
                       {new Date(c.created_at).toLocaleString(locale)}
                     </p>
                   </div>
