@@ -449,7 +449,29 @@ class ChatService:
             messages=new_messages,
         )
 
-    async def create_conversation(self, employee_id: str) -> Conversation:
+    async def create_conversation(
+        self, employee_id: str, *, reuse_empty: bool = True
+    ) -> Conversation:
+        """Create a fresh conversation for ``employee_id``.
+
+        Default ``reuse_empty=True`` matches the user's mental model: clicking
+        an employee should land them in a usable chat surface, not stack up
+        empty conversations every time. We look for an existing conversation
+        owned by the same employee that has zero messages persisted and reuse
+        it. Pass ``reuse_empty=False`` for callers that explicitly need a new
+        row (e.g. tests or bulk seeding).
+        """
+        if reuse_empty:
+            existing = await self._conversations.list_for_employee(employee_id)
+            if existing:
+                counts = await self._conversations.count_messages([c.id for c in existing])
+                # Pick the newest empty conversation so we resume the user's
+                # most recent click rather than dragging them back to an old
+                # forgotten draft.
+                empty = [c for c in existing if counts.get(c.id, 0) == 0]
+                if empty:
+                    empty.sort(key=lambda c: c.created_at, reverse=True)
+                    return empty[0]
         conv = Conversation(
             id=str(uuid.uuid4()),
             employee_id=employee_id,
