@@ -262,6 +262,15 @@ class LLMModelRow(Base):
     supports_images: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("0"), nullable=False
     )
+    # 2026-04-28 (alembic 0033) · capability-aware model picker.
+    # Stored as JSON list of strings (e.g. ["chat"] / ["image_gen"]) — the
+    # JSON column is portable across sqlite + postgres without a typed enum.
+    # Old rows get the server default ["chat"] from the migration. Distinct
+    # from supports_images (vision/input) — capabilities is what the model
+    # OUTPUTS (chat / image_gen / speech / embedding).
+    capabilities: Mapped[list[str]] = mapped_column(
+        JSON, default=lambda: ["chat"], server_default='["chat"]'
+    )
 
 
 class TriggerRow(Base):
