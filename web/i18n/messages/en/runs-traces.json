@@ -51,6 +51,14 @@
     "traceChip": {
       "label": "trace"
     },
+    "traceDrawer": {
+      "title": "Run trace",
+      "fullscreen": "Open full",
+      "fullscreenHint": "Open the L3 trace page in observatory · full timeline + side panels",
+      "close": "Close",
+      "overlayClose": "Click outside to close",
+      "kbHint": "ESC to close · share URL (includes ?trace=<run_id>)"
+    },
     "artifacts": {
       "title": "Artifacts · {count}",
       "subtitle": "Files written or updated by this run · click to open details",

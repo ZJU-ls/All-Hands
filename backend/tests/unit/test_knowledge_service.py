@@ -160,6 +160,42 @@ def test_default_embedding_model_ref_pulled_from_settings() -> None:
 # ---------------------------------------------------------------------------
 
 
+async def test_ask_stream_emits_tool_call_frames_around_search_and_llm(
+    svc: KnowledgeService,
+) -> None:
+    """Agentic frame protocol: tool_call before each slow step, tool_result
+    after kb_search, sources once, llm tool_call, deltas, done. The user
+    must not see a 20-s opaque silence while qwen is generating."""
+    kb = await svc.create_kb(name="brain")
+    await svc.upload_document(kb.id, title="Survey", content_bytes=_SAMPLE_MD, filename="survey.md")
+
+    async def fake_stream(*_args: object, **_kwargs: object):
+        for piece, ref in [("Hi.", "fake:model")]:
+            yield piece, ref
+
+    async def fake_pick(self, model_ref):
+        return ("provider-stub", "fake:model")
+
+    svc._call_chat_llm_stream = fake_stream  # type: ignore[method-assign]
+    KnowledgeService._pick_chat_provider = fake_pick  # type: ignore[method-assign,assignment]
+
+    events: list[str] = []
+    payloads: list[dict] = []  # type: ignore[type-arg]
+    async for f in svc.ask_stream(kb.id, "what is rrf"):
+        events.append(f["event"])
+        payloads.append(f)
+
+    # Order: tool_call(search) · tool_result(search) · sources · tool_call(llm) · delta · done
+    assert events[0] == "tool_call" and payloads[0]["tool"] == "kb_search"
+    assert events[1] == "tool_result" and payloads[1]["tool"] == "kb_search"
+    assert "result_count" in payloads[1] and "duration_ms" in payloads[1]
+    assert events[2] == "sources" and len(payloads[2]["sources"]) > 0
+    assert events[3] == "tool_call" and payloads[3]["tool"] == "llm_compose_answer"
+    assert payloads[3]["input"]["model_ref"] == "fake:model"
+    assert events.count("delta") == 1
+    assert events[-1] == "done"
+
+
 async def test_ask_stream_emits_sources_then_deltas_then_done(
     svc: KnowledgeService,
 ) -> None:
@@ -183,11 +219,13 @@ async def test_ask_stream_emits_sources_then_deltas_then_done(
         frames.append(f)
 
     events = [f["event"] for f in frames]
-    assert events[0] == "sources"
+    # Agentic frame protocol(2026-04-28):tool_call(search) · tool_result · sources · tool_call(llm) · delta(s) · done
+    assert "sources" in events
     assert events[-1] == "done"
     assert events.count("delta") == 2
-    # Sources must be a non-empty list of citation dicts in order
-    src = frames[0]["sources"]
+    # Sources frame must carry a non-empty citation list
+    src_frame = next(f for f in frames if f["event"] == "sources")
+    src = src_frame["sources"]
     assert isinstance(src, list) and len(src) > 0
     assert src[0]["n"] == 1 and "chunk_id" in src[0]
     # Deltas in arrival order
@@ -209,12 +247,14 @@ async def test_ask_stream_no_hits_yields_friendly_delta_then_done(
     frames: list[dict] = []  # type: ignore[type-arg]
     async for f in svc.ask_stream(kb.id, "anything"):
         frames.append(f)
-    assert frames[0]["event"] == "sources"
-    assert frames[0]["sources"] == []
-    assert frames[1]["event"] == "delta"
-    assert "知识库" in frames[1]["text"]
-    assert frames[2]["event"] == "done"
-    assert frames[2]["used_model"] is None
+    # tool_call(search) · tool_result · sources(empty) · delta(no_hits) · done
+    src_frame = next(f for f in frames if f["event"] == "sources")
+    assert src_frame["sources"] == []
+    delta_frames = [f for f in frames if f["event"] == "delta"]
+    assert len(delta_frames) == 1
+    assert "知识库" in delta_frames[0]["text"]
+    assert frames[-1]["event"] == "done"
+    assert frames[-1]["used_model"] is None
 
 
 async def test_suggest_tags_returns_empty_when_no_provider(

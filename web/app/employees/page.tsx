@@ -200,7 +200,7 @@ export default function EmployeesPage() {
         <Link
           href="/employees/new"
           data-testid="goto-employee-design"
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary text-primary-fg text-[12px] font-medium shadow-soft-sm hover:bg-primary-hover hover:-translate-y-px transition duration-base"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary text-primary-fg text-[12px] font-semibold shadow-soft-sm hover:bg-primary-hover hover:-translate-y-px transition duration-base"
         >
           <Icon name="plus" size={14} strokeWidth={2.25} />
           {t("designAction")}

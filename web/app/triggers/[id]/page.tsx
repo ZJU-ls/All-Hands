@@ -673,7 +673,7 @@ function FireRow({ f }: { f: Fire }) {
       <span className="inline-flex items-center h-5 px-1.5 rounded-md bg-surface border border-border font-mono text-caption text-text-subtle shrink-0">
         {f.source}
       </span>
-      {f.run_id && <TraceChip runId={f.run_id} label={f.run_id} />}
+      {f.run_id && <TraceChip runId={f.run_id} label={f.run_id} variant="page" />}
       {f.error_code && (
         <span
           className="inline-flex items-center gap-1 font-mono text-caption text-danger truncate"

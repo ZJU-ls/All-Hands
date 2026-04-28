@@ -31,6 +31,7 @@ import {
   type ArtifactSort,
   type ArtifactStatsDto,
 } from "@/lib/artifacts-api";
+import { useEmployeeNames } from "@/lib/use-employee-names";
 
 // 2026-04-27 · KINDS array必须含全部 12 种(对齐 backend ArtifactKind enum)。
 // 之前只有 7 项 · 用户从顶部 stats 卡点 "csv · 2" 时,过滤面包屑显示 csv,
@@ -842,6 +843,7 @@ function ActivityCard({
   stats: ArtifactStatsDto;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const employeeName = useEmployeeNames();
   const max = Math.max(1, ...stats.daily_counts);
   // Plain SVG sparkline · same primitive used in cockpit but inlined here
   // since we want a slightly different visual treatment (filled-area under
@@ -903,17 +905,17 @@ function ActivityCard({
                 stats.top_employees[0]?.count
                   ? (row.count / stats.top_employees[0].count) * 100
                   : 0;
-              const shortKey = row.key.slice(0, 8);
+              const displayName = employeeName(row.key);
               return (
                 <li key={row.key} className="flex items-center gap-2">
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 text-text-muted">
                     <Icon name="users" size={11} />
                   </span>
                   <span
-                    className="font-mono text-caption text-text"
+                    className="text-caption text-text truncate max-w-[140px]"
                     title={row.key}
                   >
-                    {shortKey}
+                    {displayName}
                   </span>
                   <div className="relative ml-2 h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
                     <div

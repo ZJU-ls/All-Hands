@@ -15,12 +15,20 @@ import { RouteProgress } from "@/components/shell/RouteProgress";
 import { useDocumentTitle } from "@/lib/use-document-title";
 
 // Lazy-load the global ⌘K palette so its module graph isn't dragged into
-// every route's dev cold-compile. (The trace drawer used to live here too;
-// it was removed when trace viewing moved into observatory's L3 page —
-// /observatory/runs/[id] · TraceChip now navigates rather than opening an
-// overlay. See `docs/specs/2026-04-27-trace-into-observatory.md`.)
+// every route's dev cold-compile.
 const CommandPalette = dynamic(
   () => import("@/components/ui/CommandPalette").then((m) => m.CommandPalette),
+  { ssr: false },
+);
+
+// Lazy-load the trace drawer · most pages never open it, no need to drag
+// RunTracePanel + observatory-api into the chat shell on every cold-compile.
+// (2026-04-28: drawer reinstated after trace-into-observatory.md regressed
+// SSE — clicking a chip in chat used to navigate away and kill the live
+// stream. Drawer keeps the chat page mounted; "↗ 全屏看" inside the drawer
+// still hands users the L3 page when they want it.)
+const RunTraceDrawer = dynamic(
+  () => import("@/components/runs/RunTraceDrawer").then((m) => m.RunTraceDrawer),
   { ssr: false },
 );
 
@@ -518,6 +526,10 @@ export function AppShell({
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
       />
+      {/* Global trace drawer · driven by ?trace=<run_id> · keeps the
+          underlying page (chat / cockpit / tasks) mounted so live SSE
+          streams and spawn_subagent runs aren't cancelled by a click. */}
+      <RunTraceDrawer />
     </div>
     </ToastProvider>
   );

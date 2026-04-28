@@ -89,9 +89,25 @@ export async function askKB(
   );
 }
 
-// Streaming Ask — the SSE frame protocol mirrors the backend route doc:
-//   sources → delta* → done   |   sources → error   |   error
+// Streaming Ask — agentic SSE protocol(2026-04-28). Each slow step gets a
+// tool_call frame so the UI can render an activity log instead of going
+// opaque-silent for 20 s while qwen generates. Mirrors what the eventual
+// AgentLoop integration will emit so frontend doesn't need a second flip.
+//   tool_call(kb_search) → tool_result(kb_search) → sources →
+//   tool_call(llm_compose_answer) → delta* → done
 export type AskStreamFrame =
+  | {
+      event: "tool_call";
+      tool: "kb_search" | "llm_compose_answer";
+      input: Record<string, unknown>;
+      label: string;
+    }
+  | {
+      event: "tool_result";
+      tool: "kb_search" | "llm_compose_answer";
+      result_count?: number;
+      duration_ms: number;
+    }
   | { event: "sources"; sources: AskSource[] }
   | { event: "delta"; text: string }
   | { event: "done"; used_model: string | null; latency_ms: number }
@@ -251,6 +267,27 @@ export async function getKBHealth(
     await fetch(`${BASE}/api/kb/${kbId}/health?days=${days}`),
     "getKBHealth",
   );
+}
+
+// Follow-up questions — given a finished Q&A turn, ask the LLM what a
+// curious user would naturally ask next. Empty list on no-provider /
+// LLM error; the UI hides the row.
+export async function getFollowUpQuestions(
+  kbId: string,
+  args: { question: string; answer: string; limit?: number },
+): Promise<string[]> {
+  const r = await fetch(`${BASE}/api/kb/${kbId}/follow-ups`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      question: args.question,
+      answer: args.answer,
+      limit: args.limit ?? 3,
+    }),
+  });
+  if (!r.ok) return [];
+  const j = (await r.json()) as { questions: string[] };
+  return j.questions ?? [];
 }
 
 // Starter questions — small list of LLM-suggested prompts for the Ask

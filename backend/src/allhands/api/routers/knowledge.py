@@ -681,6 +681,30 @@ async def starter_questions(kb_id: str, limit: int = 4) -> dict[str, list[str]]:
     return {"questions": qs}
 
 
+class FollowUpPayload(BaseModel):
+    question: str
+    answer: str
+    limit: int = 3
+
+
+@router.post("/{kb_id}/follow-ups")
+async def follow_up_questions(kb_id: str, payload: FollowUpPayload) -> dict[str, list[str]]:
+    """LLM-suggested follow-up questions for an Ask turn.
+
+    Empty list on no-provider / LLM error — UI hides the row gracefully.
+    """
+    try:
+        qs = await _service().suggest_follow_up_questions(
+            kb_id,
+            question=payload.question,
+            answer=payload.answer,
+            limit=payload.limit,
+        )
+    except KBNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"questions": qs}
+
+
 class DiagnoseOut(BaseModel):
     bm25_only: list[ScoredChunkOut]
     vector_only: list[ScoredChunkOut]
