@@ -105,7 +105,10 @@
       "cancel": "取消",
       "bulkDelete": "批量删除",
       "bulkTags": "标签…",
-      "retryIngest": "重试入库"
+      "retryIngest": "重试入库",
+      "loading": "加载中…",
+      "allTags": "全部标签",
+      "uploadingProgress": "上传 · 完成 {done}/{total}"
     },
     "uploads": {
       "summary": "上传 · 完成 {done}/{total}",
@@ -122,6 +125,10 @@
       "bm25Rank": "BM25 #{rank}",
       "vecRank": "vec #{rank}",
       "scoreLabel": "score",
+      "placeholder": "搜 {kb} 里的内容…",
+      "submit": "搜",
+      "running": "…",
+      "emptyHint": "输个词搜 {kb} 里的内容 · 同时跑 BM25 + 向量召回 · 解释面板告诉你为什么这条排前面",
       "explainLabel": "为什么排在这",
       "matchedTokens": "命中 {matched}/{total} 个词",
       "matchedHeader": "查询里的词 · 是否命中",
@@ -145,10 +152,55 @@
     "stale": {
       "body": "{missing}/{total} 个分片没有向量(BM25 还能搜 · 但向量召回会漏)",
       "cta": "重新嵌入全部",
-      "running": "处理中…"
+      "running": "处理中…",
+      "doneSummary": "Re-embed 完成 · 共 {processed} · 成功 {succeeded} · 失败 {failed}"
+    },
+    "l2": {
+      "loadingTitle": "加载知识库…",
+      "loadingDesc": "读取 KB 元信息和健康数据",
+      "backToHub": "全部 KB",
+      "tabs": {
+        "overview": "概览",
+        "docs": "文档",
+        "ask": "问",
+        "search": "搜",
+        "settings": "设置"
+      }
     },
     "reembed": {
       "summary": "Re-embed 完成 · 共 {processed} · 成功 {succeeded} · 失败 {failed}"
+    },
+    "overview": {
+      "descriptionLabel": "描述",
+      "noDescription": "(还没写描述 · 点右侧编辑 ↗)",
+      "editDescription": "去设置编辑",
+      "healthLabel": "Health",
+      "lastActive": "最近活跃 · {when}",
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activity30d": "近 30 天入库节奏",
+      "recentUploads": "最近 5 个文档",
+      "loading": "加载中…",
+      "emptyDocs": "还没有文档 · 上传一个开始",
+      "noStarters": "上传文档后会自动生成起手问 · 或者没配 chat provider",
+      "seeAllDocs": "全部文档",
+      "quickActions": "快捷操作",
+      "upload": "上传",
+      "ingestUrl": "抓 URL",
+      "ask": "问",
+      "search": "搜",
+      "settings": "设置"
+    },
+    "card": {
+      "docs": "docs",
+      "chunks": "chunks",
+      "tokens": "tokens",
+      "activity30d": "近 30 天",
+      "never": "—",
+      "demoMode": "演示模式",
+      "staleEmbedding": "{missing} 个分片缺向量",
+      "ready": "Ask 已配"
     },
     "health": {
       "sectionLabel": "Health",
@@ -182,7 +234,16 @@
       "copyAsCitation": "复制",
       "copyAsCitationTitle": "复制 markdown · 含问题 / 答案 / 引用列表",
       "copied": "已复制",
-      "copyFailed": "复制失败 · 浏览器可能屏蔽了 clipboard API"
+      "copyFailed": "复制失败 · 浏览器可能屏蔽了 clipboard API",
+      "emptyTitle": "问 {kb} 任何事",
+      "emptyDesc": "AI 用 KB 里的内容回答 · 每个事实都标 [N] 引用 · 可以点开看原文",
+      "placeholderFirst": "问 {kb}…",
+      "placeholderFollowUp": "继续追问 · 上一轮的引用编号会沿用…",
+      "send": "提问",
+      "running": "…",
+      "hint": "Enter 发送 · Shift+Enter 换行 · 答案沿用同一份检索片段编号",
+      "sourcesEmpty": "提问后这里会列出回答用到的来源",
+      "sourceColumnHelp": "此面板汇总所有轮次的来源 · 去重 · 点击跳到原文"
     },
     "bulkTags": {
       "title": "给 {count} 个文档批量打标签",
@@ -240,6 +301,7 @@
         "basic": "基础",
         "diagnose": "调试检索",
         "advanced": "高级",
+        "retrieval": "检索权重",
         "danger": "危险"
       }
     },
@@ -272,6 +334,7 @@
       "statsRow": "{hits} 命中 · {ms} ms"
     },
     "basic": {
+      "sectionTitle": "Embedding 模型",
       "demoStatus": "演示模式 · 检索靠关键词匹配",
       "semanticStatus": "已启用语义检索",
       "demoBody": "搜「相机」不会命中「摄像机」。要理解语义近义词,需要绑一个真实的 embedding 模型。",
@@ -299,6 +362,14 @@
     },
     "detail": {
       "closeAria": "关闭",
+      "backToDocs": "返回文档列表",
+      "loadingDoc": "加载文档…",
+      "notFound": "文档不存在或已被删除",
+      "deleteConfirm": "确认删除 \"{title}\"?(软删 · 30 天可恢复)",
+      "tabOverview": "概览",
+      "actionsSection": "操作",
+      "reindex": "重新嵌入",
+      "chunkCountLine": "{count} 段",
       "headerMeta": "v{version} · {kb} KB · {chunks} 段",
       "tabInfo": "概览",
       "tabText": "原文",

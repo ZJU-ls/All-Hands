@@ -188,14 +188,47 @@ DELETE_EMPLOYEE_TOOL = Tool(
     id="allhands.meta.delete_employee",
     kind=ToolKind.META,
     name="delete_employee",
-    description="Permanently delete an employee by name.",
+    description=(
+        "Soft-delete an employee by name (status=archived). The row stays "
+        "in the database so conversations keep their employee link and the "
+        "user can restore_employee them later. Pass hard=true for permanent "
+        "SQL DELETE."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "hard": {
+                "type": "boolean",
+                "description": (
+                    "When true, permanently drop the row instead of "
+                    "archiving. Defaults to false (soft delete)."
+                ),
+            },
+        },
+        "required": ["name"],
+    },
+    output_schema={"type": "object"},
+    scope=ToolScope.IRREVERSIBLE,
+    requires_confirmation=True,
+)
+
+RESTORE_EMPLOYEE_TOOL = Tool(
+    id="allhands.meta.restore_employee",
+    kind=ToolKind.META,
+    name="restore_employee",
+    description=(
+        "Re-hire a previously archived employee by name. Flips status "
+        "from archived back to published so they appear on the roster "
+        "again. Idempotent for non-archived employees."
+    ),
     input_schema={
         "type": "object",
         "properties": {"name": {"type": "string"}},
         "required": ["name"],
     },
     output_schema={"type": "object"},
-    scope=ToolScope.IRREVERSIBLE,
+    scope=ToolScope.WRITE,
     requires_confirmation=True,
 )
 
@@ -339,6 +372,7 @@ ALL_META_TOOLS = [
     CREATE_EMPLOYEE_TOOL,
     UPDATE_EMPLOYEE_TOOL,
     DELETE_EMPLOYEE_TOOL,
+    RESTORE_EMPLOYEE_TOOL,
     PUBLISH_EMPLOYEE_TOOL,
     PREVIEW_EMPLOYEE_COMPOSITION_TOOL,
     DISPATCH_EMPLOYEE_TOOL,

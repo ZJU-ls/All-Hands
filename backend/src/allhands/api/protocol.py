@@ -106,6 +106,8 @@ class ChatMessageResponse(BaseModel):
     # Attachment ids on this user-uploaded turn. Empty for assistant/tool
     # rows. Frontend resolves to thumbnail / file chips via /api/attachments.
     attachment_ids: list[str] = []
+    # 2026-04-28 · True when manual /compact has soft-flagged this message.
+    is_compacted: bool = False
 
 
 class CompactConversationRequest(BaseModel):

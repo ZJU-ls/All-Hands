@@ -477,13 +477,24 @@
         "section": "暴露的工具",
         "fetching": "拉取中",
         "refresh": "刷新",
-        "intro": "点击一行查看 <mono>input_schema</mono>。",
+        "intro": "点击一行展开 <mono>Try it</mono> 表单 · 直接在页面里调一次,验证连通性 + 看返回结构。",
         "loading": "拉取工具清单",
         "errorTitle": "获取工具失败",
         "retry": "重试",
         "emptyTitle": "该服务器未声明工具",
         "emptyDescription": "握手成功但工具清单为空。",
-        "inputSchema": "input schema"
+        "inputSchema": "input schema",
+        "tryPanel": {
+          "title": "试一下 · TRY IT",
+          "noArgs": "该工具不需要参数 · 直接点 Run 调用",
+          "run": "Run",
+          "running": "调用中",
+          "reset": "重置",
+          "ok": "成功",
+          "err": "失败",
+          "result": "返回结果",
+          "jsonPlaceholder": "粘贴合法 JSON · 失败会以原文发送让后端报错"
+        }
       },
       "logs": {
         "section": "MCP 通信日志",

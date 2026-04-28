@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>allhands 本地全知全能 · 实现方案 V2</title>
+<style>
+  :root {
+    --bg: #0b1020; --bg-elev: #131a32; --bg-card: #161e3a; --bg-card-2: #1c2547;
+    --border: #232c52; --border-soft: #1d2647;
+    --text: #e7ecff; --text-muted: #9aa6d3; --text-dim: #6c7aa8;
+    --primary: #4f7dff; --primary-soft: #6e94ff; --accent: #8ab4ff;
+    --good: #3ec28f; --warn: #f0b94f; --bad: #ef6f6c;
+    --code-bg: #0e1530; --shadow: 0 8px 32px rgba(0,0,0,0.4);
+    --glow: 0 0 24px rgba(79,125,255,0.15);
+  }
+  html[data-theme="light"] {
+    --bg: #f6f8ff; --bg-elev: #ffffff; --bg-card: #ffffff; --bg-card-2: #f0f4ff;
+    --border: #dbe2f5; --border-soft: #e8edfa;
+    --text: #15203d; --text-muted: #5a6691; --text-dim: #8693bb;
+    --primary: #2a59e6; --primary-soft: #4f7dff; --accent: #2a59e6;
+    --code-bg: #eef2ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); }
+  body {
+    margin: 0;
+    font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  header.hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+  .hero h1 {
+    margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .meta { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
+  .hero .badge {
+    display: inline-block; margin-left: 8px; padding: 2px 10px;
+    background: rgba(79,125,255,0.15); color: var(--primary-soft);
+    border: 1px solid rgba(79,125,255,0.3); border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+  }
+  .theme-toggle {
+    border: 1px solid var(--border); background: var(--bg-elev); color: var(--text);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  }
+
+  /* TLDR */
+  .tldr {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 32px 0 36px;
+  }
+  .tldr-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px; position: relative; overflow: hidden;
+    transition: all 0.2s;
+  }
+  .tldr-card:hover { transform: translateY(-2px); border-color: rgba(79,125,255,0.4); box-shadow: var(--glow); }
+  .tldr-card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+  }
+  .tldr-card h4 { margin: 0 0 6px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .tldr-card .num { font-size: 28px; font-weight: 700; color: var(--primary-soft); line-height: 1; margin: 6px 0 4px; }
+  .tldr-card p { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+
+  section { margin: 56px 0; }
+  h2 {
+    font-size: 22px; margin: 0 0 18px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border); position: relative;
+  }
+  h2::before {
+    content: ""; position: absolute; left: 0; bottom: -1px; width: 56px; height: 2px;
+    background: linear-gradient(90deg, var(--primary), transparent);
+  }
+  h2 .num {
+    display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center;
+    background: rgba(79,125,255,0.15); color: var(--primary-soft);
+    border-radius: 8px; font-size: 14px; font-weight: 600; margin-right: 10px;
+    vertical-align: middle;
+  }
+  h3 { font-size: 17px; margin: 24px 0 10px; }
+  h4 { font-size: 13px; margin: 16px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px;
+    background: var(--bg-card); border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { background: var(--bg-elev); font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  tr:last-child td { border-bottom: 0; }
+  tr:hover td { background: rgba(79,125,255,0.05); }
+  table td.center, table th.center { text-align: center; }
+
+  code {
+    background: var(--code-bg); padding: 2px 6px; border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
+    font-size: 12.5px; color: var(--accent);
+  }
+  pre {
+    background: var(--code-bg); padding: 16px 18px; border-radius: 10px;
+    border: 1px solid var(--border); overflow: auto; line-height: 1.55;
+    font-size: 12px;
+  }
+  pre code { background: transparent; padding: 0; color: var(--text); font-size: 12px; }
+
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+    background: rgba(79,125,255,0.15); color: var(--primary-soft);
+    border: 1px solid rgba(79,125,255,0.3);
+  }
+  .tag.good { background: rgba(62,194,143,0.13); color: var(--good); border-color: rgba(62,194,143,0.3); }
+  .tag.warn { background: rgba(240,185,79,0.13); color: var(--warn); border-color: rgba(240,185,79,0.3); }
+  .tag.bad  { background: rgba(239,111,108,0.13); color: var(--bad);  border-color: rgba(239,111,108,0.3); }
+  .tag.dim  { background: var(--bg-elev); color: var(--text-dim); border-color: var(--border); }
+
+  .callout {
+    background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 12px;
+    padding: 18px 22px; margin: 18px 0;
+  }
+  .callout strong { color: var(--primary-soft); }
+  .callout.warn { background: linear-gradient(135deg, rgba(240,185,79,0.10), rgba(240,185,79,0.02)); border-color: rgba(240,185,79,0.30); }
+  .callout.warn strong { color: var(--warn); }
+  .callout.good { background: linear-gradient(135deg, rgba(62,194,143,0.10), rgba(62,194,143,0.02)); border-color: rgba(62,194,143,0.30); }
+  .callout.good strong { color: var(--good); }
+
+  /* TIER ARCH */
+  .tier {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 12px;
+    display: grid; grid-template-columns: 80px 1fr; gap: 18px;
+    transition: all 0.2s;
+  }
+  .tier:hover { transform: translateX(4px); border-color: rgba(79,125,255,0.4); box-shadow: var(--glow); }
+  .tier-num {
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white; border-radius: 10px; padding: 12px;
+    font-weight: 700; font-size: 14px; text-align: center;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tier-content h3 { margin: 0 0 4px; font-size: 16px; }
+  .tier-content .tag-line { color: var(--accent); font-size: 12px; margin-bottom: 8px; }
+  .tier-content p { margin: 0; color: var(--text-muted); font-size: 13px; }
+  .tier-content ul { margin: 6px 0 0; padding-left: 20px; font-size: 12.5px; }
+  .tier.tier0 .tier-num { background: linear-gradient(135deg, #3ec28f, #6dd5a8); }
+  .tier.tier1 .tier-num { background: linear-gradient(135deg, #4f7dff, #6e94ff); }
+  .tier.tier2 .tier-num { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+  .tier.tier3 .tier-num { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+  .tier.tier4 .tier-num { background: linear-gradient(135deg, #06b6d4, #22d3ee); }
+  .tier.tier5 .tier-num { background: linear-gradient(135deg, #ec4899, #f472b6); }
+
+  /* TOOL GRID */
+  .tool-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;
+    margin: 16px 0;
+  }
+  .tool-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 11px 13px;
+  }
+  .tool-card .id {
+    font-family: ui-monospace, monospace; font-size: 12px;
+    color: var(--accent); font-weight: 600; display: block; margin-bottom: 4px;
+  }
+  .tool-card .desc { font-size: 11.5px; color: var(--text-muted); margin-top: 5px; }
+
+  /* PERMISSION DECISION FLOW */
+  .perm-flow {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; margin: 16px 0;
+  }
+  .perm-step {
+    display: grid; grid-template-columns: 28px 1fr auto; gap: 14px;
+    padding: 8px 0; border-bottom: 1px dashed var(--border-soft);
+    align-items: center; font-size: 13.5px;
+  }
+  .perm-step:last-child { border-bottom: 0; }
+  .perm-step .n {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: rgba(79,125,255,0.18); color: var(--primary-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+
+  /* TIMELINE */
+  .timeline { position: relative; margin: 24px 0; padding-left: 32px; }
+  .timeline::before {
+    content: ""; position: absolute; left: 10px; top: 6px; bottom: 6px;
+    width: 2px; background: linear-gradient(180deg, var(--primary), var(--accent), transparent);
+  }
+  .phase {
+    position: relative; margin-bottom: 18px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px;
+    transition: all 0.2s;
+  }
+  .phase:hover { border-color: rgba(79,125,255,0.4); transform: translateX(4px); }
+  .phase::before {
+    content: attr(data-p); position: absolute; left: -32px; top: 16px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--primary); color: white; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 4px var(--bg);
+  }
+  .phase.optional { border-style: dashed; opacity: 0.85; }
+  .phase.optional::before { background: var(--text-dim); }
+  .phase.unchanged { border-color: rgba(62,194,143,0.30); background: linear-gradient(135deg, rgba(62,194,143,0.04), transparent); }
+  .phase.new::before { background: var(--accent); }
+  .phase h4 { margin: 0 0 4px; font-size: 14px; color: var(--text); text-transform: none; letter-spacing: 0; }
+  .phase .est { color: var(--text-dim); font-size: 12px; margin-bottom: 6px; }
+  .phase ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+  .phase li { color: var(--text-muted); }
+
+  /* TOC */
+  nav.toc {
+    position: fixed; left: 16px; top: 80px;
+    width: 220px; max-height: calc(100vh - 100px); overflow-y: auto;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px; font-size: 12.5px;
+  }
+  nav.toc h5 { margin: 0 0 8px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  nav.toc a { display: block; padding: 4px 8px; color: var(--text-muted); text-decoration: none; border-radius: 6px; margin: 1px 0; }
+  nav.toc a:hover { background: var(--bg-card-2); color: var(--text); }
+  nav.toc a.b { color: var(--accent); font-weight: 600; }
+  @media (max-width: 1380px) { nav.toc { display: none; } }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 48px 0; }
+  .footer { color: var(--text-dim); font-size: 12px; margin-top: 64px; text-align: center; }
+  a { color: var(--primary-soft); }
+
+  @media (max-width: 760px) {
+    .tldr { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <h5>导航</h5>
+  <a href="#tldr" class="b">0 · TL;DR</a>
+  <a href="#bench">1 · 行业对标</a>
+  <a href="#matrix">2 · 能力矩阵</a>
+  <a href="#tier">3 · 6 Tier 架构</a>
+  <a href="#tools">4 · Tool 清单(40+)</a>
+  <a href="#perm">5 · 权限模型 V2</a>
+  <a href="#mem">6 · 长期记忆</a>
+  <a href="#self">7 · Skill 自合成</a>
+  <a href="#proactive">8 · Proactive</a>
+  <a href="#mcp">9 · MCP Host</a>
+  <a href="#layout">10 · 项目结构</a>
+  <a href="#phase">11 · 7 Phase</a>
+  <a href="#risk">12 · 风险</a>
+  <a href="#decision">13 · 决策(15 项)</a>
+  <a href="#compat">14 · v1 兼容</a>
+  <a href="#path" class="b">15 · 落地建议</a>
+  <a href="#full">17 · 全行业对比</a>
+  <a href="ITERATIONS.html" class="b">📋 迭代日志</a>
+</nav>
+
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <h1>allhands 本地全知全能 · 方案 V2 <span class="badge">10 轮迭代</span></h1>
+    <div class="meta">2026-04-26 · 取代 PLAN.md v1 · 详细 markdown 见 <code>PLAN-V2.md</code> · 迭代过程 → <a href="ITERATIONS.html">ITERATIONS.html</a></div>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">切换主题</button>
+</header>
+
+<!-- =================== 0 TL;DR =================== -->
+<section id="tldr">
+  <div class="tldr">
+    <div class="tldr-card">
+      <h4>路线</h4>
+      <div class="num">全知全能</div>
+      <p>本地 · 多场景 · 多入口 · 比 Claude Code/Cline/Goose 都强</p>
+    </div>
+    <div class="tldr-card">
+      <h4>Tool 数</h4>
+      <div class="num">8 → 40+</div>
+      <p>分 6 tier(CLI / Script / OS / GUI / MCP / Cloud)</p>
+    </div>
+    <div class="tldr-card">
+      <h4>新增能力</h4>
+      <div class="num">7 大</div>
+      <p>OS自动化 · GUI · MCP host · 记忆 · Spotlight RAG · Proactive · Skill 自合成</p>
+    </div>
+    <div class="tldr-card">
+      <h4>工作量</h4>
+      <div class="num">15-18 天</div>
+      <p>7 phase 必做 + 2 可选 · 仍可分阶段合 main</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>一句话:</strong> v1 是"对齐 Claude Code 的本地执行能力"。V2 是"<strong>在你的电脑上无所不能</strong>" —— 写代码 / 改 Excel / 清磁盘 / 操作浏览器 / 自动化 macOS / 查日历 / 收邮件 / 定时跑任务 / 把成功流程沉淀成新 skill,同一个员工全部包揽。
+  </div>
+
+  <div class="callout good">
+    <strong>v1 → V2 兼容承诺:</strong> Phase 1-3 完全不变(v1 已 ready) · <code>permissions.json</code> 老配置零迁移 · 多出的字段都是 optional。如果你只想做 v1 范围 · 完全 OK。
+  </div>
+</section>
+
+<!-- =================== 1 BENCHMARKS =================== -->
+<section id="bench">
+  <h2><span class="num">1</span>行业对标(2026.04 状态)</h2>
+  <p>10 轮迭代第 1 轮花了大量精力在这。<strong>抄好的、避坑的、抓 gap</strong>。</p>
+
+  <table>
+    <tr><th>工具</th><th>形态</th><th>star</th><th>长处</th><th>缺位(我们要做对)</th></tr>
+    <tr><td><strong>OpenHands</strong> <span class="tag warn">同名提醒!</span></td><td>全平台 agent · Docker runtime + Plugin 系统</td><td>68k</td><td>Plugin 体系 · Workspace 抽象 · ActionExecutor 模型</td><td>太重 Docker · 普通用户装不动</td></tr>
+    <tr><td><strong>Cline</strong></td><td>VS Code 插件 · approve 每步</td><td>58k</td><td><strong>per-category auto-approve</strong> · YOLO mode · <code>.clinerules</code></td><td>受限 IDE</td></tr>
+    <tr><td><strong>Aider</strong></td><td>CLI · 自动 git commit</td><td>41k</td><td>git 强绑定 · 每改有 trace</td><td>只做代码 · 不做 office/桌面</td></tr>
+    <tr><td><strong>Goose</strong> (Linux Foundation)</td><td>Rust + Electron 桌面 app</td><td>32k</td><td><strong>3000+ MCP server · 70+ ext · 对话内渲染交互 UI</strong></td><td>需装客户端</td></tr>
+    <tr><td><strong>Continue</strong></td><td>VS Code · BYOM</td><td>31k</td><td>YAML 配置漂亮 · profiles</td><td>偏代码补全 · 不是 agent</td></tr>
+    <tr><td><strong>Claude Code</strong></td><td>CLI</td><td>—</td><td>settings.json 三态 · /loop · skill · Computer Use(2026.3)</td><td>单用户 · 没 web / 多员工</td></tr>
+  </table>
+
+  <h3>关键启示(影响 V2 设计的 6 条)</h3>
+  <ol>
+    <li><strong>Goose 是最像我们想做的样子</strong> · 桌面 app + MCP 大集成 + 多端。我们的差异化:web 多用户 + Lead Agent 一句话改权限 + Tool First 哲学</li>
+    <li><strong>OpenAI Codex 的 sandbox 默认开</strong>(workspace-write)是行业唯一 · 我们抄 → V2 默认 light · D11</li>
+    <li><strong>anthropics/skill-creator</strong>(完成长任务后封 skill)是 v1 完全没考虑的能力 · V2 必须内置</li>
+    <li><strong>macOS mdfind</strong> 已索引 125+ 元数据 + 自然语言 · 是天然 RAG · 我们做"本地知识库"成本可能为零</li>
+    <li><strong>Cline 的 per-category auto-approve</strong> 比 v1 "每条规则一弹" 人性多了</li>
+    <li><strong>OpenHands Plugin 系统</strong>给我们干净的扩展点 · 我们叫 Capability Pack(skill 是知识包)</li>
+  </ol>
+</section>
+
+<!-- =================== 2 CAPABILITY MATRIX =================== -->
+<section id="matrix">
+  <h2><span class="num">2</span>"全知全能"能力矩阵</h2>
+  <p>12 个能力域 · v1 → V2 → 落点</p>
+
+  <table>
+    <tr><th>#</th><th>能力域</th><th>v1</th><th>V2 目标</th><th>tier</th></tr>
+    <tr><td>A</td><td>文件系统</td><td>read/write/edit/glob/grep</td><td>+ <code>find_natural</code>(mdfind)+ <code>diff</code> + <code>archive</code></td><td>0/1</td></tr>
+    <tr><td>B</td><td>进程 / 命令</td><td>local.bash</td><td>+ <code>spawn_long</code>(后台 · stdout pipe)+ <code>kill</code></td><td>0</td></tr>
+    <tr><td>C</td><td>代码语义</td><td><span class="tag bad">无</span></td><td><code>code.symbols</code> / <code>code.refs</code> / <code>code.rename</code> · tree-sitter</td><td>1</td></tr>
+    <tr><td>D</td><td>包管理</td><td>via bash</td><td><code>pkg.install</code>(brew/apt/winget/pip/npm 统一)· <code>pkg.outdated</code></td><td>1</td></tr>
+    <tr><td>E</td><td>网络</td><td>via curl</td><td>+ <code>http</code>(httpx 流式)· <code>dns</code> · <code>ping</code></td><td>1</td></tr>
+    <tr><td>F</td><td>OS 自动化</td><td><span class="tag bad">无</span></td><td>macOS osascript/Shortcuts · Win COM/PS · Linux D-Bus</td><td>2</td></tr>
+    <tr><td>G</td><td>GUI 控制</td><td><span class="tag bad">无</span></td><td><code>gui.screenshot/click/type</code>(Anthropic Computer Use)</td><td>3</td></tr>
+    <tr><td>H</td><td>浏览器</td><td>via curl</td><td><code>browser.navigate/fill_form/scrape</code>(Playwright)</td><td>3</td></tr>
+    <tr><td>I</td><td>数据源</td><td><span class="tag bad">无</span></td><td>MCP host · 内置 github/postgres/slack/gmail 等</td><td>4</td></tr>
+    <tr><td>J</td><td>通信</td><td><span class="tag bad">无</span></td><td>macOS Mail/iMessage/Calendar · MCP slack/discord</td><td>2/4</td></tr>
+    <tr><td>K</td><td>AI 服务路由</td><td>model_gateway 已有</td><td>+ <code>ai.transcribe</code>/<code>image_describe</code>/<code>embed</code>(本地)</td><td>1</td></tr>
+    <tr><td>L</td><td>自我扩展</td><td><span class="tag bad">无</span></td><td><strong><code>meta.create_skill</code></strong> · <code>meta.create_tool</code></td><td>Meta</td></tr>
+  </table>
+
+  <h3>横向对比(同行覆盖度)</h3>
+  <table>
+    <tr><th>域</th><th class="center">OpenHands</th><th class="center">Cline</th><th class="center">Goose</th><th class="center">Claude Code</th><th class="center">allhands V2</th></tr>
+    <tr><td>F · OS 自动化</td><td class="center">❌</td><td class="center">❌</td><td class="center">ext</td><td class="center">❌</td><td class="center"><strong>✅ 内置三平台</strong></td></tr>
+    <tr><td>G · GUI Control</td><td class="center">❌</td><td class="center">❌</td><td class="center">⚠️</td><td class="center">✅</td><td class="center">✅</td></tr>
+    <tr><td>I · 数据源</td><td class="center">ext</td><td class="center">MCP</td><td class="center">MCP 70+</td><td class="center">MCP</td><td class="center"><strong>✅ 精选 + registry</strong></td></tr>
+    <tr><td>J · 通信</td><td class="center">❌</td><td class="center">❌</td><td class="center">MCP</td><td class="center">❌</td><td class="center"><strong>✅ macOS 原生 + MCP</strong></td></tr>
+    <tr><td>L · 自扩展</td><td class="center">❌</td><td class="center">❌</td><td class="center">⚠️ recipes</td><td class="center">⚠️ 手动</td><td class="center"><strong>✅ 自动从会话提取</strong></td></tr>
+  </table>
+  <div class="callout"><strong>差异化高地:</strong> F · J · L 三域是我们独有 / 最强。</div>
+</section>
+
+<!-- =================== 3 TIER ARCH =================== -->
+<section id="tier">
+  <h2><span class="num">3</span>核心架构 · 6 Tier 工具栈</h2>
+
+  <div class="callout">
+    <strong>Lead Agent 工具优先级 system prompt 注入:</strong>
+    Tier 5 → 4 → 2 → 1 → 0 → <strong>3</strong>(GUI 兜底)。
+    GUI 最贵(每次截屏 ~3K tokens),只有其他 tier 都没辙才退到 GUI。
+  </div>
+
+  <div class="tier tier0">
+    <div class="tier-num">Tier 0</div>
+    <div class="tier-content">
+      <h3>Native CLI Wrapper</h3>
+      <div class="tag-line">最便宜 · 最快 · agent 用得最多</div>
+      <p><code>local.bash · local.find_natural(mdfind)· local.git · local.ripgrep</code></p>
+    </div>
+  </div>
+  <div class="tier tier1">
+    <div class="tier-num">Tier 1</div>
+    <div class="tier-content">
+      <h3>Local Script (Python / Node)</h3>
+      <div class="tag-line">跑一段代码 · 用 ~/.allhands/venv 标准库</div>
+      <p><code>local.run_python · local.run_node · local.code.symbols(tree-sitter)</code></p>
+    </div>
+  </div>
+  <div class="tier tier2">
+    <div class="tier-num">Tier 2</div>
+    <div class="tier-content">
+      <h3>OS Automation(平台原生)</h3>
+      <div class="tag-line">macOS osascript / Shortcuts · Win COM/PS · Linux D-Bus</div>
+      <p><code>os.osascript · os.shortcut.run · os.notification · os.imsg.send · os.mail.send · os.calendar.add</code></p>
+    </div>
+  </div>
+  <div class="tier tier3">
+    <div class="tier-num">Tier 3</div>
+    <div class="tier-content">
+      <h3>GUI / Computer Use</h3>
+      <div class="tag-line">视觉控制任意 app · Anthropic Computer Use API + Playwright</div>
+      <p><code>gui.screenshot · gui.click · gui.type · browser.fill_form</code></p>
+    </div>
+  </div>
+  <div class="tier tier4">
+    <div class="tier-num">Tier 4</div>
+    <div class="tier-content">
+      <h3>MCP Server(host 角色)</h3>
+      <div class="tag-line">集成 registry.modelcontextprotocol.io · 3000+ 现成 server</div>
+      <p><code>mcp.github.* · mcp.postgres.* · mcp.slack.* · mcp.gmail.*</code></p>
+    </div>
+  </div>
+  <div class="tier tier5">
+    <div class="tier-num">Tier 5</div>
+    <div class="tier-content">
+      <h3>Cloud Connector(Anthropic 风格 · 优先级最高)</h3>
+      <div class="tag-line">用户绑了账号就走结构化 API · 优于 Tier 3 GUI</div>
+      <p><code>cloud.google.calendar.* · cloud.slack.* · cloud.notion.*</code></p>
+    </div>
+  </div>
+</section>
+
+<!-- =================== 4 TOOLS =================== -->
+<section id="tools">
+  <h2><span class="num">4</span>详细 Tool 清单(40+)</h2>
+
+  <h3>Tier 0 · Native CLI(16 个)</h3>
+  <div class="tool-grid">
+    <div class="tool-card"><span class="id">local.bash</span><span class="tag bad">IRR</span><div class="desc">通用 shell · 流式</div></div>
+    <div class="tool-card"><span class="id">local.read</span><span class="tag good">READ</span><div class="desc">offset/limit · ≤10MB</div></div>
+    <div class="tool-card"><span class="id">local.write</span><span class="tag warn">WRITE</span><div class="desc">全量重写</div></div>
+    <div class="tool-card"><span class="id">local.edit</span><span class="tag warn">WRITE</span><div class="desc">唯一字符串替换</div></div>
+    <div class="tool-card"><span class="id">local.list_dir</span><span class="tag good">READ</span><div class="desc">过滤 .git · node_modules</div></div>
+    <div class="tool-card"><span class="id">local.glob</span><span class="tag good">READ</span><div class="desc"><code>**/*.py</code></div></div>
+    <div class="tool-card"><span class="id">local.grep</span><span class="tag good">READ</span><div class="desc">ripgrep 包装</div></div>
+    <div class="tool-card"><span class="id"><strong>local.find_natural</strong></span><span class="tag good">READ</span><div class="desc">mdfind 自然语言("上周改的 markdown")· macOS 原生</div></div>
+    <div class="tool-card"><span class="id">local.diff</span><span class="tag good">READ</span><div class="desc">三方对比</div></div>
+    <div class="tool-card"><span class="id">local.archive</span><span class="tag warn">WRITE</span><div class="desc">zip / tar / unzip</div></div>
+    <div class="tool-card"><span class="id">local.delete</span><span class="tag bad">IRR</span><div class="desc">默认走回收站</div></div>
+    <div class="tool-card"><span class="id">local.move</span><span class="tag warn">WRITE</span><div class="desc">含重命名</div></div>
+    <div class="tool-card"><span class="id">local.copy</span><span class="tag warn">WRITE</span><div class="desc"></div></div>
+    <div class="tool-card"><span class="id">local.git</span><span class="tag warn">WRITE</span><div class="desc">push/reset 默认 deny</div></div>
+    <div class="tool-card"><span class="id">local.ripgrep</span><span class="tag good">READ</span><div class="desc">rg 直调</div></div>
+    <div class="tool-card"><span class="id">local.tree</span><span class="tag good">READ</span><div class="desc">目录树</div></div>
+  </div>
+
+  <h3>Tier 1 · Local Script(7 个)</h3>
+  <div class="tool-grid">
+    <div class="tool-card"><span class="id">local.run_python</span><span class="tag bad">IRR</span><div class="desc"><code>~/.allhands/venv</code> · 60s timeout</div></div>
+    <div class="tool-card"><span class="id">local.run_node</span><span class="tag bad">IRR</span><div class="desc">同上 · npx</div></div>
+    <div class="tool-card"><span class="id">local.code.symbols</span><span class="tag good">READ</span><div class="desc">tree-sitter 抽 fn/class</div></div>
+    <div class="tool-card"><span class="id">local.code.refs</span><span class="tag good">READ</span><div class="desc">找引用</div></div>
+    <div class="tool-card"><span class="id">local.code.rename</span><span class="tag warn">WRITE</span><div class="desc">重命名 + 全局更新</div></div>
+    <div class="tool-card"><span class="id">local.spawn_long</span><span class="tag bad">IRR</span><div class="desc">后台跑(dev server)</div></div>
+    <div class="tool-card"><span class="id">local.kill</span><span class="tag bad">IRR</span><div class="desc">杀 PID(只能杀我们 spawn 的)</div></div>
+  </div>
+
+  <h3>Tier 2 · OS Automation(8 个 · 平台分发)</h3>
+  <div class="tool-grid">
+    <div class="tool-card"><span class="id">os.osascript</span><span class="tag bad">IRR</span><div class="desc">macOS · 任意 AppleScript</div></div>
+    <div class="tool-card"><span class="id">os.shortcut.list</span><span class="tag good">READ</span><div class="desc">macOS · shortcuts list</div></div>
+    <div class="tool-card"><span class="id">os.shortcut.run</span><span class="tag bad">IRR</span><div class="desc">macOS · 跑 Shortcut by name</div></div>
+    <div class="tool-card"><span class="id">os.notification</span><span class="tag warn">WRITE</span><div class="desc">跨平台 · 系统通知</div></div>
+    <div class="tool-card"><span class="id">os.imsg.send</span><span class="tag bad">IRR</span><div class="desc">macOS · iMessage</div></div>
+    <div class="tool-card"><span class="id">os.mail.send</span><span class="tag bad">IRR</span><div class="desc">macOS · Mail.app · 草稿可选</div></div>
+    <div class="tool-card"><span class="id">os.calendar.add</span><span class="tag bad">IRR</span><div class="desc">macOS · Calendar.app</div></div>
+    <div class="tool-card"><span class="id">os.powershell</span><span class="tag bad">IRR</span><div class="desc">Win · 任意 PS</div></div>
+    <div class="tool-card"><span class="id">os.dbus_call</span><span class="tag bad">IRR</span><div class="desc">Linux · KDE/GNOME 通用</div></div>
+  </div>
+
+  <h3>Tier 3 · GUI / Computer Use(7 个)</h3>
+  <div class="callout warn">
+    <strong>默认 OFF</strong>(D12)· 用户在 Settings 显式 opt-in 才启用。第一次启用要 1 步演示("我点桌面 Finder · 你看截图")建立信任。
+  </div>
+  <div class="tool-grid">
+    <div class="tool-card"><span class="id">gui.screenshot</span><span class="tag good">READ</span><div class="desc">整屏 / 单 app · base64 回传</div></div>
+    <div class="tool-card"><span class="id">gui.read_screen</span><span class="tag good">READ</span><div class="desc">截屏 + Claude 视觉描述当前界面</div></div>
+    <div class="tool-card"><span class="id">gui.click</span><span class="tag bad">IRR</span><div class="desc">坐标 + modifier</div></div>
+    <div class="tool-card"><span class="id">gui.type</span><span class="tag bad">IRR</span><div class="desc">当前焦点输入</div></div>
+    <div class="tool-card"><span class="id">gui.key</span><span class="tag bad">IRR</span><div class="desc">单键 / 组合键</div></div>
+    <div class="tool-card"><span class="id">browser.open_url</span><span class="tag warn">WRITE</span><div class="desc">默认浏览器</div></div>
+    <div class="tool-card"><span class="id">browser.playwright_session</span><span class="tag bad">IRR</span><div class="desc">受控会话 · navigate/click/fill/scrape</div></div>
+  </div>
+
+  <h3>Tier 4 · MCP(我们做 host)</h3>
+  <p>预装精选 server(D13 · 可不装)· 来自 registry top installs:</p>
+  <table>
+    <tr><th>Server</th><th>来源</th><th>安装量</th><th>用途</th></tr>
+    <tr><td><code>github</code></td><td>官方</td><td>398k</td><td>PR/issue/repo</td></tr>
+    <tr><td><code>postgres</code></td><td>官方</td><td>312k</td><td>只读 SQL</td></tr>
+    <tr><td><code>brave-search</code></td><td>官方</td><td>287k</td><td>Web 搜索</td></tr>
+    <tr><td><code>slack</code> · <code>gmail</code> · <code>notion</code> · <code>linear</code></td><td>官方</td><td>—</td><td>用户填 token 后可用</td></tr>
+  </table>
+
+  <h3>Meta Tool(8 个 · 自我扩展 + 配置)</h3>
+  <div class="tool-grid">
+    <div class="tool-card"><span class="id">meta.permission_grant</span><span class="tag warn">WRITE</span></div>
+    <div class="tool-card"><span class="id">meta.permission_revoke</span><span class="tag warn">WRITE</span></div>
+    <div class="tool-card"><span class="id">meta.permission_test</span><span class="tag good">READ</span></div>
+    <div class="tool-card"><span class="id"><strong>meta.create_skill</strong></span><span class="tag warn">WRITE</span><div class="desc">把当前会话封 SKILL.md</div></div>
+    <div class="tool-card"><span class="id">meta.create_tool</span><span class="tag warn">WRITE</span><div class="desc">把脚本封 backend tool(实验)</div></div>
+    <div class="tool-card"><span class="id">meta.list_my_skills</span><span class="tag good">READ</span></div>
+    <div class="tool-card"><span class="id">meta.install_mcp</span><span class="tag warn">WRITE</span></div>
+    <div class="tool-card"><span class="id">meta.update_setting</span><span class="tag warn">WRITE</span></div>
+  </div>
+</section>
+
+<!-- =================== 5 PERMISSION =================== -->
+<section id="perm">
+  <h2><span class="num">5</span>权限模型 V2 · 五级层次</h2>
+  <p>v1 是简单 JSON 三态。V2 加 4 个维度让"日常零打扰 + 关键场景强守门"成为可能。</p>
+
+  <h3>决策合流图(每次 Tool Call 走一遍)</h3>
+  <div class="perm-flow">
+    <div class="perm-step"><div class="n">1</div><div>YOLO mode 是否开?</div><div><span class="tag bad">是 → ALLOW(全开)</span></div></div>
+    <div class="perm-step"><div class="n">2</div><div>触碰 Sandbox 边界?(写域 / 网络 / syscall)</div><div><span class="tag bad">越界 → DENY</span></div></div>
+    <div class="perm-step"><div class="n">3</div><div>当前 workspace 信任级别?</div><div><span class="tag warn">untrusted + WRITE → 强制 ASK</span></div></div>
+    <div class="perm-step"><div class="n">4</div><div>Pattern 规则命中?(deny &gt; allow &gt; ask)</div><div><span class="tag">→ 命中决策</span></div></div>
+    <div class="perm-step"><div class="n">5</div><div>Auto-approve category 开?(read/write/exec/browser/mcp)</div><div><span class="tag good">cat=allow → ALLOW</span></div></div>
+    <div class="perm-step"><div class="n">6</div><div>都没命中 → 走 default_mode</div><div><span class="tag warn">默认 ASK</span></div></div>
+  </div>
+
+  <h3>5 个维度详解</h3>
+  <table>
+    <tr><th>层级</th><th>来源</th><th>设置</th></tr>
+    <tr><td><strong>① YOLO mode</strong></td><td>抄 Cline</td><td><code>yolo: true</code> · UI 顶部红条提醒</td></tr>
+    <tr><td><strong>② Sandbox boundary</strong></td><td>抄 OpenAI Codex</td><td>off / <strong>light(默认)</strong> / strict · D11</td></tr>
+    <tr><td><strong>③ Workspace trust</strong></td><td>抄 Codex</td><td><code>trusted</code> / <code>untrusted</code> · untrusted 跳过项目级 .allhands/ 配置</td></tr>
+    <tr><td><strong>④ Pattern 规则</strong></td><td>v1 沿用</td><td>deny &gt; allow &gt; ask · glob 匹配</td></tr>
+    <tr><td><strong>⑤ Auto-approve category</strong></td><td>抄 Cline</td><td>read/write/exec/browser_gui/mcp 5 个 toggle · max_calls_before_recheck</td></tr>
+  </table>
+</section>
+
+<!-- =================== 6 MEMORY =================== -->
+<section id="mem">
+  <h2><span class="num">6</span>长期记忆架构(Mem0 风格 · 三层)</h2>
+
+  <table>
+    <tr><th>层</th><th>容量</th><th>何时用</th><th>实现</th></tr>
+    <tr><td><strong>Core</strong></td><td>≤ 2KB</td><td>永远在 context</td><td>注入 system prompt 末尾(用户档案 / 偏好)</td></tr>
+    <tr><td><strong>Recall</strong></td><td>全部历史</td><td>agent 主动 search</td><td>SQLite FTS5 全文索引</td></tr>
+    <tr><td><strong>Archival</strong></td><td>大块文件 / 知识</td><td>agent 主动 search</td><td><code>sqlite-vec</code>(50KB extension · 单文件)</td></tr>
+  </table>
+
+  <div class="callout good">
+    <strong>不引入向量服务依赖。</strong> sqlite-vec 2025.1 GA · 跟现有 SQLite 同进程 · 不需要额外 service · 用户机器 0 额外配置。
+  </div>
+
+  <h3>🌟 Spotlight 作"零成本 RAG"(macOS 关键创新)</h3>
+  <div class="callout">
+    mdfind 已经索引用户全机 <strong>125+ 元数据 + 文档全文 + 邮件 + 联系人</strong>。我们<strong>不复制这个索引</strong>,给 agent 一个 <code>local.find_natural</code> 调它就行。<br><br>
+    例:<em>"找我上个月跟客户 X 讨论合同的所有文件"</em><br>
+    → <code>local.find_natural("kMDItemContentModificationDate >= '2026-03' && '客户 X' && 合同")</code><br>
+    → mdfind 0.1s 返回 N 个路径 → agent.local.read 重点几个 → 答用户。<br><br>
+    <strong>比维护自己的 RAG 索引便宜两个数量级。</strong>
+  </div>
+  <p>降级:Linux <code>locate + recoll</code> · Windows Search COM。</p>
+
+  <h3>5 个 memory tool</h3>
+  <div class="tool-grid">
+    <div class="tool-card"><span class="id">memory.store_core</span><span class="tag warn">WRITE</span><div class="desc">写 ≤500 字符进 core(用户档案/偏好)</div></div>
+    <div class="tool-card"><span class="id">memory.recall_search</span><span class="tag good">READ</span><div class="desc">FTS5 搜历史会话</div></div>
+    <div class="tool-card"><span class="id">memory.archival_save</span><span class="tag warn">WRITE</span><div class="desc">存大块 + 自动 embedding</div></div>
+    <div class="tool-card"><span class="id">memory.archival_search</span><span class="tag good">READ</span><div class="desc">向量召回 top-K</div></div>
+    <div class="tool-card"><span class="id">memory.forget</span><span class="tag bad">IRR</span><div class="desc">GDPR-style 删一条</div></div>
+  </div>
+</section>
+
+<!-- =================== 7 SELF-SYNTHESIS =================== -->
+<section id="self">
+  <h2><span class="num">7</span>Skill 自合成(Self-Synthesis)</h2>
+  <p>灵感:<a href="https://github.com/anthropics/skills">anthropics/skill-creator</a> 工作流 —— "完成长任务后,问 agent 要不要把刚学的封成 skill"。</p>
+
+  <h3>3 种触发场景</h3>
+  <ol>
+    <li><strong>会话结束时:</strong> UI 在对话末尾显示 ghost button "把这次的方法封成 skill"</li>
+    <li><strong>agent 主动建议:</strong> 连续 3 个相似任务后 · Lead Agent 在 system prompt 收到 hint "你看起来重复做同一类事 · 提议 user 封 skill"</li>
+    <li><strong>用户明令:</strong> "把刚才操作 sales.xlsx 的方法保存成 skill 叫 monthly-rec"</li>
+  </ol>
+
+  <h3>沉淀位置</h3>
+<pre><code>~/.allhands/skills/
+├── builtin/        # 我们随产品发的(excel-ops · file-organize · ...)
+└── learned/        # 用户自己沉淀的 · git-managed</code></pre>
+
+  <div class="callout good">
+    <strong>D14:</strong> <code>learned/</code> 默认 git init · 用户能 push 到自己的 GitHub 跟同事分享。这就是 anthropics/skills repo 的私人版本。
+  </div>
+
+  <h3>实验级 · Tool 自合成(Phase 10 · 默认 disable)</h3>
+  <div class="callout warn">
+    更激进:让 agent <strong>直接造 backend tool</strong>(<code>meta.create_tool</code>)。风险显著(自动生成代码注入)· 默认 disable · 只在用户开启 "Tool Synthesis" 实验开关后启用。
+  </div>
+</section>
+
+<!-- =================== 8 PROACTIVE =================== -->
+<section id="proactive">
+  <h2><span class="num">8</span>Proactive 层 · 让 agent 主动起来</h2>
+
+  <h3>3 种触发器</h3>
+  <table>
+    <tr><th>触发器</th><th>例</th><th>实现</th></tr>
+    <tr><td><strong>File watcher</strong></td><td>监听 <code>~/Downloads/*.xlsx</code> · 一掉就让"对账员工"分类归档</td><td><code>watchdog</code></td></tr>
+    <tr><td><strong>Cron</strong></td><td>每天 8:30 让"晨报员工"发昨日总结到 Slack</td><td><code>apscheduler</code></td></tr>
+    <tr><td><strong>Webhook</strong></td><td>GitHub 给 PR 推 webhook · 触发"reviewer 员工"</td><td><code>aiohttp</code></td></tr>
+  </table>
+
+  <h3>trigger.yaml 示例</h3>
+<pre><code>name: "downloads-xlsx-archive"
+trigger:
+  type: fs
+  path: ~/Downloads
+  pattern: "*.xlsx"
+  event: created
+employee: archiver
+prompt: |
+  新文件 {{event.path}} 出现在 Downloads · 按文件名规则归档到合适目录。
+permission_profile: trusted
+notify_on_completion: true</code></pre>
+
+  <div class="callout warn">
+    <strong>R4 风险防跑飞:</strong> trigger 默认带 <code>max_runs_per_hour: 5</code> · 触发跑的会话强制 paranoid profile · 关键操作仍弹通知确认。
+  </div>
+
+  <h3>独立 daemon process(D15)</h3>
+  <p><code>allhands-daemon</code> 是单独的 Python process · supervisor 起 · 跟 backend 不同生命周期(<strong>backend 关 · daemon 仍跑</strong>)· 这样"晨报"才真能晨报。</p>
+</section>
+
+<!-- =================== 9 MCP HOST =================== -->
+<section id="mcp">
+  <h2><span class="num">9</span>MCP Host 实现</h2>
+
+  <p>走 <a href="https://github.com/modelcontextprotocol/python-sdk">MCP Python SDK</a> · 我们是 host(client 角色)。每个用户配置的 MCP server 在独立子进程跑 · stdio / HTTP+SSE 都支持 · 进程崩溃自动重启。</p>
+
+  <h3>配置文件(兼容 Claude Desktop / Code / Cursor)</h3>
+<pre><code>// ~/.allhands/mcp.json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "..." }
+    },
+    "postgres": {
+      "command": "uvx",
+      "args": ["mcp-server-postgres", "postgresql://..."]
+    }
+  }
+}</code></pre>
+
+  <h3>UI 一键装</h3>
+  <p>Settings → MCP tab → "Browse Registry" 拉 <a href="https://registry.modelcontextprotocol.io">registry.modelcontextprotocol.io</a> 列表 → 卡片显示 description / install count → "Install" 写 mcp.json · 重启子进程。</p>
+</section>
+
+<!-- =================== 11 PHASE =================== -->
+<section id="phase">
+  <h2><span class="num">11</span>分阶段实现(7 phase + 2 可选 · 15-18 天)</h2>
+
+  <div class="timeline">
+    <div class="phase unchanged" data-p="1">
+      <h4>Phase 1 · Local Executor + 权限引擎 + Agent 一句话 <span class="tag good">v1 不变</span></h4>
+      <div class="est">⏱ 3-4 天 · 后端为主</div>
+      <ul><li>16 Tier 0 + 7 Tier 1 + 8 meta tool · 5 级权限模型 · 默认 permissions.json 模板</li></ul>
+    </div>
+    <div class="phase unchanged" data-p="2">
+      <h4>Phase 2 · 5 个内置 Skill + Setup <span class="tag good">v1 不变</span></h4>
+      <div class="est">⏱ 1-2 天</div>
+    </div>
+    <div class="phase unchanged" data-p="3">
+      <h4>Phase 3 · 无感引导 + 可视化权限页 <span class="tag good">v1 不变</span></h4>
+      <div class="est">⏱ 2 天</div>
+    </div>
+    <div class="phase new" data-p="4">
+      <h4>Phase 4 · OS 自动化 Tier 2 <span class="tag">V2 新</span></h4>
+      <div class="est">⏱ 2-3 天 · macOS 优先</div>
+      <ul>
+        <li>8 个 <code>os.*</code> tool · macOS osascript / Shortcuts / notification / Mail / iMessage / Calendar</li>
+        <li>Win/Linux 给 stub + 友好 NotImplementedError</li>
+      </ul>
+    </div>
+    <div class="phase new" data-p="5">
+      <h4>Phase 5 · MCP Host <span class="tag">V2 新</span></h4>
+      <div class="est">⏱ 2 天</div>
+      <ul>
+        <li>execution/mcp/host.py · 子进程管理 · 配置文件 · UI 一键装</li>
+        <li>接通 github / postgres / brave-search 三个作演示</li>
+      </ul>
+    </div>
+    <div class="phase new" data-p="6">
+      <h4>Phase 6 · 长期记忆 + Spotlight RAG <span class="tag">V2 新</span></h4>
+      <div class="est">⏱ 2 天</div>
+      <ul>
+        <li>sqlite-vec 集成 · core/recall/archival 三层</li>
+        <li><code>local.find_natural</code> · Settings → Memory 页</li>
+      </ul>
+    </div>
+    <div class="phase new" data-p="7">
+      <h4>Phase 7 · Computer Use + 浏览器 <span class="tag">V2 新</span></h4>
+      <div class="est">⏱ 2 天</div>
+      <ul>
+        <li>Anthropic Computer Use API(beta header)· 7 个 <code>gui.*</code></li>
+        <li>Playwright · <code>browser.playwright_session</code></li>
+        <li>Settings 加 "Enable Computer Use" 开关 · 默认关 · 引导给 macOS Accessibility 权限</li>
+      </ul>
+    </div>
+    <div class="phase new" data-p="8">
+      <h4>Phase 8 · Proactive Daemon <span class="tag">V2 新</span></h4>
+      <div class="est">⏱ 2 天</div>
+      <ul>
+        <li><code>allhands-daemon</code> 独立进程 · watchdog + apscheduler + aiohttp</li>
+        <li>Settings → Triggers 页</li>
+      </ul>
+    </div>
+    <div class="phase new" data-p="9">
+      <h4>Phase 9 · Skill 自合成 <span class="tag">V2 新</span></h4>
+      <div class="est">⏱ 1-2 天</div>
+      <ul>
+        <li><code>meta.create_skill</code> · 套 anthropics/skill-creator 模板</li>
+        <li>UI ghost button "封 skill" · learned/ 自动 git init</li>
+      </ul>
+    </div>
+    <div class="phase optional" data-p="10">
+      <h4>Phase 10(可选 · 实验) · Tool 自合成</h4>
+      <div class="est">⏱ 1 天 · 默认 disable · 高风险</div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== 12 RISKS =================== -->
+<section id="risk">
+  <h2><span class="num">12</span>风险与对策(R1-R10)</h2>
+  <table>
+    <tr><th>#</th><th>风险</th><th>对策</th></tr>
+    <tr><td>R1</td><td>macOS Accessibility 权限弹窗扰民</td><td>首次需要时一次性引导 · Shortcuts 替代部分 osascript</td></tr>
+    <tr><td>R2</td><td>Computer Use 成本(每截屏 ~3K tokens)</td><td>system prompt "tier 优先级" · UI 实时显示 token 用量</td></tr>
+    <tr><td>R3</td><td>MCP 子进程崩溃</td><td>supervisor · 30s 无响应 kill+重启 · 3 次失败禁用</td></tr>
+    <tr><td>R4</td><td>Proactive 跑飞</td><td>max_runs_per_hour: 5 · paranoid profile · 关键弹通知</td></tr>
+    <tr><td>R5</td><td>Learned skill 污染 builtin</td><td>物理隔离目录 · UI 区分 · 不能覆盖同名</td></tr>
+    <tr><td>R6</td><td>sqlite-vec 文件膨胀</td><td>定期 vacuum · UI 显示占用 · 清理 30 天前 archival</td></tr>
+    <tr><td>R7</td><td>恶意 MCP server</td><td>install 前展示 server tool 列表 + scope · 用户勾确认</td></tr>
+    <tr><td>R8</td><td>macOS Sequoia mdfind 慢 / 索引未建</td><td>检测 <code>mdutil -s /</code> · 降级 <code>find</code> + 警告</td></tr>
+    <tr><td>R9</td><td>Computer Use 误操作</td><td>首次启用 1 步演示("我点 Finder · 你看截图")</td></tr>
+    <tr><td>R10</td><td>Tool 数太多 · agent 选错</td><td>system prompt 严格 tier 优先级 · description 标注成本</td></tr>
+  </table>
+</section>
+
+<!-- =================== 13 DECISIONS =================== -->
+<section id="decision">
+  <h2><span class="num">13</span>决策清单 V2(15 项 · 比 v1 多 5)</h2>
+  <p>v1 D1-D10 全部沿用 · 新加 5 项:</p>
+  <table>
+    <tr><th>#</th><th>问题</th><th>默认</th></tr>
+    <tr><td><strong>D11</strong></td><td>Sandbox 默认值</td><td><span class="tag good">light</span>(抄 Codex · v1 是 off)</td></tr>
+    <tr><td><strong>D12</strong></td><td>Computer Use 默认值</td><td><span class="tag dim">off</span>(显式 opt-in)</td></tr>
+    <tr><td><strong>D13</strong></td><td>MCP 预装哪些 server</td><td>github / postgres / brave-search 三个 · 都需 token 才激活</td></tr>
+    <tr><td><strong>D14</strong></td><td>Learned skill 是否默认 git</td><td><span class="tag good">是</span> · 自动 git init · 方便分享</td></tr>
+    <tr><td><strong>D15</strong></td><td>Proactive daemon 跟 backend 同生命周期?</td><td><span class="tag good">不同步</span> · daemon 是 service · 真 always-on</td></tr>
+  </table>
+</section>
+
+<!-- =================== 15 PATH =================== -->
+<section id="path">
+  <h2><span class="num">15</span>落地建议(给你拍板)</h2>
+  <div class="tldr">
+    <div class="tldr-card">
+      <h4>路径 A · 稳健</h4>
+      <div class="num">8 天</div>
+      <p>只做 v1 Phase 1-3 · 体验 + 反馈 · 然后再决定要不要进 V2</p>
+    </div>
+    <div class="tldr-card" style="border: 2px solid var(--good); box-shadow: var(--glow);">
+      <h4>路径 B · 平衡 <span class="tag good">推荐</span></h4>
+      <div class="num">12 天</div>
+      <p>v1 P1-P3 + V2 P4(macOS OS 自动化)+ P6(记忆 + Spotlight)· 拿到"全知全能"的 70% 体验</p>
+    </div>
+    <div class="tldr-card">
+      <h4>路径 C · 全量</h4>
+      <div class="num">15-18 天</div>
+      <p>V2 全部 9 phase · 真正"在我电脑上无所不能"</p>
+    </div>
+  </div>
+  <div class="callout">
+    <strong>我建议 B。</strong> GUI Computer Use 和 Proactive 虽然惊艳但有 macOS 权限障碍 · 留作"用户提了再加"。MCP 也可以推迟到第二批 · 等社区 server 质量更稳。但你说"我就要全" · 我们就走 C。
+  </div>
+</section>
+
+<!-- =================== 17 FULL COMPARE =================== -->
+<section id="full">
+  <h2><span class="num">17</span>全行业对比 · allhands V2 vs 5 同行</h2>
+  <table>
+    <tr>
+      <th>能力</th>
+      <th class="center">OpenHands</th>
+      <th class="center">Cline</th>
+      <th class="center">Goose</th>
+      <th class="center">Claude Code</th>
+      <th class="center">Codex</th>
+      <th class="center"><strong>allhands V2</strong></th>
+    </tr>
+    <tr><td>部署形态</td><td class="center">self-host docker</td><td class="center">VSCode ext</td><td class="center">desktop app</td><td class="center">CLI</td><td class="center">CLI</td><td class="center"><strong>web · 多端</strong></td></tr>
+    <tr><td>多用户协作</td><td class="center">❌</td><td class="center">❌</td><td class="center">❌</td><td class="center">❌</td><td class="center">❌</td><td class="center"><strong>✅</strong></td></tr>
+    <tr><td>Tool 数</td><td class="center">30+</td><td class="center">15+</td><td class="center">70+ ext</td><td class="center">10+</td><td class="center">12+</td><td class="center"><strong>40+ · 6 tier</strong></td></tr>
+    <tr><td>Sandbox 默认</td><td class="center">container</td><td class="center">n/a</td><td class="center">n/a</td><td class="center">off</td><td class="center"><strong>workspace-write</strong></td><td class="center"><strong>light</strong></td></tr>
+    <tr><td>三入口配权限</td><td class="center">❌</td><td class="center">⚠️ UI</td><td class="center">⚠️ CLI</td><td class="center">⚠️ JSON</td><td class="center">⚠️ TOML</td><td class="center"><strong>✅ UI/弹窗/Agent</strong></td></tr>
+    <tr><td>Long memory</td><td class="center">❌</td><td class="center">❌</td><td class="center">⚠️</td><td class="center">❌</td><td class="center">❌</td><td class="center"><strong>✅ 3 tier · sqlite-vec</strong></td></tr>
+    <tr><td>Spotlight 集成</td><td class="center">❌</td><td class="center">❌</td><td class="center">❌</td><td class="center">⚠️</td><td class="center">❌</td><td class="center"><strong>✅ tool 内置</strong></td></tr>
+    <tr><td>Computer Use</td><td class="center">❌</td><td class="center">⚠️</td><td class="center">⚠️ ext</td><td class="center">✅(2026.3)</td><td class="center">❌</td><td class="center"><strong>✅</strong></td></tr>
+    <tr><td>MCP host</td><td class="center">⚠️</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">⚠️</td><td class="center"><strong>✅ + registry 一键</strong></td></tr>
+    <tr><td>Proactive 触发</td><td class="center">❌</td><td class="center">❌</td><td class="center">❌</td><td class="center">⚠️ /loop</td><td class="center">❌</td><td class="center"><strong>✅ fs/cron/webhook</strong></td></tr>
+    <tr><td>Skill 自合成</td><td class="center">❌</td><td class="center">❌</td><td class="center">⚠️ recipe</td><td class="center">⚠️ skill-creator</td><td class="center">❌</td><td class="center"><strong>✅ 一键封会话</strong></td></tr>
+    <tr><td>Tool 自合成</td><td class="center">❌</td><td class="center">❌</td><td class="center">❌</td><td class="center">❌</td><td class="center">❌</td><td class="center"><strong>⚠️ 实验</strong></td></tr>
+  </table>
+  <div class="callout good">
+    <strong>差异化(我们独有 4 项):</strong>多用户协作 · 三入口权限 · Spotlight RAG · 自合成 Skill。
+  </div>
+</section>
+
+<div class="footer">
+  allhands · research/sandbox · 2026-04-26 · 经 10 轮调研迭代 · markdown 见 <code>PLAN-V2.md</code> · 迭代日志 → <a href="ITERATIONS.html">ITERATIONS.html</a>
+</div>
+
+</div>
+
+<script>
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+</script>
+</body>
+</html>

@@ -390,14 +390,21 @@ class ChatService:
         conversation_id: str,
         keep_last: int = DEFAULT_COMPACT_KEEP_LAST,
     ) -> CompactResult:
-        """Deterministically collapse earlier messages into a summary marker.
+        """Soft-fold earlier messages into a summary marker.
 
-        No LLM call — this is the cheap, always-available lever. The agent's
-        next turn will read a shorter history (N kept + 1 synthetic system
-        marker) so the prompt token budget drops immediately. A future track
-        can swap in an LLM summarisation path; this function's contract
-        (return shape + side-effects) stays stable so the UI doesn't have to
-        change.
+        Dual-view contract (compact-dual-view.md, 2026-04-28):
+          - Old rows STAY in the database with ``is_compacted=True`` so the UI
+            transcript keeps them visible behind a 「N 条已压缩」 fold.
+          - A synthetic ``role="system"`` summary marker is appended with
+            ``is_compacted=False`` so it survives the LLM context filter.
+          - ``send_message`` filters non-system compacted rows when building
+            the LLM input → token budget drops immediately, no LLM call here.
+
+        Rolling-merge across multiple compacts: any *prior* summary marker
+        is itself flagged compacted along with the older content it covered,
+        so the transcript ends up with at most one live summary marker.
+        Users can press 整理 repeatedly without stacking up multiple
+        "[系统] 已压缩 …" lines in the LLM context.
 
         The runtime cache for this conversation is cleared because the live
         SkillRuntime's "which tools are currently resolved" state was built
@@ -414,11 +421,26 @@ class ChatService:
             raise DomainError(f"Conversation {conversation_id!r} not found.")
 
         messages = await self._conversations.list_messages(conversation_id)
-        if len(messages) <= keep_last:
+
+        # Only "live" (non-compacted) messages count toward keep_last — a
+        # second compact press should fold everything except the most recent
+        # tail again, ignoring previously-folded rows.
+        live = [m for m in messages if not m.is_compacted]
+        if len(live) <= keep_last:
             return CompactResult(dropped=0, summary_id=None, messages=messages)
 
-        to_drop = messages[:-keep_last]
-        to_keep = messages[-keep_last:]
+        to_drop_live = live[:-keep_last]
+        to_keep = live[-keep_last:]
+
+        # Pull in any prior summary markers (role=system, not yet compacted)
+        # that landed between/before to_drop_live so the rolling-merge
+        # invariant holds: at most one live system summary after compact.
+        prior_summary_ids = [
+            m.id
+            for m in messages
+            if m.role == "system" and not m.is_compacted and m.id not in {x.id for x in to_keep}
+        ]
+        ids_to_compact = [m.id for m in to_drop_live] + prior_summary_ids
 
         earliest_kept = to_keep[0].created_at
         # 1µs earlier so ORDER BY created_at ASC surfaces the summary before
@@ -428,12 +450,75 @@ class ChatService:
             id=str(uuid.uuid4()),
             conversation_id=conversation_id,
             role="system",
-            content=f"[系统] 已压缩 {len(to_drop)} 条较早消息以节省上下文。",
+            content=f"[系统] 已压缩 {len(to_drop_live)} 条较早消息以节省上下文。",
             created_at=summary_created_at,
         )
 
-        await self._conversations.delete_messages([m.id for m in to_drop])
+        await self._conversations.mark_messages_compacted(ids_to_compact)
         await self._conversations.append_message(summary)
+
+        # Mirror the soft-flag onto the event log so the LLM context build
+        # path actually shrinks. Without this the manual /compact only
+        # changed the legacy fallback projection — the production path
+        # (event_repo is not None) reads ConversationEvent.is_compacted via
+        # build_llm_context and would have kept feeding the model the full
+        # history. Rolling-merge: any prior live SUMMARY events get folded
+        # along with the older content they covered.
+        if self._event_repo is not None:
+            try:
+                events = await self._event_repo.list_by_conversation(
+                    conversation_id, include_compacted=False
+                )
+                old_events = [
+                    e
+                    for e in events
+                    if e.created_at < earliest_kept and e.kind != EventKind.SUMMARY
+                ]
+                prior_summary_events = [
+                    e
+                    for e in events
+                    if e.kind == EventKind.SUMMARY and e.created_at < earliest_kept
+                ]
+                event_ids_to_compact = [e.id for e in old_events] + [
+                    e.id for e in prior_summary_events
+                ]
+                if event_ids_to_compact:
+                    await self._event_repo.mark_compacted(event_ids_to_compact)
+                if old_events:
+                    covers_range = (
+                        old_events[0].sequence,
+                        old_events[-1].sequence,
+                    )
+                    await self._event_repo.append(
+                        ConversationEvent(
+                            id=str(uuid.uuid4()),
+                            conversation_id=conversation_id,
+                            parent_id=None,
+                            sequence=await self._event_repo.next_sequence(conversation_id),
+                            kind=EventKind.SUMMARY,
+                            content_json={
+                                "summary_text": (
+                                    f"[manual-compact] User folded "
+                                    f"{len(to_drop_live)} earlier messages."
+                                ),
+                                "covers_sequence_range": list(covers_range),
+                                "events_covered": len(old_events),
+                            },
+                            subagent_id=None,
+                            turn_id=None,
+                            idempotency_key=None,
+                            is_compacted=False,
+                            created_at=datetime.now(UTC),
+                        )
+                    )
+            except Exception:
+                # Don't let an event-log glitch defeat the user-facing
+                # compact — the message-table side already succeeded so
+                # the UI fold + fallback context-builder still benefit.
+                log.exception(
+                    "manual_compact.event_log_mirror_failed",
+                    extra={"conversation_id": conversation_id},
+                )
 
         # Two-sided clear: cache + repo (ADR 0011 · principle 7). Letting the
         # persisted runtime survive a compact would resurrect skills the user
@@ -451,12 +536,34 @@ class ChatService:
 
         new_messages = await self._conversations.list_messages(conversation_id)
         return CompactResult(
-            dropped=len(to_drop),
+            dropped=len(to_drop_live),
             summary_id=summary.id,
             messages=new_messages,
         )
 
-    async def create_conversation(self, employee_id: str) -> Conversation:
+    async def create_conversation(
+        self, employee_id: str, *, reuse_empty: bool = True
+    ) -> Conversation:
+        """Create a fresh conversation for ``employee_id``.
+
+        Default ``reuse_empty=True`` matches the user's mental model: clicking
+        an employee should land them in a usable chat surface, not stack up
+        empty conversations every time. We look for an existing conversation
+        owned by the same employee that has zero messages persisted and reuse
+        it. Pass ``reuse_empty=False`` for callers that explicitly need a new
+        row (e.g. tests or bulk seeding).
+        """
+        if reuse_empty:
+            existing = await self._conversations.list_for_employee(employee_id)
+            if existing:
+                counts = await self._conversations.count_messages([c.id for c in existing])
+                # Pick the newest empty conversation so we resume the user's
+                # most recent click rather than dragging them back to an old
+                # forgotten draft.
+                empty = [c for c in existing if counts.get(c.id, 0) == 0]
+                if empty:
+                    empty.sort(key=lambda c: c.created_at, reverse=True)
+                    return empty[0]
         conv = Conversation(
             id=str(uuid.uuid4()),
             employee_id=employee_id,
@@ -642,6 +749,14 @@ class ChatService:
             )
         else:
             history = await self._conversations.list_messages(conversation_id)
+            # /compact dual-view (compact-dual-view.md): non-system messages
+            # flagged ``is_compacted`` are folded in the UI but excluded from
+            # the LLM context here so the token budget actually shrinks. The
+            # synthetic system summary marker (role=system,
+            # is_compacted=False) is then surfaced to the model below as a
+            # ``user`` injection so it survives the user/assistant filter.
+            visible = [m for m in history if not m.is_compacted]
+            summaries = [m for m in history if not m.is_compacted and m.role == "system"]
             lc_messages = [
                 {
                     "role": m.role,
@@ -649,9 +764,21 @@ class ChatService:
                     "id": m.id,
                     "attachment_ids": list(m.attachment_ids) if m.role == "user" else [],
                 }
-                for m in history
+                for m in visible
                 if m.role in ("user", "assistant")
             ]
+            for s in summaries:
+                # Inject as a user message so providers that reject mid-thread
+                # system messages (Anthropic) accept it · matches the
+                # build_llm_context projection in the event-log path.
+                lc_messages.insert(
+                    0,
+                    {
+                        "role": "user",
+                        "content": f"<earlier_summary>\n{s.content}\n</earlier_summary>",
+                        "id": s.id,
+                    },
+                )
 
         # Multimodal projection (2026-04-28). For every user dict carrying
         # attachment_ids, replace `content` with either a list of OpenAI-style

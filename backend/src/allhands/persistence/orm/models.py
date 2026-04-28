@@ -165,6 +165,11 @@ class MessageRow(Base):
     # Attachment ids referenced by this message (user uploads). Resolved at
     # read time via SqlAttachmentRepo to build ImageBlock/FileBlock entries.
     attachment_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Soft flag set by manual /compact — UI keeps row behind a fold while
+    # the LLM context build path filters it out. Indexed for long convs.
+    is_compacted: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("0"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
     conversation: Mapped[ConversationRow] = relationship(back_populates="messages")

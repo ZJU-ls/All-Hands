@@ -78,17 +78,37 @@ def _svc(
 
 
 @pytest.mark.asyncio
-async def test_add_server_assigns_id_and_defaults_health_unknown() -> None:
-    svc, repo, _ = _svc()
+async def test_add_server_assigns_id_and_eagerly_probes_when_enabled() -> None:
+    """Adding an *enabled* server probes immediately so the UI's tool-count
+    chip isn't stuck at 0 until the user clicks 'test'. Pre-2026-04-28 it
+    stayed UNKNOWN forever — that was the L01 ux bug behind tool count = 0.
+    """
+    svc, repo, _fake = _svc(adapter=FakeAdapter(tools=[MCPToolInfo("a", "", {})]))
     created = await svc.add(
         name="stdio-1",
         transport=MCPTransport.STDIO,
         config={"command": "echo", "args": []},
     )
     assert created.id
-    assert created.health == MCPHealth.UNKNOWN
+    # Eager probe runs · health flips to OK · tools cached.
+    assert created.health == MCPHealth.OK
+    assert created.exposed_tool_ids == ["a"]
     assert created.enabled is True
     assert (await repo.get(created.id)) is not None
+
+
+@pytest.mark.asyncio
+async def test_add_server_disabled_skips_eager_probe() -> None:
+    svc, _repo, _ = _svc()
+    created = await svc.add(
+        name="stdio-disabled",
+        transport=MCPTransport.STDIO,
+        config={"command": "echo"},
+        enabled=False,
+    )
+    # No probe → defaults preserved.
+    assert created.health == MCPHealth.UNKNOWN
+    assert created.exposed_tool_ids == []
 
 
 @pytest.mark.asyncio

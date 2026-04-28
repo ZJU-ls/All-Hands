@@ -74,6 +74,7 @@ from allhands.execution.tool_pipeline import (
 # B5 cleanup can fully delete runner.py without breaking imports).
 RESOLVE_SKILL_TOOL_ID = "allhands.meta.resolve_skill"
 READ_SKILL_FILE_TOOL_ID = "allhands.meta.read_skill_file"
+RUN_SKILL_SCRIPT_TOOL_ID = "allhands.meta.run_skill_script"
 DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
 SPAWN_SUBAGENT_TOOL_ID = "allhands.meta.spawn_subagent"
 
@@ -287,6 +288,7 @@ class AgentLoop:
         conversation_id: str = "",
         run_id: str | None = None,
         max_output_tokens: int | None = None,
+        script_runner: Any = None,
         **_unused: Any,
     ) -> None:
         self._employee = employee
@@ -297,6 +299,7 @@ class AgentLoop:
         self._skill_registry = skill_registry
         self._runtime = runtime
         self._spawn_subagent_service = spawn_subagent_service
+        self._script_runner = script_runner
         self._model_ref_override = model_ref_override
         # ADR 0019 C1 · plan tools · plan_repo and conversation_id passed
         # in by ChatService when constructing the runner; None during
@@ -349,6 +352,13 @@ class AgentLoop:
             )
             lc_messages = self._build_lc_messages(messages, overrides)
 
+            # `iteration` is reset to 0 here EVERY call to stream() · this
+            # is the per-turn invariant. send_message → fresh AgentRunner →
+            # fresh AgentLoop → fresh stream() → fresh iteration counter.
+            # If the user sees "max_iterations" exit on what feels like a
+            # fresh turn, the cause is *this* turn's tool-call sequence
+            # being too long for the budget — not history accumulating.
+            # Test: ``test_agent_loop_iter_reset.py`` pins this contract.
             iteration = 0
             # Self-correction nudge counters · capped to avoid loops.
             # When the model emits 0 text + 0 tool_calls (`empty_response`
@@ -362,7 +372,23 @@ class AgentLoop:
             while True:
                 iteration += 1
                 if iteration > max_iterations:
-                    yield LoopExited(reason="max_iterations")
+                    # Detail spells out the per-turn count + the limit the
+                    # employee was configured with so users + ops can tell
+                    # at a glance whether the budget was reasonable for
+                    # the task — and confirm the counter reset (no history
+                    # creep). Pre-2026-04-28 this was a bare event with no
+                    # numbers, leading users to suspect history accrual.
+                    yield LoopExited(
+                        reason="max_iterations",
+                        detail=(
+                            f"hit per-turn iteration ceiling: used "
+                            f"{iteration - 1}/{max_iterations} (this counter "
+                            "resets every send_message — it does NOT accrue "
+                            "across turns). If your task genuinely needs "
+                            "more tool-call rounds, raise the employee's "
+                            "max_iterations on /employees/{id}."
+                        ),
+                    )
                     return
 
                 # 2026-04-25 (P2): rebuild bindings + tool list every
@@ -398,16 +424,33 @@ class AgentLoop:
                             reasoning_delta=reasoning_delta,
                         )
 
-                # Per-turn LLM telemetry. ``usage_metadata`` is populated by
-                # LangChain when the provider returns it (OpenAI / Anthropic
-                # / DashScope all do); we surface zeros for any provider that
-                # doesn't, which the consumer treats as "unknown" rather than
-                # a literal zero.
+                # Per-turn LLM telemetry. ``usage_metadata`` is populated
+                # provider-side: Anthropic streams ``message_delta`` events
+                # carrying usage; OpenAI requires ``stream_options=
+                # {"include_usage": True}`` (handled in build_llm via
+                # ``stream_usage=True``). When usage is genuinely missing
+                # (rare aggregator that strips the field, or a custom proxy),
+                # we log once and surface zeros — observatory will show "—"
+                # cost rather than guessing.
                 _llm_duration_s = (_now() - llm_call_started_at).total_seconds()
                 _usage = getattr(accumulated, "usage_metadata", None) or {}
                 _input_tok = int(_usage.get("input_tokens", 0) or 0)
                 _output_tok = int(_usage.get("output_tokens", 0) or 0)
                 _total_tok = int(_usage.get("total_tokens", 0) or 0) or (_input_tok + _output_tok)
+                if not _usage and accumulated is not None:
+                    _log.warning(
+                        "agent_loop.usage_metadata.missing",
+                        extra={
+                            "model_ref": effective_model_ref,
+                            "iteration": iteration,
+                            "hint": (
+                                "provider didn't return usage on the stream. "
+                                "If this is OpenAI-compat, ensure stream_usage=True "
+                                "in llm_factory.build_llm. Cost / token KPIs in "
+                                "observatory will show 0 for this run."
+                            ),
+                        },
+                    )
                 yield LLMCallFinished(
                     message_id=message_id,
                     model_ref=effective_model_ref,
@@ -651,14 +694,37 @@ class AgentLoop:
 
     def _active_tool_ids(self) -> list[str]:
         """Active tool ids for THIS turn. Mirrors runner.py:367-376.
-        Task 11 will overlay skill-resolved tool ids; for Task 7 we
-        use just the employee's base list."""
+
+        Skills overlay their resolved tool ids on top of the employee's base
+        list. Then we expand any ``mcp:<server_id>`` entries (the UI's
+        "mounted MCP server" persistence shape) into the universal MCP
+        dispatch pair (``list_mcp_server_tools`` + ``invoke_mcp_server_tool``)
+        — without that expansion, agents that mounted an MCP server would
+        find no per-tool entries in the registry and the loop would silently
+        drop them. The dispatch pair lets the agent list + invoke any
+        server's tool catalogue at runtime (no ahead-of-time per-tool
+        registration needed).
+        """
         active: list[str] = list(self._employee.tool_ids)
         if self._runtime is not None:
             for tids in getattr(self._runtime, "resolved_skills", {}).values():
                 for tid in tids:
                     if tid not in active:
                         active.append(tid)
+        # MCP expansion · ``mcp:<server_id>`` is a "mounted MCP server" marker
+        # written by the employee designer UI, not a registered tool id.
+        # Replace each with the universal dispatch pair so the agent can
+        # actually reach the server's tools at runtime. Idempotent.
+        if any(tid.startswith("mcp:") for tid in active):
+            for dispatcher in (
+                "allhands.meta.list_mcp_server_tools",
+                "allhands.meta.invoke_mcp_server_tool",
+            ):
+                if dispatcher not in active:
+                    active.append(dispatcher)
+            # Drop the marker ids — they're not registry entries and the
+            # binding loop's KeyError-skip path would just spam warnings.
+            active = [tid for tid in active if not tid.startswith("mcp:")]
         return active
 
     def _build_bindings(self) -> dict[str, ToolBinding]:
@@ -723,6 +789,25 @@ class AgentLoop:
             return make_read_skill_file_executor(
                 runtime=self._runtime,
                 skill_registry=self._skill_registry,
+            )
+        if tool_id == RUN_SKILL_SCRIPT_TOOL_ID and self._skill_registry is not None:
+            # Lazy default: if no script_runner was injected (legacy callers),
+            # build a SubprocessScriptRunner on demand. Tests that want a Fake
+            # pass it explicitly via ctor `script_runner=` kwarg.
+            runner = self._script_runner
+            if runner is None:
+                from allhands.execution.script_runner import SubprocessScriptRunner
+
+                runner = SubprocessScriptRunner()
+                self._script_runner = runner
+            from allhands.execution.tools.meta.skill_scripts import (
+                make_run_skill_script_executor,
+            )
+
+            return make_run_skill_script_executor(
+                runtime=self._runtime,
+                skill_registry=self._skill_registry,
+                runner=runner,
             )
         if tool_id == DISPATCH_TOOL_ID and self._dispatch_service is not None:
             return self._build_dispatch_executor()

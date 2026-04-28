@@ -17,6 +17,7 @@ import {
   listMcpServers,
   listSkills,
   publishEmployee,
+  restoreEmployee,
   type ConversationDto,
   type EmployeeDto,
   type McpServerDto,
@@ -101,8 +102,11 @@ function EmployeePageInner() {
   const [mcpServers, setMcpServers] = useState<McpServerDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [busyAction, setBusyAction] = useState<"publish" | "delete" | null>(null);
+  const [busyAction, setBusyAction] = useState<
+    "publish" | "delete" | "restore" | null
+  >(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [hardDeleteOpen, setHardDeleteOpen] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -187,17 +191,50 @@ function EmployeePageInner() {
     }
   }
 
-  async function handleConfirmDelete() {
+  async function handleRestore() {
+    if (!employee) return;
+    setBusyAction("restore");
+    setError(null);
+    try {
+      await restoreEmployee(employee.id);
+      await reload();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleConfirmArchive() {
     if (!employee) return;
     setBusyAction("delete");
     setError(null);
     try {
+      // Default DELETE → soft delete (archive). Detail page stays mounted so
+      // the user can see the archived state + 「重新聘用」 banner without
+      // bouncing back to the list.
       await deleteEmployee(employee.id);
+      setDeleteOpen(false);
+      await reload();
+    } catch (e) {
+      setError(String(e));
+      setDeleteOpen(false);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleConfirmHardDelete() {
+    if (!employee) return;
+    setBusyAction("delete");
+    setError(null);
+    try {
+      await deleteEmployee(employee.id, { hard: true });
       router.push("/employees");
     } catch (e) {
       setError(String(e));
       setBusyAction(null);
-      setDeleteOpen(false);
+      setHardDeleteOpen(false);
     }
   }
 
@@ -236,6 +273,14 @@ function EmployeePageInner() {
             <LoadingState title={t("loadingEmployee")} />
           ) : employee ? (
             <>
+              {employee.status === "archived" && (
+                <ArchivedBanner
+                  busy={busyAction === "restore"}
+                  onRestore={() => void handleRestore()}
+                  onHardDelete={() => setHardDeleteOpen(true)}
+                />
+              )}
+
               <HeroCard
                 employee={employee}
                 isLead={isLead}
@@ -254,6 +299,7 @@ function EmployeePageInner() {
               {activeTab === "overview" && (
                 <OverviewPane
                   employee={employee}
+                  skills={skills}
                   conversations={conversations}
                   badges={badges}
                   badgeT={badgeT}
@@ -291,10 +337,81 @@ function EmployeePageInner() {
         confirmLabel={t("deleteConfirm")}
         danger
         busy={busyAction === "delete"}
-        onConfirm={() => void handleConfirmDelete()}
+        onConfirm={() => void handleConfirmArchive()}
         onCancel={() => setDeleteOpen(false)}
       />
+
+      <ConfirmDialog
+        open={hardDeleteOpen}
+        title={t("hardDeleteTitle", { name: employee?.name ?? "" })}
+        message={t("hardDeleteMessage")}
+        confirmLabel={t("hardDeleteConfirm")}
+        danger
+        busy={busyAction === "delete"}
+        onConfirm={() => void handleConfirmHardDelete()}
+        onCancel={() => setHardDeleteOpen(false)}
+      />
     </AppShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Archived banner — only rendered for status=archived
+// ---------------------------------------------------------------------------
+
+function ArchivedBanner({
+  busy,
+  onRestore,
+  onHardDelete,
+}: {
+  busy: boolean;
+  onRestore: () => void;
+  onHardDelete: () => void;
+}) {
+  const t = useTranslations("employees.detail");
+  return (
+    <section
+      data-testid="employee-archived-banner"
+      className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning-soft px-4 py-3"
+    >
+      <span className="grid h-8 w-8 place-items-center rounded-lg bg-warning/15 text-warning shrink-0">
+        <Icon name="folder" size={14} strokeWidth={2.25} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold text-text">
+          {t("archivedTitle")}
+        </p>
+        <p className="mt-0.5 text-[12px] text-text-muted">
+          {t("archivedBody")}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={onRestore}
+          disabled={busy}
+          data-testid="employee-archived-restore"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-[12px] font-semibold text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-60 transition duration-base"
+        >
+          {busy ? (
+            <Icon name="loader" size={12} className="animate-spin" />
+          ) : (
+            <Icon name="refresh" size={12} strokeWidth={2.25} />
+          )}
+          {t("restore")}
+        </button>
+        <button
+          type="button"
+          onClick={onHardDelete}
+          disabled={busy}
+          data-testid="employee-archived-hard-delete"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-danger/40 px-3 text-[12px] font-medium text-danger hover:bg-danger-soft disabled:opacity-30 transition duration-base"
+        >
+          <Icon name="trash-2" size={12} strokeWidth={2} />
+          {t("hardDelete")}
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -362,15 +479,25 @@ function HeroCard({
               className={`inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-caption font-mono font-semibold uppercase tracking-wider ${
                 employee.status === "draft"
                   ? "bg-warning-soft text-warning"
-                  : "bg-success-soft text-success"
+                  : employee.status === "archived"
+                    ? "bg-surface-3 text-text-subtle"
+                    : "bg-success-soft text-success"
               }`}
             >
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  employee.status === "draft" ? "bg-warning" : "bg-success"
+                  employee.status === "draft"
+                    ? "bg-warning"
+                    : employee.status === "archived"
+                      ? "bg-text-subtle"
+                      : "bg-success"
                 }`}
               />
-              {employee.status === "draft" ? t("statusDraft") : t("statusPublished")}
+              {employee.status === "draft"
+                ? t("statusDraft")
+                : employee.status === "archived"
+                  ? t("statusArchived")
+                  : t("statusPublished")}
             </span>
           </div>
           {employee.description ? (
@@ -398,46 +525,48 @@ function HeroCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onNewConversation}
-            disabled={creating}
-            data-testid="employee-hero-chat"
-            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary hover:bg-primary-hover text-primary-fg text-[13px] font-semibold shadow-soft hover:-translate-y-px transition duration-base disabled:opacity-60"
-          >
-            {creating ? (
-              <>
-                <Icon name="loader" size={14} className="animate-spin" />
-                {t("openingChat")}
-              </>
-            ) : (
-              <>
-                <Icon name="send" size={14} />
-                {t("startChat")}
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={onEdit}
-            data-testid="employee-hero-edit"
-            className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
-          >
-            <Icon name="edit" size={14} />
-            {t("edit")}
-          </button>
-          <Link
-            href={`/chat?prefill=${encodeURIComponent(
-              t("dispatchPrefill", { name: employee.name }),
-            )}`}
-            data-testid="employee-hero-dispatch"
-            className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
-          >
-            <Icon name="share-2" size={14} />
-            {t("dispatch")}
-          </Link>
-        </div>
+        {employee.status !== "archived" && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onNewConversation}
+              disabled={creating}
+              data-testid="employee-hero-chat"
+              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-primary hover:bg-primary-hover text-primary-fg text-[13px] font-semibold shadow-soft hover:-translate-y-px transition duration-base disabled:opacity-60"
+            >
+              {creating ? (
+                <>
+                  <Icon name="loader" size={14} className="animate-spin" />
+                  {t("openingChat")}
+                </>
+              ) : (
+                <>
+                  <Icon name="send" size={14} />
+                  {t("startChat")}
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={onEdit}
+              data-testid="employee-hero-edit"
+              className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
+            >
+              <Icon name="edit" size={14} />
+              {t("edit")}
+            </button>
+            <Link
+              href={`/chat?prefill=${encodeURIComponent(
+                t("dispatchPrefill", { name: employee.name }),
+              )}`}
+              data-testid="employee-hero-dispatch"
+              className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border bg-surface text-[13px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base"
+            >
+              <Icon name="share-2" size={14} />
+              {t("dispatch")}
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -629,6 +758,7 @@ function TabBar({
 
 function OverviewPane({
   employee,
+  skills,
   conversations,
   badges,
   badgeT,
@@ -637,6 +767,7 @@ function OverviewPane({
   onNewConversation,
 }: {
   employee: EmployeeDto;
+  skills: SkillDto[] | null;
   conversations: ConversationDto[] | null;
   badges: string[];
   badgeT: (key: string) => string;
@@ -645,6 +776,11 @@ function OverviewPane({
   onNewConversation: () => void;
 }) {
   const t = useTranslations("employees.detail");
+  const skillNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    (skills ?? []).forEach((s) => m.set(s.id, s.name));
+    return m;
+  }, [skills]);
   return (
     <div data-testid="employee-tab-overview" className="space-y-6">
       <Section
@@ -659,10 +795,11 @@ function OverviewPane({
             {employee.skill_ids.map((id) => (
               <span
                 key={id}
-                className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary-muted text-primary text-caption font-mono font-medium"
+                className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary-muted text-primary text-caption font-medium"
+                title={id}
               >
                 <Icon name="sparkles" size={10} strokeWidth={2} />
-                {id.replace(/^allhands\.(skills|builtin)\./, "")}
+                {skillNameById.get(id) ?? id.replace(/^allhands\.(skills|builtin)\./, "")}
               </span>
             ))}
           </div>
@@ -786,7 +923,7 @@ function ConfigPane({
   employee: EmployeeDto;
   skills: SkillDto[] | null;
   mcpServers: McpServerDto[] | null;
-  busyAction: "publish" | "delete" | null;
+  busyAction: "publish" | "delete" | "restore" | null;
   onPublish: () => void;
   onDelete: () => void;
   onTry: () => void;
@@ -794,6 +931,7 @@ function ConfigPane({
 }) {
   const t = useTranslations("employees.detail");
   const isDraft = employee.status === "draft";
+  const isArchived = employee.status === "archived";
   const busy = busyAction !== null;
   return (
     <div data-testid="employee-tab-config" className="space-y-5">
@@ -811,16 +949,18 @@ function ConfigPane({
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={onTry}
-              disabled={busy}
-              data-testid="employee-config-try"
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base disabled:opacity-40"
-            >
-              <Icon name="play" size={12} strokeWidth={2.25} />
-              {t("tryEmployee")}
-            </button>
+            {!isArchived && (
+              <button
+                type="button"
+                onClick={onTry}
+                disabled={busy}
+                data-testid="employee-config-try"
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-surface text-[12px] font-medium text-text hover:border-primary hover:text-primary shadow-soft-sm transition duration-base disabled:opacity-40"
+              >
+                <Icon name="play" size={12} strokeWidth={2.25} />
+                {t("tryEmployee")}
+              </button>
+            )}
             {isDraft && (
               <button
                 type="button"
@@ -842,19 +982,21 @@ function ConfigPane({
                 )}
               </button>
             )}
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={busy || employee.is_lead_agent}
-              title={
-                employee.is_lead_agent ? t("leadCannotDelete") : t("deleteHint")
-              }
-              data-testid="employee-config-delete"
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/40 bg-surface text-danger hover:bg-danger-soft text-[12px] font-medium shadow-soft-sm transition duration-base disabled:opacity-30 disabled:hover:bg-surface"
-            >
-              <Icon name="trash-2" size={12} strokeWidth={2} />
-              {busyAction === "delete" ? t("deleting") : t("delete")}
-            </button>
+            {!isArchived && (
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={busy || employee.is_lead_agent}
+                title={
+                  employee.is_lead_agent ? t("leadCannotDelete") : t("deleteHint")
+                }
+                data-testid="employee-config-delete"
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-danger/40 bg-surface text-danger hover:bg-danger-soft text-[12px] font-medium shadow-soft-sm transition duration-base disabled:opacity-30 disabled:hover:bg-surface"
+              >
+                <Icon name="trash-2" size={12} strokeWidth={2} />
+                {busyAction === "delete" ? t("deleting") : t("delete")}
+              </button>
+            )}
           </div>
         </div>
       </section>

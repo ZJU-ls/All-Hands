@@ -876,21 +876,52 @@ class KnowledgeService:
             emitted = True
 
     async def _pick_chat_provider(self, model_ref: str | None) -> tuple[Any, str]:
-        from allhands.persistence.sql_repos import SqlLLMProviderRepo
+        """Pick an LLM provider + model name for the Ask path.
+
+        Priority:
+        1. Caller-supplied ``model_ref`` (and walk to the matching provider)
+        2. The DB's default ``LLMModel`` (the user's "set as default" pick on /gateway)
+        3. ``settings.default_model_ref`` (env override, kept for ops)
+        4. Provider preset's bundled default
+
+        Why DB default first: the user explicitly clicked "set as default" on
+        a model on /gateway; honouring an env or preset over that pick is a
+        bug we hit during real-LLM testing on 2026-04-28(qwen3.6-plus was the
+        DB default but Ask kept calling openai/gpt-4o-mini from a stale env).
+        """
+        from allhands.persistence.sql_repos import SqlLLMModelRepo, SqlLLMProviderRepo
 
         async with self._session_maker() as s:
             providers = await SqlLLMProviderRepo(s).list_all()
-        usable = [p for p in providers if p.enabled and p.api_key]
-        if not usable:
+            default_model = await SqlLLMModelRepo(s).get_default()
+
+        usable_by_id = {p.id: p for p in providers if p.enabled and p.api_key}
+        if not usable_by_id:
             raise _NoChatProvider()
-        provider = usable[0]
 
-        ref = model_ref or get_settings().default_model_ref
-        if not ref:
-            from allhands.core.provider_presets import preset_for
+        # 1. Explicit model_ref → still need to find a usable provider.
+        if model_ref:
+            # Pick the first usable provider; preserves the legacy contract
+            # for callers that already supplied a fully-qualified ref.
+            provider = next(iter(usable_by_id.values()))
+            return provider, model_ref
 
-            ref = preset_for(provider.kind).default_model
-        return provider, ref
+        # 2. DB-marked default model wins when its provider is enabled + keyed.
+        if default_model is not None:
+            owning = usable_by_id.get(default_model.provider_id)
+            if owning is not None:
+                return owning, default_model.name
+
+        # 3. Settings env fallback
+        provider = next(iter(usable_by_id.values()))
+        ref = get_settings().default_model_ref
+        if ref:
+            return provider, ref
+
+        # 4. Provider preset
+        from allhands.core.provider_presets import preset_for
+
+        return provider, preset_for(provider.kind).default_model
 
     async def suggest_tags_for_document(
         self,

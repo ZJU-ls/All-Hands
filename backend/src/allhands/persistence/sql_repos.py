@@ -101,7 +101,7 @@ def _row_to_employee(row: EmployeeRow) -> Employee:
         skill_ids=list(row.skill_ids),
         max_iterations=row.max_iterations,
         is_lead_agent=row.is_lead_agent,
-        status=row.status if row.status in ("draft", "published") else "published",  # type: ignore[arg-type]
+        status=row.status if row.status in ("draft", "published", "archived") else "published",  # type: ignore[arg-type]
         created_by=row.created_by,
         created_at=_utc(row.created_at),
         published_at=_utc(row.published_at) if row.published_at else None,
@@ -175,6 +175,7 @@ def _row_to_message(row: MessageRow) -> Message:
         reasoning=row.reasoning,
         interrupted=row.interrupted,
         attachment_ids=list(getattr(row, "attachment_ids", []) or []),
+        is_compacted=bool(row.is_compacted),
         created_at=_utc(row.created_at),
     )
 
@@ -241,10 +242,22 @@ class SqlEmployeeRepo:
         row = result.scalar_one_or_none()
         return _row_to_employee(row) if row else None
 
-    async def list_all(self, *, status: str | None = None) -> list[Employee]:
+    async def list_all(
+        self, *, status: str | None = None, include_archived: bool = False
+    ) -> list[Employee]:
+        """List employees.
+
+        - ``status`` filters to a single status value when provided.
+        - ``include_archived`` controls whether archived employees show up
+          when ``status`` is ``None``. The default keeps the historical
+          "active surfaces" behaviour: callers that want the 「已离职」
+          tab pass ``status="archived"`` explicitly.
+        """
         stmt = select(EmployeeRow)
         if status is not None:
             stmt = stmt.where(EmployeeRow.status == status)
+        elif not include_archived:
+            stmt = stmt.where(EmployeeRow.status != "archived")
         result = await self._s.execute(stmt)
         return [_row_to_employee(r) for r in result.scalars().all()]
 
@@ -349,6 +362,7 @@ class SqlConversationRepo:
             reasoning=message.reasoning,
             interrupted=message.interrupted,
             attachment_ids=list(message.attachment_ids),
+            is_compacted=message.is_compacted,
             created_at=_naive(message.created_at),
         )
         self._s.add(row)
@@ -361,6 +375,26 @@ class SqlConversationRepo:
         await self._s.execute(delete(MessageRow).where(MessageRow.id.in_(message_ids)))
         await self._s.commit()
         return len(message_ids)
+
+    async def mark_messages_compacted(self, message_ids: list[str]) -> int:
+        """Soft-flag messages as compacted (compact-dual-view.md).
+
+        Used by manual ``/compact`` instead of ``delete_messages``: the row
+        stays so the UI keeps the full transcript, but the LLM context
+        builder filters non-system rows where ``is_compacted=True`` so the
+        token budget actually shrinks. Idempotent: re-flagging an already
+        compacted message is a no-op SQL update.
+        """
+        if not message_ids:
+            return 0
+        from sqlalchemy import update
+
+        result = await self._s.execute(
+            update(MessageRow).where(MessageRow.id.in_(message_ids)).values(is_compacted=True)
+        )
+        await self._s.commit()
+        rowcount = getattr(result, "rowcount", None)
+        return int(rowcount) if rowcount else 0
 
     async def delete(self, conversation_id: str) -> bool:
         """Cascade-aware conversation delete.

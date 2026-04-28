@@ -155,6 +155,11 @@ class Message(BaseModel):
     # into ImageBlock/FileBlock entries in content_blocks. Empty for assistant
     # / tool messages.
     attachment_ids: list[str] = Field(default_factory=list)
+    # 2026-04-28 · context-compact dual-view. True when this message has been
+    # folded into a summary by a manual `/compact` action. The row stays in
+    # the database so the UI keeps it (behind a "N 条已压缩" fold); only the
+    # LLM context build path filters it out (except system summary markers).
+    is_compacted: bool = False
     created_at: datetime
 
     @model_validator(mode="after")

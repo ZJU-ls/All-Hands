@@ -24,7 +24,7 @@
       "done": "Compacted · {n}",
       "idle": "Compact context",
       "errorTitle": "Compaction failed · {message}",
-      "tooltip": "Fold older messages into a single summary to free up the context window",
+      "tooltip": "Shrinks the context sent to the model · your transcript keeps every message, just folded behind a click-to-expand band",
       "ariaLabel": "Manually compact conversation context"
     },
     "composer": {
@@ -103,7 +103,14 @@
       "streamStalled": "Waiting for response",
       "streamSilent": "No response for {s}s",
       "streamAbort": "Stop",
-      "streamAbortTitle": "Stop this stream (idle too long · aborts SSE and unlocks the input)"
+      "streamAbortTitle": "Stop this stream (idle too long · aborts SSE and unlocks the input)",
+      "compactedFold": {
+        "heading": "{n} messages compacted",
+        "subtitle": "Stay in your transcript but skipped from the model's context · click to expand",
+        "expand": "Expand",
+        "collapse": "Collapse",
+        "rowBadge": "Folded"
+      }
     },
     "modelOverride": {
       "defaultModel": "Default model",

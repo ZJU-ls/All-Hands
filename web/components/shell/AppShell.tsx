@@ -274,11 +274,18 @@ function UsageCard() {
 function Sidebar({
   collapsed,
   onToggle,
+  activeOverride,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  /** Pin the active highlight to a specific menu href, ignoring the URL.
+   * Used when the current URL belongs conceptually to a different menu —
+   * e.g. /chat/{convId} for a non-Lead employee should highlight 「员工」,
+   * not 「对话」 (which is the Lead chat entry). */
+  activeOverride?: string;
 }) {
   const pathname = usePathname();
+  const effectivePath = activeOverride ?? pathname;
   const tSection = useTranslations("shell.sections");
   const tMenu = useTranslations("shell.menu");
   const tSide = useTranslations("shell.sidebar");
@@ -306,7 +313,7 @@ function Sidebar({
             )}
             <ul className="space-y-0.5">
               {section.items.map((item) => {
-                const active = matchActive(pathname, item.href, allHrefs);
+                const active = matchActive(effectivePath, item.href, allHrefs);
                 return (
                   <SidebarItem
                     key={item.href}
@@ -359,10 +366,16 @@ export function AppShell({
   children,
   title,
   actions,
+  sidebarActiveOverride,
 }: {
   children: React.ReactNode;
   title?: string;
   actions?: React.ReactNode;
+  /** Override which sidebar item is highlighted regardless of pathname. Use
+   * this on pages whose URL belongs to one menu group conceptually but should
+   * stay anchored to another — e.g. a non-Lead employee chat lives under
+   * ``/chat/{id}`` but visually belongs under 「员工」. */
+  sidebarActiveOverride?: string;
 }) {
   const t = useTranslations("shell.topbar");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -443,7 +456,11 @@ export function AppShell({
     <ToastProvider>
     <RouteProgress />
     <div className="flex h-screen w-full bg-bg text-text">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={toggleSidebar}
+        activeOverride={sidebarActiveOverride}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-bg/80 px-6 backdrop-blur-md">
           <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight">

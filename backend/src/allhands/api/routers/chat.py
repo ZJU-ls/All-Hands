@@ -108,6 +108,7 @@ def _to_message_response(m: Message) -> ChatMessageResponse:
         reasoning=m.reasoning,
         interrupted=m.interrupted,
         attachment_ids=list(m.attachment_ids),
+        is_compacted=m.is_compacted,
     )
 
 

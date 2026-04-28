@@ -2,9 +2,9 @@
   "employees": {
     "list": {
       "shellTitle": "Employees",
-      "designAction": "Design employee",
+      "designAction": "+ New employee",
       "pageTitle": "Employees",
-      "subtitle": "Browse published employees as cards. Click an avatar to start a new chat. Use \"Design employee\" in the top right to enter the draft workspace.",
+      "subtitle": "Browse your team — switch tabs to see drafts and archived members. Click any card to drill into details, or use the quick actions on the bottom right.",
       "defaultModel": "Default model",
       "fallbackModel": "Use default",
       "noDescription": "No description",
@@ -12,14 +12,51 @@
       "startChatAria": "Start a new chat with {name}",
       "detail": "Details",
       "chat": "Chat",
+      "tryEmployee": "Try out",
       "opening": "Opening",
+      "publish": "Publish",
+      "archive": "Archive",
+      "archiveHint": "Soft-delete · employee moves to 已离职, conversations stay intact, can be restored later",
+      "restore": "Restore",
+      "hardDelete": "Delete forever",
+      "hardDeleteHint": "Permanently drop the row · conversations lose their employee link",
+      "leadCannotDelete": "The Lead Agent cannot be deleted",
+      "statusDraft": "Draft",
+      "statusPublished": "Live",
+      "statusArchived": "Archived",
+      "archiveTitle": "Archive employee \"{name}\"?",
+      "archiveMessage": "The employee disappears from the active roster but keeps all conversations. You can restore them from the 「已离职」 tab.",
+      "archiveConfirm": "Archive",
+      "hardDeleteTitle": "Permanently delete \"{name}\"?",
+      "hardDeleteMessage": "This drops the row from the database. Conversations remain but lose their employee link. This cannot be undone.",
+      "hardDeleteConfirm": "Delete forever",
       "loadingEmployees": "Loading employees",
       "emptyHeading": "Hire your first digital employee",
       "emptyBodyPrefix": "Send a quick ",
       "emptyBodySuffix": " message to the Lead Agent and assign a few skills and tools — your new employee starts on the spot.",
       "hireEmployee": "Hire employee",
       "openDesigner": "Open designer",
-      "popularStarts": "Popular starts"
+      "popularStarts": "Popular starts",
+      "toolbar": {
+        "tabsAria": "Filter employees by status",
+        "tabs": {
+          "all": "All",
+          "published": "Active",
+          "draft": "Draft",
+          "archived": "Archived"
+        },
+        "searchPlaceholder": "Search name / description / model / skill…"
+      },
+      "emptyFiltered": {
+        "searchHeading": "No employees match \"{query}\"",
+        "tabHeading": {
+          "all": "No employees yet",
+          "published": "No active employees",
+          "draft": "No drafts in progress",
+          "archived": "Nobody has been archived yet"
+        },
+        "body": "Try a different tab or clear the search to see more."
+      }
     },
     "detail": {
       "shellTitleFallback": "Employee",
@@ -82,7 +119,15 @@
       "deleteConfirm": "Delete",
       "filesEmptyHeading": "No artifacts from {name} yet",
       "filesEmptyBody": "Files this employee produces (reports, charts, exports) will land here. Browse all artifacts in the dedicated panel for now.",
-      "filesGotoArtifacts": "Open artifacts"
+      "filesGotoArtifacts": "Open artifacts",
+      "statusArchived": "Archived",
+      "archivedTitle": "This employee has been archived",
+      "archivedBody": "Conversations stay intact. Restore to put them back on the active roster, or delete forever to drop the row entirely.",
+      "restore": "Restore",
+      "hardDelete": "Delete forever",
+      "hardDeleteTitle": "Permanently delete \"{name}\"?",
+      "hardDeleteMessage": "This drops the row from the database. Conversations remain but lose their employee link. Cannot be undone.",
+      "hardDeleteConfirm": "Delete forever"
     },
     "new": {
       "shellTitle": "Hire new employee",
