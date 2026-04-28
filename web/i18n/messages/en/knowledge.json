@@ -185,6 +185,11 @@
       "summary": "Re-embed done · {processed} processed · {succeeded} ok · {failed} failed"
     },
     "overview": {
+      "welcomeTitle": "Welcome to {kb}",
+      "welcomeBody": "Drop a markdown / pdf / docx in — searchable + askable in seconds. Or grab a web article.",
+      "welcomeUpload": "Upload your first document",
+      "welcomeIngestUrl": "Ingest a URL",
+      "welcomeFootnote": "Supports .md / .pdf / .docx / .txt / .html / .csv …",
       "descriptionLabel": "Description",
       "noDescription": "(no description · click edit ↗ to add one)",
       "editDescription": "Edit in settings",

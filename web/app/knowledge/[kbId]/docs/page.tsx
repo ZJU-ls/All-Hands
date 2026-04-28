@@ -35,6 +35,7 @@ import {
 } from "@/lib/kb-api";
 import { ModalShell } from "@/components/knowledge/ModalShell";
 import { Field } from "@/components/knowledge/Field";
+import { SkeletonDocCard } from "@/components/knowledge/Skeleton";
 
 type StateFilter = "" | "ready" | "indexing" | "failed";
 
@@ -424,7 +425,11 @@ function DocumentsTabInner() {
       {/* Doc grid */}
       <div className="flex-1 overflow-y-auto p-5">
         {!docs ? (
-          <p className="text-[12px] text-text-muted">{td("loading")}</p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <SkeletonDocCard key={i} />
+            ))}
+          </div>
         ) : docs.length === 0 ? (
           <EmptyState
             title={td("emptyTitle")}

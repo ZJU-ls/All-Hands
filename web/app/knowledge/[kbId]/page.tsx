@@ -20,6 +20,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
 import { useKBContext } from "@/components/knowledge/KBContext";
+import { SkeletonRow } from "@/components/knowledge/Skeleton";
 import {
   type DocumentDto,
   getStarterQuestions,
@@ -47,6 +48,46 @@ export default function OverviewPage() {
     () => health?.daily_doc_counts ?? [],
     [health],
   );
+
+  // Empty-KB onboarding: when this KB has zero documents, swap the
+  // multi-card layout for a single "first run" hero. Avoids 4 empty boxes
+  // shouting "loading…" / "(empty)".
+  if (kb.document_count === 0) {
+    return (
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="mx-auto max-w-2xl py-8 text-center">
+          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-primary-muted">
+            <Icon name="upload" size={26} className="text-primary" />
+          </div>
+          <h2 className="text-[20px] font-semibold text-text">
+            {t("welcomeTitle", { kb: kb.name })}
+          </h2>
+          <p className="mt-2 text-[13px] text-text-muted">
+            {t("welcomeBody")}
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            <Link
+              href={`/knowledge/${kb.id}/docs?upload=1`}
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-5 text-[13px] font-semibold text-primary-fg shadow-soft-sm hover:bg-primary-hover"
+            >
+              <Icon name="upload" size={14} />
+              {t("welcomeUpload")}
+            </Link>
+            <Link
+              href={`/knowledge/${kb.id}/docs?ingestUrl=1`}
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-border bg-surface-2 px-5 text-[13px] text-text hover:border-border-strong"
+            >
+              <Icon name="link" size={14} />
+              {t("welcomeIngestUrl")}
+            </Link>
+          </div>
+          <p className="mt-4 font-mono text-[11px] text-text-subtle">
+            {t("welcomeFootnote")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -127,7 +168,13 @@ export default function OverviewPage() {
               {t("recentUploads")}
             </div>
             {!recent ? (
-              <p className="mt-3 text-[12px] text-text-muted">{t("loading")}</p>
+              <ul className="mt-3 space-y-1.5">
+                {[0, 1, 2].map((i) => (
+                  <li key={i} className="rounded-lg bg-surface-2 px-3 py-2">
+                    <SkeletonRow width="70%" />
+                  </li>
+                ))}
+              </ul>
             ) : recent.length === 0 ? (
               <p className="mt-3 text-[12px] text-text-muted">
                 {t("emptyDocs")}
@@ -168,7 +215,13 @@ export default function OverviewPage() {
               {tStarter("label")}
             </div>
             {starters === null ? (
-              <p className="mt-3 text-[12px] text-text-muted">{t("loading")}</p>
+              <ul className="mt-3 space-y-1.5">
+                {[0, 1, 2].map((i) => (
+                  <li key={i} className="rounded-lg bg-surface-2 px-3 py-2">
+                    <SkeletonRow width="85%" />
+                  </li>
+                ))}
+              </ul>
             ) : starters.length === 0 ? (
               <p className="mt-3 text-[12px] text-text-muted">
                 {t("noStarters")}
