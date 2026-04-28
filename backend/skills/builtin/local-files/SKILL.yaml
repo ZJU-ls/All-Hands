@@ -15,6 +15,8 @@ tool_ids:
   - allhands.local.edit_file
   # 跑命令
   - allhands.local.bash
+  # 跑 skill 内打包的 Python 脚本(anthropic/pdf · xlsx 等同款)
+  - allhands.meta.run_skill_script
   # 工作区管理(L01 对称)
   - allhands.meta.list_local_workspaces
   - allhands.meta.add_local_workspace
