@@ -174,11 +174,14 @@ def default_lead_tool_ids() -> list[str]:
         "allhands.meta.read_skill_file",
         "allhands.meta.dispatch_employee",
         "allhands.meta.spawn_subagent",
-        # Working memo (Plan · 4 small tools · cheap to always have)
-        "allhands.meta.plan_create",
-        "allhands.meta.plan_update_step",
-        "allhands.meta.plan_complete_step",
-        "allhands.meta.plan_view",
+        # Working memo (Plan · 2 atomic-replace tools · Claude-Code TodoWrite
+        # parity, see plan_tools.py module docstring). 2026-04-28: replaces
+        # the legacy 4-tuple plan_create / plan_update_step /
+        # plan_complete_step / plan_view that no longer exists in the
+        # registry — Leads bootstrapped before this rename will still carry
+        # the stale ids; ``ensure_lead_agent`` migrates them on next boot.
+        "allhands.meta.update_plan",
+        "allhands.meta.view_plan",
         # State snapshot (single tool, compact output)
         "allhands.meta.cockpit.get_workspace_summary",
         # Output channel (L16 · render as how-the-LLM-visualises-reply,
@@ -232,6 +235,16 @@ async def ensure_lead_agent(repo: EmployeeRepo) -> Employee:
         updates: dict[str, object] = {}
         if existing.system_prompt != canonical_prompt:
             updates["system_prompt"] = canonical_prompt
+
+        # Tool-id rename migrations (2026-04-28). Apply BEFORE the legacy
+        # baseline check so a Lead carrying a renamed-but-still-valid id
+        # heals to the new id without being mistakenly classified as
+        # "legacy-style" (which would clobber any user customizations).
+        from allhands.services.tool_id_migrations import apply_renames_to_tool_ids
+
+        renamed_tools = apply_renames_to_tool_ids(list(existing.tool_ids))
+        if renamed_tools != list(existing.tool_ids):
+            updates["tool_ids"] = renamed_tools
 
         # E22 auto-upgrade: if the Lead still has the pre-refactor flat bundle
         # (was bootstrapped before the skill-pack split), migrate to the new

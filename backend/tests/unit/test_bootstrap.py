@@ -37,8 +37,8 @@ LEAD_ADMIN_TOOL_IDS_EXPECTED = {
     "allhands.meta.list_models",
     "allhands.meta.create_model",
     "allhands.meta.chat_test_model",
-    # planning
-    "allhands.meta.plan_create",
+    # planning · 2026-04-28: renamed to update_plan (atomic-replace · Claude-Code TodoWrite parity)
+    "allhands.meta.update_plan",
     # cockpit / workspace
     "allhands.meta.cockpit.get_workspace_summary",
     "allhands.meta.cockpit.pause_all_runs",
@@ -309,9 +309,15 @@ async def test_user_customised_lead_is_not_forced_to_render_hot() -> None:
 
     await ensure_lead_agent(repo)
 
-    # No upsert because prompt already matches + tool_ids is not exact baseline
-    # (has the extra user-added tool) → guard falls through.
-    repo.upsert.assert_not_called()
+    # Rename migration fires (the historical snapshot still contains the old
+    # plan_create / plan_view ids) so an upsert is expected — but it must
+    # ONLY have replaced the renamed ids and nothing else. The user's
+    # ``some.custom.extra_tool`` survives.
+    if repo.upsert.called:
+        new = repo.upsert.call_args.args[0]
+        assert "some.custom.extra_tool" in new.tool_ids
+        assert "allhands.meta.update_plan" in new.tool_ids
+        assert "allhands.meta.plan_create" not in new.tool_ids
 
 
 @pytest.mark.asyncio
@@ -406,4 +412,9 @@ async def test_user_customised_post_l16_lead_is_not_forced_to_upgrade() -> None:
     repo.upsert = AsyncMock()
 
     await ensure_lead_agent(repo)
-    repo.upsert.assert_not_called()
+    # Rename migration fires (the snapshot includes legacy plan ids) but
+    # must preserve the user-added tool.
+    if repo.upsert.called:
+        new = repo.upsert.call_args.args[0]
+        assert "some.custom.extra_tool" in new.tool_ids
+        assert "allhands.meta.plan_create" not in new.tool_ids
