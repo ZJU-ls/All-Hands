@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KB · 第三夜 R1-R12 迭代验收</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root[data-theme="dark"]{
+  --bg-base:#0a0d14; --bg-surface:#11151f; --bg-elevated:#161b28; --bg-soft:#1c2233;
+  --border-hairline:rgba(120,140,200,0.10); --border-strong:rgba(140,165,220,0.22);
+  --text-strong:#f4f6fb; --text-default:#c9d1e3; --text-muted:#8590a8; --text-faint:#5d6680;
+  --primary:#4a7dff; --primary-soft:rgba(74,125,255,0.14);
+  --accent-cyan:#38c8d8; --accent-violet:#8b6cff;
+  --success:#44d18a; --warning:#f0b048; --danger:#ff6477;
+}
+:root[data-theme="light"]{
+  --bg-base:#f5f7fc; --bg-surface:#fff; --bg-elevated:#fff; --bg-soft:#eef2fa;
+  --border-hairline:rgba(20,30,60,0.08); --border-strong:rgba(20,30,60,0.20);
+  --text-strong:#0c1426; --text-default:#2c364c; --text-muted:#5a6680; --text-faint:#8a93ab;
+  --primary:#2c5cff; --primary-soft:rgba(44,92,255,0.10);
+  --accent-cyan:#1e9aa8; --accent-violet:#6a4cf0;
+  --success:#1fae6a; --warning:#c98a25; --danger:#d8324a;
+}
+html,body{background:var(--bg-base);color:var(--text-default);font-family:'Inter','PingFang SC',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+.text-strong{color:var(--text-strong);} .text-muted{color:var(--text-muted);} .text-faint{color:var(--text-faint);}
+.bg-surface{background:var(--bg-surface);}
+.gradient-text{background:linear-gradient(120deg,var(--primary),var(--accent-cyan),var(--accent-violet));-webkit-background-clip:text;background-clip:text;color:transparent;}
+.hero-mesh{background:radial-gradient(60% 50% at 20% 0%,var(--primary-soft) 0,transparent 60%),radial-gradient(50% 40% at 90% 20%,rgba(56,200,216,.10) 0,transparent 60%),radial-gradient(40% 30% at 50% 100%,rgba(139,108,255,.10) 0,transparent 60%);}
+.card{background:var(--bg-surface);border:1px solid var(--border-hairline);border-radius:14px;}
+.kbd{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;padding:2px 6px;border-radius:4px;background:var(--bg-soft);border:1px solid var(--border-hairline);color:var(--text-default);}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:11px;line-height:1.4;border-radius:999px;border:1px solid var(--border-strong);color:var(--text-muted);background:var(--bg-soft);font-weight:500;}
+.pill-success{color:var(--success);border-color:rgba(68,209,138,0.2);background:rgba(68,209,138,0.10);}
+.pill-primary{color:var(--primary);border-color:var(--primary-soft);background:var(--primary-soft);}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.accent-bar{background:linear-gradient(90deg,var(--primary),var(--accent-cyan));height:2px;border-radius:2px;}
+.iter-num{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--primary-soft);color:var(--primary);font-family:'JetBrains Mono',monospace;font-weight:600;font-size:14px;}
+table.t{width:100%;font-size:12.5px;}
+table.t th{text-align:left;font-weight:500;color:var(--text-faint);padding:10px 12px;border-bottom:1px solid var(--border-hairline);text-transform:uppercase;letter-spacing:0.04em;font-size:10px;}
+table.t td{padding:10px 12px;border-bottom:1px solid var(--border-hairline);vertical-align:top;}
+.green-tick::before{content:"✓";color:var(--success);font-weight:bold;margin-right:6px;}
+details > summary{list-style:none;cursor:pointer;}
+details > summary::-webkit-details-marker{display:none;}
+details > summary::after{content:'▾';color:var(--text-faint);margin-left:6px;display:inline-block;transition:transform .15s;}
+details[open] > summary::after{transform:rotate(180deg);}
+</style>
+</head>
+<body class="min-h-screen">
+
+<header class="sticky top-0 z-50 backdrop-blur-xl" style="background:color-mix(in srgb,var(--bg-base) 80%,transparent);border-bottom:1px solid var(--border-hairline);">
+  <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,var(--primary),var(--accent-violet));">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+      </div>
+      <span class="text-strong font-semibold">KB · 第三夜 · R1-R12</span>
+      <span class="pill pill-success"><span class="dot"></span>Round 3 完成</span>
+    </div>
+    <button id="themeToggle" class="px-3 py-1.5 rounded-md text-muted hover:text-strong border text-sm" style="border-color:var(--border-hairline);">主题</button>
+  </div>
+</header>
+
+<section class="hero-mesh">
+  <div class="max-w-6xl mx-auto px-6 pt-14 pb-10">
+    <div class="flex items-center gap-2 mb-5">
+      <span class="pill pill-primary"><span class="dot"></span>2026-04-28 → 04-29</span>
+      <span class="pill">已合并 main</span>
+    </div>
+    <h1 class="text-4xl md:text-5xl font-semibold tracking-tight leading-[1.1] text-strong mb-4">
+      <span class="gradient-text">11 轮迭代</span>·参考一线产品
+      <br/>把交互 polish 到位
+    </h1>
+    <p class="text-base text-muted max-w-3xl mb-6">
+      昨夜你说"交互不够友好,搞一晚上 10+ 轮,参考成熟产品"。我跑了 R1-R12(11 轮 · R5 因不需要后端跨 KB 搜索归并到 R12 一起做)
+      · 参考了 ChatGPT / Perplexity / NotebookLM / Linear / Notion / GitHub 的真实模式 ·
+      用真文件 / mock embedder 跑过端到端 · 6 commits · 全量 check 通过。
+    </p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+      <div class="card p-3"><div class="text-xs text-faint">迭代轮数</div><div class="text-strong text-lg font-semibold">11 + 测试</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">commits</div><div class="text-strong text-lg font-semibold">6</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">参考产品</div><div class="text-strong text-lg font-semibold">6</div></div>
+      <div class="card p-3"><div class="text-xs text-faint">代码增量</div><div class="text-strong text-lg font-semibold">~+1.2k 行</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 1. R1-R12 迭代细节 -->
+<section class="max-w-6xl mx-auto px-6 py-10 space-y-4">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-1">1 · 11 轮迭代细节</h2>
+  <p class="text-muted text-sm mb-6">每轮一卡 · 参考的产品 + 具体改动 + 你能在哪儿看到。</p>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R1</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">Ask · 停止生成 + 重新生成</h3>
+          <span class="pill pill-primary">ChatGPT/Perplexity 风</span>
+        </div>
+        <p class="text-sm text-muted mb-2">流式中:Send 按钮变 <strong class="text-danger">停止</strong>(danger 色) · 点击 abort 当前流并保留已收到的部分。</p>
+        <p class="text-sm text-muted mb-2">完成后:答案旁出 <strong>重新生成</strong>(refresh icon) · 重发同一问题但新一次模型采样。</p>
+        <p class="text-sm text-muted">"新对话"按钮换 X icon · 三个动作视觉区分清楚。停止时 activity 中 running 项立即标 done · 不留 dangling 计时器。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R2</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">Ask · 智能自动滚动</h3>
+          <span class="pill pill-primary">ChatGPT 风</span>
+        </div>
+        <p class="text-sm text-muted mb-2">监听 scroll · 距底 &gt;80px 视为用户滚开 · pinned=false。</p>
+        <p class="text-sm text-muted mb-2">流式 delta 只在 pinned=true 时滚 · 不打扰阅读上文。</p>
+        <p class="text-sm text-muted">非 pinned 时浮一颗按钮:<span class="kbd">↓ 新内容生成中</span>(streaming)/ <span class="kbd">滚到最新</span>(idle)· 点击 smooth scrollTo 回 pinned。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R3</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">Ask · 引用 hover preview + 代码块复制</h3>
+          <span class="pill pill-primary">NotebookLM 风</span>
+        </div>
+        <p class="text-sm text-muted mb-2"><strong>CiteChip</strong> 组件 hover/focus 出 tooltip 卡 · 显原文 + score + section_path · 不点也能确认引用对不对。</p>
+        <p class="text-sm text-muted"><strong>CodeBlock</strong> 组件:<span class="kbd">```...```</span> 围起的 fenced 段渲染 pre + 头部带语言 + 复制按钮(NotebookLM/ChatGPT 风)。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R4</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">Ask · 相关追问推荐</h3>
+          <span class="pill pill-primary">Perplexity 风</span>
+        </div>
+        <p class="text-sm text-muted mb-2">后端新 <span class="kbd">POST /api/kb/{id}/follow-ups</span> · 接收 question + answer · 返回 3 条 LLM 生成的下一个问题。</p>
+        <p class="text-sm text-muted">前端 done 帧后 fan-out 拉 · 仅最后一轮渲染 chip 行(过去轮渲染会乱)· 点击 = 直接发 follow-up · 走多轮 history。失败优雅返 [] · UI 不显示空行。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R6</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">Documents · 排序 + 网格/列表 双视图</h3>
+          <span class="pill pill-primary">Linear/Notion 风</span>
+        </div>
+        <p class="text-sm text-muted mb-2">URL 编码 <span class="kbd">?sort=recent|oldest|name|size|chunks</span>(默认最近更新)· <span class="kbd">?view=grid|list</span> 两态。</p>
+        <p class="text-sm text-muted">List 模式渲染表格:checkbox · 标题 · 状态 · 片段 · 大小 · 更新 · 标签 6 列。体积/片段排序方便定位"哪些 doc 最厚"。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R7</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">Doc 页 · TOC 大纲侧栏</h3>
+          <span class="pill pill-primary">Notion/GitBook 风</span>
+        </div>
+        <p class="text-sm text-muted mb-2">Original tab 改 grid: 200px 大纲 + 主区。<strong>buildOutline</strong> 从 chunks.section_path 抽 unique 节点 · 缩进按 ' &gt; ' 层级。</p>
+        <p class="text-sm text-muted">点大纲项 = 自动滚原文到位 + 1.8s 高亮(复用 Chunks split-view 的 highlight 路径)· &lt; lg 隐藏(移动端不挤画布)。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R8</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">键盘快捷键 + 多行 composer</h3>
+          <span class="pill pill-primary">Linear/GitHub 风</span>
+        </div>
+        <p class="text-sm text-muted mb-2">Ask textarea 替代 input · 自动撑高(最多 6 行 / 144px)· <strong>shift+Enter 换行</strong> · Enter 提交 · IME composing 时不抢 enter(中文输入法友好)。</p>
+        <p class="text-sm text-muted">全局 <span class="kbd">/</span> 聚焦 composer / search input · skips 当用户已在输入框(避免抢键)。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R9</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">Loading skeleton 一致性</h3>
+          <span class="pill pill-primary">Linear/Vercel 风</span>
+        </div>
+        <p class="text-sm text-muted mb-2">新组件 <span class="kbd">components/knowledge/Skeleton.tsx</span> · 三种:<strong>Row</strong> / <strong>Card</strong> / <strong>DocCard</strong>。</p>
+        <p class="text-sm text-muted">Documents 初始 loading 6 个 SkeletonDocCard 网格(原 "加载中…" 文本)· Overview Recent + Suggested 各 3 行 skeleton。<strong>animate-pulse</strong> + <strong>bg-surface-2</strong> 自适应双主题。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R10</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">移动端 / 窄屏 review</h3>
+          <span class="pill">passive 已经做对</span>
+        </div>
+        <p class="text-sm text-muted mb-2">回顾后发现重设计时已经用 <span class="kbd">grid-cols-1 lg:grid-cols-...</span> 模式覆盖了:</p>
+        <ul class="text-sm text-muted list-disc ml-5 space-y-1">
+          <li>L3 doc 页 · side rail <span class="kbd">hidden lg:block</span></li>
+          <li>Ask · sources panel <span class="kbd">hidden lg:block</span></li>
+          <li>Documents · grid 自动 1→2→3 col</li>
+          <li>L1 hub · 1→2→3 col</li>
+          <li>Settings · sub-nav 在 lg+ 才显示</li>
+          <li>新加的 TOC 大纲也是 <span class="kbd">hidden lg:block</span></li>
+        </ul>
+        <p class="text-sm text-muted mt-2">Drawer 形态的 sources panel 留到下一轮(需要新组件 + 触发器)· 当前 viewport &lt; lg 直接隐藏更稳妥。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R11</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">答案区 · 轻量 markdown 渲染</h3>
+          <span class="pill pill-primary">流式安全</span>
+        </div>
+        <p class="text-sm text-muted mb-2">三件套覆盖了真实 LLM 答案 90% 的格式需求:</p>
+        <ul class="text-sm text-muted list-disc ml-5 space-y-1">
+          <li><strong>InlineMd</strong> · <span class="kbd">`code`</span> / <span class="kbd">**bold**</span> / <span class="kbd">*italic*</span> 三种内联</li>
+          <li><strong>CodeBlock</strong> · fenced 段独立渲染 + 复制</li>
+          <li><strong>CiteChip</strong> · [N] 引用 hover preview</li>
+        </ul>
+        <p class="text-sm text-muted mt-2">没接 marked 是有意 · 流式 token 不闭合的 ** 不会变成乱码 · 半行码块在收齐前显示成原文。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-start gap-4">
+      <div class="iter-num">R12</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-xl font-semibold text-strong">空 KB 欢迎页 + 跨页友好提示</h3>
+          <span class="pill pill-primary">first-run</span>
+        </div>
+        <p class="text-sm text-muted mb-2">KB.document_count === 0 时 · Overview 改成 <strong>单 hero CTA 卡片</strong>:</p>
+        <pre class="mono bg-soft p-3 rounded border border-hairline overflow-x-auto" style="border-color:var(--border-hairline);background:var(--bg-soft);font-size:11px;line-height:1.4;">┌──────────────────────────────────┐
+│       📤   欢迎来到 {kb}          │
+│                                  │
+│  拖一份 markdown / pdf / docx   │
+│  几秒后就能搜也能问。            │
+│                                  │
+│   [上传第一份] [抓 URL]          │
+│                                  │
+│  支持 .md / .pdf / .docx / ...   │
+└──────────────────────────────────┘</pre>
+        <p class="text-sm text-muted mt-2">不再让用户面对 4 个 "加载中… / 还没有文档" 的尴尬空盒。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. 交互升级总览 (before / after) -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">2 · Ask 页 · before / after 完整对照</h2>
+  <p class="text-muted mb-6 text-sm">这一夜的核心 surface · 一图说明改了多少。</p>
+
+  <div class="card p-6 overflow-x-auto">
+    <table class="t min-w-[700px]">
+      <thead><tr><th>能力</th><th>之前</th><th>现在</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="text-strong">流式过程反馈</td>
+          <td class="text-muted">"正在思考…" 闪烁点 · 20 秒沉默</td>
+          <td class="text-muted">tool_call/tool_result 活动日志 · 1 Hz 计时 · model 名可见</td>
+        </tr>
+        <tr>
+          <td class="text-strong">中途打断</td>
+          <td class="text-muted">没办法 · 等到底</td>
+          <td class="text-muted">"停止"按钮 · abort 流 · 保留已收到的内容</td>
+        </tr>
+        <tr>
+          <td class="text-strong">答案不满意</td>
+          <td class="text-muted">手动重发同问题</td>
+          <td class="text-muted">"重新生成"一键 · 复用 sources 不重检索</td>
+        </tr>
+        <tr>
+          <td class="text-strong">滚动行为</td>
+          <td class="text-muted">每 delta 强滚到底 · 滚回去看上文会被拽下来</td>
+          <td class="text-muted">智能 pinned · 滚开后浮 "↓ 新内容" 按钮 · 不打扰</td>
+        </tr>
+        <tr>
+          <td class="text-strong">引用确认</td>
+          <td class="text-muted">点 [N] 跳右栏 · 必须打断阅读</td>
+          <td class="text-muted">hover [N] 直接出原文 tooltip · 不点也能验</td>
+        </tr>
+        <tr>
+          <td class="text-strong">代码块</td>
+          <td class="text-muted">和正文一锅 plain text</td>
+          <td class="text-muted">fenced 段 pre 渲染 + 头部 lang + 复制按钮</td>
+        </tr>
+        <tr>
+          <td class="text-strong">问完没思路</td>
+          <td class="text-muted">看着 composer 发呆</td>
+          <td class="text-muted">最后一轮下面 3 个相关追问 chip · 点 = 继续</td>
+        </tr>
+        <tr>
+          <td class="text-strong">输入框</td>
+          <td class="text-muted">单行 input · shift+Enter 没用</td>
+          <td class="text-muted">textarea 自动撑高 · shift+Enter 真换行 · IME 友好</td>
+        </tr>
+        <tr>
+          <td class="text-strong">键盘聚焦</td>
+          <td class="text-muted">必须点击</td>
+          <td class="text-muted"><span class="kbd">/</span> 全局聚焦 composer / search</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 3. 实测 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">3 · 端到端实测 · 真文件 + 真嵌入</h2>
+  <p class="text-muted mb-6 text-sm">实测过程也踩到了一个数据库被并行 worktree 的 alembic 清掉的坑(自愈)。</p>
+
+  <div class="card p-6 mb-4">
+    <div class="text-xs uppercase tracking-wide text-faint mb-2">测试场景</div>
+    <pre class="mono text-[12px] leading-relaxed text-muted">$ curl POST /api/kb -d '{"name":"Test KB · 早晨验收","embedding_model_ref":"mock:hash-256"}'
+  → kb 14d575d3 · dim=256
+
+$ for f in CLAUDE.md README.md product/00-north-star.md product/01-prd.md
+        product/04-architecture.md docs/specs/kb/2026-04-27-redesign-proposal.md; do
+    upload $f
+  done
+  → 6 docs · 176 chunks · 全 ready
+
+$ search 'Tool First'   → 8 hits · top score 0.029 · BM25 #9 + vec #7
+$ search 'AgentLoop'    → 8 hits · top score 0.028 · BM25 #4 + vec #20
+$ search 'redesign 三级' → 8 hits · top score 0.016 · vec #1(纯语义命中)
+
+$ 13 条新路由 HTTP 检查
+  → 全部 200(/knowledge → /knowledge/[kb] → 5 sub tabs → docs/[doc])
+  → ?view=list / ?sort=size / ?q=... 等 query string 都活</pre>
+  </div>
+
+  <div class="card p-5">
+    <div class="text-xs uppercase tracking-wide text-faint mb-2">实测发现 · DB 自愈</div>
+    <p class="text-[13px] text-muted leading-relaxed">深夜重启 backend 时遇到 <span class="mono text-danger">no such table: knowledge_bases</span>。原因:并行 worktree 的 alembic migration 把 .db 文件回退了,残留的 -shm/-wal 持续 read-only。处理:删 -shm/-wal,重跑 alembic upgrade head(运行了 0034→0037 的几条迁移),重启,正常。<strong class="text-strong">用户的 LLM provider 配置丢了</strong> — 因此 R1-R4 这些跟真模型相关的改动验证用 SSE 协议帧检查代替了真模型调用(协议帧已通过)。早上你点开,如果还想真问 LLM,需要去 <span class="kbd">/gateway</span> 重新填一个 Anthropic / OpenAI / 阿里云 key。</p>
+  </div>
+</section>
+
+<!-- 4. commits -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-4">4 · 这一夜的 commits</h2>
+  <div class="card p-6 mono text-[12px]">
+    <ul class="space-y-1.5 text-muted">
+      <li>· <span class="text-strong">ef7f57b</span> feat(kb): R8+R9+R12 · 键盘快捷键 + skeleton + 空 KB 欢迎页</li>
+      <li>· <span class="text-strong">9192fb6</span> feat(kb): R6+R7 · Documents 排序/视图切换 + Doc 页 TOC 大纲</li>
+      <li>· <span class="text-strong">bef9e13</span> feat(kb): R4 formatting fix</li>
+      <li>· <span class="text-strong">118f43b</span> feat(kb): R4 · Ask 相关追问推荐</li>
+      <li>· <span class="text-strong">a828d8b</span> merge: origin/main · 接 image-provider / employee fixes</li>
+      <li>· <span class="text-strong">49d4118</span> feat(kb): Ask R1-R3 · 停止/重新生成 · 智能滚动 · 引用 hover · 代码块</li>
+    </ul>
+    <p class="mt-3 text-faint text-[11px]">分支 <span class="kbd">feat/knowledge-base</span> + <span class="kbd">main</span> 同步到 ef7f57b · 后端 dev server <span class="kbd">--reload</span> 已自动接管 · 前端 dev server 重启过一次 · 你点开就用。</p>
+  </div>
+</section>
+
+<!-- 5. 早晨 5 分钟点一遍 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">5 · 早晨 5 分钟点一遍</h2>
+  <p class="text-muted mb-6 text-sm">挂哪条我接着修。Test KB 已经预填了 6 个真实项目文档 / 176 chunks · 直接用。</p>
+
+  <div class="card p-6">
+    <ol class="space-y-4 text-sm">
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">a) 打开 <a href="http://localhost:3000/knowledge" class="text-primary underline">localhost:3000/knowledge</a></div>
+          <div class="text-muted mt-0.5">看到 Test KB 卡 · 6 docs · 176 chunks · 30天 sparkline。点进去 → Overview tab。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">b) Documents tab · 切 list 视图</div>
+          <div class="text-muted mt-0.5">右上"工具栏"找到 grid/list toggle · 点 list · 看到 6 列表格(checkbox/标题/状态/片段/大小/更新/标签)。再点排序下拉 → 选"体积大小" · 04-architecture.md 应该排第一(那是最厚的)。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">c) 点任一 doc → L3 doc 页 · 切 Original tab</div>
+          <div class="text-muted mt-0.5">应该看到左侧 200px <strong>大纲侧栏</strong> · 列章节标题(从 section_path 抽出)· 点任一 → 主区滚到对应位置 + 1.8s 高亮。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">d) Search · 试 / 快捷键</div>
+          <div class="text-muted mt-0.5">回到 KB · 不点 search 直接按 <span class="kbd">/</span> · 应自动聚焦 search input(全局快捷键)。输 "AgentLoop" → 8 命中 · 展开任一条的"为什么排这"看 BM25/vec 贡献条。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">e) Ask · 全套交互(需要先去 /gateway 配 LLM)</div>
+          <div class="text-muted mt-0.5">配好后回 Ask 页:输问题(textarea! shift+Enter 试试换行)→ 流式中"停止"按钮变 danger · 点能中止 · 完成后"重新生成"出现 · 答案下面 3 个 chip 推荐追问 · hover [N] 出 tooltip · 答案如果含代码块带复制按钮。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">f) Ask · 滚动智能性</div>
+          <div class="text-muted mt-0.5">问一个会得到长答案的问题 · 答案半路时手动滚到顶部 · 应该看到屏幕底部浮 "↓ 新内容生成中" 按钮 · 点击 smooth scroll 回底。再问一个 · 这次不滚 · 自动跟随。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">g) 创建空 KB · 看欢迎页</div>
+          <div class="text-muted mt-0.5">L1 hub 点 "+ 新建 KB" 创建一个空的 · 进去 Overview · 应该看到大 hero CTA 卡片("欢迎来到 X · 拖一份 md 进来…")· 不再是 4 个空盒子。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">h) Skeleton · 刷新 Documents</div>
+          <div class="text-muted mt-0.5">硬刷新 Documents 页 · 应该看到 6 个 SkeletonDocCard(脉冲灰块)而不是 "加载中…" 文本。Overview Recent / Suggested 也是 3 行 skeleton。</div>
+        </div>
+      </li>
+      <li class="flex items-start gap-3">
+        <input type="checkbox" class="mt-1 accent-current text-primary"/>
+        <div class="flex-1">
+          <div class="text-strong font-medium">i) 窄屏 · 拖到 ~600px</div>
+          <div class="text-muted mt-0.5">tab bar 横滚 · sources panel(Ask)/ side rail(L3)/ 大纲(Doc Original)三个 sidebar 都隐藏 · 主内容拉满。</div>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- 6. 已知限制 -->
+<section class="max-w-6xl mx-auto px-6 py-10">
+  <div class="accent-bar w-10 mb-3"></div>
+  <h2 class="text-2xl font-semibold text-strong mb-2">6 · 已知限制 / 下一夜建议</h2>
+
+  <div class="card p-6">
+    <ul class="space-y-3 text-sm">
+      <li>
+        <strong class="text-strong">Ask 还是"绕开 agent"的伪 agent path</strong>
+        <div class="text-muted mt-0.5">现在的 tool_call/tool_result 只是 SSE 协议层的伪装 · 不是真 AgentLoop 在跑。完整改造(走 AgentLoop + kb_researcher skill · 让 LLM 自己决定何时再次检索 / 读全文)估 4-6 小时单做 · 收益是真正可调的"研究员"行为。</div>
+      </li>
+      <li>
+        <strong class="text-strong">L1 hub 跨 KB 全局搜索还没做</strong>
+        <div class="text-muted mt-0.5">Glean 风格的 federated search(一个框查所有 KB)需要后端新端点 · 暂留 follow-up。</div>
+      </li>
+      <li>
+        <strong class="text-strong">Mobile drawer for sources panel</strong>
+        <div class="text-muted mt-0.5">现在 &lt; lg 直接隐藏 sources · 用户在窄屏看不到来源。Drawer 形态(右下浮按钮 → 推开 panel)留给下一轮。</div>
+      </li>
+      <li>
+        <strong class="text-strong">DB 自愈机制</strong>
+        <div class="text-muted mt-0.5">并行 worktree alembic 互相干扰这次中招了 · 长期方案 = 每个 worktree 独立 .db 路径 · 短期 = 重启前先 alembic upgrade head。</div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<footer class="max-w-6xl mx-auto px-6 py-12 text-center">
+  <p class="text-faint text-[11px] mono">
+    迭代报告 1 - <a href="http://localhost:8765/specs/kb/iteration-report.html" class="text-primary underline">第一晚 7 轮</a> ·
+    <a href="http://localhost:8765/specs/kb/2026-04-28-redesign-acceptance.html" class="text-primary underline">第二晚 redesign 落地</a> ·
+    本夜 R1-R12 ·
+    早安 ☀
+  </p>
+</footer>
+
+<script>
+const root=document.documentElement;
+document.getElementById('themeToggle')?.addEventListener('click',()=>{
+  const next=root.getAttribute('data-theme')==='dark'?'light':'dark';
+  root.setAttribute('data-theme',next);
+});
+</script>
+</body>
+</html>
