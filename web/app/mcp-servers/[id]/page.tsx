@@ -433,9 +433,6 @@ function Hero({
                 {trHero("dependents", { count: dependentCount })}
               </span>
             </div>
-            <p className="font-mono text-caption text-text-subtle truncate">
-              {server.id}
-            </p>
           </div>
         </div>
         <div className="flex gap-2 shrink-0">

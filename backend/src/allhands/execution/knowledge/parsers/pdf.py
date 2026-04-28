@@ -26,7 +26,7 @@ class PdfParser:
 
     def parse(self, file_path: str) -> ParseResult:
         try:
-            from pypdf import PdfReader
+            from pypdf import PdfReader  # type: ignore[import-not-found]
         except ImportError as exc:  # pragma: no cover
             raise PdfParseError(
                 "pypdf is required to ingest PDFs. Install with `uv add pypdf`."

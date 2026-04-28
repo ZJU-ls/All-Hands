@@ -321,11 +321,8 @@ function Hero({
                 {t("inUse", { count: dependentCount })}
               </span>
             </div>
-            <p className="text-[13px] text-text-muted leading-relaxed mb-2">
+            <p className="text-[13px] text-text-muted leading-relaxed">
               {skill.description || t("noDescription")}
-            </p>
-            <p className="font-mono text-caption text-text-subtle truncate">
-              {skill.id}
             </p>
           </div>
         </div>
@@ -519,9 +516,11 @@ function Overview({
                       </span>
                     )}
                   </div>
-                  <p className="font-mono text-caption text-text-subtle truncate">
-                    {e.id}
-                  </p>
+                  {e.description && (
+                    <p className="text-caption text-text-subtle truncate">
+                      {e.description}
+                    </p>
+                  )}
                 </div>
                 <Icon
                   name="arrow-right"
@@ -631,8 +630,8 @@ function PromptTab({ skill }: { skill: Skill }) {
       <Section title={t("sample")} icon="sparkles">
         <p className="text-sm text-text-muted leading-relaxed mb-3">
           {t("sampleBefore")}{" "}
-          <span className="font-mono text-text bg-surface-2 px-1.5 py-0.5 rounded border border-border">
-            {skill.id}
+          <span className="text-text bg-surface-2 px-1.5 py-0.5 rounded border border-border font-medium">
+            {skill.name}
           </span>{" "}
           {t.rich("sampleAfter", {
             mono: (chunks) => <span className="font-mono text-text">{chunks}</span>,

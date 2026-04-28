@@ -299,6 +299,7 @@ function EmployeePageInner() {
               {activeTab === "overview" && (
                 <OverviewPane
                   employee={employee}
+                  skills={skills}
                   conversations={conversations}
                   badges={badges}
                   badgeT={badgeT}
@@ -757,6 +758,7 @@ function TabBar({
 
 function OverviewPane({
   employee,
+  skills,
   conversations,
   badges,
   badgeT,
@@ -765,6 +767,7 @@ function OverviewPane({
   onNewConversation,
 }: {
   employee: EmployeeDto;
+  skills: SkillDto[] | null;
   conversations: ConversationDto[] | null;
   badges: string[];
   badgeT: (key: string) => string;
@@ -773,6 +776,11 @@ function OverviewPane({
   onNewConversation: () => void;
 }) {
   const t = useTranslations("employees.detail");
+  const skillNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    (skills ?? []).forEach((s) => m.set(s.id, s.name));
+    return m;
+  }, [skills]);
   return (
     <div data-testid="employee-tab-overview" className="space-y-6">
       <Section
@@ -787,10 +795,11 @@ function OverviewPane({
             {employee.skill_ids.map((id) => (
               <span
                 key={id}
-                className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary-muted text-primary text-caption font-mono font-medium"
+                className="inline-flex items-center gap-1.5 h-6 px-2 rounded-full bg-primary-muted text-primary text-caption font-medium"
+                title={id}
               >
                 <Icon name="sparkles" size={10} strokeWidth={2} />
-                {id.replace(/^allhands\.(skills|builtin)\./, "")}
+                {skillNameById.get(id) ?? id.replace(/^allhands\.(skills|builtin)\./, "")}
               </span>
             ))}
           </div>

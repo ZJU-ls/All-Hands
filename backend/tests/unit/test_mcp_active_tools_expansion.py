@@ -86,10 +86,12 @@ def test_multiple_mcp_markers_dedupe_dispatch_pair() -> None:
 
 
 def test_dispatcher_already_present_not_duplicated() -> None:
-    emp = _mk_employee([
-        "mcp:srv-1",
-        "allhands.meta.invoke_mcp_server_tool",  # explicitly added
-    ])
+    emp = _mk_employee(
+        [
+            "mcp:srv-1",
+            "allhands.meta.invoke_mcp_server_tool",  # explicitly added
+        ]
+    )
     out = _loop(emp)._active_tool_ids()
     assert out.count("allhands.meta.invoke_mcp_server_tool") == 1
     assert "allhands.meta.list_mcp_server_tools" in out
