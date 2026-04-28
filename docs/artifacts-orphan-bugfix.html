@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>制品孤儿 bug 排查 + 修复报告 · allhands</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --surface-2: #f3f5f9;
+      --border: #e2e6ee;
+      --text: #0f1115;
+      --text-muted: #4a5160;
+      --text-subtle: #87909e;
+      --primary: #2768ff;
+      --primary-soft: #e9efff;
+      --success: #149563;
+      --success-soft: #defcec;
+      --warning: #b85d00;
+      --warning-soft: #fff1de;
+      --danger: #b8264a;
+      --danger-soft: #ffe4ec;
+      --accent: #6b46c1;
+      --accent-soft: #efe9ff;
+      --shadow-sm: 0 1px 2px rgba(15,17,21,.05), 0 1px 3px rgba(15,17,21,.04);
+      --shadow: 0 4px 16px rgba(15,17,21,.08);
+      --shadow-lg: 0 12px 40px rgba(39,104,255,.18);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);line-height:1.6;font-size:14px}
+    main{max-width:1080px;margin:0 auto;padding:48px 28px 96px}
+    .hero{background:linear-gradient(135deg,#b8264a 0%,#2768ff 60%,#6b46c1 100%);color:#fff;padding:36px 36px 32px;border-radius:20px;margin-bottom:32px;position:relative;overflow:hidden;box-shadow:var(--shadow-lg)}
+    .hero::before{content:"";position:absolute;width:360px;height:360px;right:-80px;top:-140px;background:radial-gradient(circle,rgba(255,255,255,.2),transparent 60%);filter:blur(20px)}
+    .hero h1{font-size:30px;font-weight:700;margin:0 0 10px;letter-spacing:-.02em}
+    .hero .subtitle{margin:0 0 18px;opacity:.9;font-size:15px}
+    .hero .meta{display:flex;flex-wrap:wrap;gap:18px;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px}
+    h2{font-size:22px;letter-spacing:-.01em;margin:44px 0 16px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+    h3{font-size:14px;font-weight:600;margin:0 0 6px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow-sm);transition:transform .15s ease,box-shadow .15s ease}
+    .card:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .layer{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:14px;box-shadow:var(--shadow-sm)}
+    .layer-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .layer-head .num{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;font-weight:700}
+    .layer-head h3{font-size:16px;flex:1}
+    table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+    th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)}
+    th{background:var(--surface-2);font-weight:600;font-size:12px;color:var(--text-muted)}
+    tr:last-child td{border-bottom:0}
+    .pill{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:11px;font-size:11.5px;font-weight:500}
+    .pill.success{background:var(--success-soft);color:var(--success)}
+    .pill.danger{background:var(--danger-soft);color:var(--danger)}
+    .pill.warning{background:var(--warning-soft);color:var(--warning)}
+    pre,.ascii-block{background:#0d1117;color:#e8edf5;padding:16px 18px;border-radius:10px;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;line-height:1.55;overflow-x:auto;margin:14px 0}
+    pre code{color:#e8edf5;background:none;padding:0;border:0}
+    code.inline{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;background:var(--surface-2);padding:1px 6px;border-radius:4px;border:1px solid var(--border)}
+    blockquote{margin:14px 0;padding:12px 16px;background:var(--surface);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;color:var(--text);font-size:13px}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:36px}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow-sm)}
+    .stat .num{font-size:28px;font-weight:700;color:var(--primary);font-family:ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:-.02em}
+    .stat .label{font-size:11px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+    .compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+    .compare > div{padding:14px 16px;border-radius:10px;border:1px solid var(--border)}
+    .compare .before{background:var(--danger-soft);border-color:rgba(184,38,74,.25)}
+    .compare .after{background:var(--success-soft);border-color:rgba(20,149,99,.25)}
+    .compare h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+    .compare .before h4{color:var(--danger)}
+    .compare .after h4{color:var(--success)}
+    .compare p{margin:0;font-size:13px;color:var(--text)}
+    .footer{margin-top:56px;padding:18px 0 0;border-top:1px solid var(--border);font-size:12px;color:var(--text-subtle);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    @media (max-width:720px){.stats,.grid2,.compare{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>制品孤儿 bug 排查 + 修复</h1>
+      <p class="subtitle">用户截图反馈 → 端到端追踪 → 三连修复 + 数据回填</p>
+      <div class="meta">
+        <span><b>触发</b> LeadAgent 子代理产 html · 制品区 0</span>
+        <span><b>commit</b> 065553c</span>
+        <span><b>影响范围</b> 所有走 dispatch / spawn 的子代理产物</span>
+        <span><b>历史孤儿</b> alembic 0037 回填</span>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><div class="num">3</div><div class="label">级联根因</div></div>
+      <div class="stat"><div class="num">3</div><div class="label">连环修复</div></div>
+      <div class="stat"><div class="num">4</div><div class="label">数据流层</div></div>
+      <div class="stat"><div class="num">~30s</div><div class="label">用户首次困惑</div></div>
+    </section>
+
+    <h2>0 · 现场症状</h2>
+
+    <div class="card">
+      <p>用户在 LeadAgent 对话里看到一条任务产出 <code class="inline">AllHands_Capability_Demo.html</code>,<b>chat 详情区</b>完整渲染了这份 HTML 制品(预览图、下载、打开按钮齐全),但右侧的<b>制品区</b>显示 "还没有制品 · 0"。</p>
+      <p>同一份数据,两个面板出现"是否存在"的结构性不一致 — 这种 bug 最具迷惑性,因为 backend 既没报错,artifact 也确实在数据库里。</p>
+    </div>
+
+    <h2>1 · 根因 — 三层级联 bug</h2>
+
+    <div class="layer">
+      <div class="layer-head">
+        <span class="num">L1</span>
+        <h3>子代理 runner factory 缺 conversation_id</h3>
+        <span class="pill danger">🔥 起源</span>
+      </div>
+      <p><code class="inline">backend/src/allhands/services/chat_service.py</code> 的 <code class="inline">_build_runner_factory</code> 给每个<b>子 runner</b> 构造 AgentRunner 时,从来不传 conversation_id:</p>
+      <pre><code>def factory(child: Employee, depth: int) -&gt; AgentRunner:
+    ...
+    return AgentRunner(
+        employee=child,
+        ...
+        # ADR 0019 · plan_repo also shared with subagents...
+        # conversation_id is None at the nested factory layer; the
+        # dispatch / spawn service knows the conversation it's targeting
+        # and can supply it through the runner kwargs path if needed.
+        plan_repo=self._plan_repo,                                # ← 注释是 wishful thinking
+        user_input_signal=self._user_input_signal,
+    )</code></pre>
+      <p>注释说"dispatch / spawn 'can supply' if needed",但现实里<b>从来没有</b>任何地方真的传过。</p>
+    </div>
+
+    <div class="layer">
+      <div class="layer-head">
+        <span class="num">L2</span>
+        <h3>AgentLoop 把空字符串当成"无 conversation"</h3>
+        <span class="pill danger">🔥 传播</span>
+      </div>
+      <p>子 <code class="inline">AgentRunner._conversation_id = ""</code> → AgentLoop._conversation_id = ""。当子 agent 调 <code class="inline">allhands.artifacts.create</code> 时:</p>
+      <pre><code>kwargs = {
+    "conversation_id": self._conversation_id or None,
+    ...
+}
+# "" or None → None</code></pre>
+      <p>传给 executor factory 的 conversation_id 是 None。</p>
+    </div>
+
+    <div class="layer">
+      <div class="layer-head">
+        <span class="num">L3</span>
+        <h3>落库 NULL,UI 严格过滤把它排除</h3>
+        <span class="pill danger">🔥 暴雷</span>
+      </div>
+      <p>这条记录在 DB 里 <code class="inline">conversation_id IS NULL</code>。ArtifactPanel 用 listArtifacts({conversationId}) 严格过滤(SQL <code class="inline">WHERE conversation_id = :cid</code>,<b>不是 OR conversation_id IS NULL</b>),NULL 行被排除。</p>
+      <div class="ascii-block">┌─ 数据流对比 ────────────────────────────────────┐
+│                                                  │
+│  Chat 详情区:SSE → run.completed → getArtifact() │
+│                                     ↓ 直接 by id  │
+│                                 ✅ 看到了        │
+│                                                  │
+│  ArtifactPanel:listArtifacts({conv_id})          │
+│                            ↓ WHERE conv_id = :x  │
+│                        ❌ NULL 行被排除          │
+│                                                  │
+└──────────────────────────────────────────────────┘</div>
+    </div>
+
+    <h2>2 · 修复(三连)</h2>
+
+    <div class="layer">
+      <div class="layer-head">
+        <span class="num" style="background:var(--success-soft);color:var(--success)">F1</span>
+        <h3>backend factory 传 conversation_id</h3>
+        <span class="pill success">forward fix</span>
+      </div>
+      <p>利用已经存在的 <code class="inline">_parent_conversation_id: ContextVar[str | None]</code> — 在 <code class="inline">ChatService.send_message</code> 入口就 set 好。改 factory 读它:</p>
+      <pre><code>inherited_conv = _parent_conversation_id.get() or ""
+return AgentRunner(
+    ...,
+    conversation_id=inherited_conv,
+    ...
+)</code></pre>
+      <p><b>从此新生成的子 agent 制品 conversation_id 正确归属父对话。</b></p>
+    </div>
+
+    <div class="layer">
+      <div class="layer-head">
+        <span class="num" style="background:var(--success-soft);color:var(--success)">F2</span>
+        <h3>alembic 0037 回填历史孤儿</h3>
+        <span class="pill success">data heal</span>
+      </div>
+      <p>新 migration 把 events 表里 run.started/completed/failed 的 payload 拿出来,build "run_id → conversation_id" 反查表,逐条 UPDATE 仍然 NULL 的 artifact。</p>
+      <pre><code>SELECT id, created_by_run_id FROM artifacts
+WHERE conversation_id IS NULL AND created_by_run_id IS NOT NULL;
+
+SELECT payload FROM events
+WHERE kind IN ('run.started', 'run.completed', 'run.failed');
+-- payload 里有 {run_id, conversation_id}
+
+UPDATE artifacts SET conversation_id = lookup(run_id) WHERE id = ?;</code></pre>
+      <p>idempotent · downgrade no-op(没记录哪些行被本次更新过)。</p>
+    </div>
+
+    <div class="layer">
+      <div class="layer-head">
+        <span class="num" style="background:var(--success-soft);color:var(--success)">F3</span>
+        <h3>前端「全工作区」toggle</h3>
+        <span class="pill success">UX safety net</span>
+      </div>
+      <p>即便修了根因,如果将来又冒出别的 scope 错位,用户也能切换视图自查。</p>
+      <ul>
+        <li><b>本对话</b>(默认)· 仍按 conversationId 严格过滤</li>
+        <li><b>全工作区</b> · 绕过过滤,看全部 — 包括子代理 / 隔壁对话产出</li>
+        <li>localStorage 持久化 · SSE handler 在 showAll 模式下不过滤</li>
+      </ul>
+    </div>
+
+    <h2>3 · 验证矩阵</h2>
+
+    <table>
+      <thead><tr><th>场景</th><th>修前</th><th>修后</th></tr></thead>
+      <tbody>
+        <tr><td>父 agent 产出制品</td><td><span class="pill success">✅ panel 看到</span></td><td><span class="pill success">✅ panel 看到</span></td></tr>
+        <tr><td>子 agent (dispatch) 产出</td><td><span class="pill danger">❌ panel 0 制品</span></td><td><span class="pill success">✅ panel 看到(继承 conv)</span></td></tr>
+        <tr><td>子 agent (spawn_subagent) 产出</td><td><span class="pill danger">❌ 同上</span></td><td><span class="pill success">✅ 同上</span></td></tr>
+        <tr><td>历史已存在的 NULL 孤儿</td><td><span class="pill danger">❌ 永远看不到</span></td><td><span class="pill success">✅ alembic 0037 回填</span></td></tr>
+        <tr><td>「全工作区」toggle</td><td>—</td><td><span class="pill success">✅ 看全 workspace</span></td></tr>
+        <tr><td>/artifacts 全局页</td><td><span class="pill success">✅ 不过滤 conv</span></td><td><span class="pill success">✅ 不变</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2>4 · 改造对比</h2>
+
+    <div class="compare">
+      <div class="before">
+        <h4>修前</h4>
+        <p>chat 看到 html · panel 0 制品 · 用户怀疑数据丢失</p>
+      </div>
+      <div class="after">
+        <h4>修后</h4>
+        <p>两边一致 · 子代理产物正确归属父对话</p>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="before">
+        <h4>修前</h4>
+        <p>无视觉退路 · 用户必须跳到 /artifacts 才能看到</p>
+      </div>
+      <div class="after">
+        <h4>修后</h4>
+        <p>panel 自带「全工作区」toggle · 不离开聊天上下文</p>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="before">
+        <h4>修前</h4>
+        <p>历史 NULL 孤儿在 panel 永久不可达</p>
+      </div>
+      <div class="after">
+        <h4>修后</h4>
+        <p>alembic 0037 一次性回填 · panel 立刻可见</p>
+      </div>
+    </div>
+
+    <h2>5 · 业界对照与启示</h2>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>反模式参考</h3>
+        <p style="margin-top:8px;font-size:13px;">这是个典型的 "ContextVar 传递断链" bug:</p>
+        <ul>
+          <li><b>Datadog APM</b> · trace context propagation across async boundaries must be explicit or via context-vars — 不能假设 caller "如果需要会传"</li>
+          <li><b>OpenTelemetry</b> · Span context inheritance 是声明式的,不是注释式("this 'can supply' if needed" 是 docstring smell)</li>
+          <li><b>Notion 子页面归属</b> · 子文档默认归属父 workspace,不是"独立飘着等人来认领"</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>关键启示</h3>
+        <p style="margin-top:8px;font-size:13px;">任何"父 → 子"的 runner / context / scope 传递,要么<b>默认继承</b>,要么<b>显式 opt-out</b>;<b>绝不能默认丢失 + 注释里写"将来会处理"</b>。</p>
+        <p style="margin-top:10px;font-size:13px;">本次 bug 看起来是"右侧 panel 显示 0",但实际数据流跨 4 层(SSE / SQL / runner 工厂 / context var),任何一层假设错了都会导致用户看到的不一致。</p>
+      </div>
+    </div>
+
+    <h2>6 · 工程账</h2>
+
+    <div class="card">
+      <ul>
+        <li><b>修改文件</b> · backend/services/chat_service.py · alembic/0037_backfill_artifact_conv_id.py(新)· web/components/artifacts/ArtifactPanel.tsx</li>
+        <li><b>i18n</b> · zh-CN + en 各 4 个 key(showAllOn/Off + 两个 title)</li>
+        <li><b>commit</b> · <code class="inline">065553c</code> on feat/ui-tweaks + main</li>
+        <li><b>TS / lint</b> · web typecheck 通过 · vitest 1794 passed</li>
+        <li><b>pytest</b> · 34 个 test 在本机失败,<b>无一与本修复相关</b> — 全部 <code class="inline">FileExistsError: 'data'</code>,源于 <code class="inline">backend/data</code> 是指向 sibling repo 的 symlink。<code class="inline">origin/main</code> 干净树上同样失败(stash 验证)。</li>
+      </ul>
+    </div>
+
+    <h2>7 · 后续 / 待办</h2>
+
+    <div class="card">
+      <ul>
+        <li>🟡 同样的"context 传递断链"在 ChatService 别处可能也存在 — triggers / cron / batch tasks 的 conversation_id 归属。建议跑一遍全量追溯。</li>
+        <li>🟡 ArtifactPanel SSE 实时新增 · defensive 起见可在 handler 里降级处理 conversation_id=null 的情况(显示但灰显)</li>
+        <li>🟡 单测覆盖 · 加 <code class="inline">test_subagent_artifact_inherits_conversation_id</code>,fake DispatchService 跑 round-trip 断言 conversation_id 落库正确</li>
+        <li>🔴 <b>本机 dev infra:</b>backend/data symlink 导致大量 test 在 mkdir 时 FileExistsError · 建议起来后清掉 symlink 或改成正常目录</li>
+      </ul>
+    </div>
+
+    <blockquote>
+      <b>诊断 → 修复 → 验证</b> 三段都得过一遍才能 declare 解决。本次 bug 看起来是"右侧 panel 显示 0",但实际数据流跨 4 层(SSE / SQL / runner 工厂 / context var),任何一层假设错了都会导致用户看到的不一致。
+    </blockquote>
+
+    <div class="footer">
+      <span>分支 · feat/ui-tweaks</span>
+      <span>已推 main</span>
+      <span>2026-04-28 · GMT+8</span>
+    </div>
+  </main>
+</body>
+</html>
