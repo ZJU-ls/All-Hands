@@ -59,6 +59,13 @@
       "fieldMaxOutputTokens": "Max output tokens · optional",
       "fieldMaxOutputTokensPlaceholder": "Leave blank → model default",
       "fieldMaxOutputTokensHint": "Forwarded as max_tokens on outbound chat requests. Blank means \"don't constrain\" (model decides); a value here hard-caps each reply.",
+      "autofilledFromCatalog": "✨ Auto-filled display name / capabilities / context window from {name}. Edit anything to override.",
+      "sectionCapabilities": "Capabilities (output modalities)",
+      "capabilitiesAutoHint": "Leave all unchecked = backend auto-detects from the model name (gpt-image / wanx / dall-e → image generation; otherwise → chat). Manual selections override.",
+      "capabilityChat": "Chat / tool calls",
+      "capabilityImageGen": "Image generation",
+      "capabilitySpeech": "Speech (TTS / STT)",
+      "capabilityEmbedding": "Text embeddings",
       "sectionAdvanced": "Advanced (optional)",
       "modelFormTips": [
         "💡 You only need a model name to register. The three token caps below are advanced and default to the model's own ceiling.",

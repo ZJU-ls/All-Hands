@@ -258,7 +258,7 @@ def make_executor(
             artifacts_out: list[dict[str, Any]] = []
             for img in result.images:
                 content_b64 = base64.b64encode(img.data).decode("ascii")
-                artifact_name = f"img-{prompt[:32].replace('/', '_')}.png"
+                artifact_name = _safe_artifact_name(prompt)
                 try:
                     async with save_lock:
                         art = await artifact_service.create(
@@ -376,4 +376,188 @@ __all__ = [
     "build_default_provider_factory",
     "execute",
     "make_executor",
+    "make_gateway_executor",
 ]
+
+
+_ARTIFACT_NAME_BAD = __import__("re").compile(r"[^\w一-龿\s._-]")
+
+
+def _safe_artifact_name(prompt: str) -> str:
+    """ArtifactService.create has a strict name regex (letters / digits / CJK
+    / space / . _ -). Sanitize freeform prompts before naming."""
+    cleaned = _ARTIFACT_NAME_BAD.sub("_", prompt[:32])
+    return f"img-{cleaned.strip() or 'gen'}.png"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Gateway-flavored executor · the new path (MODEL-GATEWAY.html § A4)
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def make_gateway_executor(
+    *,
+    gateway: object,  # ModelGateway · forward-decl to avoid execution↔execution cycle on import
+    resolve_provider_model: Callable[[str | None], tuple[object, object]],
+    artifact_service: ArtifactStore,
+    conversation_id: str | None = None,
+    employee_id: str | None = None,
+    workspace_id: str = "default",
+) -> Callable[..., Any]:
+    """Build the executor closure backed by ``ModelGateway``.
+
+    Same I/O contract as ``make_executor`` (the legacy provider-based form);
+    swaps the per-prompt provider call for a single gateway dispatch that
+    routes to the right adapter (OpenAI / DashScope / Imagen / FLUX / ...).
+
+    ``resolve_provider_model(model_ref)`` returns a (LLMProvider, LLMModel)
+    pair. The api/deps.py wiring picks:
+      - the model whose id matches model_ref, OR
+      - the first enabled model with Capability.IMAGE_GEN.
+    Errors bubble up as ImageProviderError so the LLM gets a real envelope.
+    """
+    from allhands.core.artifact import ArtifactKind
+
+    save_lock = asyncio.Lock()
+
+    async def _execute(**kwargs: Any) -> dict[str, Any]:
+        # ── 1. parse + validate input ──────────────────────────────────────
+        prompts = kwargs.get("prompts")
+        if not isinstance(prompts, list) or not prompts:
+            return {
+                "error": "prompts must be a non-empty list",
+                "field": "prompts",
+                "expected": "list[str] · length 1-10",
+                "received": repr(prompts)[:120],
+            }
+        if len(prompts) > MAX_BATCH:
+            return {
+                "error": f"too many prompts · {len(prompts)} > {MAX_BATCH}",
+                "field": "prompts",
+                "expected": f"≤ {MAX_BATCH}",
+                "hint": "Split into multiple generate_image calls.",
+            }
+        size = kwargs.get("size", "1024x1024")
+        if size not in ALLOWED_SIZES:
+            return {
+                "error": f"unsupported size {size!r}",
+                "field": "size",
+                "expected": f"one of {list(ALLOWED_SIZES)}",
+                "received": str(size),
+            }
+        try:
+            quality = ImageQuality(kwargs.get("quality", "auto"))
+        except ValueError:
+            return {
+                "error": f"unknown quality {kwargs.get('quality')!r}",
+                "field": "quality",
+                "expected": [q.value for q in ImageQuality],
+            }
+        model_ref = kwargs.get("model_ref")
+
+        # ── 2. resolve (provider, model) pair via injected resolver ────────
+        try:
+            provider, model = resolve_provider_model(model_ref)
+        except ImageProviderError as exc:
+            return exc.to_dict()
+        except Exception as exc:
+            # Surface gateway routing errors (NoAdapterFoundError) via duck-type
+            to_dict = getattr(exc, "to_dict", None)
+            if callable(to_dict):
+                return to_dict()  # type: ignore[no-any-return]
+            return {
+                "error": f"failed to resolve image model: {exc.__class__.__name__}",
+                "field": "model_ref",
+                "received": str(model_ref) if model_ref else "(default)",
+                "hint": (
+                    "Register a model with capabilities including 'image_gen' "
+                    "in /settings/providers."
+                ),
+            }
+
+        # ── 3. fan out · per-prompt request · gather ───────────────────────
+        async def _one(prompt: str) -> dict[str, Any]:
+            try:
+                req = ImageGenerationRequest(prompt=prompt, size=size, quality=quality, n=1)
+            except Exception as exc:
+                return {"error": f"invalid prompt: {exc}", "prompt": prompt[:100]}
+            try:
+                # Gateway dispatches to the right adapter based on
+                # (modality, provider.kind, model.name).
+                result = await gateway.generate_image(  # type: ignore[attr-defined]
+                    req, provider=provider, model=model
+                )
+            except ImageProviderError as exc:
+                return {**exc.to_dict(), "prompt": prompt[:100]}
+            except Exception as exc:
+                to_dict = getattr(exc, "to_dict", None)
+                if callable(to_dict):
+                    return {**to_dict(), "prompt": prompt[:100]}
+                return {
+                    "error": f"adapter failed: {exc.__class__.__name__}",
+                    "prompt": prompt[:100],
+                }
+
+            artifacts_out: list[dict[str, Any]] = []
+            for img in result.images:
+                content_b64 = base64.b64encode(img.data).decode("ascii")
+                artifact_name = _safe_artifact_name(prompt)
+                try:
+                    async with save_lock:
+                        art = await artifact_service.create(
+                            name=artifact_name,
+                            kind=ArtifactKind.IMAGE,
+                            content_base64=content_b64,
+                            mime_type=img.mime_type,
+                            workspace_id=workspace_id,
+                            conversation_id=conversation_id,
+                            created_by_employee_id=employee_id,
+                            metadata={
+                                "image_gen": True,
+                                "model": result.model_used,
+                                "provider": result.provider_id,
+                                "prompt": img.prompt,
+                                "revised_prompt": img.revised_prompt,
+                                "size": img.size,
+                            },
+                        )
+                except Exception as exc:
+                    return {
+                        "error": f"failed to save artifact: {exc.__class__.__name__}",
+                        "prompt": prompt[:100],
+                        "hint": "Check workspace_id and that artifact storage is healthy.",
+                    }
+                artifacts_out.append(
+                    {
+                        "artifact_id": art.id,
+                        "url": f"/api/artifacts/{art.id}/content",
+                        "prompt": prompt,
+                        "mime_type": img.mime_type,
+                        "size": img.size,
+                        "revised_prompt": img.revised_prompt,
+                    }
+                )
+            return {"images": artifacts_out, "duration_ms": result.duration_ms}
+
+        per_prompt_results = await asyncio.gather(*(_one(p) for p in prompts))
+
+        flat_images: list[dict[str, Any]] = []
+        total_duration = 0
+        for res in per_prompt_results:
+            if "images" in res:
+                flat_images.extend(res["images"])
+                total_duration = max(total_duration, res.get("duration_ms", 0))
+            else:
+                flat_images.append({k: v for k, v in res.items() if k != "images"})
+
+        # cost estimate uses model name (Gateway already used the right adapter)
+        model_name = getattr(model, "name", "")
+        cost = estimate_cost(model_name=model_name, quality=quality, size=size, n=len(flat_images))
+
+        return {
+            "images": flat_images,
+            "total_cost_usd": cost,
+            "duration_ms": total_duration,
+        }
+
+    return _execute
