@@ -32,6 +32,7 @@ from allhands.api.protocol import (
 from allhands.core import Message
 from allhands.core.errors import DomainError, EmployeeNotFound
 from allhands.core.run_overrides import RunOverrides
+from allhands.execution.stream_broker import RunBroker, get_broker_registry
 from allhands.i18n import t
 from allhands.services.branch_service import branch_from_event, regenerate_last_turn
 
@@ -80,6 +81,12 @@ async def _to_conversation_response(
         pass
     except Exception:
         log.exception("effective_model_ref resolution failed for conv=%s", getattr(conv, "id", "?"))
+    # If the chat page is being (re)mounted, the frontend looks at this to
+    # decide whether to auto-subscribe to a still-running broker rather
+    # than start a fresh turn (compact-dual-view follow-up · 2026-04-28).
+    active_run_id = get_broker_registry().active_run_for_conversation(
+        conv.id  # type: ignore[attr-defined]
+    )
     return ConversationResponse(
         id=conv.id,  # type: ignore[attr-defined]
         employee_id=conv.employee_id,  # type: ignore[attr-defined]
@@ -89,6 +96,7 @@ async def _to_conversation_response(
         effective_model_source=eff_source,
         created_at=conv.created_at.isoformat(),  # type: ignore[attr-defined]
         message_count=message_count,
+        active_run_id=active_run_id,
     )
 
 
@@ -396,14 +404,23 @@ async def send_message(
 
     chat_svc = await get_chat_service(session, request=request)
 
-    async def _open_stream() -> AsyncIterator[AgentEvent]:
-        overrides = RunOverrides(
-            thinking=body.thinking,
-            temperature=body.temperature,
-            top_p=body.top_p,
-            max_tokens=body.max_tokens,
-            system_override=body.system_override,
-        )
+    # Mint the run_id up front so the broker, the SSE encoder, and any
+    # later resubscribe call all share the same identity. (Pre-2026-04-28
+    # the encoder minted its own run_id internally; that worked when the
+    # SSE response WAS the agent's life support, but broke as soon as we
+    # decoupled them.)
+    run_id = f"run_{secrets.token_hex(8)}"
+    overrides = RunOverrides(
+        thinking=body.thinking,
+        temperature=body.temperature,
+        top_p=body.top_p,
+        max_tokens=body.max_tokens,
+        system_override=body.system_override,
+    )
+
+    registry = get_broker_registry()
+
+    async def _producer() -> AsyncIterator[AgentEvent]:
         return await chat_svc.send_message(
             conversation_id,
             body.content,
@@ -411,27 +428,70 @@ async def send_message(
             attachment_ids=body.attachment_ids,
         )
 
+    broker = await registry.start_run(conversation_id, run_id, _producer)
+
+    async def _open_stream() -> AsyncIterator[AgentEvent]:
+        return _broker_subscriber_iter(broker)
+
     return StreamingResponse(
-        _encode_chat_sse(conversation_id, request, _open_stream),
+        _encode_chat_sse(conversation_id, request, _open_stream, run_id=run_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+async def _broker_subscriber_iter(broker: RunBroker) -> AsyncIterator[AgentEvent]:
+    """Bridge the broker's per-subscriber asyncio.Queue into the AgentEvent
+    iterator shape the SSE encoder expects.
+
+    Disconnect path: the encoder closes us via ``aclose()``; we unsubscribe
+    in finally so the broker's subscriber set stays accurate. The broker
+    task itself keeps producing — that's the point of the refactor.
+    """
+    queue = await broker.subscribe()
+    try:
+        while True:
+            event = await queue.get()
+            if event is None:
+                # End-of-stream sentinel from the broker.
+                return
+            if isinstance(event, dict) and event.get("__broker_error__"):
+                # Producer crashed mid-stream. Surface as a run-error so
+                # the encoder yields RUN_ERROR · matches the legacy path.
+                from allhands.execution.events import ErrorEvent
+
+                yield ErrorEvent(
+                    kind="error",
+                    code="BROKER_ERROR",
+                    message="agent task failed (see server logs)",
+                )
+                return
+            yield event
+    finally:
+        await broker.unsubscribe(queue)
 
 
 async def _encode_chat_sse(
     conversation_id: str,
     request: Request,
     open_stream: Callable[[], Awaitable[AsyncIterator[AgentEvent]]],
+    *,
+    run_id: str | None = None,
 ) -> AsyncIterator[bytes]:
     """Shared AG-UI SSE encoder (ADR 0014 Phase 4b).
 
     ``open_stream`` is an async callable that returns the agent-event
-    iterator (from ``ChatService.send_message`` or ``ChatService.resume_message``).
+    iterator (from ``ChatService.send_message``, ``ChatService.resume_message``,
+    or — post 2026-04-28 — a per-subscriber view onto a ``RunBroker``).
     Everything else — RUN_STARTED framing, per-event encoding, disconnect
     handling, close-on-error, RUN_FINISHED/RUN_ERROR — is identical between
-    the fresh-turn and resume entry points.
+    the fresh-turn / resume / subscribe entry points.
+
+    Pass ``run_id`` to keep the SSE wire identity in sync with an external
+    broker · None falls back to a fresh local id (legacy path).
     """
-    run_id = f"run_{secrets.token_hex(8)}"
+    if run_id is None:
+        run_id = f"run_{secrets.token_hex(8)}"
     yield agui.encode_sse(agui.run_started(conversation_id, run_id))
 
     stream: AsyncIterator[AgentEvent] | None = None
@@ -708,6 +768,47 @@ async def resume_message(
 
     return StreamingResponse(
         _encode_chat_sse(conversation_id, request, _open_stream),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/{conversation_id}/runs/{run_id}/subscribe")
+async def subscribe_to_run(
+    conversation_id: str,
+    run_id: str,
+    request: Request,
+) -> StreamingResponse:
+    """Reconnect to a previously-started run · 2026-04-28.
+
+    Lets a client that disconnected mid-stream (tab switch, route change,
+    network blip, browser refresh) re-attach to the same run and receive
+    the buffered events followed by the live tail. The agent task is
+    decoupled from the SSE response by ``stream_broker``, so the run keeps
+    going even when nobody is listening.
+
+    Returns 404 if the broker has already been GCed (≥ 60s past
+    completion · idle grace window expired). The frontend should fall
+    back to ``GET /messages`` for full history in that case.
+    """
+    registry = get_broker_registry()
+    broker = registry.get(run_id)
+    if broker is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"run {run_id!r} not found (broker expired)",
+        )
+    if broker.conversation_id != conversation_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"run {run_id!r} belongs to a different conversation",
+        )
+
+    async def _open_stream() -> AsyncIterator[AgentEvent]:
+        return _broker_subscriber_iter(broker)
+
+    return StreamingResponse(
+        _encode_chat_sse(conversation_id, request, _open_stream, run_id=run_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
