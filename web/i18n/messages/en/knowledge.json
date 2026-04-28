@@ -243,7 +243,8 @@
       "running": "…",
       "hint": "Enter to send · Shift+Enter for newline · same retrieved snippets carry across turns",
       "sourcesEmpty": "Sources used in answers will appear here after you ask",
-      "sourceColumnHelp": "Aggregated sources across all turns · deduped · click to jump to source"
+      "sourceColumnHelp": "Aggregated sources across all turns · deduped · click to jump to source",
+      "activityHits": "{count} hits"
     },
     "bulkTags": {
       "title": "Tag {count} selected documents",
