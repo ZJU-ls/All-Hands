@@ -651,14 +651,37 @@ class AgentLoop:
 
     def _active_tool_ids(self) -> list[str]:
         """Active tool ids for THIS turn. Mirrors runner.py:367-376.
-        Task 11 will overlay skill-resolved tool ids; for Task 7 we
-        use just the employee's base list."""
+
+        Skills overlay their resolved tool ids on top of the employee's base
+        list. Then we expand any ``mcp:<server_id>`` entries (the UI's
+        "mounted MCP server" persistence shape) into the universal MCP
+        dispatch pair (``list_mcp_server_tools`` + ``invoke_mcp_server_tool``)
+        — without that expansion, agents that mounted an MCP server would
+        find no per-tool entries in the registry and the loop would silently
+        drop them. The dispatch pair lets the agent list + invoke any
+        server's tool catalogue at runtime (no ahead-of-time per-tool
+        registration needed).
+        """
         active: list[str] = list(self._employee.tool_ids)
         if self._runtime is not None:
             for tids in getattr(self._runtime, "resolved_skills", {}).values():
                 for tid in tids:
                     if tid not in active:
                         active.append(tid)
+        # MCP expansion · ``mcp:<server_id>`` is a "mounted MCP server" marker
+        # written by the employee designer UI, not a registered tool id.
+        # Replace each with the universal dispatch pair so the agent can
+        # actually reach the server's tools at runtime. Idempotent.
+        if any(tid.startswith("mcp:") for tid in active):
+            for dispatcher in (
+                "allhands.meta.list_mcp_server_tools",
+                "allhands.meta.invoke_mcp_server_tool",
+            ):
+                if dispatcher not in active:
+                    active.append(dispatcher)
+            # Drop the marker ids — they're not registry entries and the
+            # binding loop's KeyError-skip path would just spam warnings.
+            active = [tid for tid in active if not tid.startswith("mcp:")]
         return active
 
     def _build_bindings(self) -> dict[str, ToolBinding]:
