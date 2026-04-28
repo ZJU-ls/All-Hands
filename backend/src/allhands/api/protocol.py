@@ -30,6 +30,14 @@ class ConversationResponse(BaseModel):
     # renders this as the "N 轮" badge — defaults to 0 so older clients can
     # ignore it. Derived field, not stored on core.Conversation.
     message_count: int = 0
+    # 2026-04-28 · run_id of an in-flight agent task for this conversation,
+    # or null if no run is active. Frontend reads this on chat-page mount
+    # and resubscribes via POST /runs/{id}/subscribe to recover a stream
+    # that survived a tab switch / route change / refresh. Computed at
+    # response time from the in-process broker registry — not persisted,
+    # so a server restart resets to null (intended; the broker is
+    # in-memory v0).
+    active_run_id: str | None = None
 
 
 class UpdateConversationRequest(BaseModel):
