@@ -51,6 +51,14 @@
     "traceChip": {
       "label": "追踪"
     },
+    "traceDrawer": {
+      "title": "运行链路",
+      "fullscreen": "全屏看",
+      "fullscreenHint": "在观测中心 L3 详情页打开 · 含完整时间线和侧栏",
+      "close": "关闭",
+      "overlayClose": "点击外部空白关闭",
+      "kbHint": "ESC 关闭 · 链接可分享(URL 含 ?trace=<run_id>)"
+    },
     "artifacts": {
       "title": "产出制品 · {count}",
       "subtitle": "本次 run 写入或更新的文件 · 点击进入详情",

@@ -2,7 +2,7 @@
   "employees": {
     "list": {
       "shellTitle": "Employees",
-      "designAction": "+ New employee",
+      "designAction": "New employee",
       "pageTitle": "Employees",
       "subtitle": "Browse your team — switch tabs to see drafts and archived members. Click any card to drill into details, or use the quick actions on the bottom right.",
       "defaultModel": "Default model",

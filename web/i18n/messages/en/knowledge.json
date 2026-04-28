@@ -243,7 +243,17 @@
       "running": "…",
       "hint": "Enter to send · Shift+Enter for newline · same retrieved snippets carry across turns",
       "sourcesEmpty": "Sources used in answers will appear here after you ask",
-      "sourceColumnHelp": "Aggregated sources across all turns · deduped · click to jump to source"
+      "sourceColumnHelp": "Aggregated sources across all turns · deduped · click to jump to source",
+      "activityHits": "{count} hits",
+      "stop": "Stop",
+      "stopTitle": "Abort generation · keep the partial answer",
+      "regenerate": "Regenerate",
+      "regenerateTitle": "Re-send the same question · fresh model sampling",
+      "newConversationTitle": "Clear conversation · start over",
+      "scrollToBottom": "Latest",
+      "scrollToBottomStreaming": "↓ New content streaming",
+      "scrollToBottomTitle": "Return to bottom · stay with the latest answer",
+      "copyCode": "Copy"
     },
     "bulkTags": {
       "title": "Tag {count} selected documents",

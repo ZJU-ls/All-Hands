@@ -159,9 +159,7 @@ export default function ConversationsPage() {
                               <div className="truncate text-sm font-medium text-text">
                                 {c.title ?? t("untitled")}
                               </div>
-                              <div className="mt-0.5 flex items-center gap-2 font-mono text-caption text-text-subtle">
-                                <span>{c.id.slice(0, 8)}</span>
-                                <span>·</span>
+                              <div className="mt-0.5 flex items-center gap-2 text-caption text-text-subtle">
                                 <time>{new Date(c.created_at).toLocaleString(locale)}</time>
                               </div>
                             </div>
