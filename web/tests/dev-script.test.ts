@@ -51,17 +51,26 @@ describe("L08 · dev ergonomics regression guards", () => {
     );
   });
 
-  it("RunTraceDrawer has been removed (trace moved to observatory L3 page)", () => {
-    // Pin the architectural decision: trace viewing lives at
-    // /observatory/runs/[id]; the global ?trace= drawer is gone. If anyone
-    // brings it back, this test fails loudly.
+  it("RunTraceDrawer is mounted at the AppShell level and lazy-loaded", () => {
+    // 2026-04-28 reversed the 2026-04-27 trace-into-observatory regression.
+    // Trace chips in chat used to <Link>-navigate to /observatory/runs/[id]
+    // and unmount the chat page mid-stream — killing spawn_subagent and
+    // partial token output. Drawer is back, mounted globally, lazy-loaded so
+    // the bundle cost stays at ~0 for routes that never trigger it.
     const drawerPath = resolve(ROOT, "components/runs/RunTraceDrawer.tsx");
-    expect(() => readFileSync(drawerPath, "utf8")).toThrow();
+    expect(() => readFileSync(drawerPath, "utf8")).not.toThrow();
+
     const appShell = readFileSync(
       resolve(ROOT, "components/shell/AppShell.tsx"),
       "utf8",
     );
-    expect(appShell).not.toMatch(/RunTraceDrawer/);
+    // It must be dynamic-imported (lazy) — eager import would re-couple the
+    // RunTracePanel + observatory-api bundle into every chat cold-compile.
+    expect(appShell).toMatch(
+      /dynamic\s*\(\s*\(\)\s*=>\s*import\(\s*["']@\/components\/runs\/RunTraceDrawer["']/,
+    );
+    // And it must be rendered.
+    expect(appShell).toMatch(/<RunTraceDrawer\s*\/>/);
   });
 
   it("the ⌘K keydown listener lives in AppShell, not inside CommandPalette", () => {

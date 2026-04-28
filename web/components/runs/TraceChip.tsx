@@ -3,32 +3,30 @@
 /**
  * TraceChip · Brand Blue Dual Theme V2 (ADR 0016)
  *
- * Renders a link into the observatory L3 trace page
- * (``/observatory/runs/<run_id>``). Two visual variants:
+ * Two visual variants AND two navigation behaviours:
  *
- *   - **chip** · rounded-full primary-tinted pill (default · dense lists)
- *   - **link** · inline text link with `↗` glyph (ToolCallCard expand)
+ *   - **chip / link variant (default)** opens the right-side trace drawer
+ *     (`?trace=<run_id>`). The chat page keeps streaming, spawn_subagent
+ *     keeps running. This is what users hit from inside an active
+ *     conversation, where unmounting would kill the live SSE.
+ *   - **page variant** behaves as before — a full `<Link>` navigation to
+ *     `/observatory/runs/<run_id>`. Used by cockpit ActiveRunsList,
+ *     observatory traces table, and other "I came here to analyse traces"
+ *     surfaces where a page change is the desired outcome.
  *
- * Pre-2026-04-27 this pushed ``?trace=<id>`` and a global drawer popped on
- * top of whatever page the user was on. That coupled trace viewing to chat
- * UX and produced 3 parallel trace surfaces. The integration plan
- * consolidates trace into observatory's L3 — this component is the
- * single hand-off; tests pin the href contract.
- *
- * ``TRACE_QUERY_KEY`` stays exported as ``"trace"`` because some observatory
- * sub-views (cockpit ActiveRunsList, traces page) still use it as a
- * URL-state key for selection · they navigate to /observatory/runs/<id>
- * via this chip but read the legacy query for backward-compat.
+ * The `traceHref` helper is exported so the drawer's "↗ 全屏看" button
+ * and the variant=page renderer share one definition.
  */
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/icon";
+import { useTraceDrawer } from "@/lib/use-trace-drawer";
 
 export const TRACE_QUERY_KEY = "trace";
 
-/** Single source of truth for the L3 trace href. */
+/** Single source of truth for the L3 trace href (full-screen page). */
 export function traceHref(runId: string): string {
   return `/observatory/runs/${encodeURIComponent(runId)}`;
 }
@@ -36,7 +34,12 @@ export function traceHref(runId: string): string {
 type Props = {
   runId: string;
   label?: string;
-  variant?: "chip" | "link";
+  /**
+   * `chip` (default) and `link` open the in-place drawer; `page` performs
+   * a full navigation. Pick `page` only on surfaces whose primary purpose
+   * is trace analysis (cockpit, observatory tables).
+   */
+  variant?: "chip" | "link" | "page";
   className?: string;
 };
 
@@ -48,14 +51,39 @@ export function TraceChip({
 }: Props) {
   const t = useTranslations("runs.traceChip");
   const resolvedLabel = label ?? t("label");
-  const href = traceHref(runId);
+  const { open } = useTraceDrawer();
 
-  if (variant === "link") {
+  const baseDataAttrs = {
+    "data-testid": "trace-chip",
+    "data-run-id": runId,
+    "data-variant": variant,
+  } as const;
+
+  if (variant === "page") {
+    const href = traceHref(runId);
     return (
       <Link
         href={href}
-        data-testid="trace-chip"
-        data-run-id={runId}
+        {...baseDataAttrs}
+        className={cn(
+          "inline-flex h-6 items-center gap-1 rounded-full border border-primary/20 bg-primary-muted/60 px-2 font-mono text-[10px] text-primary transition-colors duration-base hover:bg-primary-muted hover:-translate-y-px hover:border-primary/40",
+          className,
+        )}
+      >
+        <Icon name="external-link" size={10} strokeWidth={2} aria-hidden />
+        {resolvedLabel}
+      </Link>
+    );
+  }
+
+  const onClick = () => open(runId);
+
+  if (variant === "link") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        {...baseDataAttrs}
         className={cn(
           "inline-flex items-center gap-1 font-mono text-caption text-primary transition-colors duration-base hover:text-primary-hover",
           className,
@@ -63,22 +91,22 @@ export function TraceChip({
       >
         <span aria-hidden>↗</span>
         {resolvedLabel}
-      </Link>
+      </button>
     );
   }
 
   return (
-    <Link
-      href={href}
-      data-testid="trace-chip"
-      data-run-id={runId}
+    <button
+      type="button"
+      onClick={onClick}
+      {...baseDataAttrs}
       className={cn(
         "inline-flex h-6 items-center gap-1 rounded-full border border-primary/20 bg-primary-muted/60 px-2 font-mono text-[10px] text-primary transition-colors duration-base hover:bg-primary-muted hover:-translate-y-px hover:border-primary/40",
         className,
       )}
     >
       <Icon name="external-link" size={10} strokeWidth={2} aria-hidden />
-      {label}
-    </Link>
+      {resolvedLabel}
+    </button>
   );
 }

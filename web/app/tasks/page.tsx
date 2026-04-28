@@ -462,7 +462,7 @@ function TaskRow({ task, assigneeName }: { task: TaskDto; assigneeName: string }
               {updated.toLocaleString(locale)}
             </div>
             {task.run_ids.length > 0 && task.run_ids[0] && (
-              <TraceChip runId={task.run_ids[0]} label="trace" />
+              <TraceChip runId={task.run_ids[0]} label="trace" variant="page" />
             )}
           </div>
           <Icon
