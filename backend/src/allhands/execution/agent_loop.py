@@ -74,6 +74,7 @@ from allhands.execution.tool_pipeline import (
 # B5 cleanup can fully delete runner.py without breaking imports).
 RESOLVE_SKILL_TOOL_ID = "allhands.meta.resolve_skill"
 READ_SKILL_FILE_TOOL_ID = "allhands.meta.read_skill_file"
+RUN_SKILL_SCRIPT_TOOL_ID = "allhands.meta.run_skill_script"
 DISPATCH_TOOL_ID = "allhands.meta.dispatch_employee"
 SPAWN_SUBAGENT_TOOL_ID = "allhands.meta.spawn_subagent"
 
@@ -287,6 +288,7 @@ class AgentLoop:
         conversation_id: str = "",
         run_id: str | None = None,
         max_output_tokens: int | None = None,
+        script_runner: Any = None,
         **_unused: Any,
     ) -> None:
         self._employee = employee
@@ -297,6 +299,7 @@ class AgentLoop:
         self._skill_registry = skill_registry
         self._runtime = runtime
         self._spawn_subagent_service = spawn_subagent_service
+        self._script_runner = script_runner
         self._model_ref_override = model_ref_override
         # ADR 0019 C1 · plan tools · plan_repo and conversation_id passed
         # in by ChatService when constructing the runner; None during
@@ -723,6 +726,25 @@ class AgentLoop:
             return make_read_skill_file_executor(
                 runtime=self._runtime,
                 skill_registry=self._skill_registry,
+            )
+        if tool_id == RUN_SKILL_SCRIPT_TOOL_ID and self._skill_registry is not None:
+            # Lazy default: if no script_runner was injected (legacy callers),
+            # build a SubprocessScriptRunner on demand. Tests that want a Fake
+            # pass it explicitly via ctor `script_runner=` kwarg.
+            runner = self._script_runner
+            if runner is None:
+                from allhands.execution.script_runner import SubprocessScriptRunner
+
+                runner = SubprocessScriptRunner()
+                self._script_runner = runner
+            from allhands.execution.tools.meta.skill_scripts import (
+                make_run_skill_script_executor,
+            )
+
+            return make_run_skill_script_executor(
+                runtime=self._runtime,
+                skill_registry=self._skill_registry,
+                runner=runner,
             )
         if tool_id == DISPATCH_TOOL_ID and self._dispatch_service is not None:
             return self._build_dispatch_executor()

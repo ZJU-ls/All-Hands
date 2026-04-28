@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Skill 脚本执行 · 现状 · 方案 · Claude Code 对比</title>
+<style>
+  :root {
+    --bg: #0b1020; --bg-elev: #131a32; --bg-card: #161e3a; --bg-card-2: #1c2547;
+    --border: #232c52; --border-soft: #1d2647;
+    --text: #e7ecff; --text-muted: #9aa6d3; --text-dim: #6c7aa8;
+    --primary: #4f7dff; --primary-soft: #6e94ff; --accent: #8ab4ff;
+    --good: #3ec28f; --warn: #f0b94f; --bad: #ef6f6c; --code-bg: #0e1530;
+    --glow: 0 0 24px rgba(79,125,255,0.15);
+  }
+  html[data-theme="light"] { --bg: #f6f8ff; --bg-elev: #ffffff; --bg-card: #ffffff; --bg-card-2: #f0f4ff;
+    --border: #dbe2f5; --text: #15203d; --text-muted: #5a6691;
+    --primary: #2a59e6; --primary-soft: #4f7dff; --accent: #2a59e6; --code-bg: #eef2ff; }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); margin: 0; }
+  body { font: 15px/1.7 -apple-system, "PingFang SC", sans-serif; -webkit-font-smoothing: antialiased; }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 56px 28px 96px; }
+  header.hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+  .hero h1 { margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .meta { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
+  .badge { display: inline-block; margin-left: 8px; padding: 2px 10px; background: rgba(79,125,255,0.15); color: var(--primary-soft); border: 1px solid rgba(79,125,255,0.3); border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .theme-toggle { border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+
+  .lead { margin: 32px 0 36px; padding: 22px 26px;
+    background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 14px; }
+  .lead strong { color: var(--primary-soft); }
+  .lead.bad { background: linear-gradient(135deg, rgba(239,111,108,0.08), rgba(239,111,108,0.02)); border-color: rgba(239,111,108,0.25); }
+  .lead.bad strong { color: var(--bad); }
+  .lead.good { background: linear-gradient(135deg, rgba(62,194,143,0.10), rgba(62,194,143,0.04)); border-color: rgba(62,194,143,0.25); }
+  .lead.good strong { color: var(--good); }
+
+  h2 { font-size: 22px; margin: 56px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); position: relative; }
+  h2::before { content: ""; position: absolute; left: 0; bottom: -1px; width: 56px; height: 2px; background: linear-gradient(90deg, var(--primary), transparent); }
+  h2 .num { display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background: rgba(79,125,255,0.15); color: var(--primary-soft); border-radius: 8px; font-size: 14px; font-weight: 600; margin-right: 10px; vertical-align: middle; }
+  h3 { font-size: 17px; margin: 24px 0 10px; }
+  h4 { font-size: 13px; margin: 16px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+  /* 状态卡 */
+  .verdict {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 24px 0;
+  }
+  .verdict-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; transition: all 0.2s; }
+  .verdict-card:hover { transform: translateY(-2px); box-shadow: var(--glow); }
+  .verdict-card.no { border-left: 3px solid var(--bad); }
+  .verdict-card.partial { border-left: 3px solid var(--warn); }
+  .verdict-card.yes { border-left: 3px solid var(--good); }
+  .verdict-card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .verdict-card .ic { font-size: 22px; }
+  .verdict-card h3 { margin: 0; font-size: 16px; }
+  .verdict-card .status { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; margin-left: auto; }
+  .verdict-card.no .status { background: rgba(239,111,108,0.13); color: var(--bad); border: 1px solid rgba(239,111,108,0.3); }
+  .verdict-card.partial .status { background: rgba(240,185,79,0.13); color: var(--warn); border: 1px solid rgba(240,185,79,0.3); }
+  .verdict-card.yes .status { background: rgba(62,194,143,0.13); color: var(--good); border: 1px solid rgba(62,194,143,0.3); }
+  .verdict-card p { margin: 0; font-size: 13.5px; color: var(--text-muted); }
+
+  /* 对比表 */
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px;
+    background: var(--bg-card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { background: var(--bg-elev); font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  tr:last-child td { border-bottom: 0; }
+  td.center, th.center { text-align: center; }
+  td.yes { color: var(--good); font-weight: 600; }
+  td.no { color: var(--bad); font-weight: 600; }
+  td.partial { color: var(--warn); font-weight: 600; }
+
+  code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
+    font-size: 12.5px; color: var(--accent); }
+  pre { background: var(--code-bg); padding: 16px 18px; border-radius: 10px;
+    border: 1px solid var(--border); overflow: auto; line-height: 1.55; font-size: 12.5px; margin: 12px 0; }
+  pre code { background: transparent; padding: 0; color: var(--text); font-size: 12.5px; }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    background: rgba(79,125,255,0.15); color: var(--primary-soft); border: 1px solid rgba(79,125,255,0.3); }
+  .tag.good { background: rgba(62,194,143,0.13); color: var(--good); border-color: rgba(62,194,143,0.3); }
+  .tag.warn { background: rgba(240,185,79,0.13); color: var(--warn); border-color: rgba(240,185,79,0.3); }
+  .tag.bad { background: rgba(239,111,108,0.13); color: var(--bad); border-color: rgba(239,111,108,0.3); }
+  .tag.dim { background: var(--bg-elev); color: var(--text-dim); border-color: var(--border); }
+
+  .callout { background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 12px; padding: 18px 22px; margin: 18px 0; }
+  .callout strong { color: var(--primary-soft); }
+  .callout.warn { background: linear-gradient(135deg, rgba(240,185,79,0.10), rgba(240,185,79,0.02)); border-color: rgba(240,185,79,0.30); }
+  .callout.warn strong { color: var(--warn); }
+  .callout.good { background: linear-gradient(135deg, rgba(62,194,143,0.10), rgba(62,194,143,0.04)); border-color: rgba(62,194,143,0.30); }
+  .callout.good strong { color: var(--good); }
+
+  /* Skill dir tree visualization */
+  .tree {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; font-family: ui-monospace, monospace; font-size: 12.5px;
+    line-height: 1.7;
+  }
+  .tree .dir { color: var(--accent); font-weight: 600; }
+  .tree .py { color: #fbbf24; }
+  .tree .md { color: #c4a9fe; }
+  .tree .read-ok { color: var(--good); margin-left: 8px; font-size: 11px; }
+  .tree .exec-no { color: var(--bad); margin-left: 8px; font-size: 11px; }
+  .tree .exec-yes { color: var(--good); margin-left: 8px; font-size: 11px; }
+
+  /* Phase timeline for impl */
+  .phases { margin: 20px 0; }
+  .phase {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 14px; position: relative;
+  }
+  .phase::before { content: ""; position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
+    background: linear-gradient(180deg, var(--primary), var(--accent)); border-radius: 4px 0 0 4px; }
+  .phase h4 { margin: 0 0 4px; font-size: 14px; color: var(--text); text-transform: none; letter-spacing: 0; }
+  .phase .est { color: var(--text-dim); font-size: 12px; margin-bottom: 8px; }
+
+  /* Side-by-side compare */
+  .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+  .vs-col { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+  .vs-col h3 { margin: 0 0 10px; font-size: 16px; }
+  .vs-col.cc h3 { color: var(--accent); }
+  .vs-col.us h3 { color: var(--primary-soft); }
+  .vs-col ul { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; }
+  .vs-col li { margin: 4px 0; color: var(--text-muted); }
+  .vs-col code { font-size: 12px; }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 48px 0; }
+  .footer { color: var(--text-dim); font-size: 12px; margin-top: 64px; text-align: center; }
+  a { color: var(--primary-soft); }
+
+  @media (max-width: 880px) { .verdict, .vs { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <h1>Skill 脚本执行 · 现状与方案 <span class="badge">2026-04-27</span></h1>
+    <div class="meta">用户问:"现在如果 skill 里有脚本需要执行 · 平台支持吗?" · 顺带 vs Claude Code 对照</div>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">切换主题</button>
+</header>
+
+<!-- ============================ TLDR ============================ -->
+<div class="lead bad">
+  <strong>核心结论:</strong> <strong>不能跑</strong>。我们能 <strong>读</strong> skill 里的 <code>scripts/*.py</code>(<code>read_skill_file</code> tool),也能在 UI 里 <strong>编辑</strong> 它们(<code>SkillFileEditor</code>),但 <strong>没有任何 tool 能执行它们</strong>。Claude Code 风格的 skill(<code>anthropics/skills</code> 仓库里 pdf / pptx / xlsx 那种用 Python 真做事的)· 我们当前体系下用不了 —— agent 读了脚本也跑不了。
+</div>
+
+<div class="verdict">
+  <div class="verdict-card yes">
+    <div class="head"><div class="ic">📖</div><h3>读 skill 文件</h3><div class="status">支持</div></div>
+    <p><code>allhands.meta.read_skill_file(skill_id, relative_path)</code> · 沙盒限 install 目录 · 256KB 上限 · UTF-8。能读 SKILL.md / references/ / scripts/ 任意文件。</p>
+  </div>
+  <div class="verdict-card yes">
+    <div class="head"><div class="ic">✏️</div><h3>编辑 skill 文件</h3><div class="status">UI 支持</div></div>
+    <p>新加的 <code>SkillFileEditor</code>(CodeMirror 6)能在 web UI 编辑 <code>.md / .yaml / .json / .py</code> · 文件存进 skill 目录。</p>
+  </div>
+  <div class="verdict-card no">
+    <div class="head"><div class="ic">🔧</div><h3>执行 skill 脚本</h3><div class="status">缺失</div></div>
+    <p><strong>没有任何 tool 能跑脚本</strong>。整个 backend 搜不到 <code>asyncio.create_subprocess</code> / <code>subprocess.run</code>。这是当前 Skill 体系最大缺口。</p>
+  </div>
+</div>
+
+<!-- ============================ Section 1: 现状深扫 ============================ -->
+<h2><span class="num">1</span>现状深扫(基于代码 audit)</h2>
+
+<h3>1.1 现有 Skill 文件支持矩阵</h3>
+
+<table>
+  <tr><th>Skill 文件类型</th><th>在 skill 里能放?</th><th>能读?</th><th>能在 UI 编辑?</th><th>能执行?</th></tr>
+  <tr><td><code>SKILL.yaml</code> / <code>.md</code>(frontmatter + body)</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="center">N/A(描述类)</td></tr>
+  <tr><td><code>references/*.md</code></td><td class="yes center">✅</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="center">N/A</td></tr>
+  <tr><td><code>templates/*</code>(任意模板)</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="center">N/A</td></tr>
+  <tr><td><code>scripts/*.py</code></td><td class="yes center">✅</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="no center"><strong>❌ 缺</strong></td></tr>
+  <tr><td><code>scripts/*.sh</code></td><td class="yes center">✅</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="no center"><strong>❌ 缺</strong></td></tr>
+  <tr><td><code>requirements.txt</code>(声明依赖)</td><td class="partial center">⚠️ 可放</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="no center"><strong>❌ 没生效</strong></td></tr>
+  <tr><td><code>scripts/*.js</code> · 任意可执行</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="yes center">✅</td><td class="no center"><strong>❌ 缺</strong></td></tr>
+</table>
+
+<h3>1.2 关键代码线索</h3>
+
+<p><code>backend/src/allhands/execution/tools/meta/skill_files.py</code> 文件 docstring 自己写:</p>
+
+<div class="callout warn">
+  <strong>注释里说:</strong> "lets you pull the skill's <code>references/</code>, <code>templates/</code>, or <strong><code>scripts/</code></strong> content on demand."<br>
+  <strong>但 tool 只是 READ 范畴</strong>(<code>scope=ToolScope.READ</code>) · 没有对应的 <code>run_skill_script</code> 兄弟 tool。
+</div>
+
+<p>另一个证据:全代码搜 <code>subprocess</code> / <code>asyncio.create_subprocess</code>:</p>
+
+<pre><code># 命令:
+$ grep -rn "subprocess.run\|asyncio.create_subprocess" backend/src/allhands
+
+# 结果(0 行):
+(无匹配)</code></pre>
+
+<p>已有的 18 个 builtin skill 都<strong>不含 .py 脚本</strong>(只有 YAML + MD)· 因为放了也跑不了。</p>
+
+<h3>1.3 Skill 目录树视觉对比</h3>
+
+<div class="vs">
+  <div class="vs-col cc">
+    <h3>🟢 Claude Code · anthropics/skills/pdf/</h3>
+    <div class="tree">
+<span class="dir">pdf/</span>
+├── SKILL.md             <span class="md"></span><span class="exec-yes">读 + agent 用</span>
+├── reference.md         <span class="md"></span><span class="exec-yes">读</span>
+├── forms.md             <span class="md"></span><span class="exec-yes">读</span>
+├── LICENSE.txt
+└── <span class="dir">scripts/</span>
+    ├── <span class="py">check_bounding_boxes.py</span><span class="exec-yes">直接 python xx.py 跑</span>
+    ├── <span class="py">check_fillable_fields.py</span><span class="exec-yes">↑</span>
+    ├── <span class="py">convert_pdf_to_images.py</span><span class="exec-yes">↑</span>
+    ├── <span class="py">create_validation_image.py</span><span class="exec-yes">↑</span>
+    ├── <span class="py">extract_form_field_info.py</span><span class="exec-yes">↑</span>
+    ├── <span class="py">extract_form_structure.py</span><span class="exec-yes">↑</span>
+    ├── <span class="py">fill_fillable_fields.py</span><span class="exec-yes">↑</span>
+    └── <span class="py">fill_pdf_form_with_annotations.py</span><span class="exec-yes">↑</span>
+    </div>
+    <p style="margin-top: 10px; font-size: 12.5px; color: var(--text-muted);">
+      Claude Code 通过 <strong>Bash tool</strong> 跑:<code>python /skill/path/scripts/extract_form_structure.py form.pdf</code>。SKILL.md 教 agent 用什么参数 · agent 拼命令调 Bash。
+    </p>
+  </div>
+  <div class="vs-col us">
+    <h3>🔴 我们 · backend/skills/builtin/pdf/(假想)</h3>
+    <div class="tree">
+<span class="dir">pdf/</span>
+├── SKILL.yaml           <span class="md"></span><span class="exec-yes">读 + agent 用</span>
+├── prompts/guidance.md  <span class="md"></span><span class="exec-yes">读</span>
+└── <span class="dir">scripts/</span>
+    ├── <span class="py">extract_form_structure.py</span><span class="exec-no">读 ✓ · <strong>跑 ✗</strong></span>
+    ├── <span class="py">fill_fillable_fields.py</span><span class="exec-no">读 ✓ · <strong>跑 ✗</strong></span>
+    └── ... <span class="exec-no">同上 · 全部读但跑不了</span>
+    </div>
+    <p style="margin-top: 10px; font-size: 12.5px; color: var(--text-muted);">
+      <strong>差距:</strong> 没有 Bash tool · 也没有 <code>run_skill_script</code> tool。agent 能读 .py 内容回到 LLM context · 但<strong>没办法实际跑它做事</strong>。
+    </p>
+  </div>
+</div>
+
+<!-- ============================ Section 2: Claude Code 对比 ============================ -->
+<h2><span class="num">2</span>Claude Code Skill 能力对比</h2>
+
+<table>
+  <tr><th>能力</th><th class="center">Claude Code</th><th class="center">allhands 现状</th><th>差距 · 怎么补</th></tr>
+  <tr>
+    <td><strong>SKILL.md 三段加载</strong>(descriptor / body / references)</td>
+    <td class="yes center">✅</td>
+    <td class="yes center">✅</td>
+    <td>已实现(ADR 0015)· 完全对齐</td>
+  </tr>
+  <tr>
+    <td>读 skill 内任意文件</td>
+    <td class="yes center">✅(隐式 via Read tool)</td>
+    <td class="yes center">✅(<code>read_skill_file</code> · 沙盒)</td>
+    <td>对齐 · 我们沙盒更严格(只能读自己 skill 目录)</td>
+  </tr>
+  <tr>
+    <td><strong>跑 .py 脚本</strong></td>
+    <td class="yes center">✅(via Bash · <code>python script.py</code>)</td>
+    <td class="no center"><strong>❌ 缺</strong></td>
+    <td>需新 tool <code>run_skill_script</code> · 见 § 3</td>
+  </tr>
+  <tr>
+    <td>跑 .sh / .js / 任意可执行</td>
+    <td class="yes center">✅(Bash 通用)</td>
+    <td class="no center">❌</td>
+    <td>同上 · 一个 run tool 解决</td>
+  </tr>
+  <tr>
+    <td>声明 Python 依赖(<code>requirements.txt</code>)</td>
+    <td class="yes center">✅(用户机器装 / venv)</td>
+    <td class="no center">❌</td>
+    <td>每 skill 一个 venv 太重 · 共享 <code>~/.allhands/skills-venv</code> + 启动时 install</td>
+  </tr>
+  <tr>
+    <td>用户 UI 编辑 skill 文件</td>
+    <td class="partial center">⚠️ 文本编辑器</td>
+    <td class="yes center">✅(CodeMirror 6 · 语法高亮)</td>
+    <td><strong>我们更强</strong> · 已就位</td>
+  </tr>
+  <tr>
+    <td>Skill marketplace · 一键装</td>
+    <td class="yes center">✅(<code>/plugin install</code>)</td>
+    <td class="partial center">⚠️ zip 上传</td>
+    <td>V2 设计里 · 后续做</td>
+  </tr>
+  <tr>
+    <td>Skill 自合成(从会话学)</td>
+    <td class="partial center">⚠️ skill-creator 手动</td>
+    <td class="no center">❌ V2 设计未实施</td>
+    <td>PLAN-V2 § 7 · Phase 9</td>
+  </tr>
+  <tr>
+    <td>Skill 跨 agent 共享</td>
+    <td class="yes center">✅(全局 skill 池)</td>
+    <td class="yes center">✅(SkillRegistry)</td>
+    <td>对齐</td>
+  </tr>
+  <tr>
+    <td>Skill scope · 限定 tool 集</td>
+    <td class="yes center">✅(<code>allowed-tools</code> frontmatter)</td>
+    <td class="yes center">✅(<code>tool_ids</code>)</td>
+    <td>对齐</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>结论:</strong> 9 项能力中 6 项对齐 · 1 项我们更强(UI 编辑)· <strong>3 项缺失:跑脚本 · 依赖管理 · marketplace</strong>。其中"跑脚本"是 unblocker —— 不补这个,Claude Code 风格的 skill(pdf / pptx / xlsx 那种真用 Python 干活的)我们整套体系对接不了,等于丢失整个 <code>anthropics/skills</code> 生态。
+</div>
+
+<!-- ============================ Section 3: 设计方案 ============================ -->
+<h2><span class="num">3</span>设计方案 · 加 <code>run_skill_script</code> tool</h2>
+
+<h3>3.1 Tool 契约(ADR 0021 风格 · 自解释)</h3>
+
+<pre><code>RUN_SKILL_SCRIPT_TOOL = Tool(
+    id="allhands.meta.run_skill_script",
+    kind=ToolKind.META,
+    name="run_skill_script",
+    description=(
+        "Execute a script inside an activated skill's scripts/ directory. "
+        "Use AFTER calling resolve_skill. The script's cwd is the skill root, "
+        "stdout/stderr are captured (truncated at 1 MB tail), exit code returned. "
+        "Python scripts run in the shared ~/.allhands/skills-venv (pre-installed "
+        "from the skill's requirements.txt at activation time). "
+        "Path must start with 'scripts/'. Default timeout 30s, max 120s."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "skill_id":   {"type": "string", "description": "Activated skill id."},
+            "script":     {"type": "string", "description": "Path under scripts/ (e.g. 'scripts/extract.py')"},
+            "args":       {"type": "array", "items": {"type": "string"}, "default": []},
+            "stdin":      {"type": "string", "description": "Optional stdin payload (≤ 64 KB)."},
+            "timeout":    {"type": "integer", "minimum": 1, "maximum": 120, "default": 30},
+            "interpreter":{"type": "string", "enum": ["python", "node", "bash"],
+                          "description": "Auto-detected from extension if omitted."}
+        },
+        "required": ["skill_id", "script"],
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "exit":   {"type": "integer"},
+            "stdout": {"type": "string"},
+            "stderr": {"type": "string"},
+            "duration_ms": {"type": "integer"},
+            "killed": {"type": "string", "enum": ["timeout", "oom", "user", null]},
+            "error":  {"type": "string"},  // 只在 schema/safety 失败时
+        },
+    },
+    scope=ToolScope.IRREVERSIBLE,
+    requires_confirmation=True,         # 走 DeferredSignal · 用户确认
+    cost_hint=CostHint(relative="medium"),
+)</code></pre>
+
+<h3>3.2 安全边界(沙盒 + 守门)</h3>
+
+<table>
+  <tr><th>边界</th><th>怎么守</th></tr>
+  <tr><td>路径必须在 <code>&lt;skill_dir&gt;/scripts/</code></td><td>同 read_skill_file · <code>_safe_resolve</code> 校验 · 拒绝 <code>..</code> 和 symlink</td></tr>
+  <tr><td>cwd 锁死 skill 根</td><td><code>subprocess.run(cwd=skill_dir)</code> · 脚本能 import 同目录 helpers · 但出不了</td></tr>
+  <tr><td>环境变量白名单</td><td>仅 <code>PATH · HOME · ALLHANDS_SKILL_DIR · ALLHANDS_DATA · LANG · LC_ALL</code> · 不传用户 shell env(防 token 泄露)</td></tr>
+  <tr><td>资源限制</td><td>timeout 默认 30s 上限 120s · stdout 截断 1 MB tail · stderr 同 · CPU 限 = 单核 · 内存软限(POSIX <code>resource.RLIMIT_AS</code>)</td></tr>
+  <tr><td>Confirmation Gate</td><td>scope=IRREVERSIBLE + requires_confirmation=True · 弹窗显示 <strong>完整命令 + 解释器 + skill_id</strong> · 可"总是允许这个 skill"</td></tr>
+  <tr><td>Python 解释器</td><td>用 <code>~/.allhands/skills-venv/bin/python</code>(从 user PATH 隔离)· 提前装好常用库</td></tr>
+  <tr><td>错误回 envelope</td><td>遵 ADR 0021 · 不吐 Python traceback · 走 <code>{error, field, expected, received, hint}</code></td></tr>
+</table>
+
+<h3>3.3 依赖管理 · 共享 skills-venv</h3>
+
+<div class="callout good">
+  <strong>设计:</strong> 不给每个 skill 单独 venv(太重 · 装一次几百 MB)· 而是<strong>共享一个 <code>~/.allhands/skills-venv</code></strong>。skill 通过 <code>requirements.txt</code> 声明依赖 · activation 时检查 + 增量 <code>uv pip install</code>(<code>uv</code> 比 pip 快 10x · 重复装秒级缓存)。
+</div>
+
+<pre><code># skill 目录结构(支持 V2 后)
+backend/skills/builtin/pdf/
+├── SKILL.yaml
+├── prompts/guidance.md
+├── requirements.txt          # ← 新增:声明依赖
+└── scripts/
+    ├── extract_form_structure.py
+    └── fill_fillable_fields.py
+
+# requirements.txt
+pypdf>=4.0
+pdfplumber>=0.11
+reportlab>=4.0
+
+# 启动流程:
+# 1. resolve_skill("pdf") 被调用
+# 2. SkillRegistry 检查 skill 的 requirements.txt
+# 3. 若有:执行 `uv pip install --quiet -r requirements.txt --target ~/.allhands/skills-venv/site-packages`
+#    (uv 缓存命中时 < 1s · miss 时按依赖大小 · 通常几秒)
+# 4. 失败 → 返回 ToolMessage 告诉 agent "依赖装失败 · 用 fallback skill"</code></pre>
+
+<h3>3.4 完整调用链路(从对话到执行)</h3>
+
+<pre><code>① 用户:"用 pdf skill 把 invoice.pdf 的表单字段都列出来"
+
+② Lead Agent:
+   resolve_skill("pdf")
+     → SkillRegistry 注入 body 到 runtime
+     → 检查 requirements.txt · 触发 uv pip install(缓存 ~ 1s)
+     → SkillRuntime.resolved_skills 加 "pdf"
+
+③ Agent 读 SKILL.md body · 看到 "用 scripts/extract_form_structure.py":
+   read_skill_file("pdf", "scripts/extract_form_structure.py")
+     → 读到 .py 内容 · 看 main() 签名
+
+④ Agent 决定调用:
+   run_skill_script(
+     skill_id="pdf",
+     script="scripts/extract_form_structure.py",
+     args=["/Users/me/Downloads/invoice.pdf"],
+     timeout=30
+   )
+
+⑤ PermissionGate 弹 confirmation:
+   "Lead Agent 想跑:
+    python scripts/extract_form_structure.py /Users/me/Downloads/invoice.pdf
+    (在 skill: pdf 内 · 共享 venv · 30s timeout)"
+   [允许] [总是允许 pdf skill] [拒绝]
+
+⑥ 用户允许 → DeferredSignal 唤起 → executor 跑 subprocess
+   stdout: '{"fields": ["customer", "amount", ...]}'
+   exit: 0
+
+⑦ ToolMessage 回到 agent · agent 解析 JSON · 答复用户。</code></pre>
+
+<!-- ============================ Section 4: 实施 phase ============================ -->
+<h2><span class="num">4</span>实施 · 4 个小 phase(可独立合 main)</h2>
+
+<div class="phases">
+  <div class="phase">
+    <h4>Phase A · 最小执行器(1-2 天)</h4>
+    <div class="est">⏱ 仅 Python · 仅 stdin/args/stdout · 无 venv · 用 <code>~/.allhands/venv</code></div>
+    <ul>
+      <li><code>execution/tools/meta/skill_scripts.py</code> · 新 tool 定义 + executor</li>
+      <li><code>execution/script_runner.py</code> · subprocess wrapper(timeout / 截断 / env 白名单)</li>
+      <li>注册 + L01 配对(REST 没 / 不需要)</li>
+      <li>测试:fixture skill 含 scripts/echo.py · 跑通</li>
+      <li>Confirmation Gate 接通 DeferredSignal</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h4>Phase B · 共享 skills-venv 自动装(1 天)</h4>
+    <ul>
+      <li><code>execution/skills_venv.py</code> · 检测 + 增量 install via uv</li>
+      <li><code>resolve_skill</code> 调用时若 skill 有 <code>requirements.txt</code> · 后台 install</li>
+      <li>失败时返回结构化 envelope(ADR 0021)</li>
+      <li>UI:Settings → Skills 加"Venv 状态"卡(已装 / 缺什么)</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h4>Phase C · 多解释器 + 资源限(0.5-1 天)</h4>
+    <ul>
+      <li>支持 <code>node</code> / <code>bash</code> · 按扩展名自动路由</li>
+      <li>POSIX <code>resource.RLIMIT_AS</code> 内存软限</li>
+      <li>大 stdout 走 spool 文件 · agent 调 <code>read_skill_file("logs/run-NNN.txt")</code> 看完整</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <h4>Phase D · 把 anthropics/skills 接进来(0.5 天)</h4>
+    <ul>
+      <li><code>scripts/sync-anthropic-skills.sh</code> · clone + symlink 进 skills/imported/</li>
+      <li>把 pdf / pptx / xlsx / docx 4 个 skill 验证跑通</li>
+      <li>UI 加 "From Anthropic" tab · 一键启用</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>预估:</strong> 总 3-4.5 天 · 每个 phase 独立可合 main。Phase A 完了就能跑 · B/C 是体验提升 · D 是生态打通。
+</div>
+
+<!-- ============================ Section 5: 跟 V2 PLAN 关系 ============================ -->
+<h2><span class="num">5</span>跟 PLAN-V2 的关系</h2>
+
+<p>这个能力<strong>已经在 PLAN-V2 里隐含</strong>(Tier 1 <code>local.run_python</code> 能跑任意 Python)· 但 <code>run_skill_script</code> 是<strong>更精准的方式</strong>:</p>
+
+<div class="vs">
+  <div class="vs-col us">
+    <h3>用 PLAN-V2 的 <code>local.run_python</code></h3>
+    <ul>
+      <li>agent <code>read_skill_file</code> 读到 .py 内容</li>
+      <li>把整个文件内容塞进 <code>local.run_python(code=...)</code></li>
+      <li><strong>问题:</strong> 大 .py(50 KB)在 LLM context 里炸 token · 改一个参数要重传整个 .py · 编码问题多</li>
+      <li>能跑 · 但贵 · 不优雅</li>
+    </ul>
+  </div>
+  <div class="vs-col cc">
+    <h3>用 <code>run_skill_script</code></h3>
+    <ul>
+      <li>agent 直接 <code>run_skill_script(skill_id, "scripts/x.py", args=[...])</code></li>
+      <li>.py 内容不进 LLM context · 只传 args(几十字节)</li>
+      <li>解释器跑磁盘上的 .py · 改完 reload 即可</li>
+      <li><strong>token 省 99%</strong> · 工程清爽</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout good">
+  <strong>结论:</strong> <code>run_skill_script</code> 是 <code>local.run_python</code> 之上的"专用版本" —— skill 场景下成本远低、协议清晰。两个 tool 不冲突 · <strong>共存</strong>(local 给临时代码 · skill_script 给 skill 内打包脚本)。
+</div>
+
+<!-- ============================ Section 6: 决策 ============================ -->
+<h2><span class="num">6</span>给你拍板</h2>
+
+<table>
+  <tr><th>#</th><th>问题</th><th>推荐默认</th></tr>
+  <tr><td>S1</td><td>是否做 <code>run_skill_script</code>?</td><td><span class="tag good">是</span> · Phase A 1-2 天 · unblocker · 必须做</td></tr>
+  <tr><td>S2</td><td>共享 venv 还是每 skill 独立 venv?</td><td><span class="tag">共享</span>(<code>~/.allhands/skills-venv</code>) · 节省 ~ 200MB / skill</td></tr>
+  <tr><td>S3</td><td>用 <code>uv</code> 还是 <code>pip</code>?</td><td><span class="tag good">uv</span> · 装包快 10x · 缓存命中秒级</td></tr>
+  <tr><td>S4</td><td>默认 timeout / 上限</td><td>30s / 120s · 长任务 agent 自己 split 多次调</td></tr>
+  <tr><td>S5</td><td>支持哪些解释器?</td><td>v0:Python · v1 加:node / bash · 不支持任意 binary(安全风险)</td></tr>
+  <tr><td>S6</td><td>是否 import <code>anthropics/skills</code>?</td><td><span class="tag good">是</span> · Phase D · 一键拿 4 个 office skill 真能跑</td></tr>
+  <tr><td>S7</td><td>requirements.txt 装失败怎么办</td><td>结构化错误回 agent · agent 主动建议用户跑 setup script · 不让 skill 半残</td></tr>
+</table>
+
+<hr>
+
+<div class="callout">
+  <strong>下一步:</strong> 你说"S1 做 · 默认全选" · 我开 Phase A(1-2 天) · 写完一份能跑的 <code>run_skill_script</code> + L01 测试 + 一个 demo skill(<code>echo</code>)证明全链路。<br>
+  顺手验证:把 <code>anthropics/skills/pdf</code> 直接 symlink 进 <code>backend/skills/imported/pdf</code> · 跑 <code>extract_form_structure.py invoice.pdf</code> 确认能跑通。
+</div>
+
+<div class="footer">
+  allhands · research/sandbox · 2026-04-27 · Skill 脚本执行调研 + 设计方案 · 兄弟文档 → <a href="INDEX.html">INDEX.html</a>
+</div>
+
+</div>
+
+<script>
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+</script>
+</body>
+</html>
