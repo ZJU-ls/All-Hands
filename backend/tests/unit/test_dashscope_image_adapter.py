@@ -64,6 +64,27 @@ def test_size_conversion() -> None:
     assert _to_dashscope_size("auto") == "1024*1024"
 
 
+@pytest.mark.asyncio
+async def test_size_above_wanx_cap_rejected_with_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Real-LLM soak found wanx tops out at 1440 per dim. Pre-flight
+    rejection saves a 4-5s round trip and gives the agent a structured
+    envelope it can act on (ADR 0021)."""
+
+    def _handler(req: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError("should not reach DashScope")
+
+    _patch_httpx(monkeypatch, httpx.MockTransport(_handler))
+    a = DashScopeImageAdapter(poll_interval_seconds=0.0)
+    with pytest.raises(ImageProviderError, match="wanx"):
+        await a.generate(
+            ImageGenerationRequest(prompt="cat", size="1536x1024"),
+            provider=_provider(),
+            model=_model(),
+        )
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Mock transport scaffolding
 # ─────────────────────────────────────────────────────────────────────
