@@ -116,6 +116,42 @@ async def startup() -> None:
     except Exception as exc:
         log.warning("models.vision_backfill.failed", error=str(exc))
 
+    # 2026-04-29 · sync persisted MCP servers into the in-process tool
+    # registry so concrete `mcp__<server>__<tool>` entries are visible
+    # to the agent loop on the very first turn after boot. Without this,
+    # agent_loop.expand_mcp_mounts has nothing to expand to and falls
+    # back to silently dropping the mount marker. Best-effort:
+    # individual server failures don't block startup; UI's "test
+    # connection" button is the manual lever for the rare case.
+    try:
+        from allhands.api.deps import get_mcp_client
+        from allhands.persistence.sql_repos import SqlMCPServerRepo
+
+        client = get_mcp_client()
+        maker = get_sessionmaker()
+        async with maker() as session:
+            servers = await SqlMCPServerRepo(session).list_all()
+        registered_total = 0
+        for srv in servers:
+            if not srv.enabled:
+                continue
+            try:
+                tools = await client.register_server_tools(srv)
+                registered_total += len(tools)
+            except Exception as exc:
+                log.warning(
+                    "mcp.startup.register_failed",
+                    server=srv.name,
+                    error=str(exc),
+                )
+        log.info(
+            "mcp.startup.registered",
+            servers=len([s for s in servers if s.enabled]),
+            tools=registered_total,
+        )
+    except Exception as exc:
+        log.warning("mcp.startup.failed", error=str(exc))
+
     # 2026-04-26 P3 · drawio-creator skill was merged into allhands.artifacts.
     # Sanity scan: any stale 'allhands.drawio-creator' reference in the DB
     # would resolve to "skill not found" and break activation. The 0029
