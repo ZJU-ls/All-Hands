@@ -58,6 +58,7 @@ from allhands.services.trigger_service import TriggerService
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from allhands.execution.mcp_client import MCPClient
     from allhands.services.model_service import LLMModelService
     from allhands.services.observatory_service import ObservatoryService
     from allhands.services.provider_service import LLMProviderService
@@ -271,8 +272,28 @@ def _get_mcp_adapter() -> RealMCPAdapter:
     return RealMCPAdapter()
 
 
+@lru_cache(maxsize=1)
+def get_mcp_client() -> MCPClient:
+    """Process-wide MCPClient that bridges the persisted MCP server
+    registry into the in-process ``ToolRegistry``. Lazy so unit tests
+    that don't touch MCP keep their import graph small. Also installs
+    itself as the execution-layer default client (see
+    ``execution.mcp_client.get_default_mcp_client``) so AgentLoop /
+    AgentRunner can resolve ``mcp:<server_id>`` markers without
+    crossing the api → execution import boundary."""
+    from allhands.execution.mcp_client import MCPClient, set_default_mcp_client
+
+    client = MCPClient(registry=get_tool_registry(), adapter=_get_mcp_adapter())
+    set_default_mcp_client(client)
+    return client
+
+
 async def get_mcp_service(session: AsyncSession = Depends(get_session)) -> MCPService:
-    return MCPService(repo=SqlMCPServerRepo(session), adapter=_get_mcp_adapter())
+    return MCPService(
+        repo=SqlMCPServerRepo(session),
+        adapter=_get_mcp_adapter(),
+        client=get_mcp_client(),
+    )
 
 
 async def get_artifact_service(
