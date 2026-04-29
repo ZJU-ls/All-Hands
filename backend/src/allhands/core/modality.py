@@ -37,11 +37,9 @@ class Modality(StrEnum):
 CAPABILITY_TO_MODALITY: dict[Capability, Modality] = {
     Capability.CHAT: Modality.TEXT,
     Capability.IMAGE_GEN: Modality.IMAGE,
+    Capability.VIDEO_GEN: Modality.VIDEO,
     Capability.SPEECH: Modality.AUDIO,
     Capability.EMBEDDING: Modality.EMBEDDING,
-    # VIDEO_GEN doesn't exist on Capability yet — added when first video
-    # adapter lands. Keep this map authoritative so a single grep finds
-    # every place modality routing happens.
 }
 
 

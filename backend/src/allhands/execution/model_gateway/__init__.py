@@ -200,6 +200,31 @@ class ModelGateway:
         )
 
 
+def build_default_gateway() -> ModelGateway:
+    """Process-singleton factory · register every shipped adapter once.
+
+    Adding a new adapter = one new file in ``adapters/`` + one ``register``
+    line here. Tool layer / REST endpoints / UI testing dialog all light
+    up automatically as long as the model row carries the right capability.
+    """
+    from .adapters import (
+        DashScopeAudioAdapter,
+        DashScopeImageAdapter,
+        DashScopeVideoAdapter,
+        OpenAIImageAdapter,
+    )
+
+    gw = ModelGateway()
+    # Image
+    gw.register(OpenAIImageAdapter())
+    gw.register(DashScopeImageAdapter())
+    # Video
+    gw.register(DashScopeVideoAdapter())
+    # Audio (TTS)
+    gw.register(DashScopeAudioAdapter())
+    return gw
+
+
 __all__ = [
     "AdapterMismatchError",
     "AudioAdapter",
@@ -210,4 +235,5 @@ __all__ = [
     "ModelGatewayError",
     "NoAdapterFoundError",
     "VideoAdapter",
+    "build_default_gateway",
 ]

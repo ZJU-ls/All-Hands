@@ -41,8 +41,9 @@ class Capability(StrEnum):
 
     CHAT = "chat"
     IMAGE_GEN = "image_gen"
-    SPEECH = "speech"  # reserved · TTS / STT
-    EMBEDDING = "embedding"  # reserved · vector embeddings
+    VIDEO_GEN = "video_gen"  # text-to-video / image-to-video (wanx-video / sora / veo)
+    SPEECH = "speech"  # TTS / STT (cosyvoice / sambert / whisper / tts-1)
+    EMBEDDING = "embedding"  # vector embeddings (text-embedding-* / bge-* / m3e-*)
 
 
 class LLMModel(BaseModel):

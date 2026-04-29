@@ -88,6 +88,42 @@
       "setDefault": "设为默认",
       "setDefaultTitle": "设为工作区默认 (provider + model 一起切)"
     },
+    "modelGenTest": {
+      "title": "测试 · {model}",
+      "tab": {
+        "image": "图像",
+        "video": "视频",
+        "audio": "语音",
+        "disabled": "{mode} (该模型未声明此能力)"
+      },
+      "image": {
+        "prompt": "提示词",
+        "size": "尺寸",
+        "n": "数量",
+        "defaultPrompt": "一只在阳光下打盹的橘色小猫,水彩风格"
+      },
+      "video": {
+        "prompt": "提示词",
+        "resolution": "分辨率",
+        "duration": "时长 (秒)",
+        "slowHint": "视频生成通常 1-3 分钟,请耐心等待",
+        "defaultPrompt": "一只小狗在草地上奔跑,慢动作"
+      },
+      "audio": {
+        "text": "文本",
+        "voice": "音色",
+        "format": "格式",
+        "speed": "语速",
+        "defaultText": "你好,这是一段语音合成测试。"
+      },
+      "metrics": {
+        "duration": "耗时",
+        "modelUsed": "实际模型"
+      },
+      "run": "运行",
+      "running": "运行中 ({elapsed})",
+      "error": "出错"
+    },
     "modelTest": {
       "errorTimeout": "超时",
       "errorAuth": "认证失败",

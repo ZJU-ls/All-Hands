@@ -26,6 +26,7 @@ import { Icon } from "@/components/ui/icon";
 import { BrandMark, resolveBrand, type BrandSlug } from "@/components/brand/BrandMark";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ModelTestDialog } from "@/components/gateway/ModelTestDialog";
+import { ModelGenTestDialog } from "@/components/gateway/ModelGenTestDialog";
 import {
   ProviderSection,
   type GatewayProvider,
@@ -676,7 +677,30 @@ function GatewayPageInner() {
         />
       )}
       {chatModel && (
-        <ModelTestDialog model={chatModel} onClose={() => setChatModel(null)} />
+        // Dispatch on capabilities: image_gen / video_gen / speech models open
+        // the gen-test dialog (compact tabs, base64 preview); chat-only models
+        // keep the existing rich chat console. A model that declares both
+        // chat AND a gen capability today still goes through the chat dialog
+        // — switching mid-test is rare and the chat surface is the dominant
+        // workflow. Revisit when bi-modal models become common.
+        (() => {
+          const caps = (chatModel.capabilities ?? []) as string[];
+          const isGenOnly =
+            caps.length > 0 &&
+            !caps.includes("chat") &&
+            caps.some((c) => c === "image_gen" || c === "video_gen" || c === "speech");
+          return isGenOnly ? (
+            <ModelGenTestDialog
+              model={chatModel}
+              onClose={() => setChatModel(null)}
+            />
+          ) : (
+            <ModelTestDialog
+              model={chatModel}
+              onClose={() => setChatModel(null)}
+            />
+          );
+        })()
       )}
       <ConfirmDialog
         open={deleteProviderTarget !== null}

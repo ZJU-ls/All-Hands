@@ -49,19 +49,73 @@ from allhands.persistence.repositories import LLMModelRepo, LLMProviderRepo
 _IMAGE_MODEL_PATTERNS: tuple[str, ...] = (
     "gpt-image",
     "dall-e",
-    "wanx",
+    "wanx2",
+    "wanx-v",  # wanx-v1 etc · matches before wanx-video below by accident; we rely on order in _looks_like_video_model
     "wan2-image",
     "wan2.1-image",
     "wan2.5-image",
     "wan2.6-image",
     "imagen",
     "flux",
+    "stable-diffusion",
+    "sd3",
+    "kolors",
 )
+
+_VIDEO_MODEL_PATTERNS: tuple[str, ...] = (
+    "wanx-video",
+    "wan2-video",
+    "wan2.1-video",
+    "wan2.5-video",
+    "wan2-i2v",
+    "wan2-t2v",
+    "sora",
+    "veo",
+    "kling",
+    "seedance",
+    "vidu",
+)
+
+_SPEECH_MODEL_PATTERNS: tuple[str, ...] = (
+    "cosyvoice",
+    "sambert",
+    "tts-1",  # OpenAI tts-1 / tts-1-hd
+    "tts-hd",
+    "whisper",
+    "sensevoice",
+    "paraformer",
+    "elevenlabs",
+)
+
+_EMBEDDING_MODEL_PATTERNS: tuple[str, ...] = (
+    "text-embedding",
+    "embedding-",
+    "bge-",
+    "m3e-",
+    "gte-",
+    "voyage-",
+)
+
+
+def _looks_like_video_model(name: str) -> bool:
+    return any(p in name.lower() for p in _VIDEO_MODEL_PATTERNS)
 
 
 def _looks_like_image_model(name: str) -> bool:
     n = name.lower()
+    if _looks_like_video_model(name):
+        # video patterns can superficially look like image (wanx-video starts
+        # with wanx-) — disambiguate by checking video first.
+        return False
     return any(p in n for p in _IMAGE_MODEL_PATTERNS)
+
+
+def _looks_like_speech_model(name: str) -> bool:
+    return any(p in name.lower() for p in _SPEECH_MODEL_PATTERNS)
+
+
+def _looks_like_embedding_model(name: str) -> bool:
+    return any(p in name.lower() for p in _EMBEDDING_MODEL_PATTERNS)
 
 
 ErrorCategory = Literal[
@@ -127,8 +181,14 @@ class LLMModelService:
 
         if capabilities:
             caps_enum = [Capability(c) for c in capabilities]
+        elif _looks_like_video_model(name):
+            caps_enum = [Capability.VIDEO_GEN]
         elif _looks_like_image_model(name):
             caps_enum = [Capability.IMAGE_GEN]
+        elif _looks_like_speech_model(name):
+            caps_enum = [Capability.SPEECH]
+        elif _looks_like_embedding_model(name):
+            caps_enum = [Capability.EMBEDDING]
         else:
             caps_enum = [Capability.CHAT]
         model = LLMModel(

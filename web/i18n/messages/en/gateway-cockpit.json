@@ -88,6 +88,42 @@
       "setDefault": "Set as default",
       "setDefaultTitle": "Set as the workspace default (provider + model both switch)"
     },
+    "modelGenTest": {
+      "title": "Test · {model}",
+      "tab": {
+        "image": "Image",
+        "video": "Video",
+        "audio": "Audio",
+        "disabled": "{mode} (model does not declare this capability)"
+      },
+      "image": {
+        "prompt": "Prompt",
+        "size": "Size",
+        "n": "Count",
+        "defaultPrompt": "A small orange cat napping in the sun, watercolor"
+      },
+      "video": {
+        "prompt": "Prompt",
+        "resolution": "Resolution",
+        "duration": "Duration (s)",
+        "slowHint": "Video gen takes 1-3 minutes — be patient.",
+        "defaultPrompt": "A puppy running across a grassy field, slow motion"
+      },
+      "audio": {
+        "text": "Text",
+        "voice": "Voice",
+        "format": "Format",
+        "speed": "Speed",
+        "defaultText": "Hello, this is a TTS test."
+      },
+      "metrics": {
+        "duration": "Duration",
+        "modelUsed": "Model used"
+      },
+      "run": "Run",
+      "running": "Running ({elapsed})",
+      "error": "Error"
+    },
     "modelTest": {
       "errorTimeout": "Timeout",
       "errorAuth": "Auth failed",
