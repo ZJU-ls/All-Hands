@@ -58,6 +58,10 @@ export function InputBar({
   const [value, setValue] = useState("");
   const [thinking, setThinking] = useState(false);
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
+  // Inline rejection notices for files that failed pre-flight (size /
+  // mime). Replaces `alert()` which stole textarea focus and made the
+  // composer untypeable until the user clicked back into it.
+  const [rejections, setRejections] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [modelSupportsImages, setModelSupportsImages] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -289,20 +293,21 @@ export function InputBar({
           status: { state: "queued" },
         });
       }
-      if (queued.length === 0) {
-        if (rejected.length > 0) {
-          // soft toast — alert is the simplest in-tree primitive available.
-          // Avoid a fancy toast lib here to keep diff small.
-          alert(rejected.join("\n"));
-        }
-        return;
+      if (rejected.length > 0) {
+        // Inline notice (auto-dismiss after 5 s) instead of alert(),
+        // which stole textarea focus and made the composer untypeable.
+        setRejections((prev) => [...prev, ...rejected]);
+        window.setTimeout(
+          () => setRejections((prev) => prev.slice(rejected.length)),
+          5000,
+        );
       }
+      if (queued.length === 0) return;
       setAttachments((prev) => [...prev, ...queued]);
       // Kick off uploads concurrently.
       for (const att of queued) {
         void uploadOne(att);
       }
-      if (rejected.length > 0) alert(rejected.join("\n"));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [conversationId, tAtt],
@@ -542,6 +547,19 @@ export function InputBar({
         accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.json,.csv,.xml,.yaml,.yml,.html"
       />
       <div className="rounded-xl border border-border bg-surface">
+        {rejections.length > 0 && (
+          <div
+            data-testid="upload-rejections"
+            className="border-b border-warning/30 bg-warning-soft px-3 py-2 text-[12px] text-warning"
+          >
+            {rejections.map((msg, i) => (
+              <div key={i} className="flex items-start gap-1.5">
+                <Icon name="alert-triangle" size={12} className="mt-[3px] shrink-0" />
+                <span>{msg}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <AttachmentChips attachments={attachments} onRemove={removeAttachment} />
         <Composer
           value={value}
@@ -551,7 +569,11 @@ export function InputBar({
           isStreaming={isStreaming}
           placeholder={t("placeholder")}
           rows={3}
-          disabled={!canSendWithContent && (value.trim().length > 0 || attachments.length > 0)}
+          // CRITICAL: don't pass `disabled` here — that would block the
+          // textarea entirely on upload failure, costing the user their
+          // focus + ability to type. Use `sendDisabled` to gate only the
+          // send button so they can still compose / remove failed chips.
+          sendDisabled={!canSendWithContent && (value.trim().length > 0 || attachments.length > 0)}
           controls={
             <div className="flex items-center gap-2">
               <button

@@ -50,6 +50,11 @@ export type ComposerProps = {
   testId?: string;
   /** When true the textarea keeps enabled during streaming (for queued input UX). Defaults to true. */
   keepTextareaEnabledWhileStreaming?: boolean;
+  /** Block sending only · keeps the textarea typeable. Use for transient
+   *  "can't send right now" states (failed upload chip, queued retry, etc.)
+   *  where the user must still be able to compose / delete chips without
+   *  losing focus on the textarea. */
+  sendDisabled?: boolean;
 };
 
 export type ComposerHandle = {
@@ -70,6 +75,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     controlsTrailing,
     testId,
     keepTextareaEnabledWhileStreaming = true,
+    sendDisabled = false,
   },
   ref,
 ) {
@@ -97,7 +103,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     ta.style.overflowY = ta.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [value]);
 
-  const canSend = !isStreaming && !disabled && value.trim().length > 0;
+  const canSend = !isStreaming && !disabled && !sendDisabled && value.trim().length > 0;
 
   const handleClick = useCallback(() => {
     if (isStreaming) {

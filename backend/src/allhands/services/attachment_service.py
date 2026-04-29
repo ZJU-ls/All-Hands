@@ -90,7 +90,16 @@ class AttachmentService:
 
         safe_name = _sanitize_filename(filename)
         # Resolve mime: prefer explicit, fall back to extension-guessed.
-        resolved_mime = (mime or "").strip().lower() or _guess_mime(safe_name)
+        # Browsers send "application/octet-stream" (or empty) when the OS
+        # mimetype DB doesn't know an extension — common for .md, .yaml,
+        # .csv on Windows / Linux. Trusting that opaque value would falsely
+        # reject perfectly valid text/office uploads, so treat it the same
+        # as "unknown" and re-guess from the filename extension.
+        provided = (mime or "").strip().lower()
+        if not provided or provided == "application/octet-stream":
+            resolved_mime = _guess_mime(safe_name)
+        else:
+            resolved_mime = provided
         if not _mime_allowed(resolved_mime):
             raise AttachmentServiceError(f"mime {resolved_mime!r} not allowed (file: {safe_name})")
 
@@ -178,7 +187,31 @@ def _sanitize_filename(filename: str) -> str:
     return name
 
 
+# Python's stdlib mimetypes DB misses common dev / data extensions on a few
+# platforms (notably .md → None on macOS Python). We seed those before
+# falling through so users don't get spurious rejections.
+_EXTRA_MIME: dict[str, str] = {
+    ".md": "text/markdown",
+    ".markdown": "text/markdown",
+    ".rst": "text/x-rst",
+    ".yaml": "application/x-yaml",
+    ".yml": "application/x-yaml",
+    ".csv": "text/csv",
+    ".tsv": "text/tab-separated-values",
+    ".log": "text/plain",
+    ".env": "text/plain",
+    ".ini": "text/plain",
+    ".toml": "text/plain",
+    ".jsonl": "application/json",
+    ".ndjson": "application/json",
+}
+
+
 def _guess_mime(filename: str) -> str:
+    if "." in filename:
+        ext = "." + filename.rsplit(".", 1)[-1].lower()
+        if ext in _EXTRA_MIME:
+            return _EXTRA_MIME[ext]
     guessed, _ = mimetypes.guess_type(filename)
     return (guessed or "application/octet-stream").lower()
 

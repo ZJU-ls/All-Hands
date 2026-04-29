@@ -169,6 +169,37 @@ async def test_pdf_mime_allowed(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_octet_stream_falls_back_to_extension(tmp_path: Path) -> None:
+    """Browsers send `application/octet-stream` for files whose extension
+    isn't in the OS mimetype DB (commonly .md / .yaml / .csv on Windows).
+
+    Previously this opaque value bypassed `_guess_mime` because the truthy
+    check `mime or _guess_mime()` short-circuited, so the upload was
+    rejected as "not allowed" — a real-world bug reported 2026-04-29.
+    """
+    svc = _make_service(tmp_path)
+    att = await svc.upload(data=b"# hello", filename="notes.md", mime="application/octet-stream")
+    assert att.mime == "text/markdown"
+
+
+@pytest.mark.asyncio
+async def test_md_extension_maps_to_text_markdown(tmp_path: Path) -> None:
+    """Python's stdlib mimetypes DB returns None for `.md` on some
+    platforms. We seed _EXTRA_MIME so the upload still resolves to a
+    text/* mime that's on the allowlist."""
+    svc = _make_service(tmp_path)
+    att = await svc.upload(data=b"# hello", filename="readme.md", mime=None)
+    assert att.mime == "text/markdown"
+
+
+@pytest.mark.asyncio
+async def test_yaml_with_empty_browser_mime(tmp_path: Path) -> None:
+    svc = _make_service(tmp_path)
+    att = await svc.upload(data=b"key: value\n", filename="cfg.yaml", mime="")
+    assert att.mime == "application/x-yaml"
+
+
+@pytest.mark.asyncio
 async def test_store_extracted_text(tmp_path: Path) -> None:
     svc = _make_service(tmp_path)
     att = await svc.upload(data=b"x", filename="x.pdf", mime="application/pdf")
