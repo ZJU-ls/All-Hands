@@ -1,17 +1,19 @@
-"""Client-disconnect → agent-cancel wiring for POST /api/conversations/{id}/messages.
+"""Client-disconnect behaviour for POST /api/conversations/{id}/messages.
 
-I-0015 / I-0016: the Composer's single send/stop button aborts the fetch
-when the user clicks while streaming. Starlette surfaces this as a
-`http.disconnect` receive frame. `routers/chat.py::send_message` polls
-`request.is_disconnected()` between events and closes the underlying
-async generator; this test proves the generator is actually closed (i.e.
-the agent loop does not keep running after disconnect).
+2026-04-28 inverted the historical contract: when the SSE client
+disconnects, the agent task DOES NOT stop. The new ``stream_broker``
+infrastructure (see ``execution/stream_broker.py``) decouples the agent
+producer from the SSE consumer. A user that tabs away or refreshes can
+re-attach via ``POST /runs/{id}/subscribe`` and pick up where they
+left off — clicking a trace chip no longer kills spawn_subagent runs.
 
-We test the async generator returned by `event_stream()` directly with a
-fake Request whose `is_disconnected()` flips to True after the first
-token is consumed. This avoids the sync TestClient + SSE cancellation
-edge cases (the sync client doesn't reliably push `http.disconnect` into
-the ASGI receive queue mid-stream).
+This test pins the new contract: disconnect → SSE response loop ends,
+broker subscriber count drops to zero, but the underlying generator
+keeps producing until *we* explicitly tear down the broker. The legacy
+"router aclose()s the agent stream on disconnect" expectation is gone.
+
+We drive the handler directly with a fake Request whose
+``is_disconnected()`` flips after the first token, same as before.
 """
 
 from __future__ import annotations
@@ -74,49 +76,72 @@ class FakeRequest:
 
 
 @pytest.mark.asyncio
-async def test_event_stream_closes_agent_on_disconnect(
+async def test_disconnect_keeps_broker_alive_for_resubscribe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Disconnect mid-stream → router breaks the loop and `aclose()`s the agent gen."""
-
-    svc = CancelTrackingChatService()
-
-    async def _svc(_session: object, request: object = None) -> CancelTrackingChatService:
-        return svc
-
-    monkeypatch.setattr(chat_router, "get_chat_service", _svc)
-
-    request = FakeRequest()
-
-    # Invoke the underlying handler without the FastAPI machinery so we
-    # can drive the generator ourselves. `send_message` returns a
-    # StreamingResponse whose body iterator IS our event_stream().
-    response = await chat_router.send_message(
-        conversation_id="c1",
-        body=chat_router.SendMessageRequest(content="hi"),
-        request=request,  # type: ignore[arg-type]
-        session=None,  # type: ignore[arg-type]
+    """Disconnect mid-stream → SSE encoder exits but broker task lives on."""
+    from allhands.execution.stream_broker import (
+        get_broker_registry,
+        reset_broker_registry_for_tests,
     )
-    body_iter = response.body_iterator  # type: ignore[attr-defined]
 
-    # First frame: RUN_STARTED opens the AG-UI v1 envelope (I-0017).
-    run_started = await body_iter.__anext__()
-    assert b"event: RUN_STARTED" in run_started
-    # Next frame: the first AG-UI token lands as TEXT_MESSAGE_START.
-    text_start = await body_iter.__anext__()
-    assert b"event: TEXT_MESSAGE_START" in text_start
-    assert not svc.closed.is_set()
-
-    # Client disconnects. Router polls between events so the next
-    # iteration must observe the flag and break out of the loop.
-    request.disconnect()
-
-    # The loop may yield one more buffered token before polling; drain
-    # until the iterator ends.
+    reset_broker_registry_for_tests()
     try:
-        while True:
-            await asyncio.wait_for(body_iter.__anext__(), timeout=2.0)
-    except StopAsyncIteration:
-        pass
+        svc = CancelTrackingChatService()
 
-    assert svc.closed.is_set(), "router did not aclose() the agent stream after disconnect"
+        async def _svc(
+            _session: object,
+            request: object = None,
+        ) -> CancelTrackingChatService:
+            return svc
+
+        monkeypatch.setattr(chat_router, "get_chat_service", _svc)
+
+        request = FakeRequest()
+
+        response = await chat_router.send_message(
+            conversation_id="c1",
+            body=chat_router.SendMessageRequest(content="hi"),
+            request=request,  # type: ignore[arg-type]
+            session=None,  # type: ignore[arg-type]
+        )
+        body_iter = response.body_iterator  # type: ignore[attr-defined]
+
+        # RUN_STARTED → first token chunk lands.
+        run_started = await body_iter.__anext__()
+        assert b"event: RUN_STARTED" in run_started
+        text_start = await body_iter.__anext__()
+        assert b"event: TEXT_MESSAGE_START" in text_start
+
+        # Client disconnects. The encoder exits its loop on the next poll.
+        request.disconnect()
+        try:
+            while True:
+                await asyncio.wait_for(body_iter.__anext__(), timeout=2.0)
+        except StopAsyncIteration:
+            pass
+
+        # The agent stream must NOT have been closed by the disconnect
+        # alone — broker contract. Give the producer a moment to keep
+        # spinning; if it had been cancelled we'd see closed.is_set()
+        # immediately.
+        await asyncio.sleep(0.15)
+        assert not svc.closed.is_set(), (
+            "agent stream was closed on client disconnect — broker must keep "
+            "the run alive for resubscribe"
+        )
+
+        # Active run is still queryable from the registry — that's how the
+        # frontend will spot it on chat-page remount.
+        active = get_broker_registry().active_run_for_conversation("c1")
+        assert active is not None
+
+        # Tear down explicitly so the test process doesn't leak the task.
+        broker = get_broker_registry().get(active)
+        assert broker is not None
+        if broker._task is not None:
+            broker._task.cancel()
+            with pytest.raises((asyncio.CancelledError, BaseException)):
+                await broker._task
+    finally:
+        reset_broker_registry_for_tests()

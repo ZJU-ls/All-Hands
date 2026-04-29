@@ -387,6 +387,8 @@
         "emptyTools": "This server declares no tools.",
         "toolsSearchPlaceholder": "Search tools…",
         "toolsNoMatch": "No tool matches \"{query}\"",
+        "tryOpen": "Try",
+        "tryClose": "Close",
         "featured": "featured"
       },
       "empty": {

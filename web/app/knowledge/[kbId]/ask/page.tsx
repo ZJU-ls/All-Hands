@@ -21,6 +21,7 @@ import {
   type AskSource,
   type AskStreamFrame,
   askKBStream,
+  getFollowUpQuestions,
   getStarterQuestions,
 } from "@/lib/kb-api";
 
@@ -47,6 +48,9 @@ type AskTurn = {
   // up here so the user sees a search step + a thinking step in real time
   // instead of staring at a blinking dot for 20 s.
   activity: AgentActivity[];
+  // Follow-up question chips, fetched lazily after the turn finishes
+  // streaming. null = not requested · [] = LLM returned nothing useful.
+  followUps: string[] | null;
 };
 
 export default function AskTabPage() {
@@ -68,6 +72,7 @@ function AskTabInner() {
   const [starters, setStarters] = useState<string[] | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const fired = useRef(false);
 
   useEffect(() => {
@@ -115,6 +120,26 @@ function AskTabInner() {
     setPinned(true);
   }
 
+  // Global "/" → focus the composer (skips when user is typing elsewhere).
+  // Linear / Notion / GitHub all use this; cheap muscle memory win.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tgt = e.target as HTMLElement | null;
+      if (
+        tgt &&
+        (tgt.tagName === "INPUT" ||
+          tgt.tagName === "TEXTAREA" ||
+          tgt.isContentEditable)
+      )
+        return;
+      e.preventDefault();
+      composerRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   async function runTurn(question: string, followUp: boolean) {
     const q = question.trim();
     if (!q) return;
@@ -129,6 +154,7 @@ function AskTabInner() {
       usedModel: null,
       latencyMs: null,
       activity: [],
+      followUps: null,
     };
     setTurns((prev) => (followUp ? [...prev, blank] : [blank]));
 
@@ -207,6 +233,20 @@ function AskTabInner() {
                 ? { ...a, state: "done" as const, durationMs: Date.now() - a.startedAt }
                 : a,
             );
+            // Fan out follow-up fetch — set state on this turn when it lands.
+            void getFollowUpQuestions(kb.id, {
+              question: tt.question,
+              answer: tt.answer,
+              limit: 3,
+            })
+              .then((qs) =>
+                setTurns((prev2) =>
+                  prev2.map((tt2) =>
+                    tt2.id === turnId ? { ...tt2, followUps: qs } : tt2,
+                  ),
+                ),
+              )
+              .catch(() => undefined);
             return {
               ...tt,
               activity: closed,
@@ -303,9 +343,13 @@ function AskTabInner() {
                     key={turn.id}
                     turn={turn}
                     idx={idx}
+                    isLast={idx === turns.length - 1}
                     onChunkClick={(docId) =>
                       router.push(`/knowledge/${kb.id}/docs/${docId}`)
                     }
+                    onFollowUp={(q) => {
+                      void runTurn(q, true);
+                    }}
                   />
                 ))}
               </div>
@@ -328,12 +372,24 @@ function AskTabInner() {
         <div className="border-t border-border bg-surface px-6 py-3">
           <div className="mx-auto max-w-3xl">
             <div className="flex items-center gap-2">
-              <input
-                type="text"
+              <textarea
+                ref={composerRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  // Auto-grow up to 6 lines
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  // Skip when an IME composition is in progress so Chinese
+                  // pinyin candidates don't accidentally submit on Enter.
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
                     e.preventDefault();
                     submitDraft();
                   }
@@ -344,7 +400,8 @@ function AskTabInner() {
                     : t("placeholderFollowUp")
                 }
                 disabled={anyStreaming}
-                className="h-10 flex-1 rounded-xl border border-border bg-surface-2 px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
+                rows={1}
+                className="min-h-10 max-h-[144px] flex-1 resize-none rounded-xl border border-border bg-surface-2 px-3 py-2 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
               />
               {anyStreaming ? (
                 <button
@@ -503,10 +560,14 @@ function TurnView({
   turn,
   idx,
   onChunkClick,
+  onFollowUp,
+  isLast,
 }: {
   turn: AskTurn;
   idx: number;
   onChunkClick: (docId: string) => void;
+  onFollowUp: (q: string) => void;
+  isLast: boolean;
 }) {
   const t = useTranslations("knowledge.ask");
   const parts = renderAnswerWithCites(turn.answer, turn.sources, onChunkClick, turn.id);
@@ -554,6 +615,31 @@ function TurnView({
           )}
         </div>
       </div>
+
+      {/* Follow-up chip row (Perplexity-style "Related"). Only on the last
+          turn — past turns showing them would clutter and the user can just
+          ask anyway via composer. */}
+      {isLast && !turn.streaming && turn.followUps && turn.followUps.length > 0 && (
+        <div className="ml-9">
+          <div className="mb-1.5 flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+            <Icon name="sparkles" size={10} />
+            <span>{t("relatedLabel")}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {turn.followUps.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => onFollowUp(q)}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 text-[12px] text-text-muted hover:border-primary/40 hover:bg-primary-muted/30 hover:text-primary"
+              >
+                <Icon name="arrow-right" size={10} />
+                <span>{q}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

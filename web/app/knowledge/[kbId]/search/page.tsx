@@ -10,7 +10,7 @@
  *   ?q=<query>  (auto-fires on mount; updates as user types via debounce)
  */
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Icon } from "@/components/ui/icon";
@@ -37,6 +37,27 @@ function SearchTabInner() {
   const [results, setResults] = useState<ScoredChunkDto[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Global "/" → focus search input. Same shortcut as Ask page; consistent
+  // muscle memory across KB tabs.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tgt = e.target as HTMLElement | null;
+      if (
+        tgt &&
+        (tgt.tagName === "INPUT" ||
+          tgt.tagName === "TEXTAREA" ||
+          tgt.isContentEditable)
+      )
+        return;
+      e.preventDefault();
+      inputRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   async function runSearch(q: string) {
     if (!q.trim()) {
@@ -76,6 +97,7 @@ function SearchTabInner() {
         <div className="mx-auto flex max-w-3xl items-center gap-2">
           <Icon name="search" size={14} className="text-text-subtle" />
           <input
+            ref={inputRef}
             type="text"
             autoFocus
             value={draft}

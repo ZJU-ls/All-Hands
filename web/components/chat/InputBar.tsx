@@ -31,6 +31,17 @@ type Props = {
   conversation?: ConversationDto | null;
   employee?: EmployeeDto | null;
   onConversationChange?: (next: ConversationDto) => void;
+  /**
+   * 2026-04-28 · run_id of an in-flight broker run for this conversation,
+   * resolved on chat-page mount from `getConversation()`. When non-null
+   * the InputBar opens an SSE subscriber to `POST /runs/{id}/subscribe`
+   * instead of waiting for the user to send a new turn — the buffered
+   * events replay and the live tail attaches in-place. Mirrors the
+   * AgUiCallbacks the send handler builds, so all the state machinery
+   * (reasoning, tool calls, render envelopes, confirmations) reuses
+   * the same wiring.
+   */
+  initialActiveRunId?: string | null;
 };
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -52,12 +63,17 @@ export function InputBar({
   conversation,
   employee,
   onConversationChange,
+  initialActiveRunId,
 }: Props) {
   const t = useTranslations("chat.inputBar");
   const tAtt = useTranslations("chat.attachments");
   const [value, setValue] = useState("");
   const [thinking, setThinking] = useState(false);
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
+  // Inline rejection notices for files that failed pre-flight (size /
+  // mime). Replaces `alert()` which stole textarea focus and made the
+  // composer untypeable until the user clicked back into it.
+  const [rejections, setRejections] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [modelSupportsImages, setModelSupportsImages] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -289,20 +305,21 @@ export function InputBar({
           status: { state: "queued" },
         });
       }
-      if (queued.length === 0) {
-        if (rejected.length > 0) {
-          // soft toast — alert is the simplest in-tree primitive available.
-          // Avoid a fancy toast lib here to keep diff small.
-          alert(rejected.join("\n"));
-        }
-        return;
+      if (rejected.length > 0) {
+        // Inline notice (auto-dismiss after 5 s) instead of alert(),
+        // which stole textarea focus and made the composer untypeable.
+        setRejections((prev) => [...prev, ...rejected]);
+        window.setTimeout(
+          () => setRejections((prev) => prev.slice(rejected.length)),
+          5000,
+        );
       }
+      if (queued.length === 0) return;
       setAttachments((prev) => [...prev, ...queued]);
       // Kick off uploads concurrently.
       for (const att of queued) {
         void uploadOne(att);
       }
-      if (rejected.length > 0) alert(rejected.join("\n"));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [conversationId, tAtt],
@@ -476,6 +493,41 @@ export function InputBar({
     anyFailed,
   ]);
 
+  // 2026-04-28 · auto-resubscribe to in-flight runs.
+  //
+  // ChatPage hands us the `active_run_id` it read from GET
+  // /api/conversations/{id}. When non-null, an agent is still streaming
+  // events into the broker — the user just opened a tab onto a run that
+  // started earlier (after a refresh, a route change away-and-back, or
+  // even another tab). Hook into POST /runs/{id}/subscribe; the same
+  // AG-UI v1 wire shape replays buffered events then attaches to the
+  // live tail. Disconnect path is identical to a normal turn.
+  useEffect(() => {
+    if (!initialActiveRunId) return;
+    if (streamRef.current) return; // a fresh send already started
+    beginTurn();
+    const handle = openStream(
+      `${BASE}/api/conversations/${conversationId}/runs/${encodeURIComponent(
+        initialActiveRunId,
+      )}/subscribe`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      },
+      buildStreamCallbacks(),
+    );
+    streamRef.current = handle;
+    return () => {
+      handle.abort();
+      if (streamRef.current === handle) streamRef.current = null;
+    };
+    // intentionally not depending on buildStreamCallbacks — that
+    // useCallback rebuilds on every store-state change and would
+    // restart the resubscribe loop. The effect is mount-only by design.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, initialActiveRunId, beginTurn]);
+
   // ADR 0018 · resume protocol simplified to a single round-trip.
   // ConfirmationDialog flips the Confirmation row directly via
   // /api/confirmations/{id}/resolve; the backend's polling
@@ -542,6 +594,19 @@ export function InputBar({
         accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.json,.csv,.xml,.yaml,.yml,.html"
       />
       <div className="rounded-xl border border-border bg-surface">
+        {rejections.length > 0 && (
+          <div
+            data-testid="upload-rejections"
+            className="border-b border-warning/30 bg-warning-soft px-3 py-2 text-[12px] text-warning"
+          >
+            {rejections.map((msg, i) => (
+              <div key={i} className="flex items-start gap-1.5">
+                <Icon name="alert-triangle" size={12} className="mt-[3px] shrink-0" />
+                <span>{msg}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <AttachmentChips attachments={attachments} onRemove={removeAttachment} />
         <Composer
           value={value}
@@ -551,7 +616,11 @@ export function InputBar({
           isStreaming={isStreaming}
           placeholder={t("placeholder")}
           rows={3}
-          disabled={!canSendWithContent && (value.trim().length > 0 || attachments.length > 0)}
+          // CRITICAL: don't pass `disabled` here — that would block the
+          // textarea entirely on upload failure, costing the user their
+          // focus + ability to type. Use `sendDisabled` to gate only the
+          // send button so they can still compose / remove failed chips.
+          sendDisabled={!canSendWithContent && (value.trim().length > 0 || attachments.length > 0)}
           controls={
             <div className="flex items-center gap-2">
               <button

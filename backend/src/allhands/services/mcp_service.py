@@ -11,6 +11,7 @@ routers translate to 400/404.
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -20,6 +21,7 @@ from allhands.execution.mcp.adapter import MCPInvocationError
 
 if TYPE_CHECKING:
     from allhands.execution.mcp.adapter import MCPAdapter, MCPToolInfo
+    from allhands.execution.mcp_client import MCPClient
     from allhands.persistence.repositories import MCPServerRepo
 
 
@@ -28,9 +30,21 @@ class MCPServiceError(Exception):
 
 
 class MCPService:
-    def __init__(self, *, repo: MCPServerRepo, adapter: MCPAdapter) -> None:
+    def __init__(
+        self,
+        *,
+        repo: MCPServerRepo,
+        adapter: MCPAdapter,
+        client: MCPClient | None = None,
+    ) -> None:
         self._repo = repo
         self._adapter = adapter
+        # The bridge into ToolRegistry. Optional so legacy test
+        # constructions (single-router unit tests) keep working without
+        # spinning up a registry; production wiring (api/deps.py) always
+        # passes one so add/test/update/delete keep the registry in sync
+        # with the DB.
+        self._client = client
 
     async def list_all(self) -> list[MCPServer]:
         return await self._repo.list_all()
@@ -65,7 +79,9 @@ class MCPService:
         # Best-effort: probe + cache the tool catalogue right after add when
         # enabled. Failure is non-fatal — the row is already saved and the
         # user can hit "test" later. Without this, freshly added servers
-        # show "0 tools" until the user manually tests.
+        # show "0 tools" until the user manually tests. test_connection
+        # additionally registers each tool into the in-process ToolRegistry
+        # via MCPClient (2026-04-29 fix · concrete tools, not dispatcher).
         if enabled:
             probed = await self.test_connection(server.id)
             if probed is not None:
@@ -95,9 +111,20 @@ class MCPService:
             }
         )
         await self._repo.upsert(updated)
+        # Re-handshake to pick up new config (e.g. command path changed)
+        # and refresh the in-process tool registry. Disabled servers get
+        # their tools unregistered on the next test_connection.
+        if self._client is not None and updated.enabled:
+            # best-effort · UI test button will surface errors
+            with contextlib.suppress(Exception):
+                await self._client.register_server_tools(updated)
+        elif self._client is not None and not updated.enabled:
+            await self._client.unregister_server_tools(updated.id)
         return updated
 
     async def delete(self, server_id: str) -> None:
+        if self._client is not None:
+            await self._client.unregister_server_tools(server_id)
         await self._repo.delete(server_id)
 
     async def test_connection(self, server_id: str) -> MCPServer | None:
@@ -136,6 +163,17 @@ class MCPService:
             },
         )
         await self._repo.upsert(updated)
+        # Mirror the catalogue into ToolRegistry as concrete
+        # ``mcp__<server>__<tool>`` entries so the agent loop can expand
+        # ``mcp:<server_id>`` mounts to specific Tools (rather than
+        # falling back on the universal dispatcher pair). Best-effort:
+        # an MCPInvocationError here just means the next agent turn will
+        # see fewer tools, not that the test_connection failed.
+        if self._client is not None and health == MCPHealth.OK:
+            with contextlib.suppress(Exception):
+                await self._client.register_server_tools(updated)
+        elif self._client is not None and health != MCPHealth.OK:
+            await self._client.unregister_server_tools(updated.id)
         return updated
 
     async def list_server_tools(self, server_id: str) -> list[MCPToolInfo]:

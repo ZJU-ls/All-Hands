@@ -28,6 +28,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { ToolTryPanel } from "@/components/mcp/ToolTryPanel";
 
 type Transport = "stdio" | "sse" | "http";
 type Health = "unknown" | "ok" | "unreachable" | "auth_failed";
@@ -896,7 +897,11 @@ function ServerCard({
               <p className="text-[11px] text-text-muted">{tr("card.emptyTools")}</p>
             )}
             {tools && Array.isArray(tools) && tools.length > 0 && (
-              <ToolsList tools={tools} serverName={server.name} />
+              <ToolsList
+                tools={tools}
+                serverId={server.id}
+                serverName={server.name}
+              />
             )}
           </div>
         )}
@@ -911,17 +916,19 @@ function ServerCard({
 
 function ToolsList({
   tools,
+  serverId,
   serverName,
 }: {
   tools: ToolInfo[];
+  serverId: string;
   serverName: string;
 }) {
   const tr = useTranslations("mcp.list");
   const [query, setQuery] = useState("");
-  // 2026-04-26 · 单个 server 暴露 50+ tool 的情况(github-official 等)
-  // 完全可能。展开 panel 后没有内部搜索,要找特定 tool 只能滚屏。补一个
-  // compact 搜索框 — 同时控制 panel 高度,超 12 个时变成滚动容器,避免
-  // 一次撑满整屏。
+  // 2026-04-29 · 单工具展开式调用 — 列表页之前只能"看"工具签名,要试调
+  // 必须跳到详情页。改成行级展开 + 内嵌 ToolTryPanel,与详情页共用同一份
+  // 组件。同一 server 内同时只展开一个工具,避免一次撑出多张表单。
+  const [expanded, setExpanded] = useState<string>("");
   const lcQuery = query.trim().toLowerCase();
   const visible = useMemo(() => {
     if (!lcQuery) return tools;
@@ -953,28 +960,65 @@ function ToolsList({
         <ul
           className={
             "flex flex-col gap-1.5 " +
-            (tools.length > 12 ? "max-h-72 overflow-y-auto pr-1" : "")
+            (tools.length > 12 ? "max-h-[28rem] overflow-y-auto pr-1" : "")
           }
         >
-          {visible.map((tool) => (
-            <li
-              key={tool.name}
-              data-testid={`tool-${serverName}-${tool.name}`}
-              className="flex items-start gap-2 text-[11px]"
-            >
-              <Icon
-                name="zap"
-                size={11}
-                className="mt-0.5 text-primary shrink-0"
-              />
-              <div className="min-w-0">
-                <span className="font-mono text-text">{tool.name}</span>
-                {tool.description && (
-                  <span className="text-text-muted"> — {tool.description}</span>
+          {visible.map((tool) => {
+            const open = expanded === tool.name;
+            return (
+              <li
+                key={tool.name}
+                data-testid={`tool-${serverName}-${tool.name}`}
+                className="rounded-md border border-border bg-surface overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpanded((prev) => (prev === tool.name ? "" : tool.name))
+                  }
+                  aria-expanded={open}
+                  data-testid={`tool-toggle-${serverName}-${tool.name}`}
+                  className="w-full flex items-start gap-2 px-2.5 py-2 text-left text-[11px] hover:bg-surface-2 transition-colors duration-fast"
+                >
+                  <Icon
+                    name="zap"
+                    size={11}
+                    className="mt-0.5 text-primary shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className="font-mono text-text">{tool.name}</span>
+                    {tool.description && (
+                      <span className="text-text-muted">
+                        {" "}
+                        — {tool.description}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-medium shrink-0 transition-colors duration-fast ${
+                      open
+                        ? "bg-primary text-primary-fg"
+                        : "bg-surface-2 text-text-muted border border-border"
+                    }`}
+                  >
+                    <Icon
+                      name={open ? "chevron-up" : "play"}
+                      size={9}
+                      strokeWidth={2.25}
+                    />
+                    {open ? tr("card.tryClose") : tr("card.tryOpen")}
+                  </span>
+                </button>
+                {open && (
+                  <ToolTryPanel
+                    serverId={serverId}
+                    tool={tool}
+                    testIdPrefix={`tool-try-${serverName}`}
+                  />
                 )}
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

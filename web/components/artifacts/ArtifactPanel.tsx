@@ -103,9 +103,34 @@ export function ArtifactPanel({
     [panelWidth, persistWidth],
   );
 
+  // 2026-04-28 · "全工作区" toggle。默认仍只看当前对话(scoped),但
+  // 如果发生过 conversation_id=NULL 孤儿(老 bug 修前生成的子 agent
+  // 制品),用户切到全工作区能恢复看到。也方便用户在 chat 里快速浏
+  // 览隔壁对话产出的 artifact 不必跳页。state 持久化到 localStorage,
+  // 切换不丢。
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setShowAll(window.localStorage.getItem("allhands.artifact_panel_show_all") === "1");
+  }, []);
+  const toggleShowAll = useCallback(() => {
+    setShowAll((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          "allhands.artifact_panel_show_all",
+          next ? "1" : "0",
+        );
+      }
+      return next;
+    });
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
-      const items = await listArtifacts({ limit: 200, conversationId });
+      // showAll=true → 不传 conversationId,看全部工作区制品
+      const scopeConv = showAll ? undefined : conversationId;
+      const items = await listArtifacts({ limit: 200, conversationId: scopeConv });
       setArtifacts(items);
       setError(null);
       setState("ok");
@@ -113,7 +138,7 @@ export function ArtifactPanel({
       setError(String(e));
       setState((prev) => (prev === "ok" ? "ok" : "error"));
     }
-  }, [conversationId]);
+  }, [conversationId, showAll]);
 
   useEffect(() => {
     void refresh();
@@ -138,7 +163,10 @@ export function ArtifactPanel({
       // Scope filter (v2): drop frames for artifacts produced by other
       // conversations. Cross-conversation artifacts still surface globally
       // via /artifacts; the chat-side panel stays local.
-      if (conversationId && payload.conversation_id !== conversationId) return;
+      // 2026-04-28 · 当 showAll=true 时不过滤,任何 artifact 都接进 panel,
+      // 与 listArtifacts 在 showAll 模式下的 scope 保持一致。
+      if (!showAll && conversationId && payload.conversation_id !== conversationId)
+        return;
       const artifactId = payload.artifact_id;
 
       if (payload.op === "deleted") {
@@ -187,7 +215,7 @@ export function ArtifactPanel({
       cancelled = true;
       source.close();
     };
-  }, [refresh, conversationId]);
+  }, [refresh, conversationId, showAll]);
 
   return (
     <aside
@@ -226,11 +254,32 @@ export function ArtifactPanel({
             {t("offline")}
           </span>
         )}
+        {conversationId && (
+          <button
+            type="button"
+            onClick={toggleShowAll}
+            aria-pressed={showAll}
+            data-testid="artifact-panel-show-all"
+            title={showAll ? t("showAllOnTitle") : t("showAllOffTitle")}
+            className={
+              "ml-auto inline-flex h-7 items-center gap-1 rounded-md border px-2 font-mono text-[10px] transition-colors duration-fast " +
+              (showAll
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-border bg-surface text-text-muted hover:border-border-strong hover:text-text")
+            }
+          >
+            <Icon name={showAll ? "folder" : "folder"} size={11} />
+            {showAll ? t("showAllOn") : t("showAllOff")}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
           aria-label={t("closeAria")}
-          className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors duration-fast ease-out hover:border-border-strong hover:text-text"
+          className={
+            (conversationId ? "" : "ml-auto ") +
+            "inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface text-text-muted transition-colors duration-fast ease-out hover:border-border-strong hover:text-text"
+          }
           title={t("closeTitle")}
         >
           <Icon name="x" size={14} />
