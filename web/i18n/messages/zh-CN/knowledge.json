@@ -108,7 +108,21 @@
       "retryIngest": "重试入库",
       "loading": "加载中…",
       "allTags": "全部标签",
-      "uploadingProgress": "上传 · 完成 {done}/{total}"
+      "uploadingProgress": "上传 · 完成 {done}/{total}",
+      "sortRecent": "最近更新",
+      "sortOldest": "最早创建",
+      "sortName": "名称 A-Z",
+      "sortSize": "体积大小",
+      "sortChunks": "片段数",
+      "sortAria": "排序方式",
+      "viewGrid": "网格视图",
+      "viewList": "列表视图",
+      "colTitle": "标题",
+      "colState": "状态",
+      "colChunks": "片段",
+      "colSize": "大小",
+      "colUpdated": "更新",
+      "colTags": "标签"
     },
     "uploads": {
       "summary": "上传 · 完成 {done}/{total}",
@@ -171,6 +185,11 @@
       "summary": "Re-embed 完成 · 共 {processed} · 成功 {succeeded} · 失败 {failed}"
     },
     "overview": {
+      "welcomeTitle": "欢迎来到 {kb}",
+      "welcomeBody": "拖一份 markdown / pdf / docx 进来 · 几秒后就能搜也能问。或者抓一篇网页文章。",
+      "welcomeUpload": "上传第一份文档",
+      "welcomeIngestUrl": "抓 URL",
+      "welcomeFootnote": "支持 .md / .pdf / .docx / .txt / .html / .csv 等",
       "descriptionLabel": "描述",
       "noDescription": "(还没写描述 · 点右侧编辑 ↗)",
       "editDescription": "去设置编辑",
@@ -244,7 +263,17 @@
       "hint": "Enter 发送 · Shift+Enter 换行 · 答案沿用同一份检索片段编号",
       "sourcesEmpty": "提问后这里会列出回答用到的来源",
       "sourceColumnHelp": "此面板汇总所有轮次的来源 · 去重 · 点击跳到原文",
-      "activityHits": "{count} 命中"
+      "activityHits": "{count} 命中",
+      "stop": "停止",
+      "stopTitle": "中止当前生成 · 保留已收到的内容",
+      "regenerate": "重新生成",
+      "regenerateTitle": "重发同一个问题 · 换一次模型采样",
+      "newConversationTitle": "清空当前对话 · 重新开始",
+      "scrollToBottom": "滚到最新",
+      "scrollToBottomStreaming": "↓ 新内容生成中",
+      "scrollToBottomTitle": "回到对话底部 · 跟上最新答案",
+      "copyCode": "复制",
+      "relatedLabel": "相关追问"
     },
     "bulkTags": {
       "title": "给 {count} 个文档批量打标签",
@@ -371,6 +400,7 @@
       "actionsSection": "操作",
       "reindex": "重新嵌入",
       "chunkCountLine": "{count} 段",
+      "outline": "大纲",
       "headerMeta": "v{version} · {kb} KB · {chunks} 段",
       "tabInfo": "概览",
       "tabText": "原文",

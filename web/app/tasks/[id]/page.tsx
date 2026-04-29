@@ -21,6 +21,7 @@ import {
   type TaskDto,
   type TaskStatus,
 } from "@/lib/tasks-api";
+import { useEmployeeNames } from "@/lib/use-employee-names";
 
 type LoadStatus = "loading" | "ready" | "notfound" | "error";
 
@@ -374,6 +375,8 @@ function TaskHero({ task }: { task: TaskDto }) {
   const statusT = useTranslations("tasks.status");
   const sourceT = useTranslations("tasks.source");
   const locale = useLocale();
+  const employeeName = useEmployeeNames();
+  const assigneeName = employeeName(task.assignee_id);
   const created = new Date(task.created_at).toLocaleString(locale);
   const updated = new Date(task.updated_at).toLocaleString(locale);
   const completed = task.completed_at ? new Date(task.completed_at).toLocaleString(locale) : null;
@@ -393,10 +396,9 @@ function TaskHero({ task }: { task: TaskDto }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <TaskStatusPill status={task.status} />
-            <span className="inline-flex h-5 items-center rounded bg-surface-2 px-1.5 font-mono text-[10px] text-text-muted">
+            <span className="inline-flex h-5 items-center rounded bg-surface-2 px-1.5 text-[10px] text-text-muted">
               {sourceT(task.source)}
             </span>
-            <span className="font-mono text-[10px] text-text-subtle">{task.id}</span>
           </div>
           <h2 className="mt-2 text-xl font-semibold leading-tight tracking-tight text-text">
             {task.title}
@@ -422,7 +424,10 @@ function TaskHero({ task }: { task: TaskDto }) {
           <div className="text-[10px] font-mono uppercase tracking-wider text-text-subtle">
             {t("assignedTo")}
           </div>
-          <div className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1">
+          <div
+            className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1"
+            title={task.assignee_id}
+          >
             <span
               aria-hidden
               className="grid h-5 w-5 place-items-center rounded-full text-[9px] font-bold text-primary-fg"
@@ -431,9 +436,9 @@ function TaskHero({ task }: { task: TaskDto }) {
                   "linear-gradient(135deg, var(--color-primary), var(--color-accent))",
               }}
             >
-              {task.assignee_id.slice(0, 1).toUpperCase()}
+              {assigneeName.slice(0, 1).toUpperCase()}
             </span>
-            <span className="font-mono text-[11px] text-text">{task.assignee_id}</span>
+            <span className="text-[11px] font-medium text-text">{assigneeName}</span>
           </div>
         </div>
       </div>

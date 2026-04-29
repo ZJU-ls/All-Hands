@@ -1589,6 +1589,18 @@ class ChatService:
                 event_bus=bus,
             )
             child_runtime = bootstrap_employee_runtime(child, skill_registry, tool_registry)
+            # 2026-04-28 · 修制品落库 conversation_id=NULL 的 bug。
+            # 现象:LeadAgent 派子 agent 跑 → 子 agent 调
+            # `allhands.artifacts.create` 产 html / drawio,但右侧聊天的
+            # ArtifactPanel(用 conversation_id 过滤)看不到。根因:这个
+            # factory 之前不传 conversation_id 给 AgentRunner,子 runner 的
+            # `_conversation_id=""`,artifact 落库时 conversation_id=NULL,
+            # 自然被 panel 的过滤排除。
+            # 修复:从 dispatch 设置的 _parent_conversation_id ContextVar
+            # 读当前 conv,传给子 runner。这条 ContextVar 在
+            # ChatService.send_message 入口就已经 set,subagent 跑在同一
+            # asyncio task 里继承得到。
+            inherited_conv = _parent_conversation_id.get() or ""
             return AgentRunner(
                 employee=child,
                 tool_registry=tool_registry,
@@ -1598,11 +1610,7 @@ class ChatService:
                 skill_registry=skill_registry,
                 runtime=child_runtime,
                 spawn_subagent_service=nested_spawn,
-                # ADR 0019 · plan_repo also shared with subagents so a Lead
-                # → child dispatch can update the same plan. conversation_id
-                # is None at the nested factory layer; the dispatch / spawn
-                # service knows the conversation it's targeting and can
-                # supply it through the runner kwargs path if needed.
+                conversation_id=inherited_conv,
                 plan_repo=self._plan_repo,
                 user_input_signal=self._user_input_signal,
             )

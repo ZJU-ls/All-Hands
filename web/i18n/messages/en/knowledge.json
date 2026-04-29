@@ -108,7 +108,21 @@
       "retryIngest": "Retry ingest",
       "loading": "Loading…",
       "allTags": "All tags",
-      "uploadingProgress": "Upload · {done}/{total} done"
+      "uploadingProgress": "Upload · {done}/{total} done",
+      "sortRecent": "Recent",
+      "sortOldest": "Oldest",
+      "sortName": "Name A-Z",
+      "sortSize": "By size",
+      "sortChunks": "By chunks",
+      "sortAria": "Sort by",
+      "viewGrid": "Grid view",
+      "viewList": "List view",
+      "colTitle": "Title",
+      "colState": "State",
+      "colChunks": "Chunks",
+      "colSize": "Size",
+      "colUpdated": "Updated",
+      "colTags": "Tags"
     },
     "uploads": {
       "summary": "Uploads · {done}/{total} done",
@@ -171,6 +185,11 @@
       "summary": "Re-embed done · {processed} processed · {succeeded} ok · {failed} failed"
     },
     "overview": {
+      "welcomeTitle": "Welcome to {kb}",
+      "welcomeBody": "Drop a markdown / pdf / docx in — searchable + askable in seconds. Or grab a web article.",
+      "welcomeUpload": "Upload your first document",
+      "welcomeIngestUrl": "Ingest a URL",
+      "welcomeFootnote": "Supports .md / .pdf / .docx / .txt / .html / .csv …",
       "descriptionLabel": "Description",
       "noDescription": "(no description · click edit ↗ to add one)",
       "editDescription": "Edit in settings",
@@ -244,7 +263,17 @@
       "hint": "Enter to send · Shift+Enter for newline · same retrieved snippets carry across turns",
       "sourcesEmpty": "Sources used in answers will appear here after you ask",
       "sourceColumnHelp": "Aggregated sources across all turns · deduped · click to jump to source",
-      "activityHits": "{count} hits"
+      "activityHits": "{count} hits",
+      "stop": "Stop",
+      "stopTitle": "Abort generation · keep the partial answer",
+      "regenerate": "Regenerate",
+      "regenerateTitle": "Re-send the same question · fresh model sampling",
+      "newConversationTitle": "Clear conversation · start over",
+      "scrollToBottom": "Latest",
+      "scrollToBottomStreaming": "↓ New content streaming",
+      "scrollToBottomTitle": "Return to bottom · stay with the latest answer",
+      "copyCode": "Copy",
+      "relatedLabel": "Related questions"
     },
     "bulkTags": {
       "title": "Tag {count} selected documents",
@@ -371,6 +400,7 @@
       "actionsSection": "Actions",
       "reindex": "Reindex",
       "chunkCountLine": "{count} chunks",
+      "outline": "Outline",
       "headerMeta": "v{version} · {kb} KB · {chunks} chunks",
       "tabInfo": "Overview",
       "tabText": "Source text",

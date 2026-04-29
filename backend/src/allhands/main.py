@@ -79,6 +79,20 @@ async def startup() -> None:
     except Exception as exc:
         log.warning("employee.seed.failed", error=str(exc))
 
+    # Tool-id rename migrations · sweep every employee (not just Lead) so
+    # custom-built employees that still reference plan_create / plan_view
+    # / etc. heal automatically. Idempotent — no-op when nothing's stale.
+    try:
+        from allhands.services.tool_id_migrations import migrate_all_employee_tool_ids
+
+        maker = get_sessionmaker()
+        async with maker() as session, session.begin():
+            count = await migrate_all_employee_tool_ids(SqlEmployeeRepo(session))
+            if count:
+                log.info("tool_ids.migrate.swept", touched=count)
+    except Exception as exc:
+        log.warning("tool_ids.migrate.failed", error=str(exc))
+
     # Auto-detect vision capability for already-registered models that pre-date
     # the supports_images column (default 0). Users get sensible defaults
     # without having to manually flip a switch for every claude / gpt-4o /

@@ -269,6 +269,27 @@ export async function getKBHealth(
   );
 }
 
+// Follow-up questions — given a finished Q&A turn, ask the LLM what a
+// curious user would naturally ask next. Empty list on no-provider /
+// LLM error; the UI hides the row.
+export async function getFollowUpQuestions(
+  kbId: string,
+  args: { question: string; answer: string; limit?: number },
+): Promise<string[]> {
+  const r = await fetch(`${BASE}/api/kb/${kbId}/follow-ups`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      question: args.question,
+      answer: args.answer,
+      limit: args.limit ?? 3,
+    }),
+  });
+  if (!r.ok) return [];
+  const j = (await r.json()) as { questions: string[] };
+  return j.questions ?? [];
+}
+
 // Starter questions — small list of LLM-suggested prompts for the Ask
 // blank state. Returns at most ``limit`` strings; an empty array means
 // "no docs yet" or "no chat provider configured" — caller hides the row.

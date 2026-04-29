@@ -21,6 +21,7 @@ import {
   type AskSource,
   type AskStreamFrame,
   askKBStream,
+  getFollowUpQuestions,
   getStarterQuestions,
 } from "@/lib/kb-api";
 
@@ -47,6 +48,9 @@ type AskTurn = {
   // up here so the user sees a search step + a thinking step in real time
   // instead of staring at a blinking dot for 20 s.
   activity: AgentActivity[];
+  // Follow-up question chips, fetched lazily after the turn finishes
+  // streaming. null = not requested · [] = LLM returned nothing useful.
+  followUps: string[] | null;
 };
 
 export default function AskTabPage() {
@@ -68,6 +72,7 @@ function AskTabInner() {
   const [starters, setStarters] = useState<string[] | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const fired = useRef(false);
 
   useEffect(() => {
@@ -88,12 +93,52 @@ function AskTabInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQ]);
 
-  // Scroll to bottom on new content.
+  // ChatGPT-style smart auto-scroll: only stick-to-bottom if the user is
+  // already near the bottom. If they scrolled up to read an earlier turn,
+  // don't yank them down on each delta — show the "↓ 新内容" button instead.
+  const [pinned, setPinned] = useState(true);
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
+    const onScroll = () => {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setPinned(dist < 80);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || !pinned) return;
     el.scrollTop = el.scrollHeight;
-  }, [turns]);
+  }, [turns, pinned]);
+
+  function scrollToBottom() {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    setPinned(true);
+  }
+
+  // Global "/" → focus the composer (skips when user is typing elsewhere).
+  // Linear / Notion / GitHub all use this; cheap muscle memory win.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tgt = e.target as HTMLElement | null;
+      if (
+        tgt &&
+        (tgt.tagName === "INPUT" ||
+          tgt.tagName === "TEXTAREA" ||
+          tgt.isContentEditable)
+      )
+        return;
+      e.preventDefault();
+      composerRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   async function runTurn(question: string, followUp: boolean) {
     const q = question.trim();
@@ -109,6 +154,7 @@ function AskTabInner() {
       usedModel: null,
       latencyMs: null,
       activity: [],
+      followUps: null,
     };
     setTurns((prev) => (followUp ? [...prev, blank] : [blank]));
 
@@ -187,6 +233,20 @@ function AskTabInner() {
                 ? { ...a, state: "done" as const, durationMs: Date.now() - a.startedAt }
                 : a,
             );
+            // Fan out follow-up fetch — set state on this turn when it lands.
+            void getFollowUpQuestions(kb.id, {
+              question: tt.question,
+              answer: tt.answer,
+              limit: 3,
+            })
+              .then((qs) =>
+                setTurns((prev2) =>
+                  prev2.map((tt2) =>
+                    tt2.id === turnId ? { ...tt2, followUps: qs } : tt2,
+                  ),
+                ),
+              )
+              .catch(() => undefined);
             return {
               ...tt,
               activity: closed,
@@ -207,6 +267,43 @@ function AskTabInner() {
   function clearAll() {
     abortRef.current?.abort();
     setTurns([]);
+  }
+
+  // ChatGPT/Perplexity-style "Stop generating" — abort the in-flight stream
+  // and mark the running turn as done with whatever partial answer we have.
+  // The user keeps the partial text + sources; can hit Regenerate to retry.
+  function stopGenerating() {
+    abortRef.current?.abort();
+    setTurns((prev) =>
+      prev.map((tt) =>
+        tt.streaming
+          ? {
+              ...tt,
+              streaming: false,
+              activity: tt.activity.map((a) =>
+                a.state === "running"
+                  ? {
+                      ...a,
+                      state: "done" as const,
+                      durationMs: Date.now() - a.startedAt,
+                    }
+                  : a,
+              ),
+            }
+          : tt,
+      ),
+    );
+  }
+
+  // Drop the most recent turn and re-run with the same question + same prior
+  // history. Useful when the model went off-track or the answer is clearly
+  // wrong on a slow KB (still gets the same retrieval, but a fresh LLM roll).
+  async function regenerate(turn: AskTurn) {
+    const targetIdx = turns.findIndex((tt) => tt.id === turn.id);
+    if (targetIdx < 0 || anyStreaming) return;
+    const isFirst = targetIdx === 0;
+    setTurns((prev) => prev.slice(0, targetIdx));
+    await runTurn(turn.question, !isFirst);
   }
 
   function submitDraft() {
@@ -238,19 +335,36 @@ function AskTabInner() {
             }}
           />
         ) : (
-          <div ref={scrollerRef} className="flex-1 overflow-y-auto px-6 py-4">
-            <div className="mx-auto max-w-3xl space-y-6">
-              {turns.map((turn, idx) => (
-                <TurnView
-                  key={turn.id}
-                  turn={turn}
-                  idx={idx}
-                  onChunkClick={(docId) =>
-                    router.push(`/knowledge/${kb.id}/docs/${docId}`)
-                  }
-                />
-              ))}
+          <div className="relative flex-1 overflow-hidden">
+            <div ref={scrollerRef} className="h-full overflow-y-auto px-6 py-4">
+              <div className="mx-auto max-w-3xl space-y-6">
+                {turns.map((turn, idx) => (
+                  <TurnView
+                    key={turn.id}
+                    turn={turn}
+                    idx={idx}
+                    isLast={idx === turns.length - 1}
+                    onChunkClick={(docId) =>
+                      router.push(`/knowledge/${kb.id}/docs/${docId}`)
+                    }
+                    onFollowUp={(q) => {
+                      void runTurn(q, true);
+                    }}
+                  />
+                ))}
+              </div>
             </div>
+            {!pinned && (
+              <button
+                type="button"
+                onClick={scrollToBottom}
+                className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 inline-flex h-8 items-center gap-1 rounded-full border border-border bg-surface px-3 text-[11px] text-text-muted shadow-soft-md hover:border-primary/40 hover:text-primary"
+                title={t("scrollToBottomTitle")}
+              >
+                <Icon name="arrow-down" size={11} />
+                {anyStreaming ? t("scrollToBottomStreaming") : t("scrollToBottom")}
+              </button>
+            )}
           </div>
         )}
 
@@ -258,12 +372,24 @@ function AskTabInner() {
         <div className="border-t border-border bg-surface px-6 py-3">
           <div className="mx-auto max-w-3xl">
             <div className="flex items-center gap-2">
-              <input
-                type="text"
+              <textarea
+                ref={composerRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  // Auto-grow up to 6 lines
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  // Skip when an IME composition is in progress so Chinese
+                  // pinyin candidates don't accidentally submit on Enter.
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
                     e.preventDefault();
                     submitDraft();
                   }
@@ -274,25 +400,50 @@ function AskTabInner() {
                     : t("placeholderFollowUp")
                 }
                 disabled={anyStreaming}
-                className="h-10 flex-1 rounded-xl border border-border bg-surface-2 px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
+                rows={1}
+                className="min-h-10 max-h-[144px] flex-1 resize-none rounded-xl border border-border bg-surface-2 px-3 py-2 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
               />
-              <button
-                type="button"
-                onClick={submitDraft}
-                disabled={anyStreaming || !draft.trim()}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-4 text-[12px] font-medium text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-40"
-              >
-                <Icon name="sparkles" size={12} />
-                {anyStreaming ? t("running") : t("send")}
-              </button>
+              {anyStreaming ? (
+                <button
+                  type="button"
+                  onClick={stopGenerating}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-danger/40 bg-danger-soft px-4 text-[12px] font-medium text-danger hover:bg-danger/10"
+                  title={t("stopTitle")}
+                >
+                  <Icon name="pause" size={12} />
+                  {t("stop")}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={submitDraft}
+                  disabled={!draft.trim()}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-4 text-[12px] font-medium text-primary-fg shadow-soft-sm hover:bg-primary-hover disabled:opacity-40"
+                >
+                  <Icon name="sparkles" size={12} />
+                  {t("send")}
+                </button>
+              )}
+              {turns.length > 0 && !anyStreaming && tail && tail.answer && (
+                <button
+                  type="button"
+                  onClick={() => regenerate(tail)}
+                  className="inline-flex h-10 items-center gap-1 rounded-xl border border-border bg-surface px-3 text-[11px] text-text-muted hover:border-primary/40 hover:text-primary"
+                  title={t("regenerateTitle")}
+                >
+                  <Icon name="refresh" size={11} />
+                  {t("regenerate")}
+                </button>
+              )}
               {turns.length > 0 && (
                 <button
                   type="button"
                   onClick={clearAll}
                   disabled={anyStreaming}
                   className="inline-flex h-10 items-center gap-1 rounded-xl border border-border bg-surface px-3 text-[11px] text-text-muted hover:border-border-strong hover:text-text disabled:opacity-40"
+                  title={t("newConversationTitle")}
                 >
-                  <Icon name="refresh" size={11} />
+                  <Icon name="x" size={11} />
                   {t("newConversation")}
                 </button>
               )}
@@ -409,10 +560,14 @@ function TurnView({
   turn,
   idx,
   onChunkClick,
+  onFollowUp,
+  isLast,
 }: {
   turn: AskTurn;
   idx: number;
   onChunkClick: (docId: string) => void;
+  onFollowUp: (q: string) => void;
+  isLast: boolean;
 }) {
   const t = useTranslations("knowledge.ask");
   const parts = renderAnswerWithCites(turn.answer, turn.sources, onChunkClick, turn.id);
@@ -460,6 +615,31 @@ function TurnView({
           )}
         </div>
       </div>
+
+      {/* Follow-up chip row (Perplexity-style "Related"). Only on the last
+          turn — past turns showing them would clutter and the user can just
+          ask anyway via composer. */}
+      {isLast && !turn.streaming && turn.followUps && turn.followUps.length > 0 && (
+        <div className="ml-9">
+          <div className="mb-1.5 flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-text-subtle">
+            <Icon name="sparkles" size={10} />
+            <span>{t("relatedLabel")}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {turn.followUps.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => onFollowUp(q)}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 text-[12px] text-text-muted hover:border-primary/40 hover:bg-primary-muted/30 hover:text-primary"
+              >
+                <Icon name="arrow-right" size={10} />
+                <span>{q}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -560,48 +740,206 @@ function CopyButton({ turn }: { turn: AskTurn }) {
   );
 }
 
+// Answer renderer · light markdown (fenced code blocks + inline bold/italic/
+// `code`) + clickable [N] citation chips. Avoiding a full markdown parser
+// keeps the chip-anchor logic clean — chips need to scroll to source-N which
+// would be tricky if marked turned [N] into something else mid-stream.
 function renderAnswerWithCites(
   answer: string,
   sources: AskSource[],
   onClickSource: (docId: string) => void,
   turnId?: string,
 ): React.ReactNode[] {
-  const out: React.ReactNode[] = [];
-  const re = /\[(\d+)\]/g;
   const known = new Map(sources.map((s) => [s.n, s] as const));
+  const out: React.ReactNode[] = [];
+  let key = 0;
+
+  // Split first by fenced ```code``` so we don't try to chip-ify inside code.
+  const fenced = answer.split(/(```[\s\S]*?```)/g);
+  for (const seg of fenced) {
+    if (seg.startsWith("```") && seg.endsWith("```") && seg.length > 6) {
+      // ```lang\n…\n```  → extract optional lang + body
+      const inner = seg.slice(3, -3);
+      const nl = inner.indexOf("\n");
+      const lang = nl > 0 ? inner.slice(0, nl).trim() : "";
+      const body = nl > 0 ? inner.slice(nl + 1) : inner;
+      out.push(
+        <CodeBlock key={`c${key++}`} lang={lang} body={body.replace(/\n$/, "")} />,
+      );
+      continue;
+    }
+    // Inline render: handle [N] citations + tiny inline markdown.
+    pushInline(seg, out, () => `inline-${key++}`, known, onClickSource, turnId);
+  }
+  return out;
+}
+
+// Push inline content (text + citations + minimal `code` / **bold**) into the
+// output array. Streaming-safe: while answer is mid-token, malformed `**` or
+// backticks render literally — tolerated as transient artefacts.
+function pushInline(
+  text: string,
+  out: React.ReactNode[],
+  nextKey: () => string,
+  known: Map<number, AskSource>,
+  onClickSource: (docId: string) => void,
+  turnId?: string,
+): void {
+  // 1. citation [N] split
+  const citeRe = /\[(\d+)\]/g;
   let last = 0;
   let m: RegExpExecArray | null;
-  let key = 0;
-  while ((m = re.exec(answer)) !== null) {
+  while ((m = citeRe.exec(text)) !== null) {
     if (m.index > last) {
-      out.push(<span key={`t${key++}`}>{answer.slice(last, m.index)}</span>);
+      out.push(
+        <InlineMd key={nextKey()} text={text.slice(last, m.index)} />,
+      );
     }
     const n = Number(m[1]);
     const src = known.get(n);
     if (src) {
       out.push(
-        <button
-          key={`c${key++}`}
-          type="button"
-          onClick={() => {
-            const id = turnId ? `src-${turnId}-${n}` : `src-${n}`;
-            const el = document.getElementById(id);
-            el?.scrollIntoView({ behavior: "smooth", block: "center" });
-            onClickSource(src.doc_id);
-          }}
-          className="mx-0.5 inline-flex items-center rounded-md bg-primary-muted px-1.5 align-baseline font-mono text-[11px] text-primary hover:bg-primary/20 transition duration-fast"
-          title={src.citation}
-        >
-          [{n}]
-        </button>,
+        <CiteChip
+          key={nextKey()}
+          n={n}
+          src={src}
+          turnId={turnId}
+          onClickSource={onClickSource}
+        />,
       );
     } else {
-      out.push(<span key={`t${key++}`}>{m[0]}</span>);
+      out.push(<span key={nextKey()}>{m[0]}</span>);
     }
     last = m.index + m[0].length;
   }
-  if (last < answer.length) {
-    out.push(<span key={`t${key++}`}>{answer.slice(last)}</span>);
+  if (last < text.length) {
+    out.push(<InlineMd key={nextKey()} text={text.slice(last)} />);
   }
-  return out;
+}
+
+// `code` + **bold** + *italic* renderer. Pure text is preserved
+// whitespace-pre-wrap-style by parent. Streaming-tolerant: an unterminated
+// pair just renders literally.
+function InlineMd({ text }: { text: string }) {
+  if (!text) return null;
+  const parts: React.ReactNode[] = [];
+  let key = 0;
+  // Greedy: code first(`x`), then bold(**x**), then italic(*x* or _x_).
+  const re = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*|_[^_\n]+_)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    const tok = m[0];
+    if (tok.startsWith("`")) {
+      parts.push(
+        <code
+          key={`md${key++}`}
+          className="rounded bg-bg/40 px-1 font-mono text-[12px] text-text"
+        >
+          {tok.slice(1, -1)}
+        </code>,
+      );
+    } else if (tok.startsWith("**")) {
+      parts.push(
+        <strong key={`md${key++}`} className="font-semibold text-text">
+          {tok.slice(2, -2)}
+        </strong>,
+      );
+    } else {
+      parts.push(
+        <em key={`md${key++}`} className="italic text-text">
+          {tok.slice(1, -1)}
+        </em>,
+      );
+    }
+    last = m.index + tok.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <>{parts}</>;
+}
+
+function CiteChip({
+  n,
+  src,
+  turnId,
+  onClickSource,
+}: {
+  n: number;
+  src: AskSource;
+  turnId?: string;
+  onClickSource: (docId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => {
+          const id = turnId ? `src-${turnId}-${n}` : `src-${n}`;
+          const el = document.getElementById(id);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          onClickSource(src.doc_id);
+        }}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="mx-0.5 inline-flex items-center rounded-md bg-primary-muted px-1.5 align-baseline font-mono text-[11px] text-primary hover:bg-primary/20 transition duration-fast"
+        title={src.citation}
+      >
+        [{n}]
+      </button>
+      {open && (
+        <span className="absolute left-1/2 z-30 mt-1 hidden w-80 -translate-x-1/2 rounded-lg border border-border bg-surface p-3 text-left shadow-soft-lg sm:block">
+          <span className="block font-mono text-[10px] text-text-subtle">
+            [{n}] · score {src.score.toFixed(3)}
+          </span>
+          <span className="mt-1 block font-mono text-[10px] text-text-muted">
+            {src.citation}
+          </span>
+          {src.section_path && (
+            <span className="mt-1 block font-mono text-[10px] text-text-subtle">
+              {src.section_path}
+            </span>
+          )}
+          <span className="mt-2 block whitespace-pre-wrap text-[11px] leading-relaxed text-text line-clamp-6">
+            {src.text}
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+function CodeBlock({ lang, body }: { lang: string; body: string }) {
+  const t = useTranslations("knowledge.ask");
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(body);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  }
+  return (
+    <span className="my-2 block rounded-lg border border-border bg-bg/40">
+      <span className="flex items-center justify-between border-b border-border px-3 py-1 font-mono text-[10px] text-text-subtle">
+        <span>{lang || "text"}</span>
+        <button
+          type="button"
+          onClick={copy}
+          className="inline-flex items-center gap-1 hover:text-text"
+        >
+          <Icon name={copied ? "check" : "copy"} size={10} />
+          {copied ? t("copied") : t("copyCode")}
+        </button>
+      </span>
+      <pre className="overflow-x-auto p-3 font-mono text-[12px] leading-relaxed text-text">
+        <code>{body}</code>
+      </pre>
+    </span>
+  );
 }
