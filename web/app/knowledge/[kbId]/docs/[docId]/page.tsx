@@ -230,23 +230,55 @@ export default function DocPage() {
           )}
 
           {tab === "text" && (
-            <div ref={textPaneRef} className="h-full overflow-y-auto p-6">
-              {text === null ? (
-                <LoadingState title={t("loadingText")} />
-              ) : text.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[12px] text-text-muted">
-                  {t("emptyText")}
-                </div>
-              ) : isMarkdown ? (
-                <AgentMarkdown
-                  content={text}
-                  className="rounded-xl border border-border bg-surface-2 px-5 py-4 text-[13px] leading-relaxed"
-                />
-              ) : (
-                <pre className="whitespace-pre-wrap break-words rounded-xl border border-border bg-surface-2 p-4 text-[12px] leading-relaxed text-text">
-                  {text}
-                </pre>
+            <div className="grid h-full grid-cols-1 overflow-hidden lg:grid-cols-[200px_1fr]">
+              {/* Outline / TOC sidebar — derived from chunks' section_path.
+                  Click an entry to scroll the text pane to that section.
+                  Hidden < lg to keep mobile clean. */}
+              {chunks && chunks.length > 0 && (
+                <aside className="hidden border-r border-border bg-surface p-3 lg:block lg:overflow-y-auto">
+                  <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-text-subtle">
+                    {t("outline")}
+                  </div>
+                  <ul className="space-y-0.5 text-[11px]">
+                    {buildOutline(chunks).map((entry) => (
+                      <li key={entry.chunkId}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const chunk = chunks.find(
+                              (c) => c.id === entry.chunkId,
+                            );
+                            if (chunk) highlightChunkInText(chunk);
+                          }}
+                          className="line-clamp-2 w-full rounded px-2 py-1 text-left text-text-muted hover:bg-surface-2 hover:text-text"
+                          style={{ paddingLeft: 8 + entry.depth * 10 }}
+                          title={entry.label}
+                        >
+                          {entry.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </aside>
               )}
+              <div ref={textPaneRef} className="overflow-y-auto p-6">
+                {text === null ? (
+                  <LoadingState title={t("loadingText")} />
+                ) : text.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[12px] text-text-muted">
+                    {t("emptyText")}
+                  </div>
+                ) : isMarkdown ? (
+                  <AgentMarkdown
+                    content={text}
+                    className="rounded-xl border border-border bg-surface-2 px-5 py-4 text-[13px] leading-relaxed"
+                  />
+                ) : (
+                  <pre className="whitespace-pre-wrap break-words rounded-xl border border-border bg-surface-2 p-4 text-[12px] leading-relaxed text-text">
+                    {text}
+                  </pre>
+                )}
+              </div>
             </div>
           )}
 
@@ -565,6 +597,27 @@ function StateBadge({ state }: { state: string }) {
       {state}
     </span>
   );
+}
+
+// Outline entry derived from chunk.section_path.
+// section_path is a " > "-delimited heading chain ("RFC > §3 > Auth model"),
+// so we just unique-by-path + index by chunk so click-to-scroll works.
+function buildOutline(chunks: { id: number; section_path: string | null }[]): {
+  chunkId: number;
+  label: string;
+  depth: number;
+}[] {
+  const seen = new Set<string>();
+  const out: { chunkId: number; label: string; depth: number }[] = [];
+  for (const c of chunks) {
+    const path = (c.section_path ?? "").trim();
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    const parts = path.split(/\s*>\s*/);
+    const last = parts[parts.length - 1] || path;
+    out.push({ chunkId: c.id, label: last, depth: Math.max(0, parts.length - 1) });
+  }
+  return out;
 }
 
 function isMarkdownLikely(mime: string): boolean {

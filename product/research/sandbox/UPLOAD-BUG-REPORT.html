@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>文件上传失败 + 失焦 bug · 排查报告 · 2026-04-29</title>
+<style>
+  body { font: 14.5px/1.6 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+         max-width: 980px; margin: 32px auto; padding: 0 24px; color: #1f2937; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  h2 { font-size: 17px; margin-top: 32px; padding-bottom: 6px;
+       border-bottom: 1px solid #e5e7eb; }
+  h3 { font-size: 14.5px; margin-top: 20px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 4px;
+           font-size: 11.5px; font-weight: 600; vertical-align: middle; margin-left: 6px; }
+  .ok { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+  .err { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 13px; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
+  th { background: #f9fafb; font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.ok-cell { color: #047857; font-weight: 600; }
+  td.err-cell { color: #b91c1c; font-weight: 600; }
+  code { font: 12px ui-monospace, Menlo, Consolas, monospace;
+         background: #f3f4f6; padding: 1px 5px; border-radius: 3px; }
+  pre  { font: 12px ui-monospace, Menlo, Consolas, monospace;
+         background: #0f172a; color: #e2e8f0; padding: 14px 16px;
+         border-radius: 6px; overflow-x: auto; }
+  .meta { color: #6b7280; font-size: 12.5px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; background: #fafafa; }
+  .card .k { color: #6b7280; font-size: 12px; }
+  .card .v { font-size: 18px; font-weight: 600; color: #111827; }
+  .small { font-size: 12.5px; color: #4b5563; }
+  .symptom { background: #fef2f2; border-left: 3px solid #ef4444; padding: 10px 14px;
+             border-radius: 0 4px 4px 0; margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<h1>文件上传失败 + 输入框失焦 · 排查报告 <span class="badge ok">FIXED</span></h1>
+<p class="meta">2026-04-29 · 三个独立 bug 串成一个表象 · 单一根因不够,得分别修</p>
+
+<h2>用户报告的症状</h2>
+<div class="symptom">
+  <strong>「我上传文件显示失败,对话框上方文件那里。失败的同时对话框还会失去焦点,没法打字。」</strong>
+</div>
+
+<h2>TL;DR</h2>
+<div class="grid">
+  <div class="card"><div class="k">独立 bug</div><div class="v">3 个</div><div class="small">前 1 后 2 · 各自原因不同</div></div>
+  <div class="card"><div class="k">影响</div><div class="v">.md / .yaml / .pptx 等</div><div class="small">+ 任何上传失败都把 textarea 锁死</div></div>
+  <div class="card"><div class="k">回归测试</div><div class="v">+3 单元测试</div><div class="small">attachment_service · 17 passing</div></div>
+</div>
+
+<h2>① 后端 · 上传失败的根因(Bug A)</h2>
+<p>
+位置:<code>backend/src/allhands/services/attachment_service.py:93</code>
+</p>
+<h3>原代码</h3>
+<pre>resolved_mime = (mime or "").strip().lower() or _guess_mime(safe_name)</pre>
+<p>
+看似合理,但浏览器对未知扩展不一定送空 mime 而是送 <code>application/octet-stream</code>(尤其是 Windows / 部分 Linux 桌面)。
+<code>"application/octet-stream"</code> 是 truthy → 跳过 <code>_guess_mime</code> 兜底 → 直接走到下面的 allowlist 检查:
+</p>
+<pre>if not _mime_allowed(resolved_mime):
+    raise AttachmentServiceError(f"mime {resolved_mime!r} not allowed")</pre>
+<p>结果:用户上传 <code>readme.md</code> / <code>config.yaml</code> / <code>slides.pptx</code> 都被前端弹"上传失败"。</p>
+
+<h3>修复</h3>
+<pre>provided = (mime or "").strip().lower()
+if not provided or provided == "application/octet-stream":
+    resolved_mime = _guess_mime(safe_name)
+else:
+    resolved_mime = provided</pre>
+<p>
+顺手补 <code>_EXTRA_MIME</code> 表(<code>.md</code> / <code>.yaml</code> / <code>.csv</code> / <code>.toml</code> / <code>.jsonl</code> 等)— Python 的 <code>mimetypes</code> 在某些平台对 <code>.md</code> 返回 None,我们 seed 一份兜底确保走到 allowlist 时是合法 text/* mime。
+</p>
+
+<h3>实测验证(curl 直打后端)</h3>
+<table>
+  <thead><tr><th>文件</th><th>请求 mime</th><th>修复前</th><th>修复后</th></tr></thead>
+  <tbody>
+    <tr><td><code>test.md</code></td><td>application/octet-stream</td><td class="err-cell">400 — mime not allowed</td><td class="ok-cell">201 → text/markdown</td></tr>
+    <tr><td><code>test.yaml</code></td><td>application/octet-stream</td><td class="err-cell">400 — mime not allowed</td><td class="ok-cell">201 → application/x-yaml</td></tr>
+    <tr><td><code>test.pptx</code></td><td>application/octet-stream</td><td class="err-cell">400 — mime not allowed</td><td class="ok-cell">201 → openxml...presentation</td></tr>
+    <tr><td><code>test.txt</code></td><td>text/plain</td><td class="ok-cell">201</td><td class="ok-cell">201(未受影响)</td></tr>
+    <tr><td>1×1 PNG</td><td>image/png</td><td class="ok-cell">201</td><td class="ok-cell">201(未受影响)</td></tr>
+  </tbody>
+</table>
+
+<h2>② 前端 · 失焦 + 不能打字的根因(Bug B)</h2>
+<p>
+位置:<code>web/components/chat/InputBar.tsx:554</code> + <code>web/components/chat/Composer.tsx:128</code>
+</p>
+<h3>原代码</h3>
+<pre>// InputBar
+&lt;Composer
+  ...
+  disabled={!canSendWithContent &amp;&amp; (value.trim().length &gt; 0 || attachments.length &gt; 0)}
+/&gt;
+
+// Composer
+const textareaDisabled = disabled || (isStreaming &amp;&amp; !keepTextareaEnabledWhileStreaming);
+&lt;textarea ... disabled={textareaDisabled} /&gt;</pre>
+<p>
+当任意一个上传失败 → <code>anyFailed=true</code> → <code>canSendWithContent=false</code> → InputBar 把 <code>disabled=true</code> 透传给 Composer → <strong>整个 textarea 被禁用</strong>。
+浏览器对 disabled 的输入框直接 blur,后续敲键也吞掉,所以用户感觉「失焦了,打不了字」。
+</p>
+
+<h3>修复</h3>
+<p>给 Composer 加一个新 prop <code>sendDisabled</code>,只阻断发送,不动 textarea:</p>
+<pre>// Composer.tsx
+sendDisabled?: boolean;  // 新 · 只 gate 发送按钮
+const canSend = !isStreaming &amp;&amp; !disabled &amp;&amp; !sendDisabled &amp;&amp; value.trim().length &gt; 0;
+// textareaDisabled 不变 · disabled 这个 prop 改回原本"罕见整体禁用"语义
+
+// InputBar.tsx
+&lt;Composer
+  ...
+  sendDisabled={!canSendWithContent &amp;&amp; (...)}  // 替换 disabled
+/&gt;</pre>
+<p class="small">效果:上传失败时 send 按钮变灰,但 textarea 仍可输入 / 删除失败 chip,焦点不丢。</p>
+
+<h2>③ 前端 · 焦点偷窃次因(Bug C)</h2>
+<p>
+位置:<code>web/components/chat/InputBar.tsx:296,305</code>
+</p>
+<h3>原代码</h3>
+<pre>if (rejected.length &gt; 0) alert(rejected.join("\n"));</pre>
+<p>
+<code>alert()</code> 是浏览器原生模态对话框,会把焦点完全拿走。即便用户敲回车关掉,焦点也不返回 textarea(回到 body)。这放大了 Bug B 的体感。
+</p>
+
+<h3>修复</h3>
+<p>替换为内联 warning strip · 5 秒自动消失 · 不动焦点:</p>
+<pre>const [rejections, setRejections] = useState&lt;string[]&gt;([]);
+
+if (rejected.length &gt; 0) {
+  setRejections((prev) =&gt; [...prev, ...rejected]);
+  window.setTimeout(
+    () =&gt; setRejections((prev) =&gt; prev.slice(rejected.length)),
+    5000,
+  );
+}
+
+// 渲染层
+{rejections.length &gt; 0 &amp;&amp; (
+  &lt;div className="border-b border-warning/30 bg-warning-soft px-3 py-2 ..."&gt;
+    {rejections.map((m, i) =&gt; &lt;div key={i}&gt;...&lt;/div&gt;)}
+  &lt;/div&gt;
+)}</pre>
+
+<h2>④ 为什么三个 bug 缠在一起?</h2>
+<p>同一交互,三层都漏:</p>
+<ol>
+  <li>用户拖 / 选 <code>config.yaml</code> 上传</li>
+  <li>前端 <code>preflight</code> 通过(浏览器 mime = octet-stream,前端只检 ALLOWED 而 octet-stream 在 file.type 为空时被放行 — 见 <code>web/lib/attachments.ts:72-76</code>)</li>
+  <li>POST /api/attachments → 后端 Bug A 拒,返回 400 "mime ... not allowed"</li>
+  <li>前端 <code>uploadOne</code> catch → status="failed"</li>
+  <li>Bug B 触发:<code>anyFailed=true</code> → Composer disabled → textarea 整体禁用 → 失焦 + 打字无效</li>
+  <li>用户去拖第二个文件想再试,如果命中 preflight 拒(超大或不允许 mime),Bug C alert() 又把仅剩的焦点拿走</li>
+</ol>
+<p>三个独立 bug,任意一个都能让用户卡死。一起修才能根治。</p>
+
+<h2>⑤ 测试</h2>
+<table>
+  <thead><tr><th>套件</th><th class="num">数量</th><th>状态</th><th>覆盖</th></tr></thead>
+  <tbody>
+    <tr><td>backend unit · attachment_service</td><td class="num">17</td><td class="ok-cell">passed (+3)</td><td>octet-stream 兜底 / .md 扩展 / 空 mime 兜底</td></tr>
+    <tr><td>web vitest</td><td class="num">2070</td><td class="ok-cell">passed</td><td>0 regressions</td></tr>
+    <tr><td>web typecheck</td><td>—</td><td class="ok-cell">passed</td><td>新 Composer prop 类型 OK</td></tr>
+    <tr><td>web eslint</td><td>—</td><td class="ok-cell">passed</td><td>0 warnings</td></tr>
+    <tr><td>backend ruff + mypy</td><td>—</td><td class="ok-cell">passed</td><td>strict mode</td></tr>
+    <tr><td>真后端 curl 实测</td><td>5</td><td class="ok-cell">5/5 OK</td><td>md / yaml / pptx 都通了</td></tr>
+  </tbody>
+</table>
+
+<h3>新增的 3 个回归测试</h3>
+<pre>tests/unit/test_attachment_service.py
+- test_octet_stream_falls_back_to_extension  (.md w/ octet-stream → text/markdown)
+- test_md_extension_maps_to_text_markdown    (.md w/ None → text/markdown)
+- test_yaml_with_empty_browser_mime          (.yaml w/ "" → application/x-yaml)</pre>
+
+<h2>⑥ 改动文件清单</h2>
+<pre>backend/src/allhands/services/attachment_service.py
+  + _EXTRA_MIME 兜底表(.md / .yaml / .csv / ...)
+  ✎ upload(): octet-stream 也走扩展兜底,不再被当真值跳过 _guess_mime
+
+backend/tests/unit/test_attachment_service.py
+  + 3 个回归测试
+
+web/components/chat/Composer.tsx
+  + ComposerProps.sendDisabled?: boolean
+  ✎ canSend 改为 !sendDisabled · disabled 保持原本"整体禁用"语义不变
+
+web/components/chat/InputBar.tsx
+  + rejections state · 内联 warning strip · 5 s 自动消失
+  ✎ Composer disabled → sendDisabled(textarea 不再被锁)
+  - 删掉两处 alert() 焦点偷窃</pre>
+
+<h2>⑦ 自己验真步骤</h2>
+<pre># 1) 拉最新分支 + 起服务
+cd /Volumes/Storage/code/allhands-sandbox/backend
+uv run alembic upgrade head
+uv run uvicorn allhands.main:app --port 8000 --reload &amp;
+
+cd ../web &amp;&amp; pnpm dev
+
+# 2) 浏览器 → /chat → 拖一个 readme.md 进来
+#    修复前:右上角红色 chip "失败 · mime ... not allowed",输入框失焦点不动
+#    修复后:chip 是绿色 "已上传",输入框焦点不动,可以继续打字 → 发送
+
+# 3) 拖一个超过 20MB 的文件
+#    修复前:alert() 弹窗,关掉后焦点丢
+#    修复后:对话框上方黄条提示,5 秒自动消失,焦点全程在 textarea</pre>
+
+<p class="meta">— 2026-04-29 · 已 push origin/research/sandbox · cherry-pick 到 fix branch 后可合 main</p>
+
+</body>
+</html>

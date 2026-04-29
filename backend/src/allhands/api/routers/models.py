@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_model_service, get_session
 from allhands.core.model import LLMModel
+from allhands.core.model_catalog import lookup_catalog
 from allhands.i18n import t
 from allhands.services.connectivity import (
     ENDPOINT_TIMEOUT_S,
@@ -43,6 +44,9 @@ class ModelResponse(BaseModel):
     enabled: bool
     is_default: bool
     supports_images: bool = False
+    # 2026-04-28 · capability picker (MODEL-GATEWAY.html § 5.2)
+    # Default ['chat'] keeps every existing model behavior unchanged.
+    capabilities: list[str] = Field(default_factory=lambda: ["chat"])
 
 
 class SetDefaultModelResponse(BaseModel):
@@ -69,6 +73,10 @@ class CreateModelRequest(BaseModel):
     # Optional explicit override; if omitted the service auto-detects from
     # the model name (claude-3+, gpt-4o, qwen-vl, gemini, deepseek-vl, …).
     supports_images: bool | None = None
+    # MODEL-GATEWAY.html § 5.1 · multi-modal capability picker.
+    # Defaults handled by the service layer (chat for typical names, image_gen
+    # for gpt-image / wanx / dall-e patterns).
+    capabilities: list[str] | None = None
 
 
 class UpdateModelRequest(BaseModel):
@@ -79,6 +87,7 @@ class UpdateModelRequest(BaseModel):
     max_output_tokens: int | None = Field(default=None, ge=1)
     enabled: bool | None = None
     supports_images: bool | None = None
+    capabilities: list[str] | None = None
 
 
 class ChatMessage(BaseModel):
@@ -117,6 +126,7 @@ def _to_response(m: LLMModel) -> ModelResponse:
         enabled=m.enabled,
         is_default=m.is_default,
         supports_images=m.supports_images,
+        capabilities=[c.value for c in m.capabilities] or ["chat"],
     )
 
 
@@ -134,6 +144,50 @@ def _to_svc_kwargs(body: ChatTestRequest | None) -> dict[str, Any]:
         "stop": body.stop,
         "enable_thinking": body.enable_thinking,
     }
+
+
+class CatalogLookupResponse(BaseModel):
+    """One row from the curated common-model catalog · used by the
+    Gateway dialog to auto-fill display name / capabilities / token caps
+    so the user doesn't have to look up specs.
+
+    `matched=False` means we couldn't find the typed name; the dialog
+    falls back to manual entry. All other fields are then echoes of the
+    user input (or defaults).
+    """
+
+    matched: bool
+    name: str
+    display_name: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    context_window: int = 0
+    max_input_tokens: int | None = None
+    max_output_tokens: int | None = None
+
+
+@router.get("/catalog/lookup", response_model=CatalogLookupResponse)
+async def catalog_lookup(
+    name: str,
+    provider_kind: str | None = None,
+) -> CatalogLookupResponse:
+    """Resolve a typed model name to curated metadata.
+
+    Called by the Gateway model dialog (debounced) to fill display name,
+    capabilities, context window, and token caps without making the user
+    look up provider docs.
+    """
+    entry = lookup_catalog(name, provider_kind=provider_kind)
+    if entry is None:
+        return CatalogLookupResponse(matched=False, name=name)
+    return CatalogLookupResponse(
+        matched=True,
+        name=entry.name,
+        display_name=entry.display_name,
+        capabilities=[c.value for c in entry.capabilities],
+        context_window=entry.context_window,
+        max_input_tokens=entry.max_input_tokens,
+        max_output_tokens=entry.max_output_tokens,
+    )
 
 
 @router.get("", response_model=list[ModelResponse])
@@ -184,6 +238,7 @@ async def create_model(
         max_input_tokens=body.max_input_tokens,
         max_output_tokens=body.max_output_tokens,
         supports_images=body.supports_images,
+        capabilities=body.capabilities,
     )
     if model is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
@@ -206,6 +261,7 @@ async def update_model(
         max_output_tokens=body.max_output_tokens,
         enabled=body.enabled,
         supports_images=body.supports_images,
+        capabilities=body.capabilities,
     )
     if model is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.model"))
@@ -403,3 +459,212 @@ async def test_model_stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ============================================================================
+# Multi-modal generation test endpoints (image / video / audio).
+#
+# These mirror the chat test endpoint above but target the ModelGateway
+# instead of /chat/completions. The dialog renders the result inline (image
+# preview / <video> player / <audio> player) so the user can sanity-check
+# the configured provider+model+key combination on a real generation.
+#
+# All three follow the same shape:
+#   - resolve (model_id) → (provider, model)
+#   - validate capability (mode-aware self-explanation envelope)
+#   - dispatch through gateway
+#   - return base64 bytes + metadata so the JSON response is self-contained
+# ============================================================================
+
+
+class ImageTestRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=4000)
+    size: str = Field(default="1024x1024")
+    n: int = Field(default=1, ge=1, le=4)
+
+
+class VideoTestRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=4000)
+    resolution: str = Field(default="1280x720")
+    duration_seconds: int = Field(default=5, ge=1, le=10)
+
+
+class TTSTestRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    voice: str = Field(default="longxiaochun")
+    format: str = Field(default="mp3")
+    speed: float = Field(default=1.0, ge=0.5, le=2.0)
+
+
+def _b64(data: bytes) -> str:
+    import base64
+
+    return base64.b64encode(data).decode("ascii")
+
+
+async def _resolve_provider_model(model_id: str, session: AsyncSession) -> tuple[Any, LLMModel]:
+    svc = await get_model_service(session)
+    pair = await svc.resolve_with_provider(model_id)
+    if pair is None:
+        raise HTTPException(status_code=404, detail=t("errors.not_found.model_or_provider"))
+    return pair[1], pair[0]  # provider, model
+
+
+@router.post("/{model_id}/test/image")
+async def test_model_image(
+    model_id: str,
+    body: ImageTestRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Generate one (or more) image via the configured provider/model.
+
+    Returns base64-encoded bytes + metadata so the dialog can render
+    inline without a follow-up download. On adapter / provider failure
+    surfaces ImageProviderError envelope as 400 with structured detail.
+    """
+    from allhands.core.image import ImageGenerationRequest, ImageGenerationResult
+    from allhands.execution.model_gateway import (
+        NoAdapterFoundError,
+        build_default_gateway,
+    )
+    from allhands.execution.model_gateway.adapters.openai_image import (
+        ImageProviderError,
+    )
+
+    provider, model = await _resolve_provider_model(model_id, session)
+    gw = build_default_gateway()
+    try:
+        raw = await gw.generate_image(
+            ImageGenerationRequest(prompt=body.prompt, size=body.size, n=body.n),
+            provider=provider,
+            model=model,
+        )
+    except NoAdapterFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ImageProviderError as exc:
+        raise HTTPException(status_code=400, detail=exc.to_dict()) from exc
+    assert isinstance(raw, ImageGenerationResult)
+    result = raw
+
+    return {
+        "duration_ms": result.duration_ms,
+        "model_used": result.model_used,
+        "cost_usd": result.cost_usd,
+        "images": [
+            {
+                "mime_type": img.mime_type,
+                "data_b64": _b64(img.data),
+                "size": img.size,
+                "revised_prompt": img.revised_prompt,
+            }
+            for img in result.images
+        ],
+    }
+
+
+@router.post("/{model_id}/test/video")
+async def test_model_video(
+    model_id: str,
+    body: VideoTestRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Generate one video — long-running (1-3 min for wanx-video).
+
+    Same envelope as image: base64 bytes + metadata. Frontend should
+    show a progress hint; the request stays open until the adapter's
+    poll loop completes (default 5 min cap).
+    """
+    from allhands.core.video import VideoGenerationRequest, VideoGenerationResult
+    from allhands.execution.model_gateway import (
+        NoAdapterFoundError,
+        build_default_gateway,
+    )
+    from allhands.execution.model_gateway.adapters.dashscope_video import (
+        VideoProviderError,
+    )
+
+    provider, model = await _resolve_provider_model(model_id, session)
+    gw = build_default_gateway()
+    try:
+        raw = await gw.generate_video(
+            VideoGenerationRequest(
+                prompt=body.prompt,
+                resolution=body.resolution,
+                duration_seconds=body.duration_seconds,
+            ),
+            provider=provider,
+            model=model,
+        )
+    except NoAdapterFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except VideoProviderError as exc:
+        raise HTTPException(status_code=400, detail=exc.to_dict()) from exc
+    assert isinstance(raw, VideoGenerationResult)
+    result = raw
+
+    vid = result.videos[0]
+    return {
+        "duration_ms": result.duration_ms,
+        "model_used": result.model_used,
+        "video": {
+            "mime_type": vid.mime_type,
+            "data_b64": _b64(vid.data),
+            "resolution": vid.resolution,
+            "duration_seconds": vid.duration_seconds,
+            "fps": vid.fps,
+            "size_bytes": len(vid.data),
+        },
+    }
+
+
+@router.post("/{model_id}/test/audio")
+async def test_model_audio(
+    model_id: str,
+    body: TTSTestRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Generate TTS audio · cosyvoice / sambert / OpenAI tts."""
+    from allhands.core.audio import AudioFormat, AudioGenerationResult, TTSRequest
+    from allhands.execution.model_gateway import (
+        NoAdapterFoundError,
+        build_default_gateway,
+    )
+    from allhands.execution.model_gateway.adapters.dashscope_audio import (
+        AudioProviderError,
+    )
+
+    try:
+        fmt = AudioFormat(body.format)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"format must be one of {[f.value for f in AudioFormat]}"
+        ) from None
+
+    provider, model = await _resolve_provider_model(model_id, session)
+    gw = build_default_gateway()
+    try:
+        raw = await gw.generate_audio(
+            TTSRequest(text=body.text, voice=body.voice, format=fmt, speed=body.speed),
+            provider=provider,
+            model=model,
+        )
+    except NoAdapterFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AudioProviderError as exc:
+        raise HTTPException(status_code=400, detail=exc.to_dict()) from exc
+    assert isinstance(raw, AudioGenerationResult)
+    result = raw
+
+    if result.audio is None:
+        raise HTTPException(status_code=500, detail=t("errors.audio.no_bytes"))
+
+    return {
+        "duration_ms": result.duration_ms,
+        "model_used": result.model_used,
+        "audio": {
+            "mime_type": result.audio.mime_type,
+            "data_b64": _b64(result.audio.data),
+            "format": result.audio.format.value,
+            "size_bytes": len(result.audio.data),
+        },
+    }

@@ -32,6 +32,10 @@ export type GatewayModel = {
   enabled: boolean;
   /** Singleton flag — at most one row across the whole table is_default=true. */
   is_default: boolean;
+  /** Output modalities the model supports. Defaults to ["chat"] for back-
+   *  compat. Image-gen models opt in to ["image_gen"]; future video/audio
+   *  models extend the same enum. Drives ModelGateway adapter routing. */
+  capabilities?: ("chat" | "image_gen" | "speech" | "embedding")[];
 };
 
 export function ModelRow({

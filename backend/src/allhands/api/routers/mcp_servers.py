@@ -54,6 +54,17 @@ class InvokeToolRequest(BaseModel):
     arguments: dict[str, Any] = {}
 
 
+class DryRunTestRequest(BaseModel):
+    """Payload for POST /mcp-servers/test — probe a config without saving."""
+
+    transport: str
+    config: dict[str, Any]
+
+
+class DryRunTestResponse(BaseModel):
+    health: str
+
+
 def _to_response(s: MCPServer) -> MCPServerResponse:
     return MCPServerResponse(
         id=s.id,
@@ -139,6 +150,21 @@ async def delete_server(
     svc: MCPService = Depends(get_mcp_service),
 ) -> None:
     await svc.delete(server_id)
+
+
+@router.post("/test", response_model=DryRunTestResponse)
+async def dry_run_test(
+    body: DryRunTestRequest,
+    svc: MCPService = Depends(get_mcp_service),
+) -> DryRunTestResponse:
+    """Probe an unsaved transport+config (used by Add form's Test button).
+
+    Returns the health classification — ok / unreachable / auth_failed —
+    without writing anything to the repo.
+    """
+    transport = _parse_transport(body.transport)
+    health = await svc.dry_run_connection(transport=transport, config=body.config)
+    return DryRunTestResponse(health=health.value)
 
 
 @router.post("/{server_id}/test", response_model=MCPServerResponse)

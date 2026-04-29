@@ -315,6 +315,7 @@ export default function ConversationPage() {
             conversation={conv}
             employee={employee}
             onConversationChange={setConv}
+            initialActiveRunId={conv?.active_run_id ?? null}
           />
         </div>
         {panelOpen && (

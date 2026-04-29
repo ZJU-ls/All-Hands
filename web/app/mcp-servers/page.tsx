@@ -28,9 +28,26 @@ import { AppShell } from "@/components/shell/AppShell";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { ToolTryPanel } from "@/components/mcp/ToolTryPanel";
 
 type Transport = "stdio" | "sse" | "http";
 type Health = "unknown" | "ok" | "unreachable" | "auth_failed";
+type AuthType = "none" | "bearer" | "custom_headers" | "oauth2_client_credentials";
+
+function buildAuthOptions(
+  t: ReturnType<typeof useTranslations>,
+): { value: AuthType; label: string; desc: string }[] {
+  return [
+    { value: "none", label: t("authNoneLabel"), desc: t("authNoneDesc") },
+    { value: "bearer", label: "Bearer Token", desc: t("authBearerDesc") },
+    { value: "custom_headers", label: t("authCustomLabel"), desc: t("authCustomDesc") },
+    {
+      value: "oauth2_client_credentials",
+      label: "OAuth2 · Client Credentials",
+      desc: t("authOAuthDesc"),
+    },
+  ];
+}
 
 type Server = {
   id: string;
@@ -896,7 +913,11 @@ function ServerCard({
               <p className="text-[11px] text-text-muted">{tr("card.emptyTools")}</p>
             )}
             {tools && Array.isArray(tools) && tools.length > 0 && (
-              <ToolsList tools={tools} serverName={server.name} />
+              <ToolsList
+                tools={tools}
+                serverId={server.id}
+                serverName={server.name}
+              />
             )}
           </div>
         )}
@@ -911,17 +932,19 @@ function ServerCard({
 
 function ToolsList({
   tools,
+  serverId,
   serverName,
 }: {
   tools: ToolInfo[];
+  serverId: string;
   serverName: string;
 }) {
   const tr = useTranslations("mcp.list");
   const [query, setQuery] = useState("");
-  // 2026-04-26 · 单个 server 暴露 50+ tool 的情况(github-official 等)
-  // 完全可能。展开 panel 后没有内部搜索,要找特定 tool 只能滚屏。补一个
-  // compact 搜索框 — 同时控制 panel 高度,超 12 个时变成滚动容器,避免
-  // 一次撑满整屏。
+  // 2026-04-29 · 单工具展开式调用 — 列表页之前只能"看"工具签名,要试调
+  // 必须跳到详情页。改成行级展开 + 内嵌 ToolTryPanel,与详情页共用同一份
+  // 组件。同一 server 内同时只展开一个工具,避免一次撑出多张表单。
+  const [expanded, setExpanded] = useState<string>("");
   const lcQuery = query.trim().toLowerCase();
   const visible = useMemo(() => {
     if (!lcQuery) return tools;
@@ -953,28 +976,65 @@ function ToolsList({
         <ul
           className={
             "flex flex-col gap-1.5 " +
-            (tools.length > 12 ? "max-h-72 overflow-y-auto pr-1" : "")
+            (tools.length > 12 ? "max-h-[28rem] overflow-y-auto pr-1" : "")
           }
         >
-          {visible.map((tool) => (
-            <li
-              key={tool.name}
-              data-testid={`tool-${serverName}-${tool.name}`}
-              className="flex items-start gap-2 text-[11px]"
-            >
-              <Icon
-                name="zap"
-                size={11}
-                className="mt-0.5 text-primary shrink-0"
-              />
-              <div className="min-w-0">
-                <span className="font-mono text-text">{tool.name}</span>
-                {tool.description && (
-                  <span className="text-text-muted"> — {tool.description}</span>
+          {visible.map((tool) => {
+            const open = expanded === tool.name;
+            return (
+              <li
+                key={tool.name}
+                data-testid={`tool-${serverName}-${tool.name}`}
+                className="rounded-md border border-border bg-surface overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpanded((prev) => (prev === tool.name ? "" : tool.name))
+                  }
+                  aria-expanded={open}
+                  data-testid={`tool-toggle-${serverName}-${tool.name}`}
+                  className="w-full flex items-start gap-2 px-2.5 py-2 text-left text-[11px] hover:bg-surface-2 transition-colors duration-fast"
+                >
+                  <Icon
+                    name="zap"
+                    size={11}
+                    className="mt-0.5 text-primary shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className="font-mono text-text">{tool.name}</span>
+                    {tool.description && (
+                      <span className="text-text-muted">
+                        {" "}
+                        — {tool.description}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-medium shrink-0 transition-colors duration-fast ${
+                      open
+                        ? "bg-primary text-primary-fg"
+                        : "bg-surface-2 text-text-muted border border-border"
+                    }`}
+                  >
+                    <Icon
+                      name={open ? "chevron-up" : "play"}
+                      size={9}
+                      strokeWidth={2.25}
+                    />
+                    {open ? tr("card.tryClose") : tr("card.tryOpen")}
+                  </span>
+                </button>
+                {open && (
+                  <ToolTryPanel
+                    serverId={serverId}
+                    tool={tool}
+                    testIdPrefix={`tool-try-${serverName}`}
+                  />
                 )}
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -1122,9 +1182,47 @@ function AddForm({
   const [args, setArgs] = useState("");
   const [envText, setEnvText] = useState("");
   const [url, setUrl] = useState("");
+  const [authType, setAuthType] = useState<AuthType>("none");
+  const [bearerToken, setBearerToken] = useState("");
   const [headersText, setHeadersText] = useState("");
+  const [oauthTokenUrl, setOauthTokenUrl] = useState("");
+  const [oauthClientId, setOauthClientId] = useState("");
+  const [oauthClientSecret, setOauthClientSecret] = useState("");
+  const [oauthScope, setOauthScope] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [testMsg, setTestMsg] = useState("");
+
+  function buildAuth(): Record<string, unknown> | string {
+    if (authType === "none") return { type: "none" };
+    if (authType === "bearer") {
+      if (!bearerToken) return t("errorBearerToken");
+      return { type: "bearer", token: bearerToken };
+    }
+    if (authType === "custom_headers") {
+      const headers: Record<string, string> = {};
+      for (const line of headersText.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const idx = trimmed.indexOf(":");
+        if (idx <= 0) return t("errorHeaderFormat", { line: trimmed });
+        headers[trimmed.slice(0, idx).trim()] = trimmed.slice(idx + 1).trim();
+      }
+      return { type: "custom_headers", headers };
+    }
+    // oauth2_client_credentials
+    if (!oauthTokenUrl) return t("errorTokenUrl");
+    if (!oauthClientId) return t("errorClientId");
+    if (!oauthClientSecret) return t("errorClientSecret");
+    const payload: Record<string, string> = {
+      type: "oauth2_client_credentials",
+      token_url: oauthTokenUrl,
+      client_id: oauthClientId,
+      client_secret: oauthClientSecret,
+    };
+    if (oauthScope) payload.scope = oauthScope;
+    return payload;
+  }
 
   function buildConfig(): Record<string, unknown> | string {
     if (transport === "stdio") {
@@ -1146,15 +1244,9 @@ function AddForm({
       return { command, args: argList, env };
     }
     if (!url) return t("errorUrl");
-    const headers: Record<string, string> = {};
-    for (const line of headersText.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const idx = trimmed.indexOf(":");
-      if (idx <= 0) return t("errorHeaderFormat", { line: trimmed });
-      headers[trimmed.slice(0, idx).trim()] = trimmed.slice(idx + 1).trim();
-    }
-    return { url, headers };
+    const auth = buildAuth();
+    if (typeof auth === "string") return auth;
+    return { url, auth };
   }
 
   async function submit() {
@@ -1201,6 +1293,7 @@ function AddForm({
     }
     setBusy(true);
     setErr("");
+    setTestMsg("");
     try {
       const res = await fetch("/api/mcp-servers/test", {
         method: "POST",
@@ -1210,6 +1303,14 @@ function AddForm({
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { detail?: string };
         throw new Error(body.detail || `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as { health: Health };
+      if (data.health === "ok") {
+        setTestMsg(t("testOk"));
+      } else if (data.health === "auth_failed") {
+        setErr(t("testAuthFailed"));
+      } else {
+        setErr(t("testFailed", { health: data.health }));
       }
     } catch (e) {
       setErr(String(e));
@@ -1358,16 +1459,125 @@ function AddForm({
                 testid="field-url"
                 leading="external-link"
               />
-              <TextareaField
-                label={t("headers")}
-                testid="field-headers"
-                value={headersText}
-                onChange={setHeadersText}
-                placeholder={"Authorization: Bearer xxx"}
-              />
             </div>
           )}
         </Section>
+
+        {/* Section 4 · Auth (http/sse only) */}
+        {transport !== "stdio" && (
+          <Section icon="lock" title={t("authSection")}>
+            <div
+              role="radiogroup"
+              aria-label={t("authTypeAria")}
+              data-testid="auth-type-select"
+              className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+            >
+              {buildAuthOptions(t).map((opt) => {
+                const active = authType === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    data-testid={`auth-${opt.value}`}
+                    onClick={() => setAuthType(opt.value)}
+                    className={`text-left rounded-xl border p-3 transition duration-base ${
+                      active
+                        ? "border-primary bg-primary/10 shadow-soft-sm"
+                        : "border-border bg-surface hover:border-border-strong hover:shadow-soft-sm"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`font-mono text-[12px] font-semibold ${
+                          active ? "text-primary" : "text-text"
+                        }`}
+                      >
+                        {opt.label}
+                      </span>
+                      {active && (
+                        <Icon
+                          name="check-circle-2"
+                          size={13}
+                          className="ml-auto text-primary"
+                        />
+                      )}
+                    </div>
+                    <p
+                      className={`mt-1.5 text-[11px] leading-snug ${
+                        active ? "text-primary/80" : "text-text-muted"
+                      }`}
+                    >
+                      {opt.desc}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {authType === "bearer" && (
+              <div className="mt-3">
+                <PasswordField
+                  label="Token"
+                  testid="field-bearer-token"
+                  value={bearerToken}
+                  onChange={setBearerToken}
+                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                />
+              </div>
+            )}
+
+            {authType === "custom_headers" && (
+              <div className="mt-3">
+                <TextareaField
+                  label={t("headers")}
+                  testid="field-headers"
+                  value={headersText}
+                  onChange={setHeadersText}
+                  placeholder={"X-API-Key: sk_xxx\nX-Tenant: acme"}
+                />
+              </div>
+            )}
+
+            {authType === "oauth2_client_credentials" && (
+              <div className="mt-3 flex flex-col gap-3">
+                <Field
+                  label="Token URL"
+                  mono
+                  value={oauthTokenUrl}
+                  onChange={setOauthTokenUrl}
+                  placeholder="https://auth.example.com/oauth/token"
+                  testid="field-oauth-token-url"
+                  leading="link"
+                />
+                <Field
+                  label="Client ID"
+                  mono
+                  value={oauthClientId}
+                  onChange={setOauthClientId}
+                  placeholder="client_abc123"
+                  testid="field-oauth-client-id"
+                />
+                <PasswordField
+                  label="Client Secret"
+                  testid="field-oauth-client-secret"
+                  value={oauthClientSecret}
+                  onChange={setOauthClientSecret}
+                  placeholder="secret_xxx"
+                />
+                <Field
+                  label={t("scopeOptional")}
+                  mono
+                  value={oauthScope}
+                  onChange={setOauthScope}
+                  placeholder="read:mcp write:mcp"
+                  testid="field-oauth-scope"
+                />
+              </div>
+            )}
+          </Section>
+        )}
 
         {err && (
           <div
@@ -1377,6 +1587,17 @@ function AddForm({
           >
             <Icon name="alert-circle" size={13} className="mt-0.5 shrink-0" />
             <span className="font-mono min-w-0 break-words">{err}</span>
+          </div>
+        )}
+
+        {testMsg && !err && (
+          <div
+            data-testid="add-test-ok"
+            role="status"
+            className="flex items-start gap-2 rounded-lg border border-success/40 bg-success-soft px-3 py-2 text-[12px] text-success"
+          >
+            <Icon name="check-circle-2" size={13} className="mt-0.5 shrink-0" />
+            <span className="font-mono min-w-0 break-words">{testMsg}</span>
           </div>
         )}
 
@@ -1494,6 +1715,46 @@ function Field({
             mono ? "font-mono" : ""
           } ${leading ? "pl-8 pr-3" : "px-3"}`}
         />
+      </div>
+    </label>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  testid,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  testid?: string;
+}) {
+  const t = useTranslations("mcp.list.form");
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <label className="block">
+      <span className="text-[11px] text-text-muted block mb-1">{label}</span>
+      <div className="relative">
+        <input
+          type={revealed ? "text" : "password"}
+          data-testid={testid}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg bg-bg border border-border py-2 pl-3 pr-10 text-[13px] text-text font-mono placeholder:text-text-subtle focus:outline-none focus:border-primary focus:shadow-glow-sm transition duration-base"
+        />
+        <button
+          type="button"
+          onClick={() => setRevealed((v) => !v)}
+          aria-label={revealed ? t("passwordHide") : t("passwordShow")}
+          className="absolute right-2 top-1/2 -translate-y-1/2 grid h-6 w-6 place-items-center rounded-md text-text-subtle hover:bg-surface-2 hover:text-text transition duration-base"
+        >
+          <Icon name={revealed ? "eye-off" : "eye"} size={13} />
+        </button>
       </div>
     </label>
   );

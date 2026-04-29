@@ -108,7 +108,21 @@
       "retryIngest": "Retry ingest",
       "loading": "Loading…",
       "allTags": "All tags",
-      "uploadingProgress": "Upload · {done}/{total} done"
+      "uploadingProgress": "Upload · {done}/{total} done",
+      "sortRecent": "Recent",
+      "sortOldest": "Oldest",
+      "sortName": "Name A-Z",
+      "sortSize": "By size",
+      "sortChunks": "By chunks",
+      "sortAria": "Sort by",
+      "viewGrid": "Grid view",
+      "viewList": "List view",
+      "colTitle": "Title",
+      "colState": "State",
+      "colChunks": "Chunks",
+      "colSize": "Size",
+      "colUpdated": "Updated",
+      "colTags": "Tags"
     },
     "uploads": {
       "summary": "Uploads · {done}/{total} done",
@@ -171,6 +185,11 @@
       "summary": "Re-embed done · {processed} processed · {succeeded} ok · {failed} failed"
     },
     "overview": {
+      "welcomeTitle": "Welcome to {kb}",
+      "welcomeBody": "Drop a markdown / pdf / docx in — searchable + askable in seconds. Or grab a web article.",
+      "welcomeUpload": "Upload your first document",
+      "welcomeIngestUrl": "Ingest a URL",
+      "welcomeFootnote": "Supports .md / .pdf / .docx / .txt / .html / .csv …",
       "descriptionLabel": "Description",
       "noDescription": "(no description · click edit ↗ to add one)",
       "editDescription": "Edit in settings",
@@ -381,6 +400,7 @@
       "actionsSection": "Actions",
       "reindex": "Reindex",
       "chunkCountLine": "{count} chunks",
+      "outline": "Outline",
       "headerMeta": "v{version} · {kb} KB · {chunks} chunks",
       "tabInfo": "Overview",
       "tabText": "Source text",

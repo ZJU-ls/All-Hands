@@ -72,6 +72,7 @@ function AskTabInner() {
   const [starters, setStarters] = useState<string[] | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const fired = useRef(false);
 
   useEffect(() => {
@@ -118,6 +119,26 @@ function AskTabInner() {
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     setPinned(true);
   }
+
+  // Global "/" → focus the composer (skips when user is typing elsewhere).
+  // Linear / Notion / GitHub all use this; cheap muscle memory win.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tgt = e.target as HTMLElement | null;
+      if (
+        tgt &&
+        (tgt.tagName === "INPUT" ||
+          tgt.tagName === "TEXTAREA" ||
+          tgt.isContentEditable)
+      )
+        return;
+      e.preventDefault();
+      composerRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   async function runTurn(question: string, followUp: boolean) {
     const q = question.trim();
@@ -351,12 +372,24 @@ function AskTabInner() {
         <div className="border-t border-border bg-surface px-6 py-3">
           <div className="mx-auto max-w-3xl">
             <div className="flex items-center gap-2">
-              <input
-                type="text"
+              <textarea
+                ref={composerRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  // Auto-grow up to 6 lines
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  // Skip when an IME composition is in progress so Chinese
+                  // pinyin candidates don't accidentally submit on Enter.
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
                     e.preventDefault();
                     submitDraft();
                   }
@@ -367,7 +400,8 @@ function AskTabInner() {
                     : t("placeholderFollowUp")
                 }
                 disabled={anyStreaming}
-                className="h-10 flex-1 rounded-xl border border-border bg-surface-2 px-3 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
+                rows={1}
+                className="min-h-10 max-h-[144px] flex-1 resize-none rounded-xl border border-border bg-surface-2 px-3 py-2 text-[13px] text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none disabled:opacity-50"
               />
               {anyStreaming ? (
                 <button

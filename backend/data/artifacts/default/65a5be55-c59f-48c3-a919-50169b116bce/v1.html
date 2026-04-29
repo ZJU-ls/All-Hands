@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AllHands Lead Agent 能力演示</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-weight: 300;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            font-size: 0.9rem;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s;
+        }
+
+        .panel:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-blue);
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+
+        .icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            fill: currentColor;
+        }
+
+        .panel-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+
+        /* Plan Styles */
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .step-item::before {
+            content: '';
+            position: absolute;
+            left: 11px;
+            top: 25px;
+            bottom: -20px;
+            width: 2px;
+            background-color: var(--border-color);
+        }
+
+        .step-item:last-child::before {
+            display: none;
+        }
+
+        .step-status {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            flex-shrink: 0;
+            z-index: 1;
+            font-size: 12px;
+        }
+
+        .step-status.active {
+            background-color: var(--accent-blue);
+            box-shadow: 0 0 10px var(--accent-blue);
+        }
+
+        .step-status.done {
+            background-color: var(--accent-green);
+        }
+
+        .step-content h4 {
+            margin: 0 0 5px 0;
+            font-size: 1rem;
+        }
+
+        .step-content p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Agent Styles */
+        .agent-card {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid transparent;
+        }
+
+        .agent-card.research { border-left-color: var(--accent-purple); }
+        .agent-card.code { border-left-color: var(--accent-blue); }
+        .agent-card.test { border-left-color: var(--accent-green); }
+
+        .agent-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .agent-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .agent-role {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+        }
+
+        .agent-task {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            margin-top: 5px;
+            margin-right: 5px;
+        }
+        .badge-skill { background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .badge-tool { background-color: rgba(16, 185, 129, 0.2); color: #34d399; }
+
+        .controls {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        button {
+            background-color: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #2563eb;
+        }
+
+        button:disabled {
+            background-color: var(--border-color);
+            cursor: not-allowed;
+        }
+
+        #log-area {
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            height: 100px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 6px;
+            width: 100%;
+            max-width: 1000px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>AllHands Lead Agent 核心能力演示</h1>
+    <div class="subtitle">Plan Decomposition & Sub-Agent Dispatch Simulation</div>
+
+    <div class="container">
+        <!-- Plan Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+                <span class="panel-title">1. Plan Creation (规划拆解)</span>
+            </div>
+            <div id="plan-steps">
+                <!-- Steps will be injected here -->
+            </div>
+        </div>
+
+        <!-- Dispatch Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                <span class="panel-title">2. Sub-Agent Dispatch (员工调度)</span>
+            </div>
+            <div id="agent-dispatch">
+                <!-- Agents will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="start-btn" onclick="runSimulation()">启动模拟任务: "构建一个数据分析看板"</button>
+    </div>
+
+    <div id="log-area">等待指令...</div>
+
+    <script>
+        const steps = [
+            { id: 1, title: "需求分析与技术选型", desc: "确定数据源、图表类型及前端框架", status: "pending" },
+            { id: 2, title: "后端 API 开发", desc: "构建数据接口，处理 CSV/JSON 数据", status: "pending" },
+            { id: 3, title: "前端可视化实现", desc: "使用 ECharts/D3.js 渲染图表", status: "pending" },
+            { id: 4, title: "集成测试与部署", desc: "端到端测试并生成 Docker 配置", status: "pending" }
+        ];
+
+        const agents = [
+            { 
+                stepId: 1, 
+                name: "MarketAnalyst", 
+                role: "研究员", 
+                task: "调研最佳数据可视化方案，输出技术选型报告。", 
+                skills: ["web_research", "data_analysis"],
+                type: "research"
+            },
+            { 
+                stepId: 2, 
+                name: "CoderAgent", 
+                role: "后端工程师", 
+                task: "编写 Python FastAPI 接口，实现数据清洗与分页。", 
+                skills: ["file_writing", "python_dev"],
+                type: "code"
+            },
+            { 
+                stepId: 3, 
+                name: "FrontendSpecialist", 
+                role: "前端工程师", 
+                task: "开发 React 组件，集成 ECharts 动态图表。", 
+                skills: ["react_dev", "ui_design"],
+                type: "code"
+            },
+            { 
+                stepId: 4, 
+                name: "DevOpsBot", 
+                role: "运维专家", 
+                task: "编写 Dockerfile 和 docker-compose.yml，执行冒烟测试。", 
+                skills: ["docker", "testing"],
+                type: "test"
+            }
+        ];
+
+        function log(msg) {
+            const logArea = document.getElementById('log-area');
+            const time = new Date().toLocaleTimeString();
+            logArea.innerHTML += `[${time}] ${msg}<br>`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function renderSteps() {
+            const container = document.getElementById('plan-steps');
+            container.innerHTML = steps.map((step, index) => `
+                <div class="step-item">
+                    <div class="step-status ${step.status === 'done' ? 'done' : ''} ${step.status === 'active' ? 'active' : ''}">
+                        ${step.status === 'done' ? '✓' : (index + 1)}
+                    </div>
+                    <div class="step-content">
+                        <h4>${step.title}</h4>
+                        <p>${step.desc}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderAgents(activeStepId) {
+            const container = document.getElementById('agent-dispatch');
+            const activeAgents = agents.filter(a => a.stepId === activeStepId);
+            
+            if (activeAgents.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:20px;">等待调度...</div>';
+                return;
+            }
+
+            container.innerHTML = activeAgents.map(agent => `
+                <div class="agent-card ${agent.type}">
+                    <div class="agent-header">
+                        <span class="agent-name">${agent.name}</span>
+                        <span class="agent-role">${agent.role}</span>
+                    </div>
+                    <div class="agent-task">${agent.task}</div>
+                    <div style="margin-top:8px;">
+                        ${agent.skills.map(s => `<span class="badge badge-skill">${s}</span>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function runSimulation() {
+            const btn = document.getElementById('start-btn');
+            btn.disabled = true;
+            document.getElementById('log-area').innerHTML = '';
+            
+            log("Lead Agent: 接收任务 '构建一个数据分析看板'");
+            log("Lead Agent: 正在拆解计划 (Plan Create)...");
+            
+            // Step 1: Plan
+            steps[0].status = 'active';
+            renderSteps();
+            await new Promise(r => setTimeout(r, 1000));
+            
+            for (let i = 0; i < steps.length; i++) {
+                const step = steps[i];
+                step.status = 'active';
+                renderSteps();
+                
+                log(`Lead Agent: 开始步骤 ${step.id} - ${step.title}`);
+                log(`Lead Agent: 正在调度员工 (Dispatch Employee)...`);
+                
+                renderAgents(step.id);
+                await new Promise(r => setTimeout(r, 1500));
+                
+                log(`Lead Agent: 员工执行中...`);
+                await new Promise(r => setTimeout(r, 1500));
+                
+                step.status = 'done';
+                renderSteps();
+                log(`Lead Agent: 步骤 ${step.id} 完成。收集结果。`);
+                
+                if (i < steps.length - 1) {
+                    await new Promise(r => setTimeout(r, 500));
+                }
+            }
+            
+            log("Lead Agent: 所有步骤完成。项目已交付。");
+            btn.disabled = false;
+            btn.innerText = "重新运行模拟";
+        }
+
+        // Initial Render
+        renderSteps();
+        renderAgents(0);
+    </script>
+</body>
+</html>

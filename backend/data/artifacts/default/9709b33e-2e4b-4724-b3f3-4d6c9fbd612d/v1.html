@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>能力展示仪表盘</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .header { text-align: center; color: #333; margin-bottom: 30px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-5px); }
+        .card h3 { margin-top: 0; color: #1890ff; }
+        .stat { font-size: 2em; font-weight: bold; color: #2c3e50; }
+        .desc { color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 制品区能力展示</h1>
+        <p>HTML 实时渲染示例</p>
+    </div>
+    <div class="grid">
+        <div class="card"><h3>文本处理</h3><div class="stat">100%</div><div class="desc">Markdown / HTML 转换效率</div></div>
+        <div class="card"><h3>图表渲染</h3><div class="stat">High</div><div class="desc">Draw.io / Mermaid 支持</div></div>
+        <div class="card"><h3>格式兼容</h3><div class="stat">7+</div><div class="desc">PDF / DOCX / XLSX / PPTX</div></div>
+    </div>
+</body>
+</html>
