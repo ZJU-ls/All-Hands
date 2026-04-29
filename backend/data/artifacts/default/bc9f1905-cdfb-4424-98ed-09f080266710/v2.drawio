@@ -1,0 +1,66 @@
+<mxfile host="embed.diagrams.net">
+  <diagram name="AI Agent Architecture" id="arch-v1">
+    <mxGraphModel dx="670" dy="649" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" value="AI 智能助手能力架构" vertex="1">
+          <mxGeometry height="40" width="400" x="200" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="input-box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" value="用户需求输入" vertex="1">
+          <mxGeometry height="40" width="180" x="313.5" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="core-box" parent="1" style="swimlane;whiteSpace=wrap;html=1;childLayout=stackLayout;horizontal=1;startSize=30;resizeParent=1;fillColor=#f5f5f5;strokeColor=#b3b3b3;fontSize=12;" value="核心处理引擎 (Agent Core)" vertex="1">
+          <mxGeometry height="220" width="1380" x="150" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="step2" parent="core-box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="内容构建与验证 (File Writing / Web Research)" vertex="1">
+          <mxGeometry height="190" width="460" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="step3" parent="core-box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="可视化呈现 (Draw.io / Mermaid)" vertex="1">
+          <mxGeometry height="190" width="460" x="460" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="step4" parent="core-box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" value="制品区管理 (Artifact Create/Update/Search)" vertex="1">
+          <mxGeometry height="190" width="460" x="920" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="output-group" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="100" width="440" x="180" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="out-html" parent="output-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=11;" value="HTML 页面" vertex="1">
+          <mxGeometry height="40" width="80" as="geometry" />
+        </mxCell>
+        <mxCell id="out-pdf" parent="output-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=11;" value="PDF 报告" vertex="1">
+          <mxGeometry height="40" width="80" x="90" as="geometry" />
+        </mxCell>
+        <mxCell id="out-drawio" parent="output-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=11;" value="Draw.io 图表" vertex="1">
+          <mxGeometry height="40" width="80" x="180" as="geometry" />
+        </mxCell>
+        <mxCell id="out-xlsx" parent="output-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=11;" value="Excel 表格" vertex="1">
+          <mxGeometry height="40" width="80" x="270" as="geometry" />
+        </mxCell>
+        <mxCell id="out-docx" parent="output-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=11;" value="Word 文档" vertex="1">
+          <mxGeometry height="40" width="80" x="360" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow1" edge="1" parent="1" source="input-box" style="endArrow=classic;html=1;entryX=0.5;entryY=0;exitX=0.5;exitY=1;" target="core-box" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="300" y="150" as="sourcePoint" />
+            <mxPoint x="350" y="100" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow2" edge="1" parent="1" source="core-box" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="output-group" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="300" y="400" as="sourcePoint" />
+            <mxPoint x="350" y="350" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="feedback" edge="1" parent="1" source="output-group" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=1;entryY=0.5;dashed=1;strokeColor=#ff0000;" target="input-box" value="迭代优化">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="650" y="460" />
+              <mxPoint x="650" y="100" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

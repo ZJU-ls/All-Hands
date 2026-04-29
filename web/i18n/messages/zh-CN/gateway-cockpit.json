@@ -59,6 +59,13 @@
       "fieldMaxOutputTokens": "最大输出 tokens · 可选",
       "fieldMaxOutputTokensPlaceholder": "留空 = 模型默认",
       "fieldMaxOutputTokensHint": "出站 chat 请求的 max_tokens。留空时不限制(由模型自身上限决定);填了就硬卡这个数。",
+      "autofilledFromCatalog": "✨ 已根据 {name} 自动补全显示名 / 能力 / 上下文窗口,可继续修改。",
+      "sectionCapabilities": "能力(输出模态)",
+      "capabilitiesAutoHint": "留空 = 后端按模型名自动判断(gpt-image / wanx / dall-e → 图像生成,其他 → 对话)。手动勾选后以你的选择为准。",
+      "capabilityChat": "对话 / 工具调用",
+      "capabilityImageGen": "图像生成",
+      "capabilitySpeech": "语音(TTS / STT)",
+      "capabilityEmbedding": "文本向量化",
       "sectionAdvanced": "高级设置(可选)",
       "modelFormTips": [
         "💡 只填模型名就能注册。三个 token 上限是高级选项,默认沿用模型本身的能力。",

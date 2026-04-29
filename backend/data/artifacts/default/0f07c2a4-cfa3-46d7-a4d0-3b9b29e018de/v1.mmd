@@ -1,0 +1,33 @@
+graph TD
+    User((用户)) -->|下达复杂指令| Lead[Lead Agent<br/>规划与调度中枢]
+    
+    subgraph "核心执行层 (Sub-Agents)"
+        direction TB
+        Research[ResearchAgent<br/>需求/调研]
+        Code[CoderAgent<br/>全栈开发]
+        Art[粒子艺术师<br/>视觉设计]
+        QA[计划测试员<br/>流程验证]
+    end
+    
+    subgraph "支撑平台 (Platform Skills)"
+        Artifacts[(制品区)]
+        Plan[Plan System]
+        MCP[MCP 服务器]
+    end
+    
+    Lead -->|1. 拆解任务| Plan
+    Lead -->|2. 调度| Research
+    Lead -->|2. 调度| Code
+    Lead -->|2. 调度| Art
+    Lead -->|3. 验收| QA
+    
+    Research -->|产出调研报告| Artifacts
+    Code -->|提交代码/脚本| Artifacts
+    Art -->|生成特效/原型| Artifacts
+    QA -->|读取制品进行测试| Artifacts
+    
+    Code -.->|调用外部工具| MCP
+    Art -.->|渲染预览| Artifacts
+
+    style Lead fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
+    style Artifacts fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff

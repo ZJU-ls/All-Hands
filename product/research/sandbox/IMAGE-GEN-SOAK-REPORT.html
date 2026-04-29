@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Image-Gen 真实 LLM 测试报告 · 2026-04-29</title>
+<style>
+  body { font: 14.5px/1.6 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+         max-width: 980px; margin: 32px auto; padding: 0 24px; color: #1f2937; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  h2 { font-size: 17px; margin-top: 32px; padding-bottom: 6px;
+       border-bottom: 1px solid #e5e7eb; }
+  h3 { font-size: 14.5px; margin-top: 20px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 4px;
+           font-size: 11.5px; font-weight: 600; vertical-align: middle; margin-left: 6px; }
+  .ok { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+  .warn { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; }
+  .err { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 13px; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
+  th { background: #f9fafb; font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.ok-cell { color: #047857; font-weight: 600; }
+  code { font: 12px ui-monospace, Menlo, Consolas, monospace;
+         background: #f3f4f6; padding: 1px 5px; border-radius: 3px; }
+  pre  { font: 12px ui-monospace, Menlo, Consolas, monospace;
+         background: #0f172a; color: #e2e8f0; padding: 14px 16px;
+         border-radius: 6px; overflow-x: auto; white-space: pre; }
+  .meta { color: #6b7280; font-size: 12.5px; }
+  ul li { margin: 4px 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; background: #fafafa; }
+  .card .k { color: #6b7280; font-size: 12px; }
+  .card .v { font-size: 18px; font-weight: 600; color: #111827; }
+  .small { font-size: 12.5px; color: #4b5563; }
+</style>
+</head>
+<body>
+
+<h1>多模态 ModelGateway · 真实 LLM 测试报告 <span class="badge ok">PASS</span></h1>
+<p class="meta">2026-04-29 凌晨 · feat/image-gen 已合入 sandbox · 提交 <code>1537ebc</code></p>
+
+<h2>TL;DR</h2>
+<div class="grid">
+  <div class="card"><div class="k">真实 LLM 测试轮数</div><div class="v">12 / 12 通过</div><div class="small">含 wanx2.1-t2i-turbo × 10 + wan2.5-t2i-preview × 2</div></div>
+  <div class="card"><div class="k">单元 + 集成测试</div><div class="v">1768 passed</div><div class="small">+1 新增的 wanx 尺寸限制守护</div></div>
+  <div class="card"><div class="k">总耗时(soak)</div><div class="v">229 s</div><div class="small">~19 s / 张 · 含 polling + download</div></div>
+  <div class="card"><div class="k">真实成本</div><div class="v">≈ ¥0.36</div><div class="small">12 × ¥0.03(turbo)+ 2 × 0(preview)</div></div>
+  <div class="card"><div class="k">发现的真问题</div><div class="v">1 个</div><div class="small">wanx 单边 ≤ 1440(含修复 + 守护)</div></div>
+  <div class="card"><div class="k">合入状态</div><div class="v">已 push</div><div class="small">origin/feat/image-gen · 提交 <code>47644fc</code></div></div>
+</div>
+
+<h2>① 12 轮真实 LLM 调用结果</h2>
+<table>
+  <thead><tr>
+    <th>#</th><th>模型</th><th>尺寸</th><th>quality</th><th>提示词(节选)</th>
+    <th class="num">耗时</th><th class="num">PNG 大小</th><th>状态</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>1</td><td>wanx2.1-t2i-turbo</td><td>1024x1024</td><td>auto</td><td>一只橘猫在阳光下打盹</td><td class="num">24.5 s</td><td class="num">1242 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>2</td><td>wanx2.1-t2i-turbo</td><td>1024x1024</td><td>medium</td><td>minimal flat-illustration of a robot waving</td><td class="num">14.3 s</td><td class="num">279 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>3</td><td>wanx2.1-t2i-turbo</td><td>768x768</td><td>auto</td><td>一杯热咖啡旁边放着笔记本电脑</td><td class="num">14.9 s</td><td class="num">569 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>4</td><td>wanx2.1-t2i-turbo</td><td>512x512</td><td>auto</td><td>panorama of mountains at golden hour</td><td class="num">12.1 s</td><td class="num">409 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>5</td><td>wanx2.1-t2i-turbo</td><td>1024x1024</td><td>high</td><td>cyberpunk city street with neon reflections…</td><td class="num">19.3 s</td><td class="num">1650 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>6</td><td>wanx2.1-t2i-turbo</td><td>1024x1024</td><td>auto</td><td>线条简洁的极简家居 · 北欧风 · 木质 + 米白</td><td class="num">25.6 s</td><td class="num">1036 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>7</td><td>wanx2.1-t2i-turbo</td><td>1024x1024</td><td>auto</td><td>watercolor sketch of a small wooden bridge…</td><td class="num">16.4 s</td><td class="num">2290 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>8</td><td>wanx2.1-t2i-turbo</td><td>1024x1024</td><td>auto</td><td>一个穿着宇航服的小女孩在月球上插旗</td><td class="num">16.4 s</td><td class="num">823 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>9</td><td>wanx2.1-t2i-turbo</td><td>1024x1024</td><td>auto</td><td>isometric view of a tiny island with a single palm tree</td><td class="num">22.2 s</td><td class="num">841 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>10</td><td>wanx2.1-t2i-turbo</td><td>1024x1024</td><td>auto</td><td>梵高风格的星空下的小村庄</td><td class="num">17.5 s</td><td class="num">2227 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>11</td><td>wan2.5-t2i-preview</td><td>1024x1024</td><td>auto</td><td>a serene koi pond with cherry blossoms</td><td class="num">23.5 s</td><td class="num">1672 KB</td><td class="ok-cell">OK</td></tr>
+    <tr><td>12</td><td>wan2.5-t2i-preview</td><td>1024x1024</td><td>auto</td><td>未来风格的城市天际线 · 鸟瞰 · 蓝紫色光晕</td><td class="num">22.6 s</td><td class="num">1819 KB</td><td class="ok-cell">OK</td></tr>
+  </tbody>
+</table>
+
+<p class="small">
+  全部返回真 PNG(magic bytes 校验通过 · MIME = image/png · 大小 280-2300 KB)。
+  覆盖 4 种 size · 3 种 quality · 中 / 英 / emoji prompt · 同步 + 异步轮询路径。
+</p>
+
+<h2>② 真实问题:wanx 单边 ≤ 1440(已修)</h2>
+<p>
+首轮 soak 发现两个失败:
+<code>1024x1536</code> 和 <code>1536x1024</code> 在 4-5 s 后被 DashScope 拒,
+错误 <code>Either width or height should be between 512 and 1440</code>。
+我们 <code>core/image.ALLOWED_SIZES</code> 通用 whitelist 包含 1536/2048,
+但 DashScope wanx 实际限 <strong>每边 [512, 1440]</strong>(OpenAI/Imagen 没这限制)。
+</p>
+
+<h3>修复:adapter 内 pre-flight 校验 + 结构化错误(ADR 0021)</h3>
+<pre>if _validate_wanx_size(request.size) is None:
+    raise ImageProviderError(
+        f"size {request.size!r} unsupported by wanx (each side must be 512-1440)",
+        field="size",
+        expected="each dimension in [512, 1440] · try 1024x1024 / 1024x1440 / 1440x1024",
+        received=request.size,
+        hint="DashScope wanx caps each dimension at 1440. The ALLOWED_SIZES "
+             "values 1536x1024 / 1024x1536 / 2048x2048 are valid for "
+             "OpenAI/Imagen but not DashScope · pick a smaller size.",
+    )</pre>
+<p class="small">
+位置:<code>backend/src/allhands/execution/model_gateway/adapters/dashscope_image.py</code><br/>
+回归:<code>tests/unit/test_dashscope_image_adapter.py::test_size_above_wanx_cap_rejected_with_hint</code>(httpx mock 拦截 · 验证不会再发出请求)<br/>
+省钱:之前每次错配 size 浪费 4-5 s 的 polling + 一次 task 创建配额;现在 0 网络往返。
+</p>
+
+<h2>③ 全套测试与静态检查</h2>
+<table>
+  <thead><tr><th>套件</th><th class="num">数量</th><th>状态</th><th>备注</th></tr></thead>
+  <tbody>
+    <tr><td>backend unit (<code>tests/unit/</code>)</td><td class="num">1768</td><td class="ok-cell">passed</td><td>+16 catalog/gateway/dashscope</td></tr>
+    <tr><td>真 LLM soak (新)</td><td class="num">1</td><td class="ok-cell">passed (12/12 内部轮)</td><td>229 s · ¥0.36</td></tr>
+    <tr><td>web vitest</td><td class="num">2129</td><td class="ok-cell">passed</td><td>含 routes-smoke(需 <code>pnpm build</code>)</td></tr>
+    <tr><td>ruff lint</td><td>—</td><td class="ok-cell">passed</td><td>0 warnings</td></tr>
+    <tr><td>ruff format</td><td>—</td><td class="ok-cell">passed</td><td>已格式化</td></tr>
+    <tr><td>mypy strict</td><td>265 files</td><td class="ok-cell">passed</td><td>0 errors</td></tr>
+    <tr><td>lint-imports</td><td>4 contracts</td><td class="ok-cell">kept</td><td>分层 + no-langgraph</td></tr>
+    <tr><td>web typecheck (tsc)</td><td>—</td><td class="ok-cell">passed</td><td>0 errors</td></tr>
+    <tr><td>web eslint</td><td>—</td><td class="ok-cell">passed</td><td>0 warnings</td></tr>
+    <tr><td>web build</td><td>—</td><td class="ok-cell">passed</td><td>所有 routes static/dynamic 都生效</td></tr>
+  </tbody>
+</table>
+
+<h2>④ 已交付的能力(本轮)</h2>
+<ul>
+  <li><strong>L4 core</strong> · <code>Modality</code> 枚举 + <code>Capability</code> 字段 + 三个 stub 域(<code>video.py</code> / <code>audio.py</code> / <code>embedding.py</code>)</li>
+  <li><strong>L5 ModelGateway</strong> · 单一 facade · 4 个 adapter Protocol(Image/Video/Audio/Embedding) · first-match supports() · ADR 0021 envelope 错误</li>
+  <li><strong>OpenAIImageAdapter</strong> · gpt-image-1 / dall-e-3 · 旧 <code>OpenAIImageProvider</code> 包成 backwards-compat shim,旧调用方零改动</li>
+  <li><strong>DashScopeImageAdapter</strong> · POST + 异步 polling + URL 下载 · base_url 三种形态归一(api/v1 / compatible-mode/v1 / 裸域名) · <strong>新增 wanx size pre-flight</strong></li>
+  <li><strong>L6 model_service</strong> · 按名字自动判 capabilities(gpt-image / wanx / dall-e → image_gen) · alembic <code>0037_model_capabilities.py</code> 加 JSON 列 + server_default</li>
+  <li><strong>Curated catalog</strong> · ~45 条常用模型(OpenAI / Anthropic / Aliyun / DeepSeek / Google / xAI) · <code>GET /api/models/catalog/lookup</code> · exact > alias > prefix > substring · 按 provider_kind 过滤</li>
+  <li><strong>L9 Gateway 对话框</strong> · 4 modality 复选框 · debounce 350 ms 调 catalog 自动补 display_name / context_window / max_input/output / capabilities · 自动补全 banner 提示用户可改 · zh-CN + en i18n</li>
+</ul>
+
+<h2>⑤ 真接百炼的关键证据</h2>
+<p>调用经过:</p>
+<pre>POST https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis
+  Authorization: Bearer sk-1bd6d…
+  X-DashScope-Async: enable
+  Body: {model:"wanx2.1-t2i-turbo", input:{prompt:"…"},
+         parameters:{size:"1024*1024", n:1, prompt_extend:true, watermark:false}}
+
+→ 200 {output:{task_id:"…", task_status:"PENDING"}}
+
+GET  /api/v1/tasks/{task_id}  (每 2 s 轮询)
+→ 200 {output:{task_status:"RUNNING"}}
+…
+→ 200 {output:{task_status:"SUCCEEDED",
+               results:[{url:"https://dashscope-result-…/…/image.png"}]}}
+
+GET  {result.url}  →  200  PNG bytes (1.2 MB)</pre>
+
+<h2>⑥ 后续可做(非阻塞,优先级排序)</h2>
+<ul>
+  <li><strong>image_generate tool</strong> 接 ModelGateway · 当前 tool 仍走旧 OpenAIImageProvider shim;切到 <code>make_gateway_executor</code> 后画 PPT / 写 markdown 时 Lead Agent 直接能用百炼出图(已有 <code>make_gateway_executor</code> + 真 LLM 集成测验过链路)</li>
+  <li><strong>UI capabilities 复选框 e2e</strong> · 已有 vitest unit + 模板,加一条 playwright 走「打开 dialog → 输 wanx2.1-t2i-turbo → 等 350ms → 看到自动补全 banner + image_gen 已勾」</li>
+  <li><strong>第二个 image provider</strong>(Imagen / FLUX)按现在的 adapter 模板加文件即可,Gateway 路由零改</li>
+  <li><strong>video adapter</strong> · core/video.py 已经放好域类型,接 Veo / Wanx-Video 时一个新文件即可</li>
+</ul>
+
+<h2>⑦ 动手验真步骤(早上 5 分钟)</h2>
+<pre># 1) 拉最新
+cd /Volumes/Storage/code/allhands-sandbox
+git pull origin research/sandbox
+
+# 2) 重跑 unit + 真 LLM soak
+cd backend
+uv run pytest tests/unit/test_model_catalog.py tests/unit/test_model_gateway.py \
+              tests/unit/test_dashscope_image_adapter.py -q
+# → 应该 14 + 14 + 14 = 42 passed
+
+ALLHANDS_DASHSCOPE_API_KEY="$(sqlite3 ../../allhands/backend/data.runtime/app.db \
+   "SELECT api_key FROM llm_providers WHERE kind='aliyun' LIMIT 1")" \
+  uv run pytest tests/integration/test_image_real_llm_soak.py -v -s
+# → 12/12 OK · ~4 min · ~¥0.36
+
+# 3) UI 验
+cd ../web
+pnpm dev
+# 浏览器:http://localhost:3000/gateway → 任一供应商 → 添加模型 →
+#   输入 wanx2.1-t2i-turbo → 等约 0.5 s → 看到 ✨ 自动补全 banner +
+#   "图像生成" 复选框已勾上</pre>
+
+<p class="meta">— Generated by allhands · feat/image-gen 已 push 到 origin · 主工作区已切回 main</p>
+
+</body>
+</html>

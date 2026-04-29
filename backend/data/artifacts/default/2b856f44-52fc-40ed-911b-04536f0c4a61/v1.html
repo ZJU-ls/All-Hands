@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>平台架构概览</title>
+  <style>
+    :root {
+      --bg: #fafbfc; --bg-2: #fff; --bg-3: #f3f5f8;
+      --text: #1a1d23; --text-muted: #5b6472; --text-subtle: #8a93a3;
+      --border: #e3e7ed; --border-strong: #cfd5de;
+      --primary: #2563eb; --primary-hover: #1d4ed8;
+      --primary-soft: #eef2ff;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
+      --shadow-md: 0 4px 14px rgba(15,23,42,.06), 0 2px 4px rgba(15,23,42,.04);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e1116; --bg-2: #161a22; --bg-3: #1d222c;
+        --text: #e6e9ef; --text-muted: #9099a8; --text-subtle: #6c7585;
+        --border: #262b35; --border-strong: #353b48;
+        --primary: #60a5fa; --primary-hover: #93c5fd;
+        --primary-soft: rgba(96,165,250,.12);
+        --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+        --shadow-md: 0 8px 24px rgba(0,0,0,.5);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC",
+                  "Microsoft YaHei", system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+    h1 {
+      font-size: 32px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 12px;
+      background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    h2 { font-size: 20px; margin: 32px 0 16px; letter-spacing: -.01em; }
+    h3 { font-size: 15px; margin: 16px 0 8px; }
+    .card {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
+      box-shadow: var(--shadow-sm); margin: 16px 0;
+      transition: transform 200ms ease, box-shadow 200ms ease;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600;
+      border: 1px solid var(--border); background: var(--bg-3); color: var(--text-muted);
+    }
+    .tech-list { list-style: none; padding: 0; margin: 12px 0 0; }
+    .tech-list li {
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .tech-list li:last-child { border-bottom: none; }
+    .flow-arrow { text-align: center; font-size: 24px; color: var(--primary); margin: 16px 0; }
+    .diagram-container {
+      display: flex; justify-content: center; align-items: center;
+      flex-direction: column; gap: 16px; padding: 32px;
+      background: var(--bg-3); border-radius: 16px; border: 1px dashed var(--border-strong);
+    }
+    .layer {
+      width: 100%; max-width: 800px; padding: 16px;
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 8px; text-align: center; font-weight: 600;
+      box-shadow: var(--shadow-sm);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>平台技术架构全景图</h1>
+    <p style="color: var(--text-muted)">全栈式微服务架构与多模态资产处理引擎</p>
+
+    <div class="diagram-container">
+      <div class="layer" style="background: var(--primary-soft); border-color: var(--primary);">
+        用户交互层 (Web / Mobile / API)
+      </div>
+      <div style="font-size: 20px; color: var(--text-subtle);">↓ HTTPS / WebSocket</div>
+      <div class="layer">
+        网关与负载均衡 (Nginx / Kong)
+      </div>
+      <div style="font-size: 20px; color: var(--text-subtle);">↓ RPC / gRPC</div>
+      <div class="layer">
+        核心业务微服务 (Skills / Artifacts / Research)
+      </div>
+      <div style="font-size: 20px; color: var(--text-subtle);">↓ Data Stream</div>
+      <div class="layer" style="background: var(--bg-3);">
+        数据存储与基础设施 (PostgreSQL / Object Storage / Vector DB)
+      </div>
+    </div>
+
+    <h2>核心模块详解</h2>
+    <div class="grid">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3>制品管理系统</h3>
+          <span class="badge">Core</span>
+        </div>
+        <p style="color: var(--text-muted)">负责所有数字资产的版本控制、渲染与归档。</p>
+        <ul class="tech-list">
+          <li><span>多格式支持</span> <strong>HTML, PDF, Drawio</strong></li>
+          <li><span>存储引擎</span> <strong>Object Storage + DB</strong></li>
+          <li><span>版本机制</span> <strong>Incremental Versioning</strong></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3>技能执行引擎</h3>
+          <span class="badge">Runtime</span>
+        </div>
+        <p style="color: var(--text-muted)">动态加载并执行特定领域的专家技能。</p>
+        <ul class="tech-list">
+          <li><span>沙箱环境</span> <strong>Isolated Execution</strong></li>
+          <li><span>工具注册</span> <strong>Dynamic Tool Registry</strong></li>
+          <li><span>上下文管理</span> <strong>Prompt Fragments</strong></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3>智能研究与写作</h3>
+          <span class="badge">AI Agent</span>
+        </div>
+        <p style="color: var(--text-muted)">结合网络搜索与大模型能力进行深度内容构建。</p>
+        <ul class="tech-list">
+          <li><span>网络抓取</span> <strong>Fetch & Parse</strong></li>
+          <li><span>结构化输出</span> <strong>Markdown / Docx</strong></li>
+          <li><span>事实校验</span> <strong>Cross-Reference</strong></li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>数据流转协议</h2>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>协议/格式</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>前端通信</td>
+            <td>JSON over HTTPS</td>
+            <td>RESTful API 交互，携带认证 Token</td>
+          </tr>
+          <tr>
+            <td>内部调用</td>
+            <td>gRPC / Message Queue</td>
+            <td>微服务间高性能同步与异步解耦</td>
+          </tr>
+          <tr>
+            <td>文件存储</td>
+            <td>BLOB / UTF-8</td>
+            <td>二进制文件直接存对象存储，文本存数据库</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from allhands.api import ag_ui_encoder as agui
 from allhands.api.deps import get_model_service, get_session
 from allhands.core.model import LLMModel
+from allhands.core.model_catalog import lookup_catalog
 from allhands.i18n import t
 from allhands.services.connectivity import (
     ENDPOINT_TIMEOUT_S,
@@ -43,6 +44,9 @@ class ModelResponse(BaseModel):
     enabled: bool
     is_default: bool
     supports_images: bool = False
+    # 2026-04-28 · capability picker (MODEL-GATEWAY.html § 5.2)
+    # Default ['chat'] keeps every existing model behavior unchanged.
+    capabilities: list[str] = Field(default_factory=lambda: ["chat"])
 
 
 class SetDefaultModelResponse(BaseModel):
@@ -69,6 +73,10 @@ class CreateModelRequest(BaseModel):
     # Optional explicit override; if omitted the service auto-detects from
     # the model name (claude-3+, gpt-4o, qwen-vl, gemini, deepseek-vl, …).
     supports_images: bool | None = None
+    # MODEL-GATEWAY.html § 5.1 · multi-modal capability picker.
+    # Defaults handled by the service layer (chat for typical names, image_gen
+    # for gpt-image / wanx / dall-e patterns).
+    capabilities: list[str] | None = None
 
 
 class UpdateModelRequest(BaseModel):
@@ -79,6 +87,7 @@ class UpdateModelRequest(BaseModel):
     max_output_tokens: int | None = Field(default=None, ge=1)
     enabled: bool | None = None
     supports_images: bool | None = None
+    capabilities: list[str] | None = None
 
 
 class ChatMessage(BaseModel):
@@ -117,6 +126,7 @@ def _to_response(m: LLMModel) -> ModelResponse:
         enabled=m.enabled,
         is_default=m.is_default,
         supports_images=m.supports_images,
+        capabilities=[c.value for c in m.capabilities] or ["chat"],
     )
 
 
@@ -134,6 +144,50 @@ def _to_svc_kwargs(body: ChatTestRequest | None) -> dict[str, Any]:
         "stop": body.stop,
         "enable_thinking": body.enable_thinking,
     }
+
+
+class CatalogLookupResponse(BaseModel):
+    """One row from the curated common-model catalog · used by the
+    Gateway dialog to auto-fill display name / capabilities / token caps
+    so the user doesn't have to look up specs.
+
+    `matched=False` means we couldn't find the typed name; the dialog
+    falls back to manual entry. All other fields are then echoes of the
+    user input (or defaults).
+    """
+
+    matched: bool
+    name: str
+    display_name: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    context_window: int = 0
+    max_input_tokens: int | None = None
+    max_output_tokens: int | None = None
+
+
+@router.get("/catalog/lookup", response_model=CatalogLookupResponse)
+async def catalog_lookup(
+    name: str,
+    provider_kind: str | None = None,
+) -> CatalogLookupResponse:
+    """Resolve a typed model name to curated metadata.
+
+    Called by the Gateway model dialog (debounced) to fill display name,
+    capabilities, context window, and token caps without making the user
+    look up provider docs.
+    """
+    entry = lookup_catalog(name, provider_kind=provider_kind)
+    if entry is None:
+        return CatalogLookupResponse(matched=False, name=name)
+    return CatalogLookupResponse(
+        matched=True,
+        name=entry.name,
+        display_name=entry.display_name,
+        capabilities=[c.value for c in entry.capabilities],
+        context_window=entry.context_window,
+        max_input_tokens=entry.max_input_tokens,
+        max_output_tokens=entry.max_output_tokens,
+    )
 
 
 @router.get("", response_model=list[ModelResponse])
@@ -160,6 +214,7 @@ async def create_model(
         max_input_tokens=body.max_input_tokens,
         max_output_tokens=body.max_output_tokens,
         supports_images=body.supports_images,
+        capabilities=body.capabilities,
     )
     if model is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.provider"))
@@ -182,6 +237,7 @@ async def update_model(
         max_output_tokens=body.max_output_tokens,
         enabled=body.enabled,
         supports_images=body.supports_images,
+        capabilities=body.capabilities,
     )
     if model is None:
         raise HTTPException(status_code=404, detail=t("errors.not_found.model"))

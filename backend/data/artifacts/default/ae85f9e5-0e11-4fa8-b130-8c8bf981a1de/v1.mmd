@@ -1,0 +1,9 @@
+graph TD
+    A[用户请求] --> B{类型判断}
+    B -->|文档| C[调用 Docx/Pdf 工具]
+    B -->|数据| D[调用 Xlsx/Csv 工具]
+    B -->|图表| E[调用 Drawio/Mermaid 工具]
+    C --> F[制品区归档]
+    D --> F
+    E --> F
+    F --> G[渲染预览卡片]
