@@ -1,7 +1,7 @@
 """Backfill artifacts.conversation_id from events.run.started payloads.
 
-Revision ID: 0037
-Revises: 0036
+Revision ID: 0038
+Revises: 0037
 Create Date: 2026-04-28
 
 修制品孤儿 bug(2026-04-28):
@@ -38,8 +38,8 @@ import json
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0037"
-down_revision = "0036"
+revision = "0038"
+down_revision = "0037"
 branch_labels = None
 depends_on = None
 

@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>统一 Model Gateway · 设计方案(text/image/video/audio)</title>
+<style>
+  :root { --bg: #0b1020; --bg-elev: #131a32; --bg-card: #161e3a; --bg-card-2: #1c2547;
+    --border: #232c52; --border-soft: #1d2647;
+    --text: #e7ecff; --text-muted: #9aa6d3; --text-dim: #6c7aa8;
+    --primary: #4f7dff; --primary-soft: #6e94ff; --accent: #8ab4ff;
+    --good: #3ec28f; --warn: #f0b94f; --bad: #ef6f6c; --code-bg: #0e1530;
+    --glow: 0 0 24px rgba(79,125,255,0.15); }
+  html[data-theme="light"] { --bg: #f6f8ff; --bg-elev: #ffffff; --bg-card: #ffffff; --bg-card-2: #f0f4ff;
+    --border: #dbe2f5; --text: #15203d; --text-muted: #5a6691;
+    --primary: #2a59e6; --primary-soft: #4f7dff; --accent: #2a59e6; --code-bg: #eef2ff; }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); margin: 0; }
+  body { font: 15px/1.7 -apple-system, "PingFang SC", sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  header.hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+  .hero h1 { margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .meta { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
+  .badge { display: inline-block; padding: 3px 10px; background: rgba(79,125,255,0.15); color: var(--primary-soft);
+    border: 1px solid rgba(79,125,255,0.3); border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 8px; }
+  .theme-toggle { border: 1px solid var(--border); background: var(--bg-elev); color: var(--text);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+
+  .lead { margin: 32px 0; padding: 22px 26px;
+    background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 16px; }
+  .lead strong { color: var(--primary-soft); }
+  .lead.warn { background: linear-gradient(135deg, rgba(240,185,79,0.10), rgba(240,185,79,0.02)); border-color: rgba(240,185,79,0.30); }
+  .lead.warn strong { color: var(--warn); }
+  .lead.good { background: linear-gradient(135deg, rgba(62,194,143,0.10), rgba(62,194,143,0.04)); border-color: rgba(62,194,143,0.25); }
+  .lead.good strong { color: var(--good); }
+
+  h2 { font-size: 22px; margin: 56px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); position: relative; }
+  h2::before { content: ""; position: absolute; left: 0; bottom: -1px; width: 56px; height: 2px; background: linear-gradient(90deg, var(--primary), transparent); }
+  h2 .num { display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background: rgba(79,125,255,0.15); color: var(--primary-soft); border-radius: 8px; font-size: 14px; font-weight: 600; margin-right: 10px; vertical-align: middle; }
+  h3 { font-size: 17px; margin: 24px 0 10px; }
+  h4 { font-size: 13px; margin: 16px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px;
+    background: var(--bg-card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { background: var(--bg-elev); font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  tr:last-child td { border-bottom: 0; }
+  td.center, th.center { text-align: center; }
+  td.yes { color: var(--good); font-weight: 600; }
+  td.no  { color: var(--bad); font-weight: 600; }
+  td.partial { color: var(--warn); font-weight: 600; }
+
+  code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--accent); }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); overflow: auto; line-height: 1.55; font-size: 12.5px; }
+  pre code { background: transparent; padding: 0; color: var(--text); font-size: 12.5px; }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .tag.good { background: rgba(62,194,143,0.15); color: var(--good); border: 1px solid rgba(62,194,143,0.3); }
+  .tag.warn { background: rgba(240,185,79,0.15); color: var(--warn); border: 1px solid rgba(240,185,79,0.3); }
+  .tag.bad { background: rgba(239,111,108,0.15); color: var(--bad); border: 1px solid rgba(239,111,108,0.3); }
+  .tag.dim { background: var(--bg-elev); color: var(--text-dim); border: 1px solid var(--border); }
+
+  .callout { background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 12px; padding: 18px 22px; margin: 18px 0; }
+  .callout strong { color: var(--primary-soft); }
+  .callout.warn { background: linear-gradient(135deg, rgba(240,185,79,0.10), rgba(240,185,79,0.02)); border-color: rgba(240,185,79,0.30); }
+  .callout.warn strong { color: var(--warn); }
+
+  /* arch diagram */
+  .arch { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 28px; margin: 18px 0; }
+  .arch-row { display: flex; justify-content: center; gap: 14px; margin: 10px 0; flex-wrap: wrap; }
+  .arch-node { background: var(--bg-card-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; min-width: 200px; text-align: center; font-size: 13px; transition: all 0.2s; }
+  .arch-node:hover { border-color: var(--primary); box-shadow: var(--glow); transform: translateY(-2px); }
+  .arch-node .label { font-weight: 600; color: var(--text); }
+  .arch-node .sub { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
+  .arch-node.primary { border-color: var(--primary); background: linear-gradient(135deg, rgba(79,125,255,0.12), rgba(138,180,255,0.04)); }
+  .arch-node.warn { border-color: rgba(240,185,79,0.4); }
+  .arch-node.good { border-color: rgba(62,194,143,0.4); background: linear-gradient(135deg, rgba(62,194,143,0.08), rgba(62,194,143,0.02)); }
+  .arch-arrow { text-align: center; color: var(--text-dim); font-size: 18px; margin: 4px 0; line-height: 1; }
+  .arch-arrow::before { content: "↓"; }
+  .arch-divider { height: 1px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: 16px 0; }
+
+  /* phase */
+  .phase { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 14px; position: relative; padding-left: 60px; }
+  .phase::before { content: attr(data-p); position: absolute; left: 16px; top: 16px; width: 32px; height: 32px;
+    border-radius: 8px; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white;
+    font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .phase h3 { margin: 0 0 4px; font-size: 16px; }
+  .phase .det { color: var(--text-dim); font-size: 12px; margin-bottom: 8px; }
+  .phase ul { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; }
+
+  .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+  .vs-col { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+  .vs-col.cur { border-color: rgba(239,111,108,0.40); }
+  .vs-col.future { border-color: rgba(62,194,143,0.40); }
+  .vs-col.cur h3 { color: var(--bad); }
+  .vs-col.future h3 { color: var(--good); }
+  .vs-col h3 { margin: 0 0 10px; font-size: 16px; }
+  .vs-col ul { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; }
+  .vs-col li { margin: 4px 0; color: var(--text-muted); }
+  .vs-col code { font-size: 12px; }
+
+  .footer { color: var(--text-dim); font-size: 12px; margin-top: 64px; text-align: center; }
+  a { color: var(--primary-soft); }
+
+  @media (max-width: 880px) { .vs { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <h1>统一 Model Gateway · 多模态架构方案 <span class="badge">设计稿 · 待你审</span></h1>
+    <div class="meta">2026-04-28 · 让 image / video / audio / embedding 走同一抽象 · 接 N 个 provider 不破架构</div>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">切换主题</button>
+</header>
+
+<!-- =============================================================== -->
+<div class="lead good">
+  <strong>核心结论:</strong> 引入 <strong>3 层新抽象</strong> · 让任意模态 × 任意 provider 通过 (provider.kind, model.name, modality) 三元组路由。
+  <ul style="margin: 8px 0 0;">
+    <li><strong>Modality</strong>(L4 core)· text / image / video / audio / embedding · 独立维度</li>
+    <li><strong>ModelAdapter</strong>(L5 execution)· 一个 adapter = 一个 (provider × modality) 实现 · 用 Protocol 定义</li>
+    <li><strong>ModelGateway</strong>(L5 execution · 单 facade)· 路由请求到对的 adapter · async/sync 统一封装</li>
+  </ul>
+  Tool 层只面对 Gateway · AgentLoop 仍 0 改动 · 加 provider 不需要改任何上层代码 · 这才是 LiteLLM / OpenRouter / Vercel AI SDK 同款"加 provider 只加一个 adapter 文件"的体感。
+</div>
+
+<!-- =============================================================== -->
+<h2><span class="num">1</span>问题 · 不重构会死哪</h2>
+
+<div class="vs">
+  <div class="vs-col cur">
+    <h3>❌ 如果保留现 Phase A 直接横向加 provider</h3>
+    <ul>
+      <li><code>OpenAIImageProvider</code> · <code>DashScopeImageProvider</code> · <code>ImagenImageProvider</code> · <code>FluxImageProvider</code> · <code>WanxVideoProvider</code> · <code>VeoVideoProvider</code> · <code>SunoAudioProvider</code> · ... 类爆炸</li>
+      <li>tool 层 <code>generate_image</code> · <code>generate_video</code> · <code>generate_audio</code> 各自 import 一堆 provider · if/else 分发</li>
+      <li>每个 tool 重复 "选 provider · 包 try/catch · 落 artifact · 算 cost · 弹 confirmation" 5 件套</li>
+      <li>UI 同问题:每个模态一个 picker · 每个 provider 一份配置</li>
+      <li>新加 video provider = 改 tool · 改 UI · 改 deps · 改 lint config · 8 处</li>
+      <li><strong>不是渐进 · 是雪崩</strong></li>
+    </ul>
+  </div>
+  <div class="vs-col future">
+    <h3>✅ 引入 Gateway · 一份代码全模态</h3>
+    <ul>
+      <li>新加 provider = 写 1 个 adapter 文件 + 注册一行 · 完。tool / UI / cost / artifact 全自动</li>
+      <li>同一份 confirmation · cost ledger · audit log 给所有模态用</li>
+      <li>video 的 async polling 跟 image 的 sync 走同一个 ModelGateway.generate(req) 接口 · async-ness 在 adapter 内封装</li>
+      <li>UI 用 capability + modality 自动 filter model picker</li>
+      <li>跟 LiteLLM(140+ provider · 同一 OpenAI 格式)和 OpenRouter / Vercel AI SDK 思路一致 · <strong>这是行业标准</strong></li>
+    </ul>
+  </div>
+</div>
+
+<!-- =============================================================== -->
+<h2><span class="num">2</span>架构图 · 一张</h2>
+
+<div class="arch">
+  <div class="arch-row">
+    <div class="arch-node primary">
+      <div class="label">tool 层 · generate_image / generate_video / generate_audio / embed_text</div>
+      <div class="sub">面向 LLM · ADR 0021 自解释 · scope+confirmation 统一</div>
+    </div>
+  </div>
+  <div class="arch-arrow"></div>
+  <div class="arch-row">
+    <div class="arch-node good">
+      <div class="label">ModelGateway(单 facade)</div>
+      <div class="sub">.generate(req, modality, provider, model) → result · 路由 · 重试 · cost · 限流</div>
+    </div>
+  </div>
+  <div class="arch-arrow"></div>
+  <div class="arch-row">
+    <div class="arch-node">
+      <div class="label">ModelAdapter Registry</div>
+      <div class="sub">按 (modality, provider.kind, model.name 模式) 找 adapter · LRU cache</div>
+    </div>
+  </div>
+  <div class="arch-arrow"></div>
+  <div class="arch-row">
+    <div class="arch-node"><div class="label">OpenAIImageAdapter</div><div class="sub">images/generations</div></div>
+    <div class="arch-node"><div class="label">DashScopeImageAdapter</div><div class="sub">wanx · async polling</div></div>
+    <div class="arch-node warn"><div class="label">ImagenAdapter</div><div class="sub">vertex · 后续</div></div>
+    <div class="arch-node warn"><div class="label">FluxAdapter</div><div class="sub">replicate / bfl · 后续</div></div>
+    <div class="arch-node warn"><div class="label">VeoVideoAdapter</div><div class="sub">vertex · long polling</div></div>
+    <div class="arch-node warn"><div class="label">WanxVideoAdapter</div><div class="sub">同 dashscope · 后续</div></div>
+  </div>
+  <div class="arch-divider"></div>
+  <div class="arch-row">
+    <div class="arch-node">
+      <div class="label">LLMProvider 表(L3 persistence)</div>
+      <div class="sub">id · kind(openai/anthropic/aliyun/google/replicate/...)· base_url · api_key</div>
+    </div>
+    <div class="arch-node">
+      <div class="label">LLMModel 表 + capabilities[]</div>
+      <div class="sub">同 provider 下挂多模型 · 各自勾选支持的 modality</div>
+    </div>
+  </div>
+</div>
+
+<!-- =============================================================== -->
+<h2><span class="num">3</span>核心 3 层 · 代码骨架</h2>
+
+<h3>3.1 L4 core · Modality + 域请求/响应</h3>
+
+<pre><code># core/modality.py · 唯一新文件
+class Modality(StrEnum):
+    TEXT = "text"             # chat completion · streaming
+    IMAGE = "image"           # text-to-image · image-edit
+    VIDEO = "video"           # text-to-video · image-to-video
+    AUDIO = "audio"           # TTS · STT
+    EMBEDDING = "embedding"   # text → vector
+
+# 每模态一份 domain models · 现 core/image.py 已就位 · 后续:
+#   core/video.py · core/audio.py · core/embedding.py
+# 都遵循 (Request frozen pydantic) → (Result frozen pydantic) 形状
+</code></pre>
+
+<h3>3.2 L5 execution · ModelAdapter Protocol(每模态一个 sub-protocol)</h3>
+
+<pre><code># execution/model_gateway/base.py
+@runtime_checkable
+class ModelAdapter(Protocol):
+    """Base · all adapters identify themselves to the registry."""
+    modality: Modality
+    provider_kinds: tuple[str, ...]   # e.g. ("openai", "openai-compat")
+    model_patterns: tuple[str, ...]   # e.g. ("gpt-image-",)
+
+    async def supports(self, *, provider: LLMProvider, model: LLMModel) -> bool: ...
+
+@runtime_checkable
+class ImageAdapter(ModelAdapter, Protocol):
+    modality: ClassVar[Modality] = Modality.IMAGE
+    async def generate(
+        self,
+        request: ImageGenerationRequest,
+        *,
+        provider: LLMProvider,
+        model: LLMModel,
+    ) -> ImageGenerationResult: ...
+
+@runtime_checkable
+class VideoAdapter(ModelAdapter, Protocol):
+    modality: ClassVar[Modality] = Modality.VIDEO
+    async def generate(
+        self,
+        request: VideoGenerationRequest,
+        *,
+        provider: LLMProvider,
+        model: LLMModel,
+    ) -> VideoGenerationResult: ...
+
+# AudioAdapter / EmbeddingAdapter 同样定义</code></pre>
+
+<h3>3.3 L5 execution · ModelGateway(单入口 facade)</h3>
+
+<pre><code># execution/model_gateway/__init__.py
+class ModelGateway:
+    """Single entry point for all generation. AgentLoop / tools call only this."""
+
+    def __init__(self) -> None:
+        self._adapters: dict[Modality, list[ModelAdapter]] = defaultdict(list)
+
+    def register(self, adapter: ModelAdapter) -> None:
+        self._adapters[adapter.modality].append(adapter)
+
+    async def generate_image(
+        self, req: ImageGenerationRequest, *, provider, model
+    ) -> ImageGenerationResult:
+        adapter = await self._pick(Modality.IMAGE, provider, model)
+        return await adapter.generate(req, provider=provider, model=model)
+
+    async def generate_video(...) -> VideoGenerationResult: ...
+    async def generate_audio(...) -> AudioGenerationResult: ...
+    async def embed_text(...) -> EmbeddingResult: ...
+
+    async def _pick(self, modality, provider, model) -> ModelAdapter:
+        for a in self._adapters[modality]:
+            if await a.supports(provider=provider, model=model):
+                return a
+        raise NoAdapterFound(modality=modality, provider=provider.kind, model=model.name)
+
+
+# bootstrap · 一次性注册所有 adapter(api/deps.py)
+gateway = ModelGateway()
+gateway.register(OpenAIImageAdapter())
+gateway.register(DashScopeImageAdapter())
+gateway.register(VeoVideoAdapter())  # 后期
+# tool 层用注入 · 测试用 FakeGateway
+</code></pre>
+
+<h3>3.4 Adapter 实现示例 · DashScope wanx(async polling)</h3>
+
+<pre><code># execution/model_gateway/adapters/dashscope_image.py
+class DashScopeImageAdapter:
+    modality = Modality.IMAGE
+    provider_kinds = ("aliyun",)
+    model_patterns = ("wanx",)
+
+    async def supports(self, *, provider, model) -> bool:
+        return provider.kind in self.provider_kinds and any(
+            p in model.name for p in self.model_patterns
+        )
+
+    async def generate(self, req, *, provider, model) -> ImageGenerationResult:
+        # DashScope wanx is task-based:
+        # 1. POST 创建任务 · 立即返回 task_id
+        # 2. 轮询 GET tasks/{task_id} 直到 status=SUCCEEDED · 每秒 1 次 · 上限 60s
+        # 3. 取出 url · 下载 png bytes
+        # 这一套 polling 完全在 adapter 内 · 上层看到的还是 sync generate(req) → result
+        async with httpx.AsyncClient(timeout=120) as client:
+            task_id = await self._submit_task(client, req, provider, model)
+            urls = await self._poll_until_done(client, task_id, provider)
+            images = await self._download_all(client, urls, req)
+        return ImageGenerationResult(images=images, ...)
+</code></pre>
+
+<!-- =============================================================== -->
+<h2><span class="num">4</span>同步 vs 异步 · Gateway 怎么统一</h2>
+
+<table>
+  <tr><th>Provider</th><th>Modality</th><th>API 模式</th><th>Adapter 内部</th><th>Gateway 看到</th></tr>
+  <tr><td>OpenAI gpt-image-1.5</td><td>image</td><td>POST 同步阻塞 5-30s</td><td>1 次 httpx POST</td><td>await · 5-30s</td></tr>
+  <tr><td>DashScope wanx</td><td>image</td><td>POST 创任务 + 轮询 GET</td><td>POST + 1Hz polling 上限 60s</td><td>await · 5-60s</td></tr>
+  <tr><td>OpenAI Sora</td><td>video</td><td>POST 创 video task + status webhook 或 polling</td><td>POST + polling 上限 5min</td><td>await · 30-300s</td></tr>
+  <tr><td>Vertex Imagen 4</td><td>image</td><td>POST 同步</td><td>同 OpenAI</td><td>await · 3-10s</td></tr>
+  <tr><td>Vertex Veo</td><td>video</td><td>Operation polling</td><td>POST + GCS path GET</td><td>await · 30-300s</td></tr>
+  <tr><td>OpenAI TTS</td><td>audio</td><td>POST 同步流式 wav/mp3</td><td>1 次 httpx POST · stream chunks</td><td>await · 1-5s</td></tr>
+</table>
+
+<div class="callout">
+  <strong>关键设计:</strong> async polling 完全封装在 adapter 内。<br>
+  Gateway / Tool / AgentLoop 看到的永远是 <code>await adapter.generate(req)</code> · 拿到结果就走。<br>
+  长视频(60s+)的 UX 优化(占位符 + SSE patch)是上层的事 · 跟 adapter 解耦。
+</div>
+
+<!-- =============================================================== -->
+<h2><span class="num">5</span>UI 设计</h2>
+
+<h3>5.1 Provider 添加 model 对话框 · capability checkbox</h3>
+
+<pre><code>┌─ 添加模型 ────────────────────────────────────┐
+│ 名字     [gpt-image-1.5]                       │
+│ 显示名   [GPT Image 1.5]                       │
+│                                                │
+│ 能力(必选 ≥ 1)                                │
+│  ☑ Chat            (chat completion)           │
+│  ☑ Image Gen       (text-to-image)             │
+│  ☐ Video Gen       (text-to-video) · 下个版本 │
+│  ☐ Audio (TTS)     (text-to-speech) · 下个版本│
+│  ☐ Embedding       (text → vector) · 下个版本 │
+│                                                │
+│ Context window  [128000]                       │
+│ Max tokens  [4096]                             │
+│                              [取消]  [保存]    │
+└────────────────────────────────────────────────┘
+</code></pre>
+
+<h3>5.2 employee 模型 picker · 按需 filter</h3>
+
+<p>员工详情页 / Lead Agent 默认模型 picker 按角色 filter:</p>
+<ul>
+  <li>Lead Agent / 普通员工 → <code>m.capabilities.includes('chat')</code></li>
+  <li>image-creator skill 员工内部使用 → <code>m.capabilities.includes('image_gen')</code></li>
+  <li>video-creator skill(后期)→ <code>m.capabilities.includes('video_gen')</code></li>
+</ul>
+<p>UI 显示 model 卡片时旁边带 capability badge:<code>chat</code> <code>image</code>(像 Cursor 的 model 选择器)。</p>
+
+<!-- =============================================================== -->
+<h2><span class="num">6</span>Provider 矩阵 · 现 + 6 个月 roadmap</h2>
+
+<table>
+  <tr><th>Provider</th><th>kind</th><th class="center">image</th><th class="center">video</th><th class="center">audio</th><th class="center">embedding</th><th>备注</th></tr>
+  <tr><td><strong>OpenAI</strong></td><td>openai</td>
+    <td class="center yes">gpt-image-1.5</td>
+    <td class="center partial">Sora(预览)</td>
+    <td class="center yes">tts-1 · whisper</td>
+    <td class="center yes">text-embedding-3</td>
+    <td>主推</td>
+  </tr>
+  <tr><td><strong>DashScope 百炼</strong></td><td>aliyun</td>
+    <td class="center yes">wanx-v1 · v2</td>
+    <td class="center yes">wanx-video</td>
+    <td class="center yes">cosyvoice</td>
+    <td class="center yes">text-embedding-v3</td>
+    <td>国内首选 · 现已配 key</td>
+  </tr>
+  <tr><td><strong>Anthropic</strong></td><td>anthropic</td>
+    <td class="center no">—</td><td class="center no">—</td><td class="center no">—</td><td class="center no">—</td>
+    <td>仅 chat(本来就是)</td>
+  </tr>
+  <tr><td><strong>Google Vertex</strong></td><td>google</td>
+    <td class="center yes">Imagen 4</td>
+    <td class="center yes">Veo 3</td>
+    <td class="center yes">Chirp</td>
+    <td class="center yes">text-embedding</td>
+    <td>多模态全栈 · 后期</td>
+  </tr>
+  <tr><td><strong>Black Forest Labs</strong></td><td>bfl / replicate</td>
+    <td class="center yes">FLUX 2 · Pro</td>
+    <td class="center no">—</td><td class="center no">—</td><td class="center no">—</td>
+    <td>艺术风强 · 后期</td>
+  </tr>
+  <tr><td><strong>ByteDance</strong></td><td>volcano / dashscope</td>
+    <td class="center yes">Seedance</td>
+    <td class="center yes">Seedance Pro</td>
+    <td class="center no">—</td><td class="center no">—</td>
+    <td>视频强 · 后期</td>
+  </tr>
+  <tr><td><strong>Replicate</strong></td><td>replicate</td>
+    <td class="center yes">SD/FLUX/Imagen</td>
+    <td class="center yes">Wan/Kling</td>
+    <td class="center yes">RVC/Bark</td>
+    <td class="center partial">少量</td>
+    <td>聚合层 · 1 个 adapter 接 N 模型</td>
+  </tr>
+  <tr><td><strong>本地 ComfyUI / SD WebUI</strong></td><td>local</td>
+    <td class="center yes">SDXL / FLUX dev</td>
+    <td class="center partial">AnimateDiff</td>
+    <td class="center no">—</td><td class="center no">—</td>
+    <td>0 API 成本 · 需 GPU · 后期</td>
+  </tr>
+</table>
+
+<!-- =============================================================== -->
+<h2><span class="num">7</span>行业对照 · 我们抄了什么</h2>
+
+<table>
+  <tr><th>项目</th><th>抽象</th><th>支持模态</th><th>provider 数</th><th>我们要抄</th></tr>
+  <tr>
+    <td><a href="https://github.com/BerriAI/litellm">LiteLLM</a></td>
+    <td>OpenAI 格式作 lingua franca · 100+ provider 走 OpenAI shape</td>
+    <td>chat · embedding · image · audio · rerank · batch · MCP / A2A</td>
+    <td>140+</td>
+    <td>"OpenAI 格式作通用契约"思路 · 但我们更轻 · 不为通用而通用</td>
+  </tr>
+  <tr>
+    <td><a href="https://openrouter.ai/">OpenRouter</a></td>
+    <td>统一 router + billing + governance 一层</td>
+    <td>image · <strong>video</strong>(Veo · Wan · Kling · Seedance)· audio</td>
+    <td>50+</td>
+    <td>video async + media unified routing 设计 · 我们的 ModelGateway 同思路</td>
+  </tr>
+  <tr>
+    <td><a href="https://ai-sdk.dev/">Vercel AI SDK</a></td>
+    <td>同一接口跑 text/image/video · providerOptions 暴露独有特性</td>
+    <td>chat · image · video</td>
+    <td>20+</td>
+    <td>同接口 + provider-specific options · 我们 Adapter 内部用 model 字段做 specific 配置</td>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/anthropics/skills">Claude Code</a></td>
+    <td><strong>不内置图生</strong> · 走 Bash + 外部 API / MCP</td>
+    <td>chat 唯一</td>
+    <td>1(Anthropic)</td>
+    <td>"chat 用我们网关 · 多模态走 tool"的二元划分被我们超越 · 我们网关原生支持多模态 · 比 Claude Code 更通用</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>定位:</strong> 我们做<strong>轻量版 LiteLLM 内嵌进 agent 平台</strong> · 不做通用 AI Gateway 服务(那是 LiteLLM/OpenRouter 的事)· 但要<strong>架构同等先进</strong>,具备未来 5 年扩展性。
+</div>
+
+<!-- =============================================================== -->
+<h2><span class="num">8</span>实施 phase</h2>
+
+<div class="phase" data-p="A1">
+  <h3>A1 · Modality + Gateway 骨架(纯抽象 · 不动现 OpenAI image)</h3>
+  <div class="det">⏱ 0.5 天</div>
+  <ul>
+    <li><code>core/modality.py</code> · Modality enum · 一个文件</li>
+    <li><code>execution/model_gateway/__init__.py</code> · ModelGateway facade · register/_pick/generate_image/generate_video/generate_audio/embed_text 接口</li>
+    <li><code>execution/model_gateway/base.py</code> · ModelAdapter / ImageAdapter / VideoAdapter / AudioAdapter / EmbeddingAdapter Protocols</li>
+    <li><code>execution/model_gateway/exceptions.py</code> · NoAdapterFound + 通用错误</li>
+    <li>测试:Gateway 注册 + dispatch · FakeAdapter 单元测试</li>
+  </ul>
+</div>
+
+<div class="phase" data-p="A2">
+  <h3>A2 · OpenAIImageAdapter 重构(把 Phase A 的代码搬进新结构)</h3>
+  <div class="det">⏱ 0.5 天 · 0 行为变化 · 全测试零回归</div>
+  <ul>
+    <li>把 <code>execution/image_provider.py · OpenAIImageProvider</code> 改名 + 移到 <code>execution/model_gateway/adapters/openai_image.py</code></li>
+    <li>实现 <code>ImageAdapter</code> Protocol · 加 <code>supports()</code> + class attrs</li>
+    <li>原 <code>image_provider.py</code> 文件保留 + re-export(老 import 路径不死)· 标 deprecated 注释</li>
+    <li>所有现有 test 不动 · 全过</li>
+  </ul>
+</div>
+
+<div class="phase" data-p="A3">
+  <h3>A3 · DashScopeImageAdapter · 真接百炼 wanx</h3>
+  <div class="det">⏱ 1.5 天 · 含 async polling 实现 + 真 LLM E2E</div>
+  <ul>
+    <li><code>execution/model_gateway/adapters/dashscope_image.py</code></li>
+    <li>POST <code>https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis</code> + <code>X-DashScope-Async: enable</code>(立即返回 task_id)</li>
+    <li>poll <code>GET /api/v1/tasks/{task_id}</code> 1Hz 上限 60s · 状态机:PENDING / RUNNING / SUCCEEDED / FAILED</li>
+    <li>SUCCEEDED 时下载 result.url png bytes</li>
+    <li>真 LLM E2E:用 DB 里现有 Bailian provider key · POST 真任务 · 验证 PNG 落 artifact</li>
+  </ul>
+</div>
+
+<div class="phase" data-p="A4">
+  <h3>A4 · generate_image tool 走 Gateway · 接 (provider, model) 路由</h3>
+  <div class="det">⏱ 0.5 天</div>
+  <ul>
+    <li>tool 层从直接构造 OpenAIImageProvider → 调 <code>gateway.generate_image(req, provider=p, model=m)</code></li>
+    <li><code>provider</code> 和 <code>model</code> 从 employee/conversation 默认 + tool args model_ref override 解析</li>
+    <li>添加 capability 校验:<code>Capability.IMAGE_GEN in model.capabilities</code> · 不满足返 ADR 0021 envelope</li>
+    <li>所有现有测试沿用 · 加 DashScope adapter 注册的版本 · 跑同一组测试</li>
+  </ul>
+</div>
+
+<div class="phase" data-p="A5">
+  <h3>A5 · UI · 模型对话框 capability checkbox + picker filter</h3>
+  <div class="det">⏱ 1 天</div>
+  <ul>
+    <li><code>web/components/providers/ModelEditor.tsx</code> · 加 capability checkbox 组(Chat / Image Gen / Video Gen 灰 / Audio 灰 / Embedding 灰)</li>
+    <li>POST /api/providers/<id>/models 加 capabilities 字段</li>
+    <li>employee Model Picker · 接受 capability prop · filter <code>m.capabilities.includes(prop)</code></li>
+    <li>image-creator skill 内部 model_ref 默认走 <code>capabilities=['image_gen']</code> 中 enabled 的第一个</li>
+  </ul>
+</div>
+
+<div class="phase" data-p="A6">
+  <h3>A6 · Video / Audio / Embedding 域骨架(占位 · 不实施)</h3>
+  <div class="det">⏱ 0.5 天 · 只加类型 · 无 adapter 实现</div>
+  <ul>
+    <li><code>core/video.py</code> · VideoGenerationRequest / Result(prompt · duration · resolution · seed)</li>
+    <li><code>core/audio.py</code> · AudioGenerationRequest(text · voice)/ Result(audio bytes · format)</li>
+    <li><code>core/embedding.py</code> · EmbeddingRequest(texts[])/ Result(vectors[][])</li>
+    <li>Gateway 加 generate_video / generate_audio / embed_text 方法 · 抛 NoAdapterFound</li>
+    <li>留一个 <code>// TODO Phase B: VeoVideoAdapter</code> 注释 · 让结构标记完整</li>
+  </ul>
+</div>
+
+<div class="phase" data-p="B">
+  <h3>Phase B · 后期(本次不动)</h3>
+  <div class="det">⏱ 视需求</div>
+  <ul>
+    <li>Phase B1 · WanxVideoAdapter(同 DashScope async polling 模式 · 5-10 倍代码复用)</li>
+    <li>Phase B2 · ImagenAdapter / FluxAdapter</li>
+    <li>Phase B3 · 异步任务 + 占位符 patch(超长 video / TTS 用)</li>
+    <li>Phase B4 · 网关层 · cost ledger / rate limiting / fallback model</li>
+  </ul>
+</div>
+
+<!-- =============================================================== -->
+<h2><span class="num">9</span>关键决策(请你拍板)</h2>
+
+<table>
+  <tr><th>#</th><th>问题</th><th>推荐</th></tr>
+  <tr><td>D1</td><td>用 OpenAI 格式作 lingua franca(LiteLLM 思路)还是各 modality 自有 schema?</td><td><strong>各自 schema</strong> · OpenAI 没标 video schema · 自有 schema 更精准 · 不为通用而通用</td></tr>
+  <tr><td>D2</td><td>Gateway 在 execution 层还是 services 层?</td><td><strong>execution 层</strong> · 不接 DB / 不调 service · 纯计算 + I/O · 跟 ScriptRunner 同级</td></tr>
+  <tr><td>D3</td><td>Adapter 选择是 supports() 动态查 or 静态 model_pattern 表?</td><td><strong>动态 supports()</strong> · 灵活 · 少 1 张映射表;但加 <code>provider_kinds</code> + <code>model_patterns</code> 让 supports 默认实现快路径</td></tr>
+  <tr><td>D4</td><td>video / audio 占位符 + SSE patch 是 adapter 内还是 Gateway 内?</td><td><strong>tool 层 · v2 加</strong> · adapter 永远同步等结果 · UX 异步是更高层关注</td></tr>
+  <tr><td>D5</td><td>cost / rate-limit / retry 在 Gateway 还是 adapter?</td><td><strong>Gateway 中间件</strong> · 横切关注点 · adapter 只负责 wire format</td></tr>
+  <tr><td>D6</td><td>这次 Phase A1-A6 全做完才合 main · 还是分批合?</td><td><strong>全做完合一次</strong> · 中间状态 image_provider.py 半新半旧不舒服 · 但 A1-A4 仍可做完后跑全测试再 review</td></tr>
+  <tr><td>D7</td><td>image_provider.py 老路径保留多久?</td><td><strong>1 个版本</strong> · 加 deprecated warning · 下版本删 · 给团队迁移窗口</td></tr>
+</table>
+
+<!-- =============================================================== -->
+<h2><span class="num">10</span>给你的最小决策反馈</h2>
+
+<div class="callout">
+  请回我:
+  <ol>
+    <li><strong>架构方向同意吗?</strong> Modality + Adapter + Gateway 这套 · 跟 LiteLLM/OpenRouter/Vercel AI SDK 对齐</li>
+    <li><strong>D1-D7 决策 · 全默认还是要改某项?</strong></li>
+    <li><strong>Phase 范围:A1-A6 全做(~ 4 天)还是只 A1-A4(~ 3 天 · 暂不动 UI)?</strong></li>
+    <li><strong>真 LLM 测试 · 用 DB 里 Bailian wanx 跑 A3 验证</strong>(我能直接拿 key 跑 · 你不用做啥)</li>
+  </ol>
+  你回 "全默认 · 全做 · 跑 wanx" 我就开干。其他细节我边做边补。
+</div>
+
+<div class="footer">
+  allhands · MODEL-GATEWAY 设计稿 · 2026-04-28 · 主门户 → <a href="MORNING-2026-04-28.html">MORNING-2026-04-28.html</a>
+</div>
+
+</div>
+<script>
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+</script>
+</body>
+</html>

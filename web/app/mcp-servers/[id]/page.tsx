@@ -573,8 +573,11 @@ function Overview({
           data-testid="mcp-config-pre"
           className="text-[11px] font-mono text-text bg-surface-2 border border-border rounded-lg p-4 whitespace-pre-wrap break-words leading-relaxed"
         >
-          {JSON.stringify(server.config, null, 2)}
+          {JSON.stringify(redactConfig(server.config), null, 2)}
         </pre>
+        <p className="mt-2 text-[11px] text-text-subtle font-mono">
+          {t("redactedNotice")}
+        </p>
       </Section>
 
       <Section
@@ -849,4 +852,38 @@ function formatTime(iso: string, locale: string): string {
   } catch {
     return iso;
   }
+}
+
+/**
+ * Client-side mirror of backend redact_config() — masks sensitive auth fields
+ * before rendering raw config JSON so bearer tokens / client_secrets don't
+ * leak via Overview. Keeps last 4 chars for operator recognition.
+ */
+const SENSITIVE_KEYS = new Set([
+  "token",
+  "client_secret",
+  "authorization",
+  "api_key",
+  "apikey",
+]);
+
+function redactConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const mask = (v: string): string =>
+    v.length <= 4 ? "••••" : "••••" + v.slice(-4);
+  const walk = (obj: unknown): unknown => {
+    if (Array.isArray(obj)) return obj.map(walk);
+    if (obj && typeof obj === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        if (SENSITIVE_KEYS.has(k.toLowerCase()) && typeof v === "string") {
+          out[k] = mask(v);
+        } else {
+          out[k] = walk(v);
+        }
+      }
+      return out;
+    }
+    return obj;
+  };
+  return walk(config) as Record<string, unknown>;
 }

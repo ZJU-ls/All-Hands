@@ -76,7 +76,16 @@ from allhands.core.knowledge import (
     is_legal_doc_transition,
 )
 from allhands.core.local_workspace import LocalWorkspace
-from allhands.core.mcp import MCPHealth, MCPServer, MCPTransport
+from allhands.core.mcp import (
+    SENSITIVE_AUTH_KEYS,
+    MCPAuth,
+    MCPAuthType,
+    MCPHealth,
+    MCPServer,
+    MCPTransport,
+    parse_auth,
+    redact_config,
+)
 from allhands.core.model import LLMModel
 from allhands.core.observability import (
     ArtifactSummary,
@@ -148,6 +157,7 @@ __all__ = [
     "DESCRIPTOR_MAX_CHARS",
     "MIN_INTERVAL_SECONDS",
     "PENDING_USER_STATUSES",
+    "SENSITIVE_AUTH_KEYS",
     "TERMINAL_STATUSES",
     "TEXT_KINDS",
     "ActiveRunCard",
@@ -199,6 +209,8 @@ __all__ = [
     "LLMModel",
     "LLMProvider",
     "LocalWorkspace",
+    "MCPAuth",
+    "MCPAuthType",
     "MCPHandshakeFailed",
     "MCPHealth",
     "MCPServer",
@@ -268,4 +280,6 @@ __all__ = [
     "WorkspaceSummary",
     "is_legal_doc_transition",
     "is_legal_transition",
+    "parse_auth",
+    "redact_config",
 ]

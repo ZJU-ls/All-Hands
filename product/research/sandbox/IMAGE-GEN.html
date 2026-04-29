@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>图片生成能力 · 调研 + 设计 + 实现路径</title>
+<style>
+  :root { --bg: #0b1020; --bg-elev: #131a32; --bg-card: #161e3a; --bg-card-2: #1c2547;
+    --border: #232c52; --border-soft: #1d2647;
+    --text: #e7ecff; --text-muted: #9aa6d3; --text-dim: #6c7aa8;
+    --primary: #4f7dff; --primary-soft: #6e94ff; --accent: #8ab4ff;
+    --good: #3ec28f; --warn: #f0b94f; --bad: #ef6f6c; --code-bg: #0e1530; }
+  html[data-theme="light"] { --bg: #f6f8ff; --bg-elev: #ffffff; --bg-card: #ffffff; --bg-card-2: #f0f4ff;
+    --border: #dbe2f5; --text: #15203d; --text-muted: #5a6691;
+    --primary: #2a59e6; --primary-soft: #4f7dff; --accent: #2a59e6; --code-bg: #eef2ff; }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); margin: 0; }
+  body { font: 15px/1.7 -apple-system, "PingFang SC", sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  header.hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+  .hero h1 { margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.01em;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .meta { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
+  .badge { display: inline-block; padding: 3px 10px; background: rgba(79,125,255,0.15); color: var(--primary-soft);
+    border: 1px solid rgba(79,125,255,0.3); border-radius: 999px; font-size: 11px; font-weight: 700; margin-left: 8px; }
+  .theme-toggle { border: 1px solid var(--border); background: var(--bg-elev); color: var(--text);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+
+  .lead { margin: 32px 0; padding: 22px 26px;
+    background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 16px; }
+  .lead strong { color: var(--primary-soft); }
+  .lead.warn { background: linear-gradient(135deg, rgba(240,185,79,0.10), rgba(240,185,79,0.02)); border-color: rgba(240,185,79,0.30); }
+  .lead.warn strong { color: var(--warn); }
+
+  h2 { font-size: 22px; margin: 56px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); position: relative; }
+  h2::before { content: ""; position: absolute; left: 0; bottom: -1px; width: 56px; height: 2px; background: linear-gradient(90deg, var(--primary), transparent); }
+  h2 .num { display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background: rgba(79,125,255,0.15); color: var(--primary-soft); border-radius: 8px; font-size: 14px; font-weight: 600; margin-right: 10px; vertical-align: middle; }
+  h3 { font-size: 17px; margin: 24px 0 10px; }
+  h4 { font-size: 13px; margin: 16px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px;
+    background: var(--bg-card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { background: var(--bg-elev); font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  tr:last-child td { border-bottom: 0; }
+  td.center, th.center { text-align: center; }
+
+  code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--accent); }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); overflow: auto; line-height: 1.55; font-size: 12.5px; }
+  pre code { background: transparent; padding: 0; color: var(--text); font-size: 12.5px; }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .tag.good { background: rgba(62,194,143,0.15); color: var(--good); border: 1px solid rgba(62,194,143,0.3); }
+  .tag.warn { background: rgba(240,185,79,0.15); color: var(--warn); border: 1px solid rgba(240,185,79,0.3); }
+  .tag.bad { background: rgba(239,111,108,0.15); color: var(--bad); border: 1px solid rgba(239,111,108,0.3); }
+  .tag.dim { background: var(--bg-elev); color: var(--text-dim); border: 1px solid var(--border); }
+
+  .callout { background: linear-gradient(135deg, rgba(79,125,255,0.10), rgba(138,180,255,0.04));
+    border: 1px solid rgba(79,125,255,0.25); border-radius: 12px; padding: 18px 22px; margin: 18px 0; }
+  .callout strong { color: var(--primary-soft); }
+  .callout.good { background: linear-gradient(135deg, rgba(62,194,143,0.10), rgba(62,194,143,0.04)); border-color: rgba(62,194,143,0.30); }
+  .callout.good strong { color: var(--good); }
+  .callout.warn { background: linear-gradient(135deg, rgba(240,185,79,0.10), rgba(240,185,79,0.02)); border-color: rgba(240,185,79,0.30); }
+  .callout.warn strong { color: var(--warn); }
+  .callout.bad { background: linear-gradient(135deg, rgba(239,111,108,0.08), rgba(239,111,108,0.02)); border-color: rgba(239,111,108,0.25); }
+  .callout.bad strong { color: var(--bad); }
+
+  .verdict { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 24px 0; }
+  .v-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 22px; transition: all 0.2s; }
+  .v-card.no { border-left: 3px solid var(--bad); }
+  .v-card.partial { border-left: 3px solid var(--warn); }
+  .v-card.yes { border-left: 3px solid var(--good); }
+  .v-card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .v-card .ic { font-size: 22px; }
+  .v-card h3 { margin: 0; font-size: 16px; }
+  .v-card .status { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; margin-left: auto; }
+  .v-card.no .status { background: rgba(239,111,108,0.13); color: var(--bad); border: 1px solid rgba(239,111,108,0.3); }
+  .v-card.partial .status { background: rgba(240,185,79,0.13); color: var(--warn); border: 1px solid rgba(240,185,79,0.3); }
+  .v-card.yes .status { background: rgba(62,194,143,0.13); color: var(--good); border: 1px solid rgba(62,194,143,0.3); }
+  .v-card p { margin: 0; font-size: 13.5px; color: var(--text-muted); }
+
+  .gap-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 14px;
+    display: grid; grid-template-columns: 50px 1fr 100px; gap: 14px; align-items: start;
+  }
+  .gap-card .gn {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--bad), #ff8a87);
+    color: white; font-weight: 700; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .gap-card.medium .gn { background: linear-gradient(135deg, var(--warn), #fbbf24); }
+  .gap-card h4 { margin: 0 0 4px; color: var(--text); font-size: 15px; text-transform: none; letter-spacing: 0; }
+  .gap-card .why { font-size: 13px; color: var(--text-muted); }
+  .gap-card .effort { color: var(--accent); font-size: 12px; font-weight: 600; text-align: right; }
+
+  .phase {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 14px;
+    position: relative; padding-left: 60px;
+  }
+  .phase::before {
+    content: attr(data-p); position: absolute; left: 16px; top: 16px;
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white; font-weight: 700; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .phase h3 { margin: 0 0 4px; font-size: 16px; }
+  .phase .est { color: var(--text-dim); font-size: 12px; margin-bottom: 8px; }
+
+  .footer { color: var(--text-dim); font-size: 12px; margin-top: 64px; text-align: center; }
+  a { color: var(--primary-soft); }
+
+  @media (max-width: 880px) { .verdict { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <h1>图片生成能力 · 调研 / 设计 / 实现 <span class="badge">2026-04-28</span></h1>
+    <div class="meta">让员工能在生成 PPT/Markdown 时<strong>异步插入 AI 生成的图片</strong> · 而不是只能写文字</div>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">切换主题</button>
+</header>
+
+<!-- ============================================================ -->
+<div class="lead bad" style="background: linear-gradient(135deg, rgba(239,111,108,0.10), rgba(239,111,108,0.02)); border-color: rgba(239,111,108,0.30);">
+  <strong style="color: var(--bad);">核心结论:</strong> <strong>不能</strong>。当前平台:
+  <ul style="margin: 8px 0 0;">
+    <li>✅ artifact 系统已支持 <code>kind: image</code> + pptx 已支持 slide 内嵌图(<code>image_url</code> data URL)· markdown / html 也能内联</li>
+    <li>❌ <strong>没有图片生成 tool</strong>(grep 全代码 0 个 <code>image generation</code> 调用)</li>
+    <li>❌ <strong>Provider 模型只识别 chat</strong>(<code>ProviderKind = "openai" | "anthropic" | "aliyun"</code>· 都按 chat 算)· LLMModel 没有 capability 字段区分图/语音</li>
+    <li>❌ <strong>没有异步任务机制</strong>:image gen 单张 5-30 秒 · 阻塞 agent loop 体验崩</li>
+  </ul>
+  <strong style="color: var(--bad);">差 4 个能力 · 但都是渐进可加 · 不破坏现有架构。</strong> 见 § 3。
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="num">1</span>现状深扫(基于代码 audit)</h2>
+
+<div class="verdict">
+  <div class="v-card yes">
+    <div class="head"><div class="ic">🖼️</div><h3>图片<strong>载体</strong>系统</h3><div class="status">已就位</div></div>
+    <p><code>artifact_create(kind=image, content_base64, mime_type)</code> 完整 · 上限 20MB · 支持 png/jpg/webp/gif/svg。pptx 的 <code>image-right</code> layout 接 <code>image_url: "data:..."</code>。markdown 用 <code>![alt](data:...)</code>。</p>
+  </div>
+  <div class="v-card yes">
+    <div class="head"><div class="ic">🌐</div><h3>artifact <strong>URL 接入</strong></h3><div class="status">已就位</div></div>
+    <p><code>GET /api/artifacts/&lt;id&gt;/content</code> 端点存在 · 这意味着图片生成后存 artifact · markdown 用 <code>![alt](/api/artifacts/&lt;id&gt;/content)</code> 而不是塞 base64 进文档(节省 token + 文档体积)。</p>
+  </div>
+  <div class="v-card no">
+    <div class="head"><div class="ic">🎨</div><h3>图片<strong>生成</strong>能力</h3><div class="status">完全缺</div></div>
+    <p>全代码 grep <code>image_url</code> · <code>generate_image</code> · <code>dall-e</code> · <code>gpt-image</code> · <code>imagen</code> · <code>midjourney</code> · 0 个引用(只有 anthropic 多模态 chat 的 image_url 是<strong>读图</strong>不是生图)。</p>
+  </div>
+  <div class="v-card no">
+    <div class="head"><div class="ic">⚡</div><h3>异步任务机制</h3><div class="status">缺</div></div>
+    <p>所有 tool 调用同步阻塞 agent loop · 30 秒图生 = LLM context 等 30s 才能继续。没有 "fire-and-forget + 后续 await / poll" 模式。</p>
+  </div>
+  <div class="v-card no">
+    <div class="head"><div class="ic">🔌</div><h3>Provider <strong>模型类型</strong></h3><div class="status">缺</div></div>
+    <p><code>LLMProvider.kind</code> 只 3 种:openai/anthropic/aliyun · 都假定是 chat。<code>LLMModel</code> 没 <code>capability</code> 字段区分 chat/image/speech/embedding。</p>
+  </div>
+  <div class="v-card partial">
+    <div class="head"><div class="ic">💰</div><h3>计费 / 配额</h3><div class="status">部分</div></div>
+    <p>Pricing service 已有 chat 的按 token 计 · 但图片是按张计费($0.04-$0.17 per image · GPT Image 1.5 / Imagen / Flux 各异)· pricing model 未覆盖。</p>
+  </div>
+</div>
+
+<h3>1.1 已存在的"图片入口"汇总</h3>
+<table>
+  <tr><th>位置</th><th>状态</th><th>用途</th></tr>
+  <tr><td><code>artifact_create({kind: "image"})</code></td><td><span class="tag good">✅</span></td><td>已有图就保存(用户上传 / 模型多模态生成)</td></tr>
+  <tr><td><code>artifact_create_pptx slides[].image_url</code></td><td><span class="tag good">✅</span></td><td>pptx slide 内嵌图(data URL)</td></tr>
+  <tr><td>Markdown <code>![](data:...)</code> 或 <code>![](/api/artifacts/.../content)</code></td><td><span class="tag good">✅</span></td><td>markdown 内联</td></tr>
+  <tr><td>HTML artifact <code>&lt;img&gt;</code></td><td><span class="tag good">✅</span></td><td>html artifact 自带</td></tr>
+  <tr><td>新 tool · <code>artifact_image_generate(prompt, model?)</code></td><td><span class="tag bad">❌</span></td><td><strong>差这个</strong> · 真正的 AI 生图入口</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2><span class="num">2</span>用户场景拆解 · 你想做什么</h2>
+
+<div class="callout">
+  <strong>诉求原文:</strong> "画 PPT 或者生成 markdown 的时候 · 可以插入图片生成模型的图片【异步】并组织好一个带图片的 markdown 或者 ppt"
+</div>
+
+<h3>2.1 拆成 3 类操作</h3>
+
+<table>
+  <tr><th>操作</th><th>同步 / 异步</th><th>预期延迟</th><th>优化点</th></tr>
+  <tr><td><strong>① 单张图生</strong>(用户:"给我画个 X")</td><td>可同步</td><td>5-15s</td><td>同步等可接受 · 配 thinking 提示</td></tr>
+  <tr><td><strong>② N 张图批量</strong>(PPT 8 张配图)</td><td><strong>必须并发</strong></td><td>5-15s × 8 = 串行 2 分钟 · 并发 15s</td><td>fan-out · 等所有完成</td></tr>
+  <tr><td><strong>③ 流式生成 markdown 边写边插图</strong></td><td><strong>必须异步</strong></td><td>文字立即可见 · 图后填充</td><td>占位符 + 后台填充</td></tr>
+</table>
+
+<h3>2.2 关键问题:agent loop 阻塞 vs 占位符替换</h3>
+
+<div class="callout warn">
+  <strong>权衡:</strong>
+  <ul>
+    <li><strong>同步等</strong>(简单):tool 调用阻塞到图生成完 · agent 接到 base64 后塞 markdown · 优:实现简单 · 劣:1 个 PPT 8 张图 = 8 × 15s = 2 分钟 LLM 干等</li>
+    <li><strong>并发 fan-out + barrier</strong>(中):单 tool call 接 N 个 prompt · 内部并发起 N 个任务 · barrier wait · 一次性返回 N 个 artifact_id · agent 拿到全部后写 markdown · <strong>推荐 v1</strong></li>
+    <li><strong>占位符 + 后台填充</strong>(终极):agent 立即返回带 <code>![](pending:img-001)</code> 占位的 markdown · 后台 task 跑完 patch · 前端 SSE 推 patch event 局部刷新 · <strong>体验最佳但工程量最大</strong> · 留 v2</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="num">3</span>缺哪些基础能力(Gap 分析)</h2>
+
+<div class="gap-card">
+  <div class="gn">G1</div>
+  <div>
+    <h4>图片生成 Tool · <code>allhands.image.generate</code></h4>
+    <p class="why">核心 unblocker。BACKEND tool · scope=WRITE + requires_confirmation(可配 · 默认 ask · 因为图生收费)。返回 artifact_id · 自动调 artifact_create 落库。支持单 prompt 同步 + 多 prompt 并发 batch。</p>
+  </div>
+  <div class="effort">⏱ 1-2 天</div>
+</div>
+
+<div class="gap-card">
+  <div class="gn">G2</div>
+  <div>
+    <h4>Image Provider 抽象 · <code>ImageProvider</code> + <code>capability</code> 字段</h4>
+    <p class="why">核心解耦。<code>LLMModel</code> 加 <code>capabilities: list[Capability]</code>(chat / image / speech / embedding)· UI Provider 配置时按 capability 过滤可选模型。新加 OpenAI Images / 通义万相 / Stable Diffusion 直接走 ImageProvider 子类 · 不污染 chat model_gateway。</p>
+  </div>
+  <div class="effort">⏱ 1.5 天</div>
+</div>
+
+<div class="gap-card medium">
+  <div class="gn">G3</div>
+  <div>
+    <h4>异步 Tool 模式 · <code>spawn_long_task</code> + <code>wait_task</code></h4>
+    <p class="why">通用机制 · 不只为图片。Tool 启动一个后台 asyncio.Task · 立即返回 task_id · agent 后续调 wait_task 等(类似 Claude Code 的 BashOutput 模式)。给图生 batch / 长 bash / web scraping 等通用复用。</p>
+  </div>
+  <div class="effort">⏱ 2 天</div>
+</div>
+
+<div class="gap-card medium">
+  <div class="gn">G4</div>
+  <div>
+    <h4>图床 / 图片 URL 解析 · <code>artifact://&lt;id&gt;</code> URL scheme</h4>
+    <p class="why">现有 <code>/api/artifacts/&lt;id&gt;/content</code> 已能取图。但 markdown 里写绝对 URL <code>http://localhost:8000/...</code> 不可移植 · 离线打开就坏。引入 <code>artifact://&lt;id&gt;</code> 协议:渲染时按当前 host 替换 · 导出 PPT/PDF 时把 artifact 内容 inline 化 base64 内嵌。</p>
+  </div>
+  <div class="effort">⏱ 0.5 天</div>
+</div>
+
+<div class="gap-card medium">
+  <div class="gn">G5</div>
+  <div>
+    <h4>Pricing extension · 按张计费</h4>
+    <p class="why">现 pricing 按 token · image 按张(+ size + quality 维度)。Model.cost_per_image 字段 + ledger 记录。配额超时 deny · 不让 agent 跑飞烧钱。</p>
+  </div>
+  <div class="effort">⏱ 0.5 天</div>
+</div>
+
+<h3>总工作量</h3>
+<div class="callout">
+  <strong>v1 必须 4 个(G1+G2+G4+G5)= ~ 3.5 天</strong>(同步 + batch · 实用)<br>
+  <strong>v1.5 加 G3(异步 task)= + 2 天 = 5.5 天</strong>(并发更优)<br>
+  <strong>v2 加占位符 + SSE patch = + 3 天</strong>(终极体验)
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="num">4</span>领域模型设计</h2>
+
+<h3>4.1 LLMModel 加 capability 字段(L4 core)</h3>
+
+<pre><code># core/model.py
+from enum import StrEnum
+
+class Capability(StrEnum):
+    CHAT = "chat"
+    IMAGE_GEN = "image_gen"
+    SPEECH = "speech"
+    EMBEDDING = "embedding"
+
+class LLMModel(BaseModel):
+    # ... 现有字段
+    capabilities: list[Capability] = Field(default=[Capability.CHAT])
+    cost_per_image: float | None = None  # USD per image (image_gen only)
+    cost_per_image_size: dict[str, float] | None = None  # {"1024x1024": 0.04, ...}
+</code></pre>
+
+<h3>4.2 ImageProvider 抽象(execution L5)</h3>
+
+<pre><code># execution/image_provider.py
+@runtime_checkable
+class ImageProvider(Protocol):
+    """Generate image bytes from a text prompt."""
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        size: str = "1024x1024",  # 1024x1024 / 1024x1536 / 1536x1024
+        quality: str = "standard",  # standard / hd / low / medium / high
+        n: int = 1,  # 同次 batch 内张数 (max 10)
+    ) -> list[bytes]: ...
+
+class OpenAIImageProvider:  # gpt-image-1.5
+    def __init__(self, api_key, base_url="https://api.openai.com/v1"): ...
+
+class DashscopeImageProvider:  # 通义万相 wanx
+    ...
+
+class FluxImageProvider:  # bfl Flux 2 / Flux Pro
+    ...
+
+class StableDiffusionLocalProvider:  # ComfyUI / SD WebUI HTTP
+    ...
+
+# Factory 按 LLMProvider.kind + LLMModel.name 分发
+def build_image_provider(provider, model) -> ImageProvider: ...
+</code></pre>
+
+<h3>4.3 Tool 设计(execution/tools/builtin/image_generate.py)</h3>
+
+<pre><code>IMAGE_GENERATE_TOOL = Tool(
+    id="allhands.image.generate",
+    kind=ToolKind.BACKEND,
+    name="generate_image",
+    description=(
+        "Generate one or more images from text prompts via the configured "
+        "image model. Returns a list of {artifact_id, mime_type, prompt} — "
+        "each image is automatically saved as an artifact you can reference "
+        "in markdown via /api/artifacts/<id>/content or in pptx via "
+        "image_url. For batch (e.g. 8 PPT slides), pass `prompts: [...]` "
+        "all at once — they run concurrently."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "prompts": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 3, "maxLength": 4000},
+                "minItems": 1, "maxItems": 10,
+                "description": "1-10 prompts · run concurrently",
+            },
+            "size": {
+                "type": "string",
+                "enum": ["1024x1024", "1024x1536", "1536x1024", "auto"],
+                "default": "1024x1024",
+            },
+            "quality": {"type": "string", "enum": ["low","medium","high","auto"], "default": "auto"},
+            "model_ref": {
+                "type": "string",
+                "description": "Override: provider/model · e.g. 'openai/gpt-image-1.5'. Default uses workspace's configured image model.",
+            },
+        },
+        "required": ["prompts"],
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "images": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "artifact_id": {"type": "string"},
+                        "mime_type": {"type": "string"},
+                        "prompt": {"type": "string"},
+                        "size": {"type": "string"},
+                        "url": {"type": "string", "description": "/api/artifacts/&lt;id&gt;/content"},
+                    },
+                },
+            },
+            "total_cost_usd": {"type": "number"},
+            "duration_ms": {"type": "integer"},
+            "error": {"type": "string"},
+        },
+    },
+    scope=ToolScope.WRITE,
+    requires_confirmation=True,  # 收费 · 默认 ask · 用户可改 allow
+    cost_hint=CostHint(relative="medium", absolute_per_call_usd=0.05),
+)</code></pre>
+
+<h3>4.4 流程图 · 用户视角</h3>
+
+<pre><code>用户 → "做一个 8 页关于 X 的 PPT · 每页配一张图"
+
+Lead Agent (Claude):
+  1. resolve_skill("artifacts")            # 已有 skill
+  2. 拟一份大纲 · 列 8 个 slide 主题 + 每页 prompt
+  3. 调 generate_image({prompts: [...8 个...]})
+                          ↓
+                  并发 fan-out 8 个 OpenAI Images call
+                  (~ 12-20s · 因为并发不是串行)
+                          ↓
+              返回 [{artifact_id, url}, ...] × 8
+  4. 调 artifact_create_pptx({slides: [
+        {layout: "title", title: "X 主题"},
+        {layout: "image-right", title: "...",
+         image_url: "/api/artifacts/img-001/content",
+         bullets: [...]},
+        ... × 7
+     ]})
+  5. 返回 PPT artifact_id 给用户 · 弹 preview</code></pre>
+
+<!-- ============================================================ -->
+<h2><span class="num">5</span>实施 phase</h2>
+
+<div class="phase" data-p="A">
+  <h3>Phase A · 最小可用(同步 + 并发 batch)</h3>
+  <div class="est">⏱ 3-4 天 · v1 立即可用 · 你的两个场景都覆盖</div>
+  <ul>
+    <li>G2 · LLMModel.capabilities + ImageProvider Protocol + OpenAI/DashScope 两个实现</li>
+    <li>G1 · generate_image tool · 内部 asyncio.gather batch · 自动存 artifact</li>
+    <li>G4 · artifact:// URL scheme · markdown/html/pptx 渲染时解析</li>
+    <li>G5 · cost_per_image 字段 + 调用前 dry-run 算总成本回 confirmation 弹窗</li>
+    <li>测试:① 单图 ② batch 8 张 ③ PPT 完整流程 ④ markdown 完整流程 ⑤ 真 LLM E2E(需 OPENAI_API_KEY)</li>
+  </ul>
+</div>
+
+<div class="phase" data-p="B">
+  <h3>Phase B · 异步 Task 框架(可选 · 更优体验)</h3>
+  <div class="est">⏱ 2 天</div>
+  <ul>
+    <li>G3 · spawn_long_task 通用机制(BackgroundTask + per-conversation task store)</li>
+    <li>image generate 改成可选 async 模式 · 立即返回 task_id · agent 后续 wait</li>
+    <li>给 long bash · web scrape · 任意 BACKEND tool 复用</li>
+  </ul>
+</div>
+
+<div class="phase" data-p="C">
+  <h3>Phase C · 流式占位符 patch(后续)</h3>
+  <div class="est">⏱ 3 天</div>
+  <ul>
+    <li>artifact 加 patch 协议 · agent 写 markdown 用 <code>![alt](pending:img-prompt-1)</code> 占位</li>
+    <li>后台 task 跑完 → emit ArtifactPatched event · 前端 SSE 收到局部刷新</li>
+    <li>agent 不等图生 · 立即继续写下一段文字</li>
+    <li>用户视觉:文字秒出 · 图陆续填上(像 GitHub 加载图)</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="num">6</span>Provider 选型推荐(2026.04 行业现状)</h2>
+
+<table>
+  <tr><th>Provider</th><th>模型</th><th>$/张</th><th>速度</th><th>适用</th></tr>
+  <tr>
+    <td><strong>OpenAI</strong></td>
+    <td>gpt-image-1.5</td>
+    <td>$0.04 (medium 1024²) · $0.16 (high)</td>
+    <td>5-15s</td>
+    <td>主推 · 质量稳 · prompt 服从性最好 · batch 半价</td>
+  </tr>
+  <tr>
+    <td><strong>OpenAI</strong></td>
+    <td>gpt-image-1.5-mini</td>
+    <td>$0.011-0.036</td>
+    <td>3-8s</td>
+    <td>预算敏感 · PPT 配图够用</td>
+  </tr>
+  <tr>
+    <td><strong>Black Forest Labs</strong></td>
+    <td>FLUX 2 / FLUX Pro</td>
+    <td>$0.025-0.04</td>
+    <td>5-10s</td>
+    <td>艺术风格 · 提示词友好</td>
+  </tr>
+  <tr>
+    <td><strong>Google</strong></td>
+    <td>Imagen 4 Fast / Standard</td>
+    <td>$0.02-0.04</td>
+    <td>3-6s</td>
+    <td>速度 + 性价比佳</td>
+  </tr>
+  <tr>
+    <td><strong>阿里云 DashScope</strong></td>
+    <td>wanx-v1 / wanx-style-repaint</td>
+    <td>¥0.20-0.40 / 张</td>
+    <td>10-20s</td>
+    <td>国内首选 · 已是我们 LLM provider</td>
+  </tr>
+  <tr>
+    <td><strong>本地</strong></td>
+    <td>Stable Diffusion XL / FLUX dev (ComfyUI)</td>
+    <td>$0(自有 GPU)</td>
+    <td>10-30s</td>
+    <td>无 API 成本 · 但要装 + GPU</td>
+  </tr>
+</table>
+
+<div class="callout good">
+  <strong>v1 推荐:</strong> 默认接 OpenAI gpt-image-1.5(最稳)+ DashScope wanx(国内备选 · 跟现有 Bailian provider 复用 API key)。
+  <strong>批量场景特别提:</strong> OpenAI batch 半价 · 8 张 PPT = $0.16 vs 单调 $0.32。
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="num">7</span>新 Skill 设计 · <code>allhands.image-creator</code></h2>
+
+<p>把 generate_image 包成一个 skill · 自带决策树告诉 agent 何时该生图 / 怎么写 prompt:</p>
+
+<pre><code># backend/skills/builtin/image-creator/SKILL.yaml
+id: allhands.image-creator
+name: 图片创作
+description: 生成 / 编辑图片 · 给 PPT/Markdown 配图 · 支持 batch
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.image.generate
+  - allhands.image.edit         # v2 加(图编辑 / inpainting)
+  - allhands.artifacts.create   # 给 markdown/pptx 引用图
+
+prompt_fragment_file: prompts/guidance.md</code></pre>
+
+<p>员工配置示例(场景:"做带图的 markdown / PPT 员工"):</p>
+
+<table>
+  <tr><th>字段</th><th>填啥</th></tr>
+  <tr><td>Workspace</td><td>~/projects/my-decks(或任何输出目录)</td></tr>
+  <tr><td>Skills</td><td><code>artifacts</code> + <strong><code>image-creator</code></strong> + <code>local-files</code></td></tr>
+  <tr><td>Model</td><td>chat: claude-sonnet-4-6 · <strong>image: gpt-image-1.5</strong>(在 image-creator skill 配置里指定)</td></tr>
+  <tr><td>Prompt</td><td>"按用户主题做带图 PPT/markdown · 图先写 prompt 列表 · 一次 batch 生成 · 不浪费"</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2><span class="num">8</span>给你的决策清单</h2>
+
+<table>
+  <tr><th>#</th><th>问题</th><th>推荐</th></tr>
+  <tr><td>D1</td><td>v1 范围只做 Phase A 还是带 Phase B?</td><td><strong>只 Phase A</strong>(3-4 天 · 你的需求够)</td></tr>
+  <tr><td>D2</td><td>支持哪些 image provider?</td><td>v1:OpenAI + DashScope · v2 加 Flux + Imagen</td></tr>
+  <tr><td>D3</td><td>本地 SD 要不要支持?</td><td>v1.5 加(走 ComfyUI HTTP 接口)· 复用 ImageProvider Protocol</td></tr>
+  <tr><td>D4</td><td>image gen 默认走 confirmation?</td><td><strong>是</strong>(收费 · 弹窗显示"将花 $0.32 生 8 张图 · 允许?")</td></tr>
+  <tr><td>D5</td><td>artifact:// URL scheme 还是直接绝对 URL?</td><td><strong>artifact://</strong>(可移植 · 渲染层解析)</td></tr>
+  <tr><td>D6</td><td>image kind 现 20MB 上限够吗?</td><td>v1 够(高清 1536² ≈ 1-3MB)· batch 总计上限 100MB</td></tr>
+  <tr><td>D7</td><td>谁负责 prompt enhancement(用户给"画狗" → 我们补成精细 prompt)?</td><td>v1 由 image-creator skill 的 prompt_fragment 引导 LLM 自己补 · 不写专门的 enhancement service</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2><span class="num">9</span>实施完后的对话脚本(目标体验)</h2>
+
+<div class="callout">
+  <strong>用户:</strong>"做一个 6 页关于'量子计算未来 5 年趋势'的 PPT · 每页配张图"
+</div>
+
+<div class="callout good">
+  <strong>Lead Agent:</strong>
+  <pre style="margin: 8px 0;"><code>1. resolve_skill(artifacts) + resolve_skill(image-creator)
+2. 拟大纲:
+   - p1: 标题页(配:量子计算抽象艺术图)
+   - p2: 现状(配:IBM/Google 量子芯片实拍风)
+   - p3: 突破方向(配:超导 vs 离子阱 对比示意图)
+   - p4: 商用进展(配:商业服务图标拼接)
+   - p5: 5 年预测(配:时间线带科技元素)
+   - p6: 总结(配:简洁科技封面图)
+3. 调 generate_image({prompts: [上面 6 个 prompt], size: "1024x1536"})
+   → 弹 confirmation:"将调 OpenAI gpt-image-1.5 生 6 张图 · 估 $0.24 · 允许?"
+   → [允许] · 后台 asyncio.gather 6 个并发 · ~ 18s
+   → 返回 6 个 artifact_id
+4. 调 artifact_create_pptx({slides: [
+       {layout: title, title: "量子计算未来 5 年", subtitle: "...", image_url: "artifact://img-001"},
+       ...
+   ]})
+5. 返回 PPT 给用户 · 弹 preview · 带 6 张配图</code></pre>
+</div>
+
+<p style="color: var(--text-muted); font-size: 13px;">
+  全程<strong>1 次 generate_image batch + 1 次 pptx 创建 = 2 次 confirmation 弹窗</strong> · 整个对话 30-40s 完成 · 拿到完整带图 PPT。
+</p>
+
+<!-- ============================================================ -->
+<div class="footer">
+  allhands · 图片生成能力调研 + 设计 · 2026-04-28 · 主门户 → <a href="MORNING-2026-04-28.html">MORNING-2026-04-28.html</a>
+</div>
+
+</div>
+<script>
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+</script>
+</body>
+</html>
