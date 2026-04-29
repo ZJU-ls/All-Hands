@@ -523,9 +523,20 @@ function GatewayPageInner() {
               <div data-testid="gateway-error">
                 <ErrorState
                   title={t("loadFailedTitle")}
+                  description={t("loadFailedHint")}
                   detail={state.message}
                   action={{ label: t("errorRetry"), onClick: () => void load() }}
-                />
+                >
+                  {/* 2026-04-29 · 500 错误持续时给用户三个排障入口,而不
+                      是只让他干瞪眼。多数 500 是 backend 没起 / DB
+                      migration 没跑完 / provider 配错导致 list_models
+                      连不上。 */}
+                  <ul className="mt-2 space-y-0.5 text-[11px] text-text-muted leading-relaxed">
+                    <li>· {t("loadFailedTip1")}</li>
+                    <li>· {t("loadFailedTip2")}</li>
+                    <li>· {t("loadFailedTip3")}</li>
+                  </ul>
+                </ErrorState>
               </div>
             </>
           )}

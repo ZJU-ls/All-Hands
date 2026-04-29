@@ -141,9 +141,33 @@ async def list_models(
     provider_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> list[ModelResponse]:
-    svc = await get_model_service(session)
-    items = await svc.list_for_provider(provider_id) if provider_id else await svc.list_all()
-    return [_to_response(m) for m in items]
+    """
+    2026-04-29: Wrap the unhandled-exception path in an explicit try/except.
+    Before this, any error inside ``svc.list_*`` (DB column missing because
+    a migration wasn't applied, ORM mapping bug, etc.) bubbled up as an
+    opaque 500 with the body ``Internal Server Error`` — frontend printed
+    "Error: models HTTP 500" and the user had no idea what to do.
+
+    Now we catch + log + raise a 503 with a structured detail so the
+    frontend's ErrorState shows the real reason ("supports_images column
+    missing — run alembic upgrade head") and can render actionable hints.
+    """
+    try:
+        svc = await get_model_service(session)
+        items = await svc.list_for_provider(provider_id) if provider_id else await svc.list_all()
+        return [_to_response(m) for m in items]
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 - intentional broad catch at API edge
+        import logging
+
+        logging.getLogger(__name__).exception("list_models failed")
+        # 503 (Service Unavailable) is more accurate than 500 here:
+        # the DB / migration / config is in a bad state, not a code bug.
+        raise HTTPException(
+            status_code=503,
+            detail=f"list_models failed: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @router.post("", response_model=ModelResponse, status_code=201)
