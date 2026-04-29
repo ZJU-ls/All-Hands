@@ -1,21 +1,21 @@
 "use client";
 
 /**
- * ModelGenTestDialog · capability-aware test surface for image / video /
- * audio generation models.
+ * ModelGenTestDialog · capability-aware unified test surface.
  *
- * Sibling to the larger ModelTestDialog (chat). When the user clicks "测试"
- * on a model row whose capabilities include image_gen / video_gen / speech,
- * this compact dialog opens with a Mode tab strip that defaults to the
- * first non-chat capability the model declares.
+ * Tabs reflect every capability the model declares:
+ *   chat (if `chat`)              → simple one-shot prompt → reply (advanced
+ *                                   streaming console available via "高级
+ *                                   控制台" link → opens ModelTestDialog)
+ *   image (if `image_gen`)        → prompt + size + n → <img> grid
+ *   video (if `video_gen`)        → prompt + resolution + dur → <video>
+ *   audio (if `speech`)           → text + voice + format → <audio>
  *
- * Each tab has its own form + result preview:
- *   image  → prompt + size + n          → <img> grid
- *   video  → prompt + resolution + dur  → <video controls>
- *   audio  → text + voice + format      → <audio controls>
+ * Default tab: chat if present, else the first declared gen capability.
  *
- * The backend dispatches through the unified ModelGateway · responses are
- * base64-inline so the preview renders without follow-up downloads.
+ * Designed against the multi-tab playground pattern shipped by OpenAI
+ * Playground / Google AI Studio · same-model multi-cap testing without
+ * forcing the user to close + reopen the dialog under a different mode.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -25,10 +25,11 @@ import { useDismissOnEscape } from "@/lib/use-dismiss-on-escape";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-type Mode = "image" | "video" | "audio";
+type Mode = "chat" | "image" | "video" | "audio";
 type ModelCapability = "chat" | "image_gen" | "video_gen" | "speech" | "embedding";
 
 const CAP_TO_MODE: Record<string, Mode | undefined> = {
+  chat: "chat",
   image_gen: "image",
   video_gen: "video",
   speech: "audio",
@@ -58,7 +59,11 @@ export function ModelGenTestDialog({ model, onClose }: ModelGenTestDialogProps) 
   const supportedModes: Mode[] = caps
     .map((c) => CAP_TO_MODE[c])
     .filter((m): m is Mode => Boolean(m));
-  const fallback: Mode = supportedModes[0] ?? "image";
+  // Default to chat when present (the most common test target); else first
+  // declared gen capability so single-modality models open straight to
+  // their relevant panel.
+  const fallback: Mode =
+    supportedModes.find((m) => m === "chat") ?? supportedModes[0] ?? "image";
   const [mode, setMode] = useState<Mode>(fallback);
   useDismissOnEscape(true, onClose);
 
@@ -96,7 +101,7 @@ export function ModelGenTestDialog({ model, onClose }: ModelGenTestDialogProps) 
         </header>
 
         <div className="flex gap-1 border-b border-border px-5 pt-3">
-          {(["image", "video", "audio"] as Mode[]).map((m) => {
+          {(["chat", "image", "video", "audio"] as Mode[]).map((m) => {
             const enabled = supportedModes.includes(m);
             const active = mode === m;
             return (
@@ -110,6 +115,8 @@ export function ModelGenTestDialog({ model, onClose }: ModelGenTestDialogProps) 
                     ? t(`tab.${m}`)
                     : t("tab.disabled", { mode: t(`tab.${m}`) })
                 }
+                data-testid={`model-test-tab-${m}`}
+                data-active={active ? "true" : undefined}
                 className={`rounded-t-md px-3 py-1.5 text-[13px] transition-colors ${
                   active
                     ? "border-b-2 border-primary bg-surface text-primary"
@@ -126,6 +133,7 @@ export function ModelGenTestDialog({ model, onClose }: ModelGenTestDialogProps) 
         </div>
 
         <div className="px-5 py-4">
+          {mode === "chat" && <ChatPanel model={model} t={t} />}
           {mode === "image" && <ImagePanel modelId={model.id} t={t} />}
           {mode === "video" && <VideoPanel modelId={model.id} t={t} />}
           {mode === "audio" && <AudioPanel modelId={model.id} t={t} />}
@@ -135,11 +143,123 @@ export function ModelGenTestDialog({ model, onClose }: ModelGenTestDialogProps) 
   );
 }
 
-function iconFor(m: Mode): "image" | "video" | "audio" {
+function iconFor(m: Mode): "image" | "video" | "audio" | "message-square" {
+  if (m === "chat") return "message-square";
   if (m === "image") return "image";
   if (m === "video") return "video";
   return "audio";
 }
+
+// ============================================================================
+// Chat (simple one-shot · single prompt → reply with metrics)
+//
+// Why "simple" here when ModelTestDialog has a rich streaming console?
+//   - This panel exists for cap-aware multi-modal testing. The user wants
+//     to type a question, see a reply, confirm the model works. Streaming
+//     + transcript history + advanced params live in the dedicated rich
+//     console which we link to via the "高级" link below.
+//   - One-shot uses the existing /test endpoint (non-streaming) — the
+//     same path the ping button takes. No new backend surface.
+// ============================================================================
+
+function ChatPanel({
+  model,
+  t,
+}: {
+  model: GenModel;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const [prompt, setPrompt] = useState(t("chat.defaultPrompt"));
+  const [system, setSystem] = useState("");
+  const [status, setStatus] = useState<GenStatus>({ state: "idle" });
+
+  const submit = async () => {
+    setStatus({ state: "running", startedAt: Date.now() });
+    try {
+      const res = await fetch(`${BASE}/api/models/${model.id}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          system: system.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(detail(body));
+      }
+      const data = await res.json();
+      // /test returns either {response, latency_ms, tokens, ...} on success
+      // or {error, error_category, latency_ms, ...} on categorised failure.
+      if (data.error) {
+        setStatus({ state: "error", message: String(data.error) });
+        return;
+      }
+      setStatus({
+        state: "ok",
+        payload: data,
+        durationMs: data.latency_ms ?? 0,
+      });
+    } catch (e) {
+      setStatus({
+        state: "error",
+        message: String(e instanceof Error ? e.message : e),
+      });
+    }
+  };
+
+  const result = status.state === "ok" ? (status.payload as ChatResult) : null;
+
+  return (
+    <div className="space-y-3">
+      <FormRow label={t("chat.system")}>
+        <input
+          value={system}
+          onChange={(e) => setSystem(e.target.value)}
+          placeholder={t("chat.systemPlaceholder")}
+          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-[13px] text-text outline-none focus:border-primary"
+        />
+      </FormRow>
+      <FormRow label={t("chat.prompt")}>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={3}
+          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] text-text outline-none focus:border-primary"
+        />
+      </FormRow>
+      <RunButton status={status} onClick={submit} t={t} />
+      <ErrorOrEmpty status={status} t={t} />
+      {result && (
+        <div className="space-y-2">
+          <div className="text-[11px] text-text-muted">
+            {t("metrics.duration")}: {fmtMs(result.latency_ms ?? 0)}
+            {typeof result.input_tokens === "number" && typeof result.output_tokens === "number" && (
+              <>
+                {" · "}
+                {t("chat.tokens")}: {result.input_tokens}/{result.output_tokens}
+              </>
+            )}
+          </div>
+          <div className="rounded-lg border border-border bg-surface-2 p-3 text-[13px] text-text whitespace-pre-wrap">
+            {result.response || result.text || "(empty)"}
+          </div>
+        </div>
+      )}
+      <div className="text-[11px] text-text-subtle">
+        {t("chat.advancedHint")}
+      </div>
+    </div>
+  );
+}
+
+type ChatResult = {
+  response?: string;
+  text?: string;
+  latency_ms?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+};
 
 // ============================================================================
 // Image

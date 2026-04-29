@@ -91,10 +91,19 @@
     "modelGenTest": {
       "title": "测试 · {model}",
       "tab": {
+        "chat": "对话",
         "image": "图像",
         "video": "视频",
         "audio": "语音",
         "disabled": "{mode} (该模型未声明此能力)"
+      },
+      "chat": {
+        "system": "System prompt(可选)",
+        "systemPlaceholder": "例:你是简洁的工程师助手。",
+        "prompt": "提示词",
+        "tokens": "Tokens",
+        "defaultPrompt": "用一句话介绍你自己。",
+        "advancedHint": "需要流式 / 多轮 / 高级参数?用顶部「高级测试」入口。"
       },
       "image": {
         "prompt": "提示词",

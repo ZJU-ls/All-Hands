@@ -677,19 +677,26 @@ function GatewayPageInner() {
         />
       )}
       {chatModel && (
-        // Dispatch on capabilities: image_gen / video_gen / speech models open
-        // the gen-test dialog (compact tabs, base64 preview); chat-only models
-        // keep the existing rich chat console. A model that declares both
-        // chat AND a gen capability today still goes through the chat dialog
-        // — switching mid-test is rare and the chat surface is the dominant
-        // workflow. Revisit when bi-modal models become common.
+        // Routing rule (multi-cap aware · 2026-04-29 fix):
+        //   - ANY non-chat capability → unified ModelGenTestDialog with
+        //     tabs for every declared capability (chat + image + video +
+        //     audio). User can switch tabs mid-session without closing.
+        //   - Pure chat (or undeclared caps) → keep the rich streaming
+        //     console (multi-turn / advanced params / TTFT metrics).
+        //
+        // The previous check `!caps.includes("chat")` broke the
+        // "checked both chat AND image_gen" case: the user only saw the
+        // chat dialog and could never reach the image tab.
+        //
+        // Pattern reference: OpenAI Playground / Google AI Studio expose
+        // mode tabs at the dialog level rather than forcing mode choice
+        // before opening.
         (() => {
           const caps = (chatModel.capabilities ?? []) as string[];
-          const isGenOnly =
-            caps.length > 0 &&
-            !caps.includes("chat") &&
-            caps.some((c) => c === "image_gen" || c === "video_gen" || c === "speech");
-          return isGenOnly ? (
+          const hasGenCap = caps.some(
+            (c) => c === "image_gen" || c === "video_gen" || c === "speech",
+          );
+          return hasGenCap ? (
             <ModelGenTestDialog
               model={chatModel}
               onClose={() => setChatModel(null)}
