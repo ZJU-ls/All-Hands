@@ -21,8 +21,13 @@ _VISION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^gpt-4-turbo", re.I),
     re.compile(r"^gpt-4-vision", re.I),
     re.compile(r"^o1\b|^o3\b|^o4\b", re.I),  # Reasoning series
-    # Aliyun Qwen-VL
+    # Aliyun Qwen-VL — explicit vision SKUs
     re.compile(r"qwen.*-vl|qwen-?v|qwen3?-vl|qvq", re.I),
+    # Aliyun Qwen unified multimodal · qwen3.5-plus / qwen3.6-plus and forward.
+    # Per DashScope: starting from 3.5, the *-plus tier folds vision into the
+    # base chat model (官方能力表标 "视觉理解"). Older qwen-plus / qwen3-plus /
+    # qwen3.0-plus stay text-only — they don't match this regex.
+    re.compile(r"^qwen3?\.[5-9]\d*-plus\b|^qwen[4-9](\.|-).*-plus\b", re.I),
     # DeepSeek
     re.compile(r"deepseek.*-vl", re.I),
     # Google Gemini — all multimodal
