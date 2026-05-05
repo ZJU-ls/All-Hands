@@ -110,9 +110,16 @@ async def test_gateway_executor_dispatches_through_canned_adapter(
 ) -> None:
     gw = ModelGateway()
     adapter = _CannedAdapter()
+    # Post-2026-05-05 the DashScope adapter accepts any aliyun image model
+    # (we removed the name-substring filter), so it would shadow the
+    # canned adapter for the test fixture below. Registering canned
+    # FIRST keeps the previous-by-construction match: gateway uses
+    # registration order and picks the first ``supports`` that returns
+    # True. Both real adapters stay around as no-op decoys verifying the
+    # routing doesn't pull them in.
+    gw.register(adapter)
     gw.register(OpenAIImageAdapter())  # registered but never used
     gw.register(DashScopeImageAdapter(poll_interval_seconds=0.0))  # ditto
-    gw.register(adapter)
 
     provider, model = _provider(), _model()
 

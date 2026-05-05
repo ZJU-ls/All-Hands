@@ -152,7 +152,10 @@ async def test_generate_handles_post_error() -> None:
             await a.generate(TTSRequest(text="hi"), provider=_make_provider(), model=_make_model())
 
 
-def test_supports_match_cosyvoice() -> None:
+def test_supports_aliyun_audio_models() -> None:
+    """Post-2026-05-05 · adapter only declares provider.kind ("aliyun");
+    name-substring matching for cosyvoice / sambert / future families
+    was the "every new release needs a code change" anti-pattern."""
     a = DashScopeAudioAdapter()
-    assert "cosyvoice" in a.model_patterns
-    assert "sambert" in a.model_patterns
+    assert "aliyun" in a.provider_kinds
+    assert a.model_patterns == ()

@@ -101,7 +101,12 @@ class OpenAIImageAdapter:
 
     modality: ClassVar[Modality] = Modality.IMAGE
     provider_kinds: ClassVar[tuple[str, ...]] = ("openai",)
-    model_patterns: ClassVar[tuple[str, ...]] = ("gpt-image", "dall-e")
+    # 2026-05-05 · empty patterns → accept any openai image model row.
+    # The model registry (``capabilities`` includes ``image``) decides what
+    # is an image model; the OpenAI Images API will reject a misclassified
+    # model with a clear server error, which is more honest than guessing
+    # from a name substring.
+    model_patterns: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, *, timeout_seconds: float = 120.0) -> None:
         self._timeout = timeout_seconds

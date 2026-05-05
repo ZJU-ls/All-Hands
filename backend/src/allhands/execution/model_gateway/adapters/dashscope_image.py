@@ -112,9 +112,13 @@ class DashScopeImageAdapter:
 
     modality: ClassVar[Modality] = Modality.IMAGE
     provider_kinds: ClassVar[tuple[str, ...]] = ("aliyun",)
-    # Substring patterns that map onto wanx / wan-image families. New model
-    # names get matched as long as they include "wan" + a numeric prefix.
-    model_patterns: ClassVar[tuple[str, ...]] = ("wanx", "wan2", "wan-image")
+    # 2026-05-05 · empty patterns → accept any aliyun image model. The
+    # registry already encodes "this row is an image model" via
+    # capabilities, so we trust that and don't double-filter on name.
+    # Pre-this-change we required the name to contain "wanx" / "wan2" /
+    # "wan-image" — every new wanx release ("wan2.7-image-pro" …) had to
+    # be added by hand.
+    model_patterns: ClassVar[tuple[str, ...]] = ()
 
     def __init__(
         self,

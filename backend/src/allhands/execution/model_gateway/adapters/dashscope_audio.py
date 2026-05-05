@@ -83,10 +83,11 @@ class DashScopeAudioAdapter:
 
     modality: ClassVar[Modality] = Modality.AUDIO
     provider_kinds: ClassVar[tuple[str, ...]] = ("aliyun",)
-    model_patterns: ClassVar[tuple[str, ...]] = (
-        "cosyvoice",
-        "sambert",
-    )
+    # 2026-05-05 · empty patterns → accept any aliyun audio model row.
+    # Capability is declared on the LLMModel row at registration time,
+    # so the adapter no longer needs to maintain a name-substring list
+    # (`cosyvoice` / `sambert` / future families …).
+    model_patterns: ClassVar[tuple[str, ...]] = ()
 
     def __init__(
         self,

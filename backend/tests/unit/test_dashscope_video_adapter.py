@@ -57,9 +57,12 @@ def test_sniff_mime_unknown() -> None:
 
 
 def test_supports_aliyun_video_models() -> None:
+    """Post-2026-05-05 · adapter only declares provider.kind ("aliyun");
+    name-substring matching is the user's old "硬代码" anti-pattern that
+    blocked every wanx release until someone widened the list."""
     a = DashScopeVideoAdapter()
     assert "aliyun" in a.provider_kinds
-    assert any("t2v" in p or "video" in p for p in a.model_patterns)
+    assert a.model_patterns == ()
 
 
 @pytest.mark.asyncio

@@ -39,12 +39,27 @@ class ModelAdapter(Protocol):
 def _default_supports(adapter: ModelAdapter, *, provider: LLMProvider, model: LLMModel) -> bool:
     """Default implementation usable from concrete adapters via composition.
 
-    Provider kind must be in the adapter's allowlist AND the model name must
-    contain at least one of the registered patterns. Adapters with stricter
-    rules (capability negotiation · region-aware routing) override this.
+    The provider.kind allowlist is authoritative. Pre-2026-05-05 we also
+    required the model.name to contain one of an adapter-private list of
+    substrings (``wanx`` / ``wan2`` / ``gpt-image`` / …). That meant every
+    fresh model release (`wan2.7-image-pro`, `gpt-image-1.5-mini`) needed
+    a code change to be acceptable — exactly the "硬代码" anti-pattern
+    the user flagged. The new contract: the user already declared the
+    capability on the LLMModel row when registering the model, the
+    Gateway dispatches by modality + provider.kind, and the adapter
+    trusts the registry.
+
+    ``model_patterns`` is preserved as an *optional* secondary filter for
+    the rare case where one provider.kind hosts genuinely incompatible
+    sub-families (e.g. an OpenAI account that holds chat-only models you
+    explicitly want to keep out of the Image adapter pool). Adapters
+    that don't need that distinction simply leave ``model_patterns``
+    empty — the default behaviour is "kind matches → accept".
     """
     if provider.kind not in adapter.provider_kinds:
         return False
+    if not adapter.model_patterns:
+        return True
     return any(pat in model.name for pat in adapter.model_patterns)
 
 

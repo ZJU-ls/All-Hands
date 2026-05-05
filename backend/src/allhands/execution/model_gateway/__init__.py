@@ -183,10 +183,14 @@ class ModelGateway:
             if await adapter.supports(provider=provider, model=model):
                 return adapter
 
-        # No match · enumerate what we have so the LLM/log can self-correct.
+        # No match · enumerate what we have so the LLM/log + the user can
+        # self-correct. Highlight ``provider.kind`` because that's the
+        # actionable mismatch — patterns are now optional and most adapters
+        # leave them empty (capabilities live on the LLMModel row).
+        accepted_kinds = sorted({k for a in candidates for k in a.provider_kinds})
         seen = ", ".join(
-            f"{a.__class__.__name__}(kinds={list(a.provider_kinds)},"
-            f" patterns={list(a.model_patterns)})"
+            f"{a.__class__.__name__}(kinds={list(a.provider_kinds)})"
+            + (f" patterns={list(a.model_patterns)}" if a.model_patterns else "")
             for a in candidates
         )
         raise NoAdapterFoundError(
@@ -194,8 +198,13 @@ class ModelGateway:
             provider=provider.kind,
             model=model.name,
             reason=(
-                f"no {modality.value} adapter accepts (provider.kind={provider.kind!r},"
-                f" model.name={model.name!r}). Registered: {seen}"
+                f"No {modality.value} adapter accepts model.name={model.name!r} "
+                f"on provider.kind={provider.kind!r}. Registered adapters for "
+                f"{modality.value}: {seen}. Most likely the provider was "
+                f"misconfigured · expected provider.kind ∈ {accepted_kinds}. "
+                f"Open the gateway page and switch the provider 'kind' to one "
+                f"of those, or remove the {modality.value} capability from "
+                f"this model."
             ),
         )
 
