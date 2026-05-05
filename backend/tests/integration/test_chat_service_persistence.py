@@ -362,3 +362,160 @@ async def test_render_and_tool_call_events_persist_with_assistant_message(
     )
     assert persisted.tool_calls[0].id == tc_id
     assert persisted.tool_calls[0].tool_id == "allhands.render.bar_chart"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2026-05-05 · multi-iteration persistence + ordering
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_assistant_committed_per_iteration_persists_separate_rows(
+    chat_svc: tuple,
+) -> None:
+    """Multi-iteration turn must produce one Message row per iteration plus
+    one tool Message row per tool call — interleaved in execution order — so
+    a page reload rehydrates the same shape the live UI rendered.
+
+    Bug repro (pre-fix): max_iterations halt would dump the entire turn into
+    a single squashed assistant row (or skip persistence entirely if buffer
+    happened to be empty), making tool calls cluster at the bottom of one
+    bubble after reload — or vanish completely.
+    """
+    from allhands.execution.events import AssistantCommittedEvent, ToolCallEndEvent
+
+    svc, _conv_repo, maker = chat_svc
+
+    msg_a = "msg-iter-1"
+    msg_b = "msg-iter-2"
+    tc1_id = "tc-1"
+    tc2_id = "tc-2"
+
+    async def fake_stream() -> AsyncIterator[AgentEvent]:
+        # iteration 1: text + 1 tool call
+        yield TokenEvent(message_id=msg_a, delta="计划:")
+        yield TokenEvent(message_id=msg_a, delta=" 先列模型")
+        yield AssistantCommittedEvent(
+            message_id=msg_a,
+            text="计划: 先列模型",
+            tool_calls=[
+                ToolCall(
+                    id=tc1_id,
+                    tool_id="allhands.list_models",
+                    args={},
+                    status=ToolCallStatus.RUNNING,
+                )
+            ],
+        )
+        yield ToolCallEndEvent(
+            tool_call=ToolCall(
+                id=tc1_id,
+                tool_id="allhands.list_models",
+                args={},
+                status=ToolCallStatus.SUCCEEDED,
+                result={"models": ["qwen3.6-plus"]},
+            )
+        )
+        # iteration 2: text + 1 tool call
+        yield TokenEvent(message_id=msg_b, delta="再创建 glm-5")
+        yield AssistantCommittedEvent(
+            message_id=msg_b,
+            text="再创建 glm-5",
+            tool_calls=[
+                ToolCall(
+                    id=tc2_id,
+                    tool_id="allhands.create_model",
+                    args={"name": "glm-5"},
+                    status=ToolCallStatus.RUNNING,
+                )
+            ],
+        )
+        yield ToolCallEndEvent(
+            tool_call=ToolCall(
+                id=tc2_id,
+                tool_id="allhands.create_model",
+                args={"name": "glm-5"},
+                status=ToolCallStatus.SUCCEEDED,
+                result={"id": "model-glm5"},
+            )
+        )
+        yield DoneEvent(message_id=msg_b, reason="done")
+
+    await _collect(svc._persist_assistant_reply("conv1", fake_stream()))
+
+    async with maker() as session:
+        msgs = await SqlConversationRepo(session).list_messages("conv1")
+
+    # Exactly 2 assistants + 2 tools, in execution order.
+    roles_order = [m.role for m in msgs]
+    assert roles_order == ["assistant", "tool", "assistant", "tool"], (
+        f"Expected per-iteration interleaving, got {roles_order}. "
+        "Pre-fix this collapsed to one assistant row with both tool_calls at end."
+    )
+    asst1, tool1, asst2, tool2 = msgs
+    assert asst1.id == msg_a
+    assert asst1.content == "计划: 先列模型"
+    assert [tc.id for tc in asst1.tool_calls] == [tc1_id]
+    assert tool1.tool_call_id == tc1_id
+    assert asst2.id == msg_b
+    assert asst2.content == "再创建 glm-5"
+    assert [tc.id for tc in asst2.tool_calls] == [tc2_id]
+    assert tool2.tool_call_id == tc2_id
+    # Strict monotonic timestamps · the microsecond-bump guarantee.
+    ts = [m.created_at for m in msgs]
+    assert ts == sorted(ts), f"created_at not monotonic: {ts}"
+
+
+@pytest.mark.asyncio
+async def test_max_iterations_error_preserves_earlier_iterations(
+    chat_svc: tuple,
+) -> None:
+    """When the loop hits max_iterations and emits ErrorEvent, the iterations
+    that already completed must remain in DB. Pre-fix: if the trailing
+    iteration's buffer happened to be empty, flush() short-circuited and the
+    entire turn vanished on reload."""
+    from allhands.execution.events import AssistantCommittedEvent, ToolCallEndEvent
+
+    svc, _conv_repo, maker = chat_svc
+
+    async def fake_stream() -> AsyncIterator[AgentEvent]:
+        # 2 successful iterations
+        yield TokenEvent(message_id="m1", delta="round 1")
+        yield AssistantCommittedEvent(
+            message_id="m1",
+            text="round 1",
+            tool_calls=[
+                ToolCall(
+                    id="t1",
+                    tool_id="allhands.x",
+                    args={},
+                    status=ToolCallStatus.RUNNING,
+                )
+            ],
+        )
+        yield ToolCallEndEvent(
+            tool_call=ToolCall(
+                id="t1",
+                tool_id="allhands.x",
+                args={},
+                status=ToolCallStatus.SUCCEEDED,
+                result={"ok": True},
+            )
+        )
+        # max_iterations halt — no further AssistantCommitted, just error.
+        yield ErrorEvent(code="MAX_ITERATIONS", message="hit per-turn ceiling")
+
+    await _collect(svc._persist_assistant_reply("conv1", fake_stream()))
+
+    async with maker() as session:
+        msgs = await SqlConversationRepo(session).list_messages("conv1")
+
+    roles = [m.role for m in msgs]
+    assert "assistant" in roles, (
+        "Earlier iteration vanished after max_iterations. "
+        "User-visible symptom: long conversation 'disappears' on reload."
+    )
+    assistants = [m for m in msgs if m.role == "assistant"]
+    assert assistants[0].content == "round 1"
+    tools = [m for m in msgs if m.role == "tool"]
+    assert any(t.tool_call_id == "t1" for t in tools)

@@ -27,6 +27,10 @@ from allhands.services.vision_capability import infer_supports_images
         "qwen-vl-max",
         "qwen3-vl-72b",
         "qvq-72b-preview",
+        # Unified multimodal · DashScope Coding Plan 标 "视觉理解" 起自 3.5-plus
+        "qwen3.5-plus",
+        "qwen3.6-plus",
+        "Qwen3.6-Plus",  # case-insensitive
         "deepseek-vl-7b",
         "gemini-1.5-pro",
         "gemini-2.0-flash",
@@ -48,8 +52,12 @@ def test_known_vision_models(name: str) -> None:
 @pytest.mark.parametrize(
     "name",
     [
-        "qwen-plus",
-        "qwen3.6-plus",
+        "qwen-plus",  # 老的非版本化 qwen-plus 仍是纯文本
+        "qwen3-plus",  # 3.0 plus 没视觉
+        "qwen3.0-plus",
+        "qwen3-max-2026-01-23",  # max 系列纯文本(深度思考但无视觉)
+        "qwen3-coder-next",
+        "qwen3-coder-plus",
         "kimi-k2.5",
         "deepseek-chat",
         "deepseek-coder",
