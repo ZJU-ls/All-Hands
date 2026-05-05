@@ -215,6 +215,14 @@ export type ChatMessageDto = {
    */
   attachment_ids?: string[];
   /**
+   * Pointer back to the assistant's tool_call.id this row is the result
+   * for. Set on role="tool" rows only · null elsewhere. Required for
+   * history rehydrate to fold tool results into the preceding assistant's
+   * tool_calls[] (without it, a multi-step turn renders as N disconnected
+   * bubbles with cards stuck on "running").
+   */
+  tool_call_id?: string | null;
+  /**
    * 2026-04-28 · Manual /compact has folded this message into a summary.
    * UI keeps the row in the transcript but hides it behind a "N 条已压缩"
    * fold; the LLM context build path filters it out so the token budget
