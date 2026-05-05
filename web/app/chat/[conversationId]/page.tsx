@@ -29,6 +29,7 @@ import {
 } from "@/lib/api";
 import { useChatStore } from "@/lib/store";
 import type { Message } from "@/lib/protocol";
+import { foldToolMessages } from "@/lib/history-fold";
 
 // Legacy + new (Lead-scoped) storage keys. We clear both on a stale 404 so
 // neither one can pin /chat to a missing conversation.
@@ -151,7 +152,7 @@ export default function ConversationPage() {
         // restores charts, cards, inline tool chips, and thinking-channel
         // replay to exactly the state the user saw mid-turn. Dropping them
         // here was the second half of the "historical render vanished" bug.
-        const asMessages: Message[] = history.map((m) => ({
+        const wireMessages: Message[] = history.map((m) => ({
           id: m.id,
           conversation_id: m.conversation_id,
           role: m.role,
@@ -165,8 +166,16 @@ export default function ConversationPage() {
           interrupted: m.interrupted ?? false,
           is_compacted: m.is_compacted ?? false,
           attachment_ids: m.attachment_ids ?? [],
+          tool_call_id: m.tool_call_id ?? null,
           created_at: m.created_at,
         }));
+        // Fold role=tool rows into the preceding assistant's matching
+        // tool_call (result + status). Without this, a multi-step turn
+        // shows up as N segmented bubbles + tool cards forever stuck on
+        // "running". See lib/history-fold.ts for the rule.
+        const asMessages = foldToolMessages(
+          wireMessages as (Message & { role: "user" | "assistant" | "tool" | "system" })[],
+        );
         setConv(c);
         setEmployee(e);
         replaceMessages(asMessages);

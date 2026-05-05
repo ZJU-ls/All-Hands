@@ -114,6 +114,12 @@ class ChatMessageResponse(BaseModel):
     # Attachment ids on this user-uploaded turn. Empty for assistant/tool
     # rows. Frontend resolves to thumbnail / file chips via /api/attachments.
     attachment_ids: list[str] = []
+    # Set on role="tool" rows · pointer back to the assistant's tool_call.id
+    # this row is the result for. Frontend uses it on history reload to fold
+    # the result + status into the assistant's tool_calls[] entry, so a
+    # multi-step turn renders as one bubble with completed cards instead of
+    # a chain of disconnected bubbles.
+    tool_call_id: str | None = None
     # 2026-04-28 · True when manual /compact has soft-flagged this message.
     is_compacted: bool = False
 
