@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from dataclasses import dataclass
@@ -1062,6 +1063,14 @@ class ChatService:
         run_total_tokens = 0
         run_llm_calls = 0
         run_model_ref: str | None = None
+        # 2026-05-05 · per-iteration message ordering (multi-iteration loop fix).
+        # Counter monotonically bumps every committed iteration so successive
+        # rows land with distinct created_at; same-millisecond collisions used
+        # to make tool_calls cluster at the bottom of one squashed bubble on
+        # reload. We add ``iteration_seq`` microseconds to ``datetime.now(UTC)``
+        # for a deterministic strict ordering even when the assistant + its
+        # tool results all flush within one event-loop tick.
+        iteration_seq = 0
         # 2026-04-25 · Claude-Code-style interrupt preservation. The tap
         # records partial bytes always; the interrupted flag distinguishes
         # "we made it to a clean done" from "the stream was cut" so:
@@ -1073,10 +1082,144 @@ class ChatService:
         # at flush() time means client disconnect / runner abort.
         done_seen = False
 
-        async def flush() -> None:
-            nonlocal persisted
-            if persisted or not buffer or message_id is None:
+        # Trailing-partial guard. Only one trailing flush() call writes a row;
+        # subsequent ones (multiple flush() points + finally) are no-ops. Per-
+        # iteration commits go through commit_iteration() which has its own
+        # path and never re-enters flush().
+        trailing_flushed = False
+
+        async def commit_iteration(
+            iter_message_id: str,
+            iter_text: str,
+            iter_reasoning: str | None,
+            iter_tool_calls: list[ToolCall],
+        ) -> None:
+            """Persist one iteration of the agent loop as its own Message row.
+
+            Called on every ``assistant_committed`` AgentEvent — exactly once
+            per LLM call inside the multi-iteration loop. Each iteration gets
+            a strictly-monotonic ``created_at`` (microsecond-bumped via
+            ``iteration_seq``) so reload ordering matches live render order
+            even when multiple iterations + tool messages flush within one
+            event-loop tick.
+            """
+            nonlocal persisted, iteration_seq, message_id, first_seen
+            if not iter_message_id:
                 return
+            iteration_seq += 1
+            anchor = first_seen or datetime.now(UTC)
+            created_at = anchor + timedelta(microseconds=iteration_seq)
+            iter_msg = Message(
+                id=iter_message_id,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=iter_text,
+                reasoning=iter_reasoning,
+                parent_run_id=run_id,
+                render_payloads=list(render_payloads),
+                tool_calls=list(iter_tool_calls),
+                interrupted=False,
+                created_at=created_at,
+            )
+            try:
+                await self._conversations.append_message(iter_msg)
+            except Exception:
+                log.exception(
+                    "Failed to persist assistant iteration",
+                    extra={
+                        "conversation_id": conversation_id,
+                        "message_id": iter_message_id,
+                    },
+                )
+                return
+            persisted = True
+            if self._event_repo is not None:
+                try:
+                    await self._event_repo.append(
+                        ConversationEvent(
+                            id=iter_message_id,
+                            conversation_id=conversation_id,
+                            parent_id=None,
+                            sequence=await self._event_repo.next_sequence(conversation_id),
+                            kind=EventKind.ASSISTANT,
+                            content_json={
+                                "content": iter_text,
+                                "reasoning": iter_reasoning,
+                                "tool_calls": [tc.model_dump() for tc in iter_tool_calls],
+                                "render_payloads": [rp.model_dump() for rp in render_payloads],
+                                "run_id": run_id,
+                                "interrupted": False,
+                            },
+                            created_at=created_at,
+                        )
+                    )
+                except Exception:
+                    log.exception(
+                        "Failed to persist ASSISTANT iteration event",
+                        extra={
+                            "conversation_id": conversation_id,
+                            "message_id": iter_message_id,
+                        },
+                    )
+            # Reset per-iteration state so the next iteration starts fresh.
+            buffer.clear()
+            reasoning_buffer.clear()
+            render_payloads.clear()
+            tool_calls_by_id.clear()
+            message_id = None
+            first_seen = None
+
+        async def commit_tool_message(tc: ToolCall) -> None:
+            """Persist a single tool result as its own Message row.
+
+            Called on every ``tool_call_end`` event so the projection that
+            ``GET /messages`` reads has tool results interleaved between
+            assistant iterations in their actual execution order — matching
+            the live SSE timeline, not "all tools squashed at the bottom".
+            """
+            nonlocal iteration_seq
+            iteration_seq += 1
+            created_at = datetime.now(UTC) + timedelta(microseconds=iteration_seq)
+            failed = tc.status == ToolCallStatus.FAILED
+            content_text: str
+            payload: Any = tc.result
+            if failed:
+                content_text = tc.error or "tool failed"
+                payload = {"error": content_text}
+            elif isinstance(payload, str):
+                content_text = payload
+            elif payload is None:
+                content_text = ""
+            else:
+                try:
+                    content_text = json.dumps(payload, ensure_ascii=False, default=str)
+                except Exception:
+                    content_text = str(payload)
+            tool_msg = Message(
+                id=str(uuid.uuid4()),
+                conversation_id=conversation_id,
+                role="tool",
+                content=content_text,
+                tool_call_id=tc.id,
+                parent_run_id=run_id,
+                created_at=created_at,
+            )
+            try:
+                await self._conversations.append_message(tool_msg)
+            except Exception:
+                log.exception(
+                    "Failed to persist tool result message",
+                    extra={
+                        "conversation_id": conversation_id,
+                        "tool_call_id": tc.id,
+                    },
+                )
+
+        async def flush() -> None:
+            nonlocal trailing_flushed, persisted
+            if trailing_flushed or not buffer or message_id is None:
+                return
+            trailing_flushed = True
             persisted = True
             content = "".join(buffer)
             reasoning_text = "".join(reasoning_buffer) or None
@@ -1202,6 +1345,27 @@ class ChatService:
                     reasoning_buffer.append(event.delta)
                     if message_id is None:
                         message_id = event.message_id
+                elif event.kind == "assistant_committed":
+                    # 2026-05-05 · per-iteration boundary. Flush this LLM
+                    # call's full snapshot as its own Message row so reload
+                    # rehydrates the multi-iteration shape (text → tool →
+                    # text → tool …) instead of one squashed bubble. Use
+                    # the event's authoritative text/tool_calls (LangChain
+                    # commit), falling back to accumulated buffer if the
+                    # commit shape is empty (defensive).
+                    iter_text = event.text or "".join(buffer)
+                    iter_reasoning = event.reasoning or ("".join(reasoning_buffer) or None)
+                    iter_tool_calls = (
+                        list(event.tool_calls)
+                        if event.tool_calls
+                        else list(tool_calls_by_id.values())
+                    )
+                    await commit_iteration(
+                        event.message_id,
+                        iter_text,
+                        iter_reasoning,
+                        iter_tool_calls,
+                    )
                 elif event.kind == "render":
                     # Aggregate render envelopes in arrival order — this is
                     # also the order the live UI rendered them. If the turn
@@ -1276,6 +1440,13 @@ class ChatService:
                                     "tool_call_id": tc.id,
                                 },
                             )
+                    # 2026-05-05 · also append a tool Message row so the
+                    # ``GET /messages`` projection has tool results
+                    # interleaved between assistant iterations in their
+                    # actual execution order. Without this, reload only
+                    # sees one squashed assistant row with all tool_calls
+                    # listed at the bottom — the visible ordering bug.
+                    await commit_tool_message(tc)
                 elif event.kind == "llm_call":
                     # Phase A · per-turn LLM telemetry. Accumulate into the
                     # run-level totals (consumed by ``finalize_run``) and
