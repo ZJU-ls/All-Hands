@@ -43,6 +43,81 @@ from allhands.core.provider import LLMProvider
 from allhands.i18n import t
 from allhands.persistence.repositories import LLMModelRepo, LLMProviderRepo
 
+# 2026-04-28 · auto-detect image-generation models by name pattern.
+# Used when the caller doesn't pin capabilities explicitly. Conservative:
+# matches well-known patterns only; everything else stays [chat].
+_IMAGE_MODEL_PATTERNS: tuple[str, ...] = (
+    "gpt-image",
+    "dall-e",
+    "wanx2",
+    "wanx-v",  # wanx-v1 etc · matches before wanx-video below by accident; we rely on order in _looks_like_video_model
+    "wan2-image",
+    "wan2.1-image",
+    "wan2.5-image",
+    "wan2.6-image",
+    "imagen",
+    "flux",
+    "stable-diffusion",
+    "sd3",
+    "kolors",
+)
+
+_VIDEO_MODEL_PATTERNS: tuple[str, ...] = (
+    "wanx-video",
+    "wan2-video",
+    "wan2.1-video",
+    "wan2.5-video",
+    "wan2-i2v",
+    "wan2-t2v",
+    "sora",
+    "veo",
+    "kling",
+    "seedance",
+    "vidu",
+)
+
+_SPEECH_MODEL_PATTERNS: tuple[str, ...] = (
+    "cosyvoice",
+    "sambert",
+    "tts-1",  # OpenAI tts-1 / tts-1-hd
+    "tts-hd",
+    "whisper",
+    "sensevoice",
+    "paraformer",
+    "elevenlabs",
+)
+
+_EMBEDDING_MODEL_PATTERNS: tuple[str, ...] = (
+    "text-embedding",
+    "embedding-",
+    "bge-",
+    "m3e-",
+    "gte-",
+    "voyage-",
+)
+
+
+def _looks_like_video_model(name: str) -> bool:
+    return any(p in name.lower() for p in _VIDEO_MODEL_PATTERNS)
+
+
+def _looks_like_image_model(name: str) -> bool:
+    n = name.lower()
+    if _looks_like_video_model(name):
+        # video patterns can superficially look like image (wanx-video starts
+        # with wanx-) — disambiguate by checking video first.
+        return False
+    return any(p in n for p in _IMAGE_MODEL_PATTERNS)
+
+
+def _looks_like_speech_model(name: str) -> bool:
+    return any(p in name.lower() for p in _SPEECH_MODEL_PATTERNS)
+
+
+def _looks_like_embedding_model(name: str) -> bool:
+    return any(p in name.lower() for p in _EMBEDDING_MODEL_PATTERNS)
+
+
 ErrorCategory = Literal[
     "timeout",
     "auth",
@@ -73,6 +148,7 @@ class LLMModelService:
         max_input_tokens: int | None = None,
         max_output_tokens: int | None = None,
         supports_images: bool | None = None,
+        capabilities: list[str] | None = None,
     ) -> LLMModel | None:
         # 2026-04-25: token caps are optional advanced settings. Registration
         # only requires (provider, name) — caps default to None ("use model
@@ -98,6 +174,23 @@ class LLMModelService:
             from allhands.services.vision_capability import infer_supports_images
 
             supports_images = infer_supports_images(name)
+        # Capabilities: caller-supplied wins; else auto-detect from model name.
+        # Image generation models (gpt-image-* / dall-e-* / wanx-* / wan2*-image)
+        # default to [image_gen]; everything else stays [chat].
+        from allhands.core.model import Capability
+
+        if capabilities:
+            caps_enum = [Capability(c) for c in capabilities]
+        elif _looks_like_video_model(name):
+            caps_enum = [Capability.VIDEO_GEN]
+        elif _looks_like_image_model(name):
+            caps_enum = [Capability.IMAGE_GEN]
+        elif _looks_like_speech_model(name):
+            caps_enum = [Capability.SPEECH]
+        elif _looks_like_embedding_model(name):
+            caps_enum = [Capability.EMBEDDING]
+        else:
+            caps_enum = [Capability.CHAT]
         model = LLMModel(
             id=str(uuid.uuid4()),
             provider_id=provider_id,
@@ -107,6 +200,7 @@ class LLMModelService:
             max_input_tokens=max_input_tokens,
             max_output_tokens=max_output_tokens,
             supports_images=supports_images,
+            capabilities=caps_enum,
         )
         return await self._models.upsert(model)
 
@@ -130,6 +224,7 @@ class LLMModelService:
         max_output_tokens: int | None = None,
         enabled: bool | None = None,
         supports_images: bool | None = None,
+        capabilities: list[str] | None = None,
     ) -> LLMModel | None:
         if context_window is not None and context_window < 0:
             raise ModelConfigError(f"context_window must be >= 0 (got {context_window}).")
@@ -144,6 +239,9 @@ class LLMModelService:
         model = await self._models.get(model_id)
         if model is None:
             return None
+        from allhands.core.model import Capability
+
+        caps_enum = [Capability(c) for c in capabilities] if capabilities is not None else None
         updated = model.model_copy(
             update={
                 k: v
@@ -155,6 +253,7 @@ class LLMModelService:
                     "max_output_tokens": max_output_tokens,
                     "enabled": enabled,
                     "supports_images": supports_images,
+                    "capabilities": caps_enum,
                 }.items()
                 if v is not None
             }

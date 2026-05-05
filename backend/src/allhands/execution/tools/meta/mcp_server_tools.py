@@ -37,21 +37,61 @@ GET_MCP_SERVER_TOOL = Tool(
     requires_confirmation=False,
 )
 
+_AUTH_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "description": (
+        "Optional auth block for remote transports (sse / http). Stored at "
+        "config.auth. Four types — 'none' (default), 'bearer' (token), "
+        "'custom_headers' (headers map), 'oauth2_client_credentials' "
+        "(token_url + client_id + client_secret [+ scope])."
+    ),
+    "properties": {
+        "type": {
+            "type": "string",
+            "enum": [
+                "none",
+                "bearer",
+                "custom_headers",
+                "oauth2_client_credentials",
+            ],
+        },
+        "token": {"type": "string", "description": "bearer only"},
+        "headers": {
+            "type": "object",
+            "description": "custom_headers only — {HeaderName: Value}",
+        },
+        "token_url": {"type": "string", "description": "oauth2_client_credentials only"},
+        "client_id": {"type": "string", "description": "oauth2_client_credentials only"},
+        "client_secret": {"type": "string", "description": "oauth2_client_credentials only"},
+        "scope": {"type": "string", "description": "oauth2_client_credentials (optional)"},
+    },
+}
+
+
 ADD_MCP_SERVER_TOOL = Tool(
     id="allhands.meta.add_mcp_server",
     kind=ToolKind.META,
     name="add_mcp_server",
     description=(
-        "Register a new MCP server. `transport` is one of stdio|sse|http; "
-        "`config` is the transport-specific payload (command/args/env for stdio, "
-        "url/headers for sse|http)."
+        "Register a new MCP server. transport is stdio|sse|http; config is "
+        "transport-specific: {command,args,env} for stdio, {url, auth?} for "
+        "sse|http. See auth subschema for supported auth types."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "name": {"type": "string"},
             "transport": {"type": "string", "enum": ["stdio", "sse", "http"]},
-            "config": {"type": "object"},
+            "config": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string"},
+                    "args": {"type": "array", "items": {"type": "string"}},
+                    "env": {"type": "object"},
+                    "url": {"type": "string"},
+                    "auth": _AUTH_SCHEMA,
+                },
+            },
             "enabled": {"type": "boolean", "default": True},
         },
         "required": ["name", "transport", "config"],

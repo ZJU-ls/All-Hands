@@ -58,6 +58,7 @@ from allhands.services.trigger_service import TriggerService
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from allhands.execution.mcp_client import MCPClient
     from allhands.services.model_service import LLMModelService
     from allhands.services.observatory_service import ObservatoryService
     from allhands.services.provider_service import LLMProviderService
@@ -74,6 +75,7 @@ def get_tool_registry() -> ToolRegistry:
     # update / delete / market browse). These factories live in ``api/``
     # because they close over SkillService; the execution layer is
     # forbidden from importing services/ by the import-linter contract.
+    from allhands.api.gateway_executors import build_gateway_executors
     from allhands.api.knowledge_executors import kb_executors_for
     from allhands.api.local_files_executors import build_local_files_executors
     from allhands.api.local_workspace_executors import build_local_workspace_executors
@@ -95,6 +97,11 @@ def get_tool_registry() -> ToolRegistry:
         **build_local_workspace_executors(maker),
         # local-files skill · 7 file/bash builtin tools
         **build_local_files_executors(maker),
+        # 2026-05-05: Gateway model + provider write tools (create_model /
+        # update_model / set_default_model / create_provider / ...). Also
+        # were declared without executors — Lead's create_model returned
+        # "ok" via _async_noop but never wrote a row.
+        **build_gateway_executors(maker),
     }
     discover_builtin_tools(reg, session_maker=maker, extra_executors=extras)
     return reg
@@ -271,8 +278,28 @@ def _get_mcp_adapter() -> RealMCPAdapter:
     return RealMCPAdapter()
 
 
+@lru_cache(maxsize=1)
+def get_mcp_client() -> MCPClient:
+    """Process-wide MCPClient that bridges the persisted MCP server
+    registry into the in-process ``ToolRegistry``. Lazy so unit tests
+    that don't touch MCP keep their import graph small. Also installs
+    itself as the execution-layer default client (see
+    ``execution.mcp_client.get_default_mcp_client``) so AgentLoop /
+    AgentRunner can resolve ``mcp:<server_id>`` markers without
+    crossing the api → execution import boundary."""
+    from allhands.execution.mcp_client import MCPClient, set_default_mcp_client
+
+    client = MCPClient(registry=get_tool_registry(), adapter=_get_mcp_adapter())
+    set_default_mcp_client(client)
+    return client
+
+
 async def get_mcp_service(session: AsyncSession = Depends(get_session)) -> MCPService:
-    return MCPService(repo=SqlMCPServerRepo(session), adapter=_get_mcp_adapter())
+    return MCPService(
+        repo=SqlMCPServerRepo(session),
+        adapter=_get_mcp_adapter(),
+        client=get_mcp_client(),
+    )
 
 
 async def get_artifact_service(

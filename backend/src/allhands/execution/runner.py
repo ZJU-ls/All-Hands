@@ -631,7 +631,13 @@ class AgentRunner:
         self._max_output_tokens = max_output_tokens
 
     def _active_tool_ids(self) -> list[str]:
-        """Contract § 8.2 · base + flatten(resolved_skills.values())."""
+        """Contract § 8.2 · base + flatten(resolved_skills.values()).
+
+        2026-04-29 · expand ``mcp:<server_id>`` markers the same way
+        ``AgentLoop._active_tool_ids`` does so subagent runners (which
+        go through this code path, not AgentLoop directly) also see the
+        concrete ``mcp__<server>__<tool>`` entries.
+        """
         active: list[str] = list(self._runtime.base_tool_ids)
         seen: set[str] = set(active)
         for tids in self._runtime.resolved_skills.values():
@@ -639,6 +645,22 @@ class AgentRunner:
                 if tid not in seen:
                     active.append(tid)
                     seen.add(tid)
+
+        markers = [tid for tid in active if tid.startswith("mcp:")]
+        if markers:
+            from allhands.execution.mcp_client import get_default_mcp_client
+
+            client = get_default_mcp_client()
+            expanded: list[str] = []
+            if client is not None:
+                for marker in markers:
+                    server_id = marker[len("mcp:") :]
+                    for tool_id in client.tool_ids_for_server(server_id):
+                        if tool_id not in seen:
+                            expanded.append(tool_id)
+                            seen.add(tool_id)
+            active = [tid for tid in active if not tid.startswith("mcp:")]
+            active.extend(expanded)
         return active
 
     def _compose_system_prompt(self) -> str:

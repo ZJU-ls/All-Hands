@@ -211,3 +211,83 @@ async def test_invoke_adapter_error_wraps_to_service_error() -> None:
     s = await svc.add(name="x", transport=MCPTransport.STDIO, config={"command": "echo"})
     with pytest.raises(MCPServiceError):
         await svc.invoke_server_tool(s.id, tool_name="x", arguments={})
+
+
+# ---------------------------------------------------------------------------
+# 2026-04-29 · MCPClient bridge contract.
+#
+# After the dispatcher → concrete-tools migration, every server lifecycle
+# event must keep the in-process ToolRegistry in sync. The service holds
+# an MCPClient reference and forwards add / test_connection / update /
+# delete to it; the registry then reflects "what the agent loop will see
+# when it expands `mcp:<server_id>` markers".
+# ---------------------------------------------------------------------------
+
+
+class _RecorderMCPClient:
+    """Stand-in for MCPClient that records the calls without doing real
+    handshakes or registry mutations."""
+
+    def __init__(self) -> None:
+        self.registered: list[tuple[str, str]] = []  # (server_id, server_name)
+        self.unregistered: list[str] = []  # server_id
+
+    async def register_server_tools(self, server: MCPServer) -> list[object]:
+        self.registered.append((server.id, server.name))
+        return []
+
+    async def unregister_server_tools(self, server_id: str) -> None:
+        self.unregistered.append(server_id)
+
+
+@pytest.mark.asyncio
+async def test_add_with_client_triggers_register_through_test_connection() -> None:
+    """add() with enabled=True triggers test_connection() which (when the
+    handshake reports OK) calls into MCPClient.register_server_tools so
+    the agent loop can see this server's tools on the next turn."""
+    client = _RecorderMCPClient()
+    repo = InMemRepo()
+    adapter = FakeAdapter(tools=[MCPToolInfo(name="echo", description="", input_schema={})])
+    svc = MCPService(repo=repo, adapter=adapter, client=client)
+    server = await svc.add(name="local", transport=MCPTransport.STDIO, config={"command": "echo"})
+    assert client.registered == [(server.id, "local")]
+
+
+@pytest.mark.asyncio
+async def test_test_connection_handshake_failure_unregisters() -> None:
+    """If a previously-healthy server starts failing handshake, the
+    cached registry entries get cleared so the agent doesn't dispatch
+    into a dead server."""
+    client = _RecorderMCPClient()
+    repo = InMemRepo()
+    adapter = FakeAdapter(tools=[MCPToolInfo(name="echo", description="", input_schema={})])
+    svc = MCPService(repo=repo, adapter=adapter, client=client)
+    server = await svc.add(name="svc", transport=MCPTransport.STDIO, config={"command": "echo"})
+    assert client.registered  # baseline
+
+    # Now adapter starts failing handshake.
+    adapter.raise_on = "handshake"
+    await svc.test_connection(server.id)
+    assert server.id in client.unregistered
+
+
+@pytest.mark.asyncio
+async def test_delete_unregisters_through_client() -> None:
+    client = _RecorderMCPClient()
+    repo = InMemRepo()
+    adapter = FakeAdapter(tools=[MCPToolInfo(name="echo", description="", input_schema={})])
+    svc = MCPService(repo=repo, adapter=adapter, client=client)
+    server = await svc.add(name="svc", transport=MCPTransport.STDIO, config={"command": "echo"})
+    await svc.delete(server.id)
+    assert server.id in client.unregistered
+
+
+@pytest.mark.asyncio
+async def test_update_disable_unregisters() -> None:
+    client = _RecorderMCPClient()
+    repo = InMemRepo()
+    adapter = FakeAdapter(tools=[MCPToolInfo(name="echo", description="", input_schema={})])
+    svc = MCPService(repo=repo, adapter=adapter, client=client)
+    server = await svc.add(name="svc", transport=MCPTransport.STDIO, config={"command": "echo"})
+    await svc.update(server.id, enabled=False)
+    assert server.id in client.unregistered

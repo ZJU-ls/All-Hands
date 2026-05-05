@@ -1,0 +1,14 @@
+id: allhands.image-creator
+name: 图片创作
+description: 文生图 · 给 Markdown / PPT 配图 · 支持并发 batch
+version: 1.0.0
+builtin: true
+
+tool_ids:
+  - allhands.image.generate
+  # 配图通常落到 markdown / pptx artifact · 一并暴露
+  - allhands.artifacts.create
+  - allhands.artifacts.create_pptx
+  - allhands.artifacts.render
+
+prompt_fragment_file: prompts/guidance.md

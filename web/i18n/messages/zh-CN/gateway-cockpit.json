@@ -5,6 +5,10 @@
       "subtitle": "管理 LLM 供应商和模型 · 配置 API · 一键健康检查",
       "addProvider": "添加供应商",
       "loadFailedTitle": "加载失败",
+      "loadFailedHint": "多数 500 是 backend 进程 / DB 迁移 / provider 配置三件套之一出了问题。先点重试,如果重试还是 500 试试下面三步:",
+      "loadFailedTip1": "确认 backend 进程在跑(`uv run uvicorn allhands.main:app --reload --port 8000`)",
+      "loadFailedTip2": "确认 alembic 已迁到最新版(`uv run alembic upgrade head`)",
+      "loadFailedTip3": "看 backend 终端日志找到具体异常 stack,提供 ApiError 上下文便于排查",
       "errorRetry": "重试",
       "pingFailure": "失败",
       "heroCounter": "· {providers} 供应商 · {models} 模型",
@@ -59,6 +63,13 @@
       "fieldMaxOutputTokens": "最大输出 tokens · 可选",
       "fieldMaxOutputTokensPlaceholder": "留空 = 模型默认",
       "fieldMaxOutputTokensHint": "出站 chat 请求的 max_tokens。留空时不限制(由模型自身上限决定);填了就硬卡这个数。",
+      "autofilledFromCatalog": "✨ 已根据 {name} 自动补全显示名 / 能力 / 上下文窗口,可继续修改。",
+      "sectionCapabilities": "能力(输出模态)",
+      "capabilitiesAutoHint": "留空 = 后端按模型名自动判断(gpt-image / wanx / dall-e → 图像生成,其他 → 对话)。手动勾选后以你的选择为准。",
+      "capabilityChat": "对话 / 工具调用",
+      "capabilityImageGen": "图像生成",
+      "capabilitySpeech": "语音(TTS / STT)",
+      "capabilityEmbedding": "文本向量化",
       "sectionAdvanced": "高级设置(可选)",
       "modelFormTips": [
         "💡 只填模型名就能注册。三个 token 上限是高级选项,默认沿用模型本身的能力。",
@@ -80,6 +91,51 @@
       "defaultBadgeTitle": "工作区默认模型 · Lead Agent 与 AI 解读默认走这一对 (provider, model)",
       "setDefault": "设为默认",
       "setDefaultTitle": "设为工作区默认 (provider + model 一起切)"
+    },
+    "modelGenTest": {
+      "title": "测试 · {model}",
+      "tab": {
+        "chat": "对话",
+        "image": "图像",
+        "video": "视频",
+        "audio": "语音",
+        "disabled": "{mode} (该模型未声明此能力)"
+      },
+      "chat": {
+        "system": "System prompt(可选)",
+        "systemPlaceholder": "例:你是简洁的工程师助手。",
+        "prompt": "提示词",
+        "tokens": "Tokens",
+        "defaultPrompt": "用一句话介绍你自己。",
+        "advancedHint": "需要流式 / 多轮 / 高级参数?用顶部「高级测试」入口。"
+      },
+      "image": {
+        "prompt": "提示词",
+        "size": "尺寸",
+        "n": "数量",
+        "defaultPrompt": "一只在阳光下打盹的橘色小猫,水彩风格"
+      },
+      "video": {
+        "prompt": "提示词",
+        "resolution": "分辨率",
+        "duration": "时长 (秒)",
+        "slowHint": "视频生成通常 1-3 分钟,请耐心等待",
+        "defaultPrompt": "一只小狗在草地上奔跑,慢动作"
+      },
+      "audio": {
+        "text": "文本",
+        "voice": "音色",
+        "format": "格式",
+        "speed": "语速",
+        "defaultText": "你好,这是一段语音合成测试。"
+      },
+      "metrics": {
+        "duration": "耗时",
+        "modelUsed": "实际模型"
+      },
+      "run": "运行",
+      "running": "运行中 ({elapsed})",
+      "error": "出错"
     },
     "modelTest": {
       "errorTimeout": "超时",
@@ -290,6 +346,12 @@
   "modelPicker": {
     "loading": "加载模型列表…",
     "loadFailed": "加载模型失败 · {message}",
+    "loadFailedTitle": "加载模型列表失败",
+    "retry": "重试",
+    "manualEnter": "手动输入",
+    "manualBack": "返回",
+    "manualPlaceholder": "provider/model · 例如 openai/gpt-4o-mini",
+    "manualHint": "直接键入 model_ref · 后端 list 接口挂了不影响保存,这条 ref 会原样落到员工 profile 上;聊天调用走的是另一条路径。",
     "groupDefault": "默认",
     "providerDefaultSuffix": " · 默认",
     "defaultHint": "默认",

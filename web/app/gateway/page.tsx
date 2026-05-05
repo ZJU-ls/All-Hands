@@ -26,6 +26,7 @@ import { Icon } from "@/components/ui/icon";
 import { BrandMark, resolveBrand, type BrandSlug } from "@/components/brand/BrandMark";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ModelTestDialog } from "@/components/gateway/ModelTestDialog";
+import { ModelGenTestDialog } from "@/components/gateway/ModelGenTestDialog";
 import {
   ProviderSection,
   type GatewayProvider,
@@ -34,6 +35,14 @@ import {
 import type { GatewayModel } from "@/components/gateway/ModelRow";
 import { useDismissOnEscape } from "@/lib/use-dismiss-on-escape";
 import type { PingState } from "@/components/gateway/PingIndicator";
+import { lookupModelCatalog, type ModelCapability } from "@/lib/api";
+
+const ALL_CAPABILITIES: readonly ModelCapability[] = [
+  "chat",
+  "image_gen",
+  "speech",
+  "embedding",
+] as const;
 
 type ProviderPreset = {
   kind: ProviderKind;
@@ -69,6 +78,10 @@ const EMPTY_MODEL_FORM = {
   // null to the backend); user explicitly opens 高级设置 to override.
   max_input_tokens: 0,
   max_output_tokens: 0,
+  // 2026-04-28: empty array = let backend auto-detect from model name
+  // (gpt-image / wanx / dall-e → image_gen; everything else → chat).
+  // User opens "能力" section to override.
+  capabilities: [] as ModelCapability[],
 };
 
 export default function GatewayPage() {
@@ -428,6 +441,9 @@ function GatewayPageInner() {
         context_window: modelForm.context_window,
         max_input_tokens: modelForm.max_input_tokens > 0 ? modelForm.max_input_tokens : null,
         max_output_tokens: modelForm.max_output_tokens > 0 ? modelForm.max_output_tokens : null,
+        // Empty array = let backend auto-detect from name pattern.
+        capabilities:
+          modelForm.capabilities.length > 0 ? modelForm.capabilities : null,
       };
       await fetch("/api/models", {
         method: "POST",
@@ -459,6 +475,8 @@ function GatewayPageInner() {
             modelForm.max_input_tokens > 0 ? modelForm.max_input_tokens : null,
           max_output_tokens:
             modelForm.max_output_tokens > 0 ? modelForm.max_output_tokens : null,
+          capabilities:
+            modelForm.capabilities.length > 0 ? modelForm.capabilities : null,
         }),
       });
       setEditingModelId(null);
@@ -523,9 +541,20 @@ function GatewayPageInner() {
               <div data-testid="gateway-error">
                 <ErrorState
                   title={t("loadFailedTitle")}
+                  description={t("loadFailedHint")}
                   detail={state.message}
                   action={{ label: t("errorRetry"), onClick: () => void load() }}
-                />
+                >
+                  {/* 2026-04-29 · 500 错误持续时给用户三个排障入口,而不
+                      是只让他干瞪眼。多数 500 是 backend 没起 / DB
+                      migration 没跑完 / provider 配错导致 list_models
+                      连不上。 */}
+                  <ul className="mt-2 space-y-0.5 text-[11px] text-text-muted leading-relaxed">
+                    <li>· {t("loadFailedTip1")}</li>
+                    <li>· {t("loadFailedTip2")}</li>
+                    <li>· {t("loadFailedTip3")}</li>
+                  </ul>
+                </ErrorState>
               </div>
             </>
           )}
@@ -612,6 +641,7 @@ function GatewayPageInner() {
                           context_window: m.context_window,
                           max_input_tokens: m.max_input_tokens ?? 0,
                           max_output_tokens: m.max_output_tokens ?? 0,
+                          capabilities: (m.capabilities ?? []) as ModelCapability[],
                         });
                       }}
                     />
@@ -642,6 +672,7 @@ function GatewayPageInner() {
       {modelFormFor !== null && (
         <ModelFormDialog
           providerName={modelFormFor.name}
+          providerKind={modelFormFor.kind}
           form={modelForm}
           onChange={setModelForm}
           saving={saving}
@@ -657,7 +688,37 @@ function GatewayPageInner() {
         />
       )}
       {chatModel && (
-        <ModelTestDialog model={chatModel} onClose={() => setChatModel(null)} />
+        // Routing rule (multi-cap aware · 2026-04-29 fix):
+        //   - ANY non-chat capability → unified ModelGenTestDialog with
+        //     tabs for every declared capability (chat + image + video +
+        //     audio). User can switch tabs mid-session without closing.
+        //   - Pure chat (or undeclared caps) → keep the rich streaming
+        //     console (multi-turn / advanced params / TTFT metrics).
+        //
+        // The previous check `!caps.includes("chat")` broke the
+        // "checked both chat AND image_gen" case: the user only saw the
+        // chat dialog and could never reach the image tab.
+        //
+        // Pattern reference: OpenAI Playground / Google AI Studio expose
+        // mode tabs at the dialog level rather than forcing mode choice
+        // before opening.
+        (() => {
+          const caps = (chatModel.capabilities ?? []) as string[];
+          const hasGenCap = caps.some(
+            (c) => c === "image_gen" || c === "video_gen" || c === "speech",
+          );
+          return hasGenCap ? (
+            <ModelGenTestDialog
+              model={chatModel}
+              onClose={() => setChatModel(null)}
+            />
+          ) : (
+            <ModelTestDialog
+              model={chatModel}
+              onClose={() => setChatModel(null)}
+            />
+          );
+        })()
       )}
       <ConfirmDialog
         open={deleteProviderTarget !== null}
@@ -1168,6 +1229,7 @@ function ProviderFormDialog({
 
 function ModelFormDialog({
   providerName,
+  providerKind,
   form,
   onChange,
   saving,
@@ -1176,6 +1238,7 @@ function ModelFormDialog({
   onSave,
 }: {
   providerName: string;
+  providerKind?: ProviderKind;
   form: typeof EMPTY_MODEL_FORM;
   onChange: (f: typeof EMPTY_MODEL_FORM) => void;
   saving: boolean;
@@ -1186,6 +1249,49 @@ function ModelFormDialog({
   onSave: () => void;
 }) {
   const t = useTranslations("gateway.page");
+  const [autofilled, setAutofilled] = useState<string | null>(null);
+  // Debounced catalog lookup · only in create mode (editing locks name).
+  // We never overwrite a field the user already typed — autofill only
+  // fills *empty* fields. That way "type name → tab around to refine"
+  // stays predictable.
+  useEffect(() => {
+    if (editing) return;
+    const name = form.name.trim();
+    if (name.length < 3) {
+      setAutofilled(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const hit = await lookupModelCatalog(name, providerKind);
+        if (cancelled || !hit.matched) return;
+        // Snapshot current form once · React state updates compose.
+        onChange({
+          ...form,
+          display_name: form.display_name || hit.display_name || form.display_name,
+          context_window:
+            form.context_window || hit.context_window || form.context_window,
+          max_input_tokens:
+            form.max_input_tokens || (hit.max_input_tokens ?? 0),
+          max_output_tokens:
+            form.max_output_tokens || (hit.max_output_tokens ?? 0),
+          capabilities:
+            form.capabilities.length > 0
+              ? form.capabilities
+              : (hit.capabilities ?? []),
+        });
+        setAutofilled(hit.display_name || hit.name);
+      } catch {
+        // Silent · catalog autofill is best-effort.
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.name, providerKind, editing]);
   return (
     <Modal
       onClose={onCancel}
@@ -1219,10 +1325,31 @@ function ModelFormDialog({
           onChange={(v) => onChange({ ...form, display_name: v })}
         />
       </FormSection>
+      <FormSection label={t("sectionCapabilities")}>
+        <CapabilityPicker
+          value={form.capabilities}
+          onChange={(caps) => onChange({ ...form, capabilities: caps })}
+          autoDetectHint={t("capabilitiesAutoHint")}
+          labels={{
+            chat: t("capabilityChat"),
+            image_gen: t("capabilityImageGen"),
+            speech: t("capabilitySpeech"),
+            embedding: t("capabilityEmbedding"),
+          }}
+        />
+      </FormSection>
       {/* 2026-04-25: 注册时只必填 name + display_name。三个 token cap 收进
           折叠的"高级设置"区,默认收起。也对 Lead Agent 友好 — 它通过
           update_model meta tool 同样可以触达。顶部的 RotatingTip 会循环
           提示用户:caps 是可选的、高级用户才需要、Lead Agent 也能配。 */}
+      {autofilled && !editing && (
+        <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[12px] text-text">
+          <Icon name="sparkles" size={14} className="text-primary shrink-0" />
+          <span>
+            {t("autofilledFromCatalog", { name: autofilled })}
+          </span>
+        </div>
+      )}
       <RotatingTip messages={t.raw("modelFormTips") as string[]} />
       <Collapsible
         label={t("sectionAdvanced")}
@@ -1351,6 +1478,60 @@ function Modal({
  * 普通用户注册模型只看到 name + display_name 两栏 + 一个折叠提示;编辑
  * 时若已填过则自动展开。点头部即可切换。轻量自管 state,无需 deps。
  */
+function CapabilityPicker({
+  value,
+  onChange,
+  autoDetectHint,
+  labels,
+}: {
+  value: ModelCapability[];
+  onChange: (next: ModelCapability[]) => void;
+  autoDetectHint: string;
+  labels: Record<ModelCapability, string>;
+}) {
+  // Empty array = backend auto-detects from model name. Once the user
+  // toggles any checkbox we send the explicit list (even if it ends up
+  // empty after toggling everything off — the backend will reject that).
+  const isAuto = value.length === 0;
+  function toggle(cap: ModelCapability) {
+    const base = isAuto ? (["chat"] as ModelCapability[]) : value;
+    const next = base.includes(cap)
+      ? base.filter((c) => c !== cap)
+      : [...base, cap];
+    // Always keep at least one capability checked once user has overridden.
+    onChange(next.length === 0 ? base : next);
+  }
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-1.5">
+        {ALL_CAPABILITIES.map((cap) => {
+          const checked = isAuto ? cap === "chat" : value.includes(cap);
+          return (
+            <label
+              key={cap}
+              className="flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12px] cursor-pointer hover:border-primary/40 transition-colors"
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggle(cap)}
+                className="accent-primary"
+              />
+              <span className="font-mono text-text">{labels[cap]}</span>
+            </label>
+          );
+        })}
+      </div>
+      {isAuto && (
+        <p className="text-[11px] text-text-subtle flex items-start gap-1.5">
+          <Icon name="sparkles" size={11} className="mt-0.5 shrink-0 text-primary" />
+          <span>{autoDetectHint}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Collapsible({
   label,
   defaultOpen = false,

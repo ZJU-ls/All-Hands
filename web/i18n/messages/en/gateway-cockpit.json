@@ -5,6 +5,10 @@
       "subtitle": "Manage LLM providers and models · configure APIs · one-click health checks",
       "addProvider": "Add provider",
       "loadFailedTitle": "Failed to load",
+      "loadFailedHint": "A 500 here is usually one of three things: backend down, DB migration behind, or a provider config that breaks list_models. Hit retry first; if it persists, try the steps below:",
+      "loadFailedTip1": "Confirm the backend is running (`uv run uvicorn allhands.main:app --reload --port 8000`)",
+      "loadFailedTip2": "Apply the latest alembic migration (`uv run alembic upgrade head`)",
+      "loadFailedTip3": "Check the backend terminal for the actual stack trace — share it when you ask for help",
       "errorRetry": "Retry",
       "pingFailure": "Failed",
       "heroCounter": "· {providers} providers · {models} models",
@@ -59,6 +63,13 @@
       "fieldMaxOutputTokens": "Max output tokens · optional",
       "fieldMaxOutputTokensPlaceholder": "Leave blank → model default",
       "fieldMaxOutputTokensHint": "Forwarded as max_tokens on outbound chat requests. Blank means \"don't constrain\" (model decides); a value here hard-caps each reply.",
+      "autofilledFromCatalog": "✨ Auto-filled display name / capabilities / context window from {name}. Edit anything to override.",
+      "sectionCapabilities": "Capabilities (output modalities)",
+      "capabilitiesAutoHint": "Leave all unchecked = backend auto-detects from the model name (gpt-image / wanx / dall-e → image generation; otherwise → chat). Manual selections override.",
+      "capabilityChat": "Chat / tool calls",
+      "capabilityImageGen": "Image generation",
+      "capabilitySpeech": "Speech (TTS / STT)",
+      "capabilityEmbedding": "Text embeddings",
       "sectionAdvanced": "Advanced (optional)",
       "modelFormTips": [
         "💡 You only need a model name to register. The three token caps below are advanced and default to the model's own ceiling.",
@@ -80,6 +91,51 @@
       "defaultBadgeTitle": "Workspace default model · Lead Agent and AI explainer route through this (provider, model) pair",
       "setDefault": "Set as default",
       "setDefaultTitle": "Set as the workspace default (provider + model both switch)"
+    },
+    "modelGenTest": {
+      "title": "Test · {model}",
+      "tab": {
+        "chat": "Chat",
+        "image": "Image",
+        "video": "Video",
+        "audio": "Audio",
+        "disabled": "{mode} (model does not declare this capability)"
+      },
+      "chat": {
+        "system": "System prompt (optional)",
+        "systemPlaceholder": "e.g. You are a concise engineer assistant.",
+        "prompt": "Prompt",
+        "tokens": "Tokens",
+        "defaultPrompt": "Introduce yourself in one sentence.",
+        "advancedHint": "Need streaming / multi-turn / advanced params? Use the dedicated advanced console."
+      },
+      "image": {
+        "prompt": "Prompt",
+        "size": "Size",
+        "n": "Count",
+        "defaultPrompt": "A small orange cat napping in the sun, watercolor"
+      },
+      "video": {
+        "prompt": "Prompt",
+        "resolution": "Resolution",
+        "duration": "Duration (s)",
+        "slowHint": "Video gen takes 1-3 minutes — be patient.",
+        "defaultPrompt": "A puppy running across a grassy field, slow motion"
+      },
+      "audio": {
+        "text": "Text",
+        "voice": "Voice",
+        "format": "Format",
+        "speed": "Speed",
+        "defaultText": "Hello, this is a TTS test."
+      },
+      "metrics": {
+        "duration": "Duration",
+        "modelUsed": "Model used"
+      },
+      "run": "Run",
+      "running": "Running ({elapsed})",
+      "error": "Error"
     },
     "modelTest": {
       "errorTimeout": "Timeout",
@@ -290,6 +346,12 @@
   "modelPicker": {
     "loading": "Loading models…",
     "loadFailed": "Failed to load models · {message}",
+    "loadFailedTitle": "Couldn't load model list",
+    "retry": "Retry",
+    "manualEnter": "Type manually",
+    "manualBack": "Back",
+    "manualPlaceholder": "provider/model · e.g. openai/gpt-4o-mini",
+    "manualHint": "Type the model_ref directly. The list endpoint may be down but this ref is saved as-is to the employee profile; chat calls use a different path.",
     "groupDefault": "Default",
     "providerDefaultSuffix": " · default",
     "defaultHint": "default",

@@ -867,6 +867,18 @@ class SqlLLMProviderRepo:
 
 
 def _row_to_model(row: LLMModelRow) -> LLMModel:
+    from allhands.core.model import Capability
+
+    raw_caps = getattr(row, "capabilities", None) or ["chat"]
+    # Tolerate raw strings + unknown values from old rows · drop unknown.
+    caps_enum: list[Capability] = []
+    for c in raw_caps:
+        try:
+            caps_enum.append(Capability(c))
+        except ValueError:
+            continue
+    if not caps_enum:
+        caps_enum = [Capability.CHAT]
     return LLMModel(
         id=row.id,
         provider_id=row.provider_id,
@@ -878,6 +890,7 @@ def _row_to_model(row: LLMModelRow) -> LLMModel:
         enabled=row.enabled,
         is_default=row.is_default,
         supports_images=bool(getattr(row, "supports_images", False)),
+        capabilities=caps_enum,
     )
 
 
@@ -921,6 +934,7 @@ class SqlLLMModelRepo:
             existing.enabled = model.enabled
             existing.is_default = model.is_default
             existing.supports_images = model.supports_images
+            existing.capabilities = [c.value for c in model.capabilities]
         else:
             self._s.add(
                 LLMModelRow(
@@ -934,6 +948,7 @@ class SqlLLMModelRepo:
                     enabled=model.enabled,
                     is_default=model.is_default,
                     supports_images=model.supports_images,
+                    capabilities=[c.value for c in model.capabilities],
                 )
             )
         await self._s.commit()

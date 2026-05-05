@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { BrandMark } from "@/components/brand/BrandMark";
+import { Icon } from "@/components/ui/icon";
 import { Select, type SelectGroup, type SelectOption } from "@/components/ui/Select";
+import { cn } from "@/lib/cn";
 import {
   buildModelRef,
   defaultModelRef,
@@ -12,6 +14,19 @@ import {
   type ModelDto,
   type ProviderDto,
 } from "@/lib/api";
+
+/**
+ * Compose the chip trigger className for the loading / error fallbacks.
+ * Mirrors the chip shape `ModelOverrideChip` builds, so the placeholder
+ * occupies the same footprint as the happy-path Select trigger.
+ */
+function cnTrigger(triggerClassName: string | undefined, extra?: string) {
+  return cn(
+    "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 font-mono text-[11px] transition-colors duration-fast disabled:opacity-60",
+    triggerClassName ?? "border-border bg-surface text-text-muted",
+    extra,
+  );
+}
 
 /**
  * ModelPicker · shared dropdown for selecting a model by ref
@@ -62,6 +77,30 @@ type Props = {
   renderTrigger?: (selected: SelectOption | null) => React.ReactNode;
   popoverAlign?: "left" | "right";
   className?: string;
+  /**
+   * Chip-sized error / loading rendering. Set when the picker lives inside
+   * a tight composer / toolbar (`ModelOverrideChip`) where the default
+   * "alert card" error state would push neighbouring controls — and the
+   * input box on chat — out of frame.
+   *
+   * 2026-05-05 fix · users reported the chat composer being completely
+   * blocked by a 「加载模型列表失败 / Error: listModels failed: 503」
+   * card sitting where the textarea should be. In compact mode, error
+   * collapses to a small red chip with retry on click; the underlying
+   * page (form / chat) keeps full width and the model fallback (employee
+   * default) keeps working.
+   *
+   * Default `false` keeps the form-friendly alert card for the employee
+   * designer surface.
+   */
+  compact?: boolean;
+  /**
+   * Label shown inside the compact error chip when the live list is
+   * unavailable. Typically the resolved fallback ref (employee default).
+   * Truthful information stays on screen so the user knows *something*
+   * is selected even though the picker can't list alternatives.
+   */
+  compactFallbackLabel?: string;
 };
 
 /** Look up a provider by the "<provider.name>/<model.name>" ref. */
@@ -87,6 +126,8 @@ export function ModelPicker({
   renderTrigger,
   popoverAlign,
   className = "w-full",
+  compact = false,
+  compactFallbackLabel,
 }: Props) {
   const t = useTranslations("modelPicker");
   const [state, setState] = useState<
@@ -94,9 +135,15 @@ export function ModelPicker({
     | { status: "ready"; providers: ProviderDto[]; models: ModelDto[] }
     | { status: "error"; message: string }
   >({ status: "loading" });
+  // 2026-04-29 · 错误态恢复路径:重试 + 手动输入 model_ref。
+  const [manualMode, setManualMode] = useState(false);
+  const [manualInput, setManualInput] = useState("");
+  // attempt 用作 effect deps,递增就重跑加载。
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setState({ status: "loading" });
     void (async () => {
       try {
         const data = await loadOnce();
@@ -113,9 +160,15 @@ export function ModelPicker({
     return () => {
       cancelled = true;
     };
-    // only run on mount — autoPickDefault/value don't need to retrigger loads.
+    // only run on mount + on retry. autoPickDefault/value don't need to
+    // retrigger loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attempt]);
+
+  const retry = () => {
+    invalidateModelPickerCache();
+    setAttempt((n) => n + 1);
+  };
 
   const grouped = useMemo(() => {
     if (state.status !== "ready") return [];
@@ -131,6 +184,25 @@ export function ModelPicker({
   }, [state]);
 
   if (state.status === "loading") {
+    if (compact) {
+      // Loading shouldn't move the composer layout · render at chip size
+      // with a subdued "…" so the textarea / neighbouring controls stay
+      // in their natural slots. The full-text loader below is for the
+      // employee designer form which has the vertical room.
+      return (
+        <button
+          type="button"
+          disabled
+          data-testid={testId ?? "model-picker-loading"}
+          className={cnTrigger(triggerClassName, "opacity-70")}
+        >
+          <Icon name="loader" size={11} className="animate-spin shrink-0" />
+          <span className="font-mono text-[10px] text-text-subtle">
+            {t("loading")}
+          </span>
+        </button>
+      );
+    }
     return (
       <div
         data-testid={testId ?? "model-picker-loading"}
@@ -142,12 +214,123 @@ export function ModelPicker({
   }
 
   if (state.status === "error") {
+    const errorTestIdShared = testId ? `${testId}-error` : "model-picker-error";
+    if (compact) {
+      // Chip-sized error · click to retry. The textarea / send button
+      // stay laid out exactly as in the happy path. Detail goes in
+      // `title` and aria-label so power users / screen readers can still
+      // see "503". Manual entry / fallback default are designer-only
+      // affordances; chat already has the employee default in effect
+      // and a "look at gateway" path via the topbar.
+      return (
+        <button
+          type="button"
+          onClick={retry}
+          aria-label={t("loadFailedTitle")}
+          title={`${t("loadFailedTitle")} · ${state.message} · ${t("retry")}`}
+          data-testid={errorTestIdShared}
+          className={cnTrigger(
+            triggerClassName,
+            "border-danger/40 bg-danger-soft text-danger hover:bg-danger-soft/80",
+          )}
+        >
+          <Icon name="alert-circle" size={11} className="shrink-0" />
+          <span className="truncate max-w-[140px]">
+            {compactFallbackLabel ?? t("loadFailedTitle")}
+          </span>
+          <Icon name="refresh" size={10} className="shrink-0 opacity-70" />
+        </button>
+      );
+    }
+    // 2026-04-29 · 加载模型列表失败时的恢复 UI。
+    // 之前只展一行红字 + error message · 用户没有出口:既不能重试,也
+    // 不能在不修后端的前提下继续填表。
+    // 现在三个出口:
+    //   1. 「重试」· 失效缓存 + 重新拉 list_models / list_providers
+    //   2. 「跟随默认」· 仅 inheritLabel 存在时(对话场景),value 设空
+    //      表示不在本对话覆盖,沿用员工 / 平台默认
+    //   3. 「手动输入」· 切到一个简单 input,用户能直接键入
+    //      `provider/model` ref(常见场景:平台模型列表挂了但用户记得自
+    //      己常用的模型 ref,后端只是 list 接口挂了 chat 不一定挂)
+    const errorTestId = errorTestIdShared;
+    if (manualMode) {
+      return (
+        <div className="space-y-2" data-testid={errorTestId}>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={manualInput || value}
+              onChange={(e) => {
+                setManualInput(e.target.value);
+                onChange(e.target.value);
+              }}
+              placeholder={t("manualPlaceholder")}
+              data-testid="model-picker-manual-input"
+              className="flex-1 h-8 rounded-md border border-border bg-surface px-2.5 font-mono text-[12px] text-text placeholder:text-text-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+            <button
+              type="button"
+              onClick={() => setManualMode(false)}
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-surface px-2.5 text-[11px] text-text-muted hover:text-text hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <Icon name="arrow-left" size={11} />
+              {t("manualBack")}
+            </button>
+          </div>
+          <p className="text-[10.5px] text-text-subtle leading-snug">
+            {t("manualHint")}
+          </p>
+        </div>
+      );
+    }
     return (
       <div
-        data-testid={testId ? `${testId}-error` : "model-picker-error"}
-        className="py-2 font-mono text-[12px] text-danger"
+        data-testid={errorTestId}
+        className="rounded-md border border-danger/30 bg-danger-soft p-3 space-y-2"
+        role="alert"
       >
-        {t("loadFailed", { message: state.message })}
+        <div className="flex items-start gap-2">
+          <Icon name="alert-circle" size={14} className="mt-0.5 shrink-0 text-danger" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-medium text-danger">
+              {t("loadFailedTitle")}
+            </p>
+            <p className="mt-0.5 font-mono text-[10.5px] text-danger/80 break-all">
+              {state.message}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 pl-6">
+          <button
+            type="button"
+            onClick={retry}
+            data-testid="model-picker-retry"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-danger/40 bg-surface px-2.5 text-[11px] font-medium text-danger hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40"
+          >
+            <Icon name="refresh" size={11} />
+            {t("retry")}
+          </button>
+          {inheritLabel !== undefined && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              data-testid="model-picker-fallback-default"
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2.5 text-[11px] text-text-muted hover:text-text hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <Icon name="check" size={11} />
+              {inheritLabel}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setManualMode(true)}
+            data-testid="model-picker-manual"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2.5 text-[11px] text-text-muted hover:text-text hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <Icon name="edit" size={11} />
+            {t("manualEnter")}
+          </button>
+        </div>
       </div>
     );
   }

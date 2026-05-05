@@ -142,4 +142,97 @@ describe("ModelPicker", () => {
     expect(labels).toContain("OpenRouter · 默认");
     expect(labels).toContain("Bailian");
   });
+
+  describe("compact mode (chip-sized fallbacks)", () => {
+    it("loading renders a chip-sized button (no full-width text)", async () => {
+      // Stall the fetch so we land in the loading branch.
+      fetchMock.mockImplementation(() => new Promise(() => {}));
+      const onChange = vi.fn();
+      render(
+        <ModelPicker
+          value=""
+          onChange={onChange}
+          compact
+          autoPickDefault={false}
+        />,
+      );
+      const loader = screen.getByTestId("model-picker-loading");
+      // Compact mode produces a button shell (chip footprint), NOT the
+      // legacy <div>-only loader that was forcing the composer textarea
+      // out of frame.
+      expect(loader.tagName).toBe("BUTTON");
+    });
+
+    it("503 error renders a small inline chip with retry, not an alert card", async () => {
+      // First load fails.
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 503,
+          headers: new Headers({ "content-type": "text/plain" }),
+          text: () => Promise.resolve("oops"),
+        } as unknown as Response),
+      );
+      const onChange = vi.fn();
+      render(
+        <ModelPicker
+          value=""
+          onChange={onChange}
+          compact
+          compactFallbackLabel="gpt-4o-mini"
+          autoPickDefault={false}
+        />,
+      );
+      await flush();
+      const errorChip = screen.getByTestId("model-picker-error");
+      // Chip shape — single button, fallback label visible.
+      expect(errorChip.tagName).toBe("BUTTON");
+      expect(errorChip.textContent).toContain("gpt-4o-mini");
+      // Inline title carries the technical detail without exploding the
+      // composer.
+      expect(errorChip.getAttribute("title")).toContain("503");
+      // Click triggers retry by re-running the fetch.
+      fetchMock.mockImplementation((url: string) => {
+        if (url.endsWith("/api/providers")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(providers),
+          } as Response);
+        }
+        if (url.endsWith("/api/models")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(models),
+          } as Response);
+        }
+        return Promise.reject(new Error(`unexpected fetch: ${url}`));
+      });
+      fireEvent.click(errorChip);
+      await flush();
+      // After retry the picker enters happy-path Select shape.
+      expect(screen.queryByTestId("model-picker-error")).toBeNull();
+      expect(screen.getByTestId("model-picker")).toBeInTheDocument();
+    });
+
+    it("non-compact mode preserves the form-friendly alert card", async () => {
+      fetchMock.mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 503,
+          headers: new Headers({ "content-type": "text/plain" }),
+          text: () => Promise.resolve("oops"),
+        } as unknown as Response),
+      );
+      const onChange = vi.fn();
+      render(
+        <ModelPicker value="" onChange={onChange} autoPickDefault={false} />,
+      );
+      await flush();
+      const errorBox = screen.getByTestId("model-picker-error");
+      // Form variant retains the alert card · multiple recovery buttons inside.
+      expect(errorBox.tagName).toBe("DIV");
+      expect(screen.getByTestId("model-picker-retry")).toBeInTheDocument();
+      expect(screen.getByTestId("model-picker-manual")).toBeInTheDocument();
+    });
+  });
 });

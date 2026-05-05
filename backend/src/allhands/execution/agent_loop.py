@@ -695,15 +695,24 @@ class AgentLoop:
     def _active_tool_ids(self) -> list[str]:
         """Active tool ids for THIS turn. Mirrors runner.py:367-376.
 
-        Skills overlay their resolved tool ids on top of the employee's base
-        list. Then we expand any ``mcp:<server_id>`` entries (the UI's
-        "mounted MCP server" persistence shape) into the universal MCP
-        dispatch pair (``list_mcp_server_tools`` + ``invoke_mcp_server_tool``)
-        — without that expansion, agents that mounted an MCP server would
-        find no per-tool entries in the registry and the loop would silently
-        drop them. The dispatch pair lets the agent list + invoke any
-        server's tool catalogue at runtime (no ahead-of-time per-tool
-        registration needed).
+        Skills overlay their resolved tool ids on top of the employee's
+        base list. Then we expand any ``mcp:<server_id>`` markers (the
+        "mounted MCP server" persistence shape) into the *concrete*
+        ``mcp__<server>__<tool>`` ids that ``MCPClient`` registered when
+        the server was added / probed.
+
+        Pre-2026-04-29 the marker was replaced with a generic
+        ``list_mcp_server_tools`` + ``invoke_mcp_server_tool`` dispatch
+        pair. The LLM never saw the actual tool names / schemas, had to
+        do a "first list, then invoke" two-turn dance most prompts
+        skipped — symptom: "agent says 我没有相关工具 even though the
+        MCP server is mounted". The fix follows Claude Code's V06
+        design: surface concrete tools so the model picks one directly.
+
+        Servers whose handshake failed (or that aren't yet registered
+        on this process) silently expand to zero tools; this matches
+        the "skill referenced a deprecated tool" path in
+        ``_build_bindings``.
         """
         active: list[str] = list(self._employee.tool_ids)
         if self._runtime is not None:
@@ -711,20 +720,40 @@ class AgentLoop:
                 for tid in tids:
                     if tid not in active:
                         active.append(tid)
-        # MCP expansion · ``mcp:<server_id>`` is a "mounted MCP server" marker
-        # written by the employee designer UI, not a registered tool id.
-        # Replace each with the universal dispatch pair so the agent can
-        # actually reach the server's tools at runtime. Idempotent.
-        if any(tid.startswith("mcp:") for tid in active):
-            for dispatcher in (
-                "allhands.meta.list_mcp_server_tools",
-                "allhands.meta.invoke_mcp_server_tool",
-            ):
-                if dispatcher not in active:
-                    active.append(dispatcher)
-            # Drop the marker ids — they're not registry entries and the
-            # binding loop's KeyError-skip path would just spam warnings.
-            active = [tid for tid in active if not tid.startswith("mcp:")]
+
+        markers = [tid for tid in active if tid.startswith("mcp:")]
+        if not markers:
+            return active
+
+        # Resolve markers → concrete ``mcp__<server>__<tool>`` ids by
+        # asking the registry which tools each server owns. We need the
+        # server *name* (not id) to build the prefix; ``MCPServer`` rows
+        # supply that, so look the server up via the MCPClient bookkeeping
+        # that was populated at registration time. Falling back on a
+        # name-prefix scan would be wrong if two servers had similar
+        # names; we keep the (server_id → tool_ids) dict on the client.
+        from allhands.execution.mcp_client import get_default_mcp_client
+
+        client = get_default_mcp_client()
+
+        expanded: list[str] = []
+        for marker in markers:
+            server_id = marker[len("mcp:") :]
+            if client is None:
+                continue
+            for tool_id in client.tool_ids_for_server(server_id):
+                if tool_id not in active and tool_id not in expanded:
+                    expanded.append(tool_id)
+
+        active = [tid for tid in active if not tid.startswith("mcp:")]
+        active.extend(expanded)
+        if not expanded:
+            _log.warning(
+                "active_tool_ids · MCP marker had no concrete tools — "
+                "server may not be registered yet (test connection?). "
+                "markers=%s",
+                markers,
+            )
         return active
 
     def _build_bindings(self) -> dict[str, ToolBinding]:
