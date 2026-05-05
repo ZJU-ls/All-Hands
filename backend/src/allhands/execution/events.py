@@ -31,6 +31,27 @@ class ReasoningEvent(BaseModel):
     delta: str
 
 
+class AssistantCommittedEvent(BaseModel):
+    """Per-iteration boundary signal · one LLM call's full assistant snapshot.
+
+    Emitted by AgentRunner exactly once per iteration of the agent loop, right
+    after the LLM commits its response (text + tool_uses). The chat_service
+    persistence tap uses this to flush each iteration as its own ``Message``
+    row, so reloading a multi-round conversation rehydrates the same shape
+    the live UI rendered (text → inline tool chips → text → …) instead of
+    collapsing every iteration into one squashed bubble.
+
+    Carries the full snapshot — the tap doesn't need to also accumulate tokens
+    / tool_call_starts, it can persist directly from this event.
+    """
+
+    kind: Literal["assistant_committed"] = "assistant_committed"
+    message_id: str
+    text: str = ""
+    reasoning: str | None = None
+    tool_calls: list[ToolCall] = []
+
+
 class ToolCallStartEvent(BaseModel):
     kind: Literal["tool_call_start"] = "tool_call_start"
     tool_call: ToolCall
@@ -150,6 +171,7 @@ class LLMCallEvent(BaseModel):
 AgentEvent = (
     TokenEvent
     | ReasoningEvent
+    | AssistantCommittedEvent
     | ToolCallStartEvent
     | ToolCallEndEvent
     | ConfirmRequiredEvent

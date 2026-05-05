@@ -33,6 +33,7 @@ from allhands.core.provider import LLMProvider
 from allhands.core.run_overrides import RunOverrides
 from allhands.execution.events import (
     AgentEvent,
+    AssistantCommittedEvent,
     DoneEvent,
     ErrorEvent,
     InterruptEvent,
@@ -466,19 +467,40 @@ class _LegacyProjector:
                 out.append(ReasoningEvent(message_id=self.run_message_id, delta=ev.reasoning_delta))
             return out
         if isinstance(ev, AssistantMessageCommitted):
+            from allhands.core.conversation import ReasoningBlock, TextBlock
+
+            text_chunks: list[str] = []
+            reasoning_chunks: list[str] = []
+            tool_calls: list[ToolCall] = []
             for block in ev.message.content_blocks:
-                if isinstance(block, ToolUseBlock):
+                if isinstance(block, TextBlock):
+                    text_chunks.append(block.text)
+                elif isinstance(block, ReasoningBlock):
+                    reasoning_chunks.append(block.text)
+                elif isinstance(block, ToolUseBlock):
                     self.tool_meta[block.id] = (block.name, dict(block.input))
-                    out.append(
-                        ToolCallStartEvent(
-                            tool_call=ToolCall(
-                                id=block.id,
-                                tool_id=block.name,
-                                args=dict(block.input),
-                                status=ToolCallStatus.RUNNING,
-                            )
+                    tool_calls.append(
+                        ToolCall(
+                            id=block.id,
+                            tool_id=block.name,
+                            args=dict(block.input),
+                            status=ToolCallStatus.RUNNING,
                         )
                     )
+            # Per-iteration commit boundary · chat_service tap persists
+            # this iteration as its own Message row so reload preserves
+            # turn-by-turn ordering. AG-UI ignores this kind (encoder
+            # falls through), live wire shape unchanged.
+            out.append(
+                AssistantCommittedEvent(
+                    message_id=ev.message.id,
+                    text="".join(text_chunks),
+                    reasoning="".join(reasoning_chunks) or None,
+                    tool_calls=list(tool_calls),
+                )
+            )
+            for tc in tool_calls:
+                out.append(ToolCallStartEvent(tool_call=tc))
             return out
         if isinstance(ev, ToolMessageCommitted):
             tc_id = ev.message.tool_call_id or ""
