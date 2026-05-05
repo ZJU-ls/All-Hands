@@ -127,6 +127,13 @@ export function ModelOverrideChip({
       size="sm"
       triggerClassName={chipClass}
       popoverAlign="left"
+      // 2026-05-05 · compact mode keeps loading + error states at chip
+      // size · before this, a 503 from /api/models popped a 300-px
+      // alert-card right where the chat textarea should be, blocking the
+      // user from typing at all. The fallback label keeps the resolved
+      // model visible even when the picker can't list alternatives.
+      compact
+      compactFallbackLabel={effModel}
       // Chip context: size to content, don't grab the flex row. Without
       // this the composer controls row collapses the ThinkingToggle +
       // CompactChip neighbours to one CJK-character-per-row min-content.
