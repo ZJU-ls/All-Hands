@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>多轮 turn 按顺序落库 · 排查报告</title>
+<style>
+  :root{--bg:#0b1020;--surface:#121833;--surface-2:#1a2247;--text:#e6e9f5;--muted:#9ba2c2;--subtle:#6c7494;--border:#252c52;--primary:#5b8cff;--success:#3fbf7f;--danger:#ff6b6b;--warn:#ffb84a}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:14.5px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  main{max-width:920px;margin:0 auto;padding:48px 28px 96px}
+  header{margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font:600 11px/1 ui-monospace,monospace;color:var(--subtle);letter-spacing:.18em;text-transform:uppercase}
+  .eyebrow::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--primary)}
+  h1{font-size:30px;font-weight:700;margin:10px 0 8px;letter-spacing:-.01em}
+  .lede{color:var(--muted);font-size:15px;max-width:64ch}
+  .meta{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font:600 11.5px/1 ui-monospace,monospace;color:var(--muted)}
+  .chip.ok{color:var(--success);border-color:rgba(63,191,127,.35);background:rgba(63,191,127,.1)}
+  .chip.danger{color:var(--danger);border-color:rgba(255,107,107,.35);background:rgba(255,107,107,.1)}
+  .chip.warn{color:var(--warn);border-color:rgba(255,184,74,.35);background:rgba(255,184,74,.1)}
+  section{margin:36px 0}
+  h2{font-size:20px;font-weight:700;margin:0 0 12px}
+  h3{font-size:15.5px;font-weight:700;margin:18px 0 8px;color:var(--text)}
+  p{color:var(--text)}
+  p.muted{color:var(--muted)}
+  ul{padding-left:20px}li{margin:4px 0}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+  code{background:var(--surface-2);padding:1px 6px;border-radius:4px;color:#dee3fb;border:1px solid var(--border)}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;overflow-x:auto;line-height:1.55}
+  pre code{background:none;padding:0;border:none;color:#dee3fb}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin:14px 0}
+  .card.bad{border-color:rgba(255,107,107,.35);background:rgba(255,107,107,.06)}
+  .card.good{border-color:rgba(63,191,127,.35);background:rgba(63,191,127,.06)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  .label{font:600 10.5px/1 ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--subtle);margin-bottom:8px}
+  table{width:100%;border-collapse:collapse;margin:10px 0}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);font-size:13.5px}
+  th{font:600 11px/1.4 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--subtle)}
+  tr:last-child td{border-bottom:none}
+  td.mono{font-family:ui-monospace,monospace;color:#dee3fb}
+  .hr{height:1px;background:var(--border);margin:24px 0}
+  footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--border);color:var(--subtle);font-size:12.5px}
+  a{color:var(--primary);text-decoration:none;border-bottom:1px dashed rgba(91,140,255,.4)}
+  a:hover{border-bottom-style:solid}
+  blockquote{margin:14px 0;padding:10px 16px;border-left:3px solid var(--primary);background:var(--surface);color:var(--muted);border-radius:0 8px 8px 0}
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <span class="eyebrow">Bugfix · chat persistence</span>
+  <h1>多轮 turn 按顺序落库 · 修 max_iterations 整段消失 + 重载 tool 排序错乱</h1>
+  <p class="lede">用户报告:跑了一个长对话(<code>create_model</code> / <code>list_models</code> 反复试 ~20 轮)触顶 max_iterations 失败,刷新进来"中间这块"全没了;少数情况能看到一小段文字,但所有 tool 卡片都堆到底部,显然不是当时的实际顺序。这份报告记录排查 → 根因 → 修复 → 验证。</p>
+  <div class="meta">
+    <span class="chip">分支 · feat/refine → main</span>
+    <span class="chip">commit · 4ebcc18</span>
+    <span class="chip ok">backend 2056 / 2056 ✓</span>
+    <span class="chip ok">frontend 2168 / 2168 ✓</span>
+    <span class="chip ok">mypy strict 0</span>
+  </div>
+</header>
+
+<section>
+  <h2>1 · 现象</h2>
+  <div class="grid2">
+    <div class="card bad">
+      <div class="label">现象 A · 整段消失</div>
+      <p>触顶 max_iterations 后失败 · 刷新页面 · 中间 ~20 轮 tool 调用 + 文本全部不见 · 只剩用户初始 <code>你能做什么</code> 和 Lead Agent 的开场白。</p>
+    </div>
+    <div class="card bad">
+      <div class="label">现象 B · 顺序错乱</div>
+      <p>偶尔能看到最后一段助手文本 · 但 8 个 <code>create_model</code> / <code>list_models</code> 卡片一股脑挂在文本下面 · 而不是当时实际"列模型 → 创建 → 再列 → 再创建"的交错顺序。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>2 · 根因</h2>
+  <p>两个症状一个根。<code>chat_service._persist_assistant_reply</code> 是把 SSE 流落库的 tap,它的 buffer / tool_calls_by_id / message_id <strong>跨整个 turn 累加</strong>,只在 <code>done</code> / <code>error</code> 时调一次 <code>flush()</code> 写一行 Message:</p>
+
+  <pre><code>async def flush() -> None:
+    if persisted or not buffer or message_id is None:
+        return    # ← 这里
+    ...
+    msg = Message(
+        id=message_id,           # 最后一次迭代的 id
+        content="".join(buffer), # 全部迭代文本拼起来
+        tool_calls=list(tool_calls_by_id.values()),  # 全部迭代 tool_calls
+        ...
+    )
+    await self._conversations.append_message(msg)</code></pre>
+
+  <h3>2.1 为什么"整段消失"</h3>
+  <p>触顶 <code>max_iterations</code> 时,<code>AgentLoop</code> 在<strong>下一轮 LLM 调用之前</strong>就 yield <code>LoopExited</code> 退出。Runner 把它翻成 <code>ErrorEvent + DoneEvent(error)</code>,tap 进 <code>error</code> 分支调 <code>flush()</code>。如果这个 turn 全程只发 tool_call(模型很少补文字 · qwen 系列特别明显),<code>buffer</code> 是空的 · 命中 <code>not buffer: return</code> 提前返回 · <strong>整个 turn 一行 Message 都没落</strong>。Reload 自然啥都没。</p>
+
+  <h3>2.2 为什么"顺序错乱"</h3>
+  <p>就算 buffer 有内容,被持久化的也就<strong>一行</strong> assistant Message,带一个 <code>content</code> 串和一个 <code>tool_calls[]</code> 平铺数组。前端 <code>MessageBubble</code> 历史路径走 <code>LegacyAgentBody</code> · 渲染顺序固定:</p>
+  <pre><code>1. message.content           ← 全部文本拼起来
+2. message.tool_calls.map()  ← 全部 tool 卡片堆底部
+3. message.render_payloads</code></pre>
+  <p>实时 SSE 之所以正常,是因为前端按事件顺序构造 <code>segments</code> 数组(text/tool_call/render 交错),用 <code>SegmentedBody</code> 渲染。Reload 没有 segments → fallback 到 Legacy → 错乱。</p>
+
+  <blockquote>"按顺序存储,按顺序渲染就好吧?" — 用户原话 · 第一性原理</blockquote>
+</section>
+
+<section>
+  <h2>3 · 修复</h2>
+  <p>每次 LLM 迭代产出一行独立的 assistant Message · 每个 tool_call_end 立刻补一行 <code>role=tool</code> · 时间戳严格单调 · reload 顺序 = 实际执行顺序。</p>
+
+  <h3>3.1 新事件:<code>AssistantCommittedEvent</code></h3>
+  <pre><code class="lang-py">class AssistantCommittedEvent(BaseModel):
+    """Per-iteration boundary signal · one LLM call's full assistant snapshot."""
+    kind: Literal["assistant_committed"] = "assistant_committed"
+    message_id: str
+    text: str = ""
+    reasoning: str | None = None
+    tool_calls: list[ToolCall] = []</code></pre>
+  <p>Runner 收到内部 <code>AssistantMessageCommitted</code> 时,从 <code>content_blocks</code> 里把 TextBlock / ReasoningBlock / ToolUseBlock 各自拣出来,打包成事件 · 在原有 <code>ToolCallStartEvent</code> 之前发出。</p>
+
+  <h3>3.2 chat_service · per-iteration commit</h3>
+  <pre><code class="lang-py">async def commit_iteration(iter_message_id, iter_text, iter_reasoning, iter_tool_calls):
+    iteration_seq += 1
+    created_at = (first_seen or now()) + timedelta(microseconds=iteration_seq)
+    msg = Message(role="assistant", content=iter_text, tool_calls=iter_tool_calls, ...)
+    await self._conversations.append_message(msg)
+    persisted = True   # turn_lock 走 happy path
+    # 同步落 ASSISTANT 事件到 event_repo (ADR 0017)
+    # 重置 buffer / tool_calls_by_id / message_id / first_seen 等待下一轮
+</code></pre>
+
+  <h3>3.3 chat_service · per-tool commit</h3>
+  <pre><code class="lang-py">async def commit_tool_message(tc: ToolCall):
+    iteration_seq += 1
+    created_at = now() + timedelta(microseconds=iteration_seq)
+    tool_msg = Message(role="tool", tool_call_id=tc.id, content=..., ...)
+    await self._conversations.append_message(tool_msg)</code></pre>
+  <p>关键:<code>iteration_seq</code> 全 turn 单调递增 · 微秒精度叠加 · 即使同一个 event-loop tick 里连续 commit 4 行 · 时间戳依然严格有序。<code>list_messages</code> 用 <code>ORDER BY created_at</code> · reload 顺序 = 写入顺序 = 实时顺序。</p>
+
+  <h3>3.4 trailing flush 改造</h3>
+  <p>原 <code>flush()</code> 用 <code>persisted</code> 标志双用(防重写 + 表示是否落过)· 新方案拆开:</p>
+  <ul>
+    <li><code>persisted</code>:首次 commit_iteration 即 True · turn_lock.complete_turn 用</li>
+    <li><code>trailing_flushed</code>:flush() 内部防重写,仅最后一段 partial(client disconnect / mid-stream error)走 flush</li>
+  </ul>
+  <p>结果:happy path 的尾部 flush() 因 buffer 已空提前返回 · partial path 仍能补上一行 <code>interrupted=True</code> 的 Message。</p>
+</section>
+
+<section>
+  <h2>4 · 兼容</h2>
+  <table>
+    <thead><tr><th>层</th><th>变化</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">AG-UI 线协议</td><td>无</td><td>encoder 没有 <code>assistant_committed</code> 分支 · 默认 fall-through 静默丢弃 · live SSE 文本/tool_call frame 序列与之前一致</td></tr>
+      <tr><td class="mono">前端历史 fixture</td><td>无</td><td>旧的"单行 assistant"消息照常走 LegacyAgentBody · 新写入的 turn 会变成多行 Message · 各自走 LegacyAgentBody(已是 chat 通用渲染)</td></tr>
+      <tr><td class="mono">event_repo (ADR 0017)</td><td>每迭代 1 条 ASSISTANT</td><td>原来是每 turn 1 条 · 现在每 LLM 调用 1 条 · 与 TOOL_CALL_EXECUTED / TOOL_CALL_FAILED 配对更自然</td></tr>
+      <tr><td class="mono">build_llm_context</td><td>无显式改动</td><td>读取多行 assistant + tool · 已支持(它本来就按 role + tool_call_id 配对) · 待后续手动验证一次复合 turn</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>5 · 测试</h2>
+  <p>新增 2 个集成 case 钉住行为:</p>
+  <ul>
+    <li><code>test_assistant_committed_per_iteration_persists_separate_rows</code>:跑一个 2 轮 turn(text + tool_call · text + tool_call) · 断言落 4 行 Message · 顺序 <code>[assistant, tool, assistant, tool]</code> · 时间戳 <code>created_at</code> 严格单调</li>
+    <li><code>test_max_iterations_error_preserves_earlier_iterations</code>:1 轮成功 · 然后 ErrorEvent(MAX_ITERATIONS) · 断言成功的那一轮 assistant 行 + tool 行都还在 DB · 不再"整段消失"</li>
+  </ul>
+  <p>原 8 个旧测试(单 message 路径)保持绿 · 因为 fake_stream 没有 <code>AssistantCommittedEvent</code> · 走 trailing flush · 等价老路径。</p>
+</section>
+
+<section>
+  <h2>6 · 验证清单</h2>
+  <ul>
+    <li>✓ <code>uv run pytest</code> · 2056 通过 · 0 失败 · 29 skipped(预期)</li>
+    <li>✓ <code>uv run mypy src</code> · strict 模式 0 错</li>
+    <li>✓ <code>pnpm typecheck</code> · 0 错</li>
+    <li>✓ <code>pnpm test --run</code> · 2168 通过</li>
+    <li>✓ <code>uv run ruff check . && ruff format --check .</code> · 全过</li>
+    <li>✓ <code>uv run lint-imports</code> · 4 contracts kept</li>
+  </ul>
+</section>
+
+<section>
+  <h2>7 · 后续</h2>
+  <ul>
+    <li><strong>UX 微调</strong>:连续 assistant Message 现在每条独立渲染 1 个 bubble + 头像 · 多轮 turn 视觉上会是多个 agent 头像列。可后续在 MessageList 加"连续同 role 不重复头像"分组 · 但功能层面已经"按顺序存 · 按顺序渲染"了。</li>
+    <li><strong>segments 后端化</strong>:目前 segments 仅用于 live 流。如果未来想让历史 turn 也合并成单 bubble 内交错,可把 segments 写进 Message 的 metadata · 不阻塞当前修复。</li>
+    <li><strong>build_llm_context 验证</strong>:复合 turn 喂给下一轮 LLM 时 · tool_use ↔ tool_result 配对靠 tool_call_id · 现在是分行存的 · 跑一个 e2e 长对话再 send 看 wire shape 是否符合 · 列入下一轮 soak。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>附录 · 文件改动</h2>
+  <table>
+    <thead><tr><th>文件</th><th>改动</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">backend/src/allhands/execution/events.py</td><td>+22 / 加 AssistantCommittedEvent · 入 union</td></tr>
+      <tr><td class="mono">backend/src/allhands/execution/runner.py</td><td>+22 / -7 · 在 AssistantMessageCommitted 处发新事件 · 拣 TextBlock / ReasoningBlock / ToolUseBlock</td></tr>
+      <tr><td class="mono">backend/src/allhands/services/chat_service.py</td><td>+162 / -3 · commit_iteration · commit_tool_message · trailing_flushed 拆分 · iteration_seq 微秒序</td></tr>
+      <tr><td class="mono">backend/tests/integration/test_chat_service_persistence.py</td><td>+157 · 2 个新集成 case</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer>
+  <div>2026-05-05 · feat/refine · commit <code>4ebcc18</code> · merged to main as <code>0583f34</code></div>
+  <div style="margin-top:6px">报告位置 · <code>product/research/sandbox/MULTI-ITER-PERSIST-FIX.html</code></div>
+</footer>
+
+</main>
+</body>
+</html>
