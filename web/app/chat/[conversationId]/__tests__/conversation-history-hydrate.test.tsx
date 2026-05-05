@@ -189,4 +189,58 @@ describe("/chat/[conversationId] · 历史渲染 rehydrate", () => {
     expect(firstTc?.tool_id).toBe("allhands.render.bar_chart");
     expect(assistant.reasoning).toBe("decided BarChart was the right component");
   });
+
+  it("hydrates attachment_ids on user rows so reloading shows uploaded images / files", async () => {
+    const conversation = {
+      id: "conv-with-render",
+      employee_id: "emp1",
+      title: null,
+      model_ref_override: null,
+      created_at: "2026-04-22T00:00:00+00:00",
+    };
+    const employee = {
+      id: "emp1",
+      name: "hydrate-test",
+      description: "",
+      tool_ids: [],
+      skill_ids: [],
+      model_ref: "default",
+      is_lead_agent: false,
+      system_prompt: "",
+      max_iterations: 10,
+      created_at: "2026-04-22T00:00:00+00:00",
+    };
+    const messages = [
+      {
+        id: "m1",
+        conversation_id: "conv-with-render",
+        role: "user",
+        content: "看下这张图",
+        created_at: "2026-04-22T00:00:00+00:00",
+        render_payloads: [],
+        tool_calls: [],
+        reasoning: null,
+        attachment_ids: ["att-abc", "att-def"],
+      },
+    ];
+
+    fetchSpy.mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/conversations/conv-with-render")) return okJson(conversation);
+      if (url.includes("/api/conversations/conv-with-render/messages")) return okJson(messages);
+      if (url.endsWith("/api/employees/emp1")) return okJson(employee);
+      throw new Error(`unexpected fetch ${url}`);
+    });
+
+    render(<ConversationPage />);
+
+    await waitFor(() => expect(replaceMessagesSpy).toHaveBeenCalled());
+    const [hydrated] = replaceMessagesSpy.mock.calls.at(-1)!;
+    const user = hydrated.find((m) => m.role === "user");
+    if (!user) throw new Error("user row must be present");
+    expect(
+      user.attachment_ids,
+      "attachment_ids dropped → user-uploaded images vanish on reload",
+    ).toEqual(["att-abc", "att-def"]);
+  });
 });

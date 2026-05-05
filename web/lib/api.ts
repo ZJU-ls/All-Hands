@@ -208,6 +208,13 @@ export type ChatMessageDto = {
    */
   interrupted?: boolean;
   /**
+   * Ids of attachments (images / files) the user uploaded with this turn.
+   * Required for history rehydrate — without this the user-message bubble
+   * silently drops images / file chips after reload (the bytes still live
+   * in the attachments table; the bubble just never learns the ids).
+   */
+  attachment_ids?: string[];
+  /**
    * 2026-04-28 · Manual /compact has folded this message into a summary.
    * UI keeps the row in the transcript but hides it behind a "N 条已压缩"
    * fold; the LLM context build path filters it out so the token budget
