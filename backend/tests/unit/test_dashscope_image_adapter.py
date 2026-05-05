@@ -142,11 +142,20 @@ async def test_supports_only_aliyun_kind() -> None:
 
 
 @pytest.mark.asyncio
-async def test_supports_only_wanx_pattern() -> None:
+async def test_supports_any_aliyun_image_model() -> None:
+    """Post-2026-05-05 the adapter trusts the registry (capabilities on
+    LLMModel) rather than name-substring matching. Any model whose
+    provider.kind=='aliyun' passes — it's the user's job to mark a
+    non-image model as non-image at registration time. Misclassification
+    surfaces as a clear server error from the upstream API instead of
+    a confusing "no adapter accepts" message."""
     a = DashScopeImageAdapter()
     assert await a.supports(provider=_provider(), model=_model("wanx-v1")) is True
     assert await a.supports(provider=_provider(), model=_model("wan2.5-t2i-preview")) is True
-    assert await a.supports(provider=_provider(), model=_model("qwen-max")) is False
+    assert await a.supports(provider=_provider(), model=_model("wan2.7-image-pro")) is True
+    # Registry trust: even a name without "wan" gets accepted, the gateway
+    # routes by capability + provider.kind.
+    assert await a.supports(provider=_provider(), model=_model("flux-dev")) is True
 
 
 # ─────────────────────────────────────────────────────────────────────

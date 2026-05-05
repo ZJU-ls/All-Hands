@@ -90,18 +90,11 @@ class DashScopeVideoAdapter:
 
     modality: ClassVar[Modality] = Modality.VIDEO
     provider_kinds: ClassVar[tuple[str, ...]] = ("aliyun",)
-    # Match wanx-video / wan2.x-t2v-* / wan2.x-i2v-* across versions.
-    model_patterns: ClassVar[tuple[str, ...]] = (
-        "wanx-video",
-        "wan2-t2v",
-        "wan2-i2v",
-        "wan2.1-t2v",
-        "wan2.1-i2v",
-        "wan2.5-t2v",
-        "wan2.5-i2v",
-        "wan2.6-t2v",
-        "wan2.6-i2v",
-    )
+    # 2026-05-05 · empty patterns → accept any aliyun video model row.
+    # See dashscope_image.py for the design note · model.capabilities
+    # is the source of truth, name-substring matching was the
+    # "every new wanx release needs a code change" anti-pattern.
+    model_patterns: ClassVar[tuple[str, ...]] = ()
 
     def __init__(
         self,
