@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { Icon } from "@/components/ui/icon";
 import { Select, type SelectGroup, type SelectOption } from "@/components/ui/Select";
+import { cn } from "@/lib/cn";
 import {
   buildModelRef,
   defaultModelRef,
@@ -13,6 +14,19 @@ import {
   type ModelDto,
   type ProviderDto,
 } from "@/lib/api";
+
+/**
+ * Compose the chip trigger className for the loading / error fallbacks.
+ * Mirrors the chip shape `ModelOverrideChip` builds, so the placeholder
+ * occupies the same footprint as the happy-path Select trigger.
+ */
+function cnTrigger(triggerClassName: string | undefined, extra?: string) {
+  return cn(
+    "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 font-mono text-[11px] transition-colors duration-fast disabled:opacity-60",
+    triggerClassName ?? "border-border bg-surface text-text-muted",
+    extra,
+  );
+}
 
 /**
  * ModelPicker · shared dropdown for selecting a model by ref
@@ -63,6 +77,30 @@ type Props = {
   renderTrigger?: (selected: SelectOption | null) => React.ReactNode;
   popoverAlign?: "left" | "right";
   className?: string;
+  /**
+   * Chip-sized error / loading rendering. Set when the picker lives inside
+   * a tight composer / toolbar (`ModelOverrideChip`) where the default
+   * "alert card" error state would push neighbouring controls — and the
+   * input box on chat — out of frame.
+   *
+   * 2026-05-05 fix · users reported the chat composer being completely
+   * blocked by a 「加载模型列表失败 / Error: listModels failed: 503」
+   * card sitting where the textarea should be. In compact mode, error
+   * collapses to a small red chip with retry on click; the underlying
+   * page (form / chat) keeps full width and the model fallback (employee
+   * default) keeps working.
+   *
+   * Default `false` keeps the form-friendly alert card for the employee
+   * designer surface.
+   */
+  compact?: boolean;
+  /**
+   * Label shown inside the compact error chip when the live list is
+   * unavailable. Typically the resolved fallback ref (employee default).
+   * Truthful information stays on screen so the user knows *something*
+   * is selected even though the picker can't list alternatives.
+   */
+  compactFallbackLabel?: string;
 };
 
 /** Look up a provider by the "<provider.name>/<model.name>" ref. */
@@ -88,6 +126,8 @@ export function ModelPicker({
   renderTrigger,
   popoverAlign,
   className = "w-full",
+  compact = false,
+  compactFallbackLabel,
 }: Props) {
   const t = useTranslations("modelPicker");
   const [state, setState] = useState<
@@ -144,6 +184,25 @@ export function ModelPicker({
   }, [state]);
 
   if (state.status === "loading") {
+    if (compact) {
+      // Loading shouldn't move the composer layout · render at chip size
+      // with a subdued "…" so the textarea / neighbouring controls stay
+      // in their natural slots. The full-text loader below is for the
+      // employee designer form which has the vertical room.
+      return (
+        <button
+          type="button"
+          disabled
+          data-testid={testId ?? "model-picker-loading"}
+          className={cnTrigger(triggerClassName, "opacity-70")}
+        >
+          <Icon name="loader" size={11} className="animate-spin shrink-0" />
+          <span className="font-mono text-[10px] text-text-subtle">
+            {t("loading")}
+          </span>
+        </button>
+      );
+    }
     return (
       <div
         data-testid={testId ?? "model-picker-loading"}
@@ -155,6 +214,34 @@ export function ModelPicker({
   }
 
   if (state.status === "error") {
+    const errorTestIdShared = testId ? `${testId}-error` : "model-picker-error";
+    if (compact) {
+      // Chip-sized error · click to retry. The textarea / send button
+      // stay laid out exactly as in the happy path. Detail goes in
+      // `title` and aria-label so power users / screen readers can still
+      // see "503". Manual entry / fallback default are designer-only
+      // affordances; chat already has the employee default in effect
+      // and a "look at gateway" path via the topbar.
+      return (
+        <button
+          type="button"
+          onClick={retry}
+          aria-label={t("loadFailedTitle")}
+          title={`${t("loadFailedTitle")} · ${state.message} · ${t("retry")}`}
+          data-testid={errorTestIdShared}
+          className={cnTrigger(
+            triggerClassName,
+            "border-danger/40 bg-danger-soft text-danger hover:bg-danger-soft/80",
+          )}
+        >
+          <Icon name="alert-circle" size={11} className="shrink-0" />
+          <span className="truncate max-w-[140px]">
+            {compactFallbackLabel ?? t("loadFailedTitle")}
+          </span>
+          <Icon name="refresh" size={10} className="shrink-0 opacity-70" />
+        </button>
+      );
+    }
     // 2026-04-29 · 加载模型列表失败时的恢复 UI。
     // 之前只展一行红字 + error message · 用户没有出口:既不能重试,也
     // 不能在不修后端的前提下继续填表。
@@ -165,7 +252,7 @@ export function ModelPicker({
     //   3. 「手动输入」· 切到一个简单 input,用户能直接键入
     //      `provider/model` ref(常见场景:平台模型列表挂了但用户记得自
     //      己常用的模型 ref,后端只是 list 接口挂了 chat 不一定挂)
-    const errorTestId = testId ? `${testId}-error` : "model-picker-error";
+    const errorTestId = errorTestIdShared;
     if (manualMode) {
       return (
         <div className="space-y-2" data-testid={errorTestId}>

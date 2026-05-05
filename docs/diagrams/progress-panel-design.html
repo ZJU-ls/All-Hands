@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>进度面板 v2 · InputBar 上方 · 可收起 + 动态</title>
+    <style>
+      :root {
+        --bg: #0a0f1c;
+        --surface: #111a2e;
+        --surface-2: #16223c;
+        --surface-3: #1d2c4d;
+        --border: #243152;
+        --border-strong: #324468;
+        --text: #e6edf7;
+        --muted: #8a9bbf;
+        --subtle: #5e7299;
+        --primary: #4f8cff;
+        --primary-soft: rgba(79, 140, 255, 0.18);
+        --success: #34d399;
+        --success-soft: rgba(52, 211, 153, 0.15);
+        --warning: #fbbf24;
+        --warning-soft: rgba(251, 191, 36, 0.15);
+        --accent: #a78bfa;
+        --accent-soft: rgba(167,139,250,0.15);
+        --pink: #f9a8d4;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 36px 24px 80px;
+        background:
+          radial-gradient(1100px 600px at 12% -8%, #1a2748, transparent),
+          radial-gradient(800px 480px at 88% 4%, #2a1d4d, transparent),
+          var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .wrap { max-width: 1100px; margin: 0 auto; }
+      h1 {
+        font-size: 28px; font-weight: 700; margin: 0 0 6px;
+        background: linear-gradient(90deg, #93c5fd, #c4b5fd, #f9a8d4);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .meta { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+      .meta code { color: var(--text); font-family: var(--mono); font-size: 12px; padding: 1px 5px; background: var(--surface); border-radius: 4px; }
+      h2 {
+        font-size: 17px; font-weight: 600; margin: 32px 0 14px;
+        padding-left: 12px; border-left: 3px solid var(--primary);
+      }
+      h3 { font-size: 14px; font-weight: 600; margin: 14px 0 8px; color: var(--text); }
+      h4 { font-size: 12px; font-weight: 600; margin: 10px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+      p { margin: 0 0 10px; }
+      code { font-family: var(--mono); font-size: 12.5px; }
+
+      .lead {
+        background: linear-gradient(135deg, rgba(79,140,255,0.08), rgba(167,139,250,0.06));
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 22px;
+        font-size: 14px;
+        margin-bottom: 24px;
+      }
+      .lead b { color: #c4b5fd; }
+
+      /* mock chat */
+      .mock-chat {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 0;
+        overflow: hidden;
+        max-width: 720px;
+        margin: 16px auto;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+      }
+      .mock-chat-header {
+        background: var(--surface-2);
+        padding: 10px 14px;
+        font-size: 12px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+      }
+      .mock-chat-body {
+        padding: 14px;
+        min-height: 140px;
+        background: var(--bg);
+      }
+      .mock-msg {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin: 8px 0;
+        font-size: 12.5px;
+        color: var(--muted);
+        max-width: 75%;
+      }
+      .mock-msg.user {
+        margin-left: auto;
+        background: var(--primary-soft);
+        border-color: rgba(79,140,255,0.4);
+        color: var(--text);
+      }
+
+      /* THE progress panel */
+      .progress-panel {
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        padding: 0;
+      }
+      .progress-section {
+        border-bottom: 1px solid var(--border);
+      }
+      .progress-section:last-child { border-bottom: none; }
+      .progress-section-header {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .progress-section-header:hover {
+        background: var(--surface-2);
+      }
+      .chevron {
+        font-family: var(--mono); color: var(--subtle);
+        transition: transform 0.15s ease;
+        font-size: 10px;
+      }
+      .chevron.collapsed { transform: rotate(-90deg); }
+      .section-icon {
+        width: 22px; height: 22px; border-radius: 6px;
+        display: grid; place-items: center;
+        font-size: 12px;
+      }
+      .section-icon.plan { background: var(--success-soft); color: var(--success); }
+      .section-icon.subagent { background: var(--accent-soft); color: var(--accent); }
+      .section-title {
+        font-size: 12.5px; color: var(--text); font-weight: 600;
+        flex: 1;
+      }
+      .section-meta {
+        font-family: var(--mono); font-size: 11px; color: var(--muted);
+      }
+      .section-body {
+        padding: 4px 14px 12px;
+        font-size: 12px;
+        animation: slide-in 0.2s ease;
+      }
+      @keyframes slide-in {
+        from { opacity: 0; max-height: 0; }
+        to { opacity: 1; max-height: 400px; }
+      }
+
+      /* plan steps */
+      .plan-steps { display: grid; gap: 6px; }
+      .plan-step {
+        display: grid; grid-template-columns: 18px 18px 1fr; gap: 8px;
+        align-items: center;
+        padding: 4px 8px;
+        border-radius: 6px;
+      }
+      .plan-step:hover { background: var(--surface-2); }
+      .step-num {
+        font-family: var(--mono); font-size: 9.5px; color: var(--subtle);
+      }
+      .step-dot {
+        width: 14px; height: 14px; border-radius: 50%;
+        background: var(--surface-3); border: 1.5px solid var(--border);
+        position: relative;
+      }
+      .step-dot.done { background: var(--success); border-color: var(--success); }
+      .step-dot.done::after {
+        content: "✓"; position: absolute; top: -1px; left: 2px;
+        font-size: 9px; color: white; font-weight: 700;
+      }
+      .step-dot.running {
+        background: var(--warning); border-color: var(--warning);
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+      .step-dot.failed {
+        background: #f87171; border-color: #f87171;
+      }
+      .step-dot.failed::after {
+        content: "×"; position: absolute; top: -2px; left: 3px;
+        font-size: 11px; color: white; font-weight: 700;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.5; box-shadow: 0 0 0 0 var(--warning); }
+        50% { opacity: 1; box-shadow: 0 0 0 4px rgba(251,191,36,0.15); }
+      }
+      .step-label {
+        font-size: 12px; color: var(--text);
+      }
+      .step-label.done { color: var(--subtle); text-decoration: line-through; }
+
+      /* subagent rows */
+      .subagent-list { display: grid; gap: 4px; }
+      .subagent-row {
+        display: grid; grid-template-columns: 14px 1fr auto; gap: 10px;
+        align-items: center;
+        padding: 6px 8px;
+        border-radius: 6px;
+      }
+      .subagent-row:hover { background: var(--surface-2); }
+      .sub-status {
+        width: 8px; height: 8px; border-radius: 50%;
+      }
+      .sub-status.running { background: var(--accent); animation: pulse-sub 1.2s infinite; }
+      .sub-status.done { background: var(--success); }
+      .sub-status.failed { background: #f87171; }
+      @keyframes pulse-sub {
+        0%, 100% { opacity: 0.5; }
+        50% { opacity: 1; }
+      }
+      .sub-info {
+        display: flex; gap: 8px; align-items: baseline;
+        font-size: 12px;
+      }
+      .sub-name { color: var(--text); font-weight: 500; }
+      .sub-meta { color: var(--subtle); font-size: 11px; font-family: var(--mono); }
+      .sub-trace-btn {
+        background: var(--accent-soft); color: var(--accent);
+        border: 1px solid rgba(167,139,250,0.4);
+        border-radius: 5px; padding: 2px 8px;
+        font-size: 10.5px; cursor: pointer;
+        font-family: var(--mono);
+      }
+      .sub-trace-btn:hover { background: rgba(167,139,250,0.3); }
+
+      /* mock InputBar */
+      .mock-input-area {
+        padding: 12px 14px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+      }
+      .mock-input {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 12px;
+        color: var(--subtle);
+      }
+
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+      .pros-cons {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      }
+      @media (max-width: 760px) { .pros-cons { grid-template-columns: 1fr; } }
+      .pros, .cons {
+        background: var(--surface-2);
+        border-left: 3px solid;
+        border-radius: 0 6px 6px 0;
+        padding: 10px 14px;
+      }
+      .pros { border-left-color: var(--success); }
+      .cons { border-left-color: var(--warning); }
+      .pros h5, .cons h5 {
+        font-size: 11px; margin: 0 0 6px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      .pros h5 { color: var(--success); }
+      .cons h5 { color: var(--warning); }
+      .pros ul, .cons ul {
+        margin: 0; padding-left: 16px; font-size: 12.5px;
+      }
+      .pros li, .cons li { color: var(--muted); margin-bottom: 3px; }
+
+      ul.bare { margin: 6px 0; padding-left: 18px; }
+      ul.bare li { margin-bottom: 5px; color: var(--muted); }
+      ul.bare li b { color: var(--text); }
+      ul.bare li code { background: var(--bg); padding: 1px 5px; border-radius: 3px; color: var(--accent); font-size: 11.5px; }
+
+      .footer-cta {
+        margin-top: 30px;
+        padding: 18px 22px;
+        background: linear-gradient(135deg, rgba(79,140,255,0.1), rgba(167,139,250,0.08));
+        border: 1px solid var(--border-strong);
+        border-radius: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>进度面板 v2 · InputBar 上方</h1>
+      <div class="meta">
+        基于反馈调整:不放顶部 · 改在<b>对话框上方</b>(InputBar 之上)· plan 和 subagent 各自<b>独立可收起/展开</b> · 实时动态。
+      </div>
+
+      <div class="lead">
+        <b>位置:</b> chat 输入框正上方 · sticky 在底部 · 跟随聊天流而非滚动 · 用户视线刚好在那里(打字时)。<br/>
+        <b>结构:</b> 两个独立的可折叠 section · 每个有自己的展开状态(localStorage 记)· 当某 section 内容为空时整个 section 不显示 · 两个都没时整个 panel 隐藏。
+      </div>
+
+      <h2>展开状态(默认)</h2>
+
+      <div class="mock-chat">
+        <div class="mock-chat-header">/chat/conv-abc · Lead Agent</div>
+        <div class="mock-chat-body">
+          <div class="mock-msg user">下一步开始执行第二步</div>
+          <div class="mock-msg">已调用 plan_update_step(1, "running") · 派发给 onpm employee 调研竞品...</div>
+        </div>
+
+        <!-- ↓ Progress panel · the new piece -->
+        <div class="progress-panel">
+          <!-- Plan section -->
+          <div class="progress-section">
+            <div class="progress-section-header">
+              <span class="chevron">▾</span>
+              <span class="section-icon plan">📋</span>
+              <span class="section-title">Q3 发布计划</span>
+              <span class="section-meta">2/5 · 1 进行中</span>
+            </div>
+            <div class="section-body">
+              <div class="plan-steps">
+                <div class="plan-step">
+                  <span class="step-num">01</span>
+                  <span class="step-dot done"></span>
+                  <span class="step-label done">市场调研与竞品分析</span>
+                </div>
+                <div class="plan-step">
+                  <span class="step-num">02</span>
+                  <span class="step-dot done"></span>
+                  <span class="step-label done">产品核心价值点提炼</span>
+                </div>
+                <div class="plan-step">
+                  <span class="step-num">03</span>
+                  <span class="step-dot running"></span>
+                  <span class="step-label">制定分阶段预热时间表</span>
+                </div>
+                <div class="plan-step">
+                  <span class="step-num">04</span>
+                  <span class="step-dot"></span>
+                  <span class="step-label">分发执行任务给专项子代理</span>
+                </div>
+                <div class="plan-step">
+                  <span class="step-num">05</span>
+                  <span class="step-dot"></span>
+                  <span class="step-label">汇总执行结果与风险评估</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subagent section -->
+          <div class="progress-section">
+            <div class="progress-section-header">
+              <span class="chevron">▾</span>
+              <span class="section-icon subagent">🤖</span>
+              <span class="section-title">活跃子代理</span>
+              <span class="section-meta">1 running</span>
+            </div>
+            <div class="section-body">
+              <div class="subagent-list">
+                <div class="subagent-row">
+                  <span class="sub-status running"></span>
+                  <span class="sub-info">
+                    <span class="sub-name">onpm</span>
+                    <span class="sub-meta">running · 1m 12s · 调研竞品</span>
+                  </span>
+                  <span class="sub-trace-btn">查看链路 →</span>
+                </div>
+                <div class="subagent-row">
+                  <span class="sub-status done"></span>
+                  <span class="sub-info">
+                    <span class="sub-name">researcher</span>
+                    <span class="sub-meta">done · 45s · 拉取了 12 个 url</span>
+                  </span>
+                  <span class="sub-trace-btn">查看链路 →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mock-input-area">
+          <div class="mock-input">输入消息...</div>
+        </div>
+      </div>
+
+      <h2>收起状态(用户点过 chevron)</h2>
+
+      <div class="mock-chat">
+        <div class="mock-chat-header">/chat/conv-abc · Lead Agent</div>
+        <div class="mock-chat-body">
+          <div class="mock-msg user">下一步开始执行第二步</div>
+          <div class="mock-msg">已调用 plan_update_step(1, "running") · 派发给 onpm employee 调研竞品...</div>
+        </div>
+
+        <div class="progress-panel">
+          <div class="progress-section">
+            <div class="progress-section-header">
+              <span class="chevron collapsed">▾</span>
+              <span class="section-icon plan">📋</span>
+              <span class="section-title">Q3 发布计划</span>
+              <span class="section-meta">2/5 · 1 进行中</span>
+            </div>
+            <!-- body 收起 · 不显示 -->
+          </div>
+
+          <div class="progress-section">
+            <div class="progress-section-header">
+              <span class="chevron collapsed">▾</span>
+              <span class="section-icon subagent">🤖</span>
+              <span class="section-title">活跃子代理</span>
+              <span class="section-meta">1 running</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mock-input-area">
+          <div class="mock-input">输入消息...</div>
+        </div>
+      </div>
+
+      <p style="color: var(--muted); font-size: 12.5px; text-align: center;">
+        即使收起,header 一行也保留 · 状态摘要(2/5 · 1 running)始终可见 · 这是关键 UX 价值。
+      </p>
+
+      <h2>无 plan 无 subagent 时</h2>
+
+      <div class="mock-chat">
+        <div class="mock-chat-header">/chat/conv-abc · Lead Agent</div>
+        <div class="mock-chat-body">
+          <div class="mock-msg user">你好</div>
+          <div class="mock-msg">你好!我是 Lead Agent...</div>
+        </div>
+        <!-- progress-panel 整个不渲染 -->
+        <div class="mock-input-area">
+          <div class="mock-input">输入消息...</div>
+        </div>
+      </div>
+
+      <p style="color: var(--muted); font-size: 12.5px; text-align: center;">
+        整个 panel 高度 0 · DOM 也不渲染 · 不打扰简单对话场景。
+      </p>
+
+      <h2>设计要点</h2>
+
+      <div class="grid2">
+        <div class="pros">
+          <h5>满足你的反馈</h5>
+          <ul>
+            <li>不在顶部 · 在 InputBar 上方</li>
+            <li>plan 和 subagent **各自独立**可收起</li>
+            <li>收起后 header 仍显示状态摘要</li>
+            <li>动态 · 实时跟随状态变化(plan 步骤打勾、subagent 完成秒数累加)</li>
+            <li>空状态隐身(简单聊天不打扰)</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h5>权衡</h5>
+          <ul>
+            <li>跟 InputBar 抢一点垂直空间(plan + subagent 都展开 ~180px)</li>
+            <li>但用户可两个都收起 · 占用降到 ~80px(两条 header)</li>
+            <li>移动端 plan 步骤名长可能 truncate · 加 title attr</li>
+          </ul>
+        </div>
+      </div>
+
+      <h2>实现路径(确认后开工)</h2>
+
+      <h3>新组件</h3>
+      <ul class="bare">
+        <li><b>新</b> <code>web/components/chat/ProgressPanel.tsx</code> ~80 LOC · 容器 · 决定整个 panel 是否显示</li>
+        <li><b>新</b> <code>web/components/chat/PlanProgressSection.tsx</code> ~120 LOC · plan 折叠 section · 拉 plan 数据 · 渲染步骤</li>
+        <li><b>新</b> <code>web/components/chat/SubagentProgressSection.tsx</code> ~100 LOC · 从 store 派生活跃 subagent · 渲染列表</li>
+      </ul>
+
+      <h3>数据源(都是动态/实时)</h3>
+      <ul class="bare">
+        <li><b>plan</b>:<code>GET /api/conversations/{id}/plans/latest</code>(新轻量 endpoint)· 加上 SSE/store 触发的 invalidation —— 当 ToolMessageCommitted 来自 plan_create/update/complete 时 refetch · 几行代码</li>
+        <li><b>subagent</b>:<b>纯前端</b> · 从 <code>useChatStore</code> 派生 · 扫所有 message.tool_calls 找 dispatch_employee/spawn_subagent · running 的进 active list · done 的进历史(默认隐藏 · 展开看) · 实时跟着流式更新</li>
+      </ul>
+
+      <h3>展开状态持久化</h3>
+      <ul class="bare">
+        <li>每个 section 的展开/收起状态存 <code>localStorage</code> · key=<code>progress.plan.expanded</code> / <code>progress.subagent.expanded</code></li>
+        <li>切换 conversation 不重置 · 用户偏好跨会话</li>
+        <li>默认值:plan 展开 · subagent 展开</li>
+      </ul>
+
+      <h3>布局插入点</h3>
+      <pre style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.5; overflow-x: auto;"><code><span style="color: var(--subtle)">// web/app/chat/[conversationId]/page.tsx ~278</span>
+&lt;div className="min-h-0 flex-1"&gt;
+  &lt;MessageList conversationId={conversationId} /&gt;
+&lt;/div&gt;
+<span style="color: var(--success)">+ &lt;ProgressPanel conversationId={conversationId} /&gt;  // ← 新插入点</span>
+&lt;InputBar
+  conversationId={conversationId}
+  ...
+/&gt;</code></pre>
+
+      <h3>实时刷新机制</h3>
+      <ul class="bare">
+        <li>plan section:initial fetch + 每次 ToolMessageCommitted 含 <code>plan_id</code> 时增量 refetch (debounce 200ms)</li>
+        <li>subagent section:zero-cost · pure derive from store (zustand selector)· 流式自动刷</li>
+        <li>计时器(running 时长)· setInterval 1s 刷一下 metadata</li>
+      </ul>
+
+      <div class="footer-cta">
+        <h3 style="margin-top: 0;">📌 这个方案 OK 吗?</h3>
+        <ul class="bare">
+          <li>位置:<b>InputBar 上方</b> ✓</li>
+          <li>plan + subagent 各自<b>独立可收起</b> ✓</li>
+          <li>收起后 header 仍显示状态摘要 ✓</li>
+          <li>实时<b>动态</b>更新 ✓</li>
+          <li>空状态自动隐身 ✓</li>
+        </ul>
+        <p style="color: var(--muted); margin: 8px 0 0;">
+          回 <b>"OK"</b> 我就开做(预计 ~1 小时 · 3 组件 + 1 endpoint + 1 commit)。<br/>
+          想看到 <b>不同的位置</b>(比如左侧 sidebar)请直接告诉我。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
