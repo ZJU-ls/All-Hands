@@ -164,6 +164,7 @@ export default function ConversationPage() {
           // the live one we just cancelled.
           interrupted: m.interrupted ?? false,
           is_compacted: m.is_compacted ?? false,
+          attachment_ids: m.attachment_ids ?? [],
           created_at: m.created_at,
         }));
         setConv(c);
