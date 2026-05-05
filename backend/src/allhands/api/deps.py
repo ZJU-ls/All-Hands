@@ -75,6 +75,7 @@ def get_tool_registry() -> ToolRegistry:
     # update / delete / market browse). These factories live in ``api/``
     # because they close over SkillService; the execution layer is
     # forbidden from importing services/ by the import-linter contract.
+    from allhands.api.gateway_executors import build_gateway_executors
     from allhands.api.knowledge_executors import kb_executors_for
     from allhands.api.local_files_executors import build_local_files_executors
     from allhands.api.local_workspace_executors import build_local_workspace_executors
@@ -96,6 +97,11 @@ def get_tool_registry() -> ToolRegistry:
         **build_local_workspace_executors(maker),
         # local-files skill · 7 file/bash builtin tools
         **build_local_files_executors(maker),
+        # 2026-05-05: Gateway model + provider write tools (create_model /
+        # update_model / set_default_model / create_provider / ...). Also
+        # were declared without executors — Lead's create_model returned
+        # "ok" via _async_noop but never wrote a row.
+        **build_gateway_executors(maker),
     }
     discover_builtin_tools(reg, session_maker=maker, extra_executors=extras)
     return reg
