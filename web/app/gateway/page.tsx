@@ -82,6 +82,13 @@ const EMPTY_MODEL_FORM = {
   // (gpt-image / wanx / dall-e → image_gen; everything else → chat).
   // User opens "能力" section to override.
   capabilities: [] as ModelCapability[],
+  // 2026-05-06: vision (image *input*) — distinct from capabilities[]
+  // (output modalities). Tri-state: null = auto-infer from name regex,
+  // true / false = manual override. Surfaces as a segmented control in
+  // ModelFormDialog so users don't need to touch SQL or chat with Lead
+  // when auto-detect mis-classifies (e.g. qwen3.6-plus before the regex
+  // covered unified-multimodal *-plus tiers).
+  supports_images: null as boolean | null,
 };
 
 export default function GatewayPage() {
@@ -444,6 +451,10 @@ function GatewayPageInner() {
         // Empty array = let backend auto-detect from name pattern.
         capabilities:
           modelForm.capabilities.length > 0 ? modelForm.capabilities : null,
+        // null in form = "auto" — omit so backend infers from name.
+        ...(modelForm.supports_images === null
+          ? {}
+          : { supports_images: modelForm.supports_images }),
       };
       await fetch("/api/models", {
         method: "POST",
@@ -477,6 +488,11 @@ function GatewayPageInner() {
             modelForm.max_output_tokens > 0 ? modelForm.max_output_tokens : null,
           capabilities:
             modelForm.capabilities.length > 0 ? modelForm.capabilities : null,
+          // PATCH 时 null = "保持不变",所以"自动检测"模式我们就不发这个字段。
+          // 只在用户显式选了"支持 / 不支持"时才传布尔。
+          ...(modelForm.supports_images === null
+            ? {}
+            : { supports_images: modelForm.supports_images }),
         }),
       });
       setEditingModelId(null);
@@ -642,6 +658,10 @@ function GatewayPageInner() {
                           max_input_tokens: m.max_input_tokens ?? 0,
                           max_output_tokens: m.max_output_tokens ?? 0,
                           capabilities: (m.capabilities ?? []) as ModelCapability[],
+                          // Edit 时把 DB 当前真值放进 form,UI 显示明确的
+                          // "支持 / 不支持";不回到"自动检测"——用户改完
+                          // 再点保存,我们就把这个明确值 PATCH 回去。
+                          supports_images: m.supports_images ?? null,
                         });
                       }}
                     />
@@ -1337,6 +1357,17 @@ function ModelFormDialog({
             embedding: t("capabilityEmbedding"),
           }}
         />
+        <VisionTriToggle
+          value={form.supports_images}
+          onChange={(v) => onChange({ ...form, supports_images: v })}
+          label={t("fieldVision")}
+          hint={t("fieldVisionHint")}
+          options={{
+            auto: t("visionAuto"),
+            yes: t("visionYes"),
+            no: t("visionNo"),
+          }}
+        />
       </FormSection>
       {/* 2026-04-25: 注册时只必填 name + display_name。三个 token cap 收进
           折叠的"高级设置"区,默认收起。也对 Lead Agent 友好 — 它通过
@@ -1528,6 +1559,74 @@ function CapabilityPicker({
           <span>{autoDetectHint}</span>
         </p>
       )}
+    </div>
+  );
+}
+
+/** Tri-state segmented control for `supports_images` (vision input).
+ *
+ * `null` = let backend infer from model name regex. Bool = explicit user
+ * override. The form state distinguishes these and the create/update
+ * payloads omit the field on `null`, so the backend keeps inferring.
+ */
+function VisionTriToggle({
+  value,
+  onChange,
+  label,
+  hint,
+  options,
+}: {
+  value: boolean | null;
+  onChange: (next: boolean | null) => void;
+  label: string;
+  hint: string;
+  options: { auto: string; yes: string; no: string };
+}) {
+  const buttons: Array<{ key: "auto" | "yes" | "no"; label: string; v: boolean | null }> =
+    [
+      { key: "auto", label: options.auto, v: null },
+      { key: "yes", label: options.yes, v: true },
+      { key: "no", label: options.no, v: false },
+    ];
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] uppercase tracking-wider text-text-muted font-medium">
+          {label}
+        </span>
+        <div
+          role="radiogroup"
+          aria-label={label}
+          className="inline-flex rounded-md border border-border bg-surface p-0.5"
+        >
+          {buttons.map((b) => {
+            const active = value === b.v;
+            return (
+              <button
+                key={b.key}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                data-testid={`vision-toggle-${b.key}`}
+                data-active={active ? "true" : "false"}
+                onClick={() => onChange(b.v)}
+                className={
+                  "px-2.5 py-1 text-[11.5px] rounded-[5px] transition-colors " +
+                  (active
+                    ? "bg-primary text-primary-fg shadow-soft-sm"
+                    : "text-text-muted hover:text-text")
+                }
+              >
+                {b.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-[11px] text-text-subtle flex items-start gap-1.5">
+        <Icon name="image" size={11} className="mt-0.5 shrink-0 text-primary" />
+        <span>{hint}</span>
+      </p>
     </div>
   );
 }

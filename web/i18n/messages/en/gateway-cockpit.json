@@ -70,6 +70,11 @@
       "capabilityImageGen": "Image generation",
       "capabilitySpeech": "Speech (TTS / STT)",
       "capabilityEmbedding": "Text embeddings",
+      "fieldVision": "Vision (image input)",
+      "fieldVisionHint": "Checked = the model can read images. Auto = inferred from name (matches vl / qvq / qwen3.5-plus and up / claude-3+ / gpt-4o / gemini). Flip this when auto-detect is wrong — no need to bother the Lead Agent.",
+      "visionAuto": "Auto",
+      "visionYes": "Supported",
+      "visionNo": "Not supported",
       "sectionAdvanced": "Advanced (optional)",
       "modelFormTips": [
         "💡 You only need a model name to register. The three token caps below are advanced and default to the model's own ceiling.",

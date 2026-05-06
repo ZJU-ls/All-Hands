@@ -36,6 +36,10 @@ export type GatewayModel = {
    *  compat. Image-gen models opt in to ["image_gen"]; future video/audio
    *  models extend the same enum. Drives ModelGateway adapter routing. */
   capabilities?: ("chat" | "image_gen" | "speech" | "embedding")[];
+  /** Vision (image *input*). Distinct from capabilities[] (output modalities).
+   *  Auto-inferred from name regex on create / update; users can override
+   *  via the tri-state toggle in ModelFormDialog. */
+  supports_images?: boolean;
 };
 
 export function ModelRow({

@@ -70,6 +70,11 @@
       "capabilityImageGen": "图像生成",
       "capabilitySpeech": "语音(TTS / STT)",
       "capabilityEmbedding": "文本向量化",
+      "fieldVision": "视觉理解(图片输入)",
+      "fieldVisionHint": "勾选 = 模型可读图;留空 = 后端按模型名推断(命中 vl / qvq / qwen3.5-plus 起 / claude-3+ / gpt-4o / gemini 视为支持)。检测错时手动改这里就好,不用让 Lead 去 update_model。",
+      "visionAuto": "自动检测",
+      "visionYes": "支持",
+      "visionNo": "不支持",
       "sectionAdvanced": "高级设置(可选)",
       "modelFormTips": [
         "💡 只填模型名就能注册。三个 token 上限是高级选项,默认沿用模型本身的能力。",
